@@ -973,7 +973,6 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     width: ordenWidth + 20,
     height: 30,
     color: primaryColor,
-    borderRadius: 4,
   })
   page.drawText(ordenText, {
     x: width - margin - ordenWidth - 20,
@@ -1155,61 +1154,61 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     y -= 20
   }
 
-  // === SECCION DE FIRMAS (posicion fija) ===
-  const sigY = 160
+  // === SECCION DE FIRMAS (posicion dinamica basada en contenido) ===
+  // Asegurar espacio minimo para firmas (70px) y footer (90px)
+  const minFooterSpace = 90
+  const firmaHeight = 60
+  const sigY = Math.max(y - 30, minFooterSpace + firmaHeight + 20)
 
   // Linea separadora antes de firmas
-  page.drawLine({ start: { x: margin, y: sigY + 50 }, end: { x: width - margin, y: sigY + 50 }, thickness: 1, color: lightGray })
+  page.drawLine({ start: { x: margin, y: sigY + 40 }, end: { x: width - margin, y: sigY + 40 }, thickness: 1, color: lightGray })
 
   // Firma Cliente
-  page.drawLine({ start: { x: margin + 30, y: sigY }, end: { x: margin + 180, y: sigY }, thickness: 1, color: textColor })
-  page.drawText("Firma del Cliente", { x: margin + 70, y: sigY - 12, size: 9, font: helvetica, color: grayColor })
-  page.drawText("Aclaracion: ________________", { x: margin + 40, y: sigY - 26, size: 8, font: helvetica, color: grayColor })
-  page.drawText("DNI: ________________", { x: margin + 55, y: sigY - 38, size: 8, font: helvetica, color: grayColor })
+  page.drawLine({ start: { x: margin + 30, y: sigY + 10 }, end: { x: margin + 180, y: sigY + 10 }, thickness: 1, color: textColor })
+  page.drawText("Firma del Cliente", { x: margin + 70, y: sigY - 2, size: 9, font: helvetica, color: grayColor })
+  page.drawText("Aclaracion: ________________", { x: margin + 40, y: sigY - 14, size: 8, font: helvetica, color: grayColor })
+  page.drawText("DNI: ________________", { x: margin + 55, y: sigY - 26, size: 8, font: helvetica, color: grayColor })
 
   // Firma Tecnico
-  page.drawLine({ start: { x: width - margin - 180, y: sigY }, end: { x: width - margin - 30, y: sigY }, thickness: 1, color: textColor })
-  page.drawText("Firma del Tecnico", { x: width - margin - 145, y: sigY - 12, size: 9, font: helvetica, color: grayColor })
-  page.drawText("Aclaracion: ________________", { x: width - margin - 165, y: sigY - 26, size: 8, font: helvetica, color: grayColor })
+  page.drawLine({ start: { x: width - margin - 180, y: sigY + 10 }, end: { x: width - margin - 30, y: sigY + 10 }, thickness: 1, color: textColor })
+  page.drawText("Firma del Tecnico", { x: width - margin - 145, y: sigY - 2, size: 9, font: helvetica, color: grayColor })
+  page.drawText("Aclaracion: ________________", { x: width - margin - 165, y: sigY - 14, size: 8, font: helvetica, color: grayColor })
 
-  // === FOOTER ===
-  const footerY = 75
+  // === FOOTER (compacto) ===
+  const footerY = minFooterSpace
 
   // Fondo del footer
   page.drawRectangle({
     x: margin,
     y: margin,
     width: contentWidth,
-    height: footerY - margin + 5,
+    height: footerY - margin,
     color: bgGray,
   })
 
-  // Terminos y condiciones
-  page.drawText("TERMINOS Y CONDICIONES", { x: margin + 10, y: footerY - 5, size: 8, font: helveticaBold, color: grayColor })
+  // Terminos y condiciones (mas compactos)
+  page.drawText("TERMINOS Y CONDICIONES", { x: margin + 10, y: footerY - 10, size: 7, font: helveticaBold, color: grayColor })
 
   const terminos = [
-    "1. Conserve este comprobante para retirar su equipo.",
-    "2. El plazo de retiro es de 30 dias. Pasado este plazo, se cobrara almacenamiento.",
-    "3. No nos hacemos responsables por datos perdidos. Realice backup antes de entregar el equipo.",
-    "4. Al firmar, el cliente acepta haber revisado el estado del equipo al momento de la entrega.",
+    "1. Conserve este comprobante para retirar su equipo. El plazo de retiro es de 30 dias.",
+    "2. No nos hacemos responsables por datos perdidos. Realice backup antes de entregar el equipo.",
+    "3. Al firmar, el cliente acepta haber revisado el estado del equipo al momento de la entrega.",
   ]
 
-  let termY = footerY - 18
+  let termY = footerY - 22
   terminos.forEach(t => {
-    page.drawText(t, { x: margin + 10, y: termY, size: 7, font: helvetica, color: grayColor })
-    termY -= 10
+    page.drawText(t, { x: margin + 10, y: termY, size: 6, font: helvetica, color: grayColor })
+    termY -= 9
   })
 
   // Linea final
   page.drawLine({ start: { x: margin, y: margin + 3 }, end: { x: width - margin, y: margin + 3 }, thickness: 2, color: primaryColor })
 
-  // Fecha de impresion (esquina inferior derecha)
+  // Fecha de impresion y numero de orden en la misma linea
   const impresionText = `Impreso: ${fechaImpresion}`
-  const impresionWidth = helvetica.widthOfTextAtSize(impresionText, 7)
-  page.drawText(impresionText, { x: width - margin - impresionWidth, y: margin - 10, size: 7, font: helvetica, color: grayColor })
-
-  // Numero de orden en footer
-  page.drawText(`Orden #${numeroOrden}`, { x: margin, y: margin - 10, size: 7, font: helveticaBold, color: grayColor })
+  const impresionWidth = helvetica.widthOfTextAtSize(impresionText, 6)
+  page.drawText(impresionText, { x: width - margin - impresionWidth, y: margin + 8, size: 6, font: helvetica, color: grayColor })
+  page.drawText(`Orden #${numeroOrden}`, { x: margin + 10, y: margin + 8, size: 6, font: helveticaBold, color: grayColor })
 
   const pdfBytes = await pdfDoc.save()
   return Buffer.from(pdfBytes)
