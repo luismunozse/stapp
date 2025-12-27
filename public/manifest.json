@@ -1,18 +1,46 @@
 {
-  "name": "STApp - Gestion de Servicio Tecnico",
+  "name": "STApp - Gestión de Servicio Técnico",
   "short_name": "STApp",
-  "description": "Sistema de gestion para servicio tecnico de dispositivos electronicos",
+  "description": "Sistema de gestión para servicio técnico de dispositivos electrónicos",
   "start_url": "/dashboard",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#3b82f6",
   "orientation": "portrait-primary",
+  "categories": ["business", "productivity"],
   "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
     {
       "src": "/logo.png",
       "sizes": "any",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Nueva Orden",
+      "short_name": "Nueva Orden",
+      "description": "Crear nueva orden de servicio",
+      "url": "/ordenes?nueva=true"
+    },
+    {
+      "name": "Clientes",
+      "short_name": "Clientes",
+      "description": "Ver lista de clientes",
+      "url": "/clientes"
     }
   ]
 }
