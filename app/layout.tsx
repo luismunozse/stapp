@@ -2,17 +2,22 @@ import type { Metadata, Viewport } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
 import { PWAInstaller } from "@/components/pwa/pwa-installer"
+import { Providers } from "@/components/providers"
 
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Servicio Técnico - Gestión",
-  description: "Sistema de gestión para servicio técnico de celulares y computadoras",
+  title: "STApp - Gestión de Servicio Técnico",
+  description: "Sistema de gestión para servicio técnico de dispositivos electrónicos",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/logo.png",
+    apple: "/logo.png",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Servicio Técnico",
+    title: "STApp",
   },
 }
 
@@ -20,8 +25,27 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
-  themeColor: "#3b82f6",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0a1a" },
+  ],
 }
+
+// Script to prevent flash of incorrect theme
+const themeScript = `
+  (function() {
+    try {
+      var theme = localStorage.getItem('theme');
+      var systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+      if (theme === 'dark' || (!theme && systemDark)) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    } catch (e) {}
+  })();
+`
 
 export default function RootLayout({
   children,
@@ -29,17 +53,19 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="es">
+    <html lang="es" suppressHydrationWarning>
       <head>
         <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#3b82f6" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="Servicio Técnico" />
+        <meta name="apple-mobile-web-app-title" content="STApp" />
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body className={inter.className}>
-        {children}
-        <PWAInstaller />
+        <Providers>
+          {children}
+          <PWAInstaller />
+        </Providers>
       </body>
     </html>
   )

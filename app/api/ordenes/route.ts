@@ -1,68 +1,121 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
+import { randomBytes } from "crypto"
+import { requireAuth } from "@/lib/auth-utils"
+import { supabaseAdmin } from "@/lib/supabase"
+import { getNextOrderNumber } from "@/lib/counters"
+import { createAuditLogger } from "@/lib/audit"
+import { uploadOrderPhoto, base64ToBuffer } from "@/lib/storage"
+import { enforcePlanLimit } from "@/lib/plan-limits"
 import { z } from "zod"
+
+// Generar token público único
+function generatePublicToken(): string {
+  return randomBytes(16).toString("hex")
+}
+
+const fotoSchema = z.object({
+  data: z.string(),
+  mime: z.string(),
+  descripcion: z.string().optional(),
+  tipo: z.string().default("INGRESO"),
+})
 
 const ordenSchema = z.object({
   clienteId: z.string().min(1, "El cliente es requerido"),
   dispositivo: z.string().min(1, "El dispositivo es requerido"),
-  tipoDispositivo: z.enum(["CELULAR", "COMPUTADORA"]),
+  tipoDispositivo: z.enum([
+    "CELULAR",
+    "COMPUTADORA",
+    "TABLET",
+    "CONSOLA",
+    "SMARTWATCH",
+    "TODOS",
+  ]),
+  marca: z.string().optional(),
+  color: z.string().optional(),
+  imei: z.string().optional(),
   problemaReportado: z.string().min(1, "El problema es requerido"),
+  accesorios: z.string().optional(),
+  passwordDispositivo: z.string().optional(),
   presupuesto: z.number().optional(),
   fechaPrometida: z.string().optional(),
   observaciones: z.string().optional(),
+  fotos: z.array(fotoSchema).optional(),
+  // Nuevos campos para presupuesto aceptado
+  presupuestoAceptado: z.boolean().optional(),
+  sena: z.number().optional(),
 })
 
 export async function GET(request: Request) {
   try {
-    const session = await auth()
-    if (!session) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
-    }
+    const { error, organizationId, userId, role } = await requireAuth()
+    if (error) return error
 
     const { searchParams } = new URL(request.url)
     const estado = searchParams.get("estado") || ""
     const tecnicoId = searchParams.get("tecnicoId") || ""
     const search = searchParams.get("search") || ""
 
-    const where: any = {}
+    let query = supabaseAdmin
+      .from("ordenes_servicio")
+      .select(`
+        *,
+        clientes (*),
+        users:tecnico_id (
+          id,
+          nombre
+        )
+      `)
+      .eq("organization_id", organizationId!)
+      .order("fecha_ingreso", { ascending: false })
 
     // Técnicos solo ven sus órdenes asignadas
-    if (session.user.role === "TECNICO") {
-      where.tecnicoId = session.user.id
+    if (role === "TECNICO") {
+      query = query.eq("tecnico_id", userId!)
     }
 
     if (estado) {
-      where.estado = estado
+      query = query.eq("estado", estado)
     }
 
     if (tecnicoId) {
-      where.tecnicoId = tecnicoId
+      query = query.eq("tecnico_id", tecnicoId)
     }
 
     if (search) {
-      where.OR = [
-        { numeroOrden: { toString: { contains: search } } },
-        { dispositivo: { contains: search, mode: "insensitive" } },
-        { cliente: { nombre: { contains: search, mode: "insensitive" } } },
-      ]
+      // Búsqueda en múltiples campos
+      query = query.or(
+        `dispositivo.ilike.%${search}%,numero_orden::text.ilike.%${search}%`
+      )
     }
 
-    const ordenes = await prisma.ordenServicio.findMany({
-      where,
-      include: {
-        cliente: true,
-        tecnico: {
-          select: {
-            id: true,
-            nombre: true,
-          },
-        },
-      },
-      orderBy: { fechaIngreso: "desc" },
-    })
+    const { data: ordenes, error: dbError } = await query
 
-    return NextResponse.json(ordenes)
+    if (dbError) {
+      throw dbError
+    }
+
+    // Transformar datos para mantener compatibilidad con el frontend
+    const ordenesFormatted = ordenes?.map(orden => ({
+      ...orden,
+      cliente: orden.clientes,
+      tecnico: orden.users,
+      // Convertir snake_case a camelCase para compatibilidad
+      numeroOrden: orden.numero_orden,
+      clienteId: orden.cliente_id,
+      tecnicoId: orden.tecnico_id,
+      organizationId: orden.organization_id,
+      tipoDispositivo: orden.tipo_dispositivo,
+      problemaReportado: orden.problema_reportado,
+      costoFinal: orden.costo_final,
+      fechaIngreso: orden.fecha_ingreso,
+      fechaPrometida: orden.fecha_prometida,
+      fechaCompletado: orden.fecha_completado,
+      // Nuevos campos
+      passwordDispositivo: orden.password_dispositivo,
+    }))
+
+    return NextResponse.json(ordenesFormatted)
   } catch (error) {
     console.error("Error fetching ordenes:", error)
     return NextResponse.json(
@@ -74,38 +127,114 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const session = await auth()
-    if (!session) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
-    }
+    const { error, organizationId, userId } = await requireAuth()
+    if (error) return error
+
+    // Verificar límite de órdenes del plan
+    const limitError = await enforcePlanLimit(organizationId!, "ordenes")
+    if (limitError) return limitError
 
     const body = await request.json()
     const data = ordenSchema.parse(body)
 
-    // Obtener el último número de orden para incrementarlo manualmente
-    const ultimaOrden = await prisma.ordenServicio.findFirst({
-      orderBy: { numeroOrden: "desc" },
-      select: { numeroOrden: true },
-    })
+    // Obtener siguiente número de orden de forma atómica
+    const numeroOrden = await getNextOrderNumber(organizationId!)
 
-    const siguienteNumero = ultimaOrden ? ultimaOrden.numeroOrden + 1 : 1
+    // Generar token público para acceso al PDF
+    const publicToken = generatePublicToken()
 
-    const orden = await prisma.ordenServicio.create({
-      data: {
-        ...data,
-        numeroOrden: siguienteNumero,
-        fechaPrometida: data.fechaPrometida
-          ? new Date(data.fechaPrometida)
-          : null,
+    // Determinar estado inicial y costo final
+    const estadoInicial = data.presupuestoAceptado ? "EN_REPARACION" : "RECIBIDO"
+    const costoFinal = data.presupuestoAceptado && data.presupuesto ? data.presupuesto : null
+
+    const { data: orden, error: dbError } = await supabaseAdmin
+      .from("ordenes_servicio")
+      .insert({
+        numero_orden: numeroOrden,
+        cliente_id: data.clienteId,
+        organization_id: organizationId!,
+        dispositivo: data.dispositivo,
+        tipo_dispositivo: data.tipoDispositivo,
+        marca: data.marca || null,
+        color: data.color || null,
+        imei: data.imei || null,
+        problema_reportado: data.problemaReportado,
+        accesorios: data.accesorios || null,
+        password_dispositivo: data.passwordDispositivo || null,
         presupuesto: data.presupuesto || null,
+        fecha_prometida: data.fechaPrometida
+          ? new Date(data.fechaPrometida).toISOString()
+          : null,
         observaciones: data.observaciones || null,
-      },
-      include: {
-        cliente: true,
-      },
+        public_token: publicToken,
+        // Nuevos campos
+        estado: estadoInicial,
+        costo_final: costoFinal,
+        sena: data.sena || 0,
+      })
+      .select(`
+        *,
+        clientes (*)
+      `)
+      .single()
+
+    if (dbError) {
+      throw dbError
+    }
+
+    // Subir fotos de ingreso si se proporcionaron
+    if (data.fotos && data.fotos.length > 0) {
+      for (const foto of data.fotos) {
+        try {
+          const buffer = base64ToBuffer(foto.data)
+          const { url, path } = await uploadOrderPhoto(
+            organizationId!,
+            orden.id,
+            buffer,
+            foto.mime
+          )
+
+          // Guardar referencia en la base de datos
+          await supabaseAdmin.from("fotos_orden").insert({
+            orden_id: orden.id,
+            url,
+            storage_path: path,
+            mime: foto.mime,
+            size: buffer.length,
+            descripcion: foto.descripcion || null,
+            tipo: foto.tipo || "INGRESO",
+          })
+        } catch (fotoError) {
+          console.error("Error uploading photo:", fotoError)
+          // Continuar con las demás fotos aunque falle una
+        }
+      }
+    }
+
+    // Registrar en auditoría
+    const audit = createAuditLogger(organizationId!, userId!, request)
+    await audit.create("ordenes_servicio", orden.id, {
+      numero_orden: orden.numero_orden,
+      dispositivo: orden.dispositivo,
+      cliente_id: orden.cliente_id,
+      fotos_ingreso: data.fotos?.length || 0,
     })
 
-    return NextResponse.json(orden, { status: 201 })
+    // Transformar para compatibilidad
+    const ordenFormatted = {
+      ...orden,
+      cliente: orden.clientes,
+      numeroOrden: orden.numero_orden,
+      clienteId: orden.cliente_id,
+      organizationId: orden.organization_id,
+      tipoDispositivo: orden.tipo_dispositivo,
+      problemaReportado: orden.problema_reportado,
+      fechaIngreso: orden.fecha_ingreso,
+      fechaPrometida: orden.fecha_prometida,
+      publicToken: orden.public_token,
+    }
+
+    return NextResponse.json(ordenFormatted, { status: 201 })
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -120,4 +249,3 @@ export async function POST(request: Request) {
     )
   }
 }
-

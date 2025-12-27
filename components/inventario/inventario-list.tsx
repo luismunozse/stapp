@@ -17,6 +17,7 @@ import {
 import { InventarioForm } from "./inventario-form"
 import { formatCurrency } from "@/lib/utils"
 import type { Inventario, TipoDispositivo } from "@/types"
+import { useModal } from "@/contexts/modal-context"
 
 const categorias = [
   "Baterías",
@@ -29,6 +30,7 @@ const categorias = [
 ]
 
 export function InventarioList() {
+  const { confirm } = useModal()
   const [items, setItems] = useState<Inventario[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
@@ -59,7 +61,15 @@ export function InventarioList() {
   }, [search, categoria, tipoDispositivo])
 
   const handleDelete = async (id: string) => {
-    if (!confirm("¿Estás seguro de eliminar este item?")) return
+    const confirmed = await confirm({
+      title: "Eliminar Item",
+      description: "¿Estás seguro de eliminar este item del inventario?",
+      confirmText: "Eliminar",
+      cancelText: "Cancelar",
+      variant: "danger",
+    })
+
+    if (!confirmed) return
 
     try {
       const res = await fetch(`/api/inventario/${id}`, { method: "DELETE" })
@@ -102,6 +112,9 @@ export function InventarioList() {
             <option value="">Todos los tipos</option>
             <option value="CELULAR">Celular</option>
             <option value="COMPUTADORA">Computadora</option>
+            <option value="TABLET">Tablet</option>
+            <option value="CONSOLA">Consola</option>
+            <option value="SMARTWATCH">Smartwatch</option>
           </Select>
         </div>
         <Button onClick={() => setShowForm(true)} className="sm:w-auto">

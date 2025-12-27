@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
+import { requireAuth } from "@/lib/auth-utils"
+import { supabaseAdmin } from "@/lib/supabase"
+import { getNextInvoiceNumber } from "@/lib/counters"
 import { z } from "zod"
-import { calculateIVA, calculateTotal } from "@/lib/utils"
 
 const generarFacturaSchema = z.object({
   ordenId: z.string().min(1, "La orden es requerida"),
@@ -10,46 +10,57 @@ const generarFacturaSchema = z.object({
 
 export async function POST(request: Request) {
   try {
-    const session = await auth()
-    if (!session) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+    const { error, organizationId, role } = await requireAuth()
+    if (error) return error
+
+    if (role !== "ADMIN") {
+      return NextResponse.json(
+        { error: "Solo administradores pueden generar facturas" },
+        { status: 403 }
+      )
     }
 
     const body = await request.json()
     const { ordenId } = generarFacturaSchema.parse(body)
 
-    // Verificar que la orden existe y está completada
-    const orden = await prisma.ordenServicio.findUnique({
-      where: { id: ordenId },
-      include: {
-        repuestos: {
-          include: {
-            inventario: true,
-          },
-        },
-      },
-    })
+    // Verificar que la orden existe, está completada y pertenece a la org
+    const { data: orden, error: ordenError } = await supabaseAdmin
+      .from("ordenes_servicio")
+      .select(`
+        id,
+        estado,
+        costo_final,
+        presupuesto,
+        organization_id,
+        numero_orden,
+        dispositivo,
+        clientes (*),
+        repuestos_orden (
+          cantidad,
+          precio_unitario
+        ),
+        facturas (id)
+      `)
+      .eq("id", ordenId)
+      .eq("organization_id", organizationId!)
+      .single()
 
-    if (!orden) {
+    if (ordenError || !orden) {
       return NextResponse.json(
         { error: "Orden no encontrada" },
         { status: 404 }
       )
     }
 
-    if (orden.estado !== "COMPLETADO") {
+    if (orden.estado !== "REPARADO" && orden.estado !== "ENTREGADO") {
       return NextResponse.json(
-        { error: "La orden debe estar completada para generar factura" },
+        { error: "La orden debe estar reparada para generar factura" },
         { status: 400 }
       )
     }
 
     // Verificar si ya existe una factura
-    const facturaExistente = await prisma.factura.findUnique({
-      where: { ordenId },
-    })
-
-    if (facturaExistente) {
+    if (orden.facturas && orden.facturas.length > 0) {
       return NextResponse.json(
         { error: "Ya existe una factura para esta orden" },
         { status: 400 }
@@ -57,10 +68,10 @@ export async function POST(request: Request) {
     }
 
     // Calcular subtotal (costo final o suma de repuestos)
-    let subtotal = orden.costoFinal || 0
-    if (!subtotal && orden.repuestos.length > 0) {
-      subtotal = orden.repuestos.reduce(
-        (sum, r) => sum + r.cantidad * r.precioUnitario,
+    let subtotal = orden.costo_final || 0
+    if (!subtotal && orden.repuestos_orden && orden.repuestos_orden.length > 0) {
+      subtotal = orden.repuestos_orden.reduce(
+        (sum: number, r: any) => sum + r.cantidad * r.precio_unitario,
         0
       )
     }
@@ -68,40 +79,47 @@ export async function POST(request: Request) {
       subtotal = orden.presupuesto
     }
 
-    const iva = calculateIVA(subtotal)
-    const total = calculateTotal(subtotal)
+    // Sin IVA - precio final directo
+    const iva = 0
+    const total = subtotal
 
-    // Obtener último número de factura
-    const ultimaFactura = await prisma.factura.findFirst({
-      orderBy: { numeroFactura: "desc" },
-    })
+    // Obtener número de factura atómico
+    const numeroFactura = await getNextInvoiceNumber(organizationId!)
 
-    let numeroFactura = "0001-00000001"
-    if (ultimaFactura) {
-      const [punto, numero] = ultimaFactura.numeroFactura.split("-")
-      const nuevoNumero = String(parseInt(numero) + 1).padStart(8, "0")
-      numeroFactura = `${punto}-${nuevoNumero}`
-    }
-
-    const factura = await prisma.factura.create({
-      data: {
-        ordenId,
-        numeroFactura,
+    // Crear factura
+    const { data: factura, error: createError } = await supabaseAdmin
+      .from("facturas")
+      .insert({
+        orden_id: ordenId,
+        numero_factura: numeroFactura,
         subtotal,
         iva,
         total,
-        estadoPago: "PENDIENTE",
-      },
-      include: {
-        orden: {
-          include: {
-            cliente: true,
-          },
-        },
-      },
-    })
+        estado_pago: "PENDIENTE",
+      })
+      .select()
+      .single()
 
-    return NextResponse.json(factura, { status: 201 })
+    if (createError) {
+      throw createError
+    }
+
+    return NextResponse.json({
+      id: factura.id,
+      ordenId: factura.orden_id,
+      numeroFactura: factura.numero_factura,
+      fecha: factura.fecha,
+      subtotal: factura.subtotal,
+      iva: factura.iva,
+      total: factura.total,
+      estadoPago: factura.estado_pago,
+      orden: {
+        id: orden.id,
+        numeroOrden: orden.numero_orden,
+        dispositivo: orden.dispositivo,
+        cliente: orden.clientes,
+      },
+    }, { status: 201 })
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -116,4 +134,3 @@ export async function POST(request: Request) {
     )
   }
 }
-

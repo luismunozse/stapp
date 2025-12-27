@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
+import { requireAuth } from "@/lib/auth-utils"
+import { supabaseAdmin } from "@/lib/supabase"
+import { formatInventario } from "@/lib/db-utils"
 import { z } from "zod"
 
 const inventarioSchema = z.object({
@@ -8,7 +9,7 @@ const inventarioSchema = z.object({
   nombre: z.string().min(1).optional(),
   descripcion: z.string().optional(),
   categoria: z.string().min(1).optional(),
-  tipoDispositivo: z.enum(["CELULAR", "COMPUTADORA"]).optional(),
+  tipoDispositivo: z.enum(["CELULAR", "COMPUTADORA", "TABLET", "CONSOLA", "SMARTWATCH", "TODOS"]).optional(),
   stock: z.number().int().min(0).optional(),
   precioCompra: z.number().min(0).optional(),
   precioVenta: z.number().min(0).optional(),
@@ -20,24 +21,26 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth()
-    if (!session) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
-    }
+    const { error, organizationId } = await requireAuth()
+    if (error) return error
 
     const { id } = await params
-    const item = await prisma.inventario.findUnique({
-      where: { id },
-    })
 
-    if (!item) {
+    const { data: item, error: dbError } = await supabaseAdmin
+      .from("inventario")
+      .select("*")
+      .eq("id", id)
+      .eq("organization_id", organizationId!)
+      .single()
+
+    if (dbError || !item) {
       return NextResponse.json(
         { error: "Item no encontrado" },
         { status: 404 }
       )
     }
 
-    return NextResponse.json(item)
+    return NextResponse.json(formatInventario(item))
   } catch (error) {
     console.error("Error fetching inventario:", error)
     return NextResponse.json(
@@ -52,21 +55,52 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth()
-    if (!session) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
-    }
+    const { error, organizationId } = await requireAuth()
+    if (error) return error
 
     const { id } = await params
     const body = await request.json()
     const data = inventarioSchema.parse(body)
 
-    const item = await prisma.inventario.update({
-      where: { id },
-      data,
-    })
+    // Verificar que el item pertenece a la organización
+    const { data: existingItem, error: fetchError } = await supabaseAdmin
+      .from("inventario")
+      .select("id")
+      .eq("id", id)
+      .eq("organization_id", organizationId!)
+      .single()
 
-    return NextResponse.json(item)
+    if (fetchError || !existingItem) {
+      return NextResponse.json(
+        { error: "Item no encontrado" },
+        { status: 404 }
+      )
+    }
+
+    // Preparar datos para update
+    const updateData: Record<string, any> = {}
+    if (data.codigo !== undefined) updateData.codigo = data.codigo
+    if (data.nombre !== undefined) updateData.nombre = data.nombre
+    if (data.descripcion !== undefined) updateData.descripcion = data.descripcion
+    if (data.categoria !== undefined) updateData.categoria = data.categoria
+    if (data.tipoDispositivo !== undefined) updateData.tipo_dispositivo = data.tipoDispositivo
+    if (data.stock !== undefined) updateData.stock = data.stock
+    if (data.precioCompra !== undefined) updateData.precio_compra = data.precioCompra
+    if (data.precioVenta !== undefined) updateData.precio_venta = data.precioVenta
+    if (data.proveedor !== undefined) updateData.proveedor = data.proveedor
+
+    const { data: item, error: updateError } = await supabaseAdmin
+      .from("inventario")
+      .update(updateData)
+      .eq("id", id)
+      .select()
+      .single()
+
+    if (updateError) {
+      throw updateError
+    }
+
+    return NextResponse.json(formatInventario(item))
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -87,15 +121,34 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth()
-    if (!session) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
-    }
+    const { error, organizationId } = await requireAuth()
+    if (error) return error
 
     const { id } = await params
-    await prisma.inventario.delete({
-      where: { id },
-    })
+
+    // Verificar que el item pertenece a la organización
+    const { data: existingItem, error: fetchError } = await supabaseAdmin
+      .from("inventario")
+      .select("id")
+      .eq("id", id)
+      .eq("organization_id", organizationId!)
+      .single()
+
+    if (fetchError || !existingItem) {
+      return NextResponse.json(
+        { error: "Item no encontrado" },
+        { status: 404 }
+      )
+    }
+
+    const { error: deleteError } = await supabaseAdmin
+      .from("inventario")
+      .delete()
+      .eq("id", id)
+
+    if (deleteError) {
+      throw deleteError
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {
@@ -106,4 +159,3 @@ export async function DELETE(
     )
   }
 }
-

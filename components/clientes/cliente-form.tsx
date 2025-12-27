@@ -36,13 +36,21 @@ export function ClienteForm({ cliente, onClose, onSuccess }: ClienteFormProps) {
     reset,
   } = useForm<ClienteFormData>({
     resolver: zodResolver(clienteSchema),
-    defaultValues: cliente || {
-      nombre: "",
-      telefono: "",
-      email: "",
-      direccion: "",
-      dni: "",
-    },
+    defaultValues: cliente
+      ? {
+          nombre: cliente.nombre,
+          telefono: cliente.telefono,
+          email: cliente.email || "",
+          direccion: cliente.direccion || "",
+          dni: cliente.dni || "",
+        }
+      : {
+          nombre: "",
+          telefono: "",
+          email: "",
+          direccion: "",
+          dni: "",
+        },
   })
 
   useEffect(() => {

@@ -1,13 +1,35 @@
 import { redirect } from "next/navigation"
 import { auth } from "@/lib/auth"
+import { NavbarLanding } from "@/components/landing/navbar-landing"
+import { Hero } from "@/components/landing/hero"
+import { Features } from "@/components/landing/features"
+import { PricingSection } from "@/components/landing/pricing-section"
+import { Testimonials } from "@/components/landing/testimonials"
+import { FAQ } from "@/components/landing/faq"
+import { Footer } from "@/components/landing/footer"
+
+// Forzar renderizado dinámico para verificar auth en cada navegación
+export const dynamic = "force-dynamic"
 
 export default async function Home() {
   const session = await auth()
 
+  // Si el usuario está autenticado, redirigir al dashboard
   if (session) {
     redirect("/dashboard")
-  } else {
-    redirect("/login")
   }
+
+  // Mostrar landing page para usuarios no autenticados
+  return (
+    <main className="min-h-screen">
+      <NavbarLanding />
+      <Hero />
+      <Features />
+      <PricingSection />
+      <Testimonials />
+      <FAQ />
+      <Footer />
+    </main>
+  )
 }
 

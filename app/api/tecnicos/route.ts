@@ -1,40 +1,49 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
+import { requireAuth, requireAdmin } from "@/lib/auth-utils"
+import { supabaseAdmin } from "@/lib/supabase"
+import { enforcePlanLimit } from "@/lib/plan-limits"
+import bcrypt from "bcryptjs"
 
 export async function GET() {
   try {
-    const session = await auth()
-    if (!session) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+    const { error, organizationId } = await requireAuth()
+    if (error) return error
+
+    // Obtener técnicos con sus órdenes activas
+    const { data: tecnicos, error: dbError } = await supabaseAdmin
+      .from("users")
+      .select(`
+        id,
+        nombre,
+        email,
+        ordenes_servicio:ordenes_servicio!tecnico_id (
+          id,
+          estado
+        )
+      `)
+      .eq("rol", "TECNICO")
+      .eq("organization_id", organizationId!)
+      .order("nombre", { ascending: true })
+
+    if (dbError) {
+      throw dbError
     }
 
-    const tecnicos = await prisma.user.findMany({
-      where: {
-        rol: "TECNICO",
-      },
-      include: {
-        ordenesAsignadas: {
-          where: {
-            estado: {
-              in: ["PENDIENTE", "EN_REPARACION", "ESPERANDO_REPUESTO"],
-            },
-          },
-        },
-      },
-      orderBy: { nombre: "asc" },
-    })
-
-    const tecnicosConStats = tecnicos.map((tecnico) => {
-      const completadas = tecnico.ordenesAsignadas.filter(
-        (o) => o.estado === "COMPLETADO" || o.estado === "ENTREGADO"
+    const tecnicosConStats = tecnicos?.map((tecnico) => {
+      const ordenes = tecnico.ordenes_servicio || []
+      const ordenesActivas = ordenes.filter(
+        (o: any) => ["RECIBIDO", "EN_DIAGNOSTICO", "PRESUPUESTADO", "APROBADO", "EN_REPARACION", "ESPERANDO_REPUESTO"].includes(o.estado)
       ).length
+      const ordenesCompletadas = ordenes.filter(
+        (o: any) => ["REPARADO", "ENTREGADO"].includes(o.estado)
+      ).length
+
       return {
         id: tecnico.id,
         nombre: tecnico.nombre,
         email: tecnico.email,
-        ordenesActivas: tecnico.ordenesAsignadas.length,
-        ordenesCompletadas: completadas,
+        ordenesActivas,
+        ordenesCompletadas,
       }
     })
 
@@ -48,3 +57,63 @@ export async function GET() {
   }
 }
 
+export async function POST(request: Request) {
+  try {
+    const { error, organizationId } = await requireAdmin()
+    if (error) return error
+
+    // Verificar límite de técnicos del plan
+    const limitError = await enforcePlanLimit(organizationId!, "tecnicos")
+    if (limitError) return limitError
+
+    const body = await request.json()
+    const { nombre, email, password } = body
+
+    if (!nombre || !email || !password) {
+      return NextResponse.json(
+        { error: "Nombre, email y contraseña son requeridos" },
+        { status: 400 }
+      )
+    }
+
+    // Verificar si el email ya existe
+    const { data: existingUser } = await supabaseAdmin
+      .from("users")
+      .select("id")
+      .eq("email", email)
+      .single()
+
+    if (existingUser) {
+      return NextResponse.json(
+        { error: "Ya existe un usuario con este email" },
+        { status: 400 }
+      )
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10)
+
+    const { data: tecnico, error: dbError } = await supabaseAdmin
+      .from("users")
+      .insert({
+        nombre,
+        email,
+        password: hashedPassword,
+        rol: "TECNICO",
+        organization_id: organizationId!,
+      })
+      .select("id, nombre, email")
+      .single()
+
+    if (dbError) {
+      throw dbError
+    }
+
+    return NextResponse.json(tecnico, { status: 201 })
+  } catch (error) {
+    console.error("Error creating tecnico:", error)
+    return NextResponse.json(
+      { error: "Error al crear técnico" },
+      { status: 500 }
+    )
+  }
+}

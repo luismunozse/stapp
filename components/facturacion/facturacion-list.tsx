@@ -1,18 +1,39 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Select } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { FileText, DollarSign, CheckCircle, Clock } from "lucide-react"
+import { PaymentStatusBadge } from "@/components/ui/badge"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import {
+  FileText,
+  Plus,
+  ChevronDown,
+  ChevronUp,
+  Trash2,
+  Ban,
+} from "lucide-react"
 import { formatDate, formatCurrency } from "@/lib/utils"
-import type { Factura, EstadoPago } from "@/types"
+import { PagoForm } from "./pago-form"
+import { PagosHistorial } from "./pagos-historial"
+
+type EstadoPagoType = "PENDIENTE" | "PAGADO_PARCIAL" | "PAGADO" | "ANULADA" | ""
 
 export function FacturacionList() {
+  const { data: session } = useSession()
+  const isAdmin = session?.user?.role === "ADMIN"
+
   const [facturas, setFacturas] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [estadoPago, setEstadoPago] = useState<EstadoPago | "">("")
+  const [estadoPago, setEstadoPago] = useState<EstadoPagoType>("")
+  const [showPagoForm, setShowPagoForm] = useState<string | null>(null)
+  const [expandedFactura, setExpandedFactura] = useState<string | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [voidDialogOpen, setVoidDialogOpen] = useState(false)
+  const [selectedFactura, setSelectedFactura] = useState<any>(null)
+  const [actionLoading, setActionLoading] = useState(false)
 
   const fetchFacturas = async () => {
     try {
@@ -33,41 +54,63 @@ export function FacturacionList() {
     fetchFacturas()
   }, [estadoPago])
 
-  const handleGenerarFactura = async (ordenId: string) => {
-    if (!confirm("¿Generar factura para esta orden?")) return
+  const toggleExpanded = (facturaId: string) => {
+    setExpandedFactura(expandedFactura === facturaId ? null : facturaId)
+  }
 
+  const handleDeleteClick = (factura: any) => {
+    setSelectedFactura(factura)
+    setDeleteDialogOpen(true)
+  }
+
+  const handleVoidClick = (factura: any) => {
+    setSelectedFactura(factura)
+    setVoidDialogOpen(true)
+  }
+
+  const handleDelete = async () => {
+    if (!selectedFactura) return
+    setActionLoading(true)
     try {
-      const res = await fetch("/api/facturacion/generar", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ordenId }),
+      const res = await fetch(`/api/facturacion/${selectedFactura.id}`, {
+        method: "DELETE",
       })
-
-      if (res.ok) {
-        fetchFacturas()
-      } else {
-        const error = await res.json()
-        alert(error.error || "Error al generar factura")
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || "Error al eliminar factura")
       }
+      setDeleteDialogOpen(false)
+      setSelectedFactura(null)
+      fetchFacturas()
     } catch (error) {
-      console.error("Error generating factura:", error)
-      alert("Error al generar factura")
+      console.error("Error deleting factura:", error)
+      alert(error instanceof Error ? error.message : "Error al eliminar factura")
+    } finally {
+      setActionLoading(false)
     }
   }
 
-  const handleUpdateEstadoPago = async (facturaId: string, nuevoEstado: EstadoPago) => {
+  const handleVoid = async () => {
+    if (!selectedFactura) return
+    setActionLoading(true)
     try {
-      const res = await fetch(`/api/facturacion/${facturaId}`, {
+      const res = await fetch(`/api/facturacion/${selectedFactura.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ estadoPago: nuevoEstado }),
+        body: JSON.stringify({ estadoPago: "ANULADA" }),
       })
-
-      if (res.ok) {
-        fetchFacturas()
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || "Error al anular factura")
       }
+      setVoidDialogOpen(false)
+      setSelectedFactura(null)
+      fetchFacturas()
     } catch (error) {
-      console.error("Error updating estado:", error)
+      console.error("Error voiding factura:", error)
+      alert(error instanceof Error ? error.message : "Error al anular factura")
+    } finally {
+      setActionLoading(false)
     }
   }
 
@@ -80,11 +123,13 @@ export function FacturacionList() {
       <div className="flex gap-4">
         <Select
           value={estadoPago}
-          onChange={(e) => setEstadoPago(e.target.value as EstadoPago | "")}
+          onChange={(e) => setEstadoPago(e.target.value as EstadoPagoType)}
         >
           <option value="">Todos los estados</option>
           <option value="PENDIENTE">Pendiente</option>
+          <option value="PAGADO_PARCIAL">Pago Parcial</option>
           <option value="PAGADO">Pagado</option>
+          <option value="ANULADA">Anulada</option>
         </Select>
       </div>
 
@@ -96,74 +141,158 @@ export function FacturacionList() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {facturas.map((factura) => (
-            <Card key={factura.id}>
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <FileText className="h-5 w-5" />
-                      Factura {factura.numeroFactura}
-                    </CardTitle>
-                    <div className="text-sm text-muted-foreground mt-1">
-                      Orden #{factura.orden.numeroOrden} - {factura.orden.cliente.nombre}
+          {facturas.map((factura) => {
+            const pendiente = factura.total - (factura.montoAbonado || 0)
+            const isExpanded = expandedFactura === factura.id
+            const showingPagoForm = showPagoForm === factura.id
+
+            return (
+              <Card key={factura.id}>
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <FileText className="h-5 w-5" />
+                        Factura {factura.numeroFactura}
+                      </CardTitle>
+                      <div className="text-sm text-muted-foreground mt-1">
+                        Orden #{factura.orden.numeroOrden} - {factura.orden.cliente.nombre}
+                      </div>
+                    </div>
+                    <PaymentStatusBadge status={factura.estadoPago} showIcon />
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="font-medium">Fecha:</span>
+                    {formatDate(factura.fecha)}
+                  </div>
+
+                  {/* Resumen financiero */}
+                  <div className="grid grid-cols-3 gap-4 p-3 bg-muted rounded-lg">
+                    <div>
+                      <div className="text-xs text-muted-foreground">Total</div>
+                      <div className="font-bold text-lg">{formatCurrency(factura.total)}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">Abonado</div>
+                      <div className="font-medium text-green-600">
+                        {formatCurrency(factura.montoAbonado || 0)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">Pendiente</div>
+                      <div className="font-medium text-red-600">
+                        {formatCurrency(factura.total - (factura.montoAbonado || 0))}
+                      </div>
                     </div>
                   </div>
-                  <Badge
-                    variant={
-                      factura.estadoPago === "PAGADO" ? "success" : "warning"
-                    }
-                  >
-                    {factura.estadoPago === "PAGADO" ? (
-                      <>
-                        <CheckCircle className="mr-1 h-3 w-3" />
-                        Pagado
-                      </>
-                    ) : (
-                      <>
-                        <Clock className="mr-1 h-3 w-3" />
-                        Pendiente
-                      </>
-                    )}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="font-medium">Fecha:</span>
-                  {formatDate(factura.fecha)}
-                </div>
-                <div className="grid grid-cols-3 gap-4 text-sm">
-                  <div>
-                    <div className="text-muted-foreground">Subtotal</div>
-                    <div className="font-medium">{formatCurrency(factura.subtotal)}</div>
-                  </div>
-                  <div>
-                    <div className="text-muted-foreground">IVA (21%)</div>
-                    <div className="font-medium">{formatCurrency(factura.iva)}</div>
-                  </div>
-                  <div>
-                    <div className="text-muted-foreground">Total</div>
-                    <div className="font-medium text-lg">
-                      {formatCurrency(factura.total)}
+
+                  {/* Balance pendiente */}
+                  {factura.estadoPago !== "PAGADO" && factura.estadoPago !== "ANULADA" && (
+                    <div className="flex items-center justify-between p-3 border border-dashed rounded-lg">
+                      <div>
+                        <div className="text-sm text-muted-foreground">Pendiente de pago</div>
+                        <div className="text-xl font-bold text-red-600">
+                          {formatCurrency(pendiente)}
+                        </div>
+                      </div>
+                      <Button
+                        onClick={() => setShowPagoForm(showingPagoForm ? null : factura.id)}
+                        variant={showingPagoForm ? "outline" : "default"}
+                      >
+                        <Plus className="mr-2 h-4 w-4" />
+                        Registrar Pago
+                      </Button>
                     </div>
-                  </div>
-                </div>
-                {factura.estadoPago === "PENDIENTE" && (
-                  <Button
-                    onClick={() => handleUpdateEstadoPago(factura.id, "PAGADO")}
-                    className="w-full"
-                  >
-                    <CheckCircle className="mr-2 h-4 w-4" />
-                    Marcar como Pagado
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-          ))}
+                  )}
+
+                  {/* Formulario de pago */}
+                  {showingPagoForm && (
+                    <PagoForm
+                      facturaId={factura.id}
+                      total={factura.total}
+                      montoAbonado={factura.montoAbonado || 0}
+                      onClose={() => setShowPagoForm(null)}
+                      onSuccess={() => {
+                        setShowPagoForm(null)
+                        fetchFacturas()
+                      }}
+                    />
+                  )}
+
+                  {/* Historial de pagos */}
+                  {factura.pagos && factura.pagos.length > 0 && (
+                    <div>
+                      <Button
+                        variant="ghost"
+                        className="w-full justify-between"
+                        onClick={() => toggleExpanded(factura.id)}
+                      >
+                        <span>Historial de pagos ({factura.pagos.length})</span>
+                        {isExpanded ? (
+                          <ChevronUp className="h-4 w-4" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4" />
+                        )}
+                      </Button>
+                      {isExpanded && <PagosHistorial pagos={factura.pagos} />}
+                    </div>
+                  )}
+
+                  {/* Acciones de admin */}
+                  {isAdmin && factura.estadoPago !== "ANULADA" && (
+                    <div className="flex gap-2 pt-3 border-t">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleVoidClick(factura)}
+                      >
+                        <Ban className="mr-2 h-4 w-4" />
+                        Anular
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => handleDeleteClick(factura)}
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Eliminar
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )
+          })}
         </div>
       )}
+
+      {/* Dialog de confirmación para eliminar */}
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="Eliminar Factura"
+        description={`¿Estás seguro de que deseas eliminar la factura ${selectedFactura?.numeroFactura}? Esta acción eliminará también todos los pagos asociados y no se puede deshacer.`}
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+        variant="danger"
+        loading={actionLoading}
+        onConfirm={handleDelete}
+      />
+
+      {/* Dialog de confirmación para anular */}
+      <ConfirmDialog
+        open={voidDialogOpen}
+        onOpenChange={setVoidDialogOpen}
+        title="Anular Factura"
+        description={`¿Estás seguro de que deseas anular la factura ${selectedFactura?.numeroFactura}? La factura quedará registrada como anulada pero no se eliminará del sistema.`}
+        confirmText="Anular"
+        cancelText="Cancelar"
+        variant="warning"
+        loading={actionLoading}
+        onConfirm={handleVoid}
+      />
     </div>
   )
 }
-

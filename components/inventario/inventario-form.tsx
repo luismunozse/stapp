@@ -18,7 +18,7 @@ const inventarioSchema = z.object({
   nombre: z.string().min(1, "El nombre es requerido"),
   descripcion: z.string().optional(),
   categoria: z.string().min(1, "La categoría es requerida"),
-  tipoDispositivo: z.enum(["CELULAR", "COMPUTADORA"]),
+  tipoDispositivo: z.enum(["CELULAR", "COMPUTADORA", "TABLET", "CONSOLA", "SMARTWATCH", "TODOS"]),
   stock: z.number().int().min(0),
   precioCompra: z.number().min(0),
   precioVenta: z.number().min(0),
@@ -58,17 +58,29 @@ export function InventarioForm({
     setValue,
   } = useForm<InventarioFormData>({
     resolver: zodResolver(inventarioSchema),
-    defaultValues: item || {
-      codigo: "",
-      nombre: "",
-      descripcion: "",
-      categoria: "",
-      tipoDispositivo: "CELULAR",
-      stock: 0,
-      precioCompra: 0,
-      precioVenta: 0,
-      proveedor: "",
-    },
+    defaultValues: item
+      ? {
+          codigo: item.codigo,
+          nombre: item.nombre,
+          descripcion: item.descripcion || "",
+          categoria: item.categoria,
+          tipoDispositivo: item.tipoDispositivo as InventarioFormData["tipoDispositivo"],
+          stock: item.stock,
+          precioCompra: item.precioCompra,
+          precioVenta: item.precioVenta,
+          proveedor: item.proveedor || "",
+        }
+      : {
+          codigo: "",
+          nombre: "",
+          descripcion: "",
+          categoria: "",
+          tipoDispositivo: "CELULAR",
+          stock: 0,
+          precioCompra: 0,
+          precioVenta: 0,
+          proveedor: "",
+        },
   })
 
   useEffect(() => {
@@ -126,7 +138,7 @@ export function InventarioForm({
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="codigo">Código *</Label>
               <Input id="codigo" {...register("codigo")} placeholder="COD-001" />
@@ -188,6 +200,10 @@ export function InventarioForm({
             >
               <option value="CELULAR">Celular</option>
               <option value="COMPUTADORA">Computadora</option>
+              <option value="TABLET">Tablet</option>
+              <option value="CONSOLA">Consola</option>
+              <option value="SMARTWATCH">Smartwatch</option>
+              <option value="TODOS">Todos los dispositivos</option>
             </Select>
             {errors.tipoDispositivo && (
               <p className="text-sm text-destructive mt-1">
@@ -196,7 +212,7 @@ export function InventarioForm({
             )}
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <Label htmlFor="stock">Stock *</Label>
               <Input

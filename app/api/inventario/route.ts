@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
+import { requireAuth } from "@/lib/auth-utils"
+import { supabaseAdmin } from "@/lib/supabase"
+import { formatInventario } from "@/lib/db-utils"
 import { z } from "zod"
 
 const inventarioSchema = z.object({
@@ -8,7 +9,7 @@ const inventarioSchema = z.object({
   nombre: z.string().min(1, "El nombre es requerido"),
   descripcion: z.string().optional(),
   categoria: z.string().min(1, "La categoría es requerida"),
-  tipoDispositivo: z.enum(["CELULAR", "COMPUTADORA"]),
+  tipoDispositivo: z.enum(["CELULAR", "COMPUTADORA", "TABLET", "CONSOLA", "SMARTWATCH", "TODOS"]),
   stock: z.number().int().min(0),
   precioCompra: z.number().min(0),
   precioVenta: z.number().min(0),
@@ -17,39 +18,39 @@ const inventarioSchema = z.object({
 
 export async function GET(request: Request) {
   try {
-    const session = await auth()
-    if (!session) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
-    }
+    const { error, organizationId } = await requireAuth()
+    if (error) return error
 
     const { searchParams } = new URL(request.url)
     const search = searchParams.get("search") || ""
     const categoria = searchParams.get("categoria") || ""
     const tipoDispositivo = searchParams.get("tipoDispositivo") || ""
 
-    const where: any = {}
+    let query = supabaseAdmin
+      .from("inventario")
+      .select("*")
+      .eq("organization_id", organizationId!)
+      .order("nombre", { ascending: true })
 
     if (search) {
-      where.OR = [
-        { nombre: { contains: search, mode: "insensitive" } },
-        { codigo: { contains: search, mode: "insensitive" } },
-      ]
+      query = query.or(`nombre.ilike.%${search}%,codigo.ilike.%${search}%`)
     }
 
     if (categoria) {
-      where.categoria = categoria
+      query = query.eq("categoria", categoria)
     }
 
     if (tipoDispositivo) {
-      where.tipoDispositivo = tipoDispositivo
+      query = query.eq("tipo_dispositivo", tipoDispositivo)
     }
 
-    const inventario = await prisma.inventario.findMany({
-      where,
-      orderBy: { nombre: "asc" },
-    })
+    const { data: inventario, error: dbError } = await query
 
-    return NextResponse.json(inventario)
+    if (dbError) {
+      throw dbError
+    }
+
+    return NextResponse.json(inventario?.map(formatInventario))
   } catch (error) {
     console.error("Error fetching inventario:", error)
     return NextResponse.json(
@@ -61,19 +62,40 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const session = await auth()
-    if (!session) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
-    }
+    const { error, organizationId } = await requireAuth()
+    if (error) return error
 
     const body = await request.json()
     const data = inventarioSchema.parse(body)
 
-    const inventario = await prisma.inventario.create({
-      data,
-    })
+    const { data: inventario, error: dbError } = await supabaseAdmin
+      .from("inventario")
+      .insert({
+        codigo: data.codigo,
+        nombre: data.nombre,
+        descripcion: data.descripcion || null,
+        categoria: data.categoria,
+        tipo_dispositivo: data.tipoDispositivo,
+        stock: data.stock,
+        precio_compra: data.precioCompra,
+        precio_venta: data.precioVenta,
+        proveedor: data.proveedor || null,
+        organization_id: organizationId!,
+      })
+      .select()
+      .single()
 
-    return NextResponse.json(inventario, { status: 201 })
+    if (dbError) {
+      if (dbError.code === "23505") {
+        return NextResponse.json(
+          { error: "Ya existe un item con ese código" },
+          { status: 400 }
+        )
+      }
+      throw dbError
+    }
+
+    return NextResponse.json(formatInventario(inventario), { status: 201 })
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -88,4 +110,3 @@ export async function POST(request: Request) {
     )
   }
 }
-

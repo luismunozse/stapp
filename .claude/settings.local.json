@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tree:*)",
+      "Bash(npm run db:seed:*)",
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(cat:*)",
+      "Bash(npm install:*)",
+      "Bash(npx prisma db push:*)",
+      "Bash(npx prisma generate)",
+      "Bash(dir:*)",
+      "Bash(npx prisma generate:*)",
+      "Bash(npx prisma:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm run build:*)",
+      "Bash(dir /s \"c:\\\\Users\\\\LUIS\\\\Desktop\\\\stapp\")",
+      "Bash(powershell -Command \"[Convert]::ToBase64String\\([System.Security.Cryptography.RandomNumberGenerator]::GetBytes\\(32\\)\\)\")",
+      "Bash(powershell -Command:*)",
+      "Bash(node -e:*)",
+      "Bash(stripe)",
+      "Bash(mercado:*)",
+      "Bash(payment \")",
+      "Bash(del \"c:\\\\Users\\\\LUIS\\\\Desktop\\\\stapp\\\\tmp-run.ts\")"
+    ]
+  }
+}

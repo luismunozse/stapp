@@ -1,25 +1,18 @@
 {
-  "name": "Servicio Técnico - Gestión",
-  "short_name": "Servicio Técnico",
-  "description": "Sistema de gestión para servicio técnico de celulares y computadoras",
-  "start_url": "/",
+  "name": "STApp - Gestion de Servicio Tecnico",
+  "short_name": "STApp",
+  "description": "Sistema de gestion para servicio tecnico de dispositivos electronicos",
+  "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#3b82f6",
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/icon-192.png",
-      "sizes": "192x192",
+      "src": "/logo.png",
+      "sizes": "any",
       "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ]
 }
-
