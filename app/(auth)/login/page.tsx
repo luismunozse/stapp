@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, Suspense } from "react"
-import { signIn } from "next-auth/react"
+import { signIn, signOut } from "next-auth/react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -11,6 +11,37 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { Eye, EyeOff, CheckCircle } from "lucide-react"
 import { BusinessLogo } from "@/components/shared/business-logo"
+
+interface TenantInfo {
+  nombre: string
+  logoUrl: string | null
+}
+
+// Extraer subdominio del hostname
+function extractSubdomain(): string | null {
+  if (typeof window === "undefined") return null
+
+  const host = window.location.hostname
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
+  const rootParts = rootDomain.split(".").length
+
+  // Soporte para desarrollo local con .local
+  if (host.endsWith(".local")) {
+    const parts = host.split(".")
+    if (parts.length >= 2 && parts[0] !== "stapp" && parts[0] !== "www") {
+      return parts[0]
+    }
+    return null
+  }
+
+  const parts = host.split(".")
+  if (parts.length <= rootParts) return null
+
+  const subdomain = parts[0]
+  if (subdomain === "www") return null
+
+  return subdomain
+}
 
 function LoginForm() {
   const router = useRouter()
@@ -23,14 +54,51 @@ function LoginForm() {
   const [loading, setLoading] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
 
+  // Estado para tenant/subdominio
+  const [tenantSlug, setTenantSlug] = useState<string | null>(null)
+  const [tenantInfo, setTenantInfo] = useState<TenantInfo | null>(null)
+  const [tenantLoading, setTenantLoading] = useState(true)
+  const [tenantError, setTenantError] = useState(false)
+
+  // Detectar subdominio y cargar info del tenant
+  useEffect(() => {
+    const slug = extractSubdomain()
+    setTenantSlug(slug)
+
+    if (slug) {
+      fetch(`/api/public/tenant?slug=${slug}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.tenant) {
+            setTenantInfo(data.tenant)
+          } else {
+            setTenantError(true)
+          }
+          setTenantLoading(false)
+        })
+        .catch(() => {
+          setTenantError(true)
+          setTenantLoading(false)
+        })
+    } else {
+      setTenantLoading(false)
+    }
+  }, [])
+
   // Mostrar mensaje de éxito si viene del registro
   useEffect(() => {
     if (searchParams.get("registered") === "true") {
       setShowSuccess(true)
-      // Limpiar el parámetro de la URL
       window.history.replaceState({}, "", "/login")
     }
   }, [searchParams])
+
+  // Redirigir si el tenant no existe
+  useEffect(() => {
+    if (tenantError && !tenantLoading) {
+      router.push("/tenant-not-found")
+    }
+  }, [tenantError, tenantLoading, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -48,10 +116,28 @@ function LoginForm() {
       if (result?.error) {
         setError("Credenciales incorrectas")
         setLoading(false)
-      } else {
-        router.push("/dashboard")
-        router.refresh()
+        return
       }
+
+      // Si estamos en un subdominio, verificar que el usuario pertenece a este tenant
+      if (tenantSlug) {
+        const verifyRes = await fetch("/api/auth/verify-tenant", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ slug: tenantSlug }),
+        })
+
+        if (!verifyRes.ok) {
+          // El usuario no pertenece a esta organización
+          await signOut({ redirect: false })
+          setError("No tienes acceso a esta organización")
+          setLoading(false)
+          return
+        }
+      }
+
+      router.push("/dashboard")
+      router.refresh()
     } catch (error) {
       setError("Error al iniciar sesión")
       setLoading(false)
@@ -68,8 +154,21 @@ function LoginForm() {
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1 pb-2">
           <div className="flex justify-center py-4">
-            <BusinessLogo size="xl" showText={false} />
+            {tenantInfo?.logoUrl ? (
+              <img
+                src={tenantInfo.logoUrl}
+                alt={tenantInfo.nombre}
+                className="h-16 w-auto object-contain"
+              />
+            ) : (
+              <BusinessLogo size="xl" showText={false} />
+            )}
           </div>
+          {tenantInfo && (
+            <CardTitle className="text-center text-xl">
+              {tenantInfo.nombre}
+            </CardTitle>
+          )}
           <CardDescription className="text-center">
             Ingresa tus credenciales para acceder
           </CardDescription>
@@ -154,19 +253,25 @@ function LoginForm() {
               {loading ? "Iniciando sesión..." : "Iniciar Sesión"}
             </Button>
           </form>
-          <div className="mt-6 text-center">
-            <p className="text-sm text-muted-foreground">
-              ¿No tienes cuenta?{" "}
-              <Link href="/registro" className="text-primary hover:underline font-medium">
-                Registra tu negocio
-              </Link>
-            </p>
-          </div>
+          {/* Solo mostrar enlace de registro si no estamos en subdominio */}
+          {!tenantSlug && (
+            <div className="mt-6 text-center">
+              <p className="text-sm text-muted-foreground">
+                ¿No tienes cuenta?{" "}
+                <Link href="/registro" className="text-primary hover:underline font-medium">
+                  Registra tu negocio
+                </Link>
+              </p>
+            </div>
+          )}
 
-          <div className="mt-4 pt-4 border-t border-border text-xs text-muted-foreground text-center space-y-1">
-            <p className="font-medium">Demo:</p>
-            <p>admin@demo.com / Admin123!</p>
-          </div>
+          {/* Solo mostrar credenciales demo si no estamos en subdominio */}
+          {!tenantSlug && (
+            <div className="mt-4 pt-4 border-t border-border text-xs text-muted-foreground text-center space-y-1">
+              <p className="font-medium">Demo:</p>
+              <p>admin@demo.com / Admin123!</p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

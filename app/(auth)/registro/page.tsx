@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
@@ -17,6 +17,9 @@ import {
   ArrowLeft,
   Check,
   Loader2,
+  Globe,
+  AlertCircle,
+  CheckCircle2,
 } from "lucide-react"
 
 type Step = 1 | 2 | 3
@@ -24,6 +27,7 @@ type Step = 1 | 2 | 3
 interface FormData {
   // Organización
   orgNombre: string
+  orgSlug: string
   orgTelefono: string
   orgEmail: string
   orgDireccion: string
@@ -32,6 +36,18 @@ interface FormData {
   email: string
   password: string
   confirmPassword: string
+}
+
+// Sanitizar slug (solo letras minúsculas, números y guiones)
+function sanitizeSlug(input: string): string {
+  return input
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .substring(0, 50)
 }
 
 export default function RegistroPage() {
@@ -43,6 +59,7 @@ export default function RegistroPage() {
   const [error, setError] = useState("")
   const [formData, setFormData] = useState<FormData>({
     orgNombre: "",
+    orgSlug: "",
     orgTelefono: "",
     orgEmail: "",
     orgDireccion: "",
@@ -52,8 +69,83 @@ export default function RegistroPage() {
     confirmPassword: "",
   })
 
+  // Estado para validación de slug
+  const [slugStatus, setSlugStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid">("idle")
+  const [slugError, setSlugError] = useState("")
+
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
+
   const updateForm = (field: keyof FormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
+    setError("")
+  }
+
+  // Generar slug automático desde el nombre
+  const generateSlugFromName = useCallback((nombre: string) => {
+    const slug = sanitizeSlug(nombre)
+    setFormData((prev) => ({ ...prev, orgSlug: slug }))
+    return slug
+  }, [])
+
+  // Verificar disponibilidad del slug
+  const checkSlugAvailability = useCallback(async (slug: string) => {
+    if (!slug || slug.length < 3) {
+      setSlugStatus("idle")
+      return
+    }
+
+    setSlugStatus("checking")
+    setSlugError("")
+
+    try {
+      const res = await fetch("/api/public/tenant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug }),
+      })
+
+      const data = await res.json()
+
+      if (data.available) {
+        setSlugStatus("available")
+      } else {
+        setSlugStatus(data.error?.includes("reservado") ? "invalid" : "taken")
+        setSlugError(data.error || "Este subdominio no está disponible")
+      }
+    } catch {
+      setSlugStatus("idle")
+    }
+  }, [])
+
+  // Debounce para verificar slug
+  useEffect(() => {
+    const slug = formData.orgSlug
+    if (!slug || slug.length < 3) {
+      setSlugStatus("idle")
+      return
+    }
+
+    const timer = setTimeout(() => {
+      checkSlugAvailability(slug)
+    }, 500)
+
+    return () => clearTimeout(timer)
+  }, [formData.orgSlug, checkSlugAvailability])
+
+  // Auto-generar slug cuando cambia el nombre (solo si el slug está vacío o coincide con el anterior)
+  const handleNombreChange = (nombre: string) => {
+    const previousSlugFromName = sanitizeSlug(formData.orgNombre)
+    updateForm("orgNombre", nombre)
+
+    // Solo auto-generar si el slug actual está vacío o era el auto-generado
+    if (!formData.orgSlug || formData.orgSlug === previousSlugFromName) {
+      generateSlugFromName(nombre)
+    }
+  }
+
+  const handleSlugChange = (value: string) => {
+    const sanitized = sanitizeSlug(value)
+    setFormData((prev) => ({ ...prev, orgSlug: sanitized }))
     setError("")
   }
 
@@ -64,6 +156,22 @@ export default function RegistroPage() {
     }
     if (formData.orgNombre.length < 2) {
       setError("El nombre debe tener al menos 2 caracteres")
+      return false
+    }
+    if (!formData.orgSlug.trim()) {
+      setError("El subdominio es requerido")
+      return false
+    }
+    if (formData.orgSlug.length < 3) {
+      setError("El subdominio debe tener al menos 3 caracteres")
+      return false
+    }
+    if (slugStatus === "taken" || slugStatus === "invalid") {
+      setError(slugError || "El subdominio no está disponible")
+      return false
+    }
+    if (slugStatus === "checking") {
+      setError("Espera mientras verificamos el subdominio")
       return false
     }
     return true
@@ -123,6 +231,7 @@ export default function RegistroPage() {
         body: JSON.stringify({
           organizacion: {
             nombre: formData.orgNombre,
+            slug: formData.orgSlug,
             telefono: formData.orgTelefono || undefined,
             email: formData.orgEmail || undefined,
             direccion: formData.orgDireccion || undefined,
@@ -224,10 +333,56 @@ export default function RegistroPage() {
                 <Input
                   id="orgNombre"
                   value={formData.orgNombre}
-                  onChange={(e) => updateForm("orgNombre", e.target.value)}
+                  onChange={(e) => handleNombreChange(e.target.value)}
                   placeholder="Ej: TechFix Reparaciones"
                   autoFocus
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="orgSlug">
+                  <div className="flex items-center gap-2">
+                    <Globe className="h-4 w-4" />
+                    <span>Subdominio *</span>
+                  </div>
+                </Label>
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Input
+                      id="orgSlug"
+                      value={formData.orgSlug}
+                      onChange={(e) => handleSlugChange(e.target.value)}
+                      placeholder="mi-negocio"
+                      className={`pr-10 ${
+                        slugStatus === "available"
+                          ? "border-green-500 focus-visible:ring-green-500"
+                          : slugStatus === "taken" || slugStatus === "invalid"
+                          ? "border-red-500 focus-visible:ring-red-500"
+                          : ""
+                      }`}
+                    />
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      {slugStatus === "checking" && (
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      )}
+                      {slugStatus === "available" && (
+                        <CheckCircle2 className="h-4 w-4 text-green-500" />
+                      )}
+                      {(slugStatus === "taken" || slugStatus === "invalid") && (
+                        <AlertCircle className="h-4 w-4 text-red-500" />
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-sm">
+                  <span className="text-muted-foreground">Tu URL será: </span>
+                  <span className="font-medium text-primary">
+                    {formData.orgSlug || "mi-negocio"}.{rootDomain}
+                  </span>
+                </div>
+                {slugError && (
+                  <p className="text-sm text-red-500">{slugError}</p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -384,6 +539,12 @@ export default function RegistroPage() {
                     Negocio
                   </h4>
                   <p className="font-medium">{formData.orgNombre}</p>
+                  <p className="text-sm flex items-center gap-1.5">
+                    <Globe className="h-3.5 w-3.5 text-primary" />
+                    <span className="text-primary font-medium">
+                      {formData.orgSlug}.{rootDomain}
+                    </span>
+                  </p>
                   {formData.orgTelefono && (
                     <p className="text-sm text-muted-foreground">{formData.orgTelefono}</p>
                   )}

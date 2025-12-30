@@ -12,11 +12,18 @@ import { X } from "lucide-react"
 import type { Cliente } from "@/types"
 
 const clienteSchema = z.object({
-  nombre: z.string().min(1, "El nombre es requerido"),
-  telefono: z.string().min(1, "El teléfono es requerido"),
+  nombre: z.string()
+    .min(1, "El nombre es requerido")
+    .regex(/^[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s]+$/, "El nombre solo debe contener letras"),
+  telefono: z.string()
+    .min(1, "El teléfono es requerido")
+    .regex(/^\d{10}$/, "El teléfono debe tener exactamente 10 dígitos"),
   email: z.string().email("Email inválido").optional().or(z.literal("")),
   direccion: z.string().optional(),
-  dni: z.string().optional(),
+  dni: z.string()
+    .regex(/^(\d{7,8})?$/, "El DNI debe tener 7 u 8 dígitos")
+    .optional()
+    .or(z.literal("")),
 })
 
 type ClienteFormData = z.infer<typeof clienteSchema>
@@ -123,7 +130,8 @@ export function ClienteForm({ cliente, onClose, onSuccess }: ClienteFormProps) {
             <Input
               id="telefono"
               {...register("telefono")}
-              placeholder="+5491112345678"
+              placeholder="1123456789"
+              maxLength={10}
             />
             {errors.telefono && (
               <p className="text-sm text-destructive mt-1">
@@ -149,7 +157,17 @@ export function ClienteForm({ cliente, onClose, onSuccess }: ClienteFormProps) {
 
           <div>
             <Label htmlFor="dni">DNI</Label>
-            <Input id="dni" {...register("dni")} placeholder="12345678" />
+            <Input
+              id="dni"
+              {...register("dni")}
+              placeholder="12345678"
+              maxLength={8}
+            />
+            {errors.dni && (
+              <p className="text-sm text-destructive mt-1">
+                {errors.dni.message}
+              </p>
+            )}
           </div>
 
           <div>

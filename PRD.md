@@ -125,7 +125,7 @@ BORRADOR → ENVIADA → ACEPTADA/RECHAZADA
 - Numeración automática (COT-0001)
 - Vinculadas a órdenes de servicio
 - Items con cantidad y precio unitario
-- Cálculo automático de IVA (21%)
+- Precio final directo (sin IVA)
 - Fecha de vencimiento configurable
 - Aprobación con firma digital del cliente
 - Envío por email con PDF adjunto
@@ -145,10 +145,11 @@ PENDIENTE → PAGADO_PARCIAL → PAGADO
   - Costo final de la orden
   - Suma de repuestos utilizados
   - Presupuesto estimado
-- IVA 21% automático
+- Precio final directo (sin IVA)
 - Registro de pagos parciales
 - Métodos de pago: EFECTIVO, TRANSFERENCIA
 - Reportes de ingresos mensuales
+- Anulación de facturas (solo admin)
 
 ### 2.7 Garantías
 
@@ -359,7 +360,19 @@ Organization (Multi-tenant)
 
 ### 6.3 PDF
 - Cotizaciones con branding
-- Facturas (futuro)
+- Comprobantes de recepción de órdenes
+
+### 6.4 MercadoPago
+- Pagos de suscripción
+- Webhooks para confirmación automática
+- Soporte para pagos mensuales y anuales
+
+### 6.5 PWA (Progressive Web App)
+- Instalable en dispositivos móviles
+- Soporte para Android (prompt automático)
+- Soporte para iOS (instrucciones guiadas para "Agregar a inicio")
+- Manifest con shortcuts para acciones rápidas
+- Service Worker para funcionamiento offline básico
 
 ---
 
@@ -419,13 +432,18 @@ Organization (Multi-tenant)
 ### Argentina
 - Moneda: Peso Argentino (ARS)
 - Formato fecha: DD/MM/YYYY
-- IVA: 21% automático
+- Facturación sin IVA (precio final directo)
 - Campo DNI para clientes
 - Formato de facturación local
 
 ### Idioma
 - Español (Argentina) por defecto
 - Todas las interfaces, emails y notificaciones en español
+
+### Precios de Suscripción
+- Plan Mensual: $14.999 ARS
+- Plan Anual: $143.990 ARS (ahorro de 20%)
+- Procesador de pago: MercadoPago
 
 ---
 
@@ -444,6 +462,7 @@ NEXTAUTH_URL=           # URL de la aplicación
 
 # Email
 RESEND_API_KEY=         # API key de Resend
+RESEND_DOMAIN=          # Dominio verificado en Resend
 
 # Background Jobs
 INNGEST_EVENT_KEY=      # Inngest event key
@@ -451,11 +470,18 @@ INNGEST_SIGNING_KEY=    # Inngest signing key
 
 # Cron
 CRON_SECRET=            # Token para autenticar cron jobs
+
+# MercadoPago
+MERCADOPAGO_ACCESS_TOKEN=    # Access token de producción
+NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY= # Public key
+MERCADOPAGO_WEBHOOK_SECRET=  # Secret para validar webhooks
 ```
 
 ### Requisitos
 - Node.js 18.17+
 - Cuenta en Supabase (tier gratuito disponible)
+- Cuenta en MercadoPago (para suscripciones)
+- Cuenta en Resend (para emails)
 
 ---
 
@@ -612,8 +638,9 @@ lib/
 - [x] Agregar auditoría básica (AuditLog)
 
 ### Corto plazo
+- [x] Integración con MercadoPago (suscripciones)
+- [x] PWA con soporte iOS/Android
 - [ ] Exportación de reportes a Excel/PDF
-- [ ] Integración con Mercado Pago
 - [ ] Subdominios por tenant (guru-tech.stapp.com)
 - [ ] Separar Web y Workers
 
@@ -633,4 +660,4 @@ lib/
 ---
 
 *Documento actualizado: Diciembre 2025*
-*Versión: 2.0 - Migración completa a Supabase*
+*Versión: 2.1 - PWA iOS, MercadoPago, eliminación IVA*

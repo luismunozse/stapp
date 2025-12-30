@@ -19,7 +19,7 @@ export default async function DashboardLayout({
   return (
     <div className="min-h-screen bg-muted/30 dark:bg-background">
       <Navbar />
-      <main className="lg:pl-64 pt-16 lg:pt-0 pb-20 lg:pb-0">
+      <main className="lg:pl-64 pt-14 lg:pt-0 pb-[calc(4rem+env(safe-area-inset-bottom,0px))] lg:pb-0">
         <div className="p-4 lg:p-8">{children}</div>
       </main>
     </div>

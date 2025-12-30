@@ -21,7 +21,8 @@
       "Bash(stripe)",
       "Bash(mercado:*)",
       "Bash(payment \")",
-      "Bash(del \"c:\\\\Users\\\\LUIS\\\\Desktop\\\\stapp\\\\tmp-run.ts\")"
+      "Bash(del \"c:\\\\Users\\\\LUIS\\\\Desktop\\\\stapp\\\\tmp-run.ts\")",
+      "Bash(del /q \"c:\\\\Users\\\\LUIS\\\\Desktop\\\\stapp\\\\middleware.ts\")"
     ]
   }
 }

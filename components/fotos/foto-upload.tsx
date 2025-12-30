@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Camera, Upload, X, Loader2 } from "lucide-react"
+import { compressImage } from "@/lib/image-compression"
 
 interface FotoUploadProps {
   ordenId: string
@@ -24,13 +25,14 @@ const tipoFotoOptions = [
 
 export function FotoUpload({ ordenId, onSuccess, onClose }: FotoUploadProps) {
   const [loading, setLoading] = useState(false)
+  const [comprimiendo, setComprimiendo] = useState(false)
   const [preview, setPreview] = useState<string | null>(null)
   const [tipo, setTipo] = useState("REPARACION")
   const [descripcion, setDescripcion] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -40,17 +42,22 @@ export function FotoUpload({ ordenId, onSuccess, onClose }: FotoUploadProps) {
       return
     }
 
-    // Validar tamaño (5MB máx)
-    if (file.size > 5 * 1024 * 1024) {
-      alert("La imagen no debe superar los 5MB")
-      return
-    }
+    setComprimiendo(true)
+    try {
+      // Comprimir imagen (máx 300KB, 1920px)
+      const compressedFile = await compressImage(file)
 
-    const reader = new FileReader()
-    reader.onloadend = () => {
-      setPreview(reader.result as string)
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setPreview(reader.result as string)
+        setComprimiendo(false)
+      }
+      reader.readAsDataURL(compressedFile)
+    } catch (error) {
+      console.error("Error comprimiendo:", error)
+      setComprimiendo(false)
+      alert("Error al procesar la imagen")
     }
-    reader.readAsDataURL(file)
   }
 
   const handleUpload = async () => {
@@ -118,7 +125,7 @@ export function FotoUpload({ ordenId, onSuccess, onClose }: FotoUploadProps) {
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Botones para seleccionar imagen */}
-        {!preview && (
+        {!preview && !comprimiendo && (
           <div className="flex gap-2">
             <input
               ref={fileInputRef}
@@ -153,6 +160,14 @@ export function FotoUpload({ ordenId, onSuccess, onClose }: FotoUploadProps) {
               <Camera className="mr-2 h-4 w-4" />
               Tomar foto
             </Button>
+          </div>
+        )}
+
+        {/* Indicador de compresión */}
+        {comprimiendo && (
+          <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            Comprimiendo imagen...
           </div>
         )}
 

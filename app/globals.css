@@ -310,3 +310,76 @@
     }
   }
 }
+
+/* Accesibilidad: Reducir movimiento para usuarios sensibles */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  html {
+    scroll-behavior: auto;
+  }
+
+  .animate-in,
+  .animate-out {
+    animation: none;
+  }
+}
+
+/* Touch targets mínimos para móviles (44x44px según WCAG) */
+@layer utilities {
+  .touch-target {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .touch-target-sm {
+    min-width: 36px;
+    min-height: 36px;
+  }
+}
+
+/* Mejoras para dispositivos táctiles */
+@media (pointer: coarse) {
+  /* Aumentar área de tap en dispositivos táctiles */
+  button,
+  [role="button"],
+  input[type="checkbox"],
+  input[type="radio"],
+  select {
+    min-height: 44px;
+  }
+
+  /* Mejorar espaciado en listas para touch */
+  .touch-list > * {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+}
+
+/* Safe area para dispositivos con notch */
+@supports (padding: max(0px)) {
+  .safe-area-inset {
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
+
+  .safe-area-inset-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+}

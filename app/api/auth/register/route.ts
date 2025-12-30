@@ -2,12 +2,14 @@ import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import bcrypt from "bcryptjs"
 import { z } from "zod"
+import { isValidSlug, RESERVED_SUBDOMAINS } from "@/lib/tenant"
 
 // Schema de validación
 const registerSchema = z.object({
   // Datos de la organización
   organizacion: z.object({
     nombre: z.string().min(2, "El nombre debe tener al menos 2 caracteres"),
+    slug: z.string().min(3, "El subdominio debe tener al menos 3 caracteres").max(50),
     telefono: z.string().optional(),
     email: z.string().email("Email inválido").optional().or(z.literal("")),
     direccion: z.string().optional(),
@@ -19,21 +21,6 @@ const registerSchema = z.object({
     password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
   }),
 })
-
-// Función para generar slug único
-function generateSlug(nombre: string): string {
-  const baseSlug = nombre
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "") // Eliminar acentos
-    .replace(/[^a-z0-9]+/g, "-") // Reemplazar caracteres especiales
-    .replace(/^-+|-+$/g, "") // Eliminar guiones al inicio/final
-    .substring(0, 50)
-
-  // Añadir sufijo aleatorio para unicidad
-  const randomSuffix = Math.random().toString(36).substring(2, 6)
-  return `${baseSlug}-${randomSuffix}`
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -51,6 +38,23 @@ export async function POST(request: NextRequest) {
 
     const { organizacion, usuario } = validationResult.data
 
+    // Validar formato del slug
+    const slugValidation = isValidSlug(organizacion.slug)
+    if (!slugValidation.valid) {
+      return NextResponse.json(
+        { error: slugValidation.error || "Subdominio inválido" },
+        { status: 400 }
+      )
+    }
+
+    // Verificar que el slug no sea reservado
+    if (RESERVED_SUBDOMAINS.has(organizacion.slug.toLowerCase())) {
+      return NextResponse.json(
+        { error: "Este subdominio está reservado" },
+        { status: 400 }
+      )
+    }
+
     // Verificar que el email del usuario no exista
     const { data: existingUser } = await supabaseAdmin
       .from("users")
@@ -65,20 +69,21 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Generar slug único para la organización
-    let slug = generateSlug(organizacion.nombre)
-
-    // Verificar que el slug no exista (por si acaso)
+    // Verificar que el slug no exista
     const { data: existingOrg } = await supabaseAdmin
       .from("organizations")
       .select("id")
-      .eq("slug", slug)
+      .eq("slug", organizacion.slug)
       .single()
 
     if (existingOrg) {
-      // Generar otro slug si existe colisión sin modificar el nombre original
-      slug = generateSlug(organizacion.nombre)
+      return NextResponse.json(
+        { error: "Este subdominio ya está en uso" },
+        { status: 400 }
+      )
     }
+
+    const slug = organizacion.slug
 
     // Crear la organización
     const { data: newOrg, error: orgError } = await supabaseAdmin

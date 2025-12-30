@@ -20,6 +20,7 @@ import {
 import { X, Plus, Camera, Upload, Trash2, Loader2, Lock, Grid3X3 } from "lucide-react"
 import { PatternLock } from "@/components/ui/pattern-lock"
 import { OrdenCreadaModal } from "./orden-creada-modal"
+import { compressImage } from "@/lib/image-compression"
 import type { Cliente } from "@/types"
 
 interface FotoPreview {
@@ -30,11 +31,18 @@ interface FotoPreview {
 }
 
 const clienteSchema = z.object({
-  nombre: z.string().min(1, "El nombre es requerido"),
-  telefono: z.string().min(1, "El teléfono es requerido"),
+  nombre: z.string()
+    .min(1, "El nombre es requerido")
+    .regex(/^[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s]+$/, "El nombre solo debe contener letras"),
+  telefono: z.string()
+    .min(1, "El teléfono es requerido")
+    .regex(/^\d{10}$/, "El teléfono debe tener exactamente 10 dígitos"),
   email: z.string().email("Email inválido").optional().or(z.literal("")),
   direccion: z.string().optional(),
-  dni: z.string().optional(),
+  dni: z.string()
+    .regex(/^(\d{7,8})?$/, "El DNI debe tener 7 u 8 dígitos")
+    .optional()
+    .or(z.literal("")),
 })
 
 // Lista de accesorios comunes
@@ -55,7 +63,10 @@ const ordenSchema = z.object({
   tipoDispositivo: z.enum(["CELULAR", "COMPUTADORA", "TABLET", "CONSOLA", "SMARTWATCH"]),
   marca: z.string().optional(),
   color: z.string().optional(),
-  imei: z.string().optional(),
+  imei: z.string()
+    .regex(/^(\d{15})?$/, "El IMEI debe tener exactamente 15 dígitos")
+    .optional()
+    .or(z.literal("")),
   problemaReportado: z.string().min(1, "El problema es requerido"),
   accesorios: z.string().optional(),
   passwordDispositivo: z.string().optional(),
@@ -100,6 +111,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
   const [ordenCreada, setOrdenCreada] = useState<OrdenCreadaData | null>(null)
   const [presupuestoAceptado, setPresupuestoAceptado] = useState(false)
   const [sena, setSena] = useState<number | undefined>(undefined)
+  const [comprimiendo, setComprimiendo] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
 
@@ -153,38 +165,46 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
   }, [])
 
   // Manejar selección de fotos
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (!files) return
 
-    Array.from(files).forEach((file) => {
-      if (!file.type.startsWith("image/")) {
-        alert("Por favor selecciona imágenes válidas")
-        return
-      }
-      if (file.size > 5 * 1024 * 1024) {
-        alert("Las imágenes no deben superar los 5MB")
-        return
-      }
-
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setFotos((prev) => [
-          ...prev,
-          {
-            id: Math.random().toString(36).substr(2, 9),
-            preview: reader.result as string,
-            file,
-            descripcion: "",
-          },
-        ])
-      }
-      reader.readAsDataURL(file)
-    })
-
-    // Reset input
+    // Reset input inmediatamente
     if (fileInputRef.current) fileInputRef.current.value = ""
     if (cameraInputRef.current) cameraInputRef.current.value = ""
+
+    setComprimiendo(true)
+
+    for (const file of Array.from(files)) {
+      if (!file.type.startsWith("image/")) {
+        alert("Por favor selecciona imágenes válidas")
+        continue
+      }
+
+      try {
+        // Comprimir imagen (máx 300KB, 1920px)
+        const compressedFile = await compressImage(file)
+
+        const reader = new FileReader()
+        reader.onloadend = () => {
+          setFotos((prev) => [
+            ...prev,
+            {
+              id: Math.random().toString(36).substr(2, 9),
+              preview: reader.result as string,
+              file: compressedFile,
+              descripcion: "",
+            },
+          ])
+        }
+        reader.readAsDataURL(compressedFile)
+      } catch (error) {
+        console.error("Error procesando imagen:", error)
+        alert("Error al procesar una imagen")
+      }
+    }
+
+    setComprimiendo(false)
   }
 
   const removeFoto = (id: string) => {
@@ -409,8 +429,14 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
               <Input
                 id="imei"
                 {...register("imei")}
-                placeholder="Número de serie"
+                placeholder="123456789012345"
+                maxLength={15}
               />
+              {errors.imei && (
+                <p className="text-sm text-destructive mt-1">
+                  {errors.imei.message}
+                </p>
+              )}
             </div>
           </div>
 
@@ -656,6 +682,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
                   variant="outline"
                   onClick={() => fileInputRef.current?.click()}
                   className="flex-1"
+                  disabled={comprimiendo}
                 >
                   <Upload className="mr-2 h-4 w-4" />
                   Seleccionar archivos
@@ -665,11 +692,20 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
                   variant="outline"
                   onClick={() => cameraInputRef.current?.click()}
                   className="flex-1"
+                  disabled={comprimiendo}
                 >
                   <Camera className="mr-2 h-4 w-4" />
                   Tomar foto
                 </Button>
               </div>
+
+              {/* Indicador de compresión */}
+              {comprimiendo && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Comprimiendo imágenes...
+                </div>
+              )}
 
               {/* Preview de fotos */}
               {fotos.length > 0 && (
@@ -754,7 +790,8 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
               <Input
                 id="cliente-telefono"
                 {...clienteForm.register("telefono")}
-                placeholder="+5491112345678"
+                placeholder="1123456789"
+                maxLength={10}
               />
               {clienteForm.formState.errors.telefono && (
                 <p className="text-sm text-destructive mt-1">
@@ -784,7 +821,13 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
                 id="cliente-dni"
                 {...clienteForm.register("dni")}
                 placeholder="12345678"
+                maxLength={8}
               />
+              {clienteForm.formState.errors.dni && (
+                <p className="text-sm text-destructive mt-1">
+                  {clienteForm.formState.errors.dni.message}
+                </p>
+              )}
             </div>
 
             <div>

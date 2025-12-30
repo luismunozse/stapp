@@ -1,5 +1,7 @@
 import { auth } from "@/lib/auth"
 import { NextResponse } from "next/server"
+import { headers } from "next/headers"
+import { validateUserTenant } from "@/lib/tenant"
 
 export async function getAuthSession() {
   const session = await auth()
@@ -25,6 +27,27 @@ export async function requireAuth() {
       role: null,
     }
   }
+
+  // Validar contexto de tenant si existe (subdominio)
+  const headersList = await headers()
+  const tenantSlug = headersList.get("x-tenant-slug")
+
+  if (tenantSlug) {
+    const isValidTenant = await validateUserTenant(organizationId, tenantSlug)
+    if (!isValidTenant) {
+      return {
+        error: NextResponse.json(
+          { error: "No tienes acceso a esta organización" },
+          { status: 403 }
+        ),
+        session: null,
+        organizationId: null,
+        userId: null,
+        role: null,
+      }
+    }
+  }
+
   return { error: null, session, organizationId, userId, role }
 }
 

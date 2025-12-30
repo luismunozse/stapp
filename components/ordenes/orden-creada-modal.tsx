@@ -59,12 +59,23 @@ interface OrdenCreadaModalProps {
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(amount)
 
-const formatDate = (dateStr: string) =>
-  new Date(dateStr).toLocaleDateString("es-AR", {
+const formatDate = (dateStr: string) => {
+  if (!dateStr) return ""
+  // Manejar formato YYYY-MM-DD del input date
+  const parts = dateStr.split("-")
+  if (parts.length === 3) {
+    const [year, month, day] = parts
+    return `${day}/${month}/${year}`
+  }
+  // Fallback para otros formatos
+  const date = new Date(dateStr)
+  if (isNaN(date.getTime())) return ""
+  return date.toLocaleDateString("es-AR", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
   })
+}
 
 function generateOrdenMessage(orden: OrdenCreadaData, baseUrl: string): string {
   let mensaje = `Hola ${orden.cliente.nombre}, le confirmamos la recepcion de su equipo:

@@ -18,8 +18,9 @@ import {
   X,
   Settings,
   Store,
+  MoreHorizontal,
 } from "lucide-react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { cn } from "@/lib/utils"
 import { BusinessLogo } from "@/components/shared/business-logo"
 
@@ -33,11 +34,36 @@ const navItems = [
   { href: "/reportes", label: "Reportes", icon: BarChart3 },
 ]
 
+// Items principales para el bottom nav (los 4 más usados)
+const bottomNavItems = [
+  { href: "/dashboard", label: "Inicio", icon: LayoutDashboard },
+  { href: "/ordenes", label: "Órdenes", icon: ClipboardList },
+  { href: "/clientes", label: "Clientes", icon: Users },
+  { href: "/inventario", label: "Inventario", icon: Package },
+]
+
 export function Navbar() {
   const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const { data: session } = useSession()
   const isAdmin = session?.user?.role === "ADMIN"
+
+  // Cerrar menú cuando cambia la ruta
+  useEffect(() => {
+    setMobileMenuOpen(false)
+  }, [pathname])
+
+  // Prevenir scroll cuando el menú está abierto
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [mobileMenuOpen])
 
   const allNavItems = [
     ...navItems,
@@ -46,6 +72,16 @@ export function Navbar() {
       { href: "/configuracion", label: "Configuración", icon: Settings }
     ] : [])
   ]
+
+  // Items que no están en el bottom nav (para el menú "Más")
+  const moreItems = allNavItems.filter(
+    item => !bottomNavItems.some(bottomItem => bottomItem.href === item.href)
+  )
+
+  // Verificar si algún item de "más" está activo
+  const isMoreActive = moreItems.some(
+    item => pathname === item.href || pathname.startsWith(item.href + "/")
+  )
 
   return (
     <>
@@ -91,15 +127,18 @@ export function Navbar() {
       </aside>
 
       {/* Mobile Header */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-background border-b border-border">
-        <div className="flex items-center justify-between h-16 px-4">
+      <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border safe-area-inset-top">
+        <div className="flex items-center justify-between h-14 px-4">
           <BusinessLogo size="sm" showText={true} textClassName="text-lg" />
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <ThemeToggle variant="icon" />
             <Button
               variant="ghost"
               size="icon"
+              className="touch-target"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label={mobileMenuOpen ? "Cerrar menú" : "Abrir menú"}
+              aria-expanded={mobileMenuOpen}
             >
               {mobileMenuOpen ? (
                 <X className="h-6 w-6" />
@@ -111,10 +150,25 @@ export function Navbar() {
         </div>
       </header>
 
-      {/* Mobile Menu */}
-      {mobileMenuOpen && (
-        <div className="lg:hidden fixed inset-0 z-40 bg-background pt-16">
-          <nav className="flex flex-col px-4 py-2 space-y-1">
+      {/* Mobile Menu Overlay */}
+      <div
+        className={cn(
+          "lg:hidden fixed inset-0 z-40 bg-black/50 transition-opacity duration-200",
+          mobileMenuOpen ? "opacity-100" : "opacity-0 pointer-events-none"
+        )}
+        onClick={() => setMobileMenuOpen(false)}
+        aria-hidden="true"
+      />
+
+      {/* Mobile Menu Drawer */}
+      <div
+        className={cn(
+          "lg:hidden fixed top-0 right-0 bottom-0 z-40 w-72 bg-background shadow-xl transition-transform duration-200 ease-out",
+          mobileMenuOpen ? "translate-x-0" : "translate-x-full"
+        )}
+      >
+        <div className="flex flex-col h-full pt-16 safe-area-inset">
+          <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto">
             {allNavItems.map((item) => {
               const Icon = item.icon
               const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
@@ -124,33 +178,36 @@ export function Navbar() {
                   href={item.href}
                   onClick={() => setMobileMenuOpen(false)}
                   className={cn(
-                    "flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors",
+                    "flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-colors touch-target",
+                    "active:scale-[0.98] active:bg-accent/80",
                     isActive
                       ? "bg-primary text-primary-foreground"
                       : "text-foreground hover:bg-accent hover:text-accent-foreground"
                   )}
                 >
-                  <Icon className="mr-3 h-5 w-5" />
+                  <Icon className="mr-3 h-5 w-5 flex-shrink-0" />
                   {item.label}
                 </Link>
               )
             })}
+          </nav>
+          <div className="p-4 border-t border-border safe-bottom">
             <Button
               variant="ghost"
-              className="w-full justify-start mt-4"
+              className="w-full justify-start py-3 touch-target active:scale-[0.98]"
               onClick={() => signOut({ callbackUrl: "/login" })}
             >
               <LogOut className="mr-3 h-5 w-5" />
               Cerrar Sesión
             </Button>
-          </nav>
+          </div>
         </div>
-      )}
+      </div>
 
-      {/* Mobile Bottom Navigation */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-background border-t border-border">
-        <div className="grid grid-cols-4 gap-1">
-          {navItems.slice(0, 4).map((item) => {
+      {/* Mobile Bottom Navigation - Optimizado para touch */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-t border-border safe-bottom">
+        <div className="grid grid-cols-5 h-16">
+          {bottomNavItems.map((item) => {
             const Icon = item.icon
             const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
             return (
@@ -158,15 +215,35 @@ export function Navbar() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex flex-col items-center justify-center py-2 text-xs transition-colors",
-                  isActive ? "text-primary" : "text-muted-foreground"
+                  "flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors",
+                  "active:bg-accent/50 active:scale-95",
+                  isActive
+                    ? "text-primary"
+                    : "text-muted-foreground hover:text-foreground"
                 )}
+                aria-current={isActive ? "page" : undefined}
               >
-                <Icon className="h-5 w-5 mb-1" />
-                <span className="truncate">{item.label}</span>
+                <Icon className={cn("h-5 w-5", isActive && "text-primary")} />
+                <span className="truncate max-w-full px-1">{item.label}</span>
               </Link>
             )
           })}
+
+          {/* Botón "Más" para acceder al resto del menú */}
+          <button
+            onClick={() => setMobileMenuOpen(true)}
+            className={cn(
+              "flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors",
+              "active:bg-accent/50 active:scale-95",
+              isMoreActive
+                ? "text-primary"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+            aria-label="Más opciones"
+          >
+            <MoreHorizontal className={cn("h-5 w-5", isMoreActive && "text-primary")} />
+            <span>Más</span>
+          </button>
         </div>
       </nav>
     </>

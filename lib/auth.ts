@@ -70,7 +70,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   ],
   callbacks: {
     jwt: async ({ token, user }) => {
-      if (user) {
+      if (user && user.id) {
         token.role = user.role
         token.id = user.id
         token.organizationId = user.organizationId
@@ -96,5 +96,52 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   session: {
     strategy: "jwt",
     maxAge: THIRTY_DAYS, // Máximo 30 días, pero el JWT controla la expiración real
+  },
+  // Cookies configuradas para funcionar en todos los subdominios
+  cookies: {
+    sessionToken: {
+      name:
+        process.env.NODE_ENV === "production"
+          ? "__Secure-next-auth.session-token"
+          : "next-auth.session-token",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NODE_ENV === "production",
+        // Dominio con punto inicial para permitir subdominios
+        domain:
+          process.env.NODE_ENV === "production"
+            ? `.${process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"}`
+            : undefined,
+      },
+    },
+    callbackUrl: {
+      name:
+        process.env.NODE_ENV === "production"
+          ? "__Secure-next-auth.callback-url"
+          : "next-auth-callback-url",
+      options: {
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NODE_ENV === "production",
+        domain:
+          process.env.NODE_ENV === "production"
+            ? `.${process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"}`
+            : undefined,
+      },
+    },
+    csrfToken: {
+      name:
+        process.env.NODE_ENV === "production"
+          ? "__Host-next-auth.csrf-token"
+          : "next-auth.csrf-token",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NODE_ENV === "production",
+      },
+    },
   },
 })
