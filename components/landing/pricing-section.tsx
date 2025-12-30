@@ -49,10 +49,11 @@ const plans = [
   },
 ]
 
-// Formatear precio en pesos argentinos
+// Formatear precio en pesos argentinos (formato fijo para evitar hydration mismatch)
 function formatPrice(price: number): string {
   if (price === 0) return "0"
-  return price.toLocaleString("es-AR")
+  // Usar formato fijo con separador de miles para consistencia servidor/cliente
+  return price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
 }
 
 export function PricingSection() {

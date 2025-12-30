@@ -98,6 +98,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     maxAge: THIRTY_DAYS, // Máximo 30 días, pero el JWT controla la expiración real
   },
   // Cookies configuradas para funcionar en todos los subdominios
+  // Solo usar dominio personalizado si está configurado COOKIE_DOMAIN
   cookies: {
     sessionToken: {
       name:
@@ -109,11 +110,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         sameSite: "lax",
         path: "/",
         secure: process.env.NODE_ENV === "production",
-        // Dominio con punto inicial para permitir subdominios
-        domain:
-          process.env.NODE_ENV === "production"
-            ? `.${process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"}`
-            : undefined,
+        // Solo establecer dominio si hay COOKIE_DOMAIN configurado (para subdominios)
+        domain: process.env.COOKIE_DOMAIN || undefined,
       },
     },
     callbackUrl: {
@@ -125,10 +123,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         sameSite: "lax",
         path: "/",
         secure: process.env.NODE_ENV === "production",
-        domain:
-          process.env.NODE_ENV === "production"
-            ? `.${process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"}`
-            : undefined,
+        domain: process.env.COOKIE_DOMAIN || undefined,
       },
     },
     csrfToken: {
