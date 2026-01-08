@@ -142,9 +142,14 @@ export async function middleware(request: NextRequest) {
 
   // Si es landing page en subdominio, redirigir a dashboard o login
   if (isLandingPath(pathname)) {
+    const landingCookieName = process.env.NODE_ENV === "production"
+      ? "__Secure-next-auth.session-token"
+      : "next-auth.session-token"
+
     const token = await getToken({
       req: request,
       secret: process.env.NEXTAUTH_SECRET,
+      cookieName: landingCookieName,
     })
 
     if (token) {
@@ -155,9 +160,14 @@ export async function middleware(request: NextRequest) {
   }
 
   // Para rutas protegidas, verificar autenticación
+  const cookieName = process.env.NODE_ENV === "production"
+    ? "__Secure-next-auth.session-token"
+    : "next-auth.session-token"
+
   const token = await getToken({
     req: request,
     secret: process.env.NEXTAUTH_SECRET,
+    cookieName,
   })
 
   if (!token) {
