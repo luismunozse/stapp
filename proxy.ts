@@ -41,7 +41,6 @@ function isPublicPath(pathname: string): boolean {
     "/api/inngest",
     "/api/cron",
     "/api/mercadopago/webhook",
-    "/api/stripe/webhook",
     "/_next",
     "/favicon.ico",
     "/manifest.json",

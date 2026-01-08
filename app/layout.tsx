@@ -3,6 +3,7 @@ import { Inter } from "next/font/google"
 import "./globals.css"
 import { PWAInstaller } from "@/components/pwa/pwa-installer"
 import { Providers } from "@/components/providers"
+import { CookieConsent } from "@/components/cookie-consent"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -86,6 +87,7 @@ export default function RootLayout({
         <Providers>
           {children}
           <PWAInstaller />
+          <CookieConsent />
         </Providers>
       </body>
     </html>

@@ -156,7 +156,7 @@ export function FacturacionList() {
                         Factura {factura.numeroFactura}
                       </CardTitle>
                       <div className="text-sm text-muted-foreground mt-1">
-                        Orden #{factura.orden.numeroOrden} - {factura.orden.cliente.nombre}
+                        Orden {factura.orden.codigoOrden || `#${factura.orden.numeroOrden}`} - {factura.orden.cliente.nombre}
                       </div>
                     </div>
                     <PaymentStatusBadge status={factura.estadoPago} showIcon />

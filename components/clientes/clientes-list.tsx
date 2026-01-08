@@ -4,17 +4,23 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DataTable, type Column } from "@/components/ui/data-table"
-import { Plus, Search, Phone, Mail, Edit, Trash2, User } from "lucide-react"
+import { Plus, Search, Phone, Mail, Edit, Trash2, User, Upload } from "lucide-react"
 import { ClienteForm } from "./cliente-form"
+import { ImportModal } from "@/components/import/import-modal"
 import { formatDate } from "@/lib/utils"
 import type { Cliente } from "@/types"
 import { useModal } from "@/contexts/modal-context"
 
-export function ClientesList() {
+interface ClientesListProps {
+  allowImport?: boolean
+}
+
+export function ClientesList({ allowImport = true }: ClientesListProps) {
   const { confirm, showError } = useModal()
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [showImport, setShowImport] = useState(false)
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
 
@@ -215,10 +221,18 @@ export function ClientesList() {
             />
           </div>
         </div>
-        <Button onClick={() => setShowForm(true)} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Nuevo Cliente
-        </Button>
+        <div className="flex gap-2">
+          {allowImport && (
+            <Button onClick={() => setShowImport(true)} variant="outline" className="gap-2">
+              <Upload className="h-4 w-4" />
+              Importar CSV
+            </Button>
+          )}
+          <Button onClick={() => setShowForm(true)} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Nuevo Cliente
+          </Button>
+        </div>
       </div>
 
       {/* Form Modal */}
@@ -232,6 +246,18 @@ export function ClientesList() {
           onSuccess={() => {
             setShowForm(false)
             setEditingCliente(null)
+            fetchClientes()
+          }}
+        />
+      )}
+
+      {/* Import Modal */}
+      {showImport && (
+        <ImportModal
+          entityType="CLIENTES"
+          onClose={() => setShowImport(false)}
+          onSuccess={() => {
+            setShowImport(false)
             fetchClientes()
           }}
         />

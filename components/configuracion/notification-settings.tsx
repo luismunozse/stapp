@@ -13,7 +13,11 @@ interface NotificationConfig {
   diasRecordatorio: number
 }
 
-export function NotificationSettings() {
+interface NotificationSettingsProps {
+  allowEdit?: boolean
+}
+
+export function NotificationSettings({ allowEdit = true }: NotificationSettingsProps) {
   const [config, setConfig] = useState<NotificationConfig | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -136,13 +140,14 @@ export function NotificationSettings() {
               </p>
             </div>
           </div>
-          <label className="relative inline-flex items-center cursor-pointer">
+          <label className={`relative inline-flex items-center ${allowEdit ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}>
             <input
               type="checkbox"
               checked={config.notificacionesEmail}
               onChange={(e) =>
                 setConfig({ ...config, notificacionesEmail: e.target.checked })
               }
+              disabled={!allowEdit}
               className="sr-only peer"
             />
             <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
@@ -160,7 +165,7 @@ export function NotificationSettings() {
               </p>
             </div>
           </div>
-          <label className="relative inline-flex items-center cursor-pointer">
+          <label className={`relative inline-flex items-center ${allowEdit ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}>
             <input
               type="checkbox"
               checked={config.notificacionesWhatsapp}
@@ -170,6 +175,7 @@ export function NotificationSettings() {
                   notificacionesWhatsapp: e.target.checked,
                 })
               }
+              disabled={!allowEdit}
               className="sr-only peer"
             />
             <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
@@ -194,13 +200,14 @@ export function NotificationSettings() {
                   diasRecordatorio: parseInt(e.target.value) || 3,
                 })
               }
+              disabled={!allowEdit}
               className="w-24"
             />
             <span className="text-sm text-muted-foreground">dias</span>
           </div>
         </div>
 
-        <Button onClick={handleSave} disabled={saving} className="w-full">
+        <Button onClick={handleSave} disabled={saving || !allowEdit} className="w-full">
           <Save className="mr-2 h-4 w-4" />
           {saving ? "Guardando..." : "Guardar configuracion"}
         </Button>

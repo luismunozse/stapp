@@ -7,7 +7,7 @@ export interface SubscriptionInfo {
   planTipo: "FREE" | "PREMIUM"
   status: "ACTIVE" | "CANCELED" | "PAST_DUE" | "TRIALING"
   billingPeriod: "MONTHLY" | "YEARLY" | null
-  paymentProvider: "STRIPE" | "MERCADOPAGO" | null
+  paymentProvider: "MERCADOPAGO" | null
   currentPeriodEnd: string | null
   cancelAtPeriodEnd: boolean
   limits: {

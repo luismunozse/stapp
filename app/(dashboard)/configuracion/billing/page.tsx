@@ -72,20 +72,6 @@ export default function BillingPage() {
     }
   }
 
-  const handleManageBilling = async () => {
-    try {
-      const response = await fetch("/api/stripe/portal", {
-        method: "POST",
-      })
-      const data = await response.json()
-      if (data.url) {
-        window.location.href = data.url
-      }
-    } catch (error) {
-      console.error("Error opening billing portal:", error)
-    }
-  }
-
   const handleCancelSubscription = async () => {
     const confirmed = await confirm({
       title: "Cancelar Suscripción",
@@ -171,7 +157,7 @@ export default function BillingPage() {
         <CurrentPlan
           subscription={subscription}
           onUpgrade={() => setUpgradeModalOpen(true)}
-          onManage={handleManageBilling}
+          onManage={() => {}}
           onCancel={handleCancelSubscription}
         />
 

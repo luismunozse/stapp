@@ -18,7 +18,7 @@ const faqs = [
   {
     question: "¿Qué métodos de pago aceptan?",
     answer:
-      "Aceptamos tarjetas de crédito y débito a través de Stripe (internacional) y MercadoPago (Latinoamérica). Puedes elegir el que te resulte más conveniente.",
+      "Aceptamos tarjetas de crédito, débito, efectivo y otros medios de pago a través de MercadoPago.",
   },
   {
     question: "¿Puedo cancelar mi suscripción en cualquier momento?",
@@ -51,10 +51,10 @@ export function FAQ() {
   const [openIndex, setOpenIndex] = useState<number | null>(0)
 
   return (
-    <section id="faq" className="py-20">
+    <section id="faq" className="py-6 sm:py-8">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="text-center max-w-3xl mx-auto mb-16">
+        <div className="text-center max-w-3xl mx-auto mb-6">
           <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
             Preguntas frecuentes
           </h2>

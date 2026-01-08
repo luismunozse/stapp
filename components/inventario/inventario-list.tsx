@@ -13,8 +13,10 @@ import {
   Trash2,
   AlertCircle,
   Package,
+  Upload,
 } from "lucide-react"
 import { InventarioForm } from "./inventario-form"
+import { ImportModal } from "@/components/import/import-modal"
 import { formatCurrency } from "@/lib/utils"
 import type { Inventario, TipoDispositivo } from "@/types"
 import { useModal } from "@/contexts/modal-context"
@@ -29,7 +31,11 @@ const categorias = [
   "Otros",
 ]
 
-export function InventarioList() {
+interface InventarioListProps {
+  allowImport?: boolean
+}
+
+export function InventarioList({ allowImport = true }: InventarioListProps) {
   const { confirm } = useModal()
   const [items, setItems] = useState<Inventario[]>([])
   const [loading, setLoading] = useState(true)
@@ -37,6 +43,7 @@ export function InventarioList() {
   const [categoria, setCategoria] = useState("")
   const [tipoDispositivo, setTipoDispositivo] = useState<TipoDispositivo | "">("")
   const [showForm, setShowForm] = useState(false)
+  const [showImport, setShowImport] = useState(false)
   const [editingItem, setEditingItem] = useState<Inventario | null>(null)
 
   const fetchItems = async () => {
@@ -117,10 +124,18 @@ export function InventarioList() {
             <option value="SMARTWATCH">Smartwatch</option>
           </Select>
         </div>
-        <Button onClick={() => setShowForm(true)} className="sm:w-auto">
-          <Plus className="mr-2 h-4 w-4" />
-          Nuevo Item
-        </Button>
+        <div className="flex gap-2">
+          {allowImport && (
+            <Button onClick={() => setShowImport(true)} variant="outline" className="gap-2">
+              <Upload className="h-4 w-4" />
+              Importar CSV
+            </Button>
+          )}
+          <Button onClick={() => setShowForm(true)} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Nuevo Item
+          </Button>
+        </div>
       </div>
 
       {showForm && (
@@ -133,6 +148,17 @@ export function InventarioList() {
           onSuccess={() => {
             setShowForm(false)
             setEditingItem(null)
+            fetchItems()
+          }}
+        />
+      )}
+
+      {showImport && (
+        <ImportModal
+          entityType="INVENTARIO"
+          onClose={() => setShowImport(false)}
+          onSuccess={() => {
+            setShowImport(false)
             fetchItems()
           }}
         />

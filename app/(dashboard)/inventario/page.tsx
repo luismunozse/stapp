@@ -1,6 +1,9 @@
 import { InventarioList } from "@/components/inventario/inventario-list"
+import { canImportData } from "@/lib/auth-utils"
 
-export default function InventarioPage() {
+export default async function InventarioPage() {
+  const allowImport = await canImportData()
+
   return (
     <div className="space-y-6">
       <div>
@@ -9,7 +12,7 @@ export default function InventarioPage() {
           Gestiona el stock de repuestos y componentes
         </p>
       </div>
-      <InventarioList />
+      <InventarioList allowImport={allowImport} />
     </div>
   )
 }

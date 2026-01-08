@@ -94,3 +94,23 @@ export function canManageInventory(role: string | null): boolean {
 export function canCreateOrders(role: string | null): boolean {
   return role === "ADMIN" || role === "VENDEDOR"
 }
+
+// Verifica si es una cuenta demo (por email)
+export function isDemoAccount(email: string | null | undefined): boolean {
+  if (!email) return false
+  return email.endsWith("@demo.com")
+}
+
+// Verifica si el usuario actual puede importar datos (no demo)
+export async function canImportData(): Promise<boolean> {
+  const { session } = await getAuthSession()
+  if (!session?.user?.email) return false
+  return !isDemoAccount(session.user.email)
+}
+
+// Verifica si el usuario actual puede editar configuración (ADMIN y no demo)
+export async function canEditConfiguration(): Promise<boolean> {
+  const { session, role } = await getAuthSession()
+  if (!session?.user?.email || role !== "ADMIN") return false
+  return !isDemoAccount(session.user.email)
+}

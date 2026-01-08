@@ -18,7 +18,11 @@ interface Config {
   direccion: string | null
 }
 
-export function ConfiguracionForm() {
+interface ConfiguracionFormProps {
+  allowEdit?: boolean
+}
+
+export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) {
   const { confirm } = useModal()
   const [config, setConfig] = useState<Config | null>(null)
   const [loading, setLoading] = useState(true)
@@ -196,6 +200,7 @@ export function ConfiguracionForm() {
                 type="button"
                 variant="outline"
                 onClick={() => fileInputRef.current?.click()}
+                disabled={!allowEdit}
               >
                 <Upload className="mr-2 h-4 w-4" />
                 Subir Logo
@@ -206,7 +211,7 @@ export function ConfiguracionForm() {
                   variant="destructive"
                   size="sm"
                   onClick={handleDeleteLogo}
-                  disabled={saving}
+                  disabled={saving || !allowEdit}
                 >
                   <Trash2 className="mr-2 h-4 w-4" />
                   Eliminar
@@ -235,6 +240,7 @@ export function ConfiguracionForm() {
               value={nombreEmpresa}
               onChange={(e) => setNombreEmpresa(e.target.value)}
               placeholder="Servicio Técnico"
+              disabled={!allowEdit}
             />
           </div>
           <div>
@@ -244,6 +250,7 @@ export function ConfiguracionForm() {
               value={telefono}
               onChange={(e) => setTelefono(e.target.value)}
               placeholder="+54 11 1234-5678"
+              disabled={!allowEdit}
             />
             <p className="text-sm text-muted-foreground mt-1">
               Se mostrará en los comprobantes PDF
@@ -256,6 +263,7 @@ export function ConfiguracionForm() {
               value={direccion}
               onChange={(e) => setDireccion(e.target.value)}
               placeholder="Av. Principal 123, Ciudad"
+              disabled={!allowEdit}
             />
             <p className="text-sm text-muted-foreground mt-1">
               Se mostrará en los comprobantes PDF
@@ -264,13 +272,13 @@ export function ConfiguracionForm() {
         </CardContent>
       </Card>
 
-      <Button onClick={handleSave} disabled={saving} className="w-full sm:w-auto">
+      <Button onClick={handleSave} disabled={saving || !allowEdit} className="w-full sm:w-auto">
         <Save className="mr-2 h-4 w-4" />
         {saving ? "Guardando..." : "Guardar Cambios"}
       </Button>
 
       {/* Configuración de notificaciones - se guarda por separado */}
-      <NotificationSettings />
+      <NotificationSettings allowEdit={allowEdit} />
     </div>
   )
 }

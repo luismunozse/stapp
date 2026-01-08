@@ -298,7 +298,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = `orden-${orden.numeroOrden}.pdf`
+      a.download = `orden-${orden.codigoOrden || orden.numeroOrden}.pdf`
       document.body.appendChild(a)
       a.click()
       window.URL.revokeObjectURL(url)
@@ -315,9 +315,10 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   }
 
   const handleDeleteOrden = async () => {
+    const codigoDisplay = orden.codigoOrden || `#${orden.numeroOrden}`
     const confirmed = await confirm({
       title: "Eliminar orden",
-      description: `¿Estás seguro de eliminar la Orden #${orden.numeroOrden}? Esta acción no se puede deshacer.`,
+      description: `¿Estás seguro de eliminar la Orden ${codigoDisplay}? Esta acción no se puede deshacer.`,
       confirmText: "Eliminar",
       variant: "danger",
     })
@@ -393,7 +394,9 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           </Link>
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold">Orden #{orden.numeroOrden}</h1>
+              <h1 className="text-2xl font-bold">
+                Orden {orden.codigoOrden || `#${orden.numeroOrden}`}
+              </h1>
               <OrderStatusBadge status={orden.estado} showIcon />
             </div>
             <p className="text-sm text-muted-foreground">

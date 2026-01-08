@@ -1,5 +1,15 @@
 import { supabaseAdmin } from "./supabase"
 
+// Mapeo de tipos de dispositivo a prefijos de orden
+const DEVICE_TYPE_PREFIXES: Record<string, string> = {
+  CELULAR: "CEL",
+  COMPUTADORA: "PC",
+  TABLET: "TAB",
+  CONSOLA: "CONS",
+  SMARTWATCH: "SW",
+  TODOS: "ORD", // Fallback para tipo genérico
+}
+
 /**
  * Obtener el siguiente número de orden para una organización
  * Usa una función PostgreSQL para garantizar atomicidad
@@ -14,6 +24,42 @@ export async function getNextOrderNumber(organizationId: string): Promise<number
   }
 
   return data as number
+}
+
+/**
+ * Obtener el siguiente número de orden formateado con prefijo por tipo de dispositivo
+ * Formato: CEL001, PC001, TAB001, CONS001, SW001
+ */
+export async function getNextOrderNumberByType(
+  organizationId: string,
+  tipoDispositivo: string
+): Promise<{ codigo: string; numero: number }> {
+  const prefix = DEVICE_TYPE_PREFIXES[tipoDispositivo] || "ORD"
+
+  // Buscar el último número de orden para este tipo de dispositivo en esta organización
+  const { data: lastOrder, error: searchError } = await supabaseAdmin
+    .from("ordenes_servicio")
+    .select("numero_orden")
+    .eq("organization_id", organizationId)
+    .eq("tipo_dispositivo", tipoDispositivo)
+    .order("numero_orden", { ascending: false })
+    .limit(1)
+    .single()
+
+  let nextNumber = 1
+
+  if (!searchError && lastOrder) {
+    nextNumber = (lastOrder.numero_orden as number) + 1
+  } else if (searchError && searchError.code !== "PGRST116") {
+    // PGRST116 = no rows found, que es válido para el primer registro
+    throw new Error(`Error getting last order number: ${searchError.message}`)
+  }
+
+  // Formatear el código con padding de 3 dígitos (expandible si supera 999)
+  const paddedNumber = nextNumber.toString().padStart(3, "0")
+  const codigo = `${prefix}${paddedNumber}`
+
+  return { codigo, numero: nextNumber }
 }
 
 /**

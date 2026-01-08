@@ -21,7 +21,7 @@ interface NotificationLog {
   asunto?: string
   createdAt: string
   cliente: { nombre: string }
-  orden?: { numeroOrden: number }
+  orden?: { numeroOrden: number; codigoOrden?: string }
 }
 
 interface NotificationHistoryProps {

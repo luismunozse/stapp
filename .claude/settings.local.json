@@ -22,7 +22,15 @@
       "Bash(mercado:*)",
       "Bash(payment \")",
       "Bash(del \"c:\\\\Users\\\\LUIS\\\\Desktop\\\\stapp\\\\tmp-run.ts\")",
-      "Bash(del /q \"c:\\\\Users\\\\LUIS\\\\Desktop\\\\stapp\\\\middleware.ts\")"
+      "Bash(del /q \"c:\\\\Users\\\\LUIS\\\\Desktop\\\\stapp\\\\middleware.ts\")",
+      "Bash(findstr:*)",
+      "Bash(npm run dev:*)",
+      "Bash(wc:*)",
+      "Bash(npm run test:run:*)",
+      "Bash(rm:*)",
+      "Bash(del \"c:\\\\Users\\\\LUIS\\\\Desktop\\\\stapp\\\\middleware.ts\")",
+      "Bash(npm uninstall:*)",
+      "Bash(git add:*)"
     ]
   }
 }

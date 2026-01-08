@@ -116,6 +116,41 @@ export async function uploadSignature(
 }
 
 /**
+ * Subir archivo de importación (CSV/Excel)
+ * Path: csv-imports/{orgId}/{uuid}.{ext}
+ */
+export async function uploadImportFile(
+  orgId: string,
+  file: Buffer | Blob,
+  mime: string,
+  originalName: string
+): Promise<UploadResult> {
+  const ext = mime.includes('csv') ? 'csv' : 'xlsx'
+  const fileName = `${uuidv4()}.${ext}`
+  const path = `${orgId}/${fileName}`
+
+  const { error } = await supabaseAdmin.storage
+    .from(STORAGE_BUCKETS.CSV_IMPORTS)
+    .upload(path, file, {
+      contentType: mime,
+      upsert: false,
+    })
+
+  if (error) {
+    throw new Error(`Error uploading import file: ${error.message}`)
+  }
+
+  const { data: urlData } = supabaseAdmin.storage
+    .from(STORAGE_BUCKETS.CSV_IMPORTS)
+    .getPublicUrl(path)
+
+  return {
+    url: urlData.publicUrl,
+    path,
+  }
+}
+
+/**
  * Eliminar archivo de storage
  */
 export async function deleteFile(

@@ -117,11 +117,6 @@ export function CurrentPlan({ subscription, onUpgrade, onManage, onCancel }: Cur
               Actualizar a Premium
             </Button>
           )}
-          {isPremium && subscription.paymentProvider === "STRIPE" && !isCanceled && (
-            <Button variant="outline" onClick={onManage}>
-              Gestionar facturación
-            </Button>
-          )}
           {isPremium && !isCanceled && (
             <Button variant="ghost" className="text-red-600" onClick={onCancel}>
               Cancelar suscripción

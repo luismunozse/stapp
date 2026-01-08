@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
-import { cancelSubscription as cancelStripeSubscription } from "@/lib/stripe"
 import { cancelPreApproval } from "@/lib/mercadopago"
 
 export async function POST() {
@@ -23,10 +22,8 @@ export async function POST() {
       )
     }
 
-    // Cancelar según el proveedor
-    if (subscription.payment_provider === "STRIPE" && subscription.stripe_subscription_id) {
-      await cancelStripeSubscription(subscription.stripe_subscription_id, true)
-    } else if (subscription.payment_provider === "MERCADOPAGO" && subscription.mercadopago_preapproval_id) {
+    // Cancelar en MercadoPago si existe
+    if (subscription.mercadopago_preapproval_id) {
       await cancelPreApproval(subscription.mercadopago_preapproval_id)
     }
 

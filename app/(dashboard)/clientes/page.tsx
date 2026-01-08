@@ -1,6 +1,9 @@
 import { ClientesList } from "@/components/clientes/clientes-list"
+import { canImportData } from "@/lib/auth-utils"
 
-export default function ClientesPage() {
+export default async function ClientesPage() {
+  const allowImport = await canImportData()
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -11,7 +14,7 @@ export default function ClientesPage() {
           </p>
         </div>
       </div>
-      <ClientesList />
+      <ClientesList allowImport={allowImport} />
     </div>
   )
 }

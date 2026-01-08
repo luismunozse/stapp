@@ -38,6 +38,7 @@ function WhatsAppIcon({ className }: { className?: string }) {
 interface OrdenCreadaData {
   id: string
   numeroOrden: number
+  codigoOrden?: string
   dispositivo: string
   problemaReportado: string
   presupuesto?: number | null
@@ -78,9 +79,11 @@ const formatDate = (dateStr: string) => {
 }
 
 function generateOrdenMessage(orden: OrdenCreadaData, baseUrl: string): string {
+  // Usar código con prefijo si existe, sino el número simple
+  const codigoDisplay = orden.codigoOrden || `#${orden.numeroOrden}`
   let mensaje = `Hola ${orden.cliente.nombre}, le confirmamos la recepcion de su equipo:
 
-*ORDEN DE SERVICIO #${orden.numeroOrden}*
+*ORDEN DE SERVICIO ${codigoDisplay}*
 
 Dispositivo: ${orden.dispositivo}
 Problema: ${orden.problemaReportado}`
@@ -142,7 +145,7 @@ export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = `orden-${orden.numeroOrden}.pdf`
+      a.download = `orden-${orden.codigoOrden || orden.numeroOrden}.pdf`
       document.body.appendChild(a)
       a.click()
       window.URL.revokeObjectURL(url)
@@ -175,7 +178,7 @@ export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-green-600">
             <Check className="h-5 w-5" />
-            Orden #{orden.numeroOrden} creada
+            Orden {orden.codigoOrden || `#${orden.numeroOrden}`} creada
           </DialogTitle>
           <DialogDescription>
             La orden fue creada exitosamente. Puede enviar el comprobante al cliente por WhatsApp.

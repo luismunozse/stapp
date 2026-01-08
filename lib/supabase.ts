@@ -40,6 +40,7 @@ export const STORAGE_BUCKETS = {
   FOTOS_ORDENES: "fotos-ordenes",
   LOGOS: "logos",
   FIRMAS: "firmas",
+  CSV_IMPORTS: "csv-imports",
 } as const
 
 // Helper para obtener URL pública de un archivo

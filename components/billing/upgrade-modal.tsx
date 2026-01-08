@@ -9,7 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Check, CreditCard, Loader2 } from "lucide-react"
+import { Check, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface UpgradeModalProps {
@@ -19,7 +19,6 @@ interface UpgradeModalProps {
 
 export function UpgradeModal({ open, onClose }: UpgradeModalProps) {
   const [billingPeriod, setBillingPeriod] = useState<"MONTHLY" | "YEARLY">("MONTHLY")
-  const [paymentMethod, setPaymentMethod] = useState<"stripe" | "mercadopago">("stripe")
   const [loading, setLoading] = useState(false)
 
   const prices = {
@@ -39,12 +38,7 @@ export function UpgradeModal({ open, onClose }: UpgradeModalProps) {
   const handleUpgrade = async () => {
     setLoading(true)
     try {
-      const endpoint =
-        paymentMethod === "stripe"
-          ? "/api/stripe/checkout"
-          : "/api/mercadopago/preference"
-
-      const response = await fetch(endpoint, {
+      const response = await fetch("/api/mercadopago/preference", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ billingPeriod }),
@@ -52,9 +46,7 @@ export function UpgradeModal({ open, onClose }: UpgradeModalProps) {
 
       const data = await response.json()
 
-      if (data.url) {
-        window.location.href = data.url
-      } else if (data.initPoint) {
+      if (data.initPoint) {
         window.location.href = data.initPoint
       } else {
         throw new Error("No se pudo iniciar el pago")
@@ -131,44 +123,17 @@ export function UpgradeModal({ open, onClose }: UpgradeModalProps) {
             </div>
           </div>
 
-          {/* Payment method selection */}
+          {/* Payment method info - MercadoPago */}
           <div className="space-y-3">
             <label className="text-sm font-medium">Método de pago</label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setPaymentMethod("stripe")}
-                className={cn(
-                  "p-4 rounded-lg border-2 text-center transition-colors",
-                  paymentMethod === "stripe"
-                    ? "border-primary bg-primary/5"
-                    : "border-gray-200 hover:border-gray-300"
-                )}
-              >
-                <CreditCard className="h-6 w-6 mx-auto mb-2" />
-                <div className="font-medium">Tarjeta</div>
-                <div className="text-xs text-muted-foreground">
-                  Visa, Mastercard, etc.
-                </div>
-              </button>
-              <button
-                type="button"
-                onClick={() => setPaymentMethod("mercadopago")}
-                className={cn(
-                  "p-4 rounded-lg border-2 text-center transition-colors",
-                  paymentMethod === "mercadopago"
-                    ? "border-primary bg-primary/5"
-                    : "border-gray-200 hover:border-gray-300"
-                )}
-              >
-                <div className="h-6 w-6 mx-auto mb-2 bg-[#00A0DF] rounded flex items-center justify-center text-white font-bold text-xs">
-                  MP
-                </div>
-                <div className="font-medium">MercadoPago</div>
-                <div className="text-xs text-muted-foreground">
-                  Efectivo, débito, crédito
-                </div>
-              </button>
+            <div className="p-4 rounded-lg border-2 border-primary bg-primary/5 text-center">
+              <div className="h-8 w-8 mx-auto mb-2 bg-[#00A0DF] rounded flex items-center justify-center text-white font-bold">
+                MP
+              </div>
+              <div className="font-medium mb-1">MercadoPago</div>
+              <div className="text-xs text-muted-foreground">
+                Tarjeta de crédito, débito, efectivo y más opciones de pago
+              </div>
             </div>
           </div>
 

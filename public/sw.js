@@ -1,5 +1,5 @@
 // Service Worker para PWA - Optimizado para móviles
-const CACHE_NAME = 'stapp-v3'
+const CACHE_NAME = 'stapp-v4'
 const API_CACHE_NAME = 'stapp-api-v1'
 const STATIC_CACHE_NAME = 'stapp-static-v1'
 
@@ -7,6 +7,12 @@ const STATIC_CACHE_NAME = 'stapp-static-v1'
 const STATIC_ASSETS = [
   '/logo.png',
   '/manifest.json',
+]
+
+// Rutas que NO deben cachearse (landing page y rutas públicas de marketing)
+const EXCLUDED_ROUTES = [
+  '/',
+  '/landing',
 ]
 
 // Rutas de API que se pueden cachear temporalmente
@@ -60,6 +66,11 @@ self.addEventListener('fetch', (event) => {
 
   // Estrategia para navegación (páginas HTML)
   if (request.mode === 'navigate') {
+    // No cachear rutas excluidas (landing page)
+    if (EXCLUDED_ROUTES.includes(url.pathname)) {
+      event.respondWith(fetch(request))
+      return
+    }
     event.respondWith(networkFirstWithOfflineFallback(request))
     return
   }
@@ -102,8 +113,8 @@ async function networkFirstWithOfflineFallback(request) {
     if (cached) {
       return cached
     }
-    // Fallback a dashboard como página offline
-    const offlinePage = await caches.match('/dashboard')
+    // Fallback a login como página offline
+    const offlinePage = await caches.match('/login')
     if (offlinePage) {
       return offlinePage
     }

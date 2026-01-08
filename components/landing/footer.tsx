@@ -15,15 +15,15 @@ export function Footer() {
       { name: "FAQ", href: "#faq" },
     ],
     empresa: [
-      { name: "Sobre Nosotros", href: "#" },
-      { name: "Blog", href: "#" },
-      { name: "Trabaja con nosotros", href: "#" },
-      { name: "Contacto", href: "#" },
+      { name: "Sobre Nosotros", href: "/empresa/sobre-nosotros" },
+      { name: "Blog", href: "/empresa/blog" },
+      { name: "Trabaja con nosotros", href: "/empresa/trabaja-con-nosotros" },
+      { name: "Contacto", href: "/empresa/contacto" },
     ],
     legal: [
-      { name: "Términos de servicio", href: "#" },
-      { name: "Política de privacidad", href: "#" },
-      { name: "Política de cookies", href: "#" },
+      { name: "Términos de servicio", href: "/legal/terminos" },
+      { name: "Política de privacidad", href: "/legal/privacidad" },
+      { name: "Política de cookies", href: "/legal/cookies" },
     ],
   }
 
@@ -36,8 +36,8 @@ export function Footer() {
 
   return (
     <footer className="bg-gray-900 text-gray-300">
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-12">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
           {/* Brand */}
           <div className="lg:col-span-2">
             <Link href="/" className="flex items-center mb-6">
@@ -92,12 +92,12 @@ export function Footer() {
             <ul className="space-y-3">
               {footerLinks.empresa.map((link) => (
                 <li key={link.name}>
-                  <a
+                  <Link
                     href={link.href}
                     className="text-gray-400 hover:text-white transition-colors"
                   >
                     {link.name}
-                  </a>
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -109,12 +109,12 @@ export function Footer() {
             <ul className="space-y-3">
               {footerLinks.legal.map((link) => (
                 <li key={link.name}>
-                  <a
+                  <Link
                     href={link.href}
                     className="text-gray-400 hover:text-white transition-colors"
                   >
                     {link.name}
-                  </a>
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -122,7 +122,7 @@ export function Footer() {
         </div>
 
         {/* Bottom */}
-        <div className="border-t border-gray-800 mt-12 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="border-t border-gray-800 mt-8 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-sm text-gray-500">
             © {currentYear} STApp. Todos los derechos reservados.
           </p>

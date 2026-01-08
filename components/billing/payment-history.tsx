@@ -90,7 +90,7 @@ export function PaymentHistory({ payments }: PaymentHistoryProps) {
                   </p>
                   <p className="text-sm text-muted-foreground">
                     {formatDate(payment.paid_at)} •{" "}
-                    {payment.payment_provider === "STRIPE" ? "Tarjeta" : "MercadoPago"}
+                    MercadoPago
                   </p>
                 </div>
               </div>

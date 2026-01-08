@@ -1,6 +1,61 @@
-import { Resend } from "resend"
+const ENVIALOSIMPLE_API_URL = "https://backend.envialosimple.email/api/v1/mail/send"
+const EMAIL_FROM = process.env.EMAIL_FROM || "noreply@stapp.com.ar"
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+interface SendEmailParams {
+  to: string
+  subject: string
+  html: string
+  substitutions?: Record<string, string>
+  attachments?: Array<{
+    filename: string
+    content: string // base64
+    type: string
+  }>
+}
+
+async function sendEmail({ to, subject, html, substitutions, attachments }: SendEmailParams) {
+  const apiKey = process.env.ENVIALOSIMPLE_API_KEY
+
+  if (!apiKey) {
+    throw new Error("ENVIALOSIMPLE_API_KEY no está configurada")
+  }
+
+  const payload: Record<string, unknown> = {
+    from: EMAIL_FROM,
+    to,
+    subject,
+    html,
+  }
+
+  if (substitutions) {
+    payload.substitutions = substitutions
+  }
+
+  if (attachments && attachments.length > 0) {
+    payload.attachments = attachments.map((att) => ({
+      filename: att.filename,
+      content: att.content,
+      type: att.type,
+    }))
+  }
+
+  const response = await fetch(ENVIALOSIMPLE_API_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  })
+
+  if (!response.ok) {
+    const errorData = await response.text()
+    console.error("EnvialoSimple error:", errorData)
+    throw new Error("Error al enviar el correo")
+  }
+
+  return await response.json()
+}
 
 interface SendPasswordResetEmailParams {
   email: string
@@ -15,8 +70,7 @@ export async function sendPasswordResetEmail({
 }: SendPasswordResetEmailParams) {
   const resetUrl = `${process.env.NEXTAUTH_URL}/reset-password/${token}`
 
-  const { data, error } = await resend.emails.send({
-    from: process.env.EMAIL_FROM || "STApp <onboarding@resend.dev>",
+  return sendEmail({
     to: email,
     subject: "Restablecer contraseña - STApp",
     html: `
@@ -68,13 +122,6 @@ export async function sendPasswordResetEmail({
       </html>
     `,
   })
-
-  if (error) {
-    console.error("Error sending email:", error)
-    throw new Error("Error al enviar el correo")
-  }
-
-  return data
 }
 
 interface SendCotizacionEmailParams {
@@ -103,14 +150,14 @@ export async function sendCotizacionEmail({
     ? `Esta cotización es válida hasta el ${new Date(fechaVencimiento).toLocaleDateString("es-AR")}.`
     : "Esta cotización no tiene fecha de vencimiento especificada."
 
-  const { data, error } = await resend.emails.send({
-    from: process.env.EMAIL_FROM || "STApp <onboarding@resend.dev>",
+  return sendEmail({
     to: email,
     subject: `Cotización ${numeroCotizacion} - Orden #${numeroOrden}`,
     attachments: [
       {
+        content: pdfBuffer.toString("base64"),
         filename: `${numeroCotizacion}.pdf`,
-        content: pdfBuffer,
+        type: "application/pdf",
       },
     ],
     html: `
@@ -158,11 +205,4 @@ export async function sendCotizacionEmail({
       </html>
     `,
   })
-
-  if (error) {
-    console.error("Error sending cotizacion email:", error)
-    throw new Error("Error al enviar el correo de cotización")
-  }
-
-  return data
 }

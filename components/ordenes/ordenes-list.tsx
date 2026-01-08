@@ -106,9 +106,10 @@ export function OrdenesList() {
 
   const handleDelete = async (e: React.MouseEvent, orden: OrdenServicio) => {
     e.stopPropagation()
+    const codigoDisplay = orden.codigoOrden || `#${orden.numeroOrden}`
     const confirmed = await confirm({
       title: "Eliminar Orden",
-      description: `¿Estás seguro de eliminar la Orden #${orden.numeroOrden}? Esta acción no se puede deshacer.`,
+      description: `¿Estás seguro de eliminar la Orden ${codigoDisplay}? Esta acción no se puede deshacer.`,
       confirmText: "Eliminar",
       cancelText: "Cancelar",
       variant: "danger",
@@ -154,7 +155,9 @@ export function OrdenesList() {
       sortable: true,
       className: "font-medium",
       render: (orden) => (
-        <span className="text-primary font-semibold">#{orden.numeroOrden}</span>
+        <span className="text-primary font-semibold">
+          {orden.codigoOrden || `#${orden.numeroOrden}`}
+        </span>
       ),
     },
     {
@@ -247,7 +250,7 @@ export function OrdenesList() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar por número, dispositivo o cliente..."
+              placeholder="Buscar orden, cliente, dispositivo..."
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value)

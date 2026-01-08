@@ -15,7 +15,14 @@ import {
 } from "./email-templates"
 import { getWhatsAppTemplates, generateWhatsAppUrl } from "./whatsapp-templates"
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+// Lazy initialization to avoid errors during build
+let _resend: Resend | null = null
+function getResend(): Resend {
+  if (!_resend) {
+    _resend = new Resend(process.env.RESEND_API_KEY)
+  }
+  return _resend
+}
 
 export class NotificationService {
   private organizationId: string
@@ -110,7 +117,7 @@ export class NotificationService {
     }
 
     try {
-      const { data, error } = await resend.emails.send({
+      const { data, error } = await getResend().emails.send({
         from: process.env.EMAIL_FROM || "Servicio Tecnico <onboarding@resend.dev>",
         to: context.cliente.email,
         subject: emailContent.subject,

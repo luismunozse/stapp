@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { randomBytes } from "crypto"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
-import { getNextOrderNumber } from "@/lib/counters"
+import { getNextOrderNumberByType } from "@/lib/counters"
 import { createAuditLogger } from "@/lib/audit"
 import { uploadOrderPhoto, base64ToBuffer } from "@/lib/storage"
 import { enforcePlanLimit } from "@/lib/plan-limits"
@@ -83,10 +83,25 @@ export async function GET(request: Request) {
     }
 
     if (search) {
-      // Búsqueda en múltiples campos
-      query = query.or(
-        `dispositivo.ilike.%${search}%,numero_orden::text.ilike.%${search}%`
-      )
+      // Primero buscar IDs de clientes que coincidan con la búsqueda
+      const { data: clientesMatch } = await supabaseAdmin
+        .from("clientes")
+        .select("id")
+        .eq("organization_id", organizationId!)
+        .or(`nombre.ilike.%${search}%,telefono.ilike.%${search}%`)
+
+      const clienteIds = clientesMatch?.map(c => c.id) || []
+
+      // Búsqueda en múltiples campos incluyendo clientes
+      if (clienteIds.length > 0) {
+        query = query.or(
+          `dispositivo.ilike.%${search}%,numero_orden::text.ilike.%${search}%,codigo_orden.ilike.%${search}%,marca.ilike.%${search}%,cliente_id.in.(${clienteIds.join(",")})`
+        )
+      } else {
+        query = query.or(
+          `dispositivo.ilike.%${search}%,numero_orden::text.ilike.%${search}%,codigo_orden.ilike.%${search}%,marca.ilike.%${search}%`
+        )
+      }
     }
 
     const { data: ordenes, error: dbError } = await query
@@ -102,6 +117,7 @@ export async function GET(request: Request) {
       tecnico: orden.users,
       // Convertir snake_case a camelCase para compatibilidad
       numeroOrden: orden.numero_orden,
+      codigoOrden: orden.codigo_orden,
       clienteId: orden.cliente_id,
       tecnicoId: orden.tecnico_id,
       organizationId: orden.organization_id,
@@ -137,8 +153,11 @@ export async function POST(request: Request) {
     const body = await request.json()
     const data = ordenSchema.parse(body)
 
-    // Obtener siguiente número de orden de forma atómica
-    const numeroOrden = await getNextOrderNumber(organizationId!)
+    // Obtener siguiente número de orden con prefijo por tipo de dispositivo
+    const { codigo: codigoOrden, numero: numeroOrden } = await getNextOrderNumberByType(
+      organizationId!,
+      data.tipoDispositivo
+    )
 
     // Generar token público para acceso al PDF
     const publicToken = generatePublicToken()
@@ -151,6 +170,7 @@ export async function POST(request: Request) {
       .from("ordenes_servicio")
       .insert({
         numero_orden: numeroOrden,
+        codigo_orden: codigoOrden,
         cliente_id: data.clienteId,
         organization_id: organizationId!,
         dispositivo: data.dispositivo,
@@ -225,6 +245,7 @@ export async function POST(request: Request) {
       ...orden,
       cliente: orden.clientes,
       numeroOrden: orden.numero_orden,
+      codigoOrden: orden.codigo_orden,
       clienteId: orden.cliente_id,
       organizationId: orden.organization_id,
       tipoDispositivo: orden.tipo_dispositivo,

@@ -2,7 +2,14 @@ import { inngest } from "../client"
 import { supabaseAdmin } from "@/lib/supabase"
 import { Resend } from "resend"
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+// Lazy initialization to avoid errors during build
+let _resend: Resend | null = null
+function getResend(): Resend {
+  if (!_resend) {
+    _resend = new Resend(process.env.RESEND_API_KEY)
+  }
+  return _resend
+}
 
 /**
  * Función de Inngest para enviar notificaciones
@@ -45,7 +52,7 @@ export const sendNotification = inngest.createFunction(
         try {
           const { subject, html } = generateEmailContent(tipo, context)
 
-          const { data, error } = await resend.emails.send({
+          const { data, error } = await getResend().emails.send({
             from: `${context.organizationName} <notificaciones@${process.env.RESEND_DOMAIN || "resend.dev"}>`,
             to: context.cliente.email!,
             subject,

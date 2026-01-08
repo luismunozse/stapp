@@ -34,6 +34,7 @@ export interface Cliente {
 export interface OrdenServicio {
   id: string
   numeroOrden: number
+  codigoOrden?: string
   clienteId: string
   tecnicoId?: string | null
   dispositivo: string
@@ -79,5 +80,29 @@ export interface Factura {
   iva: number
   total: number
   estadoPago: EstadoPago
+}
+
+export type EntityImportType = "CLIENTES" | "INVENTARIO"
+
+export interface Importacion {
+  id: string
+  organizationId: string
+  userId: string
+  entityType: EntityImportType
+  filename: string
+  filePath: string
+  fileSize: number
+  totalRows: number
+  successCount: number
+  skippedCount: number
+  errorCount: number
+  errorsDetail: Array<{
+    row: number
+    error?: string
+    reason?: string
+    data: any
+  }>
+  createdAt: Date
+  user?: User
 }
 

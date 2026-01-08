@@ -181,3 +181,24 @@ export function formatProveedor(proveedor: any) {
     updatedAt: proveedor.updated_at,
   }
 }
+
+export function formatImportacion(importacion: any) {
+  if (!importacion) return null
+
+  return {
+    id: importacion.id,
+    organizationId: importacion.organization_id,
+    userId: importacion.user_id,
+    entityType: importacion.entity_type,
+    filename: importacion.filename,
+    filePath: importacion.file_path,
+    fileSize: importacion.file_size,
+    totalRows: importacion.total_rows,
+    successCount: importacion.success_count,
+    skippedCount: importacion.skipped_count,
+    errorCount: importacion.error_count,
+    errorsDetail: importacion.errors_detail,
+    createdAt: importacion.created_at,
+    user: importacion.users ? formatUser(importacion.users) : undefined,
+  }
+}

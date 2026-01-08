@@ -2,8 +2,10 @@ import { auth } from "@/lib/auth"
 import { redirect } from "next/navigation"
 import { ConfiguracionForm } from "@/components/configuracion/configuracion-form"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { CookieSettings } from "@/components/cookie-settings"
 import Link from "next/link"
-import { ClipboardCheck, ChevronRight, CreditCard } from "lucide-react"
+import { ClipboardCheck, ChevronRight, CreditCard, FileSpreadsheet } from "lucide-react"
+import { canEditConfiguration } from "@/lib/auth-utils"
 
 export default async function ConfiguracionPage() {
   const session = await auth()
@@ -15,6 +17,8 @@ export default async function ConfiguracionPage() {
   if (session.user?.role !== "ADMIN") {
     redirect("/dashboard")
   }
+
+  const allowEdit = await canEditConfiguration()
 
   return (
     <div className="space-y-6">
@@ -60,9 +64,34 @@ export default async function ConfiguracionPage() {
             </CardContent>
           </Card>
         </Link>
+
+        <Link href="/configuracion/importaciones">
+          <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Importaciones
+              </CardTitle>
+              <FileSpreadsheet className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <CardDescription className="flex items-center justify-between">
+                Ver historial de importaciones CSV/Excel
+                <ChevronRight className="h-4 w-4" />
+              </CardDescription>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
 
-      <ConfiguracionForm />
+      {!allowEdit && (
+        <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg">
+          <p className="text-sm font-medium">Las cuentas demo no pueden editar la configuración</p>
+        </div>
+      )}
+
+      <ConfiguracionForm allowEdit={allowEdit} />
+
+      <CookieSettings />
     </div>
   )
 }
