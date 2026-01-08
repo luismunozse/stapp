@@ -121,7 +121,7 @@ export default function PrivacidadPage() {
           <li><strong>Retiro del consentimiento:</strong> retirar el consentimiento en cualquier momento</li>
         </ul>
         <p className="text-gray-600 mt-4">
-          Para ejercer estos derechos, contacte a soporte@stapp.com.
+          Para ejercer estos derechos, puede hacerlo desde la configuración de su cuenta.
         </p>
       </section>
 
@@ -152,17 +152,6 @@ export default function PrivacidadPage() {
         </p>
       </section>
 
-      <section className="mb-8">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">11. Contacto</h2>
-        <p className="text-gray-600 mb-4">
-          Si tiene preguntas sobre esta Política de Privacidad, puede contactarnos:
-        </p>
-        <ul className="list-none text-gray-600 space-y-2">
-          <li><strong>Email:</strong> soporte@stapp.com</li>
-          <li><strong>Teléfono:</strong> +1 (555) 123-4567</li>
-          <li><strong>Delegado de Protección de Datos:</strong> privacidad@stapp.com</li>
-        </ul>
-      </section>
     </article>
   )
 }

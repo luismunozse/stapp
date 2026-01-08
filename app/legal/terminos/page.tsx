@@ -135,16 +135,6 @@ export default function TerminosPage() {
         </p>
       </section>
 
-      <section className="mb-8">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">12. Contacto</h2>
-        <p className="text-gray-600 mb-4">
-          Si tiene preguntas sobre estos Términos de Servicio, puede contactarnos en:
-        </p>
-        <ul className="list-none text-gray-600 space-y-2">
-          <li><strong>Email:</strong> soporte@stapp.com</li>
-          <li><strong>Teléfono:</strong> +1 (555) 123-4567</li>
-        </ul>
-      </section>
     </article>
   )
 }

@@ -2,7 +2,6 @@
 
 import Link from "next/link"
 import Image from "next/image"
-import { Twitter, Facebook, Instagram, Linkedin } from "lucide-react"
 
 export function Footer() {
   const currentYear = new Date().getFullYear()
@@ -14,12 +13,6 @@ export function Footer() {
       { name: "Testimonios", href: "#testimonials" },
       { name: "FAQ", href: "#faq" },
     ],
-    empresa: [
-      { name: "Sobre Nosotros", href: "/empresa/sobre-nosotros" },
-      { name: "Blog", href: "/empresa/blog" },
-      { name: "Trabaja con nosotros", href: "/empresa/trabaja-con-nosotros" },
-      { name: "Contacto", href: "/empresa/contacto" },
-    ],
     legal: [
       { name: "Términos de servicio", href: "/legal/terminos" },
       { name: "Política de privacidad", href: "/legal/privacidad" },
@@ -27,17 +20,10 @@ export function Footer() {
     ],
   }
 
-  const socialLinks = [
-    { name: "Twitter", icon: Twitter, href: "#" },
-    { name: "Facebook", icon: Facebook, href: "#" },
-    { name: "Instagram", icon: Instagram, href: "#" },
-    { name: "LinkedIn", icon: Linkedin, href: "#" },
-  ]
-
   return (
     <footer className="bg-gray-900 text-gray-300">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           {/* Brand */}
           <div className="lg:col-span-2">
             <Link href="/" className="flex items-center mb-6">
@@ -72,23 +58,6 @@ export function Footer() {
             </ul>
           </div>
 
-          {/* Empresa */}
-          <div>
-            <h3 className="text-white font-semibold mb-4">Empresa</h3>
-            <ul className="space-y-3">
-              {footerLinks.empresa.map((link) => (
-                <li key={link.name}>
-                  <Link
-                    href={link.href}
-                    className="text-gray-400 hover:text-white transition-colors"
-                  >
-                    {link.name}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-
           {/* Legal */}
           <div>
             <h3 className="text-white font-semibold mb-4">Legal</h3>
@@ -108,22 +77,10 @@ export function Footer() {
         </div>
 
         {/* Bottom */}
-        <div className="border-t border-gray-800 mt-8 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="text-sm text-gray-500">
+        <div className="border-t border-gray-800 mt-8 pt-6">
+          <p className="text-sm text-gray-500 text-center">
             © {currentYear} STApp. Todos los derechos reservados.
           </p>
-          <div className="flex items-center gap-4">
-            {socialLinks.map((social) => (
-              <a
-                key={social.name}
-                href={social.href}
-                className="text-gray-500 hover:text-white transition-colors"
-                aria-label={social.name}
-              >
-                <social.icon className="w-5 h-5" />
-              </a>
-            ))}
-          </div>
         </div>
       </div>
     </footer>

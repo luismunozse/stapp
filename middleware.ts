@@ -100,7 +100,7 @@ function extractSubdomain(hostname: string): string | null {
   return subdomain
 }
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const hostname = request.headers.get("host") || ""
   const pathname = request.nextUrl.pathname
   const subdomain = extractSubdomain(hostname)
