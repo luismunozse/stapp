@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   description: "Sistema de gestión para servicio técnico de dispositivos electrónicos",
   manifest: "/manifest.json",
   icons: {
-    icon: "/logo.png",
+    icon: "/favicon.ico",
     apple: "/logo.png",
   },
   appleWebApp: {

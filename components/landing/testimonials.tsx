@@ -39,7 +39,7 @@ export function Testimonials() {
             Lo que dicen nuestros clientes
           </h2>
           <p className="text-lg text-gray-600">
-            Más de 500 talleres confían en STApp para gestionar
+            Descubre por qué los técnicos eligen STApp para gestionar
             sus reparaciones.
           </p>
         </div>

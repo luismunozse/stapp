@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import Image from "next/image"
-import { Mail, Phone, MapPin, Twitter, Facebook, Instagram, Linkedin } from "lucide-react"
+import { Twitter, Facebook, Instagram, Linkedin } from "lucide-react"
 
 export function Footer() {
   const currentYear = new Date().getFullYear()
@@ -44,29 +44,15 @@ export function Footer() {
               <Image
                 src="/logo.png"
                 alt="STApp"
-                width={120}
-                height={40}
-                className="h-10 w-auto object-contain brightness-0 invert"
+                width={160}
+                height={48}
+                className="h-12 w-auto object-contain brightness-0 invert"
               />
             </Link>
-            <p className="text-gray-400 mb-6 max-w-sm">
+            <p className="text-gray-400 max-w-sm">
               Sistema completo para gestionar tu taller de reparación de
               dispositivos electrónicos. Órdenes, inventario, facturación y más.
             </p>
-            <div className="space-y-3">
-              <div className="flex items-center gap-3 text-sm">
-                <Mail className="w-5 h-5 text-gray-500" />
-                <span>soporte@stapp.com</span>
-              </div>
-              <div className="flex items-center gap-3 text-sm">
-                <Phone className="w-5 h-5 text-gray-500" />
-                <span>+1 (555) 123-4567</span>
-              </div>
-              <div className="flex items-center gap-3 text-sm">
-                <MapPin className="w-5 h-5 text-gray-500" />
-                <span>Disponible en toda Latinoamérica</span>
-              </div>
-            </div>
           </div>
 
           {/* Producto */}
