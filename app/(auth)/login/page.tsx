@@ -140,13 +140,19 @@ function LoginForm() {
         router.refresh()
       } else {
         // Login desde dominio principal: obtener organización y redirigir al subdominio
-        const orgRes = await fetch("/api/auth/user-organization")
+        // Pequeño delay para asegurar que la cookie de sesión esté disponible
+        await new Promise((resolve) => setTimeout(resolve, 500))
+
+        const orgRes = await fetch("/api/auth/user-organization", {
+          credentials: "include",
+        })
 
         if (orgRes.ok) {
           const { organization } = await orgRes.json()
           const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
           const targetUrl = `https://${organization.slug}.${rootDomain}/dashboard`
           window.location.href = targetUrl
+          return // Importante: no continuar después de la redirección
         } else {
           // Fallback: ir al dashboard del dominio principal
           router.push("/dashboard")
@@ -154,8 +160,12 @@ function LoginForm() {
         }
       }
     } catch (error) {
+      console.error("Login error:", error)
       setError("Error al iniciar sesión")
       setLoading(false)
+    } finally {
+      // Asegurar que loading se desactive si no hay redirección externa
+      setTimeout(() => setLoading(false), 5000)
     }
   }
 
