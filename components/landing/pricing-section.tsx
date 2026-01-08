@@ -42,7 +42,6 @@ const plans = [
       { name: "Notificaciones WhatsApp", included: true },
       { name: "Logo personalizado", included: true },
       { name: "Exportación de datos", included: true },
-      { name: "API acceso", included: true },
     ],
     cta: "Actualizar a Premium",
     popular: true,
