@@ -35,6 +35,7 @@ function isPublicPath(pathname: string): boolean {
     "/registro",
     "/forgot-password",
     "/reset-password",
+    "/verificar-email",
     "/tenant-not-found",
     "/api/auth",
     "/api/public",

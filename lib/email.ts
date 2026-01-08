@@ -57,6 +57,76 @@ async function sendEmail({ to, subject, html, substitutions, attachments }: Send
   return await response.json()
 }
 
+interface SendVerificationEmailParams {
+  email: string
+  token: string
+  nombre: string
+  slug: string
+}
+
+export async function sendVerificationEmail({
+  email,
+  token,
+  nombre,
+  slug,
+}: SendVerificationEmailParams) {
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
+  const verifyUrl = `https://${slug}.${rootDomain}/verificar-email?token=${token}`
+
+  return sendEmail({
+    to: email,
+    subject: "Verifica tu cuenta - STApp",
+    html: `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Verificar cuenta</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+            <h1 style="color: white; margin: 0; font-size: 24px;">STApp</h1>
+          </div>
+
+          <div style="background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 10px 10px;">
+            <h2 style="color: #1f2937; margin-top: 0;">¡Bienvenido ${nombre}!</h2>
+
+            <p style="color: #4b5563;">
+              Gracias por registrarte en STApp. Para completar tu registro y acceder a tu cuenta,
+              necesitas verificar tu dirección de correo electrónico.
+            </p>
+
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${verifyUrl}"
+                 style="background: #3b82f6; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
+                Verificar mi cuenta
+              </a>
+            </div>
+
+            <p style="color: #6b7280; font-size: 14px;">
+              Este enlace expirará en <strong>24 horas</strong>.
+            </p>
+
+            <p style="color: #6b7280; font-size: 14px;">
+              Si el botón no funciona, copia y pega este enlace en tu navegador:
+            </p>
+            <p style="color: #3b82f6; font-size: 12px; word-break: break-all;">
+              ${verifyUrl}
+            </p>
+
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+
+            <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
+              Si no creaste esta cuenta, puedes ignorar este correo.
+            </p>
+          </div>
+        </body>
+      </html>
+    `,
+  })
+}
+
 interface SendPasswordResetEmailParams {
   email: string
   token: string

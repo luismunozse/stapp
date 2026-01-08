@@ -53,6 +53,9 @@ function LoginForm() {
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
+  const [showResendOption, setShowResendOption] = useState(false)
+  const [resendLoading, setResendLoading] = useState(false)
+  const [resendSuccess, setResendSuccess] = useState(false)
 
   // Estado para tenant/subdominio
   const [tenantSlug, setTenantSlug] = useState<string | null>(null)
@@ -85,10 +88,17 @@ function LoginForm() {
     }
   }, [])
 
+  // Estado para mensaje de verificación pendiente
+  const [showVerifyMessage, setShowVerifyMessage] = useState(false)
+
   // Mostrar mensaje de éxito si viene del registro o pre-llenar email
   useEffect(() => {
     if (searchParams.get("registered") === "true") {
       setShowSuccess(true)
+      // Si viene con verify=true, mostrar mensaje de verificación
+      if (searchParams.get("verify") === "true") {
+        setShowVerifyMessage(true)
+      }
     }
     // Pre-llenar email si viene de redirección del dominio principal
     const emailParam = searchParams.get("email")
@@ -96,7 +106,7 @@ function LoginForm() {
       setEmail(emailParam)
     }
     // Limpiar URL
-    if (searchParams.get("registered") || searchParams.get("email")) {
+    if (searchParams.get("registered") || searchParams.get("email") || searchParams.get("verify")) {
       window.history.replaceState({}, "", "/login")
     }
   }, [searchParams])
@@ -107,6 +117,37 @@ function LoginForm() {
       router.push("/tenant-not-found")
     }
   }, [tenantError, tenantLoading, router])
+
+  const handleResendVerification = async () => {
+    if (!email) {
+      setError("Ingresa tu email primero")
+      return
+    }
+
+    setResendLoading(true)
+    setResendSuccess(false)
+
+    try {
+      const res = await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      })
+
+      const data = await res.json()
+
+      if (res.ok) {
+        setResendSuccess(true)
+        setError("")
+      } else {
+        setError(data.error || "Error al reenviar el email")
+      }
+    } catch {
+      setError("Error de conexión. Intenta de nuevo.")
+    } finally {
+      setResendLoading(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -122,7 +163,13 @@ function LoginForm() {
       })
 
       if (result?.error) {
-        setError("Credenciales incorrectas")
+        if (result.error.includes("EMAIL_NOT_VERIFIED")) {
+          setError("Tu email no ha sido verificado. Revisa tu bandeja de entrada.")
+          setShowResendOption(true)
+        } else {
+          setError("Credenciales incorrectas")
+          setShowResendOption(false)
+        }
         setLoading(false)
         return
       }
@@ -208,17 +255,37 @@ function LoginForm() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             {showSuccess && (
-              <div className="bg-success-50 dark:bg-success-100 border border-success/30 text-success-700 dark:text-success-600 px-4 py-3 rounded flex items-center gap-2">
+              <div className={`${showVerifyMessage ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400" : "bg-success-50 dark:bg-success-100 border-success/30 text-success-700 dark:text-success-600"} border px-4 py-3 rounded flex items-center gap-2`}>
                 <CheckCircle className="h-5 w-5 flex-shrink-0" />
                 <div>
                   <p className="font-medium">¡Cuenta creada exitosamente!</p>
-                  <p className="text-sm opacity-90">Ya puedes iniciar sesión con tus credenciales.</p>
+                  <p className="text-sm opacity-90">
+                    {showVerifyMessage
+                      ? "Revisa tu email para verificar tu cuenta antes de iniciar sesión."
+                      : "Ya puedes iniciar sesión con tus credenciales."}
+                  </p>
                 </div>
+              </div>
+            )}
+            {resendSuccess && (
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 px-4 py-3 rounded">
+                <p className="font-medium">Email enviado</p>
+                <p className="text-sm opacity-90">Revisa tu bandeja de entrada para verificar tu cuenta.</p>
               </div>
             )}
             {error && (
               <div className="bg-destructive/10 border border-destructive/30 text-destructive px-4 py-3 rounded">
-                {error}
+                <p>{error}</p>
+                {showResendOption && (
+                  <button
+                    type="button"
+                    onClick={handleResendVerification}
+                    disabled={resendLoading}
+                    className="mt-2 text-sm underline hover:no-underline disabled:opacity-50"
+                  >
+                    {resendLoading ? "Enviando..." : "Reenviar email de verificación"}
+                  </button>
+                )}
               </div>
             )}
             <div className="space-y-2">

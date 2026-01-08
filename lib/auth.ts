@@ -39,6 +39,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           return null
         }
 
+        // Verificar que el email esté verificado
+        if (!user.email_verified) {
+          throw new Error("EMAIL_NOT_VERIFIED")
+        }
+
         // Verificar que la organización esté activa
         const organization = user.organizations as { id: string; activo: boolean }
         if (!organization?.activo) {

@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import bcrypt from "bcryptjs"
+import crypto from "crypto"
 import { z } from "zod"
 import { isValidSlug, RESERVED_SUBDOMAINS } from "@/lib/tenant"
+import { sendVerificationEmail } from "@/lib/email"
 
 // Schema de validación
 const registerSchema = z.object({
@@ -114,7 +116,11 @@ export async function POST(request: NextRequest) {
     // Hash de la contraseña
     const hashedPassword = await bcrypt.hash(usuario.password, 10)
 
-    // Crear el usuario admin
+    // Generar token de verificación
+    const verificationToken = crypto.randomBytes(32).toString("hex")
+    const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 horas
+
+    // Crear el usuario admin (sin verificar)
     const { data: newUser, error: userError } = await supabaseAdmin
       .from("users")
       .insert({
@@ -123,6 +129,9 @@ export async function POST(request: NextRequest) {
         nombre: usuario.nombre,
         rol: "ADMIN",
         organization_id: newOrg.id,
+        email_verified: false,
+        email_verification_token: verificationToken,
+        email_verification_expires: verificationExpires.toISOString(),
       })
       .select("id, email, nombre, rol")
       .single()
@@ -209,9 +218,23 @@ export async function POST(request: NextRequest) {
       ])
     }
 
+    // Enviar email de verificación
+    try {
+      await sendVerificationEmail({
+        email: usuario.email,
+        token: verificationToken,
+        nombre: usuario.nombre,
+        slug: newOrg.slug,
+      })
+    } catch (emailError) {
+      console.error("Error sending verification email:", emailError)
+      // No hacemos rollback, el usuario puede solicitar reenvío
+    }
+
     return NextResponse.json({
       success: true,
-      message: "Organización creada exitosamente",
+      message: "Cuenta creada. Revisa tu email para verificar tu cuenta.",
+      requiresVerification: true,
       organization: {
         id: newOrg.id,
         nombre: newOrg.nombre,

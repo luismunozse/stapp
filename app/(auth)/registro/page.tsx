@@ -210,8 +210,8 @@ export default function RegistroPage() {
         return
       }
 
-      // Éxito - redirigir al login del subdominio
-      const targetUrl = `https://${formData.orgSlug}.${rootDomain}/login?registered=true`
+      // Éxito - redirigir al login del subdominio con mensaje de verificación
+      const targetUrl = `https://${formData.orgSlug}.${rootDomain}/login?registered=true&verify=true`
       window.location.href = targetUrl
     } catch (err) {
       console.error("Error:", err)
