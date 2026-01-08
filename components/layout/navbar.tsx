@@ -73,6 +73,12 @@ export function Navbar() {
     ] : [])
   ]
 
+  // Logout que redirige al login del mismo dominio/subdominio
+  const handleLogout = async () => {
+    await signOut({ redirect: false })
+    window.location.href = "/login"
+  }
+
   // Items que no están en el bottom nav (para el menú "Más")
   const moreItems = allNavItems.filter(
     item => !bottomNavItems.some(bottomItem => bottomItem.href === item.href)
@@ -117,7 +123,7 @@ export function Navbar() {
             <Button
               variant="ghost"
               className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              onClick={() => signOut({ callbackUrl: "/login" })}
+              onClick={handleLogout}
             >
               <LogOut className="mr-3 h-5 w-5" />
               Cerrar Sesión
@@ -195,7 +201,7 @@ export function Navbar() {
             <Button
               variant="ghost"
               className="w-full justify-start py-3 touch-target active:scale-[0.98]"
-              onClick={() => signOut({ callbackUrl: "/login" })}
+              onClick={handleLogout}
             >
               <LogOut className="mr-3 h-5 w-5" />
               Cerrar Sesión
