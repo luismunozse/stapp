@@ -30,7 +30,9 @@
       "Bash(rm:*)",
       "Bash(del \"c:\\\\Users\\\\LUIS\\\\Desktop\\\\stapp\\\\middleware.ts\")",
       "Bash(npm uninstall:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ]
   }
 }

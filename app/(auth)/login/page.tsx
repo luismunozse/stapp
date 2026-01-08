@@ -135,9 +135,9 @@ function LoginForm() {
           return
         }
 
-        // Ya estamos en el subdominio correcto
-        router.push("/dashboard")
-        router.refresh()
+        // Ya estamos en el subdominio correcto - usar window.location para navegación completa
+        window.location.href = "/dashboard"
+        return
       } else {
         // Login desde dominio principal: obtener organización y redirigir al subdominio
         // Pequeño delay para asegurar que la cookie de sesión esté disponible
