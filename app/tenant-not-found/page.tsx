@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Building2, Home } from "lucide-react"
+import { Building2, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
@@ -27,10 +27,10 @@ export default function TenantNotFoundPage() {
           <p className="text-sm text-muted-foreground">
             Verifica que la URL sea correcta o contacta al administrador de la organización.
           </p>
-          <Button asChild className="w-full">
-            <a href={homeUrl}>
-              <Home className="mr-2 h-4 w-4" />
+          <Button asChild size="lg" className="w-full gap-2 text-base font-medium">
+            <a href={homeUrl} target="_blank" rel="noopener noreferrer">
               Ir a {rootDomain}
+              <ExternalLink className="h-4 w-4" />
             </a>
           </Button>
           <p className="text-xs text-muted-foreground">

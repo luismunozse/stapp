@@ -134,10 +134,25 @@ function LoginForm() {
           setLoading(false)
           return
         }
-      }
 
-      router.push("/dashboard")
-      router.refresh()
+        // Ya estamos en el subdominio correcto
+        router.push("/dashboard")
+        router.refresh()
+      } else {
+        // Login desde dominio principal: obtener organización y redirigir al subdominio
+        const orgRes = await fetch("/api/auth/user-organization")
+
+        if (orgRes.ok) {
+          const { organization } = await orgRes.json()
+          const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
+          const targetUrl = `https://${organization.slug}.${rootDomain}/dashboard`
+          window.location.href = targetUrl
+        } else {
+          // Fallback: ir al dashboard del dominio principal
+          router.push("/dashboard")
+          router.refresh()
+        }
+      }
     } catch (error) {
       setError("Error al iniciar sesión")
       setLoading(false)
