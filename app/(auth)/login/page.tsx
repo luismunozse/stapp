@@ -85,10 +85,18 @@ function LoginForm() {
     }
   }, [])
 
-  // Mostrar mensaje de éxito si viene del registro
+  // Mostrar mensaje de éxito si viene del registro o pre-llenar email
   useEffect(() => {
     if (searchParams.get("registered") === "true") {
       setShowSuccess(true)
+    }
+    // Pre-llenar email si viene de redirección del dominio principal
+    const emailParam = searchParams.get("email")
+    if (emailParam) {
+      setEmail(emailParam)
+    }
+    // Limpiar URL
+    if (searchParams.get("registered") || searchParams.get("email")) {
       window.history.replaceState({}, "", "/login")
     }
   }, [searchParams])
@@ -139,24 +147,23 @@ function LoginForm() {
         window.location.href = "/dashboard"
         return
       } else {
-        // Login desde dominio principal: obtener organización y redirigir al subdominio
-        // Pequeño delay para asegurar que la cookie de sesión esté disponible
-        await new Promise((resolve) => setTimeout(resolve, 500))
-
+        // Login desde dominio principal: cerrar sesión aquí y redirigir al subdominio para login
         const orgRes = await fetch("/api/auth/user-organization", {
           credentials: "include",
         })
 
         if (orgRes.ok) {
           const { organization } = await orgRes.json()
+          // Cerrar sesión en dominio principal (la cookie es solo para este dominio)
+          await signOut({ redirect: false })
+          // Redirigir al login del subdominio con el email pre-llenado
           const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
-          const targetUrl = `https://${organization.slug}.${rootDomain}/dashboard`
+          const targetUrl = `https://${organization.slug}.${rootDomain}/login?email=${encodeURIComponent(email)}`
           window.location.href = targetUrl
-          return // Importante: no continuar después de la redirección
+          return
         } else {
-          // Fallback: ir al dashboard del dominio principal
-          router.push("/dashboard")
-          router.refresh()
+          setError("No se pudo obtener la organización")
+          setLoading(false)
         }
       }
     } catch (error) {
