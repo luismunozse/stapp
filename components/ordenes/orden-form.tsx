@@ -167,7 +167,11 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
   // Manejar selección de fotos
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
-    if (!files) return
+    console.log("handleFileChange llamado, files:", files?.length)
+    if (!files || files.length === 0) {
+      console.log("No hay archivos seleccionados")
+      return
+    }
 
     // Reset input inmediatamente
     if (fileInputRef.current) fileInputRef.current.value = ""
@@ -176,18 +180,24 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
     setComprimiendo(true)
 
     const processFile = async (file: File): Promise<FotoPreview | null> => {
+      console.log("Procesando archivo:", file.name, file.type, file.size)
+
       if (!file.type.startsWith("image/")) {
+        console.log("Archivo no es imagen:", file.type)
         alert("Por favor selecciona imágenes válidas")
         return null
       }
 
       try {
         // Comprimir imagen (máx 300KB, 1920px)
+        console.log("Iniciando compresión...")
         const compressedFile = await compressImage(file)
+        console.log("Compresión completada, tamaño:", compressedFile.size)
 
         return new Promise((resolve) => {
           const reader = new FileReader()
           reader.onloadend = () => {
+            console.log("FileReader onloadend, result length:", (reader.result as string)?.length)
             resolve({
               id: Math.random().toString(36).substr(2, 9),
               preview: reader.result as string,
@@ -196,7 +206,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
             })
           }
           reader.onerror = () => {
-            console.error("Error leyendo archivo")
+            console.error("FileReader error:", reader.error)
             resolve(null)
           }
           reader.readAsDataURL(compressedFile)
@@ -210,10 +220,15 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
 
     try {
       const results = await Promise.all(Array.from(files).map(processFile))
+      console.log("Resultados procesados:", results.length, "válidos:", results.filter(Boolean).length)
       const validPhotos = results.filter((p): p is FotoPreview => p !== null)
 
       if (validPhotos.length > 0) {
-        setFotos((prev) => [...prev, ...validPhotos])
+        console.log("Agregando fotos al estado:", validPhotos.length)
+        setFotos((prev) => {
+          console.log("Estado anterior:", prev.length, "nuevas:", validPhotos.length)
+          return [...prev, ...validPhotos]
+        })
       }
     } finally {
       setComprimiendo(false)
