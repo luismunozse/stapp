@@ -175,36 +175,49 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
 
     setComprimiendo(true)
 
-    for (const file of Array.from(files)) {
+    const processFile = async (file: File): Promise<FotoPreview | null> => {
       if (!file.type.startsWith("image/")) {
         alert("Por favor selecciona imágenes válidas")
-        continue
+        return null
       }
 
       try {
         // Comprimir imagen (máx 300KB, 1920px)
         const compressedFile = await compressImage(file)
 
-        const reader = new FileReader()
-        reader.onloadend = () => {
-          setFotos((prev) => [
-            ...prev,
-            {
+        return new Promise((resolve) => {
+          const reader = new FileReader()
+          reader.onloadend = () => {
+            resolve({
               id: Math.random().toString(36).substr(2, 9),
               preview: reader.result as string,
               file: compressedFile,
               descripcion: "",
-            },
-          ])
-        }
-        reader.readAsDataURL(compressedFile)
+            })
+          }
+          reader.onerror = () => {
+            console.error("Error leyendo archivo")
+            resolve(null)
+          }
+          reader.readAsDataURL(compressedFile)
+        })
       } catch (error) {
         console.error("Error procesando imagen:", error)
         alert("Error al procesar una imagen")
+        return null
       }
     }
 
-    setComprimiendo(false)
+    try {
+      const results = await Promise.all(Array.from(files).map(processFile))
+      const validPhotos = results.filter((p): p is FotoPreview => p !== null)
+
+      if (validPhotos.length > 0) {
+        setFotos((prev) => [...prev, ...validPhotos])
+      }
+    } finally {
+      setComprimiendo(false)
+    }
   }
 
   const removeFoto = (id: string) => {

@@ -123,7 +123,15 @@ export default function RegistroPage() {
   }
 
   const handleSlugChange = (value: string) => {
-    const sanitized = sanitizeSlug(value)
+    // Sanitizar pero permitir guión al final mientras escribe
+    const sanitized = value
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9-]/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-/, "") // Solo quitar guión al inicio, no al final
+      .substring(0, 50)
     setFormData((prev) => ({ ...prev, orgSlug: sanitized }))
     setError("")
   }
@@ -185,6 +193,9 @@ export default function RegistroPage() {
     setLoading(true)
     setError("")
 
+    // Limpiar guión final del slug antes de enviar
+    const cleanSlug = formData.orgSlug.replace(/-$/, "")
+
     try {
       const res = await fetch("/api/auth/register", {
         method: "POST",
@@ -192,7 +203,7 @@ export default function RegistroPage() {
         body: JSON.stringify({
           organizacion: {
             nombre: formData.orgNombre,
-            slug: formData.orgSlug,
+            slug: cleanSlug,
           },
           usuario: {
             nombre: formData.nombre,
@@ -211,7 +222,7 @@ export default function RegistroPage() {
       }
 
       // Éxito - redirigir al login del subdominio con mensaje de verificación
-      const targetUrl = `https://${formData.orgSlug}.${rootDomain}/login?registered=true&verify=true`
+      const targetUrl = `https://${cleanSlug}.${rootDomain}/login?registered=true&verify=true`
       window.location.href = targetUrl
     } catch (err) {
       console.error("Error:", err)
