@@ -259,8 +259,8 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
 
       const nuevoCliente = await res.json()
 
-      // Actualizar lista de clientes y seleccionar el nuevo
-      const clientesActualizados = await fetchClientes()
+      // Agregar el nuevo cliente a la lista inmediatamente y seleccionarlo
+      setClientes(prev => [...prev, nuevoCliente])
       setValue("clienteId", nuevoCliente.id)
 
       // Cerrar modal y resetear formulario

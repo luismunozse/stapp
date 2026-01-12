@@ -86,7 +86,7 @@ export async function sendVerificationEmail({
         </head>
         <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-            <h1 style="color: white; margin: 0; font-size: 24px;">STApp</h1>
+            <img src="https://${rootDomain}/logo-white.png" alt="STApp" style="height: 50px; max-width: 180px;">
           </div>
 
           <div style="background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 10px 10px;">
@@ -156,7 +156,7 @@ export async function sendPasswordResetEmail({
         </head>
         <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-            <h1 style="color: white; margin: 0; font-size: 24px;">STApp</h1>
+            <img src="https://${rootDomain}/logo-white.png" alt="STApp" style="height: 50px; max-width: 180px;">
           </div>
 
           <div style="background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 10px 10px;">
@@ -216,6 +216,7 @@ export async function sendCotizacionEmail({
   fechaVencimiento,
   pdfBuffer,
 }: SendCotizacionEmailParams) {
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(amount)
 
@@ -243,7 +244,7 @@ export async function sendCotizacionEmail({
         </head>
         <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-            <h1 style="color: white; margin: 0; font-size: 24px;">STApp</h1>
+            <img src="https://${rootDomain}/logo-white.png" alt="STApp" style="height: 50px; max-width: 180px;">
           </div>
 
           <div style="background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 10px 10px;">
