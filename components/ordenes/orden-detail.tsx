@@ -89,9 +89,12 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
 
   // Repuesto form state
   const [showAddRepuesto, setShowAddRepuesto] = useState(false)
+  const [tipoRepuesto, setTipoRepuesto] = useState<"inventario" | "manual">("inventario")
   const [nuevoRepuesto, setNuevoRepuesto] = useState({
     inventarioId: "",
     cantidad: 1,
+    nombre: "",
+    precioUnitario: 0,
   })
 
   const isAdmin = session?.user?.role === "ADMIN"
@@ -187,25 +190,50 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   }
 
   const handleAddRepuesto = async () => {
-    if (!nuevoRepuesto.inventarioId || nuevoRepuesto.cantidad < 1) {
-      await alert({
-        title: "Datos incompletos",
-        description: "Selecciona un item y cantidad",
-        variant: "warning",
-      })
-      return
+    // Validar según el tipo
+    if (tipoRepuesto === "inventario") {
+      if (!nuevoRepuesto.inventarioId || nuevoRepuesto.cantidad < 1) {
+        await alert({
+          title: "Datos incompletos",
+          description: "Selecciona un item y cantidad",
+          variant: "warning",
+        })
+        return
+      }
+    } else {
+      if (!nuevoRepuesto.nombre.trim() || nuevoRepuesto.cantidad < 1 || nuevoRepuesto.precioUnitario < 0) {
+        await alert({
+          title: "Datos incompletos",
+          description: "Completa nombre, cantidad y precio",
+          variant: "warning",
+        })
+        return
+      }
     }
 
     setUpdating(true)
     try {
+      const payload = tipoRepuesto === "inventario"
+        ? {
+            tipo: "inventario",
+            inventarioId: nuevoRepuesto.inventarioId,
+            cantidad: nuevoRepuesto.cantidad,
+          }
+        : {
+            tipo: "manual",
+            nombre: nuevoRepuesto.nombre.trim(),
+            cantidad: nuevoRepuesto.cantidad,
+            precioUnitario: nuevoRepuesto.precioUnitario,
+          }
+
       const res = await fetch(`/api/ordenes/${ordenId}/repuestos`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(nuevoRepuesto),
+        body: JSON.stringify(payload),
       })
 
       if (res.ok) {
-        setNuevoRepuesto({ inventarioId: "", cantidad: 1 })
+        setNuevoRepuesto({ inventarioId: "", cantidad: 1, nombre: "", precioUnitario: 0 })
         setShowAddRepuesto(false)
         fetchOrden()
       } else {
@@ -592,31 +620,91 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                 <CardContent>
                   {showAddRepuesto && (
                     <div className="mb-4 p-3 border rounded-lg space-y-3 bg-muted/30">
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <div>
-                          <Label className="text-xs">Item</Label>
-                          <Select
-                            value={nuevoRepuesto.inventarioId}
-                            onChange={(e) => setNuevoRepuesto({ ...nuevoRepuesto, inventarioId: e.target.value })}
-                          >
-                            <option value="">Seleccionar...</option>
-                            {inventario.map((item) => (
-                              <option key={item.id} value={item.id}>
-                                {item.nombre} (Stock: {item.stock})
-                              </option>
-                            ))}
-                          </Select>
-                        </div>
-                        <div>
-                          <Label className="text-xs">Cantidad</Label>
-                          <Input
-                            type="number"
-                            min="1"
-                            value={nuevoRepuesto.cantidad}
-                            onChange={(e) => setNuevoRepuesto({ ...nuevoRepuesto, cantidad: parseInt(e.target.value) || 1 })}
-                          />
-                        </div>
+                      {/* Toggle tipo de repuesto */}
+                      <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
+                        <button
+                          type="button"
+                          onClick={() => setTipoRepuesto("inventario")}
+                          className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                            tipoRepuesto === "inventario"
+                              ? "bg-background shadow-sm font-medium"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          Del inventario
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTipoRepuesto("manual")}
+                          className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                            tipoRepuesto === "manual"
+                              ? "bg-background shadow-sm font-medium"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          Manual
+                        </button>
                       </div>
+
+                      {tipoRepuesto === "inventario" ? (
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div>
+                            <Label className="text-xs">Item</Label>
+                            <Select
+                              value={nuevoRepuesto.inventarioId}
+                              onChange={(e) => setNuevoRepuesto({ ...nuevoRepuesto, inventarioId: e.target.value })}
+                            >
+                              <option value="">Seleccionar...</option>
+                              {inventario.map((item) => (
+                                <option key={item.id} value={item.id}>
+                                  {item.nombre} (Stock: {item.stock})
+                                </option>
+                              ))}
+                            </Select>
+                          </div>
+                          <div>
+                            <Label className="text-xs">Cantidad</Label>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={nuevoRepuesto.cantidad}
+                              onChange={(e) => setNuevoRepuesto({ ...nuevoRepuesto, cantidad: parseInt(e.target.value) || 1 })}
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="grid gap-3 sm:grid-cols-3">
+                          <div className="sm:col-span-3">
+                            <Label className="text-xs">Nombre del repuesto</Label>
+                            <Input
+                              placeholder="Ej: Flex de carga iPhone 12"
+                              value={nuevoRepuesto.nombre}
+                              onChange={(e) => setNuevoRepuesto({ ...nuevoRepuesto, nombre: e.target.value })}
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Cantidad</Label>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={nuevoRepuesto.cantidad}
+                              onChange={(e) => setNuevoRepuesto({ ...nuevoRepuesto, cantidad: parseInt(e.target.value) || 1 })}
+                            />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <Label className="text-xs">Precio unitario</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              placeholder="0.00"
+                              value={nuevoRepuesto.precioUnitario || ""}
+                              onChange={(e) => setNuevoRepuesto({ ...nuevoRepuesto, precioUnitario: parseFloat(e.target.value) || 0 })}
+                            />
+                          </div>
+                        </div>
+                      )}
+
                       <div className="flex gap-2">
                         <Button size="sm" onClick={handleAddRepuesto} disabled={updating}>
                           Agregar
@@ -626,7 +714,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                           variant="ghost"
                           onClick={() => {
                             setShowAddRepuesto(false)
-                            setNuevoRepuesto({ inventarioId: "", cantidad: 1 })
+                            setTipoRepuesto("inventario")
+                            setNuevoRepuesto({ inventarioId: "", cantidad: 1, nombre: "", precioUnitario: 0 })
                           }}
                         >
                           Cancelar
@@ -643,7 +732,14 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                           className="flex items-center justify-between p-3 border rounded-lg"
                         >
                           <div>
-                            <div className="font-medium">{repuesto.inventario.nombre}</div>
+                            <div className="font-medium flex items-center gap-2">
+                              {repuesto.inventario?.nombre || repuesto.nombre}
+                              {!repuesto.inventario && (
+                                <span className="text-xs bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
+                                  Manual
+                                </span>
+                              )}
+                            </div>
                             <div className="text-sm text-muted-foreground">
                               {repuesto.cantidad} × {formatCurrency(repuesto.precioUnitario)}
                             </div>

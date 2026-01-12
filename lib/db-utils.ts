@@ -123,6 +123,7 @@ export function formatRepuesto(repuesto: any) {
     id: repuesto.id,
     ordenId: repuesto.orden_id,
     inventarioId: repuesto.inventario_id,
+    nombre: repuesto.nombre, // Para repuestos manuales
     cantidad: repuesto.cantidad,
     precioUnitario: repuesto.precio_unitario,
     inventario: repuesto.inventario ? formatInventario(repuesto.inventario) : undefined,

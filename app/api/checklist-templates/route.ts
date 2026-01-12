@@ -22,7 +22,13 @@ export async function GET() {
 
     if (dbError) throw dbError
 
-    return NextResponse.json(templates)
+    // Mapear checklist_template_items a items para el frontend
+    const mappedTemplates = templates?.map(t => ({
+      ...t,
+      items: t.checklist_template_items || [],
+    })) || []
+
+    return NextResponse.json(mappedTemplates)
   } catch (error) {
     console.error("Error fetching checklist templates:", error)
     return NextResponse.json(

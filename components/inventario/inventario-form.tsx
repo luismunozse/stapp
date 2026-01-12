@@ -12,13 +12,14 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { X } from "lucide-react"
 import type { Inventario, TipoDispositivo } from "@/types"
+import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
 
 const inventarioSchema = z.object({
   codigo: z.string().min(1, "El código es requerido"),
   nombre: z.string().min(1, "El nombre es requerido"),
   descripcion: z.string().optional(),
   categoria: z.string().min(1, "La categoría es requerida"),
-  tipoDispositivo: z.enum(["CELULAR", "COMPUTADORA", "TABLET", "CONSOLA", "SMARTWATCH", "TODOS"]),
+  tipoDispositivo: z.string().min(1, "El tipo de dispositivo es requerido"),
   stock: z.number().int().min(0),
   precioCompra: z.number().min(0),
   precioVenta: z.number().min(0),
@@ -48,6 +49,7 @@ export function InventarioForm({
   onClose,
   onSuccess,
 }: InventarioFormProps) {
+  const { tipos: tiposDispositivo, loading: tiposLoading } = useTiposDispositivo({ incluirTodos: true })
   const [loading, setLoading] = useState(false)
   const {
     register,
@@ -75,7 +77,7 @@ export function InventarioForm({
           nombre: "",
           descripcion: "",
           categoria: "",
-          tipoDispositivo: "CELULAR",
+          tipoDispositivo: "",
           stock: 0,
           precioCompra: 0,
           precioVenta: 0,
@@ -194,16 +196,15 @@ export function InventarioForm({
             <Select
               id="tipoDispositivo"
               {...register("tipoDispositivo")}
-              onChange={(e) =>
-                setValue("tipoDispositivo", e.target.value as TipoDispositivo)
-              }
+              onChange={(e) => setValue("tipoDispositivo", e.target.value)}
+              disabled={tiposLoading}
             >
-              <option value="CELULAR">Celular</option>
-              <option value="COMPUTADORA">Computadora</option>
-              <option value="TABLET">Tablet</option>
-              <option value="CONSOLA">Consola</option>
-              <option value="SMARTWATCH">Smartwatch</option>
-              <option value="TODOS">Todos los dispositivos</option>
+              <option value="">Seleccionar...</option>
+              {tiposDispositivo.map((tipo) => (
+                <option key={tipo.id} value={tipo.codigo}>
+                  {tipo.nombre}
+                </option>
+              ))}
             </Select>
             {errors.tipoDispositivo && (
               <p className="text-sm text-destructive mt-1">

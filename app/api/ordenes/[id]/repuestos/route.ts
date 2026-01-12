@@ -3,10 +3,26 @@ import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
 
-const repuestoSchema = z.object({
+// Schema para repuesto de inventario
+const repuestoInventarioSchema = z.object({
+  tipo: z.literal("inventario"),
   inventarioId: z.string().min(1),
   cantidad: z.number().int().min(1),
 })
+
+// Schema para repuesto manual
+const repuestoManualSchema = z.object({
+  tipo: z.literal("manual"),
+  nombre: z.string().min(1, "El nombre es requerido"),
+  cantidad: z.number().int().min(1),
+  precioUnitario: z.number().min(0, "El precio debe ser mayor o igual a 0"),
+})
+
+// Schema combinado
+const repuestoSchema = z.discriminatedUnion("tipo", [
+  repuestoInventarioSchema,
+  repuestoManualSchema,
+])
 
 export async function POST(
   request: Request,
@@ -32,35 +48,45 @@ export async function POST(
       return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
     }
 
-    // Verificar que el item existe y tiene stock
-    const { data: item, error: itemError } = await supabaseAdmin
-      .from("inventario")
-      .select("id, stock, precio_venta")
-      .eq("id", data.inventarioId)
-      .eq("organization_id", organizationId!)
-      .single()
+    if (data.tipo === "inventario") {
+      // Repuesto desde inventario
+      const { data: item, error: itemError } = await supabaseAdmin
+        .from("inventario")
+        .select("id, stock, precio_venta")
+        .eq("id", data.inventarioId)
+        .eq("organization_id", organizationId!)
+        .single()
 
-    if (itemError || !item) {
-      return NextResponse.json({ error: "Item no encontrado" }, { status: 404 })
+      if (itemError || !item) {
+        return NextResponse.json({ error: "Item no encontrado" }, { status: 404 })
+      }
+
+      if (item.stock < data.cantidad) {
+        return NextResponse.json({ error: "Stock insuficiente" }, { status: 400 })
+      }
+
+      // Crear relación repuesto-orden
+      await supabaseAdmin.from("repuestos_orden").insert({
+        orden_id: ordenId,
+        inventario_id: data.inventarioId,
+        cantidad: data.cantidad,
+        precio_unitario: item.precio_venta,
+      })
+
+      // Actualizar stock
+      await supabaseAdmin
+        .from("inventario")
+        .update({ stock: item.stock - data.cantidad })
+        .eq("id", data.inventarioId)
+    } else {
+      // Repuesto manual (sin inventario)
+      await supabaseAdmin.from("repuestos_orden").insert({
+        orden_id: ordenId,
+        nombre: data.nombre,
+        cantidad: data.cantidad,
+        precio_unitario: data.precioUnitario,
+      })
     }
-
-    if (item.stock < data.cantidad) {
-      return NextResponse.json({ error: "Stock insuficiente" }, { status: 400 })
-    }
-
-    // Crear relación repuesto-orden
-    await supabaseAdmin.from("repuestos_orden").insert({
-      orden_id: ordenId,
-      inventario_id: data.inventarioId,
-      cantidad: data.cantidad,
-      precio_unitario: item.precio_venta,
-    })
-
-    // Actualizar stock
-    await supabaseAdmin
-      .from("inventario")
-      .update({ stock: item.stock - data.cantidad })
-      .eq("id", data.inventarioId)
 
     return NextResponse.json({ success: true }, { status: 201 })
   } catch (error) {
@@ -117,22 +143,23 @@ export async function DELETE(
       return NextResponse.json({ error: "Repuesto no encontrado" }, { status: 404 })
     }
 
-    // Obtener stock actual
-    const { data: item } = await supabaseAdmin
-      .from("inventario")
-      .select("stock")
-      .eq("id", repuesto.inventario_id)
-      .single()
-
     // Eliminar repuesto
     await supabaseAdmin.from("repuestos_orden").delete().eq("id", repuestoId)
 
-    // Devolver stock
-    if (item) {
-      await supabaseAdmin
+    // Devolver stock solo si era de inventario
+    if (repuesto.inventario_id) {
+      const { data: item } = await supabaseAdmin
         .from("inventario")
-        .update({ stock: item.stock + repuesto.cantidad })
+        .select("stock")
         .eq("id", repuesto.inventario_id)
+        .single()
+
+      if (item) {
+        await supabaseAdmin
+          .from("inventario")
+          .update({ stock: item.stock + repuesto.cantidad })
+          .eq("id", repuesto.inventario_id)
+      }
     }
 
     return NextResponse.json({ success: true })
@@ -144,4 +171,3 @@ export async function DELETE(
     )
   }
 }
-

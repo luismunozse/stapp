@@ -1,5 +1,16 @@
 export type Rol = "ADMIN" | "TECNICO" | "VENDEDOR"
 export type TipoDispositivo = "CELULAR" | "COMPUTADORA" | "TABLET" | "CONSOLA" | "SMARTWATCH" | "TODOS"
+
+export interface TipoDispositivoCustom {
+  id: string
+  codigo: string
+  nombre: string
+  prefijoOrden: string
+  icono?: string | null
+  activo: boolean
+  esBase: boolean
+  orden: number
+}
 export type EstadoOrden =
   | "RECIBIDO"           // Equipo recién ingresado
   | "EN_DIAGNOSTICO"     // Técnico evaluando el problema
@@ -39,6 +50,8 @@ export interface OrdenServicio {
   tecnicoId?: string | null
   dispositivo: string
   tipoDispositivo: TipoDispositivo
+  tipoDispositivoId?: string | null
+  tipoDispositivoCustom?: TipoDispositivoCustom | null
   marca?: string | null
   color?: string | null
   imei?: string | null
@@ -65,6 +78,8 @@ export interface Inventario {
   descripcion?: string | null
   categoria: string
   tipoDispositivo: TipoDispositivo
+  tipoDispositivoId?: string | null
+  tipoDispositivoCustom?: TipoDispositivoCustom | null
   stock: number
   precioCompra: number
   precioVenta: number

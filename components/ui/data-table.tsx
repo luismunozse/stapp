@@ -13,6 +13,7 @@ import {
 import { cn } from "@/lib/utils"
 import { Button } from "./button"
 import { Select } from "./select"
+import { DatePicker } from "./date-picker"
 
 // Types
 export interface Column<T> {
@@ -354,11 +355,9 @@ export function DataTableFilters({ filters, onClearAll }: DataTableFiltersProps)
             </Select>
           )}
           {filter.type === "date" && (
-            <input
-              type="date"
+            <DatePicker
               value={filter.value}
-              onChange={(e) => filter.onChange(e.target.value)}
-              className="h-9 px-3 rounded-md border border-input bg-background text-sm"
+              onChange={filter.onChange}
               placeholder={filter.label}
             />
           )}

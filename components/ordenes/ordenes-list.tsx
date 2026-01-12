@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
+import { DatePicker } from "@/components/ui/date-picker"
 import { DataTable, type Column } from "@/components/ui/data-table"
 import { OrderStatusBadge } from "@/components/ui/badge"
 import {
@@ -301,31 +302,23 @@ export function OrdenesList() {
             ))}
           </Select>
 
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Desde:</span>
-            <input
-              type="date"
-              value={fechaDesde}
-              onChange={(e) => {
-                setFechaDesde(e.target.value)
-                setPage(1)
-              }}
-              className="h-9 px-3 rounded-md border border-input bg-background text-sm"
-            />
-          </div>
+          <DatePicker
+            placeholder="Desde"
+            value={fechaDesde}
+            onChange={(value) => {
+              setFechaDesde(value)
+              setPage(1)
+            }}
+          />
 
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Hasta:</span>
-            <input
-              type="date"
-              value={fechaHasta}
-              onChange={(e) => {
-                setFechaHasta(e.target.value)
-                setPage(1)
-              }}
-              className="h-9 px-3 rounded-md border border-input bg-background text-sm"
-            />
-          </div>
+          <DatePicker
+            placeholder="Hasta"
+            value={fechaHasta}
+            onChange={(value) => {
+              setFechaHasta(value)
+              setPage(1)
+            }}
+          />
 
           {hasActiveFilters && (
             <Button

@@ -4,7 +4,7 @@ import { ConfiguracionForm } from "@/components/configuracion/configuracion-form
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { CookieSettings } from "@/components/cookie-settings"
 import Link from "next/link"
-import { ClipboardCheck, ChevronRight, CreditCard, FileSpreadsheet } from "lucide-react"
+import { ClipboardCheck, ChevronRight, CreditCard, FileSpreadsheet, Smartphone } from "lucide-react"
 import { canEditConfiguration } from "@/lib/auth-utils"
 
 export default async function ConfiguracionPage() {
@@ -76,6 +76,23 @@ export default async function ConfiguracionPage() {
             <CardContent>
               <CardDescription className="flex items-center justify-between">
                 Ver historial de importaciones CSV/Excel
+                <ChevronRight className="h-4 w-4" />
+              </CardDescription>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/configuracion/tipos-dispositivo">
+          <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Tipos de Dispositivo
+              </CardTitle>
+              <Smartphone className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <CardDescription className="flex items-center justify-between">
+                Gestiona los tipos de dispositivo disponibles
                 <ChevronRight className="h-4 w-4" />
               </CardDescription>
             </CardContent>

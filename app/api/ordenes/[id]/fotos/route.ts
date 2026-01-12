@@ -9,7 +9,7 @@ const fotoSchema = z.object({
   data: z.string().min(1, "Imagen requerida"),
   mime: z.string().min(1, "Tipo de imagen requerido"),
   descripcion: z.string().optional(),
-  tipo: z.enum(["INGRESO", "REPARACION", "ENTREGA"]).default("REPARACION"),
+  tipo: z.enum(["INGRESO", "DIAGNOSTICO", "COMPONENTE", "REPARACION", "ENTREGA"]).default("REPARACION"),
 })
 
 // GET - Obtener fotos de una orden

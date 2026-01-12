@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
+import { DatePicker } from "@/components/ui/date-picker"
 import { DollarSign, TrendingUp, FileText, Package } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
 import {
@@ -74,24 +75,18 @@ export function ReportesView() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <Label htmlFor="desde">Desde</Label>
-              <Input
-                id="desde"
-                type="date"
-                value={desde}
-                onChange={(e) => setDesde(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="hasta">Hasta</Label>
-              <Input
-                id="hasta"
-                type="date"
-                value={hasta}
-                onChange={(e) => setHasta(e.target.value)}
-              />
-            </div>
+            <DatePicker
+              id="desde"
+              label="Desde"
+              value={desde}
+              onChange={setDesde}
+            />
+            <DatePicker
+              id="hasta"
+              label="Hasta"
+              value={hasta}
+              onChange={setHasta}
+            />
             <div className="flex items-end">
               <Button onClick={fetchIngresos} className="w-full">
                 Aplicar Filtros
@@ -124,20 +119,6 @@ export function ReportesView() {
           <CardContent>
             <div className="text-2xl font-bold">
               {ingresos?.resumen?.cantidad || 0}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">IVA Recaudado</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {ingresos?.resumen?.totalIva
-                ? formatCurrency(ingresos.resumen.totalIva)
-                : "$0"}
             </div>
           </CardContent>
         </Card>

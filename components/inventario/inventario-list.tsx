@@ -18,10 +18,11 @@ import {
 import { InventarioForm } from "./inventario-form"
 import { ImportModal } from "@/components/import/import-modal"
 import { formatCurrency } from "@/lib/utils"
-import type { Inventario, TipoDispositivo } from "@/types"
+import type { Inventario, TipoDispositivo, TipoDispositivoCustom } from "@/types"
 import { useModal } from "@/contexts/modal-context"
+import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
 
-const categorias = [
+const todasLasCategorias = [
   "Baterías",
   "Pantallas",
   "Carcasas",
@@ -31,12 +32,23 @@ const categorias = [
   "Otros",
 ]
 
+const categoriasPorTipo: Record<TipoDispositivo | "", string[]> = {
+  "": todasLasCategorias,
+  "CELULAR": ["Baterías", "Pantallas", "Carcasas", "Memoria", "Otros"],
+  "COMPUTADORA": todasLasCategorias,
+  "TABLET": ["Baterías", "Pantallas", "Carcasas", "Memoria", "Otros"],
+  "CONSOLA": ["Baterías", "Pantallas", "Carcasas", "Memoria", "Procesadores", "Otros"],
+  "SMARTWATCH": ["Baterías", "Pantallas", "Carcasas", "Otros"],
+  "TODOS": todasLasCategorias,
+}
+
 interface InventarioListProps {
   allowImport?: boolean
 }
 
 export function InventarioList({ allowImport = true }: InventarioListProps) {
   const { confirm } = useModal()
+  const { tipos: tiposDispositivo, loading: tiposLoading } = useTiposDispositivo()
   const [items, setItems] = useState<Inventario[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
@@ -45,6 +57,16 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   const [showForm, setShowForm] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [editingItem, setEditingItem] = useState<Inventario | null>(null)
+
+  const categoriasDisponibles = categoriasPorTipo[tipoDispositivo]
+
+  const handleTipoChange = (nuevoTipo: TipoDispositivo | "") => {
+    setTipoDispositivo(nuevoTipo)
+    const nuevasCategorias = categoriasPorTipo[nuevoTipo]
+    if (categoria && !nuevasCategorias.includes(categoria)) {
+      setCategoria("")
+    }
+  }
 
   const fetchItems = async () => {
     try {
@@ -106,7 +128,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
             onChange={(e) => setCategoria(e.target.value)}
           >
             <option value="">Todas las categorías</option>
-            {categorias.map((cat) => (
+            {categoriasDisponibles.map((cat) => (
               <option key={cat} value={cat}>
                 {cat}
               </option>
@@ -114,14 +136,17 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
           </Select>
           <Select
             value={tipoDispositivo}
-            onChange={(e) => setTipoDispositivo(e.target.value as TipoDispositivo | "")}
+            onChange={(e) => handleTipoChange(e.target.value as TipoDispositivo | "")}
+            disabled={tiposLoading}
           >
             <option value="">Todos los tipos</option>
-            <option value="CELULAR">Celular</option>
-            <option value="COMPUTADORA">Computadora</option>
-            <option value="TABLET">Tablet</option>
-            <option value="CONSOLA">Consola</option>
-            <option value="SMARTWATCH">Smartwatch</option>
+            {tiposDispositivo
+              .filter((t) => t.codigo !== "TODOS")
+              .map((tipo) => (
+                <option key={tipo.id} value={tipo.codigo}>
+                  {tipo.nombre}
+                </option>
+              ))}
           </Select>
         </div>
         <div className="flex gap-2">
@@ -207,7 +232,9 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex gap-2">
-                  <Badge variant="outline">{item.tipoDispositivo}</Badge>
+                  <Badge variant="outline">
+                    {tiposDispositivo.find((t) => t.codigo === item.tipoDispositivo)?.nombre || item.tipoDispositivo}
+                  </Badge>
                   <Badge variant="secondary">{item.categoria}</Badge>
                 </div>
                 {item.descripcion && (

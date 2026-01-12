@@ -364,13 +364,6 @@ function LoginForm() {
             </div>
           )}
 
-          {/* Solo mostrar credenciales demo si no estamos en subdominio */}
-          {!tenantSlug && (
-            <div className="mt-4 pt-4 border-t border-border text-xs text-muted-foreground text-center space-y-1">
-              <p className="font-medium">Demo:</p>
-              <p>admin@demo.com / Admin123!</p>
-            </div>
-          )}
         </CardContent>
       </Card>
     </div>

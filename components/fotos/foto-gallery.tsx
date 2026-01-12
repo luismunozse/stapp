@@ -25,6 +25,7 @@ import { useModal } from "@/contexts/modal-context"
 
 interface Foto {
   id: string
+  url: string
   mime: string
   descripcion: string | null
   tipo: string
@@ -48,8 +49,6 @@ export function FotoGallery({ ordenId }: FotoGalleryProps) {
   const [loading, setLoading] = useState(true)
   const [showUpload, setShowUpload] = useState(false)
   const [selectedFoto, setSelectedFoto] = useState<string | null>(null)
-  const [fotoData, setFotoData] = useState<{ data: string; mime: string } | null>(null)
-  const [loadingFoto, setLoadingFoto] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
   const { confirm, showError } = useModal()
 
@@ -69,30 +68,15 @@ export function FotoGallery({ ordenId }: FotoGalleryProps) {
     fetchFotos()
   }, [ordenId])
 
-  const loadFotoData = async (fotoId: string) => {
-    setLoadingFoto(true)
-    try {
-      const res = await fetch(`/api/ordenes/${ordenId}/fotos/${fotoId}`)
-      const data = await res.json()
-      setFotoData({ data: data.data, mime: data.mime })
-    } catch (error) {
-      console.error("Error loading foto:", error)
-    } finally {
-      setLoadingFoto(false)
-    }
-  }
-
-  const openViewer = async (fotoId: string) => {
+  const openViewer = (fotoId: string) => {
     setSelectedFoto(fotoId)
-    await loadFotoData(fotoId)
   }
 
   const closeViewer = () => {
     setSelectedFoto(null)
-    setFotoData(null)
   }
 
-  const navigateFoto = async (direction: "prev" | "next") => {
+  const navigateFoto = (direction: "prev" | "next") => {
     if (!selectedFoto) return
     const currentIndex = fotos.findIndex((f) => f.id === selectedFoto)
     let newIndex: number
@@ -103,9 +87,7 @@ export function FotoGallery({ ordenId }: FotoGalleryProps) {
       newIndex = currentIndex < fotos.length - 1 ? currentIndex + 1 : 0
     }
 
-    const newFoto = fotos[newIndex]
-    setSelectedFoto(newFoto.id)
-    await loadFotoData(newFoto.id)
+    setSelectedFoto(fotos[newIndex].id)
   }
 
   const handleDelete = async (fotoId: string) => {
@@ -139,15 +121,22 @@ export function FotoGallery({ ordenId }: FotoGalleryProps) {
     }
   }
 
-  const downloadFoto = () => {
-    if (!fotoData || !selectedFoto) return
+  const downloadFoto = async () => {
+    if (!selectedFoto) return
     const foto = fotos.find((f) => f.id === selectedFoto)
     if (!foto) return
 
-    const link = document.createElement("a")
-    link.href = `data:${fotoData.mime};base64,${fotoData.data}`
-    link.download = `foto-${foto.tipo.toLowerCase()}-${new Date(foto.createdAt).getTime()}.${fotoData.mime.split("/")[1]}`
-    link.click()
+    try {
+      const response = await fetch(foto.url)
+      const blob = await response.blob()
+      const link = document.createElement("a")
+      link.href = URL.createObjectURL(blob)
+      link.download = `foto-${foto.tipo.toLowerCase()}-${new Date(foto.createdAt).getTime()}.${foto.mime.split("/")[1]}`
+      link.click()
+      URL.revokeObjectURL(link.href)
+    } catch (error) {
+      console.error("Error downloading foto:", error)
+    }
   }
 
   // Agrupar fotos por tipo
@@ -216,9 +205,18 @@ export function FotoGallery({ ordenId }: FotoGalleryProps) {
                           className="relative group aspect-square bg-muted rounded-lg overflow-hidden cursor-pointer border hover:border-primary transition-colors"
                           onClick={() => openViewer(foto.id)}
                         >
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <Camera className="h-8 w-8 text-muted-foreground" />
-                          </div>
+                          {foto.url ? (
+                            <img
+                              src={foto.url}
+                              alt={foto.descripcion || "Foto del equipo"}
+                              className="absolute inset-0 w-full h-full object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <Camera className="h-8 w-8 text-muted-foreground" />
+                            </div>
+                          )}
                           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
                             <Maximize2 className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
                           </div>
@@ -281,15 +279,17 @@ export function FotoGallery({ ordenId }: FotoGalleryProps) {
           )}
 
           <div className="max-w-4xl max-h-[80vh] p-4">
-            {loadingFoto ? (
-              <div className="text-white text-center">Cargando imagen...</div>
-            ) : fotoData ? (
-              <img
-                src={`data:${fotoData.mime};base64,${fotoData.data}`}
-                alt="Foto del equipo"
-                className="max-w-full max-h-[80vh] object-contain rounded-lg"
-              />
-            ) : null}
+            {(() => {
+              const foto = fotos.find((f) => f.id === selectedFoto)
+              if (!foto) return null
+              return (
+                <img
+                  src={foto.url}
+                  alt={foto.descripcion || "Foto del equipo"}
+                  className="max-w-full max-h-[80vh] object-contain rounded-lg"
+                />
+              )
+            })()}
           </div>
 
           {/* Info de la foto */}

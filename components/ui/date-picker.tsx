@@ -1,20 +1,31 @@
 "use client"
 
 import * as React from "react"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Calendar } from "lucide-react"
+import { format, parse } from "date-fns"
+import { es } from "date-fns/locale"
+import { Calendar as CalendarIcon } from "lucide-react"
+
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { Calendar } from "@/components/ui/calendar"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { Label } from "@/components/ui/label"
 
 interface DatePickerProps {
   id?: string
   label?: string
-  value?: string
+  value?: string // formato YYYY-MM-DD
   onChange?: (value: string) => void
   placeholder?: string
   required?: boolean
   min?: string
   max?: string
+  disabled?: boolean
+  className?: string
 }
 
 export function DatePicker({
@@ -22,71 +33,198 @@ export function DatePicker({
   label,
   value,
   onChange,
-  placeholder = "dd/mm/aaaa",
+  placeholder = "Seleccionar fecha",
   required,
   min,
   max,
+  disabled,
+  className,
 }: DatePickerProps) {
-  const inputRef = React.useRef<HTMLInputElement>(null)
+  const [open, setOpen] = React.useState(false)
 
-  const handleIconClick = (e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    if (inputRef.current) {
-      // Intentar abrir el picker nativo (funciona en Chrome, Edge, Safari 14+)
-      if (inputRef.current.showPicker) {
-        try {
-          inputRef.current.showPicker()
-        } catch (err) {
-          // Fallback: hacer focus
-          inputRef.current.focus()
-          inputRef.current.click()
-        }
-      } else {
-        // Fallback para navegadores que no soportan showPicker
-        inputRef.current.focus()
-        inputRef.current.click()
-      }
+  // Convertir string YYYY-MM-DD a Date
+  const selectedDate = React.useMemo(() => {
+    if (!value) return undefined
+    try {
+      return parse(value, "yyyy-MM-dd", new Date())
+    } catch {
+      return undefined
     }
-  }
+  }, [value])
 
-  const handleInputClick = () => {
-    if (inputRef.current) {
-      // En móviles, hacer focus abre el picker
-      inputRef.current.focus()
+  // Convertir min/max a Date
+  const minDate = React.useMemo(() => {
+    if (!min) return undefined
+    try {
+      return parse(min, "yyyy-MM-dd", new Date())
+    } catch {
+      return undefined
     }
+  }, [min])
+
+  const maxDate = React.useMemo(() => {
+    if (!max) return undefined
+    try {
+      return parse(max, "yyyy-MM-dd", new Date())
+    } catch {
+      return undefined
+    }
+  }, [max])
+
+  const handleSelect = (date: Date | undefined) => {
+    if (date) {
+      onChange?.(format(date, "yyyy-MM-dd"))
+    } else {
+      onChange?.("")
+    }
+    setOpen(false)
   }
 
   return (
-    <div className="space-y-2">
-      {label && <Label htmlFor={id}>{label}</Label>}
-      <div className="relative">
-        <Input
-          ref={inputRef}
-          id={id}
-          type="date"
-          value={value || ""}
-          onChange={(e) => onChange?.(e.target.value)}
-          onClick={handleInputClick}
-          onFocus={handleInputClick}
-          required={required}
-          min={min}
-          max={max}
-          className="pr-10 cursor-pointer"
-          placeholder={placeholder}
-        />
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent pointer-events-auto"
-          onClick={handleIconClick}
-          aria-label="Abrir calendario"
-        >
-          <Calendar className="h-4 w-4 text-muted-foreground" />
-        </Button>
-      </div>
+    <div className={cn("space-y-2", className)}>
+      {label && (
+        <Label htmlFor={id}>
+          {label}
+          {required && <span className="text-destructive ml-1">*</span>}
+        </Label>
+      )}
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            id={id}
+            variant="outline"
+            disabled={disabled}
+            className={cn(
+              "w-full justify-start text-left font-normal",
+              !selectedDate && "text-muted-foreground",
+              "hover:bg-accent hover:text-accent-foreground",
+              "focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            )}
+          >
+            <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />
+            {selectedDate ? (
+              <span className="text-foreground">
+                {format(selectedDate, "PPP", { locale: es })}
+              </span>
+            ) : (
+              <span>{placeholder}</span>
+            )}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <Calendar
+            mode="single"
+            selected={selectedDate}
+            onSelect={handleSelect}
+            disabled={(date) => {
+              if (minDate && date < minDate) return true
+              if (maxDate && date > maxDate) return true
+              return false
+            }}
+            initialFocus
+          />
+        </PopoverContent>
+      </Popover>
     </div>
   )
 }
 
+// Componente para selección de rango de fechas
+interface DateRangePickerProps {
+  id?: string
+  label?: string
+  from?: string
+  to?: string
+  onChange?: (range: { from: string; to: string }) => void
+  placeholder?: string
+  disabled?: boolean
+  className?: string
+}
+
+export function DateRangePicker({
+  id,
+  label,
+  from,
+  to,
+  onChange,
+  placeholder = "Seleccionar rango",
+  disabled,
+  className,
+}: DateRangePickerProps) {
+  const [open, setOpen] = React.useState(false)
+
+  const fromDate = React.useMemo(() => {
+    if (!from) return undefined
+    try {
+      return parse(from, "yyyy-MM-dd", new Date())
+    } catch {
+      return undefined
+    }
+  }, [from])
+
+  const toDate = React.useMemo(() => {
+    if (!to) return undefined
+    try {
+      return parse(to, "yyyy-MM-dd", new Date())
+    } catch {
+      return undefined
+    }
+  }, [to])
+
+  const handleSelect = (range: { from?: Date; to?: Date } | undefined) => {
+    if (range) {
+      onChange?.({
+        from: range.from ? format(range.from, "yyyy-MM-dd") : "",
+        to: range.to ? format(range.to, "yyyy-MM-dd") : "",
+      })
+      // Cerrar solo cuando se seleccionó el rango completo
+      if (range.from && range.to) {
+        setOpen(false)
+      }
+    }
+  }
+
+  const formatRangeLabel = () => {
+    if (fromDate && toDate) {
+      return `${format(fromDate, "dd MMM", { locale: es })} - ${format(toDate, "dd MMM yyyy", { locale: es })}`
+    }
+    if (fromDate) {
+      return `${format(fromDate, "dd MMM yyyy", { locale: es })} - ...`
+    }
+    return placeholder
+  }
+
+  return (
+    <div className={cn("space-y-2", className)}>
+      {label && <Label htmlFor={id}>{label}</Label>}
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            id={id}
+            variant="outline"
+            disabled={disabled}
+            className={cn(
+              "w-full justify-start text-left font-normal",
+              !fromDate && "text-muted-foreground",
+              "hover:bg-accent hover:text-accent-foreground"
+            )}
+          >
+            <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />
+            <span className={fromDate ? "text-foreground" : ""}>
+              {formatRangeLabel()}
+            </span>
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <Calendar
+            mode="range"
+            selected={{ from: fromDate, to: toDate }}
+            onSelect={handleSelect}
+            numberOfMonths={2}
+            initialFocus
+          />
+        </PopoverContent>
+      </Popover>
+    </div>
+  )
+}

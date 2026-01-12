@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { DatePicker } from "@/components/ui/date-picker"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { X, Plus, FileText, Calculator } from "lucide-react"
@@ -171,12 +172,11 @@ export function CotizacionForm({
           {/* Additional Fields */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="fechaVencimiento">Válida hasta</Label>
-              <Input
+              <DatePicker
                 id="fechaVencimiento"
-                type="date"
+                label="Válida hasta"
                 value={fechaVencimiento}
-                onChange={(e) => setFechaVencimiento(e.target.value)}
+                onChange={setFechaVencimiento}
                 disabled={loading}
               />
             </div>
