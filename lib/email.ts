@@ -131,14 +131,17 @@ interface SendPasswordResetEmailParams {
   email: string
   token: string
   nombre: string
+  slug: string
 }
 
 export async function sendPasswordResetEmail({
   email,
   token,
   nombre,
+  slug,
 }: SendPasswordResetEmailParams) {
-  const resetUrl = `${process.env.NEXTAUTH_URL}/reset-password/${token}`
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
+  const resetUrl = `https://${slug}.${rootDomain}/reset-password/${token}`
 
   return sendEmail({
     to: email,

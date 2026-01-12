@@ -2,12 +2,13 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { ArrowLeft, CheckCircle } from "lucide-react"
+import { BusinessLogo } from "@/components/shared/business-logo"
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("")
@@ -35,7 +36,7 @@ export default function ForgotPasswordPage() {
       }
 
       setSent(true)
-    } catch (error) {
+    } catch {
       setError("Error al procesar la solicitud")
     } finally {
       setLoading(false)
@@ -44,11 +45,14 @@ export default function ForgotPasswordPage() {
 
   if (sent) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+      <div className="min-h-screen flex items-center justify-center bg-muted/30 dark:bg-background px-4">
+        <div className="absolute top-4 right-4">
+          <ThemeToggle variant="icon" />
+        </div>
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
-            <div className="mx-auto w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-4">
-              <CheckCircle className="h-6 w-6 text-green-600" />
+            <div className="mx-auto w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-4">
+              <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
             </div>
             <CardTitle className="text-2xl font-bold">
               Revisa tu correo
@@ -75,18 +79,14 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-muted/30 dark:bg-background px-4">
+      <div className="absolute top-4 right-4">
+        <ThemeToggle variant="icon" />
+      </div>
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
           <div className="flex justify-center py-4">
-            <Image
-              src="/logo.png"
-              alt="STApp"
-              width={120}
-              height={40}
-              className="h-10 w-auto object-contain"
-              priority
-            />
+            <BusinessLogo size="xl" showText={false} />
           </div>
           <CardTitle className="text-2xl font-bold text-center">
             ¿Olvidaste tu contraseña?
@@ -98,7 +98,7 @@ export default function ForgotPasswordPage() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+              <div className="bg-destructive/10 border border-destructive/30 text-destructive px-4 py-3 rounded">
                 {error}
               </div>
             )}

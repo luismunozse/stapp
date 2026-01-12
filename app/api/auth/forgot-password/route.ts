@@ -13,10 +13,15 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { email } = forgotPasswordSchema.parse(body)
 
-    // Buscar usuario
+    // Buscar usuario con su organización
     const { data: user } = await supabaseAdmin
       .from("users")
-      .select("id, email, nombre")
+      .select(`
+        id,
+        email,
+        nombre,
+        organizations!inner (slug)
+      `)
       .eq("email", email)
       .single()
 
@@ -40,11 +45,16 @@ export async function POST(request: Request) {
       })
       .eq("id", user.id)
 
+    // Obtener slug de la organización
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const org = (user as any).organizations as { slug: string }
+
     // Enviar email
     await sendPasswordResetEmail({
       email: user.email,
       token: resetToken,
       nombre: user.nombre,
+      slug: org.slug,
     })
 
     return NextResponse.json({
