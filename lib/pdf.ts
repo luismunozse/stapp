@@ -949,16 +949,58 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
 
   let y = height - margin - 20
 
+  // === LOGO (si existe) ===
+  let logoWidth = 0
+  if (data.logoUrl) {
+    try {
+      const logoResponse = await fetch(data.logoUrl)
+      if (logoResponse.ok) {
+        const logoArrayBuffer = await logoResponse.arrayBuffer()
+        const logoBytes = new Uint8Array(logoArrayBuffer)
+
+        // Detectar tipo de imagen
+        let logoImage
+        const contentType = logoResponse.headers.get("content-type") || ""
+
+        if (contentType.includes("png") || data.logoUrl.toLowerCase().includes(".png")) {
+          logoImage = await pdfDoc.embedPng(logoBytes)
+        } else if (contentType.includes("jpeg") || contentType.includes("jpg") || data.logoUrl.toLowerCase().includes(".jpg") || data.logoUrl.toLowerCase().includes(".jpeg")) {
+          logoImage = await pdfDoc.embedJpg(logoBytes)
+        }
+
+        if (logoImage) {
+          const logoDims = logoImage.scale(1)
+          const maxLogoHeight = 50
+          const maxLogoWidth = 80
+          const scale = Math.min(maxLogoHeight / logoDims.height, maxLogoWidth / logoDims.width)
+          const scaledWidth = logoDims.width * scale
+          const scaledHeight = logoDims.height * scale
+
+          page.drawImage(logoImage, {
+            x: margin + 10,
+            y: height - margin - 15 - scaledHeight,
+            width: scaledWidth,
+            height: scaledHeight,
+          })
+          logoWidth = scaledWidth + 15
+        }
+      }
+    } catch (logoError) {
+      console.error("Error loading logo:", logoError)
+      // Continuar sin logo
+    }
+  }
+
   // === HEADER - Nombre empresa ===
-  page.drawText(empresaNombre, { x: margin + 10, y, size: 20, font: helveticaBold, color: textColor })
+  page.drawText(empresaNombre, { x: margin + 10 + logoWidth, y, size: 20, font: helveticaBold, color: textColor })
   y -= 16
 
   if (telefonoEmpresa) {
-    page.drawText(`Tel: ${telefonoEmpresa}`, { x: margin + 10, y, size: 9, font: helvetica, color: grayColor })
+    page.drawText(`Tel: ${telefonoEmpresa}`, { x: margin + 10 + logoWidth, y, size: 9, font: helvetica, color: grayColor })
     y -= 12
   }
   if (direccionEmpresa) {
-    page.drawText(direccionEmpresa, { x: margin + 10, y, size: 9, font: helvetica, color: grayColor })
+    page.drawText(direccionEmpresa, { x: margin + 10 + logoWidth, y, size: 9, font: helvetica, color: grayColor })
     y -= 12
   }
 
