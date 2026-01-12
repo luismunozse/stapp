@@ -63,10 +63,10 @@ export function PricingSection() {
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="text-center max-w-3xl mx-auto mb-6">
-          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
+          <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
             Precios simples y transparentes
           </h2>
-          <p className="text-lg text-gray-600 mb-8">
+          <p className="text-lg text-muted-foreground mb-8">
             Comienza gratis y actualiza cuando lo necesites. Sin costos ocultos.
           </p>
 
@@ -75,7 +75,7 @@ export function PricingSection() {
             <span
               className={cn(
                 "text-sm font-medium",
-                !annual ? "text-gray-900" : "text-gray-500"
+                !annual ? "text-foreground" : "text-muted-foreground"
               )}
             >
               Mensual
@@ -85,12 +85,12 @@ export function PricingSection() {
               onClick={() => setAnnual(!annual)}
               className={cn(
                 "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
-                annual ? "bg-primary" : "bg-gray-200"
+                annual ? "bg-primary" : "bg-muted"
               )}
             >
               <span
                 className={cn(
-                  "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
+                  "inline-block h-4 w-4 transform rounded-full bg-background transition-transform",
                   annual ? "translate-x-6" : "translate-x-1"
                 )}
               />
@@ -98,11 +98,11 @@ export function PricingSection() {
             <span
               className={cn(
                 "text-sm font-medium",
-                annual ? "text-gray-900" : "text-gray-500"
+                annual ? "text-foreground" : "text-muted-foreground"
               )}
             >
               Anual{" "}
-              <span className="text-green-600 font-semibold">
+              <span className="text-green-600 dark:text-green-400 font-semibold">
                 (Ahorra 20%)
               </span>
             </span>
@@ -118,7 +118,7 @@ export function PricingSection() {
                 "relative rounded-2xl p-8",
                 plan.popular
                   ? "bg-primary text-white shadow-xl scale-105"
-                  : "bg-white border shadow-sm"
+                  : "bg-card border shadow-sm"
               )}
             >
               {plan.popular && (
@@ -133,7 +133,7 @@ export function PricingSection() {
                 <h3
                   className={cn(
                     "text-2xl font-bold mb-2",
-                    plan.popular ? "text-white" : "text-gray-900"
+                    plan.popular ? "text-white" : "text-foreground"
                   )}
                 >
                   {plan.name}
@@ -141,7 +141,7 @@ export function PricingSection() {
                 <p
                   className={cn(
                     "text-sm",
-                    plan.popular ? "text-white/80" : "text-gray-500"
+                    plan.popular ? "text-white/80" : "text-muted-foreground"
                   )}
                 >
                   {plan.description}
@@ -152,7 +152,7 @@ export function PricingSection() {
                 <span
                   className={cn(
                     "text-4xl font-bold",
-                    plan.popular ? "text-white" : "text-gray-900"
+                    plan.popular ? "text-white" : "text-foreground"
                   )}
                 >
                   {plan.priceMonthly === 0 ? (
@@ -171,7 +171,7 @@ export function PricingSection() {
                 <span
                   className={cn(
                     "text-sm",
-                    plan.popular ? "text-white/80" : "text-gray-500"
+                    plan.popular ? "text-white/80" : "text-muted-foreground"
                   )}
                 >
                   /mes
@@ -180,7 +180,7 @@ export function PricingSection() {
                   <p
                     className={cn(
                       "text-xs mt-1",
-                      plan.popular ? "text-white/60" : "text-gray-400"
+                      plan.popular ? "text-white/60" : "text-muted-foreground"
                     )}
                   >
                     Facturado anualmente (${formatPrice(plan.priceYearly)})
@@ -193,7 +193,7 @@ export function PricingSection() {
                   className={cn(
                     "w-full mb-6",
                     plan.popular
-                      ? "bg-white text-primary hover:bg-gray-100"
+                      ? "bg-white text-primary hover:bg-white/90"
                       : ""
                   )}
                   variant={plan.popular ? "secondary" : "default"}
@@ -216,7 +216,7 @@ export function PricingSection() {
                       <X
                         className={cn(
                           "w-5 h-5 flex-shrink-0",
-                          plan.popular ? "text-white/40" : "text-gray-300"
+                          plan.popular ? "text-white/40" : "text-muted-foreground/50"
                         )}
                       />
                     )}
@@ -224,7 +224,7 @@ export function PricingSection() {
                       className={cn(
                         "text-sm",
                         !feature.included &&
-                          (plan.popular ? "text-white/40" : "text-gray-400")
+                          (plan.popular ? "text-white/40" : "text-muted-foreground/50")
                       )}
                     >
                       {feature.name}
@@ -237,7 +237,7 @@ export function PricingSection() {
         </div>
 
         {/* Money back guarantee */}
-        <p className="text-center text-sm text-gray-500 mt-12">
+        <p className="text-center text-sm text-muted-foreground mt-12">
           Garantía de devolución de 30 días. Cancela cuando quieras.
         </p>
       </div>

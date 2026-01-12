@@ -55,10 +55,10 @@ export function FAQ() {
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="text-center max-w-3xl mx-auto mb-6">
-          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
+          <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
             Preguntas frecuentes
           </h2>
-          <p className="text-lg text-gray-600">
+          <p className="text-lg text-muted-foreground">
             ¿Tienes dudas? Aquí encontrarás las respuestas a las preguntas más
             comunes.
           </p>
@@ -73,10 +73,10 @@ export function FAQ() {
                 onClick={() => setOpenIndex(openIndex === index ? null : index)}
                 className="flex items-center justify-between w-full py-5 text-left"
               >
-                <span className="font-medium text-gray-900">{faq.question}</span>
+                <span className="font-medium text-foreground">{faq.question}</span>
                 <ChevronDown
                   className={cn(
-                    "w-5 h-5 text-gray-500 transition-transform",
+                    "w-5 h-5 text-muted-foreground transition-transform",
                     openIndex === index && "rotate-180"
                   )}
                 />
@@ -87,7 +87,7 @@ export function FAQ() {
                   openIndex === index ? "max-h-96 pb-5" : "max-h-0"
                 )}
               >
-                <p className="text-gray-600">{faq.answer}</p>
+                <p className="text-muted-foreground">{faq.answer}</p>
               </div>
             </div>
           ))}

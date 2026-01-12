@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
-import { Cookie, X } from "lucide-react"
+import { Cookie } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 export function CookieConsent() {
@@ -106,24 +106,24 @@ export function CookieConsent() {
           isVisible ? "translate-y-0 opacity-100" : "translate-y-full opacity-0"
         }`}
       >
-        <div className="bg-white border-t border-gray-200 shadow-2xl">
+        <div className="bg-card border-t shadow-2xl">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div className="flex flex-col lg:flex-row items-start lg:items-center gap-6">
               {/* Icon y texto */}
               <div className="flex-1 flex items-start gap-4">
-                <div className="flex-shrink-0 w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <Cookie className="w-6 h-6 text-blue-600" />
+                <div className="flex-shrink-0 w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+                  <Cookie className="w-6 h-6 text-primary" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  <h3 className="text-lg font-semibold text-foreground mb-2">
                     Utilizamos cookies
                   </h3>
-                  <p className="text-sm text-gray-600 leading-relaxed">
+                  <p className="text-sm text-muted-foreground leading-relaxed">
                     Utilizamos cookies esenciales para el funcionamiento del sitio y cookies
                     opcionales para mejorar tu experiencia. Puedes elegir qué cookies aceptar.{" "}
                     <Link
                       href="/legal/cookies"
-                      className="text-blue-600 hover:text-blue-700 underline font-medium"
+                      className="text-primary hover:text-primary/80 underline font-medium"
                     >
                       Más información
                     </Link>
@@ -149,7 +149,7 @@ export function CookieConsent() {
                 </Button>
                 <Button
                   onClick={handleAcceptAll}
-                  className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white order-1 sm:order-3"
+                  className="w-full sm:w-auto order-1 sm:order-3"
                 >
                   Aceptar todo
                 </Button>

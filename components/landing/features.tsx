@@ -72,14 +72,14 @@ const features = [
 
 export function Features() {
   return (
-    <section id="features" className="py-6 sm:py-8 bg-gray-50">
+    <section id="features" className="py-6 sm:py-8 bg-muted/50">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="text-center max-w-3xl mx-auto mb-6">
-          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
+          <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
             Todo lo que necesitas para tu taller
           </h2>
-          <p className="text-lg text-gray-600">
+          <p className="text-lg text-muted-foreground">
             Herramientas diseñadas específicamente para talleres de reparación
             de dispositivos electrónicos.
           </p>
@@ -90,17 +90,17 @@ export function Features() {
           {features.map((feature) => (
             <div
               key={feature.name}
-              className="bg-white rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow"
+              className="bg-card rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow border"
             >
               <div
                 className={`${feature.color} w-12 h-12 rounded-lg flex items-center justify-center mb-4`}
               >
                 <feature.icon className="w-6 h-6 text-white" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              <h3 className="text-lg font-semibold text-foreground mb-2">
                 {feature.name}
               </h3>
-              <p className="text-gray-600 text-sm">{feature.description}</p>
+              <p className="text-muted-foreground text-sm">{feature.description}</p>
             </div>
           ))}
         </div>

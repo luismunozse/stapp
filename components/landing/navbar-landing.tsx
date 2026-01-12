@@ -4,6 +4,7 @@ import { useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
+import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { Menu, X, LayoutDashboard } from "lucide-react"
 
 interface NavbarLandingProps {
@@ -21,7 +22,7 @@ export function NavbarLanding({ isLoggedIn = false }: NavbarLandingProps) {
   ]
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b">
+    <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b">
       <nav className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
@@ -42,7 +43,7 @@ export function NavbarLanding({ isLoggedIn = false }: NavbarLandingProps) {
               <a
                 key={item.name}
                 href={item.href}
-                className="text-sm font-medium text-gray-600 hover:text-primary transition-colors"
+                className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors"
               >
                 {item.name}
               </a>
@@ -51,6 +52,7 @@ export function NavbarLanding({ isLoggedIn = false }: NavbarLandingProps) {
 
           {/* Desktop CTA */}
           <div className="hidden md:flex items-center gap-4">
+            <ThemeToggle variant="icon" />
             {isLoggedIn ? (
               <Link href="/dashboard">
                 <Button>
@@ -71,17 +73,20 @@ export function NavbarLanding({ isLoggedIn = false }: NavbarLandingProps) {
           </div>
 
           {/* Mobile menu button */}
-          <button
-            type="button"
-            className="md:hidden p-2"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          >
-            {mobileMenuOpen ? (
-              <X className="h-6 w-6" />
-            ) : (
-              <Menu className="h-6 w-6" />
-            )}
-          </button>
+          <div className="md:hidden flex items-center gap-2">
+            <ThemeToggle variant="icon" />
+            <button
+              type="button"
+              className="p-2"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            >
+              {mobileMenuOpen ? (
+                <X className="h-6 w-6" />
+              ) : (
+                <Menu className="h-6 w-6" />
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Mobile menu */}
@@ -92,7 +97,7 @@ export function NavbarLanding({ isLoggedIn = false }: NavbarLandingProps) {
                 <a
                   key={item.name}
                   href={item.href}
-                  className="text-sm font-medium text-gray-600 hover:text-primary"
+                  className="text-sm font-medium text-muted-foreground hover:text-primary"
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   {item.name}

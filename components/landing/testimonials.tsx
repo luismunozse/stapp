@@ -31,14 +31,14 @@ const testimonials = [
 
 export function Testimonials() {
   return (
-    <section id="testimonials" className="py-6 sm:py-8 bg-gray-50">
+    <section id="testimonials" className="py-6 sm:py-8 bg-muted/50">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="text-center max-w-3xl mx-auto mb-6">
-          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
+          <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
             Lo que dicen nuestros clientes
           </h2>
-          <p className="text-lg text-gray-600">
+          <p className="text-lg text-muted-foreground">
             Descubre por qué los técnicos eligen STApp para gestionar
             sus reparaciones.
           </p>
@@ -49,7 +49,7 @@ export function Testimonials() {
           {testimonials.map((testimonial, index) => (
             <div
               key={index}
-              className="bg-white rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow"
+              className="bg-card rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow border"
             >
               {/* Stars */}
               <div className="flex gap-1 mb-4">
@@ -62,7 +62,7 @@ export function Testimonials() {
               </div>
 
               {/* Quote */}
-              <blockquote className="text-gray-700 mb-6">
+              <blockquote className="text-muted-foreground mb-6">
                 "{testimonial.content}"
               </blockquote>
 
@@ -72,10 +72,10 @@ export function Testimonials() {
                   {testimonial.avatar}
                 </div>
                 <div>
-                  <p className="font-semibold text-gray-900">
+                  <p className="font-semibold text-foreground">
                     {testimonial.author}
                   </p>
-                  <p className="text-sm text-gray-500">{testimonial.role}</p>
+                  <p className="text-sm text-muted-foreground">{testimonial.role}</p>
                 </div>
               </div>
             </div>

@@ -22,7 +22,7 @@ export function Hero() {
   return (
     <section className="relative pt-14 pb-6 sm:pt-20 sm:pb-8 overflow-hidden">
       {/* Background gradient */}
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-50 via-white to-purple-50" />
+      <div className="absolute inset-0 bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-background dark:via-background dark:to-background" />
 
       {/* Floating devices decoration */}
       <div className="absolute top-20 right-10 opacity-10">
@@ -35,13 +35,13 @@ export function Hero() {
       <div className="container relative mx-auto px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto text-center">
           {/* Headline */}
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 tracking-tight mb-6">
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-foreground tracking-tight mb-6">
             Gestiona tu taller de reparaciones{" "}
             <span className="text-primary">como un profesional</span>
           </h1>
 
           {/* Subheadline */}
-          <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
+          <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
             Sistema completo para talleres de reparación de celulares,
             computadoras y dispositivos electrónicos. Organiza tus órdenes,
             controla tu inventario y factura en segundos.
@@ -52,7 +52,7 @@ export function Hero() {
             {benefits.map((benefit) => (
               <div
                 key={benefit}
-                className="flex items-center gap-2 text-sm text-gray-600"
+                className="flex items-center gap-2 text-sm text-muted-foreground"
               >
                 <CheckCircle className="w-5 h-5 text-green-500" />
                 {benefit}
@@ -76,7 +76,7 @@ export function Hero() {
           </div>
 
           {/* Trust indicators */}
-          <p className="text-sm text-gray-500 mt-6">
+          <p className="text-sm text-muted-foreground mt-6">
             Prueba gratis • Sin compromiso • Configuración en 2 minutos
           </p>
         </div>
