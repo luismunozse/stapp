@@ -7,9 +7,19 @@ import { CookieConsent } from "@/components/cookie-consent"
 
 const inter = Inter({ subsets: ["latin"] })
 
+const siteUrl = "https://stapp.com.ar"
+
 export const metadata: Metadata = {
-  title: "STApp - Gestión de Servicio Técnico",
-  description: "Sistema de gestión para servicio técnico de dispositivos electrónicos",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: "STApp - Gestión de Servicio Técnico",
+    template: "%s | STApp",
+  },
+  description: "Sistema de gestión para servicio técnico de dispositivos electrónicos. Administra órdenes de trabajo, clientes, inventario y facturación desde una sola plataforma.",
+  keywords: ["servicio técnico", "gestión taller", "reparación celulares", "software reparaciones", "orden de trabajo", "gestión técnicos"],
+  authors: [{ name: "STApp" }],
+  creator: "STApp",
+  publisher: "STApp",
   manifest: "/manifest.json",
   icons: {
     icon: "/favicon.ico",
@@ -20,6 +30,51 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: "STApp",
   },
+  // Open Graph
+  openGraph: {
+    type: "website",
+    locale: "es_AR",
+    url: siteUrl,
+    siteName: "STApp",
+    title: "STApp - Gestión de Servicio Técnico",
+    description: "Sistema de gestión para servicio técnico de dispositivos electrónicos. Administra órdenes de trabajo, clientes, inventario y facturación.",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "STApp - Gestión de Servicio Técnico",
+      },
+    ],
+  },
+  // Twitter Cards
+  twitter: {
+    card: "summary_large_image",
+    title: "STApp - Gestión de Servicio Técnico",
+    description: "Sistema de gestión para servicio técnico de dispositivos electrónicos. Administra órdenes, clientes e inventario.",
+    images: ["/og-image.png"],
+    creator: "@stapp_ar",
+  },
+  // Robots
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
+  // Alternates
+  alternates: {
+    canonical: siteUrl,
+  },
+  // Verification (agregar IDs cuando estén disponibles)
+  // verification: {
+  //   google: "google-site-verification-id",
+  // },
 }
 
 export const viewport: Viewport = {
