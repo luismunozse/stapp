@@ -1,0 +1,27 @@
+import { redirect } from "next/navigation"
+import { getSuperadminSession } from "@/lib/superadmin-auth"
+import { NavbarSuperadmin } from "@/components/superadmin/navbar-superadmin"
+
+// Forzar renderizado dinámico para verificar auth en cada navegación
+export const dynamic = "force-dynamic"
+
+export default async function SuperadminLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  const session = await getSuperadminSession()
+
+  if (!session) {
+    redirect("/superadmin-login")
+  }
+
+  return (
+    <div className="min-h-screen bg-muted/30 dark:bg-background">
+      <NavbarSuperadmin userEmail={session.user?.email || ""} />
+      <main className="lg:pl-64 pt-14 lg:pt-0">
+        <div className="p-4 lg:p-8">{children}</div>
+      </main>
+    </div>
+  )
+}

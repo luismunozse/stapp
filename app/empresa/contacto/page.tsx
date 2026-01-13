@@ -13,10 +13,10 @@ import {
   Phone,
   MapPin,
   Clock,
-  MessageCircle,
   Send,
   CheckCircle,
 } from "lucide-react"
+import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 
 export default function ContactoPage() {
   const [formData, setFormData] = useState({
@@ -79,7 +79,7 @@ export default function ContactoPage() {
       bgColor: "bg-green-50",
     },
     {
-      icon: MessageCircle,
+      icon: WhatsAppIcon,
       title: "WhatsApp",
       description: "Respuesta rápida",
       value: "+54 11 1234-5678",

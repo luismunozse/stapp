@@ -5,12 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
   Mail,
-  MessageCircle,
   Clock,
   CheckCircle,
   XCircle,
   Bell,
 } from "lucide-react"
+import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 
 interface NotificationLog {
   id: string
@@ -108,7 +108,7 @@ export function NotificationHistory({ ordenId }: NotificationHistoryProps) {
                   {log.canal === "EMAIL" ? (
                     <Mail className="h-4 w-4 text-blue-600" />
                   ) : (
-                    <MessageCircle className="h-4 w-4 text-green-600" />
+                    <WhatsAppIcon className="h-4 w-4 text-green-600" />
                   )}
                 </div>
 

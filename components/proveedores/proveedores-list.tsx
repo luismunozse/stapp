@@ -12,9 +12,9 @@ import {
   Mail,
   MapPin,
   Globe,
-  MessageCircle,
   ExternalLink,
 } from "lucide-react"
+import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { ProveedorForm } from "./proveedor-form"
 import { useModal } from "@/contexts/modal-context"
 
@@ -165,7 +165,7 @@ export function ProveedoresList() {
                     rel="noopener noreferrer"
                     className="flex items-center gap-2 text-sm text-green-600 hover:text-green-700"
                   >
-                    <MessageCircle className="h-4 w-4" />
+                    <WhatsAppIcon className="h-4 w-4" />
                     WhatsApp
                     <ExternalLink className="h-3 w-3" />
                   </a>

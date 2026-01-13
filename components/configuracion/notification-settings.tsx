@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Save, Bell, Mail, MessageCircle } from "lucide-react"
+import { Save, Bell, Mail } from "lucide-react"
+import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 
 interface NotificationConfig {
   notificacionesEmail: boolean
@@ -156,7 +157,7 @@ export function NotificationSettings({ allowEdit = true }: NotificationSettingsP
 
         <div className="flex items-center justify-between p-4 border rounded-lg">
           <div className="flex items-start gap-3">
-            <MessageCircle className="h-5 w-5 text-green-600 mt-0.5" />
+            <WhatsAppIcon className="h-5 w-5 text-green-600 mt-0.5" />
             <div>
               <Label className="text-base">Boton WhatsApp</Label>
               <p className="text-sm text-muted-foreground">
