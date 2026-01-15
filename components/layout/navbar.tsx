@@ -19,6 +19,7 @@ import {
   Settings,
   Store,
   MoreHorizontal,
+  TrendingUp,
 } from "lucide-react"
 import { useState, useEffect } from "react"
 import { cn } from "@/lib/utils"
@@ -29,6 +30,7 @@ const navItems = [
   { href: "/ordenes", label: "Órdenes", icon: ClipboardList },
   { href: "/clientes", label: "Clientes", icon: Users },
   { href: "/tecnicos", label: "Técnicos", icon: Wrench },
+  { href: "/vendedores", label: "Vendedores", icon: TrendingUp },
   { href: "/inventario", label: "Inventario", icon: Package },
   { href: "/facturacion", label: "Facturación", icon: FileText },
   { href: "/reportes", label: "Reportes", icon: BarChart3 },

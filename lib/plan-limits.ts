@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { checkPlanLimit } from "@/lib/subscriptions"
 
-export type LimitType = "ordenes" | "tecnicos" | "clientes"
+export type LimitType = "ordenes" | "tecnicos" | "clientes" | "vendedores"
 
 // Middleware para verificar límites del plan antes de crear recursos
 export async function enforcePlanLimit(
@@ -42,5 +42,10 @@ export const LIMIT_MESSAGES = {
     title: "Límite de clientes alcanzado",
     description: "Has alcanzado el límite de clientes de tu plan Free.",
     action: "Actualiza a Premium para agregar clientes ilimitados.",
+  },
+  vendedores: {
+    title: "Límite de vendedores alcanzado",
+    description: "Has alcanzado el límite de vendedores de tu plan Free.",
+    action: "Actualiza a Premium para agregar vendedores ilimitados.",
   },
 }

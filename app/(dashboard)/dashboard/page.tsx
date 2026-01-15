@@ -5,6 +5,7 @@ import { ClipboardList, Users, Package, DollarSign, Shield } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
 import { redirect } from "next/navigation"
 import Link from "next/link"
+import { DolarWidget } from "@/components/cotizacion-dolar"
 
 export default async function DashboardPage() {
   const session = await auth()
@@ -145,7 +146,7 @@ export default async function DashboardPage() {
         })}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader>
             <CardTitle>Órdenes Recientes</CardTitle>
@@ -219,6 +220,7 @@ export default async function DashboardPage() {
             )}
           </CardContent>
         </Card>
+        <DolarWidget />
       </div>
     </div>
   )

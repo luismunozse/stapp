@@ -23,6 +23,7 @@ export interface UsageInfo {
   ordenesMesActual: number
   ordenesTotal: number
   tecnicos: number
+  vendedores: number
   clientes: number
   storageMb: number
 }
@@ -93,6 +94,7 @@ export async function getUsageInfo(organizationId: string): Promise<UsageInfo> {
       ordenesMesActual: 0,
       ordenesTotal: 0,
       tecnicos: 0,
+      vendedores: 0,
       clientes: 0,
       storageMb: 0,
     }
@@ -102,15 +104,17 @@ export async function getUsageInfo(organizationId: string): Promise<UsageInfo> {
     ordenesMesActual: data.ordenes_mes_actual || 0,
     ordenesTotal: data.ordenes_count || 0,
     tecnicos: data.tecnicos_count || 0,
+    vendedores: data.vendedores_count || 0,
     clientes: data.clientes_count || 0,
     storageMb: parseFloat(data.storage_used_mb || "0"),
   }
 }
 
 // Límites por defecto del plan FREE (cuando no hay suscripción)
-const FREE_PLAN_LIMITS = {
+const FREE_PLAN_LIMITS: Record<string, number> = {
   ordenes: 50,
   tecnicos: 2,
+  vendedores: 2,
   clientes: 100,
   storageMb: 100,
 }
@@ -118,7 +122,7 @@ const FREE_PLAN_LIMITS = {
 // Verificar si una organización puede realizar una acción según su plan
 export async function checkPlanLimit(
   organizationId: string,
-  limitType: "ordenes" | "tecnicos" | "clientes"
+  limitType: "ordenes" | "tecnicos" | "clientes" | "vendedores"
 ): Promise<{ allowed: boolean; current: number; limit: number | null; message?: string }> {
   const subscription = await getSubscriptionInfo(organizationId)
   const usage = await getUsageInfo(organizationId)
@@ -138,6 +142,11 @@ export async function checkPlanLimit(
         limit = subscription.limits.tecnicos
         current = usage.tecnicos
         break
+      case "vendedores":
+        // Vendedores usa el mismo límite que técnicos en el plan
+        limit = subscription.limits.tecnicos
+        current = usage.vendedores
+        break
       case "clientes":
         limit = subscription.limits.clientes
         current = usage.clientes
@@ -152,6 +161,9 @@ export async function checkPlanLimit(
         break
       case "tecnicos":
         current = usage.tecnicos
+        break
+      case "vendedores":
+        current = usage.vendedores
         break
       case "clientes":
         current = usage.clientes
