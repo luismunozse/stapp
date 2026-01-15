@@ -71,6 +71,12 @@ export type CategoriaChecklist =
 
 export type MetodoPago = "EFECTIVO" | "TRANSFERENCIA"
 
+export type MetodoPagoVenta = "EFECTIVO" | "TRANSFERENCIA" | "TARJETA"
+
+export type EstadoVenta = "COMPLETADA" | "ANULADA"
+
+export type EstadoGarantiaVenta = "ACTIVA" | "VENCIDA" | "RECLAMADA"
+
 // ========================================
 // TABLE TYPES
 // ========================================
@@ -525,4 +531,58 @@ export interface InventarioConUso extends Inventario {
   _count?: {
     repuestos: number
   }
+}
+
+// ========================================
+// VENTAS TYPES
+// ========================================
+
+export interface Venta {
+  id: string
+  numero_venta: number
+  cliente_id: string | null
+  cliente_nombre: string
+  cliente_telefono: string | null
+  vendedor_id: string
+  subtotal: number
+  descuento: number
+  total: number
+  metodo_pago: MetodoPagoVenta
+  estado: EstadoVenta
+  observaciones: string | null
+  organization_id: string
+  created_at: string
+  updated_at: string
+}
+
+export interface ItemVenta {
+  id: string
+  venta_id: string
+  inventario_id: string | null
+  descripcion: string
+  cantidad: number
+  precio_unitario: number
+  subtotal: number
+  dias_garantia: number
+}
+
+export interface GarantiaVenta {
+  id: string
+  venta_id: string
+  item_venta_id: string
+  numero_garantia: string
+  dias_validez: number
+  fecha_inicio: string
+  fecha_vencimiento: string
+  estado: EstadoGarantiaVenta
+  organization_id: string
+  created_at: string
+}
+
+// Venta con relaciones
+export interface VentaConRelaciones extends Venta {
+  cliente?: Cliente | null
+  vendedor?: User
+  items?: (ItemVenta & { inventario?: Inventario | null })[]
+  garantias?: GarantiaVenta[]
 }

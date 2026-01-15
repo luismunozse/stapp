@@ -1256,4 +1256,450 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   return Buffer.from(pdfBytes)
 }
 
-export type { CotizacionPDFData, CotizacionItem, OrdenPDFData }
+// ========================================
+// COMPROBANTE DE VENTA
+// ========================================
+
+interface VentaItem {
+  descripcion: string
+  cantidad: number
+  precioUnitario: number
+  subtotal: number
+  diasGarantia: number
+}
+
+interface VentaPDFData {
+  numeroVenta: number
+  fecha: Date
+  cliente: {
+    nombre: string
+    telefono?: string | null
+  }
+  vendedor: string
+  items: VentaItem[]
+  subtotal: number
+  descuento: number
+  total: number
+  metodoPago: string
+  nombreEmpresa?: string
+  telefonoEmpresa?: string | null
+  direccionEmpresa?: string | null
+  logoUrl?: string | null
+}
+
+const metodoPagoLabels: Record<string, string> = {
+  EFECTIVO: "Efectivo",
+  TRANSFERENCIA: "Transferencia",
+  TARJETA: "Tarjeta",
+}
+
+export async function generateVentaPDF(data: VentaPDFData): Promise<Buffer> {
+  const safe = (val: unknown): string => {
+    if (val === null || val === undefined) return ""
+    if (typeof val === "string") return val
+    if (typeof val === "number") return String(val)
+    return ""
+  }
+
+  const formatDatePDF = (date: Date | string | null | undefined): string => {
+    if (!date) return ""
+    const d = new Date(date)
+    if (isNaN(d.getTime())) return ""
+    return d.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" })
+  }
+
+  const formatCurrencyPDF = (amount: number | null | undefined): string => {
+    if (amount === null || amount === undefined) return "$0"
+    return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(amount)
+  }
+
+  // Extraer datos
+  const empresaNombre = safe(data.nombreEmpresa) || "Servicio Tecnico"
+  const telefonoEmpresa = safe(data.telefonoEmpresa)
+  const direccionEmpresa = safe(data.direccionEmpresa)
+  const numeroVenta = data.numeroVenta
+  const fecha = formatDatePDF(data.fecha)
+  const clienteNombre = safe(data.cliente?.nombre) || "Consumidor Final"
+  const clienteTelefono = safe(data.cliente?.telefono)
+  const vendedor = safe(data.vendedor)
+  const metodoPago = metodoPagoLabels[data.metodoPago] || data.metodoPago
+
+  // Crear documento PDF
+  const pdfDoc = await PDFLib.create()
+  const page = pdfDoc.addPage([595, 842]) // A4
+  const { width, height } = page.getSize()
+
+  // Cargar fuentes
+  const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica)
+  const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
+
+  // Colores
+  const primaryColor = rgb(0.231, 0.510, 0.965) // #3b82f6
+  const textColor = rgb(0.122, 0.161, 0.216) // #1f2937
+  const grayColor = rgb(0.420, 0.451, 0.502) // #6b7280
+  const lightGray = rgb(0.898, 0.906, 0.922) // #e5e7eb
+  const bgGray = rgb(0.953, 0.957, 0.965) // #f3f4f6
+  const white = rgb(1, 1, 1)
+  const greenColor = rgb(0.134, 0.545, 0.373)
+
+  const margin = 40
+  const contentWidth = width - (margin * 2)
+
+  let y = height - margin - 20
+
+  // === HEADER ===
+  page.drawText(empresaNombre, { x: margin, y, size: 20, font: helveticaBold, color: textColor })
+  y -= 16
+  if (telefonoEmpresa) {
+    page.drawText(`Tel: ${telefonoEmpresa}`, { x: margin, y, size: 9, font: helvetica, color: grayColor })
+    y -= 12
+  }
+  if (direccionEmpresa) {
+    page.drawText(direccionEmpresa, { x: margin, y, size: 9, font: helvetica, color: grayColor })
+    y -= 12
+  }
+
+  // Numero de venta (lado derecho)
+  const ventaText = `VENTA #${String(numeroVenta).padStart(4, "0")}`
+  const ventaWidth = helveticaBold.widthOfTextAtSize(ventaText, 16)
+  page.drawRectangle({
+    x: width - margin - ventaWidth - 20,
+    y: height - margin - 35,
+    width: ventaWidth + 16,
+    height: 26,
+    color: primaryColor,
+  })
+  page.drawText(ventaText, {
+    x: width - margin - ventaWidth - 12,
+    y: height - margin - 27,
+    size: 16,
+    font: helveticaBold,
+    color: white
+  })
+  page.drawText(`Fecha: ${fecha}`, {
+    x: width - margin - 90,
+    y: height - margin - 55,
+    size: 9,
+    font: helvetica,
+    color: grayColor
+  })
+
+  y = height - margin - 90
+
+  // Linea separadora
+  page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 2, color: primaryColor })
+  y -= 20
+
+  // === TITULO ===
+  const titleText = "COMPROBANTE DE VENTA"
+  const titleWidth = helveticaBold.widthOfTextAtSize(titleText, 14)
+  page.drawText(titleText, { x: (width - titleWidth) / 2, y, size: 14, font: helveticaBold, color: primaryColor })
+  y -= 30
+
+  // === DATOS DEL CLIENTE ===
+  page.drawRectangle({ x: margin, y: y - 40, width: contentWidth / 2 - 10, height: 50, color: bgGray })
+  page.drawText("CLIENTE", { x: margin + 10, y: y - 5, size: 9, font: helveticaBold, color: primaryColor })
+  page.drawText(clienteNombre, { x: margin + 10, y: y - 20, size: 10, font: helvetica, color: textColor })
+  if (clienteTelefono) {
+    page.drawText(`Tel: ${clienteTelefono}`, { x: margin + 10, y: y - 33, size: 9, font: helvetica, color: grayColor })
+  }
+
+  // === DATOS DEL VENDEDOR ===
+  page.drawRectangle({ x: margin + contentWidth / 2 + 10, y: y - 40, width: contentWidth / 2 - 10, height: 50, color: bgGray })
+  page.drawText("VENDEDOR", { x: margin + contentWidth / 2 + 20, y: y - 5, size: 9, font: helveticaBold, color: primaryColor })
+  page.drawText(vendedor, { x: margin + contentWidth / 2 + 20, y: y - 20, size: 10, font: helvetica, color: textColor })
+  page.drawText(`Pago: ${metodoPago}`, { x: margin + contentWidth / 2 + 20, y: y - 33, size: 9, font: helvetica, color: grayColor })
+
+  y -= 60
+
+  // === TABLA DE ITEMS ===
+  page.drawText("DETALLE DE PRODUCTOS", { x: margin, y, size: 10, font: helveticaBold, color: primaryColor })
+  y -= 5
+  page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 1, color: lightGray })
+  y -= 20
+
+  // Header de tabla
+  page.drawRectangle({ x: margin, y: y - 5, width: contentWidth, height: 22, color: bgGray })
+  page.drawText("Descripcion", { x: margin + 10, y: y, size: 9, font: helveticaBold, color: textColor })
+  page.drawText("Cant.", { x: margin + 280, y: y, size: 9, font: helveticaBold, color: textColor })
+  page.drawText("P. Unit.", { x: margin + 330, y: y, size: 9, font: helveticaBold, color: textColor })
+  page.drawText("Subtotal", { x: margin + 410, y: y, size: 9, font: helveticaBold, color: textColor })
+  page.drawText("Garantia", { x: margin + 475, y: y, size: 9, font: helveticaBold, color: textColor })
+  y -= 25
+
+  // Filas de items
+  for (const item of data.items) {
+    page.drawText(item.descripcion.substring(0, 40), { x: margin + 10, y, size: 9, font: helvetica, color: textColor })
+    page.drawText(String(item.cantidad), { x: margin + 285, y, size: 9, font: helvetica, color: textColor })
+    page.drawText(formatCurrencyPDF(item.precioUnitario), { x: margin + 330, y, size: 9, font: helvetica, color: textColor })
+    page.drawText(formatCurrencyPDF(item.subtotal), { x: margin + 410, y, size: 9, font: helvetica, color: textColor })
+    page.drawText(item.diasGarantia > 0 ? `${item.diasGarantia} dias` : "-", { x: margin + 478, y, size: 9, font: helvetica, color: item.diasGarantia > 0 ? greenColor : grayColor })
+    y -= 18
+    page.drawLine({ start: { x: margin, y: y + 5 }, end: { x: width - margin, y: y + 5 }, thickness: 0.5, color: lightGray })
+  }
+
+  y -= 20
+
+  // === TOTALES ===
+  const totalsX = width - margin - 180
+
+  page.drawText("Subtotal:", { x: totalsX, y, size: 10, font: helvetica, color: grayColor })
+  page.drawText(formatCurrencyPDF(data.subtotal), { x: totalsX + 100, y, size: 10, font: helvetica, color: textColor })
+  y -= 18
+
+  if (data.descuento > 0) {
+    page.drawText("Descuento:", { x: totalsX, y, size: 10, font: helvetica, color: grayColor })
+    page.drawText(`-${formatCurrencyPDF(data.descuento)}`, { x: totalsX + 100, y, size: 10, font: helvetica, color: rgb(0.8, 0.2, 0.2) })
+    y -= 18
+  }
+
+  page.drawLine({ start: { x: totalsX, y: y + 5 }, end: { x: width - margin, y: y + 5 }, thickness: 1, color: primaryColor })
+  y -= 5
+
+  page.drawText("TOTAL:", { x: totalsX, y, size: 12, font: helveticaBold, color: textColor })
+  page.drawText(formatCurrencyPDF(data.total), { x: totalsX + 100, y, size: 12, font: helveticaBold, color: primaryColor })
+
+  // === FOOTER ===
+  const footerY = margin + 60
+
+  page.drawLine({ start: { x: margin, y: footerY }, end: { x: width - margin, y: footerY }, thickness: 1, color: lightGray })
+
+  page.drawText("Conserve este comprobante como prueba de compra.", { x: margin, y: footerY - 15, size: 8, font: helvetica, color: grayColor })
+  page.drawText("Los productos con garantia incluyen certificado por separado.", { x: margin, y: footerY - 27, size: 8, font: helvetica, color: grayColor })
+  page.drawText("Gracias por su compra!", { x: margin, y: footerY - 42, size: 9, font: helveticaBold, color: primaryColor })
+
+  const fechaImpresion = new Date().toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
+  page.drawText(`Impreso: ${fechaImpresion}`, { x: width - margin - 110, y: footerY - 42, size: 7, font: helvetica, color: grayColor })
+
+  const pdfBytes = await pdfDoc.save()
+  return Buffer.from(pdfBytes)
+}
+
+// ========================================
+// CERTIFICADO DE GARANTIA DE VENTA
+// ========================================
+
+interface GarantiaVentaPDFData {
+  numeroGarantia: string
+  venta: {
+    numeroVenta: number
+    fecha: Date
+  }
+  cliente: {
+    nombre: string
+    telefono?: string | null
+  }
+  item: {
+    descripcion: string
+    cantidad: number
+    marca?: string | null
+  }
+  diasValidez: number
+  fechaInicio: Date
+  fechaVencimiento: Date
+  nombreEmpresa?: string
+  telefonoEmpresa?: string | null
+  direccionEmpresa?: string | null
+  logoUrl?: string | null
+}
+
+export async function generateGarantiaVentaPDF(data: GarantiaVentaPDFData): Promise<Buffer> {
+  const safe = (val: unknown): string => {
+    if (val === null || val === undefined) return ""
+    if (typeof val === "string") return val
+    if (typeof val === "number") return String(val)
+    return ""
+  }
+
+  const formatDatePDF = (date: Date | string | null | undefined): string => {
+    if (!date) return ""
+    const d = new Date(date)
+    if (isNaN(d.getTime())) return ""
+    return d.toLocaleDateString("es-AR", { day: "2-digit", month: "long", year: "numeric" })
+  }
+
+  // Extraer datos
+  const empresaNombre = safe(data.nombreEmpresa) || "Servicio Tecnico"
+  const telefonoEmpresa = safe(data.telefonoEmpresa)
+  const direccionEmpresa = safe(data.direccionEmpresa)
+  const numeroGarantia = safe(data.numeroGarantia)
+  const clienteNombre = safe(data.cliente?.nombre) || "Consumidor Final"
+  const clienteTelefono = safe(data.cliente?.telefono)
+  const productoDescripcion = safe(data.item?.descripcion)
+  const productoCantidad = data.item?.cantidad || 1
+  const fechaInicio = formatDatePDF(data.fechaInicio)
+  const fechaVencimiento = formatDatePDF(data.fechaVencimiento)
+  const numeroVenta = data.venta?.numeroVenta || 0
+  const fechaVenta = formatDatePDF(data.venta?.fecha)
+
+  // Crear documento PDF
+  const pdfDoc = await PDFLib.create()
+  const page = pdfDoc.addPage([595, 842]) // A4
+  const { width, height } = page.getSize()
+
+  // Cargar fuentes
+  const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica)
+  const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
+
+  // Colores
+  const primaryColor = rgb(0.231, 0.510, 0.965) // #3b82f6
+  const textColor = rgb(0.122, 0.161, 0.216) // #1f2937
+  const grayColor = rgb(0.420, 0.451, 0.502) // #6b7280
+  const lightGray = rgb(0.898, 0.906, 0.922) // #e5e7eb
+  const bgGray = rgb(0.953, 0.957, 0.965) // #f3f4f6
+  const greenColor = rgb(0.134, 0.545, 0.373)
+  const greenBg = rgb(0.863, 0.949, 0.898)
+  const white = rgb(1, 1, 1)
+
+  const margin = 50
+  const contentWidth = width - (margin * 2)
+
+  // === MARCO DECORATIVO ===
+  page.drawRectangle({
+    x: margin - 10,
+    y: margin - 10,
+    width: contentWidth + 20,
+    height: height - (margin * 2) + 20,
+    borderColor: primaryColor,
+    borderWidth: 3,
+  })
+  page.drawRectangle({
+    x: margin - 5,
+    y: margin - 5,
+    width: contentWidth + 10,
+    height: height - (margin * 2) + 10,
+    borderColor: lightGray,
+    borderWidth: 1,
+  })
+
+  let y = height - margin - 30
+
+  // === HEADER ===
+  page.drawText(empresaNombre, { x: margin + 10, y, size: 18, font: helveticaBold, color: textColor })
+  y -= 14
+  if (telefonoEmpresa) {
+    page.drawText(`Tel: ${telefonoEmpresa}`, { x: margin + 10, y, size: 9, font: helvetica, color: grayColor })
+    y -= 11
+  }
+  if (direccionEmpresa) {
+    page.drawText(direccionEmpresa, { x: margin + 10, y, size: 9, font: helvetica, color: grayColor })
+  }
+
+  y = height - margin - 80
+
+  // === TITULO PRINCIPAL ===
+  page.drawRectangle({
+    x: margin,
+    y: y - 5,
+    width: contentWidth,
+    height: 45,
+    color: primaryColor,
+  })
+
+  const titleText = "CERTIFICADO DE GARANTIA"
+  const titleWidth = helveticaBold.widthOfTextAtSize(titleText, 22)
+  page.drawText(titleText, { x: (width - titleWidth) / 2, y: y + 10, size: 22, font: helveticaBold, color: white })
+
+  y -= 60
+
+  // === NUMERO DE GARANTIA ===
+  const garantiaText = `N° ${numeroGarantia}`
+  const garantiaWidth = helveticaBold.widthOfTextAtSize(garantiaText, 16)
+  page.drawText(garantiaText, { x: (width - garantiaWidth) / 2, y, size: 16, font: helveticaBold, color: primaryColor })
+
+  y -= 40
+
+  // === DATOS DEL CLIENTE ===
+  page.drawRectangle({ x: margin, y: y - 50, width: contentWidth, height: 60, color: bgGray })
+  page.drawText("DATOS DEL CLIENTE", { x: margin + 15, y: y - 5, size: 10, font: helveticaBold, color: primaryColor })
+  y -= 22
+  page.drawText("Nombre:", { x: margin + 15, y, size: 9, font: helveticaBold, color: grayColor })
+  page.drawText(clienteNombre, { x: margin + 70, y, size: 10, font: helvetica, color: textColor })
+  y -= 15
+  if (clienteTelefono) {
+    page.drawText("Telefono:", { x: margin + 15, y, size: 9, font: helveticaBold, color: grayColor })
+    page.drawText(clienteTelefono, { x: margin + 70, y, size: 10, font: helvetica, color: textColor })
+  }
+
+  y -= 40
+
+  // === DATOS DEL PRODUCTO ===
+  page.drawText("PRODUCTO CUBIERTO", { x: margin, y, size: 10, font: helveticaBold, color: primaryColor })
+  y -= 5
+  page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 1, color: lightGray })
+  y -= 20
+
+  page.drawText("Descripcion:", { x: margin + 15, y, size: 9, font: helveticaBold, color: grayColor })
+  page.drawText(productoDescripcion, { x: margin + 85, y, size: 10, font: helvetica, color: textColor })
+  y -= 15
+  page.drawText("Cantidad:", { x: margin + 15, y, size: 9, font: helveticaBold, color: grayColor })
+  page.drawText(String(productoCantidad), { x: margin + 85, y, size: 10, font: helvetica, color: textColor })
+  y -= 15
+  page.drawText("Venta N°:", { x: margin + 15, y, size: 9, font: helveticaBold, color: grayColor })
+  page.drawText(`${String(numeroVenta).padStart(4, "0")} - ${fechaVenta}`, { x: margin + 85, y, size: 10, font: helvetica, color: textColor })
+
+  y -= 40
+
+  // === VIGENCIA DE LA GARANTIA ===
+  page.drawRectangle({
+    x: margin,
+    y: y - 80,
+    width: contentWidth,
+    height: 90,
+    color: greenBg,
+    borderColor: greenColor,
+    borderWidth: 2,
+  })
+
+  page.drawText("VIGENCIA DE LA GARANTIA", { x: margin + 15, y: y - 8, size: 11, font: helveticaBold, color: greenColor })
+  y -= 30
+
+  const diasText = `${data.diasValidez} DIAS`
+  const diasWidth = helveticaBold.widthOfTextAtSize(diasText, 28)
+  page.drawText(diasText, { x: (width - diasWidth) / 2, y, size: 28, font: helveticaBold, color: greenColor })
+  y -= 25
+
+  page.drawText(`Desde: ${fechaInicio}`, { x: margin + 100, y, size: 10, font: helvetica, color: textColor })
+  page.drawText(`Hasta: ${fechaVencimiento}`, { x: width - margin - 180, y, size: 10, font: helveticaBold, color: textColor })
+
+  y -= 60
+
+  // === CONDICIONES ===
+  page.drawText("CONDICIONES DE LA GARANTIA", { x: margin, y, size: 10, font: helveticaBold, color: primaryColor })
+  y -= 5
+  page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 1, color: lightGray })
+  y -= 18
+
+  const condiciones = [
+    "1. Esta garantia cubre defectos de fabricacion del producto.",
+    "2. No cubre danos por mal uso, caidas, liquidos o manipulacion inadecuada.",
+    "3. Para hacer efectiva la garantia, presente este certificado y el producto.",
+    "4. La garantia no es transferible y solo es valida para el comprador original.",
+    "5. El producto sera reparado o reemplazado segun disponibilidad.",
+  ]
+
+  for (const cond of condiciones) {
+    page.drawText(cond, { x: margin + 10, y, size: 9, font: helvetica, color: textColor })
+    y -= 14
+  }
+
+  // === FIRMA ===
+  y -= 30
+  page.drawLine({ start: { x: width - margin - 200, y }, end: { x: width - margin - 20, y }, thickness: 1, color: textColor })
+  page.drawText("Firma y Sello", { x: width - margin - 140, y: y - 12, size: 9, font: helvetica, color: grayColor })
+
+  // === FOOTER ===
+  const footerY = margin + 30
+  page.drawLine({ start: { x: margin, y: footerY }, end: { x: width - margin, y: footerY }, thickness: 1, color: lightGray })
+  page.drawText("Este certificado es valido como comprobante de garantia. Conservelo junto con su factura de compra.", {
+    x: margin + 10, y: footerY - 15, size: 8, font: helvetica, color: grayColor
+  })
+
+  const fechaImpresion = new Date().toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" })
+  page.drawText(`Emitido: ${fechaImpresion}`, { x: width - margin - 90, y: footerY - 15, size: 7, font: helvetica, color: grayColor })
+
+  const pdfBytes = await pdfDoc.save()
+  return Buffer.from(pdfBytes)
+}
+
+export type { CotizacionPDFData, CotizacionItem, OrdenPDFData, VentaPDFData, VentaItem, GarantiaVentaPDFData }

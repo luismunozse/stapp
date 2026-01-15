@@ -143,6 +143,42 @@ export async function getCounters(organizationId: string) {
 }
 
 /**
+ * Obtener el siguiente número de venta
+ * Formato: V0001
+ */
+export async function getNextSaleNumber(organizationId: string): Promise<{ codigo: string; numero: number }> {
+  const { data, error } = await supabaseAdmin.rpc("get_next_sale_number", {
+    org_id: organizationId,
+  })
+
+  if (error) {
+    throw new Error(`Error getting next sale number: ${error.message}`)
+  }
+
+  const num = data as number
+  return {
+    codigo: `V${num.toString().padStart(4, "0")}`,
+    numero: num,
+  }
+}
+
+/**
+ * Obtener el siguiente número de garantía de venta
+ * Formato: GAR-000001
+ */
+export async function getNextWarrantySaleNumber(organizationId: string): Promise<string> {
+  const { data, error } = await supabaseAdmin.rpc("get_next_warranty_sale_number", {
+    org_id: organizationId,
+  })
+
+  if (error) {
+    throw new Error(`Error getting next warranty sale number: ${error.message}`)
+  }
+
+  return data as string
+}
+
+/**
  * Sincronizar contadores basándose en los datos existentes
  * Útil para migración de datos o recuperación
  */

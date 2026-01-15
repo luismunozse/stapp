@@ -121,3 +121,57 @@ export interface Importacion {
   user?: User
 }
 
+// ========================================
+// VENTAS
+// ========================================
+
+export type MetodoPagoVenta = "EFECTIVO" | "TRANSFERENCIA" | "TARJETA"
+export type EstadoVenta = "COMPLETADA" | "ANULADA"
+export type EstadoGarantiaVenta = "ACTIVA" | "VENCIDA" | "RECLAMADA"
+
+export interface ItemVentaInput {
+  inventarioId?: string | null
+  descripcion: string
+  cantidad: number
+  precioUnitario: number
+  diasGarantia: number
+}
+
+export interface Venta {
+  id: string
+  numeroVenta: number
+  clienteId?: string | null
+  clienteNombre: string
+  clienteTelefono?: string | null
+  vendedor: User
+  items: ItemVentaConDetalles[]
+  subtotal: number
+  descuento: number
+  total: number
+  metodoPago: MetodoPagoVenta
+  estado: EstadoVenta
+  observaciones?: string | null
+  garantias: GarantiaVentaCompleta[]
+  createdAt: Date
+}
+
+export interface ItemVentaConDetalles {
+  id: string
+  inventario?: Inventario | null
+  descripcion: string
+  cantidad: number
+  precioUnitario: number
+  subtotal: number
+  diasGarantia: number
+}
+
+export interface GarantiaVentaCompleta {
+  id: string
+  numeroGarantia: string
+  item: ItemVentaConDetalles
+  diasValidez: number
+  fechaInicio: Date
+  fechaVencimiento: Date
+  estado: EstadoGarantiaVenta
+}
+
