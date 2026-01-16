@@ -581,7 +581,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
 
           {/* Tabs for additional sections */}
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="w-full justify-start overflow-x-auto">
+            <TabsList className="w-full justify-start overflow-x-auto flex-nowrap">
               <TabsTrigger value="repuestos" className="gap-2">
                 <Package className="h-4 w-4" />
                 Repuestos

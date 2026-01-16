@@ -6,6 +6,12 @@ import { formatCurrency } from "@/lib/utils"
 import { redirect } from "next/navigation"
 import Link from "next/link"
 import { DolarWidget } from "@/components/cotizacion-dolar"
+import {
+  OrdenesPorEstadoChart,
+  IngresosChart,
+  OrdenesRecientes,
+  OrdenesPorTecnicoChart,
+} from "@/components/dashboard"
 
 export default async function DashboardPage() {
   const session = await auth()
@@ -15,11 +21,13 @@ export default async function DashboardPage() {
 
   const organizationId = session.user.organizationId
 
-  // Calcular fechas para garantías por vencer
+  // Calcular fechas
   const hoy = new Date()
   const enSieteDias = new Date()
   enSieteDias.setDate(enSieteDias.getDate() + 7)
   const primerDiaMes = new Date(new Date().setDate(1))
+  const hace7Dias = new Date()
+  hace7Dias.setDate(hace7Dias.getDate() - 7)
 
   // Ejecutar queries en paralelo
   const [
@@ -29,7 +37,12 @@ export default async function DashboardPage() {
     itemsBajoStockResult,
     ingresosMensualesResult,
     garantiasPorVencerResult,
+    ordenesPorEstadoResult,
+    ingresosUltimos7DiasResult,
+    ordenesRecientesResult,
+    ordenesPorTecnicoResult,
   ] = await Promise.all([
+    // Stats básicos
     supabaseAdmin
       .from("ordenes_servicio")
       .select("id", { count: "exact", head: true })
@@ -68,8 +81,42 @@ export default async function DashboardPage() {
       .gte("fecha_vencimiento", hoy.toISOString())
       .lte("fecha_vencimiento", enSieteDias.toISOString())
       .order("fecha_vencimiento", { ascending: true }),
+    // Órdenes por estado para el gráfico
+    supabaseAdmin
+      .from("ordenes_servicio")
+      .select("estado")
+      .eq("organization_id", organizationId),
+    // Ingresos últimos 7 días
+    supabaseAdmin
+      .from("facturas")
+      .select("total, fecha, ordenes_servicio!inner(organization_id)")
+      .eq("ordenes_servicio.organization_id", organizationId)
+      .eq("estado_pago", "PAGADO")
+      .gte("fecha", hace7Dias.toISOString())
+      .order("fecha", { ascending: true }),
+    // Órdenes recientes
+    supabaseAdmin
+      .from("ordenes_servicio")
+      .select(`
+        id, numero_orden, codigo_orden, dispositivo, estado, fecha_ingreso,
+        clientes (nombre)
+      `)
+      .eq("organization_id", organizationId)
+      .order("fecha_ingreso", { ascending: false })
+      .limit(5),
+    // Órdenes por técnico
+    supabaseAdmin
+      .from("ordenes_servicio")
+      .select(`
+        tecnico_id, estado,
+        usuarios!ordenes_servicio_tecnico_id_fkey (nombre)
+      `)
+      .eq("organization_id", organizationId)
+      .not("tecnico_id", "is", null)
+      .in("estado", ["RECIBIDO", "EN_DIAGNOSTICO", "PRESUPUESTADO", "APROBADO", "EN_REPARACION", "ESPERANDO_REPUESTO", "REPARADO"]),
   ])
 
+  // Procesar datos básicos
   const totalOrdenes = totalOrdenesResult.count || 0
   const ordenesPendientes = ordenesPendientesResult.count || 0
   const totalClientes = totalClientesResult.count || 0
@@ -77,6 +124,74 @@ export default async function DashboardPage() {
   const facturasData = ingresosMensualesResult.data as { total: number }[] | null
   const ingresos = facturasData?.reduce((sum, f) => sum + (f.total || 0), 0) || 0
   const garantiasPorVencer = garantiasPorVencerResult.data || []
+
+  // Procesar órdenes por estado
+  const ordenesPorEstado = {
+    RECIBIDO: 0,
+    EN_DIAGNOSTICO: 0,
+    PRESUPUESTADO: 0,
+    APROBADO: 0,
+    EN_REPARACION: 0,
+    ESPERANDO_REPUESTO: 0,
+    REPARADO: 0,
+    ENTREGADO: 0,
+    CANCELADO: 0,
+    SIN_REPARACION: 0,
+  }
+  ordenesPorEstadoResult.data?.forEach((orden: { estado: string }) => {
+    if (orden.estado in ordenesPorEstado) {
+      ordenesPorEstado[orden.estado as keyof typeof ordenesPorEstado]++
+    }
+  })
+
+  // Procesar ingresos últimos 7 días
+  const ingresosMap: Record<string, number> = {}
+  // Inicializar los últimos 7 días con 0
+  for (let i = 6; i >= 0; i--) {
+    const fecha = new Date()
+    fecha.setDate(fecha.getDate() - i)
+    const key = fecha.toISOString().split("T")[0]
+    ingresosMap[key] = 0
+  }
+  // Sumar los ingresos
+  ingresosUltimos7DiasResult.data?.forEach((factura: { total: number; fecha: string }) => {
+    const key = new Date(factura.fecha).toISOString().split("T")[0]
+    if (key in ingresosMap) {
+      ingresosMap[key] += factura.total || 0
+    }
+  })
+  const ingresosUltimos7Dias = Object.entries(ingresosMap).map(([fecha, total]) => ({
+    fecha,
+    total,
+  }))
+  const totalIngresos7Dias = ingresosUltimos7Dias.reduce((sum, d) => sum + d.total, 0)
+
+  // Procesar órdenes recientes
+  const ordenesRecientes = (ordenesRecientesResult.data || []).map((orden: any) => ({
+    id: orden.id,
+    numeroOrden: orden.numero_orden,
+    codigoOrden: orden.codigo_orden,
+    cliente: orden.clientes?.nombre || "Sin cliente",
+    dispositivo: orden.dispositivo,
+    estado: orden.estado,
+    fechaIngreso: orden.fecha_ingreso,
+  }))
+
+  // Procesar órdenes por técnico
+  const tecnicosMap: Record<string, { nombre: string; ordenes: number; completadas: number }> = {}
+  ordenesPorTecnicoResult.data?.forEach((orden: any) => {
+    const tecnicoId = orden.tecnico_id
+    const nombre = orden.usuarios?.nombre || "Sin nombre"
+    if (!tecnicosMap[tecnicoId]) {
+      tecnicosMap[tecnicoId] = { nombre, ordenes: 0, completadas: 0 }
+    }
+    if (orden.estado === "REPARADO" || orden.estado === "ENTREGADO") {
+      tecnicosMap[tecnicoId].completadas++
+    } else {
+      tecnicosMap[tecnicoId].ordenes++
+    }
+  })
+  const ordenesPorTecnico = Object.values(tecnicosMap)
 
   const stats = [
     {
@@ -122,7 +237,8 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {/* Stats Cards */}
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => {
           const Icon = stat.icon
           return (
@@ -146,18 +262,20 @@ export default async function DashboardPage() {
         })}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle>Órdenes Recientes</CardTitle>
-            <CardDescription>Últimas órdenes de servicio</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Lista de órdenes recientes aparecerá aquí
-            </p>
-          </CardContent>
-        </Card>
+      {/* Gráficos principales */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <OrdenesPorEstadoChart data={ordenesPorEstado} />
+        <IngresosChart data={ingresosUltimos7Dias} totalPeriodo={totalIngresos7Dias} />
+      </div>
+
+      {/* Segunda fila: Órdenes por técnico y órdenes recientes */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <OrdenesPorTecnicoChart data={ordenesPorTecnico} />
+        <OrdenesRecientes ordenes={ordenesRecientes} />
+      </div>
+
+      {/* Tercera fila: Alertas y Widget Dólar */}
+      <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Alertas</CardTitle>
@@ -198,20 +316,24 @@ export default async function DashboardPage() {
               </div>
             )}
             {itemsBajoStock > 0 && (
-              <div className="p-3 bg-warning-50 dark:bg-warning-100 border border-warning/30 rounded-lg">
-                <div className="flex items-center gap-2 text-warning-700 dark:text-warning-600">
-                  <Package className="h-4 w-4" />
-                  {itemsBajoStock} items con stock bajo
+              <Link href="/inventario" className="block">
+                <div className="p-3 bg-warning-50 dark:bg-warning-100 border border-warning/30 rounded-lg hover:bg-warning-100 dark:hover:bg-warning-200 transition-colors">
+                  <div className="flex items-center gap-2 text-warning-700 dark:text-warning-600">
+                    <Package className="h-4 w-4" />
+                    {itemsBajoStock} items con stock bajo
+                  </div>
                 </div>
-              </div>
+              </Link>
             )}
             {ordenesPendientes > 0 && (
-              <div className="p-3 bg-info-50 dark:bg-info-100 border border-info/30 rounded-lg">
-                <div className="flex items-center gap-2 text-info-700 dark:text-info-600">
-                  <ClipboardList className="h-4 w-4" />
-                  {ordenesPendientes} órdenes pendientes
+              <Link href="/ordenes?estado=pendientes" className="block">
+                <div className="p-3 bg-info-50 dark:bg-info-100 border border-info/30 rounded-lg hover:bg-info-100 dark:hover:bg-info-200 transition-colors">
+                  <div className="flex items-center gap-2 text-info-700 dark:text-info-600">
+                    <ClipboardList className="h-4 w-4" />
+                    {ordenesPendientes} órdenes pendientes
+                  </div>
                 </div>
-              </div>
+              </Link>
             )}
             {garantiasPorVencer.length === 0 && itemsBajoStock === 0 && ordenesPendientes === 0 && (
               <p className="text-sm text-muted-foreground">

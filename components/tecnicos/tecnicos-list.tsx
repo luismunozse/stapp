@@ -141,7 +141,7 @@ export function TecnicosList() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {tecnicos.map((tecnico) => (
             <Link key={tecnico.id} href={`/tecnicos/${tecnico.id}`}>
               <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">

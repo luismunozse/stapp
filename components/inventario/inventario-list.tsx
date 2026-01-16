@@ -113,8 +113,8 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-4">
-        <div className="flex flex-col sm:flex-row gap-2">
-          <div className="relative flex-1">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+          <div className="relative sm:col-span-2 lg:col-span-2">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
               placeholder="Buscar por nombre o código..."
@@ -126,6 +126,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
           <Select
             value={categoria}
             onChange={(e) => setCategoria(e.target.value)}
+            className="w-full"
           >
             <option value="">Todas las categorías</option>
             {categoriasDisponibles.map((cat) => (
@@ -138,6 +139,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
             value={tipoDispositivo}
             onChange={(e) => handleTipoChange(e.target.value as TipoDispositivo | "")}
             disabled={tiposLoading}
+            className="w-full"
           >
             <option value="">Todos los tipos</option>
             {tiposDispositivo
@@ -149,11 +151,12 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
               ))}
           </Select>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {allowImport && (
             <Button onClick={() => setShowImport(true)} variant="outline" className="gap-2">
               <Upload className="h-4 w-4" />
-              Importar CSV
+              <span className="hidden sm:inline">Importar CSV</span>
+              <span className="sm:hidden">Importar</span>
             </Button>
           )}
           <Button onClick={() => setShowForm(true)} className="gap-2">

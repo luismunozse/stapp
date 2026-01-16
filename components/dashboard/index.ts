@@ -1,0 +1,4 @@
+export { OrdenesPorEstadoChart } from "./ordenes-por-estado-chart"
+export { IngresosChart } from "./ingresos-chart"
+export { OrdenesRecientes } from "./ordenes-recientes"
+export { OrdenesPorTecnicoChart } from "./ordenes-por-tecnico-chart"

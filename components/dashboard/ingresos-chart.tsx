@@ -1,0 +1,103 @@
+"use client"
+
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { formatCurrency } from "@/lib/utils"
+
+interface IngresosDia {
+  fecha: string
+  total: number
+}
+
+interface IngresosChartProps {
+  data: IngresosDia[]
+  totalPeriodo: number
+}
+
+export function IngresosChart({ data, totalPeriodo }: IngresosChartProps) {
+  const formatFecha = (fecha: string) => {
+    const date = new Date(fecha)
+    return date.toLocaleDateString("es-AR", { weekday: "short", day: "numeric" })
+  }
+
+  const chartData = data.map((item) => ({
+    ...item,
+    fechaFormateada: formatFecha(item.fecha),
+  }))
+
+  if (data.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Ingresos Últimos 7 Días</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground text-center py-8">
+            No hay ingresos en este período
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">Ingresos Últimos 7 Días</CardTitle>
+        <CardDescription>
+          Total: <span className="font-semibold text-foreground">{formatCurrency(totalPeriodo)}</span>
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <ResponsiveContainer width="100%" height={220}>
+          <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+            <defs>
+              <linearGradient id="colorIngresos" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+            <XAxis
+              dataKey="fechaFormateada"
+              tick={{ fontSize: 11 }}
+              tickLine={false}
+              axisLine={false}
+            />
+            <YAxis
+              tick={{ fontSize: 11 }}
+              tickLine={false}
+              axisLine={false}
+              tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+            />
+            <Tooltip
+              formatter={(value: number) => [formatCurrency(value), "Ingresos"]}
+              contentStyle={{
+                backgroundColor: "hsl(var(--card))",
+                border: "1px solid hsl(var(--border))",
+                borderRadius: "8px",
+              }}
+              labelStyle={{ color: "hsl(var(--foreground))" }}
+            />
+            <Area
+              type="monotone"
+              dataKey="total"
+              stroke="#10b981"
+              strokeWidth={2}
+              fillOpacity={1}
+              fill="url(#colorIngresos)"
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </CardContent>
+    </Card>
+  )
+}

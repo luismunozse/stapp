@@ -23,6 +23,9 @@ export interface Column<T> {
   className?: string
   headerClassName?: string
   render?: (item: T) => React.ReactNode
+  // Responsive: ocultar columna en ciertos breakpoints
+  hideOnMobile?: boolean // Oculta en < sm
+  hideOnTablet?: boolean // Oculta en < md
 }
 
 export interface DataTableProps<T> {
@@ -127,6 +130,8 @@ export function DataTable<T>({
                     className={cn(
                       "px-4 py-3 text-left font-medium text-muted-foreground",
                       column.sortable && "cursor-pointer select-none hover:text-foreground",
+                      column.hideOnMobile && "hidden sm:table-cell",
+                      column.hideOnTablet && "hidden md:table-cell",
                       column.headerClassName
                     )}
                     onClick={() => column.sortable && handleSort(column.key)}
@@ -189,7 +194,12 @@ export function DataTable<T>({
                       {columns.map((column) => (
                         <td
                           key={column.key}
-                          className={cn("px-4 py-3", column.className)}
+                          className={cn(
+                            "px-4 py-3",
+                            column.hideOnMobile && "hidden sm:table-cell",
+                            column.hideOnTablet && "hidden md:table-cell",
+                            column.className
+                          )}
                         >
                           {column.render
                             ? column.render(item)
@@ -240,18 +250,21 @@ function DataTablePagination({
   return (
     <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-2">
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <span>
+        <span className="hidden xs:inline">
           Mostrando {start} - {end} de {total}
+        </span>
+        <span className="xs:hidden">
+          {start}-{end}/{total}
         </span>
         {onPageSizeChange && (
           <>
-            <span>|</span>
-            <div className="flex items-center gap-1">
+            <span className="hidden sm:inline">|</span>
+            <div className="hidden sm:flex items-center gap-1">
               <span>Filas:</span>
               <Select
                 value={pageSize.toString()}
                 onChange={(e) => onPageSizeChange(Number(e.target.value))}
-                className="h-8 w-[70px]"
+                className="h-8 w-auto min-w-[60px]"
               >
                 {pageSizeOptions.map((size) => (
                   <option key={size} value={size}>
@@ -268,7 +281,7 @@ function DataTablePagination({
         <Button
           variant="outline"
           size="icon"
-          className="h-8 w-8"
+          className="h-9 w-9 sm:h-8 sm:w-8"
           onClick={() => onPageChange(1)}
           disabled={page === 1}
         >
@@ -277,7 +290,7 @@ function DataTablePagination({
         <Button
           variant="outline"
           size="icon"
-          className="h-8 w-8"
+          className="h-9 w-9 sm:h-8 sm:w-8"
           onClick={() => onPageChange(page - 1)}
           disabled={page === 1}
         >
@@ -285,15 +298,15 @@ function DataTablePagination({
         </Button>
 
         <div className="flex items-center gap-1 mx-2">
-          <span className="text-sm">
-            Página {page} de {totalPages}
+          <span className="text-sm whitespace-nowrap">
+            {page}/{totalPages}
           </span>
         </div>
 
         <Button
           variant="outline"
           size="icon"
-          className="h-8 w-8"
+          className="h-9 w-9 sm:h-8 sm:w-8"
           onClick={() => onPageChange(page + 1)}
           disabled={page >= totalPages}
         >
@@ -302,7 +315,7 @@ function DataTablePagination({
         <Button
           variant="outline"
           size="icon"
-          className="h-8 w-8"
+          className="h-9 w-9 sm:h-8 sm:w-8"
           onClick={() => onPageChange(totalPages)}
           disabled={page >= totalPages}
         >
@@ -339,12 +352,12 @@ export function DataTableFilters({ filters, onClearAll }: DataTableFiltersProps)
   return (
     <div className="flex flex-wrap items-center gap-2">
       {filters.map((filter) => (
-        <div key={filter.key} className="flex items-center gap-1">
+        <div key={filter.key} className="flex items-center gap-1 w-full sm:w-auto">
           {filter.type === "select" && filter.options && (
             <Select
               value={filter.value}
               onChange={(e) => filter.onChange(e.target.value)}
-              className="h-9 min-w-[140px]"
+              className="h-9 w-full sm:w-auto sm:min-w-[140px]"
             >
               <option value="">{filter.label}</option>
               {filter.options.map((opt) => (

@@ -121,6 +121,7 @@ export function VentasList() {
       key: "createdAt",
       header: "Fecha",
       sortable: true,
+      hideOnMobile: true,
       render: (venta) => formatDate(venta.createdAt),
     },
     {
@@ -139,6 +140,7 @@ export function VentasList() {
     {
       key: "items",
       header: "Items",
+      hideOnMobile: true,
       render: (venta) => (
         <div className="text-sm">
           {venta.items.length} producto{venta.items.length !== 1 ? "s" : ""}
@@ -156,6 +158,7 @@ export function VentasList() {
     {
       key: "metodoPago",
       header: "Pago",
+      hideOnTablet: true,
       render: (venta) => (
         <span className="text-sm">{metodoPagoLabels[venta.metodoPago] || venta.metodoPago}</span>
       ),
@@ -172,6 +175,7 @@ export function VentasList() {
     {
       key: "garantias",
       header: "Garantías",
+      hideOnMobile: true,
       render: (venta) => (
         <span className={venta.garantias.length > 0 ? "text-green-600 font-medium" : "text-muted-foreground"}>
           {venta.garantias.length > 0 ? `${venta.garantias.length} cert.` : "-"}

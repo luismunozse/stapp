@@ -21,7 +21,7 @@ export async function GET(
         ordenes_servicio!inner (
           id, numero_orden, dispositivo, problema_reportado, organization_id,
           clientes (*),
-          organizations (id, nombre_mostrar)
+          organizations (id, nombre_mostrar, telefono, direccion, logo_url)
         ),
         items_cotizacion (*)
       `)
@@ -42,6 +42,8 @@ export async function GET(
         { status: 403 }
       )
     }
+
+    const org = cotizacion.ordenes_servicio.organizations
 
     // Generar PDF con firma si existe
     const pdfBuffer = await generateCotizacionPDF({
@@ -64,7 +66,10 @@ export async function GET(
       iva: cotizacion.iva,
       total: cotizacion.total,
       notas: cotizacion.notas,
-      nombreEmpresa: cotizacion.ordenes_servicio.organizations?.nombre_mostrar || "STApp",
+      nombreEmpresa: org?.nombre_mostrar || "STApp",
+      telefonoEmpresa: org?.telefono,
+      direccionEmpresa: org?.direccion,
+      logoUrl: org?.logo_url,
       // Incluir firma de aprobacion si existe
       firmaAprobacion: cotizacion.firma_aprobacion,
       firmaMime: cotizacion.firma_mime,

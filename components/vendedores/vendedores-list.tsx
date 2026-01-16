@@ -141,7 +141,7 @@ export function VendedoresList() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {vendedores.map((vendedor) => (
             <Link key={vendedor.id} href={`/vendedores/${vendedor.id}`}>
               <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">

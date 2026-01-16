@@ -148,6 +148,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
       key: "email",
       header: "Email",
       sortable: true,
+      hideOnMobile: true,
       render: (cliente) =>
         cliente.email ? (
           <div className="flex items-center gap-2">
@@ -162,6 +163,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
       key: "direccion",
       header: "Dirección",
       sortable: false,
+      hideOnTablet: true,
       render: (cliente) =>
         cliente.direccion ? (
           <span className="truncate max-w-[200px]">{cliente.direccion}</span>
@@ -173,6 +175,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
       key: "createdAt",
       header: "Registrado",
       sortable: true,
+      hideOnMobile: true,
       render: (cliente) => formatDate(cliente.createdAt),
     },
     {
@@ -217,7 +220,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
                 setSearch(e.target.value)
                 setPage(1)
               }}
-              className="pl-10 w-full sm:w-[350px]"
+              className="pl-10 w-full sm:max-w-sm"
             />
           </div>
         </div>

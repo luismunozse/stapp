@@ -10,209 +10,313 @@ import {
 } from "@react-pdf/renderer"
 import { PDFDocument as PDFLib, rgb, StandardFonts } from "pdf-lib"
 
+// ========================================
+// ESTILOS MODERNOS PARA COTIZACION
+// ========================================
 const styles = StyleSheet.create({
   page: {
-    padding: 40,
-    fontSize: 11,
+    padding: 0,
+    fontSize: 10,
     fontFamily: "Helvetica",
+    backgroundColor: "#ffffff",
   },
+  // Barra de acento superior
+  accentBar: {
+    height: 8,
+    backgroundColor: "#6366f1",
+  },
+  // Container principal con padding
+  container: {
+    padding: 40,
+    paddingTop: 30,
+  },
+  // Header moderno
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 30,
-    paddingBottom: 20,
-    borderBottomWidth: 2,
-    borderBottomColor: "#3b82f6",
+    marginBottom: 25,
   },
   headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
     flex: 1,
+  },
+  logo: {
+    width: 60,
+    height: 60,
+    marginRight: 15,
+  },
+  companyDetails: {
+    flex: 1,
+  },
+  companyName: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#1e1b4b",
+    marginBottom: 3,
+  },
+  companyInfo: {
+    fontSize: 9,
+    color: "#64748b",
+    marginBottom: 1,
   },
   headerRight: {
     alignItems: "flex-end",
   },
-  title: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#1f2937",
+  docBadge: {
+    backgroundColor: "#6366f1",
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    marginBottom: 8,
   },
-  subtitle: {
-    fontSize: 12,
-    color: "#6b7280",
+  docBadgeText: {
+    color: "#ffffff",
+    fontSize: 11,
+    fontWeight: "bold",
+  },
+  docNumber: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#1e1b4b",
+  },
+  docDate: {
+    fontSize: 9,
+    color: "#64748b",
     marginTop: 4,
   },
-  cotizacionNumber: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#3b82f6",
+  // Cards/Secciones
+  card: {
+    backgroundColor: "#f8fafc",
+    borderRadius: 8,
+    padding: 15,
+    marginBottom: 15,
   },
-  cotizacionDate: {
+  cardTitle: {
     fontSize: 10,
-    color: "#6b7280",
-    marginTop: 4,
+    fontWeight: "bold",
+    color: "#6366f1",
+    marginBottom: 10,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
-  section: {
+  cardRow: {
+    flexDirection: "row",
+    marginBottom: 5,
+  },
+  cardLabel: {
+    width: 80,
+    fontSize: 9,
+    color: "#64748b",
+  },
+  cardValue: {
+    flex: 1,
+    fontSize: 10,
+    color: "#1e293b",
+  },
+  // Grid de 2 columnas
+  twoColGrid: {
+    flexDirection: "row",
+    gap: 15,
+    marginBottom: 15,
+  },
+  gridCol: {
+    flex: 1,
+    backgroundColor: "#f8fafc",
+    borderRadius: 8,
+    padding: 15,
+  },
+  // Tabla moderna
+  tableSection: {
     marginBottom: 20,
   },
-  sectionTitle: {
-    fontSize: 12,
+  tableSectionTitle: {
+    fontSize: 11,
     fontWeight: "bold",
-    color: "#374151",
-    marginBottom: 8,
-    paddingBottom: 4,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
-  },
-  row: {
-    flexDirection: "row",
-    marginBottom: 4,
-  },
-  label: {
-    width: 100,
-    color: "#6b7280",
-  },
-  value: {
-    flex: 1,
-    color: "#1f2937",
+    color: "#1e1b4b",
+    marginBottom: 12,
   },
   table: {
-    marginTop: 10,
+    borderRadius: 8,
+    overflow: "hidden",
   },
   tableHeader: {
     flexDirection: "row",
-    backgroundColor: "#f3f4f6",
-    padding: 8,
+    backgroundColor: "#6366f1",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  tableHeaderText: {
+    color: "#ffffff",
+    fontSize: 9,
     fontWeight: "bold",
-    color: "#374151",
   },
   tableRow: {
     flexDirection: "row",
-    padding: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
+    borderBottomColor: "#e2e8f0",
+    backgroundColor: "#ffffff",
+  },
+  tableRowAlt: {
+    flexDirection: "row",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+    backgroundColor: "#f8fafc",
   },
   colDescription: {
     flex: 3,
+    fontSize: 9,
   },
   colQuantity: {
     flex: 1,
     textAlign: "center",
+    fontSize: 9,
   },
   colPrice: {
-    flex: 1,
+    flex: 1.2,
     textAlign: "right",
+    fontSize: 9,
   },
   colSubtotal: {
-    flex: 1,
+    flex: 1.2,
     textAlign: "right",
+    fontSize: 9,
+    fontWeight: "bold",
   },
-  totalsSection: {
-    marginTop: 20,
-    alignItems: "flex-end",
+  // Totales
+  totalsContainer: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    marginTop: 15,
+  },
+  totalsBox: {
+    width: 220,
+    backgroundColor: "#f8fafc",
+    borderRadius: 8,
+    padding: 15,
   },
   totalRow: {
     flexDirection: "row",
-    width: 200,
     justifyContent: "space-between",
-    marginBottom: 4,
+    marginBottom: 6,
   },
   totalLabel: {
-    color: "#6b7280",
+    fontSize: 9,
+    color: "#64748b",
   },
   totalValue: {
-    fontWeight: "bold",
+    fontSize: 10,
+    color: "#1e293b",
   },
-  grandTotal: {
+  grandTotalRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     marginTop: 8,
-    paddingTop: 8,
+    paddingTop: 10,
     borderTopWidth: 2,
-    borderTopColor: "#3b82f6",
+    borderTopColor: "#6366f1",
   },
   grandTotalLabel: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "bold",
-    color: "#1f2937",
+    color: "#1e1b4b",
   },
   grandTotalValue: {
     fontSize: 14,
     fontWeight: "bold",
-    color: "#3b82f6",
+    color: "#6366f1",
   },
-  notes: {
-    marginTop: 30,
-    padding: 15,
-    backgroundColor: "#f9fafb",
-    borderRadius: 4,
-  },
-  notesTitle: {
-    fontSize: 10,
-    fontWeight: "bold",
-    color: "#374151",
-    marginBottom: 4,
-  },
-  notesText: {
-    fontSize: 10,
-    color: "#6b7280",
-  },
-  footer: {
-    position: "absolute",
-    bottom: 30,
-    left: 40,
-    right: 40,
-    textAlign: "center",
-    color: "#9ca3af",
-    fontSize: 9,
-    borderTopWidth: 1,
-    borderTopColor: "#e5e7eb",
-    paddingTop: 10,
-  },
-  validity: {
-    marginTop: 20,
-    padding: 10,
+  // Validez
+  validityBanner: {
     backgroundColor: "#fef3c7",
-    borderRadius: 4,
+    borderRadius: 6,
+    padding: 12,
+    marginTop: 15,
+    borderLeftWidth: 4,
+    borderLeftColor: "#f59e0b",
   },
   validityText: {
-    fontSize: 10,
+    fontSize: 9,
     color: "#92400e",
     textAlign: "center",
   },
+  // Notas
+  notesCard: {
+    backgroundColor: "#f1f5f9",
+    borderRadius: 8,
+    padding: 15,
+    marginTop: 15,
+  },
+  notesTitle: {
+    fontSize: 9,
+    fontWeight: "bold",
+    color: "#475569",
+    marginBottom: 6,
+  },
+  notesText: {
+    fontSize: 9,
+    color: "#64748b",
+    lineHeight: 1.4,
+  },
+  // Firma
   signatureSection: {
-    marginTop: 30,
+    marginTop: 25,
     paddingTop: 20,
-    borderTopWidth: 1,
-    borderTopColor: "#e5e7eb",
   },
   signatureContainer: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    alignItems: "flex-end",
   },
   signatureBox: {
-    width: 200,
+    width: 180,
     alignItems: "center",
   },
   signatureImage: {
-    maxWidth: 150,
-    maxHeight: 60,
-    marginBottom: 4,
+    maxWidth: 120,
+    maxHeight: 50,
+    marginBottom: 5,
   },
   signatureLine: {
     width: "100%",
     borderTopWidth: 1,
-    borderTopColor: "#374151",
-    marginTop: 4,
+    borderTopColor: "#94a3b8",
+    marginTop: 5,
   },
   signatureLabel: {
-    fontSize: 9,
-    color: "#6b7280",
-    marginTop: 4,
-    textAlign: "center",
+    fontSize: 8,
+    color: "#64748b",
+    marginTop: 5,
   },
   signatureDate: {
-    fontSize: 8,
-    color: "#9ca3af",
+    fontSize: 7,
+    color: "#94a3b8",
     marginTop: 2,
-    textAlign: "center",
+  },
+  // Footer
+  footer: {
+    position: "absolute",
+    bottom: 20,
+    left: 40,
+    right: 40,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#e2e8f0",
+  },
+  footerText: {
+    fontSize: 8,
+    color: "#94a3b8",
+  },
+  footerBrand: {
+    fontSize: 8,
+    color: "#6366f1",
+    fontWeight: "bold",
   },
 })
 
@@ -244,6 +348,9 @@ interface CotizacionPDFData {
   total: number
   notas?: string | null
   nombreEmpresa?: string
+  telefonoEmpresa?: string | null
+  direccionEmpresa?: string | null
+  logoUrl?: string | null
   // Firma de aprobacion
   firmaAprobacion?: string | null
   firmaMime?: string | null
@@ -297,6 +404,9 @@ const toText = (val: unknown): string => {
 
 const CotizacionDocument = ({ data }: { data: CotizacionPDFData }) => {
   const companyName = toText(data.nombreEmpresa) || "Servicio Tecnico"
+  const telefonoEmpresa = toText(data.telefonoEmpresa)
+  const direccionEmpresa = toText(data.direccionEmpresa)
+  const logoUrl = toText(data.logoUrl)
   const cotizacionNumber = toText(data.numeroCotizacion)
   const cotizacionDate = formatDate(data.fecha)
   const clienteNombre = toText(data.cliente.nombre)
@@ -314,124 +424,150 @@ const CotizacionDocument = ({ data }: { data: CotizacionPDFData }) => {
 
   return React.createElement(Document, null,
     React.createElement(Page, { size: "A4", style: styles.page },
-      // Header
-      React.createElement(View, { style: styles.header },
-        React.createElement(View, { style: styles.headerLeft },
-          React.createElement(Text, { style: styles.title }, companyName),
-          React.createElement(Text, { style: styles.subtitle }, "Cotizacion de Servicios")
-        ),
-        React.createElement(View, { style: styles.headerRight },
-          React.createElement(Text, { style: styles.cotizacionNumber }, cotizacionNumber),
-          React.createElement(Text, { style: styles.cotizacionDate }, `Fecha: ${cotizacionDate}`)
-        )
-      ),
+      // Barra de acento superior
+      React.createElement(View, { style: styles.accentBar }),
 
-      // Cliente Section
-      React.createElement(View, { style: styles.section },
-        React.createElement(Text, { style: styles.sectionTitle }, "Datos del Cliente"),
-        React.createElement(View, { style: styles.row },
-          React.createElement(Text, { style: styles.label }, "Nombre:"),
-          React.createElement(Text, { style: styles.value }, clienteNombre)
-        ),
-        React.createElement(View, { style: styles.row },
-          React.createElement(Text, { style: styles.label }, "Telefono:"),
-          React.createElement(Text, { style: styles.value }, clienteTelefono)
-        ),
-        clienteEmail && React.createElement(View, { style: styles.row },
-          React.createElement(Text, { style: styles.label }, "Email:"),
-          React.createElement(Text, { style: styles.value }, clienteEmail)
-        ),
-        clienteDireccion && React.createElement(View, { style: styles.row },
-              React.createElement(Text, { style: styles.label }, "Direccion:"),
-          React.createElement(Text, { style: styles.value }, clienteDireccion)
-        )
-      ),
-
-      // Orden Section
-      React.createElement(View, { style: styles.section },
-        React.createElement(Text, { style: styles.sectionTitle }, `Orden de Servicio #${ordenNumero}`),
-        React.createElement(View, { style: styles.row },
-          React.createElement(Text, { style: styles.label }, "Dispositivo:"),
-          React.createElement(Text, { style: styles.value }, dispositivo)
-        ),
-        React.createElement(View, { style: styles.row },
-          React.createElement(Text, { style: styles.label }, "Problema:"),
-          React.createElement(Text, { style: styles.value }, problemaReportado)
-        )
-      ),
-
-      // Items Table
-      React.createElement(View, { style: styles.section },
-        React.createElement(Text, { style: styles.sectionTitle }, "Detalle de la Cotizacion"),
-        React.createElement(View, { style: styles.table },
-          React.createElement(View, { style: styles.tableHeader },
-            React.createElement(Text, { style: styles.colDescription }, "Descripcion"),
-            React.createElement(Text, { style: styles.colQuantity }, "Cant."),
-            React.createElement(Text, { style: styles.colPrice }, "P. Unit."),
-            React.createElement(Text, { style: styles.colSubtotal }, "Subtotal")
+      // Container principal
+      React.createElement(View, { style: styles.container },
+        // Header moderno
+        React.createElement(View, { style: styles.header },
+          React.createElement(View, { style: styles.headerLeft },
+            logoUrl ? React.createElement(Image, { style: styles.logo, src: logoUrl }) : null,
+            React.createElement(View, { style: styles.companyDetails },
+              React.createElement(Text, { style: styles.companyName }, companyName),
+              telefonoEmpresa ? React.createElement(Text, { style: styles.companyInfo }, `Tel: ${telefonoEmpresa}`) : null,
+              direccionEmpresa ? React.createElement(Text, { style: styles.companyInfo }, direccionEmpresa) : null
+            )
           ),
-          ...data.items.map((item, index) =>
-            React.createElement(View, { key: index, style: styles.tableRow },
-              React.createElement(Text, { style: styles.colDescription }, toText(item.descripcion)),
-              React.createElement(Text, { style: styles.colQuantity }, toText(item.cantidad)),
-              React.createElement(Text, { style: styles.colPrice }, formatCurrency(item.precioUnitario)),
-              React.createElement(Text, { style: styles.colSubtotal }, formatCurrency(item.subtotal))
+          React.createElement(View, { style: styles.headerRight },
+            React.createElement(View, { style: styles.docBadge },
+              React.createElement(Text, { style: styles.docBadgeText }, "COTIZACION")
+            ),
+            React.createElement(Text, { style: styles.docNumber }, cotizacionNumber),
+            React.createElement(Text, { style: styles.docDate }, cotizacionDate)
+          )
+        ),
+
+        // Grid de 2 columnas: Cliente y Orden
+        React.createElement(View, { style: styles.twoColGrid },
+          // Cliente Card
+          React.createElement(View, { style: styles.gridCol },
+            React.createElement(Text, { style: styles.cardTitle }, "Cliente"),
+            React.createElement(View, { style: styles.cardRow },
+              React.createElement(Text, { style: styles.cardLabel }, "Nombre"),
+              React.createElement(Text, { style: styles.cardValue }, clienteNombre)
+            ),
+            React.createElement(View, { style: styles.cardRow },
+              React.createElement(Text, { style: styles.cardLabel }, "Telefono"),
+              React.createElement(Text, { style: styles.cardValue }, clienteTelefono)
+            ),
+            clienteEmail ? React.createElement(View, { style: styles.cardRow },
+              React.createElement(Text, { style: styles.cardLabel }, "Email"),
+              React.createElement(Text, { style: styles.cardValue }, clienteEmail)
+            ) : null,
+            clienteDireccion ? React.createElement(View, { style: styles.cardRow },
+              React.createElement(Text, { style: styles.cardLabel }, "Direccion"),
+              React.createElement(Text, { style: styles.cardValue }, clienteDireccion)
+            ) : null
+          ),
+          // Orden Card
+          React.createElement(View, { style: styles.gridCol },
+            React.createElement(Text, { style: styles.cardTitle }, `Orden #${ordenNumero}`),
+            React.createElement(View, { style: styles.cardRow },
+              React.createElement(Text, { style: styles.cardLabel }, "Equipo"),
+              React.createElement(Text, { style: styles.cardValue }, dispositivo)
+            ),
+            React.createElement(View, { style: styles.cardRow },
+              React.createElement(Text, { style: styles.cardLabel }, "Problema"),
+              React.createElement(Text, { style: styles.cardValue }, problemaReportado)
             )
           )
-        )
-      ),
+        ),
 
-      // Total
-      React.createElement(View, { style: styles.totalsSection },
-        React.createElement(View, { style: [styles.totalRow, styles.grandTotal] },
-          React.createElement(Text, { style: styles.grandTotalLabel }, "TOTAL:"),
-          React.createElement(Text, { style: styles.grandTotalValue }, formatCurrency(data.total))
-        )
-      ),
-
-      // Validity
-      fechaVencimiento
-        ? React.createElement(View, { style: styles.validity },
-            React.createElement(Text, { style: styles.validityText },
-              `Esta cotizacion es valida hasta el ${fechaVencimiento}`
-            )
-          )
-        : null,
-
-      // Notes
-      notas
-        ? React.createElement(View, { style: styles.notes },
-            React.createElement(Text, { style: styles.notesTitle }, "Notas:"),
-            React.createElement(Text, { style: styles.notesText }, notas)
-          )
-        : null,
-
-      // Signature Section (if approved)
-      firmaAprobacion && firmaMime
-        ? React.createElement(View, { style: styles.signatureSection },
-            React.createElement(View, { style: styles.signatureContainer },
-              React.createElement(View, { style: styles.signatureBox },
-                React.createElement(Image, {
-                  style: styles.signatureImage,
-                  src: `data:${firmaMime};base64,${firmaAprobacion}`,
-                }),
-                React.createElement(View, { style: styles.signatureLine }),
-                React.createElement(Text, { style: styles.signatureLabel }, "Firma del Cliente"),
-                fechaAprobacion && React.createElement(Text, { style: styles.signatureDate },
-                  `Aprobado: ${fechaAprobacion}`
-                )
+        // Tabla de items
+        React.createElement(View, { style: styles.tableSection },
+          React.createElement(Text, { style: styles.tableSectionTitle }, "Detalle de Servicios"),
+          React.createElement(View, { style: styles.table },
+            React.createElement(View, { style: styles.tableHeader },
+              React.createElement(Text, { style: [styles.colDescription, styles.tableHeaderText] }, "Descripcion"),
+              React.createElement(Text, { style: [styles.colQuantity, styles.tableHeaderText] }, "Cant."),
+              React.createElement(Text, { style: [styles.colPrice, styles.tableHeaderText] }, "P. Unit."),
+              React.createElement(Text, { style: [styles.colSubtotal, styles.tableHeaderText] }, "Subtotal")
+            ),
+            ...data.items.map((item, index) =>
+              React.createElement(View, { key: index, style: index % 2 === 0 ? styles.tableRow : styles.tableRowAlt },
+                React.createElement(Text, { style: styles.colDescription }, toText(item.descripcion)),
+                React.createElement(Text, { style: styles.colQuantity }, toText(item.cantidad)),
+                React.createElement(Text, { style: styles.colPrice }, formatCurrency(item.precioUnitario)),
+                React.createElement(Text, { style: styles.colSubtotal }, formatCurrency(item.subtotal))
               )
             )
           )
-        : null,
+        ),
+
+        // Totales
+        React.createElement(View, { style: styles.totalsContainer },
+          React.createElement(View, { style: styles.totalsBox },
+            React.createElement(View, { style: styles.totalRow },
+              React.createElement(Text, { style: styles.totalLabel }, "Subtotal"),
+              React.createElement(Text, { style: styles.totalValue }, formatCurrency(data.subtotal))
+            ),
+            data.iva > 0 ? React.createElement(View, { style: styles.totalRow },
+              React.createElement(Text, { style: styles.totalLabel }, "IVA"),
+              React.createElement(Text, { style: styles.totalValue }, formatCurrency(data.iva))
+            ) : null,
+            React.createElement(View, { style: styles.grandTotalRow },
+              React.createElement(Text, { style: styles.grandTotalLabel }, "TOTAL"),
+              React.createElement(Text, { style: styles.grandTotalValue }, formatCurrency(data.total))
+            )
+          )
+        ),
+
+        // Validez
+        fechaVencimiento
+          ? React.createElement(View, { style: styles.validityBanner },
+              React.createElement(Text, { style: styles.validityText },
+                `Cotizacion valida hasta el ${fechaVencimiento}`
+              )
+            )
+          : null,
+
+        // Notas
+        notas
+          ? React.createElement(View, { style: styles.notesCard },
+              React.createElement(Text, { style: styles.notesTitle }, "Observaciones"),
+              React.createElement(Text, { style: styles.notesText }, notas)
+            )
+          : null,
+
+        // Firma (si esta aprobada)
+        firmaAprobacion && firmaMime
+          ? React.createElement(View, { style: styles.signatureSection },
+              React.createElement(View, { style: styles.signatureContainer },
+                React.createElement(View, { style: styles.signatureBox },
+                  React.createElement(Image, {
+                    style: styles.signatureImage,
+                    src: `data:${firmaMime};base64,${firmaAprobacion}`,
+                  }),
+                  React.createElement(View, { style: styles.signatureLine }),
+                  React.createElement(Text, { style: styles.signatureLabel }, "Firma del Cliente"),
+                  fechaAprobacion ? React.createElement(Text, { style: styles.signatureDate },
+                    `Aprobado: ${fechaAprobacion}`
+                  ) : null
+                )
+              )
+            )
+          : null
+      ),
 
       // Footer
       React.createElement(View, { style: styles.footer },
-        React.createElement(Text, null,
+        React.createElement(Text, { style: styles.footerText },
           firmaAprobacion
-            ? "Cotizacion aprobada por el cliente."
-            : "Gracias por su confianza. Para aceptar esta cotizacion, por favor contactenos."
-        )
+            ? "Documento aprobado por el cliente"
+            : "Gracias por su confianza"
+        ),
+        React.createElement(Text, { style: styles.footerBrand }, companyName)
       )
     )
   )
@@ -912,39 +1048,38 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
   const courier = await pdfDoc.embedFont(StandardFonts.Courier)
 
-  // Colores
-  const primaryColor = rgb(0.231, 0.510, 0.965) // #3b82f6
-  const primaryLight = rgb(0.239, 0.541, 0.969) // Lighter blue
-  const textColor = rgb(0.122, 0.161, 0.216) // #1f2937
-  const grayColor = rgb(0.420, 0.451, 0.502) // #6b7280
-  const lightGray = rgb(0.898, 0.906, 0.922) // #e5e7eb
-  const bgGray = rgb(0.953, 0.957, 0.965) // #f3f4f6
+  // Colores modernos (Indigo theme)
+  const primaryColor = rgb(0.388, 0.400, 0.945) // #6366f1
+  const primaryDark = rgb(0.118, 0.106, 0.294) // #1e1b4b
+  const textColor = rgb(0.118, 0.161, 0.231) // #1e293b
+  const grayColor = rgb(0.392, 0.455, 0.545) // #64748b
+  const lightGray = rgb(0.886, 0.910, 0.941) // #e2e8f0
+  const bgGray = rgb(0.973, 0.980, 0.988) // #f8fafc
   const yellowBg = rgb(0.996, 0.953, 0.780) // #fef3c7
   const brownColor = rgb(0.573, 0.251, 0.055) // #92400e
   const greenColor = rgb(0.134, 0.545, 0.373) // #22c55e
   const white = rgb(1, 1, 1)
 
   // Margenes
-  const margin = 35
+  const margin = 40
   const contentWidth = width - (margin * 2)
 
-  // === MARCO EXTERIOR ===
+  // === BARRA DE ACENTO SUPERIOR ===
   page.drawRectangle({
-    x: margin - 5,
-    y: margin - 5,
-    width: contentWidth + 10,
-    height: height - (margin * 2) + 10,
-    borderColor: primaryColor,
-    borderWidth: 2,
+    x: 0,
+    y: height - 10,
+    width: width,
+    height: 10,
+    color: primaryColor,
   })
 
   // === HEADER BACKGROUND ===
   page.drawRectangle({
     x: margin,
-    y: height - margin - 80,
+    y: height - margin - 75,
     width: contentWidth,
-    height: 80,
-    color: rgb(0.976, 0.980, 0.988), // Very light blue
+    height: 65,
+    color: bgGray,
   })
 
   let y = height - margin - 20
@@ -1243,8 +1378,14 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     termY -= 9
   })
 
-  // Linea final
-  page.drawLine({ start: { x: margin, y: margin + 3 }, end: { x: width - margin, y: margin + 3 }, thickness: 2, color: primaryColor })
+  // Barra inferior de acento
+  page.drawRectangle({
+    x: 0,
+    y: 0,
+    width: width,
+    height: 8,
+    color: primaryColor,
+  })
 
   // Fecha de impresion y numero de orden en la misma linea
   const impresionText = `Impreso: ${fechaImpresion}`
@@ -1333,29 +1474,80 @@ export async function generateVentaPDF(data: VentaPDFData): Promise<Buffer> {
   const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica)
   const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
 
-  // Colores
-  const primaryColor = rgb(0.231, 0.510, 0.965) // #3b82f6
-  const textColor = rgb(0.122, 0.161, 0.216) // #1f2937
-  const grayColor = rgb(0.420, 0.451, 0.502) // #6b7280
-  const lightGray = rgb(0.898, 0.906, 0.922) // #e5e7eb
-  const bgGray = rgb(0.953, 0.957, 0.965) // #f3f4f6
+  // Colores modernos (Indigo theme)
+  const primaryColor = rgb(0.388, 0.400, 0.945) // #6366f1
+  const primaryDark = rgb(0.118, 0.106, 0.294) // #1e1b4b
+  const textColor = rgb(0.118, 0.161, 0.231) // #1e293b
+  const grayColor = rgb(0.392, 0.455, 0.545) // #64748b
+  const lightGray = rgb(0.886, 0.910, 0.941) // #e2e8f0
+  const bgGray = rgb(0.973, 0.980, 0.988) // #f8fafc
   const white = rgb(1, 1, 1)
   const greenColor = rgb(0.134, 0.545, 0.373)
 
   const margin = 40
   const contentWidth = width - (margin * 2)
 
+  // === BARRA DE ACENTO SUPERIOR ===
+  page.drawRectangle({
+    x: 0,
+    y: height - 10,
+    width: width,
+    height: 10,
+    color: primaryColor,
+  })
+
   let y = height - margin - 20
 
+  // === LOGO (si existe) ===
+  let logoWidth = 0
+  if (data.logoUrl) {
+    try {
+      const logoResponse = await fetch(data.logoUrl)
+      if (logoResponse.ok) {
+        const logoArrayBuffer = await logoResponse.arrayBuffer()
+        const logoBytes = new Uint8Array(logoArrayBuffer)
+
+        let logoImage
+        const contentType = logoResponse.headers.get("content-type") || ""
+
+        if (contentType.includes("png") || data.logoUrl.toLowerCase().includes(".png")) {
+          logoImage = await pdfDoc.embedPng(logoBytes)
+        } else if (contentType.includes("jpeg") || contentType.includes("jpg") || data.logoUrl.toLowerCase().includes(".jpg") || data.logoUrl.toLowerCase().includes(".jpeg")) {
+          logoImage = await pdfDoc.embedJpg(logoBytes)
+        }
+
+        if (logoImage) {
+          const logoDims = logoImage.scale(1)
+          const maxLogoHeight = 50
+          const maxLogoWidth = 80
+          const scale = Math.min(maxLogoHeight / logoDims.height, maxLogoWidth / logoDims.width)
+          const scaledWidth = logoDims.width * scale
+          const scaledHeight = logoDims.height * scale
+
+          page.drawImage(logoImage, {
+            x: margin,
+            y: height - margin - 10 - scaledHeight,
+            width: scaledWidth,
+            height: scaledHeight,
+          })
+
+          logoWidth = scaledWidth + 15
+        }
+      }
+    } catch (logoError) {
+      console.error("Error loading logo:", logoError)
+    }
+  }
+
   // === HEADER ===
-  page.drawText(empresaNombre, { x: margin, y, size: 20, font: helveticaBold, color: textColor })
+  page.drawText(empresaNombre, { x: margin + logoWidth, y, size: 20, font: helveticaBold, color: textColor })
   y -= 16
   if (telefonoEmpresa) {
-    page.drawText(`Tel: ${telefonoEmpresa}`, { x: margin, y, size: 9, font: helvetica, color: grayColor })
+    page.drawText(`Tel: ${telefonoEmpresa}`, { x: margin + logoWidth, y, size: 9, font: helvetica, color: grayColor })
     y -= 12
   }
   if (direccionEmpresa) {
-    page.drawText(direccionEmpresa, { x: margin, y, size: 9, font: helvetica, color: grayColor })
+    page.drawText(direccionEmpresa, { x: margin + logoWidth, y, size: 9, font: helvetica, color: grayColor })
     y -= 12
   }
 
@@ -1418,13 +1610,13 @@ export async function generateVentaPDF(data: VentaPDFData): Promise<Buffer> {
   page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 1, color: lightGray })
   y -= 20
 
-  // Header de tabla
-  page.drawRectangle({ x: margin, y: y - 5, width: contentWidth, height: 22, color: bgGray })
-  page.drawText("Descripcion", { x: margin + 10, y: y, size: 9, font: helveticaBold, color: textColor })
-  page.drawText("Cant.", { x: margin + 280, y: y, size: 9, font: helveticaBold, color: textColor })
-  page.drawText("P. Unit.", { x: margin + 330, y: y, size: 9, font: helveticaBold, color: textColor })
-  page.drawText("Subtotal", { x: margin + 410, y: y, size: 9, font: helveticaBold, color: textColor })
-  page.drawText("Garantia", { x: margin + 475, y: y, size: 9, font: helveticaBold, color: textColor })
+  // Header de tabla (moderno con color primario)
+  page.drawRectangle({ x: margin, y: y - 5, width: contentWidth, height: 22, color: primaryColor })
+  page.drawText("Descripcion", { x: margin + 10, y: y, size: 9, font: helveticaBold, color: white })
+  page.drawText("Cant.", { x: margin + 280, y: y, size: 9, font: helveticaBold, color: white })
+  page.drawText("P. Unit.", { x: margin + 330, y: y, size: 9, font: helveticaBold, color: white })
+  page.drawText("Subtotal", { x: margin + 410, y: y, size: 9, font: helveticaBold, color: white })
+  page.drawText("Garantia", { x: margin + 475, y: y, size: 9, font: helveticaBold, color: white })
   y -= 25
 
   // Filas de items
@@ -1470,6 +1662,15 @@ export async function generateVentaPDF(data: VentaPDFData): Promise<Buffer> {
 
   const fechaImpresion = new Date().toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
   page.drawText(`Impreso: ${fechaImpresion}`, { x: width - margin - 110, y: footerY - 42, size: 7, font: helvetica, color: grayColor })
+
+  // Barra inferior de acento
+  page.drawRectangle({
+    x: 0,
+    y: 0,
+    width: width,
+    height: 8,
+    color: primaryColor,
+  })
 
   const pdfBytes = await pdfDoc.save()
   return Buffer.from(pdfBytes)
@@ -1541,12 +1742,13 @@ export async function generateGarantiaVentaPDF(data: GarantiaVentaPDFData): Prom
   const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica)
   const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
 
-  // Colores
-  const primaryColor = rgb(0.231, 0.510, 0.965) // #3b82f6
-  const textColor = rgb(0.122, 0.161, 0.216) // #1f2937
-  const grayColor = rgb(0.420, 0.451, 0.502) // #6b7280
-  const lightGray = rgb(0.898, 0.906, 0.922) // #e5e7eb
-  const bgGray = rgb(0.953, 0.957, 0.965) // #f3f4f6
+  // Colores modernos (Indigo theme)
+  const primaryColor = rgb(0.388, 0.400, 0.945) // #6366f1
+  const primaryDark = rgb(0.118, 0.106, 0.294) // #1e1b4b
+  const textColor = rgb(0.118, 0.161, 0.231) // #1e293b
+  const grayColor = rgb(0.392, 0.455, 0.545) // #64748b
+  const lightGray = rgb(0.886, 0.910, 0.941) // #e2e8f0
+  const bgGray = rgb(0.973, 0.980, 0.988) // #f8fafc
   const greenColor = rgb(0.134, 0.545, 0.373)
   const greenBg = rgb(0.863, 0.949, 0.898)
   const white = rgb(1, 1, 1)
@@ -1554,35 +1756,77 @@ export async function generateGarantiaVentaPDF(data: GarantiaVentaPDFData): Prom
   const margin = 50
   const contentWidth = width - (margin * 2)
 
-  // === MARCO DECORATIVO ===
+  // === BARRA DE ACENTO SUPERIOR ===
   page.drawRectangle({
-    x: margin - 10,
-    y: margin - 10,
-    width: contentWidth + 20,
-    height: height - (margin * 2) + 20,
-    borderColor: primaryColor,
-    borderWidth: 3,
+    x: 0,
+    y: height - 12,
+    width: width,
+    height: 12,
+    color: primaryColor,
   })
+
+  // === MARCO DECORATIVO MODERNO ===
   page.drawRectangle({
     x: margin - 5,
     y: margin - 5,
     width: contentWidth + 10,
     height: height - (margin * 2) + 10,
     borderColor: lightGray,
-    borderWidth: 1,
+    borderWidth: 2,
   })
 
   let y = height - margin - 30
 
+  // === LOGO (si existe) ===
+  let logoWidth = 0
+  if (data.logoUrl) {
+    try {
+      const logoResponse = await fetch(data.logoUrl)
+      if (logoResponse.ok) {
+        const logoArrayBuffer = await logoResponse.arrayBuffer()
+        const logoBytes = new Uint8Array(logoArrayBuffer)
+
+        let logoImage
+        const contentType = logoResponse.headers.get("content-type") || ""
+
+        if (contentType.includes("png") || data.logoUrl.toLowerCase().includes(".png")) {
+          logoImage = await pdfDoc.embedPng(logoBytes)
+        } else if (contentType.includes("jpeg") || contentType.includes("jpg") || data.logoUrl.toLowerCase().includes(".jpg") || data.logoUrl.toLowerCase().includes(".jpeg")) {
+          logoImage = await pdfDoc.embedJpg(logoBytes)
+        }
+
+        if (logoImage) {
+          const logoDims = logoImage.scale(1)
+          const maxLogoHeight = 45
+          const maxLogoWidth = 70
+          const scale = Math.min(maxLogoHeight / logoDims.height, maxLogoWidth / logoDims.width)
+          const scaledWidth = logoDims.width * scale
+          const scaledHeight = logoDims.height * scale
+
+          page.drawImage(logoImage, {
+            x: margin + 10,
+            y: height - margin - 20 - scaledHeight,
+            width: scaledWidth,
+            height: scaledHeight,
+          })
+
+          logoWidth = scaledWidth + 15
+        }
+      }
+    } catch (logoError) {
+      console.error("Error loading logo:", logoError)
+    }
+  }
+
   // === HEADER ===
-  page.drawText(empresaNombre, { x: margin + 10, y, size: 18, font: helveticaBold, color: textColor })
+  page.drawText(empresaNombre, { x: margin + 10 + logoWidth, y, size: 18, font: helveticaBold, color: textColor })
   y -= 14
   if (telefonoEmpresa) {
-    page.drawText(`Tel: ${telefonoEmpresa}`, { x: margin + 10, y, size: 9, font: helvetica, color: grayColor })
+    page.drawText(`Tel: ${telefonoEmpresa}`, { x: margin + 10 + logoWidth, y, size: 9, font: helvetica, color: grayColor })
     y -= 11
   }
   if (direccionEmpresa) {
-    page.drawText(direccionEmpresa, { x: margin + 10, y, size: 9, font: helvetica, color: grayColor })
+    page.drawText(direccionEmpresa, { x: margin + 10 + logoWidth, y, size: 9, font: helvetica, color: grayColor })
   }
 
   y = height - margin - 80
@@ -1697,6 +1941,15 @@ export async function generateGarantiaVentaPDF(data: GarantiaVentaPDFData): Prom
 
   const fechaImpresion = new Date().toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" })
   page.drawText(`Emitido: ${fechaImpresion}`, { x: width - margin - 90, y: footerY - 15, size: 7, font: helvetica, color: grayColor })
+
+  // Barra inferior de acento
+  page.drawRectangle({
+    x: 0,
+    y: 0,
+    width: width,
+    height: 10,
+    color: primaryColor,
+  })
 
   const pdfBytes = await pdfDoc.save()
   return Buffer.from(pdfBytes)

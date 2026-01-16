@@ -197,12 +197,14 @@ export function OrdenesList() {
       key: "tecnico",
       header: "Técnico",
       sortable: false,
+      hideOnTablet: true,
       render: (orden) => orden.tecnico?.nombre || "-",
     },
     {
       key: "fechaIngreso",
       header: "Fecha Ingreso",
       sortable: true,
+      hideOnMobile: true,
       render: (orden) => formatDate(orden.fechaIngreso),
     },
     {
@@ -211,6 +213,7 @@ export function OrdenesList() {
       sortable: true,
       headerClassName: "text-right",
       className: "text-right",
+      hideOnMobile: true,
       render: (orden) =>
         orden.presupuesto ? (
           <span className="font-medium">{formatCurrency(orden.presupuesto)}</span>
@@ -257,7 +260,7 @@ export function OrdenesList() {
                 setSearch(e.target.value)
                 setPage(1)
               }}
-              className="pl-10 w-full sm:w-[350px]"
+              className="pl-10 w-full sm:max-w-sm"
             />
           </div>
         </div>
@@ -285,14 +288,14 @@ export function OrdenesList() {
 
       {/* Filters Panel */}
       {showFilters && (
-        <div className="flex flex-wrap items-center gap-3 p-4 bg-muted/30 rounded-lg border">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:flex md:flex-wrap items-center gap-3 p-4 bg-muted/30 rounded-lg border">
           <Select
             value={estado}
             onChange={(e) => {
               setEstado(e.target.value as EstadoOrden | "")
               setPage(1)
             }}
-            className="w-[180px]"
+            className="w-full sm:w-auto sm:min-w-[180px]"
           >
             <option value="">Todos los estados</option>
             {estadoOptions.map((opt) => (
@@ -325,7 +328,7 @@ export function OrdenesList() {
               variant="ghost"
               size="sm"
               onClick={clearFilters}
-              className="gap-1 text-muted-foreground"
+              className="gap-1 text-muted-foreground w-full sm:w-auto"
             >
               <X className="h-4 w-4" />
               Limpiar

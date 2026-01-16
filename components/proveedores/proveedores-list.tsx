@@ -111,7 +111,7 @@ export function ProveedoresList() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {proveedores.map((proveedor) => (
             <Card key={proveedor.id} className={!proveedor.activo ? "opacity-60" : ""}>
               <CardHeader>

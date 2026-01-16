@@ -270,10 +270,10 @@ export function CotizacionList({ ordenId, clienteEmail }: CotizacionListProps) {
                   </div>
                 </CardHeader>
                 <CardContent className="py-3 space-y-3">
-                  <div className="text-sm text-muted-foreground">
-                    Creada: {formatDate(cotizacion.createdAt)}
+                  <div className="text-sm text-muted-foreground flex flex-col sm:flex-row sm:gap-4">
+                    <span>Creada: {formatDate(cotizacion.createdAt)}</span>
                     {cotizacion.fechaVencimiento && (
-                      <span className="ml-4">
+                      <span>
                         Válida hasta: {formatDate(cotizacion.fechaVencimiento)}
                       </span>
                     )}
@@ -307,7 +307,7 @@ export function CotizacionList({ ordenId, clienteEmail }: CotizacionListProps) {
                   )}
 
                   {/* Actions */}
-                  <div className="flex gap-2 pt-2 border-t">
+                  <div className="flex flex-wrap gap-2 pt-2 border-t">
                     {canSend && (
                       <Button
                         size="sm"
