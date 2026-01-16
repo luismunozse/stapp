@@ -284,7 +284,7 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
               {fields.map((field, index) => (
                 <div key={field.id} className="grid gap-3 rounded-lg bg-muted/50 p-3 sm:grid-cols-12">
                   {/* Descripción */}
-                  <div className="sm:col-span-4">
+                  <div className="sm:col-span-3">
                     <Label className="text-xs">Descripción</Label>
                     <div className="relative">
                       <Input
@@ -340,11 +340,12 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
                   </div>
 
                   {/* Cantidad */}
-                  <div className="sm:col-span-1">
-                    <Label className="text-xs">Cant.</Label>
+                  <div className="sm:col-span-2">
+                    <Label className="text-xs">Cantidad</Label>
                     <Input
                       type="number"
                       min="1"
+                      className="text-center"
                       {...register(`items.${index}.cantidad`, { valueAsNumber: true })}
                     />
                   </div>
