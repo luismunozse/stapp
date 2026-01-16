@@ -181,7 +181,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
     {
       key: "actions",
       header: "",
-      className: "w-[100px]",
+      className: "w-auto sm:w-[100px]",
       render: (cliente) => (
         <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
           <Button

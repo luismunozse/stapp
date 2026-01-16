@@ -124,6 +124,7 @@ export function FacturacionList() {
         <Select
           value={estadoPago}
           onChange={(e) => setEstadoPago(e.target.value as EstadoPagoType)}
+          className="w-full sm:w-auto sm:min-w-[200px]"
         >
           <option value="">Todos los estados</option>
           <option value="PENDIENTE">Pendiente</option>
@@ -169,20 +170,20 @@ export function FacturacionList() {
                   </div>
 
                   {/* Resumen financiero */}
-                  <div className="grid grid-cols-3 gap-4 p-3 bg-muted rounded-lg">
+                  <div className="grid grid-cols-3 gap-2 sm:gap-4 p-3 bg-muted rounded-lg">
                     <div>
                       <div className="text-xs text-muted-foreground">Total</div>
-                      <div className="font-bold text-lg">{formatCurrency(factura.total)}</div>
+                      <div className="font-bold text-base sm:text-lg">{formatCurrency(factura.total)}</div>
                     </div>
                     <div>
                       <div className="text-xs text-muted-foreground">Abonado</div>
-                      <div className="font-medium text-green-600">
+                      <div className="font-medium text-base sm:text-lg text-green-600">
                         {formatCurrency(factura.montoAbonado || 0)}
                       </div>
                     </div>
                     <div>
                       <div className="text-xs text-muted-foreground">Pendiente</div>
-                      <div className="font-medium text-red-600">
+                      <div className="font-medium text-base sm:text-lg text-red-600">
                         {formatCurrency(factura.total - (factura.montoAbonado || 0))}
                       </div>
                     </div>
@@ -190,7 +191,7 @@ export function FacturacionList() {
 
                   {/* Balance pendiente */}
                   {factura.estadoPago !== "PAGADO" && factura.estadoPago !== "ANULADA" && (
-                    <div className="flex items-center justify-between p-3 border border-dashed rounded-lg">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 border border-dashed rounded-lg">
                       <div>
                         <div className="text-sm text-muted-foreground">Pendiente de pago</div>
                         <div className="text-xl font-bold text-red-600">
@@ -200,6 +201,7 @@ export function FacturacionList() {
                       <Button
                         onClick={() => setShowPagoForm(showingPagoForm ? null : factura.id)}
                         variant={showingPagoForm ? "outline" : "default"}
+                        className="w-full sm:w-auto"
                       >
                         <Plus className="mr-2 h-4 w-4" />
                         Registrar Pago
@@ -242,7 +244,7 @@ export function FacturacionList() {
 
                   {/* Acciones de admin */}
                   {isAdmin && factura.estadoPago !== "ANULADA" && (
-                    <div className="flex gap-2 pt-3 border-t">
+                    <div className="flex flex-wrap gap-2 pt-3 border-t">
                       <Button
                         variant="outline"
                         size="sm"

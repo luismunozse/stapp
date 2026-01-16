@@ -224,7 +224,7 @@ export function OrdenesList() {
     {
       key: "actions",
       header: "",
-      className: "w-[100px]",
+      className: "w-auto sm:w-[100px]",
       render: (orden) => (
         <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
           <Link href={`/ordenes/${orden.id}`}>
