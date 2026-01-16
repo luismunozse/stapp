@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { X, Send, Loader2 } from "lucide-react"
+import { X, Send, Loader2, Bot } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
@@ -145,22 +145,33 @@ export function ChatbotPanel({ isOpen, onClose }: ChatbotPanelProps) {
         isOpen ? "scale-100 opacity-100" : "scale-95 opacity-0 pointer-events-none"
       )}
     >
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b bg-primary text-primary-foreground rounded-t-2xl">
+      {/* Header con robot animado */}
+      <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 text-white rounded-t-2xl shadow-lg">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-primary-foreground/20 flex items-center justify-center font-bold">
-            S
+          <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center relative animate-pulse-slow">
+            <Bot className="w-7 h-7 text-white animate-bounce-subtle" />
+            {/* Badge online */}
+            <span className="absolute -bottom-1 -right-1 flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500 border-2 border-white"></span>
+            </span>
           </div>
           <div>
-            <h3 className="font-semibold">Santi</h3>
-            <p className="text-xs opacity-90">Asistente virtual de STApp</p>
+            <h3 className="font-bold text-lg flex items-center gap-2">
+              Santi
+              <span className="text-xs font-normal bg-white/20 px-2 py-0.5 rounded-full">AI</span>
+            </h3>
+            <p className="text-xs opacity-95 flex items-center gap-1">
+              <span className="inline-block w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+              En línea • Asistente virtual
+            </p>
           </div>
         </div>
         <Button
           variant="ghost"
           size="icon"
           onClick={onClose}
-          className="text-primary-foreground hover:bg-primary-foreground/10"
+          className="text-white hover:bg-white/20 transition-all duration-200"
         >
           <X className="w-5 h-5" />
         </Button>
@@ -201,6 +212,35 @@ export function ChatbotPanel({ isOpen, onClose }: ChatbotPanelProps) {
           Presioná Enter para enviar
         </p>
       </div>
+
+      {/* Estilos de animación personalizados */}
+      <style jsx>{`
+        @keyframes pulse-slow {
+          0%, 100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.7;
+          }
+        }
+
+        @keyframes bounce-subtle {
+          0%, 100% {
+            transform: translateY(0);
+          }
+          50% {
+            transform: translateY(-3px);
+          }
+        }
+
+        .animate-pulse-slow {
+          animation: pulse-slow 2s ease-in-out infinite;
+        }
+
+        .animate-bounce-subtle {
+          animation: bounce-subtle 2s ease-in-out infinite;
+        }
+      `}</style>
     </div>
   )
 }
