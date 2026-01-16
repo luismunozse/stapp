@@ -7,6 +7,7 @@ import { PricingSection } from "@/components/landing/pricing-section"
 import { Testimonials } from "@/components/landing/testimonials"
 import { FAQ } from "@/components/landing/faq"
 import { Footer } from "@/components/landing/footer"
+import { ChatbotButton } from "@/components/chatbot/chatbot-button"
 
 // Forzar renderizado dinámico para verificar auth en cada navegación
 export const dynamic = "force-dynamic"
@@ -29,6 +30,9 @@ export default async function Home() {
       <Testimonials />
       <FAQ />
       <Footer />
+
+      {/* Chatbot flotante */}
+      <ChatbotButton />
     </main>
   )
 }

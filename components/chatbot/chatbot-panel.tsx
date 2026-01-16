@@ -1,0 +1,206 @@
+"use client"
+
+import { useEffect, useRef, useState } from "react"
+import { X, Send, Loader2 } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { cn } from "@/lib/utils"
+import { ChatMessage } from "./chat-message"
+import { v4 as uuidv4 } from "uuid"
+
+interface Message {
+  id: string
+  tipo: "USER" | "ASSISTANT" | "SYSTEM"
+  contenido: string
+  timestamp: Date
+}
+
+interface ChatbotPanelProps {
+  isOpen: boolean
+  onClose: () => void
+}
+
+export function ChatbotPanel({ isOpen, onClose }: ChatbotPanelProps) {
+  const [messages, setMessages] = useState<Message[]>([])
+  const [input, setInput] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
+  const [sessionId, setSessionId] = useState<string>("")
+  const [conversacionId, setConversacionId] = useState<string | null>(null)
+  const [isClient, setIsClient] = useState(false)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Verificar que estamos en el cliente
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
+
+  // Generar sessionId al montar (solo en cliente)
+  useEffect(() => {
+    if (!isClient) return
+
+    let sid = localStorage.getItem("chatbot-session-id")
+    if (!sid) {
+      sid = uuidv4()
+      localStorage.setItem("chatbot-session-id", sid)
+    }
+    setSessionId(sid)
+
+    // Mensaje de bienvenida
+    if (messages.length === 0) {
+      setMessages([
+        {
+          id: "welcome",
+          tipo: "ASSISTANT",
+          contenido:
+            "¡Hola! Soy Santi, tu asistente virtual de STApp. Estoy acá para ayudarte con cualquier duda sobre nuestro software de gestión para talleres de reparación. ¿En qué puedo ayudarte hoy?",
+          timestamp: new Date(),
+        },
+      ])
+    }
+  }, [isClient])
+
+  // Scroll automático al final
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [messages])
+
+  const handleSendMessage = async () => {
+    if (!input.trim() || isLoading || !sessionId) return
+
+    const userMessage: Message = {
+      id: uuidv4(),
+      tipo: "USER",
+      contenido: input.trim(),
+      timestamp: new Date(),
+    }
+
+    setMessages((prev) => [...prev, userMessage])
+    setInput("")
+    setIsLoading(true)
+
+    try {
+      const response = await fetch("/api/chatbot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId,
+          message: userMessage.contenido,
+          conversacionId,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Error en la respuesta")
+      }
+
+      const data = await response.json()
+
+      if (data.conversacionId && !conversacionId) {
+        setConversacionId(data.conversacionId)
+      }
+
+      const assistantMessage: Message = {
+        id: uuidv4(),
+        tipo: "ASSISTANT",
+        contenido: data.message,
+        timestamp: new Date(),
+      }
+
+      setMessages((prev) => [...prev, assistantMessage])
+    } catch (error) {
+      console.error("Error sending message:", error)
+      const errorMessage: Message = {
+        id: uuidv4(),
+        tipo: "SYSTEM",
+        contenido:
+          error instanceof Error
+            ? error.message
+            : "Lo siento, hubo un error. Por favor intentá de nuevo.",
+        timestamp: new Date(),
+      }
+      setMessages((prev) => [...prev, errorMessage])
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault()
+      handleSendMessage()
+    }
+  }
+
+  if (!isOpen) return null
+
+  return (
+    <div
+      className={cn(
+        "fixed bottom-6 right-6 z-50",
+        "w-[90vw] max-w-md h-[600px] max-h-[80vh]",
+        "bg-card border shadow-2xl rounded-2xl",
+        "flex flex-col",
+        "transition-all duration-300 ease-in-out",
+        isOpen ? "scale-100 opacity-100" : "scale-95 opacity-0 pointer-events-none"
+      )}
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 border-b bg-primary text-primary-foreground rounded-t-2xl">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-primary-foreground/20 flex items-center justify-center font-bold">
+            S
+          </div>
+          <div>
+            <h3 className="font-semibold">Santi</h3>
+            <p className="text-xs opacity-90">Asistente virtual de STApp</p>
+          </div>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onClose}
+          className="text-primary-foreground hover:bg-primary-foreground/10"
+        >
+          <X className="w-5 h-5" />
+        </Button>
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-4">
+        {messages.map((message) => (
+          <ChatMessage key={message.id} message={message} />
+        ))}
+        {isLoading && (
+          <div className="flex items-center gap-2 text-muted-foreground mb-4">
+            <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+              <Loader2 className="w-4 h-4 animate-spin text-primary" />
+            </div>
+            <span className="text-sm">Santi está escribiendo...</span>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Input */}
+      <div className="p-4 border-t">
+        <div className="flex gap-2">
+          <Input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyPress={handleKeyPress}
+            placeholder="Escribí tu mensaje..."
+            disabled={isLoading}
+            className="flex-1"
+          />
+          <Button onClick={handleSendMessage} disabled={isLoading || !input.trim()} size="icon">
+            {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground mt-2 text-center">
+          Presioná Enter para enviar
+        </p>
+      </div>
+    </div>
+  )
+}

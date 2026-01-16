@@ -485,6 +485,32 @@ export interface Database {
         }
         Update: Partial<Omit<AuditLog, "id">>
       }
+      leads: {
+        Row: Lead
+        Insert: Omit<Lead, "id" | "created_at" | "updated_at"> & {
+          id?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: Partial<Omit<Lead, "id">>
+      }
+      chatbot_conversaciones: {
+        Row: ChatbotConversacion
+        Insert: Omit<ChatbotConversacion, "id" | "created_at" | "updated_at"> & {
+          id?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: Partial<Omit<ChatbotConversacion, "id">>
+      }
+      chatbot_mensajes: {
+        Row: ChatbotMensaje
+        Insert: Omit<ChatbotMensaje, "id" | "created_at"> & {
+          id?: string
+          created_at?: string
+        }
+        Update: Partial<Omit<ChatbotMensaje, "id">>
+      }
     }
     Enums: {
       user_role: UserRole
@@ -501,6 +527,9 @@ export interface Database {
       tipo_checklist: TipoChecklist
       categoria_checklist: CategoriaChecklist
       metodo_pago: MetodoPago
+      estado_lead: EstadoLead
+      origen_lead: OrigenLead
+      tipo_mensaje_chatbot: TipoMensajeChatbot
     }
   }
 }
@@ -585,4 +614,71 @@ export interface VentaConRelaciones extends Venta {
   vendedor?: User
   items?: (ItemVenta & { inventario?: Inventario | null })[]
   garantias?: GarantiaVenta[]
+}
+
+// ========================================
+// CHATBOT TYPES
+// ========================================
+
+export type EstadoLead =
+  | "NUEVO"
+  | "CONTACTADO"
+  | "CALIFICADO"
+  | "CONVERTIDO"
+  | "DESCARTADO"
+
+export type OrigenLead = "CHATBOT" | "FORMULARIO" | "OTRO"
+
+export type TipoMensajeChatbot = "USER" | "ASSISTANT" | "SYSTEM"
+
+export interface Lead {
+  id: string
+  nombre: string | null
+  email: string | null
+  telefono: string | null
+  empresa: string | null
+  estado: EstadoLead
+  origen: OrigenLead
+  interes: string | null
+  plan_interes: string | null
+  organization_id: string | null
+  assigned_to: string | null
+  notas: string | null
+  ultima_interaccion: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ChatbotConversacion {
+  id: string
+  session_id: string
+  lead_id: string | null
+  ip_address: string | null
+  user_agent: string | null
+  referrer: string | null
+  activa: boolean
+  lead_capturado: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface ChatbotMensaje {
+  id: string
+  conversacion_id: string
+  tipo: TipoMensajeChatbot
+  contenido: string
+  modelo: string | null
+  tokens_usados: number | null
+  tiempo_respuesta_ms: number | null
+  intencion_detectada: string | null
+  confianza: number | null
+  created_at: string
+}
+
+// Lead con relaciones
+export interface LeadConRelaciones extends Lead {
+  organization?: Organization | null
+  assigned_user?: User | null
+  conversacion?: ChatbotConversacion
+  mensajes_count?: number
 }
