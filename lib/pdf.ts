@@ -1019,9 +1019,9 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
 
   const tipoLabels: Record<string, string> = {
     CELULAR: "Celular", COMPUTADORA: "Computadora", TABLET: "Tablet",
-    CONSOLA: "Consola", SMARTWATCH: "Smartwatch"
+    CONSOLA: "Consola", SMARTWATCH: "Smartwatch", OTRO: "Otro"
   }
-  const tipoDispositivo = tipoLabels[data.tipoDispositivo] || safe(data.tipoDispositivo)
+  const tipoDispositivo = tipoLabels[data.tipoDispositivo] || safe(data.tipoDispositivo) || "Otro"
   const dispositivo = safe(data.dispositivo) || "Sin especificar"
   const marca = safe(data.marca)
   const colorDisp = safe(data.color)
@@ -1050,39 +1050,28 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
 
   // Colores modernos (Indigo theme)
   const primaryColor = rgb(0.388, 0.400, 0.945) // #6366f1
-  const primaryDark = rgb(0.118, 0.106, 0.294) // #1e1b4b
   const textColor = rgb(0.118, 0.161, 0.231) // #1e293b
   const grayColor = rgb(0.392, 0.455, 0.545) // #64748b
   const lightGray = rgb(0.886, 0.910, 0.941) // #e2e8f0
   const bgGray = rgb(0.973, 0.980, 0.988) // #f8fafc
+  const slateLight = rgb(0.945, 0.953, 0.965) // #f1f5f9
   const yellowBg = rgb(0.996, 0.953, 0.780) // #fef3c7
+  const yellowBorder = rgb(0.961, 0.620, 0.043) // #f59e0b
   const brownColor = rgb(0.573, 0.251, 0.055) // #92400e
   const greenColor = rgb(0.134, 0.545, 0.373) // #22c55e
+  const greenBg = rgb(0.863, 0.949, 0.898) // #dcfce7
   const white = rgb(1, 1, 1)
 
   // Margenes
   const margin = 40
   const contentWidth = width - (margin * 2)
+  const cardGap = 10
+  const halfWidth = (contentWidth - cardGap) / 2
 
   // === BARRA DE ACENTO SUPERIOR ===
-  page.drawRectangle({
-    x: 0,
-    y: height - 10,
-    width: width,
-    height: 10,
-    color: primaryColor,
-  })
+  page.drawRectangle({ x: 0, y: height - 10, width, height: 10, color: primaryColor })
 
-  // === HEADER BACKGROUND ===
-  page.drawRectangle({
-    x: margin,
-    y: height - margin - 75,
-    width: contentWidth,
-    height: 65,
-    color: bgGray,
-  })
-
-  let y = height - margin - 20
+  let y = height - margin - 15
 
   // === LOGO (si existe) ===
   let logoWidth = 0
@@ -1092,306 +1081,199 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
       if (logoResponse.ok) {
         const logoArrayBuffer = await logoResponse.arrayBuffer()
         const logoBytes = new Uint8Array(logoArrayBuffer)
-
-        // Detectar tipo de imagen
         let logoImage
         const contentType = logoResponse.headers.get("content-type") || ""
-
         if (contentType.includes("png") || data.logoUrl.toLowerCase().includes(".png")) {
           logoImage = await pdfDoc.embedPng(logoBytes)
         } else if (contentType.includes("jpeg") || contentType.includes("jpg") || data.logoUrl.toLowerCase().includes(".jpg") || data.logoUrl.toLowerCase().includes(".jpeg")) {
           logoImage = await pdfDoc.embedJpg(logoBytes)
         }
-
         if (logoImage) {
           const logoDims = logoImage.scale(1)
-          const maxLogoHeight = 50
-          const maxLogoWidth = 80
+          const maxLogoHeight = 45
+          const maxLogoWidth = 60
           const scale = Math.min(maxLogoHeight / logoDims.height, maxLogoWidth / logoDims.width)
           const scaledWidth = logoDims.width * scale
           const scaledHeight = logoDims.height * scale
-
-          page.drawImage(logoImage, {
-            x: margin + 10,
-            y: height - margin - 15 - scaledHeight,
-            width: scaledWidth,
-            height: scaledHeight,
-          })
-          logoWidth = scaledWidth + 15
+          page.drawImage(logoImage, { x: margin, y: y - scaledHeight + 5, width: scaledWidth, height: scaledHeight })
+          logoWidth = scaledWidth + 12
         }
       }
     } catch (logoError) {
       console.error("Error loading logo:", logoError)
-      // Continuar sin logo
     }
   }
 
-  // === HEADER - Nombre empresa ===
-  page.drawText(empresaNombre, { x: margin + 10 + logoWidth, y, size: 20, font: helveticaBold, color: textColor })
-  y -= 16
-
+  // === HEADER - Empresa ===
+  page.drawText(empresaNombre, { x: margin + logoWidth, y, size: 18, font: helveticaBold, color: textColor })
+  y -= 14
   if (telefonoEmpresa) {
-    page.drawText(`Tel: ${telefonoEmpresa}`, { x: margin + 10 + logoWidth, y, size: 9, font: helvetica, color: grayColor })
-    y -= 12
+    page.drawText(`Tel: ${telefonoEmpresa}`, { x: margin + logoWidth, y, size: 9, font: helvetica, color: grayColor })
+    y -= 11
   }
   if (direccionEmpresa) {
-    page.drawText(direccionEmpresa, { x: margin + 10 + logoWidth, y, size: 9, font: helvetica, color: grayColor })
-    y -= 12
+    page.drawText(direccionEmpresa, { x: margin + logoWidth, y, size: 9, font: helvetica, color: grayColor })
   }
 
-  // === HEADER - Numero de orden (lado derecho) ===
-  const ordenText = `ORDEN #${numeroOrden}`
-  const ordenWidth = helveticaBold.widthOfTextAtSize(ordenText, 18)
+  // === BADGE ORDEN (lado derecho) ===
+  const badgeText = "RECEPCION"
+  const badgeWidth = helveticaBold.widthOfTextAtSize(badgeText, 10) + 20
+  page.drawRectangle({ x: width - margin - badgeWidth, y: height - margin - 25, width: badgeWidth, height: 22, color: primaryColor })
+  page.drawText(badgeText, { x: width - margin - badgeWidth + 10, y: height - margin - 19, size: 10, font: helveticaBold, color: white })
 
-  // Badge para numero de orden
-  page.drawRectangle({
-    x: width - margin - ordenWidth - 30,
-    y: height - margin - 45,
-    width: ordenWidth + 20,
-    height: 30,
-    color: primaryColor,
-  })
-  page.drawText(ordenText, {
-    x: width - margin - ordenWidth - 20,
-    y: height - margin - 37,
-    size: 18,
-    font: helveticaBold,
-    color: white
-  })
+  // Numero de orden grande
+  const ordenText = `#${String(numeroOrden).padStart(4, "0")}`
+  const ordenTextWidth = helveticaBold.widthOfTextAtSize(ordenText, 22)
+  page.drawText(ordenText, { x: width - margin - ordenTextWidth, y: height - margin - 50, size: 22, font: helveticaBold, color: textColor })
 
   // Fechas
-  page.drawText(`Ingreso: ${fechaIngreso}`, {
-    x: width - margin - 100,
-    y: height - margin - 58,
-    size: 9,
-    font: helvetica,
-    color: grayColor
-  })
+  page.drawText(`Ingreso: ${fechaIngreso}`, { x: width - margin - 95, y: height - margin - 68, size: 8, font: helvetica, color: grayColor })
   if (fechaPrometida) {
-    page.drawText(`Entrega: ${fechaPrometida}`, {
-      x: width - margin - 100,
-      y: height - margin - 70,
-      size: 9,
-      font: helvetica,
-      color: grayColor
-    })
+    page.drawText(`Entrega: ${fechaPrometida}`, { x: width - margin - 95, y: height - margin - 80, size: 8, font: helvetica, color: grayColor })
   }
 
-  // === TITULO PRINCIPAL ===
-  y = height - margin - 105
+  y = height - margin - 95
+
+  // === TITULO ===
   const titleText = "COMPROBANTE DE RECEPCION"
-  const titleWidth = helveticaBold.widthOfTextAtSize(titleText, 16)
-  page.drawText(titleText, { x: (width - titleWidth) / 2, y, size: 16, font: helveticaBold, color: primaryColor })
+  const titleWidth = helveticaBold.widthOfTextAtSize(titleText, 13)
+  page.drawText(titleText, { x: (width - titleWidth) / 2, y, size: 13, font: helveticaBold, color: primaryColor })
+  y -= 20
 
-  // Linea decorativa debajo del titulo
-  y -= 8
-  page.drawLine({ start: { x: margin + 100, y }, end: { x: width - margin - 100, y }, thickness: 2, color: primaryColor })
+  // === GRID: CLIENTE | DISPOSITIVO ===
+  const cardHeight = 75
 
-  y -= 25
-
-  // === DATOS DEL CLIENTE - Layout en 2 columnas ===
-  page.drawRectangle({ x: margin, y: y - 75, width: contentWidth, height: 80, color: bgGray })
-
-  page.drawText("DATOS DEL CLIENTE", { x: margin + 10, y: y - 3, size: 10, font: helveticaBold, color: primaryColor })
-  y -= 18
-
-  // Columna izquierda
-  page.drawText("Nombre:", { x: margin + 10, y, size: 9, font: helveticaBold, color: grayColor })
-  page.drawText(clienteNombre, { x: margin + 70, y, size: 9, font: helvetica, color: textColor })
-  y -= 14
-  page.drawText("Telefono:", { x: margin + 10, y, size: 9, font: helveticaBold, color: grayColor })
-  page.drawText(clienteTelefono, { x: margin + 70, y, size: 9, font: helvetica, color: textColor })
-
-  // Columna derecha
+  // Card Cliente
+  page.drawRectangle({ x: margin, y: y - cardHeight, width: halfWidth, height: cardHeight, color: bgGray })
+  page.drawText("CLIENTE", { x: margin + 12, y: y - 12, size: 9, font: helveticaBold, color: primaryColor })
+  page.drawText("Nombre", { x: margin + 12, y: y - 28, size: 8, font: helvetica, color: grayColor })
+  page.drawText(clienteNombre.substring(0, 28), { x: margin + 12, y: y - 40, size: 10, font: helveticaBold, color: textColor })
+  page.drawText("Telefono", { x: margin + 12, y: y - 55, size: 8, font: helvetica, color: grayColor })
+  page.drawText(clienteTelefono, { x: margin + 70, y: y - 55, size: 9, font: helvetica, color: textColor })
   if (clienteEmail) {
-    page.drawText("Email:", { x: margin + 270, y: y + 14, size: 9, font: helveticaBold, color: grayColor })
-    page.drawText(clienteEmail, { x: margin + 310, y: y + 14, size: 9, font: helvetica, color: textColor })
-  }
-  if (clienteDireccion) {
-    page.drawText("Direccion:", { x: margin + 270, y, size: 9, font: helveticaBold, color: grayColor })
-    page.drawText(clienteDireccion.substring(0, 35), { x: margin + 330, y, size: 9, font: helvetica, color: textColor })
+    page.drawText("Email", { x: margin + 150, y: y - 55, size: 8, font: helvetica, color: grayColor })
+    page.drawText(clienteEmail.substring(0, 18), { x: margin + 180, y: y - 55, size: 8, font: helvetica, color: textColor })
   }
 
-  y -= 50
+  // Card Dispositivo
+  const cardX2 = margin + halfWidth + cardGap
+  page.drawRectangle({ x: cardX2, y: y - cardHeight, width: halfWidth, height: cardHeight, color: bgGray })
+  page.drawText("DISPOSITIVO", { x: cardX2 + 12, y: y - 12, size: 9, font: helveticaBold, color: primaryColor })
+  page.drawText(tipoDispositivo, { x: cardX2 + 12, y: y - 28, size: 8, font: helvetica, color: grayColor })
+  page.drawText(dispositivo.substring(0, 25), { x: cardX2 + 12, y: y - 40, size: 10, font: helveticaBold, color: textColor })
 
-  // === DATOS DEL DISPOSITIVO ===
-  page.drawText("DATOS DEL DISPOSITIVO", { x: margin, y, size: 10, font: helveticaBold, color: primaryColor })
-  y -= 3
-  page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 1, color: lightGray })
-  y -= 15
-
-  // Grid de datos del dispositivo
-  const col1 = margin
-  const col2 = margin + 180
-  const col3 = margin + 360
-
-  page.drawText("Tipo:", { x: col1, y, size: 9, font: helveticaBold, color: grayColor })
-  page.drawText(tipoDispositivo, { x: col1 + 50, y, size: 9, font: helvetica, color: textColor })
-
-  page.drawText("Dispositivo:", { x: col2, y, size: 9, font: helveticaBold, color: grayColor })
-  page.drawText(dispositivo.substring(0, 20), { x: col2 + 65, y, size: 9, font: helvetica, color: textColor })
-
+  let deviceInfoY = y - 55
   if (marca) {
-    page.drawText("Marca:", { x: col3, y, size: 9, font: helveticaBold, color: grayColor })
-    page.drawText(marca, { x: col3 + 45, y, size: 9, font: helvetica, color: textColor })
+    page.drawText(`Marca: ${marca}`, { x: cardX2 + 12, y: deviceInfoY, size: 8, font: helvetica, color: grayColor })
   }
-
-  y -= 14
   if (colorDisp) {
-    page.drawText("Color:", { x: col1, y, size: 9, font: helveticaBold, color: grayColor })
-    page.drawText(colorDisp, { x: col1 + 50, y, size: 9, font: helvetica, color: textColor })
+    page.drawText(`Color: ${colorDisp}`, { x: cardX2 + 100, y: deviceInfoY, size: 8, font: helvetica, color: grayColor })
   }
   if (imei) {
-    page.drawText("IMEI/Serie:", { x: col2, y, size: 9, font: helveticaBold, color: grayColor })
-    page.drawText(imei, { x: col2 + 65, y, size: 9, font: helvetica, color: textColor })
+    page.drawText(`IMEI: ${imei}`, { x: cardX2 + 12, y: deviceInfoY - 11, size: 8, font: helvetica, color: grayColor })
   }
 
-  y -= 25
+  y -= cardHeight + 15
 
   // === PROBLEMA REPORTADO ===
-  page.drawText("PROBLEMA REPORTADO", { x: margin, y, size: 10, font: helveticaBold, color: primaryColor })
-  y -= 3
-  page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 1, color: lightGray })
-  y -= 8
+  page.drawText("PROBLEMA REPORTADO", { x: margin, y, size: 9, font: helveticaBold, color: primaryColor })
+  y -= 12
 
-  // Caja con borde para problema
-  const problemaHeight = problemaReportado.length > 80 ? 50 : 35
-  page.drawRectangle({
-    x: margin,
-    y: y - problemaHeight,
-    width: contentWidth,
-    height: problemaHeight,
-    color: bgGray,
-    borderColor: lightGray,
-    borderWidth: 1,
-  })
-  page.drawText(problemaReportado.substring(0, 90), { x: margin + 10, y: y - 15, size: 10, font: helvetica, color: textColor })
-  if (problemaReportado.length > 90) {
-    page.drawText(problemaReportado.substring(90, 180), { x: margin + 10, y: y - 28, size: 10, font: helvetica, color: textColor })
+  const problemaLines = []
+  let tempLine = ""
+  const words = problemaReportado.split(" ")
+  for (const word of words) {
+    if (helvetica.widthOfTextAtSize(tempLine + " " + word, 10) < contentWidth - 24) {
+      tempLine += (tempLine ? " " : "") + word
+    } else {
+      problemaLines.push(tempLine)
+      tempLine = word
+    }
   }
-  y -= problemaHeight + 15
+  if (tempLine) problemaLines.push(tempLine)
+  const problemaHeight = Math.max(35, problemaLines.length * 14 + 16)
+
+  page.drawRectangle({ x: margin, y: y - problemaHeight, width: contentWidth, height: problemaHeight, color: slateLight, borderColor: lightGray, borderWidth: 1 })
+  let problemaY = y - 14
+  for (const line of problemaLines.slice(0, 4)) {
+    page.drawText(line, { x: margin + 12, y: problemaY, size: 10, font: helvetica, color: textColor })
+    problemaY -= 14
+  }
+  y -= problemaHeight + 12
 
   // === ACCESORIOS (si hay) ===
   if (accesorios) {
-    page.drawRectangle({
-      x: margin,
-      y: y - 35,
-      width: contentWidth,
-      height: 40,
-      color: yellowBg,
-      borderColor: rgb(0.855, 0.647, 0.125),
-      borderWidth: 1,
-    })
-    page.drawText("ACCESORIOS ENTREGADOS:", { x: margin + 10, y: y - 5, size: 9, font: helveticaBold, color: brownColor })
-    page.drawText(accesorios.substring(0, 80), { x: margin + 10, y: y - 20, size: 9, font: helvetica, color: brownColor })
-    y -= 50
+    page.drawRectangle({ x: margin, y: y - 32, width: contentWidth, height: 32, color: yellowBg, borderColor: yellowBorder, borderWidth: 1 })
+    page.drawText("ACCESORIOS:", { x: margin + 12, y: y - 12, size: 9, font: helveticaBold, color: brownColor })
+    page.drawText(accesorios.substring(0, 70), { x: margin + 90, y: y - 12, size: 9, font: helvetica, color: brownColor })
+    y -= 44
   }
 
-  // === CONTRASENA/PIN (si hay) ===
+  // === CONTRASENA (si hay) ===
   if (passwordDispositivo) {
-    page.drawText("CONTRASENA / PIN / PATRON", { x: margin, y, size: 10, font: helveticaBold, color: primaryColor })
-    y -= 18
-    page.drawRectangle({
-      x: margin,
-      y: y - 8,
-      width: 200,
-      height: 25,
-      color: bgGray,
-      borderColor: lightGray,
-      borderWidth: 1,
-    })
-    page.drawText(passwordDispositivo, { x: margin + 10, y: y, size: 14, font: courier, color: textColor })
-    y -= 30
+    page.drawText("CONTRASEÑA / PIN / PATRON", { x: margin, y, size: 9, font: helveticaBold, color: primaryColor })
+    y -= 12
+    page.drawRectangle({ x: margin, y: y - 22, width: 180, height: 22, color: bgGray, borderColor: lightGray, borderWidth: 1 })
+    page.drawText(passwordDispositivo, { x: margin + 10, y: y - 15, size: 12, font: courier, color: textColor })
+    y -= 34
   }
 
   // === PRESUPUESTO (si hay) ===
   if (presupuesto) {
-    page.drawRectangle({
-      x: margin,
-      y: y - 45,
-      width: contentWidth,
-      height: 50,
-      color: rgb(0.941, 0.973, 0.953), // Light green bg
-      borderColor: greenColor,
-      borderWidth: 1,
-    })
-    page.drawText("PRESUPUESTO ESTIMADO", { x: margin + 10, y: y - 8, size: 10, font: helveticaBold, color: greenColor })
-    page.drawText(presupuesto, { x: margin + 10, y: y - 28, size: 18, font: helveticaBold, color: greenColor })
-    page.drawText("* El presupuesto final puede variar segun el diagnostico", { x: margin + 180, y: y - 38, size: 7, font: helvetica, color: grayColor })
-    y -= 60
+    page.drawRectangle({ x: margin, y: y - 40, width: contentWidth, height: 40, color: greenBg, borderColor: greenColor, borderWidth: 1 })
+    page.drawText("PRESUPUESTO ESTIMADO", { x: margin + 12, y: y - 12, size: 9, font: helveticaBold, color: greenColor })
+    page.drawText(presupuesto, { x: margin + 12, y: y - 30, size: 16, font: helveticaBold, color: greenColor })
+    page.drawText("* Puede variar segun diagnostico", { x: margin + 160, y: y - 32, size: 7, font: helvetica, color: grayColor })
+    y -= 52
   }
 
   // === OBSERVACIONES (si hay) ===
   if (observaciones) {
-    page.drawText("OBSERVACIONES", { x: margin, y, size: 10, font: helveticaBold, color: primaryColor })
-    y -= 3
-    page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 1, color: lightGray })
-    y -= 15
-    page.drawText(observaciones.substring(0, 100), { x: margin, y, size: 9, font: helvetica, color: textColor })
-    y -= 20
+    page.drawText("OBSERVACIONES", { x: margin, y, size: 9, font: helveticaBold, color: primaryColor })
+    y -= 12
+    page.drawText(observaciones.substring(0, 90), { x: margin, y, size: 9, font: helvetica, color: textColor })
+    y -= 18
   }
 
-  // === SECCION DE FIRMAS (posicion dinamica basada en contenido) ===
-  // Asegurar espacio minimo para firmas (70px) y footer (90px)
-  const minFooterSpace = 90
-  const firmaHeight = 60
-  const sigY = Math.max(y - 30, minFooterSpace + firmaHeight + 20)
+  // === SECCION DE FIRMAS ===
+  const firmaY = Math.max(y - 25, 165)
 
-  // Linea separadora antes de firmas
-  page.drawLine({ start: { x: margin, y: sigY + 40 }, end: { x: width - margin, y: sigY + 40 }, thickness: 1, color: lightGray })
+  page.drawLine({ start: { x: margin, y: firmaY + 35 }, end: { x: width - margin, y: firmaY + 35 }, thickness: 1, color: lightGray })
 
   // Firma Cliente
-  page.drawLine({ start: { x: margin + 30, y: sigY + 10 }, end: { x: margin + 180, y: sigY + 10 }, thickness: 1, color: textColor })
-  page.drawText("Firma del Cliente", { x: margin + 70, y: sigY - 2, size: 9, font: helvetica, color: grayColor })
-  page.drawText("Aclaracion: ________________", { x: margin + 40, y: sigY - 14, size: 8, font: helvetica, color: grayColor })
-  page.drawText("DNI: ________________", { x: margin + 55, y: sigY - 26, size: 8, font: helvetica, color: grayColor })
+  page.drawRectangle({ x: margin, y: firmaY - 45, width: halfWidth, height: 75, color: bgGray })
+  page.drawText("FIRMA CLIENTE", { x: margin + 12, y: firmaY + 20, size: 8, font: helveticaBold, color: grayColor })
+  page.drawLine({ start: { x: margin + 20, y: firmaY - 5 }, end: { x: margin + halfWidth - 20, y: firmaY - 5 }, thickness: 1, color: grayColor })
+  page.drawText("Aclaracion: _____________________", { x: margin + 20, y: firmaY - 20, size: 7, font: helvetica, color: grayColor })
+  page.drawText("DNI: _____________________", { x: margin + 20, y: firmaY - 32, size: 7, font: helvetica, color: grayColor })
 
   // Firma Tecnico
-  page.drawLine({ start: { x: width - margin - 180, y: sigY + 10 }, end: { x: width - margin - 30, y: sigY + 10 }, thickness: 1, color: textColor })
-  page.drawText("Firma del Tecnico", { x: width - margin - 145, y: sigY - 2, size: 9, font: helvetica, color: grayColor })
-  page.drawText("Aclaracion: ________________", { x: width - margin - 165, y: sigY - 14, size: 8, font: helvetica, color: grayColor })
+  page.drawRectangle({ x: cardX2, y: firmaY - 45, width: halfWidth, height: 75, color: bgGray })
+  page.drawText("FIRMA TECNICO", { x: cardX2 + 12, y: firmaY + 20, size: 8, font: helveticaBold, color: grayColor })
+  page.drawLine({ start: { x: cardX2 + 20, y: firmaY - 5 }, end: { x: cardX2 + halfWidth - 20, y: firmaY - 5 }, thickness: 1, color: grayColor })
+  page.drawText("Aclaracion: _____________________", { x: cardX2 + 20, y: firmaY - 20, size: 7, font: helvetica, color: grayColor })
 
-  // === FOOTER (compacto) ===
-  const footerY = minFooterSpace
+  // === FOOTER ===
+  const footerTop = 70
+  page.drawRectangle({ x: margin, y: 20, width: contentWidth, height: footerTop - 12, color: bgGray })
 
-  // Fondo del footer
-  page.drawRectangle({
-    x: margin,
-    y: margin,
-    width: contentWidth,
-    height: footerY - margin,
-    color: bgGray,
-  })
-
-  // Terminos y condiciones (mas compactos)
-  page.drawText("TERMINOS Y CONDICIONES", { x: margin + 10, y: footerY - 10, size: 7, font: helveticaBold, color: grayColor })
-
+  page.drawText("TERMINOS Y CONDICIONES", { x: margin + 10, y: footerTop - 5, size: 7, font: helveticaBold, color: grayColor })
   const terminos = [
-    "1. Conserve este comprobante para retirar su equipo. El plazo de retiro es de 30 dias.",
-    "2. No nos hacemos responsables por datos perdidos. Realice backup antes de entregar el equipo.",
-    "3. Al firmar, el cliente acepta haber revisado el estado del equipo al momento de la entrega.",
+    "• Conserve este comprobante para retirar su equipo. El plazo de retiro es de 30 dias.",
+    "• No nos hacemos responsables por datos perdidos. Realice backup antes de entregar el equipo.",
+    "• Al firmar, acepta haber revisado el estado del equipo al momento de la entrega."
   ]
-
-  let termY = footerY - 22
+  let termY = footerTop - 18
   terminos.forEach(t => {
     page.drawText(t, { x: margin + 10, y: termY, size: 6, font: helvetica, color: grayColor })
-    termY -= 9
+    termY -= 10
   })
 
-  // Barra inferior de acento
-  page.drawRectangle({
-    x: 0,
-    y: 0,
-    width: width,
-    height: 8,
-    color: primaryColor,
-  })
+  page.drawText(`Orden #${numeroOrden}`, { x: margin + 10, y: 25, size: 7, font: helveticaBold, color: primaryColor })
+  page.drawText(`Impreso: ${fechaImpresion}`, { x: width - margin - 90, y: 25, size: 6, font: helvetica, color: grayColor })
 
-  // Fecha de impresion y numero de orden en la misma linea
-  const impresionText = `Impreso: ${fechaImpresion}`
-  const impresionWidth = helvetica.widthOfTextAtSize(impresionText, 6)
-  page.drawText(impresionText, { x: width - margin - impresionWidth, y: margin + 8, size: 6, font: helvetica, color: grayColor })
-  page.drawText(`Orden #${numeroOrden}`, { x: margin + 10, y: margin + 8, size: 6, font: helveticaBold, color: grayColor })
+  // === BARRA INFERIOR ===
+  page.drawRectangle({ x: 0, y: 0, width, height: 8, color: primaryColor })
 
   const pdfBytes = await pdfDoc.save()
   return Buffer.from(pdfBytes)
