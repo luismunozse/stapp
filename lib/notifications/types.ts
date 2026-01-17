@@ -24,6 +24,7 @@ export type MetodoPagoVenta = "EFECTIVO" | "TRANSFERENCIA" | "TARJETA"
 export interface NotificationContext {
   organizationId: string
   organizationName: string
+  organizationSlug?: string
   cliente: {
     id: string
     nombre: string
@@ -51,6 +52,7 @@ export interface NotificationContext {
       diasGarantia: number
     }>
     garantias: Array<{
+      id: string
       numeroGarantia: string
       diasValidez: number
       fechaVencimiento: Date

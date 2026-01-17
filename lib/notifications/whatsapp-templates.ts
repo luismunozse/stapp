@@ -172,6 +172,14 @@ const metodoPagoLabels: Record<MetodoPagoVenta, string> = {
   TARJETA: "tarjeta",
 }
 
+function getBaseUrl(ctx: NotificationContext): string {
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
+  if (ctx.organizationSlug) {
+    return `https://${ctx.organizationSlug}.${rootDomain}`
+  }
+  return `https://${rootDomain}`
+}
+
 function generateVentaConfirmacionMessage(ctx: NotificationContext): string {
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat("es-AR", {
@@ -181,10 +189,13 @@ function generateVentaConfirmacionMessage(ctx: NotificationContext): string {
 
   const venta = ctx.venta!
   const numeroVenta = `V${String(venta.numeroVenta).padStart(4, "0")}`
+  const baseUrl = getBaseUrl(ctx)
 
   let productosTexto = venta.items
     .map((item) => `- ${item.descripcion} x${item.cantidad}`)
     .join("\n")
+
+  const pdfUrl = `${baseUrl}/api/ventas/${venta.id}/pdf`
 
   return `Hola ${ctx.cliente.nombre}, gracias por su compra!
 
@@ -196,6 +207,9 @@ ${productosTexto}
 *Total: ${formatCurrency(venta.total)}*
 Pago: ${metodoPagoLabels[venta.metodoPago]}
 
+Descargar comprobante:
+${pdfUrl}
+
 ${ctx.organizationName}`
 }
 
@@ -203,17 +217,22 @@ function generateVentaGarantiaMessage(ctx: NotificationContext): string {
   const formatDate = (date: Date) => new Date(date).toLocaleDateString("es-AR")
   const venta = ctx.venta!
   const numeroVenta = `V${String(venta.numeroVenta).padStart(4, "0")}`
+  const baseUrl = getBaseUrl(ctx)
 
   let garantiasTexto = venta.garantias
-    .map((g) => `- ${g.numeroGarantia}: ${g.diasValidez} dias (hasta ${formatDate(g.fechaVencimiento)})`)
-    .join("\n")
+    .map((g) => {
+      const pdfUrl = `${baseUrl}/api/ventas/${venta.id}/garantia/${g.id}/pdf`
+      return `*${g.numeroGarantia}*
+${g.diasValidez} dias (hasta ${formatDate(g.fechaVencimiento)})
+Descargar: ${pdfUrl}`
+    })
+    .join("\n\n")
 
   return `Hola ${ctx.cliente.nombre}, su compra (${numeroVenta}) incluye garantia:
 
-*Certificados de Garantia*
 ${garantiasTexto}
 
-Conserve este mensaje como referencia. Puede solicitar los certificados en PDF en cualquier momento.
+Conserve estos certificados como comprobante.
 
 ${ctx.organizationName}`
 }

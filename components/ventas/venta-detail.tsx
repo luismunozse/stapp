@@ -71,12 +71,31 @@ interface VentaDetailProps {
   ventaId: string
 }
 
+interface Organization {
+  id: string
+  slug: string
+  nombre: string
+}
+
 export function VentaDetail({ ventaId }: VentaDetailProps) {
   const router = useRouter()
   const { confirm, showError, showSuccess } = useModal()
   const [venta, setVenta] = useState<VentaDetail | null>(null)
+  const [organization, setOrganization] = useState<Organization | null>(null)
   const [loading, setLoading] = useState(true)
   const [anulando, setAnulando] = useState(false)
+
+  const fetchOrganization = async () => {
+    try {
+      const res = await fetch("/api/auth/user-organization")
+      if (res.ok) {
+        const data = await res.json()
+        setOrganization(data.organization)
+      }
+    } catch (error) {
+      console.error("Error fetching organization:", error)
+    }
+  }
 
   const fetchVenta = async () => {
     try {
@@ -100,6 +119,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
 
   useEffect(() => {
     fetchVenta()
+    fetchOrganization()
   }, [ventaId])
 
   const handleAnular = async () => {
@@ -189,8 +209,9 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
           {venta.clienteTelefono && (
             <WhatsAppDialog
               context={{
-                organizationId: "",
-                organizationName: "",
+                organizationId: organization?.id || "",
+                organizationName: organization?.nombre || "",
+                organizationSlug: organization?.slug,
                 cliente: {
                   id: venta.clienteId || "",
                   nombre: venta.clienteNombre,
@@ -208,6 +229,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                     diasGarantia: item.diasGarantia,
                   })),
                   garantias: venta.garantias.map((g) => ({
+                    id: g.id,
                     numeroGarantia: g.numeroGarantia,
                     diasValidez: g.diasValidez,
                     fechaVencimiento: new Date(g.fechaVencimiento),
