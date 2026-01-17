@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Check, X } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -254,10 +255,22 @@ export function PricingSection() {
           ))}
         </div>
 
-        {/* Money back guarantee */}
-        <p className="text-center text-sm text-muted-foreground mt-12">
-          Garantía de devolución de 30 días. Cancela cuando quieras.
-        </p>
+        {/* Money back guarantee + MercadoPago */}
+        <div className="text-center mt-12 space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Garantía de devolución de 30 días. Cancela cuando quieras.
+          </p>
+          <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+            <span>Pagos seguros con</span>
+            <Image
+              src="/Mercado_Pago.svg.png"
+              alt="MercadoPago"
+              width={100}
+              height={28}
+              className="inline-block"
+            />
+          </div>
+        </div>
       </div>
     </section>
   )

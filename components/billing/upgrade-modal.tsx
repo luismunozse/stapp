@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Image from "next/image"
 import {
   Dialog,
   DialogContent,
@@ -127,10 +128,13 @@ export function UpgradeModal({ open, onClose }: UpgradeModalProps) {
           <div className="space-y-3">
             <label className="text-sm font-medium">Método de pago</label>
             <div className="p-4 rounded-lg border-2 border-primary bg-primary/5 text-center">
-              <div className="h-8 w-8 mx-auto mb-2 bg-[#00A0DF] rounded flex items-center justify-center text-white font-bold">
-                MP
-              </div>
-              <div className="font-medium mb-1">MercadoPago</div>
+              <Image
+                src="/Mercado_Pago.svg.png"
+                alt="MercadoPago"
+                width={120}
+                height={32}
+                className="mx-auto mb-2"
+              />
               <div className="text-xs text-muted-foreground">
                 Tarjeta de crédito, débito, efectivo y más opciones de pago
               </div>
