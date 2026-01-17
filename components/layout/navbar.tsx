@@ -149,6 +149,15 @@ export function Navbar() {
             <Button
               variant="ghost"
               size="icon"
+              className="touch-target text-muted-foreground hover:text-destructive"
+              onClick={handleLogout}
+              aria-label="Cerrar sesión"
+            >
+              <LogOut className="h-5 w-5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
               className="touch-target"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               aria-label={mobileMenuOpen ? "Cerrar menú" : "Abrir menú"}
