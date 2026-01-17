@@ -4,6 +4,7 @@ import { useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
+import { Switch } from "@/components/ui/switch"
 import { Check } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -80,25 +81,11 @@ export function PricingSection() {
               >
                 Mensual
               </span>
-              <button
-                type="button"
-                onClick={() => setAnnual(!annual)}
-                className={cn(
-                  "relative inline-flex h-5 w-9 items-center rounded-full transition-colors border-2",
-                  annual
-                    ? "bg-primary border-primary"
-                    : "bg-muted/50 border-muted-foreground/30"
-                )}
-              >
-                <span
-                  className={cn(
-                    "inline-block h-3.5 w-3.5 transform rounded-full transition-transform shadow-sm",
-                    annual
-                      ? "translate-x-[18px] bg-white"
-                      : "translate-x-0.5 bg-muted-foreground/60"
-                  )}
-                />
-              </button>
+              <Switch
+                checked={annual}
+                onCheckedChange={setAnnual}
+                aria-label="Cambiar entre facturación mensual y anual"
+              />
               <span
                 className={cn(
                   "text-sm font-medium transition-colors",

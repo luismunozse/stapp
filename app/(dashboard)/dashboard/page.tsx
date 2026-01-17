@@ -199,24 +199,24 @@ export default async function DashboardPage() {
       value: totalOrdenes.toString(),
       description: `${ordenesPendientes} pendientes`,
       icon: ClipboardList,
-      colorClass: "text-info",
-      bgClass: "bg-info-50 dark:bg-info-100",
+      colorClass: "text-info-600 dark:text-info-500",
+      bgClass: "bg-info-50 dark:bg-info-100/50",
     },
     {
       title: "Clientes",
       value: totalClientes.toString(),
       description: "Total registrados",
       icon: Users,
-      colorClass: "text-success",
-      bgClass: "bg-success-50 dark:bg-success-100",
+      colorClass: "text-success-600 dark:text-success-500",
+      bgClass: "bg-success-50 dark:bg-success-100/50",
     },
     {
       title: "Bajo Stock",
       value: itemsBajoStock.toString(),
       description: "Items a reponer",
       icon: Package,
-      colorClass: "text-warning-600",
-      bgClass: "bg-warning-50 dark:bg-warning-100",
+      colorClass: "text-warning-600 dark:text-warning-500",
+      bgClass: "bg-warning-50 dark:bg-warning-100/50",
     },
     {
       title: "Ingresos del Mes",
@@ -224,7 +224,7 @@ export default async function DashboardPage() {
       description: "Facturas pagadas",
       icon: DollarSign,
       colorClass: "text-purple-600 dark:text-purple-400",
-      bgClass: "bg-purple-50 dark:bg-purple-900/20",
+      bgClass: "bg-purple-50 dark:bg-purple-900/30",
     },
   ]
 
@@ -238,22 +238,22 @@ export default async function DashboardPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => {
           const Icon = stat.icon
           return (
             <Card key={stat.title} className="transition-shadow hover:shadow-md">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
+                <CardTitle className="text-xs sm:text-sm font-medium text-foreground">
                   {stat.title}
                 </CardTitle>
-                <div className={`p-2 rounded-lg ${stat.bgClass}`}>
-                  <Icon className={`h-4 w-4 ${stat.colorClass}`} />
+                <div className={`p-1.5 sm:p-2 rounded-lg ${stat.bgClass}`}>
+                  <Icon className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${stat.colorClass}`} />
                 </div>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stat.value}</div>
-                <p className="text-caption mt-1">
+              <CardContent className="p-3 sm:p-6 pt-0">
+                <div className="text-lg sm:text-2xl font-bold text-foreground">{stat.value}</div>
+                <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">
                   {stat.description}
                 </p>
               </CardContent>
@@ -283,8 +283,8 @@ export default async function DashboardPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             {garantiasPorVencer.length > 0 && (
-              <div className="p-3 bg-warning-50 dark:bg-warning-100 border border-warning/30 rounded-lg">
-                <div className="flex items-center gap-2 text-warning-700 dark:text-warning-600 font-medium">
+              <div className="p-3 bg-warning-50 dark:bg-warning-100/40 border border-warning/30 dark:border-warning/20 rounded-lg">
+                <div className="flex items-center gap-2 text-warning-700 dark:text-warning-500 font-medium">
                   <Shield className="h-4 w-4" />
                   {garantiasPorVencer.length} garantía{garantiasPorVencer.length > 1 ? "s" : ""} por vencer
                 </div>
@@ -298,17 +298,17 @@ export default async function DashboardPage() {
                       <Link
                         key={g.id}
                         href={`/ordenes/${g.orden_id}`}
-                        className="block text-sm text-warning-600 hover:underline"
+                        className="block text-sm text-warning-700 dark:text-warning-600 hover:underline"
                       >
                         Orden #{g.ordenes_servicio.numero_orden} - {g.ordenes_servicio.clientes?.nombre}
-                        <span className="text-warning-500 ml-1">
+                        <span className="text-warning-600 dark:text-warning-500 ml-1">
                           ({diasRestantes} día{diasRestantes !== 1 ? "s" : ""})
                         </span>
                       </Link>
                     )
                   })}
                   {garantiasPorVencer.length > 3 && (
-                    <p className="text-xs text-warning-500">
+                    <p className="text-xs text-warning-600 dark:text-warning-500">
                       y {garantiasPorVencer.length - 3} más...
                     </p>
                   )}
@@ -317,8 +317,8 @@ export default async function DashboardPage() {
             )}
             {itemsBajoStock > 0 && (
               <Link href="/inventario" className="block">
-                <div className="p-3 bg-warning-50 dark:bg-warning-100 border border-warning/30 rounded-lg hover:bg-warning-100 dark:hover:bg-warning-200 transition-colors">
-                  <div className="flex items-center gap-2 text-warning-700 dark:text-warning-600">
+                <div className="p-3 bg-warning-50 dark:bg-warning-100/40 border border-warning/30 dark:border-warning/20 rounded-lg hover:bg-warning-100 dark:hover:bg-warning-200/40 transition-colors">
+                  <div className="flex items-center gap-2 text-warning-700 dark:text-warning-500">
                     <Package className="h-4 w-4" />
                     {itemsBajoStock} items con stock bajo
                   </div>
@@ -327,8 +327,8 @@ export default async function DashboardPage() {
             )}
             {ordenesPendientes > 0 && (
               <Link href="/ordenes?estado=pendientes" className="block">
-                <div className="p-3 bg-info-50 dark:bg-info-100 border border-info/30 rounded-lg hover:bg-info-100 dark:hover:bg-info-200 transition-colors">
-                  <div className="flex items-center gap-2 text-info-700 dark:text-info-600">
+                <div className="p-3 bg-info-50 dark:bg-info-100/40 border border-info/30 dark:border-info/20 rounded-lg hover:bg-info-100 dark:hover:bg-info-200/40 transition-colors">
+                  <div className="flex items-center gap-2 text-info-700 dark:text-info-500">
                     <ClipboardList className="h-4 w-4" />
                     {ordenesPendientes} órdenes pendientes
                   </div>

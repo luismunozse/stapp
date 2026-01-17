@@ -68,12 +68,12 @@ export function IngresosChart({ data, totalPeriodo }: IngresosChartProps) {
             <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
             <XAxis
               dataKey="fechaFormateada"
-              tick={{ fontSize: 11 }}
+              tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
               tickLine={false}
               axisLine={false}
             />
             <YAxis
-              tick={{ fontSize: 11 }}
+              tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
               tickLine={false}
               axisLine={false}
               tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
@@ -84,8 +84,10 @@ export function IngresosChart({ data, totalPeriodo }: IngresosChartProps) {
                 backgroundColor: "hsl(var(--card))",
                 border: "1px solid hsl(var(--border))",
                 borderRadius: "8px",
+                color: "hsl(var(--card-foreground))",
               }}
-              labelStyle={{ color: "hsl(var(--foreground))" }}
+              labelStyle={{ color: "hsl(var(--card-foreground))" }}
+              itemStyle={{ color: "hsl(var(--card-foreground))" }}
             />
             <Area
               type="monotone"

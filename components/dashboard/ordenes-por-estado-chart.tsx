@@ -86,13 +86,16 @@ export function OrdenesPorEstadoChart({ data }: OrdenesPorEstadoChartProps) {
                 backgroundColor: "hsl(var(--card))",
                 border: "1px solid hsl(var(--border))",
                 borderRadius: "8px",
+                color: "hsl(var(--card-foreground))",
               }}
+              labelStyle={{ color: "hsl(var(--card-foreground))" }}
+              itemStyle={{ color: "hsl(var(--card-foreground))" }}
             />
             <Legend
               layout="horizontal"
               verticalAlign="bottom"
               align="center"
-              wrapperStyle={{ fontSize: "12px" }}
+              wrapperStyle={{ fontSize: "12px", color: "hsl(var(--foreground))" }}
             />
           </PieChart>
         </ResponsiveContainer>

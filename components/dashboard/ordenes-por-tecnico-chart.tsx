@@ -57,11 +57,11 @@ export function OrdenesPorTecnicoChart({ data }: OrdenesPorTecnicoChartProps) {
             margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
           >
             <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} className="stroke-muted" />
-            <XAxis type="number" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+            <XAxis type="number" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} />
             <YAxis
               type="category"
               dataKey="nombre"
-              tick={{ fontSize: 11 }}
+              tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
               tickLine={false}
               axisLine={false}
               width={80}
@@ -78,8 +78,10 @@ export function OrdenesPorTecnicoChart({ data }: OrdenesPorTecnicoChartProps) {
                 backgroundColor: "hsl(var(--card))",
                 border: "1px solid hsl(var(--border))",
                 borderRadius: "8px",
+                color: "hsl(var(--card-foreground))",
               }}
-              labelStyle={{ color: "hsl(var(--foreground))", fontWeight: "bold" }}
+              labelStyle={{ color: "hsl(var(--card-foreground))", fontWeight: "bold" }}
+              itemStyle={{ color: "hsl(var(--card-foreground))" }}
             />
             <Bar dataKey="ordenes" name="ordenes" radius={[0, 4, 4, 0]}>
               {sortedData.map((_, index) => (
