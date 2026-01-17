@@ -71,10 +71,10 @@ export function PricingSection() {
             </div>
 
             {/* Billing toggle */}
-            <div className="flex items-center justify-center gap-4 mb-6">
+            <div className="flex items-center justify-center gap-3 mb-6">
               <span
                 className={cn(
-                  "text-sm font-medium",
+                  "text-sm font-medium transition-colors",
                   !annual ? "text-foreground" : "text-muted-foreground"
                 )}
               >
@@ -84,20 +84,24 @@ export function PricingSection() {
                 type="button"
                 onClick={() => setAnnual(!annual)}
                 className={cn(
-                  "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
-                  annual ? "bg-primary" : "bg-muted"
+                  "relative inline-flex h-5 w-9 items-center rounded-full transition-colors border-2",
+                  annual
+                    ? "bg-primary border-primary"
+                    : "bg-muted/50 border-muted-foreground/30"
                 )}
               >
                 <span
                   className={cn(
-                    "inline-block h-4 w-4 transform rounded-full bg-background transition-transform",
-                    annual ? "translate-x-6" : "translate-x-1"
+                    "inline-block h-3.5 w-3.5 transform rounded-full transition-transform shadow-sm",
+                    annual
+                      ? "translate-x-[18px] bg-white"
+                      : "translate-x-0.5 bg-muted-foreground/60"
                   )}
                 />
               </button>
               <span
                 className={cn(
-                  "text-sm font-medium",
+                  "text-sm font-medium transition-colors",
                   annual ? "text-foreground" : "text-muted-foreground"
                 )}
               >
