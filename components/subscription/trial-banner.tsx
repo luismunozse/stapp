@@ -40,17 +40,17 @@ export function TrialBanner({ daysRemaining }: TrialBannerProps) {
   if (isDismissed) return null
 
   return (
-    <div
-      className={cn(
-        "lg:ml-64 fixed top-14 lg:top-0 left-0 right-0 z-40 px-4 py-2 text-center text-sm font-medium",
-        isCritical
-          ? "bg-red-500 text-white"
-          : isUrgent
-          ? "bg-yellow-500 text-yellow-950"
-          : "bg-gradient-to-r from-blue-500 to-purple-500 text-white"
-      )}
-    >
-      <div className="flex items-center justify-center gap-2 flex-wrap">
+    <div className="lg:ml-64 fixed top-14 lg:top-2 left-0 right-0 z-40 flex justify-center px-4">
+      <div
+        className={cn(
+          "px-4 py-2 text-sm font-medium rounded-full shadow-lg flex items-center gap-2",
+          isCritical
+            ? "bg-red-500 text-white"
+            : isUrgent
+            ? "bg-yellow-500 text-yellow-950"
+            : "bg-gradient-to-r from-blue-500 to-purple-500 text-white"
+        )}
+      >
         <Clock className="h-4 w-4 shrink-0" />
         <span>
           {daysRemaining === 0
