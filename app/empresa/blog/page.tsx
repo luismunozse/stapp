@@ -1,11 +1,29 @@
 import Link from "next/link"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ArrowLeft, Calendar, Clock, ArrowRight } from "lucide-react"
+import { BreadcrumbJsonLd } from "@/components/seo/json-ld"
 
 export const metadata = {
-  title: "Blog - STApp",
-  description: "Consejos, novedades y mejores prácticas para talleres de reparación de dispositivos electrónicos.",
+  title: "Blog",
+  description:
+    "Consejos, novedades y mejores prácticas para talleres de reparación de dispositivos electrónicos. Aprende a gestionar mejor tu negocio.",
+  keywords: [
+    "blog servicio técnico",
+    "consejos taller reparación",
+    "gestión negocio reparaciones",
+    "tips reparación celulares",
+  ],
+  openGraph: {
+    title: "Blog - STApp",
+    description:
+      "Consejos, novedades y mejores prácticas para talleres de reparación.",
+    url: "https://stapp.com.ar/empresa/blog",
+  },
+  alternates: {
+    canonical: "https://stapp.com.ar/empresa/blog",
+  },
 }
 
 const blogPosts = [
@@ -69,6 +87,13 @@ const categories = ["Todos", "Gestión", "Inventario", "Tecnología", "Marketing
 
 export default function BlogPage() {
   return (
+    <>
+      <BreadcrumbJsonLd
+        items={[
+          { name: "Inicio", url: "https://stapp.com.ar" },
+          { name: "Blog", url: "https://stapp.com.ar/empresa/blog" },
+        ]}
+      />
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
       {/* Header */}
       <header className="border-b bg-white">
@@ -121,10 +146,13 @@ export default function BlogPage() {
             {blogPosts.map((post) => (
               <Card key={post.id} className="overflow-hidden hover:shadow-lg transition-shadow">
                 <div className="aspect-video bg-gray-200 relative overflow-hidden">
-                  <img
+                  <Image
                     src={post.image}
                     alt={post.title}
-                    className="w-full h-full object-cover"
+                    fill
+                    sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                    className="object-cover"
+                    loading="lazy"
                   />
                   <div className="absolute top-4 left-4">
                     <span className="bg-primary text-white text-xs font-semibold px-3 py-1 rounded-full">
@@ -204,5 +232,6 @@ export default function BlogPage() {
         </div>
       </footer>
     </div>
+    </>
   )
 }

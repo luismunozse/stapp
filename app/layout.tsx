@@ -4,6 +4,11 @@ import "./globals.css"
 import { PWAInstaller } from "@/components/pwa/pwa-installer"
 import { Providers } from "@/components/providers"
 import { CookieConsent } from "@/components/cookie-consent"
+import {
+  OrganizationJsonLd,
+  SoftwareApplicationJsonLd,
+  WebSiteJsonLd,
+} from "@/components/seo/json-ld"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -137,6 +142,11 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
 
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+
+        {/* Schema Markup JSON-LD */}
+        <OrganizationJsonLd />
+        <SoftwareApplicationJsonLd />
+        <WebSiteJsonLd />
       </head>
       <body className={inter.className}>
         <Providers>

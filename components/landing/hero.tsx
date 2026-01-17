@@ -20,7 +20,7 @@ export function Hero() {
   ]
 
   return (
-    <section className="relative pt-14 pb-6 sm:pt-20 sm:pb-8 overflow-hidden">
+    <section className="relative pt-20 pb-6 sm:pt-24 sm:pb-8 overflow-hidden">
       {/* Background gradient */}
       <div className="absolute inset-0 bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-background dark:via-background dark:to-background" />
 
