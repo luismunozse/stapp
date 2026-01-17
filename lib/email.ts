@@ -1,6 +1,171 @@
 const ENVIALOSIMPLE_API_URL = "https://backend.envialosimple.email/api/v1/mail/send"
 const EMAIL_FROM = process.env.EMAIL_FROM || "noreply@stapp.com.ar"
 
+// ============================================
+// ICONOS SVG
+// ============================================
+const ICONS = {
+  shield: `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>`,
+  lock: `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`,
+  document: `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><line x1="10" x2="8" y1="9" y2="9"/></svg>`,
+}
+
+// ============================================
+// ESTILOS BASE
+// ============================================
+const getEmailStyles = () => `
+  <style>
+    @media (prefers-color-scheme: dark) {
+      .email-body { background-color: #1a1a1a !important; }
+      .email-container { background-color: #1a1a1a !important; }
+      .email-content { background-color: #262626 !important; border-color: #404040 !important; }
+      .email-card { background-color: #333333 !important; border-color: #404040 !important; }
+      .text-heading { color: #f5f5f5 !important; }
+      .text-body { color: #e5e5e5 !important; }
+      .text-muted { color: #a3a3a3 !important; }
+      .text-link { color: #60a5fa !important; }
+      .divider { border-color: #404040 !important; }
+      .footer-section { background-color: #1f1f1f !important; border-color: #404040 !important; }
+    }
+  </style>
+`
+
+const getBaseTemplate = (options: {
+  preheader: string
+  headerGradient?: string
+  content: string
+  footerText?: string
+  rootDomain: string
+}) => {
+  const {
+    preheader,
+    headerGradient = "linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)",
+    content,
+    footerText = "Este correo fue enviado automáticamente. Por favor no respondas a este mensaje.",
+    rootDomain,
+  } = options
+
+  return `
+    <!DOCTYPE html>
+    <html lang="es">
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="color-scheme" content="light dark">
+        <meta name="supported-color-schemes" content="light dark">
+        <title>STApp</title>
+        ${getEmailStyles()}
+      </head>
+      <body class="email-body" style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; background-color: #f3f4f6;">
+
+        <!-- Preheader (texto de preview en inbox) -->
+        <div style="display: none; max-height: 0; overflow: hidden; mso-hide: all;">
+          ${preheader}
+          ${"&nbsp;".repeat(100)}
+        </div>
+
+        <!-- Contenedor principal -->
+        <table class="email-container" role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #f3f4f6;">
+          <tr>
+            <td align="center" style="padding: 40px 20px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px;">
+
+                <!-- Header con logo -->
+                <tr>
+                  <td style="background: ${headerGradient}; padding: 32px 40px; text-align: center; border-radius: 16px 16px 0 0;">
+                    <img src="https://${rootDomain}/logo-white.png" alt="STApp" style="height: 45px; max-width: 160px;" />
+                  </td>
+                </tr>
+
+                <!-- Contenido -->
+                <tr>
+                  <td class="email-content" style="background-color: #ffffff; padding: 40px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 16px 16px;">
+                    ${content}
+                  </td>
+                </tr>
+
+                <!-- Footer -->
+                <tr>
+                  <td class="footer-section" style="padding: 24px 40px; text-align: center;">
+                    <p class="text-muted" style="color: #9ca3af; font-size: 13px; margin: 0 0 12px 0;">
+                      ${footerText}
+                    </p>
+                    <p class="text-muted" style="color: #9ca3af; font-size: 12px; margin: 0;">
+                      <a href="https://${rootDomain}" class="text-link" style="color: #3b82f6; text-decoration: none;">STApp</a>
+                      &nbsp;•&nbsp;
+                      <a href="https://${rootDomain}/ayuda" class="text-link" style="color: #3b82f6; text-decoration: none;">Centro de ayuda</a>
+                    </p>
+                  </td>
+                </tr>
+
+              </table>
+            </td>
+          </tr>
+        </table>
+
+      </body>
+    </html>
+  `
+}
+
+// ============================================
+// COMPONENTES REUTILIZABLES
+// ============================================
+const getButton = (href: string, text: string, color = "#3b82f6") => `
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+      <td align="center" style="padding: 32px 0;">
+        <a href="${href}"
+           style="background: ${color}; color: #ffffff; padding: 16px 32px; text-decoration: none; border-radius: 10px; font-weight: 600; font-size: 16px; display: inline-block; box-shadow: 0 4px 14px 0 rgba(59, 130, 246, 0.3);">
+          ${text}
+        </a>
+      </td>
+    </tr>
+  </table>
+`
+
+const getInfoCard = (content: string, bgColor = "#f9fafb") => `
+  <table class="email-card" role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 24px 0;">
+    <tr>
+      <td style="background-color: ${bgColor}; padding: 24px; border-radius: 12px; border: 1px solid #e5e7eb;">
+        ${content}
+      </td>
+    </tr>
+  </table>
+`
+
+const getDivider = () => `
+  <hr class="divider" style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0;">
+`
+
+const getIconHeader = (icon: string, title: string) => `
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+      <td align="center" style="padding-bottom: 24px;">
+        <div style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); width: 80px; height: 80px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;">
+          <table role="presentation" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); width: 80px; height: 80px; border-radius: 50%; text-align: center; vertical-align: middle;">
+                ${icon}
+              </td>
+            </tr>
+          </table>
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <td align="center">
+        <h1 class="text-heading" style="color: #1f2937; font-size: 24px; font-weight: 700; margin: 0 0 8px 0;">
+          ${title}
+        </h1>
+      </td>
+    </tr>
+  </table>
+`
+
+// ============================================
+// ENVÍO DE EMAIL
+// ============================================
 interface SendEmailParams {
   to: string
   subject: string
@@ -73,57 +238,56 @@ export async function sendVerificationEmail({
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
   const verifyUrl = `https://${slug}.${rootDomain}/verificar-email?token=${token}`
 
+  const content = `
+    ${getIconHeader(ICONS.shield, "¡Bienvenido a STApp!")}
+
+    <p class="text-body" style="color: #4b5563; font-size: 16px; text-align: center; margin: 16px 0 0 0;">
+      Hola <strong>${nombre}</strong>, gracias por registrarte.
+    </p>
+
+    <p class="text-body" style="color: #4b5563; font-size: 16px; text-align: center; margin: 8px 0 0 0;">
+      Para completar tu registro y acceder a tu cuenta, verifica tu correo electrónico.
+    </p>
+
+    ${getButton(verifyUrl, "Verificar mi cuenta")}
+
+    ${getInfoCard(`
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td align="center">
+            <p class="text-muted" style="color: #6b7280; font-size: 14px; margin: 0;">
+              ⏱️ Este enlace expirará en <strong>24 horas</strong>
+            </p>
+          </td>
+        </tr>
+      </table>
+    `)}
+
+    ${getDivider()}
+
+    <p class="text-muted" style="color: #9ca3af; font-size: 13px; text-align: center; margin: 0 0 8px 0;">
+      ¿El botón no funciona? Copia y pega este enlace en tu navegador:
+    </p>
+    <p class="text-link" style="color: #3b82f6; font-size: 12px; word-break: break-all; text-align: center; margin: 0;">
+      ${verifyUrl}
+    </p>
+
+    ${getDivider()}
+
+    <p class="text-muted" style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
+      Si no creaste esta cuenta, puedes ignorar este correo de forma segura.
+    </p>
+  `
+
   return sendEmail({
     to: email,
     subject: "Verifica tu cuenta - STApp",
-    html: `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Verificar cuenta</title>
-        </head>
-        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-            <img src="https://${rootDomain}/logo-white.png" alt="STApp" style="height: 50px; max-width: 180px;">
-          </div>
-
-          <div style="background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 10px 10px;">
-            <h2 style="color: #1f2937; margin-top: 0;">¡Bienvenido ${nombre}!</h2>
-
-            <p style="color: #4b5563;">
-              Gracias por registrarte en STApp. Para completar tu registro y acceder a tu cuenta,
-              necesitas verificar tu dirección de correo electrónico.
-            </p>
-
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="${verifyUrl}"
-                 style="background: #3b82f6; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
-                Verificar mi cuenta
-              </a>
-            </div>
-
-            <p style="color: #6b7280; font-size: 14px;">
-              Este enlace expirará en <strong>24 horas</strong>.
-            </p>
-
-            <p style="color: #6b7280; font-size: 14px;">
-              Si el botón no funciona, copia y pega este enlace en tu navegador:
-            </p>
-            <p style="color: #3b82f6; font-size: 12px; word-break: break-all;">
-              ${verifyUrl}
-            </p>
-
-            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
-
-            <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
-              Si no creaste esta cuenta, puedes ignorar este correo.
-            </p>
-          </div>
-        </body>
-      </html>
-    `,
+    html: getBaseTemplate({
+      preheader: `${nombre}, verifica tu email para activar tu cuenta de STApp`,
+      content,
+      rootDomain,
+      footerText: "Este correo fue enviado porque alguien se registró con esta dirección de email.",
+    }),
   })
 }
 
@@ -143,57 +307,67 @@ export async function sendPasswordResetEmail({
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
   const resetUrl = `https://${slug}.${rootDomain}/reset-password/${token}`
 
+  const lockIconAmber = ICONS.lock.replace('stroke="#f59e0b"', 'stroke="#f59e0b"')
+
+  const content = `
+    ${getIconHeader(lockIconAmber, "Restablecer contraseña")}
+
+    <p class="text-body" style="color: #4b5563; font-size: 16px; text-align: center; margin: 16px 0 0 0;">
+      Hola <strong>${nombre}</strong>,
+    </p>
+
+    <p class="text-body" style="color: #4b5563; font-size: 16px; text-align: center; margin: 8px 0 0 0;">
+      Recibimos una solicitud para restablecer la contraseña de tu cuenta.
+    </p>
+
+    ${getButton(resetUrl, "Restablecer contraseña", "#f59e0b")}
+
+    ${getInfoCard(`
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td align="center">
+            <p class="text-muted" style="color: #6b7280; font-size: 14px; margin: 0;">
+              ⏱️ Por seguridad, este enlace expirará en <strong>1 hora</strong>
+            </p>
+          </td>
+        </tr>
+      </table>
+    `, "#fef3c7")}
+
+    ${getDivider()}
+
+    <p class="text-muted" style="color: #9ca3af; font-size: 13px; text-align: center; margin: 0 0 8px 0;">
+      ¿El botón no funciona? Copia y pega este enlace en tu navegador:
+    </p>
+    <p class="text-link" style="color: #3b82f6; font-size: 12px; word-break: break-all; text-align: center; margin: 0;">
+      ${resetUrl}
+    </p>
+
+    ${getDivider()}
+
+    ${getInfoCard(`
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td align="center">
+            <p class="text-muted" style="color: #92400e; font-size: 13px; margin: 0;">
+              🔒 <strong>Consejo de seguridad:</strong> Si no solicitaste este cambio, ignora este correo. Tu contraseña actual seguirá siendo válida.
+            </p>
+          </td>
+        </tr>
+      </table>
+    `, "#fef3c7")}
+  `
+
   return sendEmail({
     to: email,
     subject: "Restablecer contraseña - STApp",
-    html: `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Restablecer contraseña</title>
-        </head>
-        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-            <img src="https://${rootDomain}/logo-white.png" alt="STApp" style="height: 50px; max-width: 180px;">
-          </div>
-
-          <div style="background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 10px 10px;">
-            <h2 style="color: #1f2937; margin-top: 0;">Hola ${nombre},</h2>
-
-            <p style="color: #4b5563;">
-              Recibimos una solicitud para restablecer la contraseña de tu cuenta.
-              Si no realizaste esta solicitud, puedes ignorar este correo.
-            </p>
-
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="${resetUrl}"
-                 style="background: #3b82f6; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
-                Restablecer Contraseña
-              </a>
-            </div>
-
-            <p style="color: #6b7280; font-size: 14px;">
-              Este enlace expirará en <strong>1 hora</strong>.
-            </p>
-
-            <p style="color: #6b7280; font-size: 14px;">
-              Si el botón no funciona, copia y pega este enlace en tu navegador:
-            </p>
-            <p style="color: #3b82f6; font-size: 12px; word-break: break-all;">
-              ${resetUrl}
-            </p>
-
-            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
-
-            <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
-              Este correo fue enviado automáticamente. Por favor no respondas a este mensaje.
-            </p>
-          </div>
-        </body>
-      </html>
-    `,
+    html: getBaseTemplate({
+      preheader: `${nombre}, usa este enlace para restablecer tu contraseña`,
+      headerGradient: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+      content,
+      rootDomain,
+      footerText: "Recibiste este correo porque alguien solicitó restablecer la contraseña de esta cuenta.",
+    }),
   })
 }
 
@@ -221,8 +395,80 @@ export async function sendCotizacionEmail({
     new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(amount)
 
   const vencimientoText = fechaVencimiento
-    ? `Esta cotización es válida hasta el ${new Date(fechaVencimiento).toLocaleDateString("es-AR")}.`
-    : "Esta cotización no tiene fecha de vencimiento especificada."
+    ? `📅 Válida hasta el <strong>${new Date(fechaVencimiento).toLocaleDateString("es-AR")}</strong>`
+    : "Sin fecha de vencimiento especificada"
+
+  const content = `
+    ${getIconHeader(ICONS.document, "Nueva Cotización")}
+
+    <p class="text-body" style="color: #4b5563; font-size: 16px; text-align: center; margin: 16px 0 0 0;">
+      Hola <strong>${nombreCliente}</strong>,
+    </p>
+
+    <p class="text-body" style="color: #4b5563; font-size: 16px; text-align: center; margin: 8px 0 0 0;">
+      Le enviamos la cotización correspondiente a su orden de servicio.
+    </p>
+
+    ${getInfoCard(`
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td align="center" style="padding-bottom: 16px;">
+            <p class="text-muted" style="color: #6b7280; font-size: 13px; margin: 0; text-transform: uppercase; letter-spacing: 1px;">
+              Total de la cotización
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td align="center" style="padding-bottom: 16px;">
+            <p class="text-heading" style="color: #1f2937; font-size: 36px; font-weight: 700; margin: 0;">
+              ${formatCurrency(total)}
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td align="center">
+            <table role="presentation" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="padding: 8px 16px; background: #eff6ff; border-radius: 6px; margin-right: 8px;">
+                  <p class="text-body" style="color: #1d4ed8; font-size: 13px; margin: 0;">
+                    <strong>Cotización:</strong> ${numeroCotizacion}
+                  </p>
+                </td>
+                <td style="width: 8px;"></td>
+                <td style="padding: 8px 16px; background: #f3f4f6; border-radius: 6px;">
+                  <p class="text-body" style="color: #4b5563; font-size: 13px; margin: 0;">
+                    <strong>Orden:</strong> #${numeroOrden}
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    `, "#ffffff")}
+
+    ${getInfoCard(`
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td align="center">
+            <p class="text-muted" style="color: #6b7280; font-size: 14px; margin: 0;">
+              ${vencimientoText}
+            </p>
+          </td>
+        </tr>
+      </table>
+    `)}
+
+    ${getDivider()}
+
+    <p class="text-body" style="color: #4b5563; font-size: 15px; text-align: center; margin: 0;">
+      📎 <strong>Adjuntamos el PDF</strong> con el detalle completo de la cotización.
+    </p>
+
+    <p class="text-body" style="color: #4b5563; font-size: 15px; text-align: center; margin: 12px 0 0 0;">
+      Si desea aceptar esta cotización o tiene alguna consulta, por favor responda a este correo o contáctenos.
+    </p>
+  `
 
   return sendEmail({
     to: email,
@@ -234,49 +480,11 @@ export async function sendCotizacionEmail({
         type: "application/pdf",
       },
     ],
-    html: `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Cotización ${numeroCotizacion}</title>
-        </head>
-        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-            <img src="https://${rootDomain}/logo-white.png" alt="STApp" style="height: 50px; max-width: 180px;">
-          </div>
-
-          <div style="background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 10px 10px;">
-            <h2 style="color: #1f2937; margin-top: 0;">Hola ${nombreCliente},</h2>
-
-            <p style="color: #4b5563;">
-              Le enviamos la cotización <strong>${numeroCotizacion}</strong> correspondiente a la orden de servicio <strong>#${numeroOrden}</strong>.
-            </p>
-
-            <div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid #e5e7eb; margin: 20px 0;">
-              <div style="text-align: center;">
-                <p style="color: #6b7280; margin: 0 0 5px 0; font-size: 14px;">Total de la cotización</p>
-                <p style="color: #1f2937; margin: 0; font-size: 28px; font-weight: bold;">${formatCurrency(total)}</p>
-              </div>
-            </div>
-
-            <p style="color: #4b5563;">
-              ${vencimientoText}
-            </p>
-
-            <p style="color: #4b5563;">
-              Adjuntamos el documento PDF con el detalle completo. Si tiene alguna consulta o desea aceptar esta cotización, por favor contáctenos.
-            </p>
-
-            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
-
-            <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
-              Este correo fue enviado automáticamente. Por favor responda si desea confirmar o tiene consultas.
-            </p>
-          </div>
-        </body>
-      </html>
-    `,
+    html: getBaseTemplate({
+      preheader: `${nombreCliente}, tu cotización ${numeroCotizacion} por ${formatCurrency(total)} está lista`,
+      content,
+      rootDomain,
+      footerText: "Responde a este correo si deseas confirmar la cotización o tienes consultas.",
+    }),
   })
 }

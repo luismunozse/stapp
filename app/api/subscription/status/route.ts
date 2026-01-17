@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
-import { getSubscriptionInfo, isPremium } from "@/lib/subscriptions"
+import { getSubscriptionInfo, isPremium, getTrialInfo } from "@/lib/subscriptions"
 
 /**
  * GET /api/subscription/status
@@ -12,9 +12,10 @@ export async function GET() {
     const { error, organizationId } = await requireAuth()
     if (error) return error
 
-    const [subscription, premium] = await Promise.all([
+    const [subscription, premium, trialInfo] = await Promise.all([
       getSubscriptionInfo(organizationId!),
       isPremium(organizationId!),
+      getTrialInfo(organizationId!),
     ])
 
     return NextResponse.json({
@@ -29,6 +30,11 @@ export async function GET() {
         clientes: 100,
         storageMb: 100,
       },
+      // Trial info
+      isInTrial: trialInfo.isInTrial,
+      trialEnd: trialInfo.trialEnd?.toISOString() || null,
+      daysRemaining: trialInfo.daysRemaining,
+      isPaid: trialInfo.isPaid,
     })
   } catch (error) {
     console.error("Error fetching subscription status:", error)

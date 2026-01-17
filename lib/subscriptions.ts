@@ -9,6 +9,7 @@ export interface SubscriptionInfo {
   billingPeriod: "MONTHLY" | "YEARLY" | null
   paymentProvider: "MERCADOPAGO" | null
   currentPeriodEnd: string | null
+  trialEnd: string | null
   cancelAtPeriodEnd: boolean
   limits: {
     ordenes: number | null
@@ -17,6 +18,14 @@ export interface SubscriptionInfo {
     storageMb: number | null
   }
   features: string[]
+}
+
+export interface TrialInfo {
+  isInTrial: boolean
+  isTrialExpired: boolean
+  trialEnd: Date | null
+  daysRemaining: number
+  isPaid: boolean
 }
 
 export interface UsageInfo {
@@ -40,6 +49,7 @@ export async function getSubscriptionInfo(
       billing_period,
       payment_provider,
       current_period_end,
+      trial_end,
       cancel_at_period_end,
       plans (
         id,
@@ -70,6 +80,7 @@ export async function getSubscriptionInfo(
     billingPeriod: data.billing_period,
     paymentProvider: data.payment_provider,
     currentPeriodEnd: data.current_period_end,
+    trialEnd: data.trial_end,
     cancelAtPeriodEnd: data.cancel_at_period_end,
     limits: {
       ordenes: plan.limite_ordenes,
@@ -204,10 +215,96 @@ export async function getAvailablePlans() {
   return data || []
 }
 
-// Verificar si la organización tiene plan Premium
+// Obtener información del trial
+export async function getTrialInfo(organizationId: string): Promise<TrialInfo> {
+  const subscription = await getSubscriptionInfo(organizationId)
+
+  if (!subscription) {
+    return {
+      isInTrial: false,
+      isTrialExpired: true, // Sin suscripción = bloqueado
+      trialEnd: null,
+      daysRemaining: 0,
+      isPaid: false,
+    }
+  }
+
+  const now = new Date()
+  const trialEnd = subscription.trialEnd ? new Date(subscription.trialEnd) : null
+  const isInTrial = subscription.status === "TRIALING" && trialEnd !== null
+  const isTrialExpired = isInTrial && trialEnd < now
+  const isPaid = subscription.status === "ACTIVE" && subscription.paymentProvider !== null
+
+  // Calcular días restantes
+  let daysRemaining = 0
+  if (trialEnd && !isTrialExpired) {
+    const diffTime = trialEnd.getTime() - now.getTime()
+    daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    if (daysRemaining < 0) daysRemaining = 0
+  }
+
+  return {
+    isInTrial,
+    isTrialExpired,
+    trialEnd,
+    daysRemaining,
+    isPaid,
+  }
+}
+
+// Verificar si la organización tiene acceso válido (no bloqueado)
+export async function hasValidAccess(organizationId: string): Promise<{
+  hasAccess: boolean
+  reason?: "trial_expired" | "canceled" | "past_due"
+  trialInfo?: TrialInfo
+}> {
+  const subscription = await getSubscriptionInfo(organizationId)
+  const trialInfo = await getTrialInfo(organizationId)
+
+  // Sin suscripción = sin acceso
+  if (!subscription) {
+    return { hasAccess: false, reason: "trial_expired", trialInfo }
+  }
+
+  // Si está en trial y expiró = bloqueado
+  if (trialInfo.isTrialExpired) {
+    return { hasAccess: false, reason: "trial_expired", trialInfo }
+  }
+
+  // Si el status es CANCELED = bloqueado
+  if (subscription.status === "CANCELED") {
+    return { hasAccess: false, reason: "canceled", trialInfo }
+  }
+
+  // Si el pago falló = bloqueado
+  if (subscription.status === "PAST_DUE") {
+    return { hasAccess: false, reason: "past_due", trialInfo }
+  }
+
+  // TRIALING (no expirado) o ACTIVE = tiene acceso
+  return { hasAccess: true, trialInfo }
+}
+
+// Verificar si la organización tiene plan Premium (o está en trial activo)
 export async function isPremium(organizationId: string): Promise<boolean> {
   const subscription = await getSubscriptionInfo(organizationId)
-  return subscription?.planTipo === "PREMIUM" && subscription.status === "ACTIVE"
+
+  if (!subscription) return false
+
+  // Premium pagado y activo
+  if (subscription.planTipo === "PREMIUM" && subscription.status === "ACTIVE") {
+    return true
+  }
+
+  // En trial activo (no expirado) con plan Premium
+  if (subscription.status === "TRIALING" && subscription.planTipo === "PREMIUM") {
+    const trialEnd = subscription.trialEnd ? new Date(subscription.trialEnd) : null
+    if (trialEnd && trialEnd > new Date()) {
+      return true
+    }
+  }
+
+  return false
 }
 
 // Actualizar uso de storage
