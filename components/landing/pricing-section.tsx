@@ -8,25 +8,22 @@ import { cn } from "@/lib/utils"
 
 const plans = [
   {
-    name: "Free",
-    description: "Para empezar a organizar tu taller",
+    name: "Trial 30 días",
+    description: "Prueba todas las funciones sin compromiso",
     priceMonthly: 0,
     priceYearly: 0,
+    isTrial: true,
     features: [
-      { name: "Hasta 50 órdenes/mes", included: true },
-      { name: "2 técnicos", included: true },
-      { name: "2 vendedores", included: true },
-      { name: "100 clientes", included: true },
-      { name: "Ventas y garantías", included: true },
-      { name: "Reportes básicos", included: true },
-      { name: "100MB almacenamiento", included: true },
-      { name: "Soporte por email", included: true },
-      { name: "Órdenes ilimitadas", included: false },
-      { name: "Notificaciones WhatsApp", included: false },
-      { name: "Logo personalizado", included: false },
-      { name: "Soporte prioritario", included: false },
+      { name: "Todas las funciones Premium", included: true },
+      { name: "Órdenes ilimitadas", included: true },
+      { name: "Técnicos ilimitados", included: true },
+      { name: "Vendedores ilimitados", included: true },
+      { name: "Clientes ilimitados", included: true },
+      { name: "Reportes avanzados", included: true },
+      { name: "Notificaciones WhatsApp", included: true },
+      { name: "Sin tarjeta de crédito", included: true },
     ],
-    cta: "Comenzar Gratis",
+    cta: "Comenzar prueba gratis",
     popular: false,
   },
   {
@@ -34,6 +31,7 @@ const plans = [
     description: "Para talleres en crecimiento",
     priceMonthly: 14999,
     priceYearly: 143990,
+    isTrial: false,
     features: [
       { name: "Órdenes ilimitadas", included: true },
       { name: "Técnicos ilimitados", included: true },
@@ -46,7 +44,7 @@ const plans = [
       { name: "Logo personalizado", included: true },
       { name: "Exportación de datos", included: true },
     ],
-    cta: "Actualizar a Premium",
+    cta: "Suscribirse ahora",
     popular: true,
   },
 ]
@@ -70,7 +68,7 @@ export function PricingSection() {
             Precios simples y transparentes
           </h2>
           <p className="text-lg text-muted-foreground mb-8">
-            Comienza gratis y actualiza cuando lo necesites. Sin costos ocultos.
+            Prueba gratis por 30 días. Sin tarjeta de crédito requerida.
           </p>
 
           {/* Billing toggle */}
@@ -152,46 +150,63 @@ export function PricingSection() {
               </div>
 
               <div className="mb-6">
-                <span
-                  className={cn(
-                    "text-4xl font-bold",
-                    plan.popular ? "text-white" : "text-foreground"
-                  )}
-                >
-                  {plan.priceMonthly === 0 ? (
-                    "$0"
-                  ) : (
-                    <>
+                {plan.isTrial ? (
+                  <>
+                    <span
+                      className={cn(
+                        "text-4xl font-bold",
+                        plan.popular ? "text-white" : "text-foreground"
+                      )}
+                    >
+                      Gratis
+                    </span>
+                    <p
+                      className={cn(
+                        "text-sm mt-1",
+                        plan.popular ? "text-white/80" : "text-muted-foreground"
+                      )}
+                    >
+                      por 30 días
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <span
+                      className={cn(
+                        "text-4xl font-bold",
+                        plan.popular ? "text-white" : "text-foreground"
+                      )}
+                    >
                       $
                       {formatPrice(
                         annual
                           ? Math.round(plan.priceYearly / 12)
                           : plan.priceMonthly
                       )}
-                    </>
-                  )}
-                </span>
-                <span
-                  className={cn(
-                    "text-sm",
-                    plan.popular ? "text-white/80" : "text-muted-foreground"
-                  )}
-                >
-                  /mes
-                </span>
-                {annual && plan.priceYearly > 0 && (
-                  <p
-                    className={cn(
-                      "text-xs mt-1",
-                      plan.popular ? "text-white/60" : "text-muted-foreground"
+                    </span>
+                    <span
+                      className={cn(
+                        "text-sm",
+                        plan.popular ? "text-white/80" : "text-muted-foreground"
+                      )}
+                    >
+                      /mes
+                    </span>
+                    {annual && plan.priceYearly > 0 && (
+                      <p
+                        className={cn(
+                          "text-xs mt-1",
+                          plan.popular ? "text-white/60" : "text-muted-foreground"
+                        )}
+                      >
+                        Facturado anualmente (${formatPrice(plan.priceYearly)})
+                      </p>
                     )}
-                  >
-                    Facturado anualmente (${formatPrice(plan.priceYearly)})
-                  </p>
+                  </>
                 )}
               </div>
 
-              <Link href={plan.name === "Free" ? "/registro" : "/registro"}>
+              <Link href="/registro">
                 <Button
                   className={cn(
                     "w-full mb-6",

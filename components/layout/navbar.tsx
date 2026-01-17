@@ -21,8 +21,6 @@ import {
   MoreHorizontal,
   TrendingUp,
   ShoppingCart,
-  Crown,
-  PieChart,
 } from "lucide-react"
 import { useState, useEffect } from "react"
 import { cn } from "@/lib/utils"
@@ -38,7 +36,6 @@ const navItems = [
   { href: "/inventario", label: "Inventario", icon: Package },
   { href: "/facturacion", label: "Facturación", icon: FileText },
   { href: "/reportes", label: "Reportes", icon: BarChart3 },
-  { href: "/reportes-avanzados", label: "Reportes Pro", icon: PieChart, premium: true },
 ]
 
 // Items principales para el bottom nav (los 4 más usados)
@@ -110,7 +107,6 @@ export function Navbar() {
             {allNavItems.map((item) => {
               const Icon = item.icon
               const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
-              const isPremiumItem = 'premium' in item && item.premium
               return (
                 <Link
                   key={item.href}
@@ -124,9 +120,6 @@ export function Navbar() {
                 >
                   <Icon className="mr-3 h-5 w-5" />
                   {item.label}
-                  {isPremiumItem && (
-                    <Crown className="ml-auto h-4 w-4 text-yellow-500" />
-                  )}
                 </Link>
               )
             })}
@@ -193,7 +186,6 @@ export function Navbar() {
             {allNavItems.map((item) => {
               const Icon = item.icon
               const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
-              const isPremiumItem = 'premium' in item && item.premium
               return (
                 <Link
                   key={item.href}
@@ -209,9 +201,6 @@ export function Navbar() {
                 >
                   <Icon className="mr-3 h-5 w-5 flex-shrink-0" />
                   {item.label}
-                  {isPremiumItem && (
-                    <Crown className="ml-auto h-4 w-4 text-yellow-500" />
-                  )}
                 </Link>
               )
             })}

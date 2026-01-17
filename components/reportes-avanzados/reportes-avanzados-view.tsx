@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Crown, TrendingUp, Users, Package, BarChart3 } from "lucide-react"
+import { TrendingUp, Users, Package, BarChart3 } from "lucide-react"
 import { ComparativaIngresos } from "./comparativa-ingresos"
 import { PerformanceTecnicos } from "./performance-tecnicos"
 import { TopClientes } from "./top-clientes"
@@ -14,16 +14,11 @@ export function ReportesAvanzadosView() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="p-2 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg">
-          <Crown className="h-6 w-6 text-yellow-600 dark:text-yellow-500" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold">Reportes Avanzados</h1>
-          <p className="text-muted-foreground">
-            Analiza el rendimiento de tu taller con métricas detalladas
-          </p>
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold">Reportes</h1>
+        <p className="text-muted-foreground">
+          Analiza el rendimiento de tu taller con métricas detalladas
+        </p>
       </div>
 
       {/* Tabs */}
