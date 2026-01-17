@@ -18,6 +18,9 @@ export type EstadoOrden =
   | "CANCELADO"
   | "SIN_REPARACION"
 
+export type EstadoVenta = "COMPLETADA" | "ANULADA"
+export type MetodoPagoVenta = "EFECTIVO" | "TRANSFERENCIA" | "TARJETA"
+
 export interface NotificationContext {
   organizationId: string
   organizationName: string
@@ -35,6 +38,23 @@ export interface NotificationContext {
     estadoAnterior?: EstadoOrden
     presupuesto?: number | null
     fechaCompletado?: Date | null
+  }
+  venta?: {
+    id: string
+    numeroVenta: number
+    total: number
+    metodoPago: MetodoPagoVenta
+    estado: EstadoVenta
+    items: Array<{
+      descripcion: string
+      cantidad: number
+      diasGarantia: number
+    }>
+    garantias: Array<{
+      numeroGarantia: string
+      diasValidez: number
+      fechaVencimiento: Date
+    }>
   }
   garantia?: {
     id: string

@@ -1,4 +1,4 @@
-import { EstadoOrden, NotificationContext } from "./types"
+import { EstadoOrden, NotificationContext, MetodoPagoVenta } from "./types"
 
 export interface WhatsAppTemplate {
   id: string
@@ -61,6 +61,30 @@ export function getWhatsAppTemplates(ctx: NotificationContext): WhatsAppTemplate
       id: "garantia",
       nombre: "Informar garantia",
       mensaje: generateGarantiaMessage(ctx),
+    })
+  }
+
+  // Plantillas para ventas
+  if (ctx.venta) {
+    templates.push({
+      id: "venta_confirmacion",
+      nombre: "Confirmacion de compra",
+      mensaje: generateVentaConfirmacionMessage(ctx),
+    })
+
+    // Si tiene garantías
+    if (ctx.venta.garantias.length > 0) {
+      templates.push({
+        id: "venta_garantia",
+        nombre: "Informar garantias",
+        mensaje: generateVentaGarantiaMessage(ctx),
+      })
+    }
+
+    templates.push({
+      id: "venta_agradecimiento",
+      nombre: "Agradecimiento",
+      mensaje: generateVentaAgradecimientoMessage(ctx),
     })
   }
 
@@ -137,6 +161,69 @@ function generateSeguimientoMessage(ctx: NotificationContext): string {
   return `Hola ${ctx.cliente.nombre}, nos comunicamos por su ${ctx.orden!.dispositivo} (Orden #${ctx.orden!.numeroOrden}).
 
 [Escriba su mensaje aqui]
+
+${ctx.organizationName}`
+}
+
+// Funciones para plantillas de ventas
+const metodoPagoLabels: Record<MetodoPagoVenta, string> = {
+  EFECTIVO: "efectivo",
+  TRANSFERENCIA: "transferencia",
+  TARJETA: "tarjeta",
+}
+
+function generateVentaConfirmacionMessage(ctx: NotificationContext): string {
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat("es-AR", {
+      style: "currency",
+      currency: "ARS",
+    }).format(amount)
+
+  const venta = ctx.venta!
+  const numeroVenta = `V${String(venta.numeroVenta).padStart(4, "0")}`
+
+  let productosTexto = venta.items
+    .map((item) => `- ${item.descripcion} x${item.cantidad}`)
+    .join("\n")
+
+  return `Hola ${ctx.cliente.nombre}, gracias por su compra!
+
+*Comprobante de Venta ${numeroVenta}*
+
+Productos:
+${productosTexto}
+
+*Total: ${formatCurrency(venta.total)}*
+Pago: ${metodoPagoLabels[venta.metodoPago]}
+
+${ctx.organizationName}`
+}
+
+function generateVentaGarantiaMessage(ctx: NotificationContext): string {
+  const formatDate = (date: Date) => new Date(date).toLocaleDateString("es-AR")
+  const venta = ctx.venta!
+  const numeroVenta = `V${String(venta.numeroVenta).padStart(4, "0")}`
+
+  let garantiasTexto = venta.garantias
+    .map((g) => `- ${g.numeroGarantia}: ${g.diasValidez} dias (hasta ${formatDate(g.fechaVencimiento)})`)
+    .join("\n")
+
+  return `Hola ${ctx.cliente.nombre}, su compra (${numeroVenta}) incluye garantia:
+
+*Certificados de Garantia*
+${garantiasTexto}
+
+Conserve este mensaje como referencia. Puede solicitar los certificados en PDF en cualquier momento.
+
+${ctx.organizationName}`
+}
+
+function generateVentaAgradecimientoMessage(ctx: NotificationContext): string {
+  return `Hola ${ctx.cliente.nombre}, gracias por elegirnos!
+
+Esperamos que disfrute su compra. Si tiene alguna consulta, no dude en contactarnos.
+
+Lo esperamos pronto!
 
 ${ctx.organizationName}`
 }

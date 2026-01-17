@@ -19,6 +19,8 @@ import {
   Download,
 } from "lucide-react"
 import Link from "next/link"
+import { WhatsAppDialog } from "@/components/ordenes/whatsapp-dialog"
+import type { MetodoPagoVenta } from "@/lib/notifications/types"
 
 interface VentaItem {
   id: string
@@ -184,6 +186,36 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
         </div>
 
         <div className="flex gap-2">
+          {venta.clienteTelefono && (
+            <WhatsAppDialog
+              context={{
+                organizationId: "",
+                organizationName: "",
+                cliente: {
+                  id: venta.clienteId || "",
+                  nombre: venta.clienteNombre,
+                  telefono: venta.clienteTelefono,
+                },
+                venta: {
+                  id: venta.id,
+                  numeroVenta: venta.numeroVenta,
+                  total: venta.total,
+                  metodoPago: venta.metodoPago as MetodoPagoVenta,
+                  estado: venta.estado as "COMPLETADA" | "ANULADA",
+                  items: venta.items.map((item) => ({
+                    descripcion: item.descripcion,
+                    cantidad: item.cantidad,
+                    diasGarantia: item.diasGarantia,
+                  })),
+                  garantias: venta.garantias.map((g) => ({
+                    numeroGarantia: g.numeroGarantia,
+                    diasValidez: g.diasValidez,
+                    fechaVencimiento: new Date(g.fechaVencimiento),
+                  })),
+                },
+              }}
+            />
+          )}
           <Button
             variant="outline"
             onClick={() => window.open(`/api/ventas/${ventaId}/pdf`, "_blank")}
