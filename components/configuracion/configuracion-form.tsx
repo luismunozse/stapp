@@ -160,8 +160,8 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
         <div
           className={`px-4 py-3 rounded ${
             message.type === "success"
-              ? "bg-green-50 border border-green-200 text-green-700"
-              : "bg-red-50 border border-red-200 text-red-700"
+              ? "bg-green-500/10 border border-green-500/30 text-green-600 dark:text-green-400"
+              : "bg-destructive/10 border border-destructive/30 text-destructive"
           }`}
         >
           {message.text}
@@ -177,7 +177,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center gap-4">
-            <div className="w-24 h-24 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center overflow-hidden bg-gray-50">
+            <div className="w-24 h-24 border-2 border-dashed border-border rounded-lg flex items-center justify-center overflow-hidden bg-muted">
               {preview ? (
                 <img
                   src={preview}
@@ -185,7 +185,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
                   className="max-w-full max-h-full object-contain"
                 />
               ) : (
-                <ImageIcon className="h-8 w-8 text-gray-400" />
+                <ImageIcon className="h-8 w-8 text-muted-foreground" />
               )}
             </div>
             <div className="space-y-2">

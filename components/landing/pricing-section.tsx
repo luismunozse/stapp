@@ -15,7 +15,9 @@ const plans = [
     features: [
       { name: "Hasta 50 órdenes/mes", included: true },
       { name: "2 técnicos", included: true },
+      { name: "2 vendedores", included: true },
       { name: "100 clientes", included: true },
+      { name: "Ventas y garantías", included: true },
       { name: "Reportes básicos", included: true },
       { name: "100MB almacenamiento", included: true },
       { name: "Soporte por email", included: true },
@@ -35,6 +37,7 @@ const plans = [
     features: [
       { name: "Órdenes ilimitadas", included: true },
       { name: "Técnicos ilimitados", included: true },
+      { name: "Vendedores ilimitados", included: true },
       { name: "Clientes ilimitados", included: true },
       { name: "Reportes avanzados", included: true },
       { name: "5GB almacenamiento", included: true },

@@ -19,6 +19,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { OrdenForm } from "./orden-form"
 import { useModal } from "@/contexts/modal-context"
+import { ExportButton } from "@/components/export/export-button"
 import { formatDate, formatCurrency } from "@/lib/utils"
 import type { OrdenServicio, EstadoOrden } from "@/types"
 
@@ -279,6 +280,16 @@ export function OrdenesList() {
               </span>
             )}
           </Button>
+          <ExportButton
+            entity="ordenes"
+            filters={{
+              ...(estado && { estado }),
+              ...(fechaDesde && { desde: fechaDesde }),
+              ...(fechaHasta && { hasta: fechaHasta }),
+            }}
+            variant="outline"
+            size="sm"
+          />
           <Button onClick={() => setShowForm(true)} className="gap-2">
             <Plus className="h-4 w-4" />
             Nueva Orden

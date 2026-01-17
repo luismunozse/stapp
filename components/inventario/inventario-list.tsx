@@ -17,6 +17,7 @@ import {
 } from "lucide-react"
 import { InventarioForm } from "./inventario-form"
 import { ImportModal } from "@/components/import/import-modal"
+import { ExportButton } from "@/components/export/export-button"
 import { formatCurrency } from "@/lib/utils"
 import type { Inventario, TipoDispositivo, TipoDispositivoCustom } from "@/types"
 import { useModal } from "@/contexts/modal-context"
@@ -152,6 +153,14 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
           </Select>
         </div>
         <div className="flex flex-wrap gap-2">
+          <ExportButton
+            entity="inventario"
+            filters={{
+              ...(categoria && { categoria }),
+              ...(tipoDispositivo && { tipo_dispositivo: tipoDispositivo }),
+            }}
+            variant="outline"
+          />
           {allowImport && (
             <Button onClick={() => setShowImport(true)} variant="outline" className="gap-2">
               <Upload className="h-4 w-4" />

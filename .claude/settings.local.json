@@ -35,7 +35,9 @@
       "Bash(if exist .next rmdir /s /q .next)",
       "Bash(timeout /t 10 /nobreak)",
       "Bash(ping:*)",
-      "Bash(timeout /t 20 /nobreak)"
+      "Bash(timeout /t 20 /nobreak)",
+      "Bash(stats)",
+      "Bash(analytics \")"
     ]
   }
 }

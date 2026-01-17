@@ -1711,7 +1711,8 @@ export async function generateGarantiaVentaPDF(data: GarantiaVentaPDFData): Prom
     page.drawText(direccionEmpresa, { x: margin + 10 + logoWidth, y, size: 9, font: helvetica, color: grayColor })
   }
 
-  y = height - margin - 80
+  // Espacio adicional después del header para evitar superposición con el título
+  y = height - margin - 100
 
   // === TITULO PRINCIPAL ===
   page.drawRectangle({
@@ -1837,4 +1838,310 @@ export async function generateGarantiaVentaPDF(data: GarantiaVentaPDFData): Prom
   return Buffer.from(pdfBytes)
 }
 
-export type { CotizacionPDFData, CotizacionItem, OrdenPDFData, VentaPDFData, VentaItem, GarantiaVentaPDFData }
+// ========================================
+// COMPROBANTE DE ENTREGA
+// ========================================
+
+interface ComprobanteEntregaPDFData {
+  numeroOrden: number
+  codigoOrden?: string | null
+  fechaIngreso: Date
+  fechaEntrega: Date
+  cliente: {
+    nombre: string
+    telefono: string
+    email?: string | null
+  }
+  dispositivo: string
+  tipoDispositivo: string
+  marca?: string | null
+  problemaReportado: string
+  diagnostico?: string | null
+  // Firmas
+  firmaClienteEntrega: string // base64
+  firmaClienteMime: string
+  firmaEncargadoEntrega: string // base64
+  firmaEncargadoMime: string
+  entregadoPor: string // nombre del usuario
+  notasEntrega?: string | null
+  // Empresa
+  nombreEmpresa?: string
+  telefonoEmpresa?: string | null
+  direccionEmpresa?: string | null
+  logoUrl?: string | null
+}
+
+export async function generateComprobanteEntregaPDF(data: ComprobanteEntregaPDFData): Promise<Buffer> {
+  const safe = (val: unknown): string => {
+    if (val === null || val === undefined) return ""
+    if (typeof val === "string") return val
+    if (typeof val === "number") return String(val)
+    return ""
+  }
+
+  const formatDatePDF = (date: Date | string | null | undefined): string => {
+    if (!date) return ""
+    const d = new Date(date)
+    if (isNaN(d.getTime())) return ""
+    return d.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" })
+  }
+
+  const formatDateTimePDF = (date: Date | string | null | undefined): string => {
+    if (!date) return ""
+    const d = new Date(date)
+    if (isNaN(d.getTime())) return ""
+    return d.toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
+  }
+
+  // Extraer datos
+  const empresaNombre = safe(data.nombreEmpresa) || "Servicio Tecnico"
+  const telefonoEmpresa = safe(data.telefonoEmpresa)
+  const direccionEmpresa = safe(data.direccionEmpresa)
+  const numeroOrden = data.numeroOrden
+  const codigoOrden = safe(data.codigoOrden)
+  const fechaIngreso = formatDatePDF(data.fechaIngreso)
+  const fechaEntrega = formatDateTimePDF(data.fechaEntrega)
+  const clienteNombre = safe(data.cliente?.nombre) || "Sin nombre"
+  const clienteTelefono = safe(data.cliente?.telefono)
+  const clienteEmail = safe(data.cliente?.email)
+  const dispositivo = safe(data.dispositivo)
+  const tipoDispositivo = safe(data.tipoDispositivo)
+  const marca = safe(data.marca)
+  const problemaReportado = safe(data.problemaReportado)
+  const diagnostico = safe(data.diagnostico)
+  const entregadoPor = safe(data.entregadoPor)
+  const notasEntrega = safe(data.notasEntrega)
+
+  // Crear documento PDF
+  const pdfDoc = await PDFLib.create()
+  const page = pdfDoc.addPage([595, 842]) // A4
+  const { width, height } = page.getSize()
+
+  // Cargar fuentes
+  const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica)
+  const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
+
+  // Colores modernos (Indigo theme)
+  const primaryColor = rgb(0.388, 0.400, 0.945) // #6366f1
+  const textColor = rgb(0.118, 0.161, 0.231) // #1e293b
+  const grayColor = rgb(0.392, 0.455, 0.545) // #64748b
+  const lightGray = rgb(0.886, 0.910, 0.941) // #e2e8f0
+  const bgGray = rgb(0.973, 0.980, 0.988) // #f8fafc
+  const greenColor = rgb(0.134, 0.545, 0.373)
+  const greenBg = rgb(0.863, 0.949, 0.898)
+  const white = rgb(1, 1, 1)
+
+  const margin = 40
+  const contentWidth = width - (margin * 2)
+  const cardGap = 10
+  const halfWidth = (contentWidth - cardGap) / 2
+
+  // === BARRA DE ACENTO SUPERIOR ===
+  page.drawRectangle({ x: 0, y: height - 10, width, height: 10, color: greenColor })
+
+  let y = height - margin - 15
+
+  // === LOGO (si existe) ===
+  let logoWidth = 0
+  if (data.logoUrl) {
+    try {
+      const logoResponse = await fetch(data.logoUrl)
+      if (logoResponse.ok) {
+        const logoArrayBuffer = await logoResponse.arrayBuffer()
+        const logoBytes = new Uint8Array(logoArrayBuffer)
+        let logoImage
+        const contentType = logoResponse.headers.get("content-type") || ""
+        if (contentType.includes("png") || data.logoUrl.toLowerCase().includes(".png")) {
+          logoImage = await pdfDoc.embedPng(logoBytes)
+        } else if (contentType.includes("jpeg") || contentType.includes("jpg")) {
+          logoImage = await pdfDoc.embedJpg(logoBytes)
+        }
+        if (logoImage) {
+          const logoDims = logoImage.scale(1)
+          const maxLogoHeight = 45
+          const maxLogoWidth = 60
+          const scale = Math.min(maxLogoHeight / logoDims.height, maxLogoWidth / logoDims.width)
+          const scaledWidth = logoDims.width * scale
+          const scaledHeight = logoDims.height * scale
+          page.drawImage(logoImage, { x: margin, y: y - scaledHeight + 5, width: scaledWidth, height: scaledHeight })
+          logoWidth = scaledWidth + 12
+        }
+      }
+    } catch (logoError) {
+      console.error("Error loading logo:", logoError)
+    }
+  }
+
+  // === HEADER - Empresa ===
+  page.drawText(empresaNombre, { x: margin + logoWidth, y, size: 18, font: helveticaBold, color: textColor })
+  y -= 14
+  if (telefonoEmpresa) {
+    page.drawText(`Tel: ${telefonoEmpresa}`, { x: margin + logoWidth, y, size: 9, font: helvetica, color: grayColor })
+    y -= 11
+  }
+  if (direccionEmpresa) {
+    page.drawText(direccionEmpresa, { x: margin + logoWidth, y, size: 9, font: helvetica, color: grayColor })
+  }
+
+  // === BADGE ENTREGA (lado derecho) ===
+  const badgeText = "ENTREGA"
+  const badgeWidth = helveticaBold.widthOfTextAtSize(badgeText, 10) + 20
+  page.drawRectangle({ x: width - margin - badgeWidth, y: height - margin - 25, width: badgeWidth, height: 22, color: greenColor })
+  page.drawText(badgeText, { x: width - margin - badgeWidth + 10, y: height - margin - 19, size: 10, font: helveticaBold, color: white })
+
+  // Numero de orden grande
+  const ordenDisplay = codigoOrden || `#${String(numeroOrden).padStart(4, "0")}`
+  const ordenTextWidth = helveticaBold.widthOfTextAtSize(ordenDisplay, 20)
+  page.drawText(ordenDisplay, { x: width - margin - ordenTextWidth, y: height - margin - 50, size: 20, font: helveticaBold, color: textColor })
+
+  y = height - margin - 90
+
+  // === TITULO ===
+  const titleText = "COMPROBANTE DE ENTREGA"
+  const titleWidth = helveticaBold.widthOfTextAtSize(titleText, 14)
+  page.drawText(titleText, { x: (width - titleWidth) / 2, y, size: 14, font: helveticaBold, color: greenColor })
+  y -= 25
+
+  // === GRID: CLIENTE | DISPOSITIVO ===
+  const cardHeight = 70
+
+  // Card Cliente
+  page.drawRectangle({ x: margin, y: y - cardHeight, width: halfWidth, height: cardHeight, color: bgGray })
+  page.drawText("CLIENTE", { x: margin + 12, y: y - 12, size: 9, font: helveticaBold, color: primaryColor })
+  page.drawText(clienteNombre.substring(0, 28), { x: margin + 12, y: y - 28, size: 10, font: helveticaBold, color: textColor })
+  page.drawText(`Tel: ${clienteTelefono}`, { x: margin + 12, y: y - 42, size: 9, font: helvetica, color: grayColor })
+  if (clienteEmail) {
+    page.drawText(clienteEmail.substring(0, 25), { x: margin + 12, y: y - 55, size: 8, font: helvetica, color: grayColor })
+  }
+
+  // Card Dispositivo
+  const cardX2 = margin + halfWidth + cardGap
+  page.drawRectangle({ x: cardX2, y: y - cardHeight, width: halfWidth, height: cardHeight, color: bgGray })
+  page.drawText("DISPOSITIVO", { x: cardX2 + 12, y: y - 12, size: 9, font: helveticaBold, color: primaryColor })
+  page.drawText(dispositivo.substring(0, 25), { x: cardX2 + 12, y: y - 28, size: 10, font: helveticaBold, color: textColor })
+  page.drawText(tipoDispositivo, { x: cardX2 + 12, y: y - 42, size: 9, font: helvetica, color: grayColor })
+  if (marca) {
+    page.drawText(`Marca: ${marca}`, { x: cardX2 + 12, y: y - 55, size: 8, font: helvetica, color: grayColor })
+  }
+
+  y -= cardHeight + 15
+
+  // === FECHAS ===
+  page.drawRectangle({ x: margin, y: y - 35, width: contentWidth, height: 40, color: greenBg, borderColor: greenColor, borderWidth: 1 })
+  page.drawText("Ingreso:", { x: margin + 15, y: y - 10, size: 9, font: helveticaBold, color: grayColor })
+  page.drawText(fechaIngreso, { x: margin + 65, y: y - 10, size: 10, font: helvetica, color: textColor })
+  page.drawText("Entrega:", { x: margin + 200, y: y - 10, size: 9, font: helveticaBold, color: grayColor })
+  page.drawText(fechaEntrega, { x: margin + 250, y: y - 10, size: 10, font: helveticaBold, color: greenColor })
+  page.drawText("Entregado por:", { x: margin + 15, y: y - 25, size: 9, font: helveticaBold, color: grayColor })
+  page.drawText(entregadoPor, { x: margin + 100, y: y - 25, size: 10, font: helvetica, color: textColor })
+
+  y -= 55
+
+  // === PROBLEMA / DIAGNOSTICO ===
+  page.drawText("TRABAJO REALIZADO", { x: margin, y, size: 9, font: helveticaBold, color: primaryColor })
+  y -= 12
+
+  page.drawRectangle({ x: margin, y: y - 50, width: contentWidth, height: 55, color: bgGray, borderColor: lightGray, borderWidth: 1 })
+  page.drawText("Problema:", { x: margin + 10, y: y - 12, size: 8, font: helveticaBold, color: grayColor })
+  page.drawText(problemaReportado.substring(0, 70), { x: margin + 60, y: y - 12, size: 9, font: helvetica, color: textColor })
+  if (diagnostico) {
+    page.drawText("Diagnostico:", { x: margin + 10, y: y - 28, size: 8, font: helveticaBold, color: grayColor })
+    page.drawText(diagnostico.substring(0, 65), { x: margin + 70, y: y - 28, size: 9, font: helvetica, color: textColor })
+  }
+
+  y -= 70
+
+  // === NOTAS DE ENTREGA (si hay) ===
+  if (notasEntrega) {
+    page.drawText("NOTAS DE ENTREGA", { x: margin, y, size: 9, font: helveticaBold, color: primaryColor })
+    y -= 12
+    page.drawText(notasEntrega.substring(0, 80), { x: margin, y, size: 9, font: helvetica, color: textColor })
+    y -= 20
+  }
+
+  // === SECCION DE FIRMAS ===
+  y -= 10
+  page.drawLine({ start: { x: margin, y: y + 10 }, end: { x: width - margin, y: y + 10 }, thickness: 1, color: lightGray })
+
+  page.drawText("FIRMAS DE CONFORMIDAD", { x: margin, y: y - 5, size: 10, font: helveticaBold, color: primaryColor })
+  y -= 25
+
+  // Incrustar firma del cliente
+  const firmaClienteX = margin
+  const firmaEncargadoX = margin + halfWidth + cardGap
+
+  // Card Firma Cliente
+  page.drawRectangle({ x: firmaClienteX, y: y - 100, width: halfWidth, height: 105, color: bgGray })
+  page.drawText("CLIENTE (quien recibe)", { x: firmaClienteX + 12, y: y - 12, size: 8, font: helveticaBold, color: grayColor })
+
+  // Incrustar imagen de firma del cliente
+  try {
+    const firmaClienteBytes = Uint8Array.from(atob(data.firmaClienteEntrega), c => c.charCodeAt(0))
+    const firmaClienteImage = await pdfDoc.embedPng(firmaClienteBytes)
+    const clienteDims = firmaClienteImage.scale(1)
+    const clienteScale = Math.min(100 / clienteDims.width, 50 / clienteDims.height)
+    page.drawImage(firmaClienteImage, {
+      x: firmaClienteX + (halfWidth - clienteDims.width * clienteScale) / 2,
+      y: y - 70,
+      width: clienteDims.width * clienteScale,
+      height: clienteDims.height * clienteScale,
+    })
+  } catch (e) {
+    console.error("Error embedding client signature:", e)
+  }
+
+  page.drawLine({ start: { x: firmaClienteX + 20, y: y - 80 }, end: { x: firmaClienteX + halfWidth - 20, y: y - 80 }, thickness: 1, color: grayColor })
+  page.drawText(clienteNombre.substring(0, 25), { x: firmaClienteX + 30, y: y - 92, size: 8, font: helvetica, color: textColor })
+
+  // Card Firma Encargado
+  page.drawRectangle({ x: firmaEncargadoX, y: y - 100, width: halfWidth, height: 105, color: bgGray })
+  page.drawText("ENCARGADO (quien entrega)", { x: firmaEncargadoX + 12, y: y - 12, size: 8, font: helveticaBold, color: grayColor })
+
+  // Incrustar imagen de firma del encargado
+  try {
+    const firmaEncargadoBytes = Uint8Array.from(atob(data.firmaEncargadoEntrega), c => c.charCodeAt(0))
+    const firmaEncargadoImage = await pdfDoc.embedPng(firmaEncargadoBytes)
+    const encargadoDims = firmaEncargadoImage.scale(1)
+    const encargadoScale = Math.min(100 / encargadoDims.width, 50 / encargadoDims.height)
+    page.drawImage(firmaEncargadoImage, {
+      x: firmaEncargadoX + (halfWidth - encargadoDims.width * encargadoScale) / 2,
+      y: y - 70,
+      width: encargadoDims.width * encargadoScale,
+      height: encargadoDims.height * encargadoScale,
+    })
+  } catch (e) {
+    console.error("Error embedding staff signature:", e)
+  }
+
+  page.drawLine({ start: { x: firmaEncargadoX + 20, y: y - 80 }, end: { x: firmaEncargadoX + halfWidth - 20, y: y - 80 }, thickness: 1, color: grayColor })
+  page.drawText(entregadoPor.substring(0, 25), { x: firmaEncargadoX + 30, y: y - 92, size: 8, font: helvetica, color: textColor })
+
+  // === FOOTER ===
+  const footerTop = 80
+  page.drawRectangle({ x: margin, y: 25, width: contentWidth, height: footerTop - 20, color: bgGray })
+
+  page.drawText("TERMINOS DE ENTREGA", { x: margin + 10, y: footerTop - 5, size: 7, font: helveticaBold, color: grayColor })
+  const terminos = [
+    "• Al firmar este documento, el cliente confirma haber recibido el equipo en condiciones satisfactorias.",
+    "• La garantia del servicio aplica segun lo acordado. Consulte las condiciones especificas.",
+    "• Conserve este comprobante como prueba de entrega del equipo.",
+  ]
+  let termY = footerTop - 18
+  terminos.forEach(t => {
+    page.drawText(t, { x: margin + 10, y: termY, size: 6, font: helvetica, color: grayColor })
+    termY -= 10
+  })
+
+  page.drawText(`Orden ${ordenDisplay}`, { x: margin + 10, y: 30, size: 7, font: helveticaBold, color: greenColor })
+
+  const fechaImpresion = new Date().toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
+  page.drawText(`Impreso: ${fechaImpresion}`, { x: width - margin - 90, y: 30, size: 6, font: helvetica, color: grayColor })
+
+  // === BARRA INFERIOR ===
+  page.drawRectangle({ x: 0, y: 0, width, height: 8, color: greenColor })
+
+  const pdfBytes = await pdfDoc.save()
+  return Buffer.from(pdfBytes)
+}
+
+export type { CotizacionPDFData, CotizacionItem, OrdenPDFData, VentaPDFData, VentaItem, GarantiaVentaPDFData, ComprobanteEntregaPDFData }

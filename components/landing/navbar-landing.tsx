@@ -17,7 +17,6 @@ export function NavbarLanding({ isLoggedIn = false }: NavbarLandingProps) {
   const navigation = [
     { name: "Características", href: "#features" },
     { name: "Precios", href: "#pricing" },
-    { name: "Testimonios", href: "#testimonials" },
     { name: "FAQ", href: "#faq" },
   ]
 
@@ -32,7 +31,7 @@ export function NavbarLanding({ isLoggedIn = false }: NavbarLandingProps) {
               alt="STApp"
               width={160}
               height={48}
-              className="h-12 w-auto object-contain"
+              className="h-12 w-auto object-contain dark:invert"
               priority
             />
           </Link>

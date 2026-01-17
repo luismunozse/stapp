@@ -20,6 +20,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { VentaForm } from "./venta-form"
 import { useModal } from "@/contexts/modal-context"
+import { ExportButton } from "@/components/export/export-button"
 import { formatDate, formatCurrency } from "@/lib/utils"
 
 interface VentaListItem {
@@ -222,10 +223,22 @@ export function VentasList() {
           <ShoppingCart className="h-6 w-6 text-primary" />
           <h2 className="text-xl font-semibold">Ventas</h2>
         </div>
-        <Button onClick={() => setShowForm(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nueva Venta
-        </Button>
+        <div className="flex items-center gap-2">
+          <ExportButton
+            entity="ventas"
+            filters={{
+              ...(estado && { estado }),
+              ...(fechaDesde && { desde: fechaDesde }),
+              ...(fechaHasta && { hasta: fechaHasta }),
+            }}
+            variant="outline"
+            size="default"
+          />
+          <Button onClick={() => setShowForm(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Nueva Venta
+          </Button>
+        </div>
       </div>
 
       {/* Search and Filters */}

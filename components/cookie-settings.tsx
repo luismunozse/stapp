@@ -53,7 +53,7 @@ export function CookieSettings() {
     <Card>
       <CardHeader>
         <div className="flex items-center gap-2">
-          <Cookie className="w-5 h-5 text-gray-500" />
+          <Cookie className="w-5 h-5 text-muted-foreground" />
           <CardTitle>Preferencias de Cookies</CardTitle>
         </div>
         <CardDescription>
@@ -63,11 +63,11 @@ export function CookieSettings() {
       <CardContent className="space-y-6">
         {/* Estado actual */}
         {consent && (
-          <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-            <p className="text-sm font-medium text-gray-700 mb-1">
+          <div className="p-4 bg-muted rounded-lg border">
+            <p className="text-sm font-medium text-foreground mb-1">
               Configuración actual
             </p>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-muted-foreground">
               {consent === "all" && "Aceptando todas las cookies"}
               {consent === "essential" && "Solo cookies esenciales"}
               {consent === "rejected" && "Cookies rechazadas"}
@@ -77,31 +77,31 @@ export function CookieSettings() {
 
         {/* Opciones de cookies */}
         <div className="space-y-4">
-          <div className="border border-gray-200 rounded-lg p-4">
+          <div className="border rounded-lg p-4">
             <div className="flex items-start justify-between">
               <div className="flex-1">
-                <h4 className="font-medium text-gray-900 mb-1">
+                <h4 className="font-medium text-foreground mb-1">
                   Cookies esenciales
                 </h4>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-muted-foreground">
                   Necesarias para el funcionamiento básico del sitio. No se pueden desactivar.
                 </p>
               </div>
               <div className="ml-4 flex-shrink-0">
-                <div className="w-12 h-6 bg-blue-600 rounded-full flex items-center justify-end px-1">
-                  <div className="w-4 h-4 bg-white rounded-full" />
+                <div className="w-12 h-6 bg-primary rounded-full flex items-center justify-end px-1">
+                  <div className="w-4 h-4 bg-primary-foreground rounded-full" />
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="border border-gray-200 rounded-lg p-4">
+          <div className="border rounded-lg p-4">
             <div className="flex items-start justify-between">
               <div className="flex-1">
-                <h4 className="font-medium text-gray-900 mb-1">
+                <h4 className="font-medium text-foreground mb-1">
                   Cookies de análisis
                 </h4>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-muted-foreground">
                   Nos ayudan a entender cómo usas la aplicación para mejorarla.
                 </p>
               </div>
@@ -109,23 +109,23 @@ export function CookieSettings() {
                 <div
                   className={`w-12 h-6 rounded-full flex items-center px-1 transition-colors ${
                     consent === "all"
-                      ? "bg-blue-600 justify-end"
-                      : "bg-gray-300 justify-start"
+                      ? "bg-primary justify-end"
+                      : "bg-muted justify-start"
                   }`}
                 >
-                  <div className="w-4 h-4 bg-white rounded-full" />
+                  <div className="w-4 h-4 bg-primary-foreground rounded-full" />
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="border border-gray-200 rounded-lg p-4">
+          <div className="border rounded-lg p-4">
             <div className="flex items-start justify-between">
               <div className="flex-1">
-                <h4 className="font-medium text-gray-900 mb-1">
+                <h4 className="font-medium text-foreground mb-1">
                   Cookies de marketing
                 </h4>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-muted-foreground">
                   Se utilizan para personalizar anuncios y medir su efectividad.
                 </p>
               </div>
@@ -133,11 +133,11 @@ export function CookieSettings() {
                 <div
                   className={`w-12 h-6 rounded-full flex items-center px-1 transition-colors ${
                     consent === "all"
-                      ? "bg-blue-600 justify-end"
-                      : "bg-gray-300 justify-start"
+                      ? "bg-primary justify-end"
+                      : "bg-muted justify-start"
                   }`}
                 >
-                  <div className="w-4 h-4 bg-white rounded-full" />
+                  <div className="w-4 h-4 bg-primary-foreground rounded-full" />
                 </div>
               </div>
             </div>
@@ -155,18 +155,18 @@ export function CookieSettings() {
           </Button>
           <Button
             onClick={() => handleSavePreferences("all")}
-            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+            className="flex-1"
           >
             Aceptar todas
           </Button>
         </div>
 
-        <div className="pt-4 border-t border-gray-200">
+        <div className="pt-4 border-t">
           <Button
             onClick={handleReset}
             variant="ghost"
             size="sm"
-            className="text-gray-600 hover:text-gray-900"
+            className="text-muted-foreground hover:text-foreground"
           >
             Restablecer preferencias
           </Button>

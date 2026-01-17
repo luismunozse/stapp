@@ -54,11 +54,11 @@ export function BusinessLogo({
     return (
       <div className={cn("flex items-center gap-2", className)}>
         <div
-          className="animate-pulse bg-gray-200 rounded"
+          className="animate-pulse bg-muted rounded"
           style={{ width, height }}
         />
         {showText && (
-          <div className="animate-pulse bg-gray-200 rounded h-6 w-32" />
+          <div className="animate-pulse bg-muted rounded h-6 w-32" />
         )}
       </div>
     )
@@ -93,7 +93,7 @@ export function BusinessLogo({
         alt="STApp"
         width={size === "xl" ? 200 : size === "lg" ? 150 : 120}
         height={size === "xl" ? 60 : size === "lg" ? 45 : 36}
-        className={cn("object-contain", imageClassName)}
+        className={cn("object-contain dark:invert", imageClassName)}
         priority
       />
     </div>

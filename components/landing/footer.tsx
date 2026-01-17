@@ -10,7 +10,6 @@ export function Footer() {
     producto: [
       { name: "Características", href: "#features" },
       { name: "Precios", href: "#pricing" },
-      { name: "Testimonios", href: "#testimonials" },
       { name: "FAQ", href: "#faq" },
     ],
     legal: [
@@ -21,7 +20,7 @@ export function Footer() {
   }
 
   return (
-    <footer className="bg-gray-900 text-gray-300">
+    <footer className="bg-muted dark:bg-card border-t">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           {/* Brand */}
@@ -32,10 +31,10 @@ export function Footer() {
                 alt="STApp"
                 width={160}
                 height={48}
-                className="h-12 w-auto object-contain brightness-0 invert"
+                className="h-12 w-auto object-contain dark:invert"
               />
             </Link>
-            <p className="text-gray-400 max-w-sm">
+            <p className="text-muted-foreground max-w-sm">
               Sistema completo para gestionar tu taller de reparación de
               dispositivos electrónicos. Órdenes, inventario, facturación y más.
             </p>
@@ -43,13 +42,13 @@ export function Footer() {
 
           {/* Producto */}
           <div>
-            <h3 className="text-white font-semibold mb-4">Producto</h3>
+            <h3 className="text-foreground font-semibold mb-4">Producto</h3>
             <ul className="space-y-3">
               {footerLinks.producto.map((link) => (
                 <li key={link.name}>
                   <a
                     href={link.href}
-                    className="text-gray-400 hover:text-white transition-colors"
+                    className="text-muted-foreground hover:text-foreground transition-colors"
                   >
                     {link.name}
                   </a>
@@ -60,13 +59,13 @@ export function Footer() {
 
           {/* Legal */}
           <div>
-            <h3 className="text-white font-semibold mb-4">Legal</h3>
+            <h3 className="text-foreground font-semibold mb-4">Legal</h3>
             <ul className="space-y-3">
               {footerLinks.legal.map((link) => (
                 <li key={link.name}>
                   <Link
                     href={link.href}
-                    className="text-gray-400 hover:text-white transition-colors"
+                    className="text-muted-foreground hover:text-foreground transition-colors"
                   >
                     {link.name}
                   </Link>
@@ -77,8 +76,8 @@ export function Footer() {
         </div>
 
         {/* Bottom */}
-        <div className="border-t border-gray-800 mt-8 pt-6">
-          <p className="text-sm text-gray-500 text-center">
+        <div className="border-t mt-8 pt-6">
+          <p className="text-sm text-muted-foreground text-center">
             © {currentYear} STApp. Todos los derechos reservados.
           </p>
         </div>

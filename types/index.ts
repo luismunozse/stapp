@@ -69,6 +69,15 @@ export interface OrdenServicio {
   diagnostico?: string | null
   cliente?: Cliente
   tecnico?: User | null
+  // Campos de entrega
+  fechaEntrega?: Date | null
+  firmaClienteEntrega?: string | null
+  firmaClienteEntregaMime?: string | null
+  firmaEncargadoEntrega?: string | null
+  firmaEncargadoEntregaMime?: string | null
+  entregadoPorUserId?: string | null
+  entregadoPor?: User | null
+  notasEntrega?: string | null
 }
 
 export interface Inventario {

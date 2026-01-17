@@ -41,6 +41,7 @@ import { GarantiaCard } from "@/components/garantias/garantia-card"
 import { FotoGallery } from "@/components/fotos/foto-gallery"
 import { ChecklistCard } from "@/components/checklist/checklist-card"
 import { WhatsAppDialog } from "@/components/ordenes/whatsapp-dialog"
+import { EntregaDialog } from "@/components/ordenes/entrega-dialog"
 import { NotificationHistory } from "@/components/ordenes/notification-history"
 import { PatternDisplay } from "@/components/ui/pattern-display"
 import { useModal } from "@/contexts/modal-context"
@@ -86,6 +87,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const [deleting, setDeleting] = useState(false)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
   const [activeTab, setActiveTab] = useState("repuestos")
+  const [showEntregaDialog, setShowEntregaDialog] = useState(false)
 
   // Repuesto form state
   const [showAddRepuesto, setShowAddRepuesto] = useState(false)
@@ -142,6 +144,12 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   }
 
   const handleUpdateEstado = async (nuevoEstado: EstadoOrden) => {
+    // Interceptar cambio a ENTREGADO para abrir diálogo de firma
+    if (nuevoEstado === "ENTREGADO") {
+      setShowEntregaDialog(true)
+      return
+    }
+
     setUpdating(true)
     try {
       const res = await fetch(`/api/ordenes/${ordenId}`, {
@@ -155,6 +163,11 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
     } finally {
       setUpdating(false)
     }
+  }
+
+  const handleEntregaSuccess = () => {
+    setShowEntregaDialog(false)
+    fetchOrden()
   }
 
   const handleAsignarTecnico = async (tecnicoId: string | null) => {
@@ -942,6 +955,26 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           )}
         </div>
       </div>
+
+      {/* Diálogo de Entrega con Firma */}
+      {orden && (
+        <EntregaDialog
+          open={showEntregaDialog}
+          onClose={() => setShowEntregaDialog(false)}
+          onSuccess={handleEntregaSuccess}
+          orden={{
+            id: orden.id,
+            numeroOrden: orden.numeroOrden,
+            codigoOrden: orden.codigoOrden,
+            dispositivo: orden.dispositivo,
+            cliente: {
+              nombre: orden.cliente?.nombre || "Sin nombre",
+              telefono: orden.cliente?.telefono || "",
+            },
+          }}
+          encargadoNombre={session?.user?.name || "Usuario"}
+        />
+      )}
     </div>
   )
 }

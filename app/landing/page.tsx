@@ -3,7 +3,6 @@ import { NavbarLanding } from "@/components/landing/navbar-landing"
 import { Hero } from "@/components/landing/hero"
 import { Features } from "@/components/landing/features"
 import { PricingSection } from "@/components/landing/pricing-section"
-import { Testimonials } from "@/components/landing/testimonials"
 import { FAQ } from "@/components/landing/faq"
 import { Footer } from "@/components/landing/footer"
 import { ChatbotButton } from "@/components/chatbot/chatbot-button"
@@ -20,7 +19,6 @@ export default async function LandingPage() {
       <Hero />
       <Features />
       <PricingSection />
-      <Testimonials />
       <FAQ />
       <Footer />
 

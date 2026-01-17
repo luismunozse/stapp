@@ -7,6 +7,7 @@ import { DataTable, type Column } from "@/components/ui/data-table"
 import { Plus, Search, Phone, Mail, Edit, Trash2, User, Upload } from "lucide-react"
 import { ClienteForm } from "./cliente-form"
 import { ImportModal } from "@/components/import/import-modal"
+import { ExportButton } from "@/components/export/export-button"
 import { formatDate } from "@/lib/utils"
 import type { Cliente } from "@/types"
 import { useModal } from "@/contexts/modal-context"
@@ -225,6 +226,11 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
           </div>
         </div>
         <div className="flex gap-2">
+          <ExportButton
+            entity="clientes"
+            filters={{ ...(search && { search }) }}
+            variant="outline"
+          />
           {allowImport && (
             <Button onClick={() => setShowImport(true)} variant="outline" className="gap-2">
               <Upload className="h-4 w-4" />

@@ -156,30 +156,32 @@ CREATE TRIGGER organization_usage_updated_at
 -- INSERTAR PLANES POR DEFECTO
 -- ========================================
 
-INSERT INTO plans (nombre, tipo, descripcion, precio_mensual, precio_anual, limite_ordenes, limite_tecnicos, limite_clientes, limite_storage_mb, features) VALUES
+INSERT INTO plans (nombre, tipo, descripcion, precio_mensual, precio_anual, moneda, limite_ordenes, limite_tecnicos, limite_clientes, limite_storage_mb, features) VALUES
 (
   'Free',
   'FREE',
   'Plan gratuito para comenzar',
   0,
   0,
+  'ARS',
   50,
   2,
   100,
   100,
-  '["Hasta 50 órdenes/mes", "2 técnicos", "100 clientes", "Reportes básicos", "100MB almacenamiento"]'
+  '["Hasta 50 órdenes/mes", "2 técnicos", "2 vendedores", "100 clientes", "Ventas y garantías", "Reportes básicos", "100MB almacenamiento"]'
 ),
 (
   'Premium',
   'PREMIUM',
   'Plan completo para negocios en crecimiento',
-  29.99,
-  299.99,
+  14999,
+  143990,
+  'ARS',
   NULL,
   NULL,
   NULL,
   5000,
-  '["Órdenes ilimitadas", "Técnicos ilimitados", "Clientes ilimitados", "Reportes avanzados", "Soporte prioritario", "Notificaciones WhatsApp", "Logo personalizado", "5GB almacenamiento", "Exportación de datos"]'
+  '["Órdenes ilimitadas", "Técnicos ilimitados", "Vendedores ilimitados", "Clientes ilimitados", "Reportes avanzados", "Soporte prioritario", "Notificaciones WhatsApp", "Logo personalizado", "5GB almacenamiento", "Exportación de datos"]'
 );
 
 -- ========================================

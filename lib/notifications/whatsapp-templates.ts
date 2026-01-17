@@ -48,6 +48,15 @@ export function getWhatsAppTemplates(ctx: NotificationContext): WhatsAppTemplate
       })
     }
 
+    // Plantilla de entrega completada con comprobante
+    if (ctx.orden.estado === "ENTREGADO") {
+      templates.push({
+        id: "entrega_completada",
+        nombre: "Comprobante de entrega",
+        mensaje: generateEntregaCompletadaMessage(ctx),
+      })
+    }
+
     // Plantilla generica de seguimiento
     templates.push({
       id: "seguimiento",
@@ -161,6 +170,22 @@ function generateSeguimientoMessage(ctx: NotificationContext): string {
   return `Hola ${ctx.cliente.nombre}, nos comunicamos por su ${ctx.orden!.dispositivo} (Orden #${ctx.orden!.numeroOrden}).
 
 [Escriba su mensaje aqui]
+
+${ctx.organizationName}`
+}
+
+function generateEntregaCompletadaMessage(ctx: NotificationContext): string {
+  const baseUrl = getBaseUrl(ctx)
+  const pdfUrl = `${baseUrl}/api/ordenes/${ctx.orden!.id}/comprobante-entrega`
+
+  return `Hola ${ctx.cliente.nombre}, confirmamos la entrega de su ${ctx.orden!.dispositivo}.
+
+*Orden #${ctx.orden!.numeroOrden} - ENTREGADO*
+
+Puede descargar su comprobante de entrega aqui:
+${pdfUrl}
+
+Gracias por confiar en nosotros!
 
 ${ctx.organizationName}`
 }
