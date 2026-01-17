@@ -1,7 +1,8 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import Link from "next/link"
-import { Clock, Sparkles } from "lucide-react"
+import { Clock, Sparkles, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -9,9 +10,34 @@ interface TrialBannerProps {
   daysRemaining: number
 }
 
+const BANNER_DISMISS_KEY = "trial-banner-dismissed"
+const DISMISS_DURATION_HOURS = 24
+
 export function TrialBanner({ daysRemaining }: TrialBannerProps) {
+  const [isDismissed, setIsDismissed] = useState(true) // Start hidden to prevent flash
   const isUrgent = daysRemaining <= 7
   const isCritical = daysRemaining <= 3
+
+  useEffect(() => {
+    const dismissedAt = localStorage.getItem(BANNER_DISMISS_KEY)
+    if (dismissedAt) {
+      const dismissedTime = parseInt(dismissedAt, 10)
+      const hoursSinceDismiss = (Date.now() - dismissedTime) / (1000 * 60 * 60)
+      // Show again after DISMISS_DURATION_HOURS or if critical
+      if (hoursSinceDismiss < DISMISS_DURATION_HOURS && !isCritical) {
+        setIsDismissed(true)
+        return
+      }
+    }
+    setIsDismissed(false)
+  }, [isCritical])
+
+  const handleDismiss = () => {
+    localStorage.setItem(BANNER_DISMISS_KEY, Date.now().toString())
+    setIsDismissed(true)
+  }
+
+  if (isDismissed) return null
 
   return (
     <div
@@ -25,7 +51,7 @@ export function TrialBanner({ daysRemaining }: TrialBannerProps) {
       )}
     >
       <div className="flex items-center justify-center gap-2 flex-wrap">
-        <Clock className="h-4 w-4" />
+        <Clock className="h-4 w-4 shrink-0" />
         <span>
           {daysRemaining === 0
             ? "Tu prueba gratuita termina hoy"
@@ -46,6 +72,20 @@ export function TrialBanner({ daysRemaining }: TrialBannerProps) {
             Suscribirse ahora
           </Button>
         </Link>
+        <button
+          onClick={handleDismiss}
+          className={cn(
+            "ml-2 p-1 rounded-full transition-colors",
+            isCritical
+              ? "hover:bg-red-600"
+              : isUrgent
+              ? "hover:bg-yellow-600"
+              : "hover:bg-white/20"
+          )}
+          aria-label="Cerrar aviso"
+        >
+          <X className="h-4 w-4" />
+        </button>
       </div>
     </div>
   )
