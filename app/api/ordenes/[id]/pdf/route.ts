@@ -3,6 +3,9 @@ import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { generateOrdenPDFPuppeteer, OrdenPDFData } from "@/lib/pdf-puppeteer"
 
+export const runtime = "nodejs"
+export const maxDuration = 30
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }

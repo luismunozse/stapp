@@ -2,6 +2,9 @@ import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { generateOrdenPDFPuppeteer, OrdenPDFData } from "@/lib/pdf-puppeteer"
 
+export const runtime = "nodejs"
+export const maxDuration = 30
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ token: string }> }
