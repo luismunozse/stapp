@@ -72,10 +72,10 @@ export function PricingSection() {
             </div>
 
             {/* Billing toggle */}
-            <div className="flex items-center justify-center gap-2 sm:gap-3 mb-6">
+            <div className="flex items-center justify-center gap-3 mb-6">
               <span
                 className={cn(
-                  "text-xs sm:text-sm font-medium transition-colors",
+                  "text-sm font-medium transition-colors",
                   !annual ? "text-foreground" : "text-muted-foreground"
                 )}
               >
@@ -85,11 +85,10 @@ export function PricingSection() {
                 checked={annual}
                 onCheckedChange={setAnnual}
                 aria-label="Cambiar entre facturación mensual y anual"
-                className="h-4 w-7 scale-90 sm:h-5 sm:w-9 sm:scale-100 [&>span]:h-3 [&>span]:w-3 sm:[&>span]:h-4 sm:[&>span]:w-4 [&>span]:data-[state=checked]:translate-x-3 sm:[&>span]:data-[state=checked]:translate-x-4"
               />
               <span
                 className={cn(
-                  "text-xs sm:text-sm font-medium transition-colors",
+                  "text-sm font-medium transition-colors",
                   annual ? "text-foreground" : "text-muted-foreground"
                 )}
               >

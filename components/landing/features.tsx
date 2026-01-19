@@ -13,6 +13,8 @@ import {
   Wrench,
   BarChart3,
   Smartphone,
+  Settings,
+  Zap,
 } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 
@@ -20,6 +22,7 @@ const categories = [
   {
     id: "servicio",
     name: "Servicio Técnico",
+    icon: Wrench,
     description: "Gestiona el flujo completo de reparaciones",
     features: [
       {
@@ -55,6 +58,7 @@ const categories = [
   {
     id: "administracion",
     name: "Administración",
+    icon: Settings,
     description: "Control total de clientes, stock y finanzas",
     features: [
       {
@@ -90,6 +94,7 @@ const categories = [
   {
     id: "productividad",
     name: "Productividad",
+    icon: Zap,
     description: "Optimiza tu equipo y toma mejores decisiones",
     features: [
       {
@@ -140,15 +145,17 @@ export function Features() {
 
         {/* Tabs */}
         <Tabs defaultValue="servicio" className="w-full">
-          <div className="flex justify-center mb-8">
-            <TabsList className="grid grid-cols-3 w-full max-w-xl h-auto p-1 gap-1">
+          <div className="flex justify-center mb-10">
+            <TabsList className="inline-flex h-auto p-1.5 bg-muted/80 backdrop-blur-sm rounded-2xl border shadow-sm gap-2">
               {categories.map((category) => (
                 <TabsTrigger
                   key={category.id}
                   value={category.id}
-                  className="py-3 px-4 text-sm sm:text-base data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                  className="inline-flex items-center gap-2 py-3 px-5 text-sm font-medium rounded-xl transition-all duration-200 data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground data-[state=inactive]:hover:bg-background/50 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md"
                 >
-                  {category.name}
+                  <category.icon className="w-4 h-4" />
+                  <span className="hidden sm:inline">{category.name}</span>
+                  <span className="sm:hidden">{category.name.split(" ")[0]}</span>
                 </TabsTrigger>
               ))}
             </TabsList>
