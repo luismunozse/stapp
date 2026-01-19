@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useCallback, useMemo } from "react"
+import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
@@ -23,6 +24,9 @@ import { ExportButton } from "@/components/export/export-button"
 import { formatDate, formatCurrency } from "@/lib/utils"
 import type { OrdenServicio, EstadoOrden } from "@/types"
 
+// Fetcher para SWR
+const fetcher = (url: string) => fetch(url).then(res => res.json())
+
 const estadoOptions = [
   { value: "RECIBIDO", label: "Recibido" },
   { value: "EN_DIAGNOSTICO", label: "En Diagnóstico" },
@@ -38,14 +42,13 @@ const estadoOptions = [
 
 export function OrdenesList() {
   const router = useRouter()
-  const [ordenes, setOrdenes] = useState<OrdenServicio[]>([])
-  const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
   const { confirm, showError } = useModal()
 
   // Filters
   const [search, setSearch] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
   const [estado, setEstado] = useState<EstadoOrden | "">("")
   const [fechaDesde, setFechaDesde] = useState("")
   const [fechaHasta, setFechaHasta] = useState("")
@@ -58,44 +61,40 @@ export function OrdenesList() {
   // Pagination
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
-  const [total, setTotal] = useState(0)
 
-  const fetchOrdenes = async () => {
-    setLoading(true)
-    try {
-      const params = new URLSearchParams()
-      if (search) params.append("search", search)
-      if (estado) params.append("estado", estado)
-      if (fechaDesde) params.append("fechaDesde", fechaDesde)
-      if (fechaHasta) params.append("fechaHasta", fechaHasta)
-      params.append("page", page.toString())
-      params.append("limit", pageSize.toString())
-      params.append("sortBy", sortKey)
-      params.append("sortOrder", sortDirection)
+  // Debounce search
+  const handleSearchChange = useCallback((value: string) => {
+    setSearch(value)
+    setPage(1)
+    // Debounce de 300ms antes de actualizar la búsqueda
+    const timer = setTimeout(() => setDebouncedSearch(value), 300)
+    return () => clearTimeout(timer)
+  }, [])
 
-      const res = await fetch(`/api/ordenes?${params.toString()}`)
-      const data = await res.json()
+  // Construir URL con parámetros para SWR
+  const apiUrl = useMemo(() => {
+    const params = new URLSearchParams()
+    if (debouncedSearch) params.append("search", debouncedSearch)
+    if (estado) params.append("estado", estado)
+    if (fechaDesde) params.append("fechaDesde", fechaDesde)
+    if (fechaHasta) params.append("fechaHasta", fechaHasta)
+    params.append("page", page.toString())
+    params.append("limit", pageSize.toString())
+    params.append("sortBy", sortKey)
+    params.append("sortOrder", sortDirection)
+    return `/api/ordenes?${params.toString()}`
+  }, [debouncedSearch, estado, fechaDesde, fechaHasta, page, pageSize, sortKey, sortDirection])
 
-      if (Array.isArray(data)) {
-        setOrdenes(data)
-        setTotal(data.length)
-      } else if (data.data) {
-        setOrdenes(data.data)
-        setTotal(data.total || data.data.length)
-      }
-    } catch (error) {
-      console.error("Error fetching ordenes:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
+  // SWR para fetching con caché
+  const { data, error, isLoading, mutate } = useSWR(apiUrl, fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 5000,
+    keepPreviousData: true,
+  })
 
-  useEffect(() => {
-    const debounce = setTimeout(() => {
-      fetchOrdenes()
-    }, 300)
-    return () => clearTimeout(debounce)
-  }, [search, estado, fechaDesde, fechaHasta, page, pageSize, sortKey, sortDirection])
+  // Extraer datos de la respuesta
+  const ordenes = data?.data || []
+  const total = data?.total || 0
 
   const handleSort = (key: string) => {
     if (sortKey === key) {
@@ -131,7 +130,7 @@ export function OrdenesList() {
         return
       }
 
-      fetchOrdenes()
+      mutate() // Revalidar datos con SWR
     } catch (error) {
       console.error("Error deleting orden:", error)
       await showError("Error al eliminar la orden")
@@ -142,6 +141,7 @@ export function OrdenesList() {
 
   const clearFilters = () => {
     setSearch("")
+    setDebouncedSearch("")
     setEstado("")
     setFechaDesde("")
     setFechaHasta("")
@@ -257,10 +257,7 @@ export function OrdenesList() {
             <Input
               placeholder="Buscar orden, cliente, dispositivo..."
               value={search}
-              onChange={(e) => {
-                setSearch(e.target.value)
-                setPage(1)
-              }}
+              onChange={(e) => handleSearchChange(e.target.value)}
               className="pl-10 w-full sm:max-w-sm"
             />
           </div>
@@ -354,7 +351,7 @@ export function OrdenesList() {
           onClose={() => setShowForm(false)}
           onSuccess={() => {
             setShowForm(false)
-            fetchOrdenes()
+            mutate() // Revalidar datos con SWR
           }}
         />
       )}
@@ -364,7 +361,7 @@ export function OrdenesList() {
         data={ordenes}
         columns={columns}
         keyExtractor={(orden) => orden.id}
-        loading={loading}
+        loading={isLoading}
         emptyMessage="No hay órdenes registradas"
         sortKey={sortKey}
         sortDirection={sortDirection}

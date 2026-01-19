@@ -7,11 +7,119 @@ import { redirect } from "next/navigation"
 import Link from "next/link"
 import { DolarWidget } from "@/components/cotizacion-dolar"
 import {
-  OrdenesPorEstadoChart,
-  IngresosChart,
   OrdenesRecientes,
-  OrdenesPorTecnicoChart,
+  DashboardCharts,
 } from "@/components/dashboard"
+import { unstable_cache } from "next/cache"
+
+// Cachear datos del dashboard por 2 minutos
+const getDashboardData = unstable_cache(
+  async (organizationId: string) => {
+    const hoy = new Date()
+    const enSieteDias = new Date()
+    enSieteDias.setDate(enSieteDias.getDate() + 7)
+    const primerDiaMes = new Date(new Date().setDate(1))
+    const hace7Dias = new Date()
+    hace7Dias.setDate(hace7Dias.getDate() - 7)
+
+    const [
+      totalOrdenesResult,
+      ordenesPendientesResult,
+      totalClientesResult,
+      itemsBajoStockResult,
+      ingresosMensualesResult,
+      garantiasPorVencerResult,
+      ordenesPorEstadoResult,
+      ingresosUltimos7DiasResult,
+      ordenesRecientesResult,
+      ordenesPorTecnicoResult,
+    ] = await Promise.all([
+      supabaseAdmin
+        .from("ordenes_servicio")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", organizationId),
+      supabaseAdmin
+        .from("ordenes_servicio")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", organizationId)
+        .in("estado", ["RECIBIDO", "EN_DIAGNOSTICO", "PRESUPUESTADO", "APROBADO", "EN_REPARACION", "ESPERANDO_REPUESTO"]),
+      supabaseAdmin
+        .from("clientes")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", organizationId),
+      supabaseAdmin
+        .from("inventario")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", organizationId)
+        .lt("stock", 5),
+      supabaseAdmin
+        .from("facturas")
+        .select("total, ordenes_servicio!inner(organization_id)")
+        .eq("ordenes_servicio.organization_id", organizationId)
+        .eq("estado_pago", "PAGADO")
+        .gte("fecha", primerDiaMes.toISOString()),
+      supabaseAdmin
+        .from("garantias")
+        .select(`
+          id, orden_id, fecha_vencimiento,
+          ordenes_servicio!inner (
+            id, numero_orden, organization_id,
+            clientes (nombre)
+          )
+        `)
+        .eq("ordenes_servicio.organization_id", organizationId)
+        .eq("estado", "ACTIVA")
+        .gte("fecha_vencimiento", hoy.toISOString())
+        .lte("fecha_vencimiento", enSieteDias.toISOString())
+        .order("fecha_vencimiento", { ascending: true }),
+      supabaseAdmin
+        .from("ordenes_servicio")
+        .select("estado")
+        .eq("organization_id", organizationId),
+      supabaseAdmin
+        .from("facturas")
+        .select("total, fecha, ordenes_servicio!inner(organization_id)")
+        .eq("ordenes_servicio.organization_id", organizationId)
+        .eq("estado_pago", "PAGADO")
+        .gte("fecha", hace7Dias.toISOString())
+        .order("fecha", { ascending: true }),
+      supabaseAdmin
+        .from("ordenes_servicio")
+        .select(`
+          id, numero_orden, codigo_orden, dispositivo, estado, fecha_ingreso,
+          clientes (nombre)
+        `)
+        .eq("organization_id", organizationId)
+        .order("fecha_ingreso", { ascending: false })
+        .limit(5),
+      supabaseAdmin
+        .from("ordenes_servicio")
+        .select(`
+          tecnico_id, estado,
+          usuarios!ordenes_servicio_tecnico_id_fkey (nombre)
+        `)
+        .eq("organization_id", organizationId)
+        .not("tecnico_id", "is", null)
+        .in("estado", ["RECIBIDO", "EN_DIAGNOSTICO", "PRESUPUESTADO", "APROBADO", "EN_REPARACION", "ESPERANDO_REPUESTO", "REPARADO"]),
+    ])
+
+    return {
+      totalOrdenesResult,
+      ordenesPendientesResult,
+      totalClientesResult,
+      itemsBajoStockResult,
+      ingresosMensualesResult,
+      garantiasPorVencerResult,
+      ordenesPorEstadoResult,
+      ingresosUltimos7DiasResult,
+      ordenesRecientesResult,
+      ordenesPorTecnicoResult,
+      hace7Dias: hace7Dias.toISOString(),
+    }
+  },
+  ["dashboard-data"],
+  { revalidate: 120, tags: ["dashboard"] }
+)
 
 export default async function DashboardPage() {
   const session = await auth()
@@ -21,16 +129,8 @@ export default async function DashboardPage() {
 
   const organizationId = session.user.organizationId
 
-  // Calcular fechas
-  const hoy = new Date()
-  const enSieteDias = new Date()
-  enSieteDias.setDate(enSieteDias.getDate() + 7)
-  const primerDiaMes = new Date(new Date().setDate(1))
-  const hace7Dias = new Date()
-  hace7Dias.setDate(hace7Dias.getDate() - 7)
-
-  // Ejecutar queries en paralelo
-  const [
+  // Obtener datos del dashboard con caché (2 minutos)
+  const {
     totalOrdenesResult,
     ordenesPendientesResult,
     totalClientesResult,
@@ -41,80 +141,8 @@ export default async function DashboardPage() {
     ingresosUltimos7DiasResult,
     ordenesRecientesResult,
     ordenesPorTecnicoResult,
-  ] = await Promise.all([
-    // Stats básicos
-    supabaseAdmin
-      .from("ordenes_servicio")
-      .select("id", { count: "exact", head: true })
-      .eq("organization_id", organizationId),
-    supabaseAdmin
-      .from("ordenes_servicio")
-      .select("id", { count: "exact", head: true })
-      .eq("organization_id", organizationId)
-      .in("estado", ["RECIBIDO", "EN_DIAGNOSTICO", "PRESUPUESTADO", "APROBADO", "EN_REPARACION", "ESPERANDO_REPUESTO"]),
-    supabaseAdmin
-      .from("clientes")
-      .select("id", { count: "exact", head: true })
-      .eq("organization_id", organizationId),
-    supabaseAdmin
-      .from("inventario")
-      .select("id", { count: "exact", head: true })
-      .eq("organization_id", organizationId)
-      .lt("stock", 5),
-    supabaseAdmin
-      .from("facturas")
-      .select("total, ordenes_servicio!inner(organization_id)")
-      .eq("ordenes_servicio.organization_id", organizationId)
-      .eq("estado_pago", "PAGADO")
-      .gte("fecha", primerDiaMes.toISOString()),
-    supabaseAdmin
-      .from("garantias")
-      .select(`
-        id, orden_id, fecha_vencimiento,
-        ordenes_servicio!inner (
-          id, numero_orden, organization_id,
-          clientes (nombre)
-        )
-      `)
-      .eq("ordenes_servicio.organization_id", organizationId)
-      .eq("estado", "ACTIVA")
-      .gte("fecha_vencimiento", hoy.toISOString())
-      .lte("fecha_vencimiento", enSieteDias.toISOString())
-      .order("fecha_vencimiento", { ascending: true }),
-    // Órdenes por estado para el gráfico
-    supabaseAdmin
-      .from("ordenes_servicio")
-      .select("estado")
-      .eq("organization_id", organizationId),
-    // Ingresos últimos 7 días
-    supabaseAdmin
-      .from("facturas")
-      .select("total, fecha, ordenes_servicio!inner(organization_id)")
-      .eq("ordenes_servicio.organization_id", organizationId)
-      .eq("estado_pago", "PAGADO")
-      .gte("fecha", hace7Dias.toISOString())
-      .order("fecha", { ascending: true }),
-    // Órdenes recientes
-    supabaseAdmin
-      .from("ordenes_servicio")
-      .select(`
-        id, numero_orden, codigo_orden, dispositivo, estado, fecha_ingreso,
-        clientes (nombre)
-      `)
-      .eq("organization_id", organizationId)
-      .order("fecha_ingreso", { ascending: false })
-      .limit(5),
-    // Órdenes por técnico
-    supabaseAdmin
-      .from("ordenes_servicio")
-      .select(`
-        tecnico_id, estado,
-        usuarios!ordenes_servicio_tecnico_id_fkey (nombre)
-      `)
-      .eq("organization_id", organizationId)
-      .not("tecnico_id", "is", null)
-      .in("estado", ["RECIBIDO", "EN_DIAGNOSTICO", "PRESUPUESTADO", "APROBADO", "EN_REPARACION", "ESPERANDO_REPUESTO", "REPARADO"]),
-  ])
+    hace7Dias,
+  } = await getDashboardData(organizationId)
 
   // Procesar datos básicos
   const totalOrdenes = totalOrdenesResult.count || 0
@@ -262,17 +290,15 @@ export default async function DashboardPage() {
         })}
       </div>
 
-      {/* Gráficos principales */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <OrdenesPorEstadoChart data={ordenesPorEstado} />
-        <IngresosChart data={ingresosUltimos7Dias} totalPeriodo={totalIngresos7Dias} />
-      </div>
-
-      {/* Segunda fila: Órdenes por técnico y órdenes recientes */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <OrdenesPorTecnicoChart data={ordenesPorTecnico} />
+      {/* Gráficos con lazy loading (Recharts) + Órdenes recientes */}
+      <DashboardCharts
+        ordenesPorEstado={ordenesPorEstado}
+        ingresosUltimos7Dias={ingresosUltimos7Dias}
+        totalIngresos7Dias={totalIngresos7Dias}
+        ordenesPorTecnico={ordenesPorTecnico}
+      >
         <OrdenesRecientes ordenes={ordenesRecientes} />
-      </div>
+      </DashboardCharts>
 
       {/* Tercera fila: Alertas y Widget Dólar */}
       <div className="grid gap-4 md:grid-cols-2">

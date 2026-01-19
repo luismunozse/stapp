@@ -4,9 +4,20 @@ import { PolicyChangeModal } from "@/components/subscription/policy-change-modal
 import { auth } from "@/lib/auth"
 import { hasValidAccess, getTrialInfo } from "@/lib/subscriptions"
 import { redirect } from "next/navigation"
+import { unstable_cache } from "next/cache"
 
-// Forzar renderizado dinámico para verificar auth en cada navegación
-export const dynamic = "force-dynamic"
+// Cachear verificación de acceso por 5 minutos para mejorar performance
+const getCachedAccessInfo = unstable_cache(
+  async (organizationId: string) => {
+    const [accessResult, trialInfo] = await Promise.all([
+      hasValidAccess(organizationId),
+      getTrialInfo(organizationId),
+    ])
+    return { accessResult, trialInfo }
+  },
+  ["access-info"],
+  { revalidate: 300, tags: ["subscription"] }
+)
 
 export default async function DashboardLayout({
   children,
@@ -21,16 +32,13 @@ export default async function DashboardLayout({
 
   const organizationId = session.user.organizationId
 
-  // Verificar acceso válido (trial no expirado o suscripción activa)
-  const { hasAccess, reason } = await hasValidAccess(organizationId)
+  // Verificar acceso válido con caché (trial no expirado o suscripción activa)
+  const { accessResult, trialInfo } = await getCachedAccessInfo(organizationId)
 
-  if (!hasAccess) {
+  if (!accessResult.hasAccess) {
     // Redirigir a página de trial expirado/bloqueo
-    redirect(`/suscripcion-requerida?reason=${reason || "trial_expired"}`)
+    redirect(`/suscripcion-requerida?reason=${accessResult.reason || "trial_expired"}`)
   }
-
-  // Obtener info del trial para mostrar banner
-  const trialInfo = await getTrialInfo(organizationId)
 
   const showTrialBanner = trialInfo.isInTrial && !trialInfo.isPaid
 

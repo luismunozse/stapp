@@ -56,6 +56,15 @@ export async function GET(request: Request) {
     const tecnicoId = searchParams.get("tecnicoId") || ""
     const search = searchParams.get("search") || ""
 
+    // Paginación
+    const page = parseInt(searchParams.get("page") || "1")
+    const limit = Math.min(parseInt(searchParams.get("limit") || "20"), 100) // Max 100
+    const offset = (page - 1) * limit
+
+    // Sorting
+    const sortBy = searchParams.get("sortBy") || "fecha_ingreso"
+    const sortOrder = searchParams.get("sortOrder") === "asc" ? true : false
+
     let query = supabaseAdmin
       .from("ordenes_servicio")
       .select(`
@@ -65,9 +74,9 @@ export async function GET(request: Request) {
           id,
           nombre
         )
-      `)
+      `, { count: "exact" })
       .eq("organization_id", organizationId!)
-      .order("fecha_ingreso", { ascending: false })
+      .order(sortBy === "fechaIngreso" ? "fecha_ingreso" : sortBy, { ascending: sortOrder })
 
     // Técnicos solo ven sus órdenes asignadas
     if (role === "TECNICO") {
@@ -104,7 +113,10 @@ export async function GET(request: Request) {
       }
     }
 
-    const { data: ordenes, error: dbError } = await query
+    // Aplicar paginación
+    query = query.range(offset, offset + limit - 1)
+
+    const { data: ordenes, error: dbError, count } = await query
 
     if (dbError) {
       throw dbError
@@ -131,7 +143,18 @@ export async function GET(request: Request) {
       passwordDispositivo: orden.password_dispositivo,
     }))
 
-    return NextResponse.json(ordenesFormatted)
+    // Retornar con información de paginación y cache headers
+    return NextResponse.json({
+      data: ordenesFormatted,
+      total: count || 0,
+      page,
+      limit,
+      totalPages: Math.ceil((count || 0) / limit),
+    }, {
+      headers: {
+        "Cache-Control": "private, max-age=15, stale-while-revalidate=30",
+      },
+    })
   } catch (error) {
     console.error("Error fetching ordenes:", error)
     return NextResponse.json(

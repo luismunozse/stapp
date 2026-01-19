@@ -1,12 +1,51 @@
 "use client"
 
 import { useState } from "react"
+import dynamic from "next/dynamic"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { TrendingUp, Users, Package, BarChart3 } from "lucide-react"
-import { ComparativaIngresos } from "./comparativa-ingresos"
-import { PerformanceTecnicos } from "./performance-tecnicos"
-import { TopClientes } from "./top-clientes"
-import { AnalisisInventario } from "./analisis-inventario"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
+
+// Loading skeleton para reportes
+function ReporteSkeleton() {
+  return (
+    <Card>
+      <CardHeader>
+        <Skeleton className="h-6 w-48" />
+        <Skeleton className="h-4 w-32 mt-2" />
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <Skeleton className="h-[300px] w-full" />
+        <div className="grid grid-cols-2 gap-4">
+          <Skeleton className="h-20" />
+          <Skeleton className="h-20" />
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// Lazy load de componentes pesados con Recharts
+const ComparativaIngresos = dynamic(
+  () => import("./comparativa-ingresos").then(mod => ({ default: mod.ComparativaIngresos })),
+  { loading: () => <ReporteSkeleton />, ssr: false }
+)
+
+const PerformanceTecnicos = dynamic(
+  () => import("./performance-tecnicos").then(mod => ({ default: mod.PerformanceTecnicos })),
+  { loading: () => <ReporteSkeleton />, ssr: false }
+)
+
+const TopClientes = dynamic(
+  () => import("./top-clientes").then(mod => ({ default: mod.TopClientes })),
+  { loading: () => <ReporteSkeleton />, ssr: false }
+)
+
+const AnalisisInventario = dynamic(
+  () => import("./analisis-inventario").then(mod => ({ default: mod.AnalisisInventario })),
+  { loading: () => <ReporteSkeleton />, ssr: false }
+)
 
 export function ReportesAvanzadosView() {
   const [activeTab, setActiveTab] = useState("ingresos")

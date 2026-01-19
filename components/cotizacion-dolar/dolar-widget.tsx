@@ -48,7 +48,8 @@ export function DolarWidget() {
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch("https://dolarapi.com/v1/dolares")
+      // Usar API route con caché del servidor
+      const response = await fetch("/api/cotizacion-dolar")
       if (!response.ok) throw new Error("Error al obtener cotizaciones")
 
       const data: CotizacionDolar[] = await response.json()

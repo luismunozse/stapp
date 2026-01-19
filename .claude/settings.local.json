@@ -37,7 +37,10 @@
       "Bash(ping:*)",
       "Bash(timeout /t 20 /nobreak)",
       "Bash(stats)",
-      "Bash(analytics \")"
+      "Bash(analytics \")",
+      "Bash(npm ls:*)",
+      "Bash(cmd //c \"taskkill /PID 225080 /F\")",
+      "Bash(curl:*)"
     ]
   }
 }

@@ -22,7 +22,7 @@ export async function GET(request: Request) {
 
     let query = supabaseAdmin
       .from("clientes")
-      .select("*")
+      .select("id, nombre, telefono, email, direccion, dni, created_at")
       .eq("organization_id", organizationId!)
       .order("created_at", { ascending: false })
 
@@ -38,7 +38,11 @@ export async function GET(request: Request) {
       throw dbError
     }
 
-    return NextResponse.json(clientes)
+    return NextResponse.json(clientes, {
+      headers: {
+        "Cache-Control": "private, max-age=30, stale-while-revalidate=60",
+      },
+    })
   } catch (error) {
     console.error("Error fetching clientes:", error)
     return NextResponse.json(

@@ -28,7 +28,7 @@ export async function GET(request: Request) {
 
     let query = supabaseAdmin
       .from("inventario")
-      .select("*")
+      .select("id, codigo, nombre, descripcion, categoria, tipo_dispositivo, stock, precio_compra, precio_venta, proveedor, created_at")
       .eq("organization_id", organizationId!)
       .order("nombre", { ascending: true })
 
@@ -50,7 +50,11 @@ export async function GET(request: Request) {
       throw dbError
     }
 
-    return NextResponse.json(inventario?.map(formatInventario))
+    return NextResponse.json(inventario?.map(formatInventario), {
+      headers: {
+        "Cache-Control": "private, max-age=30, stale-while-revalidate=60",
+      },
+    })
   } catch (error) {
     console.error("Error fetching inventario:", error)
     return NextResponse.json(

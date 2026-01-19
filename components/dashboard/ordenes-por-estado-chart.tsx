@@ -1,5 +1,6 @@
 "use client"
 
+import { memo, useMemo } from "react"
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
@@ -33,16 +34,18 @@ const ESTADO_CONFIG: Record<string, { label: string; color: string }> = {
   SIN_REPARACION: { label: "Sin Reparación", color: "#dc2626" },
 }
 
-export function OrdenesPorEstadoChart({ data }: OrdenesPorEstadoChartProps) {
-  const chartData = Object.entries(data)
-    .filter(([_, value]) => value > 0)
-    .map(([estado, value]) => ({
-      name: ESTADO_CONFIG[estado]?.label || estado,
-      value,
-      color: ESTADO_CONFIG[estado]?.color || "#gray",
-    }))
-
-  const total = chartData.reduce((sum, item) => sum + item.value, 0)
+export const OrdenesPorEstadoChart = memo(function OrdenesPorEstadoChart({ data }: OrdenesPorEstadoChartProps) {
+  const { chartData, total } = useMemo(() => {
+    const chartData = Object.entries(data)
+      .filter(([_, value]) => value > 0)
+      .map(([estado, value]) => ({
+        name: ESTADO_CONFIG[estado]?.label || estado,
+        value,
+        color: ESTADO_CONFIG[estado]?.color || "#gray",
+      }))
+    const total = chartData.reduce((sum, item) => sum + item.value, 0)
+    return { chartData, total }
+  }, [data])
 
   if (total === 0) {
     return (
@@ -106,4 +109,4 @@ export function OrdenesPorEstadoChart({ data }: OrdenesPorEstadoChartProps) {
       </CardContent>
     </Card>
   )
-}
+})

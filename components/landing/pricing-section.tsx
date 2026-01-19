@@ -85,6 +85,7 @@ export function PricingSection() {
                 checked={annual}
                 onCheckedChange={setAnnual}
                 aria-label="Cambiar entre facturación mensual y anual"
+                className="scale-[0.85] sm:scale-100"
               />
               <span
                 className={cn(

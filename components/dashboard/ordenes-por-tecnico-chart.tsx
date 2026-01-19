@@ -1,5 +1,6 @@
 "use client"
 
+import { memo, useMemo } from "react"
 import {
   BarChart,
   Bar,
@@ -24,7 +25,12 @@ interface OrdenesPorTecnicoChartProps {
 
 const COLORS = ["#3b82f6", "#8b5cf6", "#06b6d4", "#10b981", "#f59e0b", "#ef4444"]
 
-export function OrdenesPorTecnicoChart({ data }: OrdenesPorTecnicoChartProps) {
+export const OrdenesPorTecnicoChart = memo(function OrdenesPorTecnicoChart({ data }: OrdenesPorTecnicoChartProps) {
+  const sortedData = useMemo(() =>
+    [...data].sort((a, b) => b.ordenes - a.ordenes).slice(0, 5),
+    [data]
+  )
+
   if (data.length === 0) {
     return (
       <Card>
@@ -40,8 +46,6 @@ export function OrdenesPorTecnicoChart({ data }: OrdenesPorTecnicoChartProps) {
       </Card>
     )
   }
-
-  const sortedData = [...data].sort((a, b) => b.ordenes - a.ordenes).slice(0, 5)
 
   return (
     <Card>
@@ -93,4 +97,4 @@ export function OrdenesPorTecnicoChart({ data }: OrdenesPorTecnicoChartProps) {
       </CardContent>
     </Card>
   )
-}
+})

@@ -1,5 +1,6 @@
 "use client"
 
+import { memo, useMemo, useCallback } from "react"
 import {
   AreaChart,
   Area,
@@ -22,16 +23,17 @@ interface IngresosChartProps {
   totalPeriodo: number
 }
 
-export function IngresosChart({ data, totalPeriodo }: IngresosChartProps) {
-  const formatFecha = (fecha: string) => {
+export const IngresosChart = memo(function IngresosChart({ data, totalPeriodo }: IngresosChartProps) {
+  const formatFecha = useCallback((fecha: string) => {
     const date = new Date(fecha)
     return date.toLocaleDateString("es-AR", { weekday: "short", day: "numeric" })
-  }
+  }, [])
 
-  const chartData = data.map((item) => ({
-    ...item,
-    fechaFormateada: formatFecha(item.fecha),
-  }))
+  const chartData = useMemo(() =>
+    data.map((item) => ({
+      ...item,
+      fechaFormateada: formatFecha(item.fecha),
+    })), [data, formatFecha])
 
   if (data.length === 0) {
     return (
@@ -102,4 +104,4 @@ export function IngresosChart({ data, totalPeriodo }: IngresosChartProps) {
       </CardContent>
     </Card>
   )
-}
+})

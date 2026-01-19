@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
-import { generateOrdenPDF, OrdenPDFData } from "@/lib/pdf"
+import { generateOrdenPDFPuppeteer, OrdenPDFData } from "@/lib/pdf-puppeteer"
 
 export async function GET(
   request: Request,
@@ -94,8 +94,8 @@ export async function GET(
       logoUrl: safeString(org?.logo_url),
     }
 
-    // Generar PDF
-    const pdfBuffer = await generateOrdenPDF(pdfData)
+    // Generar PDF con Puppeteer
+    const pdfBuffer = await generateOrdenPDFPuppeteer(pdfData)
 
     // Retornar PDF como descarga (convertir Buffer a Uint8Array)
     return new NextResponse(new Uint8Array(pdfBuffer), {
