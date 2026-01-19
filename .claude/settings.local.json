@@ -40,7 +40,9 @@
       "Bash(analytics \")",
       "Bash(npm ls:*)",
       "Bash(cmd //c \"taskkill /PID 225080 /F\")",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(git show:*)",
+      "Bash(git checkout:*)"
     ]
   }
 }

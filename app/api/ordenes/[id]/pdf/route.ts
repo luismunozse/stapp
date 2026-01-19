@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
-import { generateOrdenPDF, OrdenPDFData } from "@/lib/pdf-orden"
-
-export const runtime = "nodejs"
+import { generateOrdenPDF, OrdenPDFData } from "@/lib/pdf"
 
 export async function GET(
   request: Request,
@@ -96,7 +94,7 @@ export async function GET(
       logoUrl: safeString(org?.logo_url),
     }
 
-    // Generar PDF con React-PDF
+    // Generar PDF
     const pdfBuffer = await generateOrdenPDF(pdfData)
 
     // Retornar PDF como descarga (convertir Buffer a Uint8Array)
