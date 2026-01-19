@@ -551,13 +551,13 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                         <code className="bg-muted px-1.5 py-0.5 rounded text-xs">{orden.imei}</code>
                       </div>
                     )}
-                    {orden.passwordDispositivo && (
+                    {orden.codigoAccesoDispositivo && (
                       <div className="text-sm">
                         <span className="text-muted-foreground">Contraseña: </span>
-                        {orden.passwordDispositivo.startsWith("Patrón:") ? (
-                          <PatternDisplay value={orden.passwordDispositivo} size={80} />
+                        {orden.codigoAccesoDispositivo.startsWith("Patrón:") ? (
+                          <PatternDisplay value={orden.codigoAccesoDispositivo} size={80} />
                         ) : (
-                          <code className="bg-muted px-1.5 py-0.5 rounded text-xs">{orden.passwordDispositivo}</code>
+                          <code className="bg-muted px-1.5 py-0.5 rounded text-xs">{orden.codigoAccesoDispositivo}</code>
                         )}
                       </div>
                     )}

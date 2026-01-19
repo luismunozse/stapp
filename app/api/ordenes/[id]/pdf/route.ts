@@ -87,7 +87,7 @@ export async function GET(
       imei: safeString(orden.imei),
       problemaReportado: safeString(orden.problema_reportado) || "Sin descripción",
       accesorios: safeString(orden.accesorios),
-      passwordDispositivo: safeString(orden.password_dispositivo),
+      codigoAccesoDispositivo: safeString(orden.password_dispositivo),
       presupuesto: typeof orden.presupuesto === "number" ? orden.presupuesto : null,
       observaciones: safeString(orden.observaciones),
       nombreEmpresa: safeString(org?.nombre_mostrar) || safeString(org?.nombre) || undefined,

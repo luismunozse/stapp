@@ -64,7 +64,7 @@ export async function GET(
       imei: orden.imei,
       problemaReportado: orden.problema_reportado,
       accesorios: orden.accesorios,
-      passwordDispositivo: orden.password_dispositivo,
+      codigoAccesoDispositivo: orden.password_dispositivo,
       presupuesto: orden.presupuesto,
       observaciones: orden.observaciones,
       nombreEmpresa: org?.nombre_mostrar || org?.nombre,

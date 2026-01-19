@@ -69,7 +69,7 @@ const ordenSchema = z.object({
     .or(z.literal("")),
   problemaReportado: z.string().min(1, "El problema es requerido"),
   accesorios: z.string().optional(),
-  passwordDispositivo: z.string().optional(),
+  codigoAccesoDispositivo: z.string().optional(),
   presupuesto: z.union([z.number().positive(), z.nan(), z.undefined()]).optional(),
   fechaPrometida: z.string().optional(),
   observaciones: z.string().optional(),
@@ -132,7 +132,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
       imei: "",
       problemaReportado: "",
       accesorios: "",
-      passwordDispositivo: "",
+      codigoAccesoDispositivo: "",
       fechaPrometida: "",
     },
   })
@@ -629,7 +629,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
                 size="sm"
                 onClick={() => {
                   setPasswordType("text")
-                  setValue("passwordDispositivo", "")
+                  setValue("codigoAccesoDispositivo", "")
                 }}
                 className="flex-1"
               >
@@ -642,7 +642,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
                 size="sm"
                 onClick={() => {
                   setPasswordType("pattern")
-                  setValue("passwordDispositivo", "")
+                  setValue("codigoAccesoDispositivo", "")
                 }}
                 className="flex-1"
               >
@@ -652,14 +652,14 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
             </div>
             {passwordType === "text" ? (
               <Input
-                id="passwordDispositivo"
-                {...register("passwordDispositivo")}
+                id="codigoAccesoDispositivo"
+                {...register("codigoAccesoDispositivo")}
                 placeholder="PIN o contraseña para pruebas"
               />
             ) : (
               <PatternLock
-                value={watch("passwordDispositivo")}
-                onChange={(pattern) => setValue("passwordDispositivo", pattern)}
+                value={watch("codigoAccesoDispositivo")}
+                onChange={(pattern) => setValue("codigoAccesoDispositivo", pattern)}
               />
             )}
             <p className="text-xs text-muted-foreground mt-2">

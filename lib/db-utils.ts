@@ -57,7 +57,7 @@ export function formatOrden(orden: any) {
     color: orden.color,
     imei: orden.imei,
     accesorios: orden.accesorios,
-    passwordDispositivo: orden.password_dispositivo,
+    codigoAccesoDispositivo: orden.password_dispositivo,
     // Campos existentes
     problemaReportado: orden.problema_reportado,
     estado: orden.estado,

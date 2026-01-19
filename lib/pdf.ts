@@ -761,7 +761,7 @@ interface OrdenPDFData {
   imei?: string | null
   problemaReportado: string
   accesorios?: string | null
-  passwordDispositivo?: string | null
+  codigoAccesoDispositivo?: string | null
   presupuesto?: number | null
   observaciones?: string | null
   nombreEmpresa?: string
@@ -798,7 +798,7 @@ const OrdenDocument = ({ data }: { data: OrdenPDFData }) => {
   const imei = toText(data.imei)
   const problemaReportado = toText(data.problemaReportado)
   const accesorios = toText(data.accesorios)
-  const passwordDispositivo = toText(data.passwordDispositivo)
+  const codigoAccesoDispositivo = toText(data.codigoAccesoDispositivo)
   const presupuesto =
     data.presupuesto !== null && data.presupuesto !== undefined
       ? formatCurrency(data.presupuesto)
@@ -924,14 +924,14 @@ const OrdenDocument = ({ data }: { data: OrdenPDFData }) => {
         React.createElement(Text, { style: ordenStyles.accesoriosText }, accesorios)
       ) : null,
       // Contrasena/PIN (si hay, sin SVG por ahora para simplificar)
-      passwordDispositivo ? React.createElement(
+      codigoAccesoDispositivo ? React.createElement(
         View,
         { style: ordenStyles.section },
         React.createElement(Text, { style: ordenStyles.sectionTitle }, "CONTRASENA/PIN"),
         React.createElement(
           View,
           { style: { backgroundColor: "#f3f4f6", padding: 8, borderRadius: 4 } },
-          React.createElement(Text, { style: { fontSize: 12, fontFamily: "Courier" } }, passwordDispositivo)
+          React.createElement(Text, { style: { fontSize: 12, fontFamily: "Courier" } }, codigoAccesoDispositivo)
         )
       ) : null,
       // Presupuesto (si hay)
@@ -1028,7 +1028,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const imei = safe(data.imei)
   const problemaReportado = safe(data.problemaReportado) || "Sin descripcion"
   const accesorios = safe(data.accesorios)
-  const passwordDispositivo = safe(data.passwordDispositivo)
+  const codigoAccesoDispositivo = safe(data.codigoAccesoDispositivo)
   const presupuesto = data.presupuesto ? formatCurrencyPDF(data.presupuesto) : ""
   const observaciones = safe(data.observaciones)
 
@@ -1210,11 +1210,11 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   }
 
   // === CONTRASENA (si hay) ===
-  if (passwordDispositivo) {
+  if (codigoAccesoDispositivo) {
     page.drawText("CONTRASEÑA / PIN / PATRON", { x: margin, y, size: 9, font: helveticaBold, color: primaryColor })
     y -= 12
     page.drawRectangle({ x: margin, y: y - 22, width: 180, height: 22, color: bgGray, borderColor: lightGray, borderWidth: 1 })
-    page.drawText(passwordDispositivo, { x: margin + 10, y: y - 15, size: 12, font: courier, color: textColor })
+    page.drawText(codigoAccesoDispositivo, { x: margin + 10, y: y - 15, size: 12, font: courier, color: textColor })
     y -= 34
   }
 

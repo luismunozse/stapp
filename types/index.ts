@@ -56,7 +56,7 @@ export interface OrdenServicio {
   color?: string | null
   imei?: string | null
   accesorios?: string | null
-  passwordDispositivo?: string | null
+  codigoAccesoDispositivo?: string | null
   problemaReportado: string
   estado: EstadoOrden
   presupuesto?: number | null

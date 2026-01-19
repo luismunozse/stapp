@@ -36,7 +36,7 @@ const ordenSchema = z.object({
   imei: z.string().optional(),
   problemaReportado: z.string().min(1, "El problema es requerido"),
   accesorios: z.string().optional(),
-  passwordDispositivo: z.string().optional(),
+  codigoAccesoDispositivo: z.string().optional(),
   presupuesto: z.number().optional(),
   fechaPrometida: z.string().optional(),
   observaciones: z.string().optional(),
@@ -140,7 +140,7 @@ export async function GET(request: Request) {
       fechaPrometida: orden.fecha_prometida,
       fechaCompletado: orden.fecha_completado,
       // Nuevos campos
-      passwordDispositivo: orden.password_dispositivo,
+      codigoAccesoDispositivo: orden.password_dispositivo,
     }))
 
     // Retornar con información de paginación y cache headers
@@ -203,7 +203,7 @@ export async function POST(request: Request) {
         imei: data.imei || null,
         problema_reportado: data.problemaReportado,
         accesorios: data.accesorios || null,
-        password_dispositivo: data.passwordDispositivo || null,
+        password_dispositivo: data.codigoAccesoDispositivo || null,
         presupuesto: data.presupuesto || null,
         fecha_prometida: data.fechaPrometida
           ? new Date(data.fechaPrometida).toISOString()

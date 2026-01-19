@@ -29,7 +29,7 @@ export interface OrdenPDFData {
   imei?: string | null
   problemaReportado: string
   accesorios?: string | null
-  passwordDispositivo?: string | null
+  codigoAccesoDispositivo?: string | null
   presupuesto?: number | null
   observaciones?: string | null
   nombreEmpresa?: string
@@ -41,19 +41,25 @@ export interface OrdenPDFData {
 // ========================================
 // HELPERS
 // ========================================
-const formatDate = (date: Date): string => {
-  return date.toLocaleDateString("es-AR", {
+const formatDate = (date: Date | string | number | null | undefined): string => {
+  if (!date) return ""
+  const parsed = new Date(date)
+  if (Number.isNaN(parsed.getTime())) return ""
+  return parsed.toLocaleDateString("es-AR", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
   })
 }
 
-const formatCurrency = (amount: number): string => {
+const formatCurrency = (amount: number | string | null | undefined): string => {
+  if (amount === null || amount === undefined) return ""
+  const numericAmount = typeof amount === "string" ? Number(amount) : amount
+  if (Number.isNaN(numericAmount)) return ""
   return new Intl.NumberFormat("es-AR", {
     style: "currency",
     currency: "ARS",
-  }).format(amount)
+  }).format(numericAmount)
 }
 
 const tipoDispositivoLabels: Record<string, string> = {
@@ -64,15 +70,36 @@ const tipoDispositivoLabels: Record<string, string> = {
   OTRO: "Otro",
 }
 
-// Detectar si es patrón o PIN
-const isPatternLock = (value: string): boolean => {
-  return value.startsWith("Patrón: ")
+// Ensure we never pass objects/React nodes into <Text>
+const toText = (val: unknown): string => {
+  if (val === null || val === undefined || val === false) return ""
+  if (React.isValidElement(val)) return ""
+  if (Array.isArray(val)) {
+    return val.map((v) => toText(v)).join(", ")
+  }
+  if (typeof val === "object") {
+    if (val instanceof Date) {
+      return formatDate(val)
+    }
+    if ("$$typeof" in val) return ""
+    try {
+      return JSON.stringify(val)
+    } catch {
+      return String(val)
+    }
+  }
+  if (typeof val === "symbol") return val.toString()
+  return String(val)
 }
 
-// Formatear el patrón para mostrar
+// Detectar si es patron
+const isPatternLock = (value: string): boolean => {
+  return value.startsWith("Patron: ") || value.startsWith("Patrón: ")
+}
+
 const formatPatternDisplay = (value: string): string => {
-  if (!value || !value.startsWith("Patrón: ")) return value
-  return value.replace("Patrón: ", "")
+  if (!value) return value
+  return value.replace("Patron: ", "").replace("Patrón: ", "")
 }
 
 // ========================================
@@ -93,7 +120,6 @@ const styles = StyleSheet.create({
     padding: 28,
     paddingTop: 20,
   },
-  // Header
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -166,7 +192,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: "#64748b",
   },
-  // Título principal
   mainTitle: {
     alignItems: "center",
     marginBottom: 14,
@@ -177,17 +202,12 @@ const styles = StyleSheet.create({
     color: "#1e1b4b",
     letterSpacing: 2,
   },
-  titleDecoration: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 4,
-  },
   titleLine: {
     width: 30,
     height: 2,
     backgroundColor: "#6366f1",
+    marginTop: 4,
   },
-  // Grid 2 columnas
   grid2: {
     flexDirection: "row",
     gap: 12,
@@ -196,7 +216,6 @@ const styles = StyleSheet.create({
   gridCol: {
     flex: 1,
   },
-  // Cards
   card: {
     backgroundColor: "#f8fafc",
     borderRadius: 8,
@@ -204,7 +223,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#e2e8f0",
   },
-  cardTitle: {
+  cardTitleRow: {
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 8,
@@ -236,7 +255,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: "#1e293b",
   },
-  // Info boxes
   infoBoxes: {
     flexDirection: "row",
     gap: 10,
@@ -282,7 +300,6 @@ const styles = StyleSheet.create({
     color: "#6366f1",
     letterSpacing: 2,
   },
-  // Sections
   section: {
     backgroundColor: "#f8fafc",
     borderRadius: 8,
@@ -291,7 +308,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#e2e8f0",
   },
-  sectionTitle: {
+  sectionTitleRow: {
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 6,
@@ -314,7 +331,6 @@ const styles = StyleSheet.create({
     color: "#374151",
     lineHeight: 1.5,
   },
-  // Firmas
   signatures: {
     flexDirection: "row",
     gap: 30,
@@ -338,7 +354,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: "#64748b",
   },
-  // Footer
   footer: {
     marginTop: 14,
     paddingTop: 10,
@@ -366,7 +381,6 @@ const styles = StyleSheet.create({
     color: "#64748b",
     flex: 1,
   },
-  // Bottom bar
   bottomBar: {
     height: 6,
     backgroundColor: "#6366f1",
@@ -376,263 +390,340 @@ const styles = StyleSheet.create({
 })
 
 // ========================================
-// COMPONENTE DEL DOCUMENTO
+// COMPONENTE DEL DOCUMENTO (usando React.createElement)
 // ========================================
 const OrdenPDFDocument = ({ data }: { data: OrdenPDFData }) => {
+  // Pre-compute all strings
+  const companyName = toText(data.nombreEmpresa) || "Servicio Tecnico"
+  const telefonoEmpresa = toText(data.telefonoEmpresa)
+  const direccionEmpresa = toText(data.direccionEmpresa)
+  const logoUrl = toText(data.logoUrl)
+  const orderNum = toText(data.numeroOrden)
   const fechaIngresoStr = formatDate(data.fechaIngreso)
-  const fechaPrometidaStr = data.fechaPrometida
-    ? formatDate(data.fechaPrometida)
-    : null
-  const tipoDispositivoStr =
-    tipoDispositivoLabels[data.tipoDispositivo] || data.tipoDispositivo
-  const presupuestoStr = data.presupuesto
-    ? formatCurrency(data.presupuesto)
-    : null
-  const passwordDisplay = data.passwordDispositivo
-    ? isPatternLock(data.passwordDispositivo)
-      ? formatPatternDisplay(data.passwordDispositivo)
-      : data.passwordDispositivo
-    : null
-  const isPattern = data.passwordDispositivo
-    ? isPatternLock(data.passwordDispositivo)
-    : false
+  const fechaPrometidaStr = formatDate(data.fechaPrometida)
+  const clienteNombre = toText(data.cliente.nombre)
+  const clienteTelefono = toText(data.cliente.telefono)
+  const clienteEmail = toText(data.cliente.email)
+  const clienteDireccion = toText(data.cliente.direccion)
+  const tipoDispositivoStr = tipoDispositivoLabels[data.tipoDispositivo] || toText(data.tipoDispositivo)
+  const dispositivo = toText(data.dispositivo)
+  const marca = toText(data.marca)
+  const color = toText(data.color)
+  const imei = toText(data.imei)
+  const accesorios = toText(data.accesorios)
+  const passwordRaw = toText(data.codigoAccesoDispositivo)
+  const isPattern = passwordRaw ? isPatternLock(passwordRaw) : false
+  const passwordDisplay = isPattern ? formatPatternDisplay(passwordRaw) : passwordRaw
+  const presupuestoStr = formatCurrency(data.presupuesto)
+  const problemaReportado = toText(data.problemaReportado)
+  const observaciones = toText(data.observaciones)
 
-  return (
-    <Document>
-      <Page size="A4" style={styles.page}>
-        <View style={styles.accentBar} />
+  const hasInfoBoxes = accesorios || passwordDisplay || presupuestoStr
 
-        <View style={styles.container}>
-          {/* Header */}
-          <View style={styles.header}>
-            <View style={styles.headerLeft}>
-              {data.logoUrl ? (
-                <Image src={data.logoUrl} style={styles.logo} />
-              ) : (
-                <View style={styles.logoPlaceholder}>
-                  <Text style={styles.logoPlaceholderText}>ST</Text>
-                </View>
-              )}
-              <View style={styles.companyInfo}>
-                <Text style={styles.companyName}>
-                  {data.nombreEmpresa || "Servicio Tecnico"}
-                </Text>
-                {data.telefonoEmpresa ? (
-                  <Text style={styles.companyDetail}>
-                    {data.telefonoEmpresa}
-                  </Text>
-                ) : null}
-                {data.direccionEmpresa ? (
-                  <Text style={styles.companyDetail}>
-                    {data.direccionEmpresa}
-                  </Text>
-                ) : null}
-              </View>
-            </View>
-
-            <View style={styles.headerRight}>
-              <View style={styles.docBadge}>
-                <Text style={styles.docBadgeText}>RECEPCION</Text>
-              </View>
-              <Text style={styles.orderNumber}>#{String(data.numeroOrden)}</Text>
-              <View style={styles.orderDates}>
-                <Text style={styles.orderDateText}>
-                  Ingreso: {fechaIngresoStr}
-                </Text>
-                {fechaPrometidaStr ? (
-                  <Text style={styles.orderDateText}>
-                    Entrega: {fechaPrometidaStr}
-                  </Text>
-                ) : null}
-              </View>
-            </View>
-          </View>
-
-          {/* Título */}
-          <View style={styles.mainTitle}>
-            <Text style={styles.mainTitleText}>COMPROBANTE DE RECEPCION</Text>
-            <View style={styles.titleDecoration}>
-              <View style={styles.titleLine} />
-            </View>
-          </View>
-
-          {/* Grid Cliente y Dispositivo */}
-          <View style={styles.grid2}>
-            {/* Datos del Cliente */}
-            <View style={styles.gridCol}>
-              <View style={styles.card}>
-                <View style={styles.cardTitle}>
-                  <View style={styles.cardTitleBar} />
-                  <Text style={styles.cardTitleText}>DATOS DEL CLIENTE</Text>
-                </View>
-                <View style={styles.cardRow}>
-                  <Text style={styles.cardLabel}>Nombre</Text>
-                  <Text style={styles.cardValue}>{data.cliente.nombre}</Text>
-                </View>
-                <View style={styles.cardRow}>
-                  <Text style={styles.cardLabel}>Telefono</Text>
-                  <Text style={styles.cardValue}>{data.cliente.telefono}</Text>
-                </View>
-                {data.cliente.email ? (
-                  <View style={styles.cardRow}>
-                    <Text style={styles.cardLabel}>Email</Text>
-                    <Text style={styles.cardValue}>{data.cliente.email}</Text>
-                  </View>
-                ) : null}
-                {data.cliente.direccion ? (
-                  <View style={styles.cardRow}>
-                    <Text style={styles.cardLabel}>Direccion</Text>
-                    <Text style={styles.cardValue}>
-                      {data.cliente.direccion}
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
-            </View>
-
-            {/* Datos del Dispositivo */}
-            <View style={styles.gridCol}>
-              <View style={styles.card}>
-                <View style={styles.cardTitle}>
-                  <View style={styles.cardTitleBar} />
-                  <Text style={styles.cardTitleText}>DISPOSITIVO</Text>
-                </View>
-                <View style={styles.cardRow}>
-                  <Text style={styles.cardLabel}>Tipo</Text>
-                  <Text style={styles.cardValue}>{tipoDispositivoStr}</Text>
-                </View>
-                <View style={styles.cardRow}>
-                  <Text style={styles.cardLabel}>Equipo</Text>
-                  <Text style={styles.cardValue}>{data.dispositivo}</Text>
-                </View>
-                {data.marca ? (
-                  <View style={styles.cardRow}>
-                    <Text style={styles.cardLabel}>Marca</Text>
-                    <Text style={styles.cardValue}>{data.marca}</Text>
-                  </View>
-                ) : null}
-                {data.color ? (
-                  <View style={styles.cardRow}>
-                    <Text style={styles.cardLabel}>Color</Text>
-                    <Text style={styles.cardValue}>{data.color}</Text>
-                  </View>
-                ) : null}
-                {data.imei ? (
-                  <View style={styles.cardRow}>
-                    <Text style={styles.cardLabel}>IMEI/Serie</Text>
-                    <Text style={styles.cardValue}>{data.imei}</Text>
-                  </View>
-                ) : null}
-              </View>
-            </View>
-          </View>
-
-          {/* Info boxes */}
-          {(data.accesorios || passwordDisplay || presupuestoStr) ? (
-            <View style={styles.infoBoxes}>
-              {data.accesorios ? (
-                <View style={styles.infoBox}>
-                  <Text style={styles.infoBoxLabel}>ACCESORIOS</Text>
-                  <Text style={styles.infoBoxValue}>{data.accesorios}</Text>
-                </View>
-              ) : null}
-              {passwordDisplay ? (
-                <View style={styles.infoBox}>
-                  <Text style={styles.infoBoxLabel}>
-                    {isPattern ? "PATRON" : "PIN/CONTRASENA"}
-                  </Text>
-                  <Text style={isPattern ? styles.patternValue : styles.infoBoxValue}>
-                    {passwordDisplay}
-                  </Text>
-                </View>
-              ) : null}
-              {presupuestoStr ? (
-                <View style={styles.infoBoxHighlight}>
-                  <Text style={styles.infoBoxLabel}>PRESUPUESTO ESTIMADO</Text>
-                  <Text style={styles.infoBoxValueHighlight}>
-                    {presupuestoStr}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
-          ) : null}
-
-          {/* Problema Reportado */}
-          <View style={styles.section}>
-            <View style={styles.sectionTitle}>
-              <View style={styles.sectionTitleBar} />
-              <Text style={styles.sectionTitleText}>PROBLEMA REPORTADO</Text>
-            </View>
-            <Text style={styles.sectionContent}>{data.problemaReportado}</Text>
-          </View>
-
-          {/* Observaciones */}
-          {data.observaciones ? (
-            <View style={styles.section}>
-              <View style={styles.sectionTitle}>
-                <View style={styles.sectionTitleBar} />
-                <Text style={styles.sectionTitleText}>OBSERVACIONES</Text>
-              </View>
-              <Text style={styles.sectionContent}>{data.observaciones}</Text>
-            </View>
-          ) : null}
-
-          {/* Firmas */}
-          <View style={styles.signatures}>
-            <View style={styles.signatureBox}>
-              <View style={styles.signatureLine} />
-              <Text style={styles.signatureLabel}>Firma del Cliente</Text>
-            </View>
-            <View style={styles.signatureBox}>
-              <View style={styles.signatureLine} />
-              <Text style={styles.signatureLabel}>Firma del Tecnico</Text>
-            </View>
-          </View>
-
-          {/* Footer - Términos */}
-          <View style={styles.footer}>
-            <Text style={styles.footerTitle}>TERMINOS Y CONDICIONES</Text>
-            <View style={styles.footerItem}>
-              <Text style={styles.footerBullet}>*</Text>
-              <Text style={styles.footerText}>
-                El plazo de reparacion esta sujeto a disponibilidad de
-                repuestos.
-              </Text>
-            </View>
-            <View style={styles.footerItem}>
-              <Text style={styles.footerBullet}>*</Text>
-              <Text style={styles.footerText}>
-                Los equipos no retirados en 90 dias seran considerados en
-                abandono.
-              </Text>
-            </View>
-            <View style={styles.footerItem}>
-              <Text style={styles.footerBullet}>*</Text>
-              <Text style={styles.footerText}>
-                No nos hacemos responsables por datos almacenados en el
-                dispositivo.
-              </Text>
-            </View>
-            <View style={styles.footerItem}>
-              <Text style={styles.footerBullet}>*</Text>
-              <Text style={styles.footerText}>
-                El presupuesto puede variar segun el diagnostico tecnico.
-              </Text>
-            </View>
-          </View>
-
-          {/* Bottom bar */}
-          <View style={styles.bottomBar} />
-        </View>
-      </Page>
-    </Document>
+  return React.createElement(
+    Document,
+    null,
+    React.createElement(
+      Page,
+      { size: "A4", style: styles.page },
+      // Accent bar
+      React.createElement(View, { style: styles.accentBar }),
+      // Container
+      React.createElement(
+        View,
+        { style: styles.container },
+        // Header
+        React.createElement(
+          View,
+          { style: styles.header },
+          React.createElement(
+            View,
+            { style: styles.headerLeft },
+            logoUrl
+              ? React.createElement(Image, { src: logoUrl, style: styles.logo })
+              : React.createElement(
+                  View,
+                  { style: styles.logoPlaceholder },
+                  React.createElement(Text, { style: styles.logoPlaceholderText }, "ST")
+                ),
+            React.createElement(
+              View,
+              { style: styles.companyInfo },
+              React.createElement(Text, { style: styles.companyName }, companyName),
+              telefonoEmpresa
+                ? React.createElement(Text, { style: styles.companyDetail }, telefonoEmpresa)
+                : null,
+              direccionEmpresa
+                ? React.createElement(Text, { style: styles.companyDetail }, direccionEmpresa)
+                : null
+            )
+          ),
+          React.createElement(
+            View,
+            { style: styles.headerRight },
+            React.createElement(
+              View,
+              { style: styles.docBadge },
+              React.createElement(Text, { style: styles.docBadgeText }, "RECEPCION")
+            ),
+            React.createElement(Text, { style: styles.orderNumber }, `#${orderNum}`),
+            React.createElement(
+              View,
+              { style: styles.orderDates },
+              React.createElement(Text, { style: styles.orderDateText }, `Ingreso: ${fechaIngresoStr}`),
+              fechaPrometidaStr
+                ? React.createElement(Text, { style: styles.orderDateText }, `Entrega: ${fechaPrometidaStr}`)
+                : null
+            )
+          )
+        ),
+        // Main title
+        React.createElement(
+          View,
+          { style: styles.mainTitle },
+          React.createElement(Text, { style: styles.mainTitleText }, "COMPROBANTE DE RECEPCION"),
+          React.createElement(View, { style: styles.titleLine })
+        ),
+        // Grid: Cliente y Dispositivo
+        React.createElement(
+          View,
+          { style: styles.grid2 },
+          // Cliente Card
+          React.createElement(
+            View,
+            { style: styles.gridCol },
+            React.createElement(
+              View,
+              { style: styles.card },
+              React.createElement(
+                View,
+                { style: styles.cardTitleRow },
+                React.createElement(View, { style: styles.cardTitleBar }),
+                React.createElement(Text, { style: styles.cardTitleText }, "DATOS DEL CLIENTE")
+              ),
+              React.createElement(
+                View,
+                { style: styles.cardRow },
+                React.createElement(Text, { style: styles.cardLabel }, "Nombre"),
+                React.createElement(Text, { style: styles.cardValue }, clienteNombre)
+              ),
+              React.createElement(
+                View,
+                { style: styles.cardRow },
+                React.createElement(Text, { style: styles.cardLabel }, "Telefono"),
+                React.createElement(Text, { style: styles.cardValue }, clienteTelefono)
+              ),
+              clienteEmail
+                ? React.createElement(
+                    View,
+                    { style: styles.cardRow },
+                    React.createElement(Text, { style: styles.cardLabel }, "Email"),
+                    React.createElement(Text, { style: styles.cardValue }, clienteEmail)
+                  )
+                : null,
+              clienteDireccion
+                ? React.createElement(
+                    View,
+                    { style: styles.cardRow },
+                    React.createElement(Text, { style: styles.cardLabel }, "Direccion"),
+                    React.createElement(Text, { style: styles.cardValue }, clienteDireccion)
+                  )
+                : null
+            )
+          ),
+          // Dispositivo Card
+          React.createElement(
+            View,
+            { style: styles.gridCol },
+            React.createElement(
+              View,
+              { style: styles.card },
+              React.createElement(
+                View,
+                { style: styles.cardTitleRow },
+                React.createElement(View, { style: styles.cardTitleBar }),
+                React.createElement(Text, { style: styles.cardTitleText }, "DISPOSITIVO")
+              ),
+              React.createElement(
+                View,
+                { style: styles.cardRow },
+                React.createElement(Text, { style: styles.cardLabel }, "Tipo"),
+                React.createElement(Text, { style: styles.cardValue }, tipoDispositivoStr)
+              ),
+              React.createElement(
+                View,
+                { style: styles.cardRow },
+                React.createElement(Text, { style: styles.cardLabel }, "Equipo"),
+                React.createElement(Text, { style: styles.cardValue }, dispositivo)
+              ),
+              marca
+                ? React.createElement(
+                    View,
+                    { style: styles.cardRow },
+                    React.createElement(Text, { style: styles.cardLabel }, "Marca"),
+                    React.createElement(Text, { style: styles.cardValue }, marca)
+                  )
+                : null,
+              color
+                ? React.createElement(
+                    View,
+                    { style: styles.cardRow },
+                    React.createElement(Text, { style: styles.cardLabel }, "Color"),
+                    React.createElement(Text, { style: styles.cardValue }, color)
+                  )
+                : null,
+              imei
+                ? React.createElement(
+                    View,
+                    { style: styles.cardRow },
+                    React.createElement(Text, { style: styles.cardLabel }, "IMEI/Serie"),
+                    React.createElement(Text, { style: styles.cardValue }, imei)
+                  )
+                : null
+            )
+          )
+        ),
+        // Info boxes
+        hasInfoBoxes
+          ? React.createElement(
+              View,
+              { style: styles.infoBoxes },
+              accesorios
+                ? React.createElement(
+                    View,
+                    { style: styles.infoBox },
+                    React.createElement(Text, { style: styles.infoBoxLabel }, "ACCESORIOS"),
+                    React.createElement(Text, { style: styles.infoBoxValue }, accesorios)
+                  )
+                : null,
+              passwordDisplay
+                ? React.createElement(
+                    View,
+                    { style: styles.infoBox },
+                    React.createElement(
+                      Text,
+                      { style: styles.infoBoxLabel },
+                      isPattern ? "PATRON" : "PIN/CONTRASENA"
+                    ),
+                    React.createElement(
+                      Text,
+                      { style: isPattern ? styles.patternValue : styles.infoBoxValue },
+                      passwordDisplay
+                    )
+                  )
+                : null,
+              presupuestoStr
+                ? React.createElement(
+                    View,
+                    { style: styles.infoBoxHighlight },
+                    React.createElement(Text, { style: styles.infoBoxLabel }, "PRESUPUESTO ESTIMADO"),
+                    React.createElement(Text, { style: styles.infoBoxValueHighlight }, presupuestoStr)
+                  )
+                : null
+            )
+          : null,
+        // Problema Reportado
+        React.createElement(
+          View,
+          { style: styles.section },
+          React.createElement(
+            View,
+            { style: styles.sectionTitleRow },
+            React.createElement(View, { style: styles.sectionTitleBar }),
+            React.createElement(Text, { style: styles.sectionTitleText }, "PROBLEMA REPORTADO")
+          ),
+          React.createElement(Text, { style: styles.sectionContent }, problemaReportado)
+        ),
+        // Observaciones
+        observaciones
+          ? React.createElement(
+              View,
+              { style: styles.section },
+              React.createElement(
+                View,
+                { style: styles.sectionTitleRow },
+                React.createElement(View, { style: styles.sectionTitleBar }),
+                React.createElement(Text, { style: styles.sectionTitleText }, "OBSERVACIONES")
+              ),
+              React.createElement(Text, { style: styles.sectionContent }, observaciones)
+            )
+          : null,
+        // Firmas
+        React.createElement(
+          View,
+          { style: styles.signatures },
+          React.createElement(
+            View,
+            { style: styles.signatureBox },
+            React.createElement(View, { style: styles.signatureLine }),
+            React.createElement(Text, { style: styles.signatureLabel }, "Firma del Cliente")
+          ),
+          React.createElement(
+            View,
+            { style: styles.signatureBox },
+            React.createElement(View, { style: styles.signatureLine }),
+            React.createElement(Text, { style: styles.signatureLabel }, "Firma del Tecnico")
+          )
+        ),
+        // Footer
+        React.createElement(
+          View,
+          { style: styles.footer },
+          React.createElement(Text, { style: styles.footerTitle }, "TERMINOS Y CONDICIONES"),
+          React.createElement(
+            View,
+            { style: styles.footerItem },
+            React.createElement(Text, { style: styles.footerBullet }, "*"),
+            React.createElement(
+              Text,
+              { style: styles.footerText },
+              "El plazo de reparacion esta sujeto a disponibilidad de repuestos."
+            )
+          ),
+          React.createElement(
+            View,
+            { style: styles.footerItem },
+            React.createElement(Text, { style: styles.footerBullet }, "*"),
+            React.createElement(
+              Text,
+              { style: styles.footerText },
+              "Los equipos no retirados en 90 dias seran considerados en abandono."
+            )
+          ),
+          React.createElement(
+            View,
+            { style: styles.footerItem },
+            React.createElement(Text, { style: styles.footerBullet }, "*"),
+            React.createElement(
+              Text,
+              { style: styles.footerText },
+              "No nos hacemos responsables por datos almacenados en el dispositivo."
+            )
+          ),
+          React.createElement(
+            View,
+            { style: styles.footerItem },
+            React.createElement(Text, { style: styles.footerBullet }, "*"),
+            React.createElement(
+              Text,
+              { style: styles.footerText },
+              "El presupuesto puede variar segun el diagnostico tecnico."
+            )
+          )
+        ),
+        // Bottom bar
+        React.createElement(View, { style: styles.bottomBar })
+      )
+    )
   )
 }
 
 // ========================================
-// FUNCIÓN EXPORTADA PARA GENERAR PDF
+// FUNCION EXPORTADA PARA GENERAR PDF
 // ========================================
 export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
-  const buffer = await renderToBuffer(<OrdenPDFDocument data={data} />)
+  const buffer = await renderToBuffer(
+    React.createElement(OrdenPDFDocument, { data }) as React.ReactElement
+  )
   return Buffer.from(buffer)
 }
