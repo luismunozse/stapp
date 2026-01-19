@@ -1750,43 +1750,81 @@ export async function generateGarantiaVentaPDF(data: GarantiaVentaPDFData): Prom
   const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica)
   const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
 
-  // Colores modernos (Indigo theme)
-  const primaryColor = rgb(0.388, 0.400, 0.945) // #6366f1
-  const primaryDark = rgb(0.118, 0.106, 0.294) // #1e1b4b
+  // Colores vibrantes
+  const primaryColor = rgb(0.227, 0.384, 0.835) // #3a62d5 - Azul vibrante
+  const primaryLight = rgb(0.380, 0.533, 0.906) // #6188e7 - Azul claro
+  const primaryDark = rgb(0.118, 0.227, 0.525) // #1e3a86 - Azul oscuro
+  const accentGold = rgb(0.855, 0.647, 0.125) // #daa520 - Dorado
+  const accentGoldLight = rgb(1, 0.843, 0.4) // #ffd766 - Dorado claro
   const textColor = rgb(0.118, 0.161, 0.231) // #1e293b
   const grayColor = rgb(0.392, 0.455, 0.545) // #64748b
-  const lightGray = rgb(0.886, 0.910, 0.941) // #e2e8f0
-  const bgGray = rgb(0.973, 0.980, 0.988) // #f8fafc
-  const greenColor = rgb(0.134, 0.545, 0.373)
-  const greenBg = rgb(0.863, 0.949, 0.898)
+  const lightGray = rgb(0.918, 0.929, 0.941) // #eaecf0
+  const greenColor = rgb(0.086, 0.608, 0.420) // #169b6b
+  const greenDark = rgb(0.047, 0.408, 0.286) // #0c6849
+  const greenLight = rgb(0.812, 0.949, 0.886) // #cff2e2
   const white = rgb(1, 1, 1)
 
-  const margin = 50
+  const margin = 40
   const contentWidth = width - (margin * 2)
 
-  // === BARRA DE ACENTO SUPERIOR ===
+  // === FONDO DECORATIVO SUPERIOR ===
+  // Banda superior gruesa con gradiente visual
   page.drawRectangle({
     x: 0,
-    y: height - 12,
+    y: height - 120,
     width: width,
-    height: 12,
+    height: 120,
     color: primaryColor,
   })
-
-  // === MARCO DECORATIVO MODERNO ===
+  // Capa superpuesta para efecto
   page.drawRectangle({
-    x: margin - 5,
-    y: margin - 5,
-    width: contentWidth + 10,
-    height: height - (margin * 2) + 10,
-    borderColor: lightGray,
+    x: 0,
+    y: height - 60,
+    width: width,
+    height: 60,
+    color: primaryDark,
+  })
+
+  // === ESCUDO/BADGE DE GARANTIA (círculo decorativo) ===
+  const badgeCenterX = width / 2
+  const badgeCenterY = height - 90
+  const badgeRadius = 45
+
+  // Círculo exterior dorado
+  page.drawCircle({
+    x: badgeCenterX,
+    y: badgeCenterY,
+    size: badgeRadius + 8,
+    color: accentGold,
+  })
+  // Círculo interior azul
+  page.drawCircle({
+    x: badgeCenterX,
+    y: badgeCenterY,
+    size: badgeRadius,
+    color: primaryDark,
+  })
+  // Círculo interior más pequeño
+  page.drawCircle({
+    x: badgeCenterX,
+    y: badgeCenterY,
+    size: badgeRadius - 8,
+    borderColor: accentGoldLight,
     borderWidth: 2,
   })
 
-  let y = height - margin - 30
+  // Texto dentro del badge
+  const checkText = "OK"
+  const checkWidth = helveticaBold.widthOfTextAtSize(checkText, 28)
+  page.drawText(checkText, {
+    x: badgeCenterX - checkWidth / 2,
+    y: badgeCenterY - 10,
+    size: 28,
+    font: helveticaBold,
+    color: accentGoldLight,
+  })
 
-  // === LOGO (si existe) ===
-  let logoWidth = 0
+  // === LOGO (esquina superior izquierda) ===
   if (data.logoUrl) {
     try {
       const logoResponse = await fetch(data.logoUrl)
@@ -1805,20 +1843,27 @@ export async function generateGarantiaVentaPDF(data: GarantiaVentaPDFData): Prom
 
         if (logoImage) {
           const logoDims = logoImage.scale(1)
-          const maxLogoHeight = 45
-          const maxLogoWidth = 70
+          const maxLogoHeight = 40
+          const maxLogoWidth = 60
           const scale = Math.min(maxLogoHeight / logoDims.height, maxLogoWidth / logoDims.width)
           const scaledWidth = logoDims.width * scale
           const scaledHeight = logoDims.height * scale
 
+          // Fondo blanco para el logo
+          page.drawRectangle({
+            x: margin - 5,
+            y: height - 45 - scaledHeight / 2,
+            width: scaledWidth + 10,
+            height: scaledHeight + 10,
+            color: white,
+          })
+
           page.drawImage(logoImage, {
-            x: margin + 10,
-            y: height - margin - 20 - scaledHeight,
+            x: margin,
+            y: height - 40 - scaledHeight / 2,
             width: scaledWidth,
             height: scaledHeight,
           })
-
-          logoWidth = scaledWidth + 15
         }
       }
     } catch (logoError) {
@@ -1826,139 +1871,276 @@ export async function generateGarantiaVentaPDF(data: GarantiaVentaPDFData): Prom
     }
   }
 
-  // === HEADER ===
-  page.drawText(empresaNombre, { x: margin + 10 + logoWidth, y, size: 18, font: helveticaBold, color: textColor })
-  y -= 14
-  if (telefonoEmpresa) {
-    page.drawText(`Tel: ${telefonoEmpresa}`, { x: margin + 10 + logoWidth, y, size: 9, font: helvetica, color: grayColor })
-    y -= 11
-  }
-  if (direccionEmpresa) {
-    page.drawText(direccionEmpresa, { x: margin + 10 + logoWidth, y, size: 9, font: helvetica, color: grayColor })
-  }
-
-  // Espacio adicional después del header para evitar superposición con el título
-  y = height - margin - 100
-
   // === TITULO PRINCIPAL ===
-  page.drawRectangle({
-    x: margin,
-    y: y - 5,
-    width: contentWidth,
-    height: 45,
-    color: primaryColor,
-  })
+  let y = height - 155
 
   const titleText = "CERTIFICADO DE GARANTIA"
-  const titleWidth = helveticaBold.widthOfTextAtSize(titleText, 22)
-  page.drawText(titleText, { x: (width - titleWidth) / 2, y: y + 10, size: 22, font: helveticaBold, color: white })
+  const titleWidth = helveticaBold.widthOfTextAtSize(titleText, 24)
+  page.drawText(titleText, {
+    x: (width - titleWidth) / 2,
+    y,
+    size: 24,
+    font: helveticaBold,
+    color: primaryDark,
+  })
 
-  y -= 60
+  y -= 25
 
-  // === NUMERO DE GARANTIA ===
+  // Línea decorativa dorada debajo del título
+  const lineWidth = 180
+  page.drawRectangle({
+    x: (width - lineWidth) / 2,
+    y,
+    width: lineWidth,
+    height: 3,
+    color: accentGold,
+  })
+
+  y -= 30
+
+  // === NUMERO DE GARANTIA (badge destacado) ===
   const garantiaText = `N° ${numeroGarantia}`
-  const garantiaWidth = helveticaBold.widthOfTextAtSize(garantiaText, 16)
-  page.drawText(garantiaText, { x: (width - garantiaWidth) / 2, y, size: 16, font: helveticaBold, color: primaryColor })
+  const garantiaTextWidth = helveticaBold.widthOfTextAtSize(garantiaText, 14)
+  const garantiaBadgeWidth = garantiaTextWidth + 40
+  const garantiaBadgeHeight = 28
 
-  y -= 40
+  page.drawRectangle({
+    x: (width - garantiaBadgeWidth) / 2,
+    y: y - 5,
+    width: garantiaBadgeWidth,
+    height: garantiaBadgeHeight,
+    color: primaryLight,
+  })
+  page.drawText(garantiaText, {
+    x: (width - garantiaTextWidth) / 2,
+    y: y + 3,
+    size: 14,
+    font: helveticaBold,
+    color: white,
+  })
 
-  // === DATOS DEL CLIENTE ===
-  page.drawRectangle({ x: margin, y: y - 50, width: contentWidth, height: 60, color: bgGray })
-  page.drawText("DATOS DEL CLIENTE", { x: margin + 15, y: y - 5, size: 10, font: helveticaBold, color: primaryColor })
-  y -= 22
-  page.drawText("Nombre:", { x: margin + 15, y, size: 9, font: helveticaBold, color: grayColor })
-  page.drawText(clienteNombre, { x: margin + 70, y, size: 10, font: helvetica, color: textColor })
-  y -= 15
-  if (clienteTelefono) {
-    page.drawText("Telefono:", { x: margin + 15, y, size: 9, font: helveticaBold, color: grayColor })
-    page.drawText(clienteTelefono, { x: margin + 70, y, size: 10, font: helvetica, color: textColor })
+  y -= 50
+
+  // === INFORMACIÓN DE LA EMPRESA ===
+  page.drawText(empresaNombre.toUpperCase(), {
+    x: margin,
+    y,
+    size: 12,
+    font: helveticaBold,
+    color: textColor,
+  })
+  y -= 14
+  if (telefonoEmpresa) {
+    page.drawText(`Tel: ${telefonoEmpresa}`, { x: margin, y, size: 9, font: helvetica, color: grayColor })
+    if (direccionEmpresa) {
+      page.drawText(`  |  ${direccionEmpresa}`, { x: margin + helvetica.widthOfTextAtSize(`Tel: ${telefonoEmpresa}`, 9), y, size: 9, font: helvetica, color: grayColor })
+    }
+  } else if (direccionEmpresa) {
+    page.drawText(direccionEmpresa, { x: margin, y, size: 9, font: helvetica, color: grayColor })
   }
 
-  y -= 40
+  y -= 30
 
-  // === DATOS DEL PRODUCTO ===
-  page.drawText("PRODUCTO CUBIERTO", { x: margin, y, size: 10, font: helveticaBold, color: primaryColor })
-  y -= 5
+  // === SECCIÓN: DATOS DEL CLIENTE ===
+  // Header de sección con icono
+  page.drawRectangle({
+    x: margin,
+    y: y - 2,
+    width: 4,
+    height: 16,
+    color: primaryColor,
+  })
+  page.drawText("DATOS DEL CLIENTE", { x: margin + 12, y, size: 11, font: helveticaBold, color: primaryDark })
+  y -= 8
   page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 1, color: lightGray })
   y -= 20
 
-  page.drawText("Descripcion:", { x: margin + 15, y, size: 9, font: helveticaBold, color: grayColor })
-  page.drawText(productoDescripcion, { x: margin + 85, y, size: 10, font: helvetica, color: textColor })
-  y -= 15
-  page.drawText("Cantidad:", { x: margin + 15, y, size: 9, font: helveticaBold, color: grayColor })
-  page.drawText(String(productoCantidad), { x: margin + 85, y, size: 10, font: helvetica, color: textColor })
-  y -= 15
-  page.drawText("Venta N°:", { x: margin + 15, y, size: 9, font: helveticaBold, color: grayColor })
-  page.drawText(`${String(numeroVenta).padStart(4, "0")} - ${fechaVenta}`, { x: margin + 85, y, size: 10, font: helvetica, color: textColor })
-
-  y -= 40
-
-  // === VIGENCIA DE LA GARANTIA ===
+  // Contenido del cliente en caja
   page.drawRectangle({
     x: margin,
-    y: y - 80,
+    y: y - 35,
     width: contentWidth,
-    height: 90,
-    color: greenBg,
+    height: 50,
+    color: rgb(0.976, 0.980, 0.988),
+    borderColor: lightGray,
+    borderWidth: 1,
+  })
+
+  page.drawText("Nombre:", { x: margin + 15, y: y - 5, size: 9, font: helvetica, color: grayColor })
+  page.drawText(clienteNombre, { x: margin + 65, y: y - 5, size: 10, font: helveticaBold, color: textColor })
+  if (clienteTelefono) {
+    page.drawText("Telefono:", { x: margin + 280, y: y - 5, size: 9, font: helvetica, color: grayColor })
+    page.drawText(clienteTelefono, { x: margin + 335, y: y - 5, size: 10, font: helvetica, color: textColor })
+  }
+  page.drawText("Venta N°:", { x: margin + 15, y: y - 22, size: 9, font: helvetica, color: grayColor })
+  page.drawText(`${String(numeroVenta).padStart(4, "0")}`, { x: margin + 65, y: y - 22, size: 10, font: helveticaBold, color: textColor })
+  page.drawText("Fecha:", { x: margin + 150, y: y - 22, size: 9, font: helvetica, color: grayColor })
+  page.drawText(fechaVenta, { x: margin + 190, y: y - 22, size: 10, font: helvetica, color: textColor })
+
+  y -= 55
+
+  // === SECCIÓN: PRODUCTO CUBIERTO ===
+  page.drawRectangle({
+    x: margin,
+    y: y - 2,
+    width: 4,
+    height: 16,
+    color: primaryColor,
+  })
+  page.drawText("PRODUCTO CUBIERTO POR LA GARANTIA", { x: margin + 12, y, size: 11, font: helveticaBold, color: primaryDark })
+  y -= 8
+  page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 1, color: lightGray })
+  y -= 20
+
+  page.drawRectangle({
+    x: margin,
+    y: y - 35,
+    width: contentWidth,
+    height: 50,
+    color: rgb(0.976, 0.980, 0.988),
+    borderColor: lightGray,
+    borderWidth: 1,
+  })
+
+  page.drawText("Producto:", { x: margin + 15, y: y - 5, size: 9, font: helvetica, color: grayColor })
+  // Truncar descripción si es muy larga
+  let descripcionDisplay = productoDescripcion
+  const maxDescWidth = 380
+  while (helvetica.widthOfTextAtSize(descripcionDisplay, 10) > maxDescWidth && descripcionDisplay.length > 3) {
+    descripcionDisplay = descripcionDisplay.slice(0, -4) + "..."
+  }
+  page.drawText(descripcionDisplay, { x: margin + 65, y: y - 5, size: 10, font: helveticaBold, color: textColor })
+  page.drawText("Cantidad:", { x: margin + 15, y: y - 22, size: 9, font: helvetica, color: grayColor })
+  page.drawText(String(productoCantidad), { x: margin + 65, y: y - 22, size: 10, font: helveticaBold, color: textColor })
+
+  y -= 60
+
+  // === SECCIÓN DESTACADA: VIGENCIA DE LA GARANTIA ===
+  const vigenciaHeight = 110
+  // Fondo verde con borde
+  page.drawRectangle({
+    x: margin,
+    y: y - vigenciaHeight + 15,
+    width: contentWidth,
+    height: vigenciaHeight,
+    color: greenLight,
     borderColor: greenColor,
     borderWidth: 2,
   })
 
-  page.drawText("VIGENCIA DE LA GARANTIA", { x: margin + 15, y: y - 8, size: 11, font: helveticaBold, color: greenColor })
-  y -= 30
+  // Badge "VIGENTE" en esquina
+  const vigenteBadgeWidth = 70
+  page.drawRectangle({
+    x: width - margin - vigenteBadgeWidth,
+    y: y + 5,
+    width: vigenteBadgeWidth,
+    height: 22,
+    color: greenColor,
+  })
+  const vigenteText = "VIGENTE"
+  const vigenteWidth = helveticaBold.widthOfTextAtSize(vigenteText, 9)
+  page.drawText(vigenteText, {
+    x: width - margin - vigenteBadgeWidth / 2 - vigenteWidth / 2,
+    y: y + 11,
+    size: 9,
+    font: helveticaBold,
+    color: white,
+  })
 
-  const diasText = `${data.diasValidez} DIAS`
-  const diasWidth = helveticaBold.widthOfTextAtSize(diasText, 28)
-  page.drawText(diasText, { x: (width - diasWidth) / 2, y, size: 28, font: helveticaBold, color: greenColor })
-  y -= 25
+  // Título de la sección
+  page.drawText("VIGENCIA DE LA GARANTIA", { x: margin + 20, y: y - 5, size: 12, font: helveticaBold, color: greenDark })
+  y -= 35
 
-  page.drawText(`Desde: ${fechaInicio}`, { x: margin + 100, y, size: 10, font: helvetica, color: textColor })
-  page.drawText(`Hasta: ${fechaVencimiento}`, { x: width - margin - 180, y, size: 10, font: helveticaBold, color: textColor })
+  // Días grandes en el centro
+  const diasText = `${data.diasValidez}`
+  const diasWidth = helveticaBold.widthOfTextAtSize(diasText, 48)
+  page.drawText(diasText, { x: (width - diasWidth) / 2 - 30, y: y - 5, size: 48, font: helveticaBold, color: greenDark })
+  page.drawText("DIAS", { x: (width + diasWidth) / 2 - 20, y: y + 5, size: 16, font: helveticaBold, color: greenDark })
 
-  y -= 60
+  y -= 45
 
-  // === CONDICIONES ===
-  page.drawText("CONDICIONES DE LA GARANTIA", { x: margin, y, size: 10, font: helveticaBold, color: primaryColor })
-  y -= 5
-  page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 1, color: lightGray })
+  // Fechas con iconos visuales
+  const fechaBoxWidth = (contentWidth - 40) / 2
+
+  // Fecha inicio
+  page.drawRectangle({
+    x: margin + 10,
+    y: y - 25,
+    width: fechaBoxWidth,
+    height: 35,
+    color: white,
+    borderColor: greenColor,
+    borderWidth: 1,
+  })
+  page.drawText("DESDE", { x: margin + 20, y: y - 5, size: 8, font: helveticaBold, color: greenColor })
+  page.drawText(fechaInicio, { x: margin + 20, y: y - 18, size: 10, font: helveticaBold, color: textColor })
+
+  // Fecha fin
+  page.drawRectangle({
+    x: margin + 20 + fechaBoxWidth,
+    y: y - 25,
+    width: fechaBoxWidth,
+    height: 35,
+    color: white,
+    borderColor: greenColor,
+    borderWidth: 1,
+  })
+  page.drawText("HASTA", { x: margin + 30 + fechaBoxWidth, y: y - 5, size: 8, font: helveticaBold, color: greenColor })
+  page.drawText(fechaVencimiento, { x: margin + 30 + fechaBoxWidth, y: y - 18, size: 10, font: helveticaBold, color: textColor })
+
+  y -= 55
+
+  // === CONDICIONES (más compactas) ===
+  page.drawRectangle({
+    x: margin,
+    y: y - 2,
+    width: 4,
+    height: 16,
+    color: grayColor,
+  })
+  page.drawText("CONDICIONES DE LA GARANTIA", { x: margin + 12, y, size: 10, font: helveticaBold, color: grayColor })
   y -= 18
 
   const condiciones = [
-    "1. Esta garantia cubre defectos de fabricacion del producto.",
-    "2. No cubre danos por mal uso, caidas, liquidos o manipulacion inadecuada.",
-    "3. Para hacer efectiva la garantia, presente este certificado y el producto.",
-    "4. La garantia no es transferible y solo es valida para el comprador original.",
-    "5. El producto sera reparado o reemplazado segun disponibilidad.",
+    "Esta garantia cubre defectos de fabricacion del producto.",
+    "No cubre danos por mal uso, caidas, liquidos o manipulacion inadecuada.",
+    "Para hacer efectiva la garantia, presente este certificado y el producto.",
+    "La garantia no es transferible. El producto sera reparado o reemplazado segun disponibilidad.",
   ]
 
-  for (const cond of condiciones) {
-    page.drawText(cond, { x: margin + 10, y, size: 9, font: helvetica, color: textColor })
-    y -= 14
+  for (let i = 0; i < condiciones.length; i++) {
+    // Bullet point
+    page.drawCircle({ x: margin + 8, y: y + 3, size: 2, color: grayColor })
+    page.drawText(condiciones[i], { x: margin + 18, y, size: 8, font: helvetica, color: grayColor })
+    y -= 12
   }
 
   // === FIRMA ===
-  y -= 30
-  page.drawLine({ start: { x: width - margin - 200, y }, end: { x: width - margin - 20, y }, thickness: 1, color: textColor })
-  page.drawText("Firma y Sello", { x: width - margin - 140, y: y - 12, size: 9, font: helvetica, color: grayColor })
+  y -= 15
+  page.drawLine({ start: { x: width - margin - 180, y }, end: { x: width - margin, y }, thickness: 1, color: textColor })
+  page.drawText("Firma y Sello", { x: width - margin - 120, y: y - 12, size: 9, font: helvetica, color: grayColor })
 
   // === FOOTER ===
-  const footerY = margin + 30
-  page.drawLine({ start: { x: margin, y: footerY }, end: { x: width - margin, y: footerY }, thickness: 1, color: lightGray })
-  page.drawText("Este certificado es valido como comprobante de garantia. Conservelo junto con su factura de compra.", {
-    x: margin + 10, y: footerY - 15, size: 8, font: helvetica, color: grayColor
-  })
-
-  const fechaImpresion = new Date().toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" })
-  page.drawText(`Emitido: ${fechaImpresion}`, { x: width - margin - 90, y: footerY - 15, size: 7, font: helvetica, color: grayColor })
-
-  // Barra inferior de acento
   page.drawRectangle({
     x: 0,
     y: 0,
     width: width,
-    height: 10,
-    color: primaryColor,
+    height: 35,
+    color: primaryDark,
   })
+
+  const footerText = "Conserve este certificado junto con su comprobante de compra"
+  const footerTextWidth = helvetica.widthOfTextAtSize(footerText, 9)
+  page.drawText(footerText, {
+    x: (width - footerTextWidth) / 2,
+    y: 18,
+    size: 9,
+    font: helvetica,
+    color: rgb(0.8, 0.8, 0.85),
+  })
+
+  const fechaImpresion = new Date().toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" })
+  page.drawText(`Emitido: ${fechaImpresion}`, { x: width - margin - 80, y: 8, size: 7, font: helvetica, color: rgb(0.6, 0.6, 0.65) })
 
   const pdfBytes = await pdfDoc.save()
   return Buffer.from(pdfBytes)

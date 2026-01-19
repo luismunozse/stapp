@@ -5,7 +5,7 @@ import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/ge
 import { headers } from "next/headers"
 
 // NO usar requireAuth() - este endpoint es público
-// Usando gemini-2.5-flash-lite (modelo actualizado 2026)
+// Usando gemini-2.0-flash
 
 const chatRequestSchema = z.object({
   sessionId: z.string().min(1, "Session ID es requerido"),
@@ -114,7 +114,7 @@ export async function POST(request: Request) {
 
     // Llamar a Gemini con configuración de seguridad más permisiva
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash-lite",
+      model: "gemini-2.0-flash",
       safetySettings: [
         {
           category: HarmCategory.HARM_CATEGORY_HARASSMENT,
@@ -179,7 +179,7 @@ Instrucciones:
       conversacion_id: conversacion.id,
       tipo: "ASSISTANT",
       contenido: assistantMessage,
-      modelo: "gemini-2.5-flash-lite",
+      modelo: "gemini-2.0-flash",
       tiempo_respuesta_ms: timeElapsed,
       intencion_detectada: intencion.tipo,
       confianza: intencion.confianza,
