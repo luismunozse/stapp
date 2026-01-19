@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
-import { generateOrdenPDFPuppeteer, OrdenPDFData } from "@/lib/pdf-puppeteer"
+import { generateOrdenPDF, OrdenPDFData } from "@/lib/pdf-orden"
 
 export const runtime = "nodejs"
-export const maxDuration = 30
 
 export async function GET(
   request: Request,
@@ -74,8 +73,8 @@ export async function GET(
       logoUrl: org?.logo_url,
     }
 
-    // Generar PDF con Puppeteer
-    const pdfBuffer = await generateOrdenPDFPuppeteer(pdfData)
+    // Generar PDF con React-PDF
+    const pdfBuffer = await generateOrdenPDF(pdfData)
 
     // Retornar PDF (convertir Buffer a Uint8Array)
     return new NextResponse(new Uint8Array(pdfBuffer), {
