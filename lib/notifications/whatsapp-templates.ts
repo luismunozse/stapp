@@ -106,15 +106,47 @@ function generateEstadoMessage(ctx: NotificationContext): string {
 
   let mensaje = `Hola ${ctx.cliente.nombre}, le informamos que su ${ctx.orden!.dispositivo} (Orden #${ctx.orden!.numeroOrden}) se encuentra ${label}.`
 
-  if (estado === "REPARADO") {
-    mensaje +=
-      "\n\nPuede pasar a retirarlo en nuestro local en horario de atencion. Lo esperamos!"
-  } else if (estado === "PRESUPUESTADO") {
-    mensaje +=
-      "\n\nPor favor confirme si desea continuar con la reparacion."
-  } else if (estado === "ESPERANDO_REPUESTO") {
-    mensaje +=
-      "\n\nLe avisaremos cuando llegue el repuesto para continuar con la reparacion."
+  switch (estado) {
+    case "RECIBIDO":
+      mensaje +=
+        "\n\nHemos recibido su equipo correctamente. Pronto comenzaremos con el diagnostico y le informaremos novedades."
+      break
+    case "EN_DIAGNOSTICO":
+      mensaje +=
+        "\n\nNuestro tecnico esta evaluando el equipo. Le enviaremos el presupuesto a la brevedad."
+      break
+    case "PRESUPUESTADO":
+      mensaje +=
+        "\n\nPor favor confirme si desea continuar con la reparacion."
+      break
+    case "APROBADO":
+      mensaje +=
+        "\n\nGracias por aprobar el presupuesto. Su equipo entrara en cola de reparacion y le avisaremos cuando este listo."
+      break
+    case "EN_REPARACION":
+      mensaje +=
+        "\n\nNuestro tecnico esta trabajando en su equipo. Le avisaremos cuando la reparacion este completa."
+      break
+    case "ESPERANDO_REPUESTO":
+      mensaje +=
+        "\n\nLe avisaremos cuando llegue el repuesto para continuar con la reparacion."
+      break
+    case "REPARADO":
+      mensaje +=
+        "\n\nPuede pasar a retirarlo en nuestro local en horario de atencion. Lo esperamos!"
+      break
+    case "ENTREGADO":
+      mensaje +=
+        "\n\nGracias por confiar en nosotros. Esperamos que su equipo funcione correctamente!"
+      break
+    case "CANCELADO":
+      mensaje +=
+        "\n\nSi tiene alguna consulta o desea ingresar un nuevo servicio, no dude en contactarnos."
+      break
+    case "SIN_REPARACION":
+      mensaje +=
+        "\n\nLamentablemente no fue posible realizar la reparacion. Puede pasar a retirar su equipo en horario de atencion."
+      break
   }
 
   mensaje += `\n\n${ctx.organizationName}`
