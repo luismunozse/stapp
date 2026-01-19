@@ -1307,7 +1307,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
 
       // Mostrar secuencia al lado
       page.drawText("Secuencia:", { x: margin + 105, y: y - 30, size: 8, font: helveticaBold, color: grayColor })
-      page.drawText(patternNumbers.join(" → "), { x: margin + 105, y: y - 45, size: 10, font: courier, color: textColor })
+      page.drawText(patternNumbers.join(" > "), { x: margin + 105, y: y - 45, size: 10, font: courier, color: textColor })
 
       y -= patternBoxHeight + 12
     } else {

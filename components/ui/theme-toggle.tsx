@@ -66,10 +66,9 @@ export function ThemeToggle({ className, variant = "icon" }: ThemeToggleProps) {
   }, [theme, mounted])
 
   const cycleTheme = () => {
-    const themes: Theme[] = ["light", "dark", "system"]
-    const currentIndex = themes.indexOf(theme)
-    const nextIndex = (currentIndex + 1) % themes.length
-    setTheme(themes[nextIndex])
+    // Alternar directamente entre claro y oscuro basado en el estado visual actual
+    const isDark = document.documentElement.classList.contains("dark")
+    setTheme(isDark ? "light" : "dark")
   }
 
   // Prevent hydration mismatch
