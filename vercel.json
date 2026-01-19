@@ -5,6 +5,10 @@
       "maxDuration": 30,
       "includeFiles": "node_modules/@sparticuz/chromium/**"
     },
+    "app/api/**/*.js": {
+      "maxDuration": 30,
+      "includeFiles": "node_modules/@sparticuz/chromium/**"
+    },
     "app/api/inngest/route.ts": {
       "maxDuration": 60,
       "includeFiles": "node_modules/@sparticuz/chromium/**"
