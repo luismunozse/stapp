@@ -53,14 +53,37 @@ interface Inventario {
   precioVenta: number
 }
 
+export interface VentaCreadaData {
+  id: string
+  numeroVenta: number
+  clienteNombre: string
+  clienteTelefono: string | null
+  items: Array<{
+    descripcion: string
+    cantidad: number
+    precioUnitario: number
+    diasGarantia: number
+  }>
+  subtotal: number
+  descuento: number
+  total: number
+  metodoPago: string
+  garantias: Array<{
+    id: string
+    numeroGarantia: number
+    diasValidez: number
+  }>
+  organizationName?: string
+}
+
 interface VentaFormProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSuccess: () => void
+  onSuccess: (venta: VentaCreadaData) => void
 }
 
 export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
-  const { showError, showSuccess } = useModal()
+  const { showError } = useModal()
   const [loading, setLoading] = useState(false)
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [inventario, setInventario] = useState<Inventario[]>([])
@@ -176,9 +199,25 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
         return
       }
 
-      await showSuccess("Venta registrada correctamente")
+      const ventaData = await res.json()
+
+      // Preparar datos para el callback
+      const ventaCreada: VentaCreadaData = {
+        id: ventaData.id,
+        numeroVenta: ventaData.numeroVenta,
+        clienteNombre: ventaData.clienteNombre,
+        clienteTelefono: ventaData.clienteTelefono,
+        items: ventaData.items,
+        subtotal: ventaData.subtotal,
+        descuento: ventaData.descuento,
+        total: ventaData.total,
+        metodoPago: ventaData.metodoPago,
+        garantias: ventaData.garantias,
+      }
+
       reset()
-      onSuccess()
+      onOpenChange(false)
+      onSuccess(ventaCreada)
     } catch (error) {
       console.error("Error creating venta:", error)
       await showError("Error al crear la venta")

@@ -2,12 +2,89 @@ import NextAuth from "next-auth"
 import Credentials from "next-auth/providers/credentials"
 import { supabaseAdmin } from "@/lib/supabase"
 import bcrypt from "bcryptjs"
+import { randomBytes } from "crypto"
 
 type Rol = "ADMIN" | "TECNICO" | "VENDEDOR"
 
 // Duraciones de sesión
 const ONE_DAY = 24 * 60 * 60 // 1 día en segundos
+const SEVEN_DAYS = 7 * 24 * 60 * 60 // 7 días en segundos
 const THIRTY_DAYS = 30 * 24 * 60 * 60 // 30 días en segundos
+
+// Tiempo antes de expiración para refrescar automáticamente (6 horas antes)
+const REFRESH_THRESHOLD = 6 * 60 * 60
+
+// Genera un refresh token único
+function generateRefreshToken(): string {
+  return randomBytes(64).toString("hex")
+}
+
+// Guarda el refresh token en la base de datos
+async function saveRefreshToken(userId: string, rememberMe: boolean): Promise<string> {
+  const refreshToken = generateRefreshToken()
+  const expiresAt = new Date()
+  expiresAt.setSeconds(expiresAt.getSeconds() + (rememberMe ? THIRTY_DAYS : SEVEN_DAYS))
+
+  await supabaseAdmin
+    .from("users")
+    .update({
+      refresh_token: refreshToken,
+      refresh_token_expires: expiresAt.toISOString(),
+    })
+    .eq("id", userId)
+
+  return refreshToken
+}
+
+// Valida y obtiene usuario por refresh token
+export async function validateRefreshToken(refreshToken: string) {
+  const { data: user, error } = await supabaseAdmin
+    .from("users")
+    .select(`
+      id,
+      email,
+      nombre,
+      rol,
+      organization_id,
+      refresh_token_expires,
+      organizations (id, activo)
+    `)
+    .eq("refresh_token", refreshToken)
+    .single()
+
+  if (error || !user) return null
+
+  // Verificar que no haya expirado
+  const expires = new Date(user.refresh_token_expires)
+  if (expires < new Date()) {
+    // Limpiar refresh token expirado
+    await supabaseAdmin
+      .from("users")
+      .update({ refresh_token: null, refresh_token_expires: null })
+      .eq("id", user.id)
+    return null
+  }
+
+  // Verificar organización activa (Supabase puede retornar objeto o array)
+  const orgs = user.organizations as unknown
+  const org = Array.isArray(orgs) ? orgs[0] : orgs
+  if (!org || !(org as { activo: boolean }).activo) return null
+
+  return user
+}
+
+// Rota el refresh token (genera uno nuevo)
+export async function rotateRefreshToken(userId: string, rememberMe: boolean): Promise<string> {
+  return saveRefreshToken(userId, rememberMe)
+}
+
+// Invalida el refresh token (logout)
+export async function invalidateRefreshToken(userId: string): Promise<void> {
+  await supabaseAdmin
+    .from("users")
+    .update({ refresh_token: null, refresh_token_expires: null })
+    .eq("id", userId)
+}
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
@@ -62,6 +139,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         // Pasar rememberMe al token
         const rememberMe = credentials.rememberMe === "true"
 
+        // Generar y guardar refresh token
+        const refreshToken = await saveRefreshToken(user.id, rememberMe)
+
         return {
           id: user.id,
           email: user.email,
@@ -69,21 +149,55 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           role: user.rol as Rol,
           organizationId: user.organization_id,
           rememberMe,
+          refreshToken,
         }
       },
     }),
   ],
   callbacks: {
-    jwt: async ({ token, user }) => {
+    jwt: async ({ token, user, trigger }) => {
+      // Login inicial
       if (user && user.id) {
         token.role = user.role
         token.id = user.id
         token.organizationId = user.organizationId
         token.rememberMe = user.rememberMe
-        // Establecer expiración basada en rememberMe
-        const maxAge = user.rememberMe ? THIRTY_DAYS : ONE_DAY
-        token.exp = Math.floor(Date.now() / 1000) + maxAge
+        token.refreshToken = user.refreshToken
+        // JWT expira en 1 día, pero se refresca automáticamente
+        token.exp = Math.floor(Date.now() / 1000) + ONE_DAY
+        token.iat = Math.floor(Date.now() / 1000)
+        return token
       }
+
+      // Verificar si necesita refresh (6 horas antes de expirar)
+      const now = Math.floor(Date.now() / 1000)
+      const exp = token.exp as number
+      const timeUntilExpiry = exp - now
+
+      if (timeUntilExpiry < REFRESH_THRESHOLD && token.refreshToken) {
+        // Intentar refrescar el token
+        const validUser = await validateRefreshToken(token.refreshToken as string)
+
+        if (validUser) {
+          // Rotar refresh token para mayor seguridad
+          const newRefreshToken = await rotateRefreshToken(
+            validUser.id,
+            token.rememberMe as boolean
+          )
+
+          // Actualizar token
+          token.refreshToken = newRefreshToken
+          token.exp = Math.floor(Date.now() / 1000) + ONE_DAY
+          token.iat = Math.floor(Date.now() / 1000)
+
+          console.log(`[Auth] Token refreshed for user ${validUser.id}`)
+        } else {
+          // Refresh token inválido, forzar re-login
+          console.log(`[Auth] Refresh token invalid, session expired`)
+          token.error = "RefreshTokenExpired"
+        }
+      }
+
       return token
     },
     session: async ({ session, token }) => {
@@ -92,7 +206,21 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.id = token.id as string
         session.user.organizationId = token.organizationId as string
       }
+
+      // Pasar error al cliente si existe
+      if (token.error) {
+        session.error = token.error as string
+      }
+
       return session
+    },
+  },
+  events: {
+    signOut: async (message) => {
+      // Invalidar refresh token al hacer logout
+      if ("token" in message && message.token?.id) {
+        await invalidateRefreshToken(message.token.id as string)
+      }
     },
   },
   pages: {
@@ -100,10 +228,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   session: {
     strategy: "jwt",
-    maxAge: THIRTY_DAYS, // Máximo 30 días, pero el JWT controla la expiración real
+    maxAge: THIRTY_DAYS, // Cookie dura 30 días, JWT se refresca automáticamente
   },
   // Cookies configuradas para funcionar en todos los subdominios
-  // Solo usar dominio personalizado si está configurado COOKIE_DOMAIN
   cookies: {
     sessionToken: {
       name:
@@ -115,7 +242,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         sameSite: "lax",
         path: "/",
         secure: process.env.NODE_ENV === "production",
-        // Solo establecer dominio si hay COOKIE_DOMAIN configurado (para subdominios)
         domain: process.env.COOKIE_DOMAIN || undefined,
       },
     },

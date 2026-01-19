@@ -183,83 +183,82 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.back()}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold">
-                Venta V{String(venta.numeroVenta).padStart(4, "0")}
-              </h1>
-              <Badge variant={venta.estado === "COMPLETADA" ? "success" : "destructive"}>
-                {venta.estado === "COMPLETADA" ? "Completada" : "Anulada"}
-              </Badge>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              {formatDate(venta.createdAt)} - {metodoPagoLabels[venta.metodoPago]}
-            </p>
+      <div className="flex items-center gap-3">
+        <Button variant="ghost" size="icon" className="shrink-0" onClick={() => router.back()}>
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-xl font-bold sm:text-2xl">
+              Venta V{String(venta.numeroVenta).padStart(4, "0")}
+            </h1>
+            <Badge variant={venta.estado === "COMPLETADA" ? "success" : "destructive"}>
+              {venta.estado === "COMPLETADA" ? "Completada" : "Anulada"}
+            </Badge>
           </div>
-        </div>
-
-        <div className="flex gap-2">
-          {venta.clienteTelefono && (
-            <WhatsAppDialog
-              context={{
-                organizationId: organization?.id || "",
-                organizationName: organization?.nombre || "",
-                organizationSlug: organization?.slug,
-                cliente: {
-                  id: venta.clienteId || "",
-                  nombre: venta.clienteNombre,
-                  telefono: venta.clienteTelefono,
-                },
-                venta: {
-                  id: venta.id,
-                  numeroVenta: venta.numeroVenta,
-                  total: venta.total,
-                  metodoPago: venta.metodoPago as MetodoPagoVenta,
-                  estado: venta.estado as "COMPLETADA" | "ANULADA",
-                  items: venta.items.map((item) => ({
-                    descripcion: item.descripcion,
-                    cantidad: item.cantidad,
-                    diasGarantia: item.diasGarantia,
-                  })),
-                  garantias: venta.garantias.map((g) => ({
-                    id: g.id,
-                    numeroGarantia: g.numeroGarantia,
-                    diasValidez: g.diasValidez,
-                    fechaVencimiento: new Date(g.fechaVencimiento),
-                  })),
-                },
-              }}
-            />
-          )}
-          <Button
-            variant="outline"
-            onClick={() => window.open(`/api/ventas/${ventaId}/pdf`, "_blank")}
-          >
-            <Download className="mr-2 h-4 w-4" />
-            Comprobante
-          </Button>
-          {venta.estado === "COMPLETADA" && (
-            <Button
-              variant="destructive"
-              onClick={handleAnular}
-              disabled={anulando}
-            >
-              <XCircle className="mr-2 h-4 w-4" />
-              {anulando ? "Anulando..." : "Anular"}
-            </Button>
-          )}
+          <p className="text-sm text-muted-foreground">
+            {formatDate(venta.createdAt)} - {metodoPagoLabels[venta.metodoPago]}
+          </p>
         </div>
       </div>
 
+      {/* Botones de acción - responsive */}
+      <div className="flex flex-wrap gap-2">
+        {venta.clienteTelefono && (
+          <WhatsAppDialog
+            context={{
+              organizationId: organization?.id || "",
+              organizationName: organization?.nombre || "",
+              organizationSlug: organization?.slug,
+              cliente: {
+                id: venta.clienteId || "",
+                nombre: venta.clienteNombre,
+                telefono: venta.clienteTelefono,
+              },
+              venta: {
+                id: venta.id,
+                numeroVenta: venta.numeroVenta,
+                total: venta.total,
+                metodoPago: venta.metodoPago as MetodoPagoVenta,
+                estado: venta.estado as "COMPLETADA" | "ANULADA",
+                items: venta.items.map((item) => ({
+                  descripcion: item.descripcion,
+                  cantidad: item.cantidad,
+                  diasGarantia: item.diasGarantia,
+                })),
+                garantias: venta.garantias.map((g) => ({
+                  id: g.id,
+                  numeroGarantia: g.numeroGarantia,
+                  diasValidez: g.diasValidez,
+                  fechaVencimiento: new Date(g.fechaVencimiento),
+                })),
+              },
+            }}
+          />
+        )}
+        <Button
+          variant="outline"
+          onClick={() => window.open(`/api/ventas/${ventaId}/pdf`, "_blank")}
+        >
+          <Download className="mr-2 h-4 w-4" />
+          Comprobante
+        </Button>
+        {venta.estado === "COMPLETADA" && (
+          <Button
+            variant="destructive"
+            onClick={handleAnular}
+            disabled={anulando}
+          >
+            <XCircle className="mr-2 h-4 w-4" />
+            {anulando ? "Anulando..." : "Anular"}
+          </Button>
+        )}
+      </div>
+
       {/* Grid de información */}
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {/* Cliente */}
         <Card>
           <CardHeader className="pb-2">
@@ -315,101 +314,169 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
 
       {/* Items */}
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-2 sm:pb-6">
           <CardTitle className="flex items-center gap-2">
             <Package className="h-5 w-5" />
             Productos ({venta.items.length})
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b text-left text-sm text-muted-foreground">
-                  <th className="pb-2">Producto</th>
-                  <th className="pb-2 text-center">Cantidad</th>
-                  <th className="pb-2 text-right">Precio Unit.</th>
-                  <th className="pb-2 text-right">Subtotal</th>
-                  <th className="pb-2 text-center">Garantía</th>
-                  <th className="pb-2"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {venta.items.map((item) => {
-                  const garantia = getGarantiaForItem(item.id)
-                  return (
-                    <tr key={item.id} className="border-b last:border-0">
-                      <td className="py-3">
-                        <div className="font-medium">{item.descripcion}</div>
-                        {item.inventario && (
-                          <div className="text-xs text-muted-foreground">
-                            Código: {item.inventario.codigo}
-                          </div>
-                        )}
-                      </td>
-                      <td className="py-3 text-center">{item.cantidad}</td>
-                      <td className="py-3 text-right">{formatCurrency(item.precioUnitario)}</td>
-                      <td className="py-3 text-right font-medium">{formatCurrency(item.subtotal)}</td>
-                      <td className="py-3 text-center">
-                        {item.diasGarantia > 0 ? (
-                          <Badge variant="outline" className="text-green-600">
-                            {item.diasGarantia} días
-                          </Badge>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </td>
-                      <td className="py-3 text-right">
-                        {garantia && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() =>
-                              window.open(
-                                `/api/ventas/${ventaId}/garantia/${garantia.id}/pdf`,
-                                "_blank"
-                              )
-                            }
-                          >
-                            <Shield className="mr-1 h-4 w-4" />
-                            Certificado
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-              <tfoot>
-                <tr className="border-t">
-                  <td colSpan={3} className="py-3 text-right font-medium">
-                    Subtotal:
-                  </td>
-                  <td className="py-3 text-right">{formatCurrency(venta.subtotal)}</td>
-                  <td colSpan={2}></td>
-                </tr>
-                {venta.descuento > 0 && (
-                  <tr>
-                    <td colSpan={3} className="py-1 text-right text-destructive">
-                      Descuento:
+          {/* Vista mobile - Cards */}
+          <div className="space-y-3 sm:hidden">
+            {venta.items.map((item) => {
+              const garantia = getGarantiaForItem(item.id)
+              return (
+                <div key={item.id} className="rounded-lg border bg-muted/30 p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium">{item.descripcion}</div>
+                      {item.inventario && (
+                        <div className="text-xs text-muted-foreground">
+                          Código: {item.inventario.codigo}
+                        </div>
+                      )}
+                    </div>
+                    {item.diasGarantia > 0 && (
+                      <Badge variant="outline" className="shrink-0 text-green-600">
+                        {item.diasGarantia}d
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">
+                      {item.cantidad} x {formatCurrency(item.precioUnitario)}
+                    </span>
+                    <span className="font-medium">{formatCurrency(item.subtotal)}</span>
+                  </div>
+                  {garantia && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-2 w-full"
+                      onClick={() =>
+                        window.open(
+                          `/api/ventas/${ventaId}/garantia/${garantia.id}/pdf`,
+                          "_blank"
+                        )
+                      }
+                    >
+                      <Shield className="mr-1 h-4 w-4" />
+                      Certificado
+                    </Button>
+                  )}
+                </div>
+              )
+            })}
+            {/* Totales mobile */}
+            <div className="rounded-lg border bg-muted/50 p-3">
+              <div className="flex justify-between text-sm">
+                <span>Subtotal:</span>
+                <span>{formatCurrency(venta.subtotal)}</span>
+              </div>
+              {venta.descuento > 0 && (
+                <div className="flex justify-between text-sm text-destructive">
+                  <span>Descuento:</span>
+                  <span>-{formatCurrency(venta.descuento)}</span>
+                </div>
+              )}
+              <div className="mt-2 flex justify-between border-t pt-2 text-lg font-bold">
+                <span>Total:</span>
+                <span className="text-primary">{formatCurrency(venta.total)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Vista desktop - Tabla */}
+          <div className="hidden sm:block">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b text-left text-sm text-muted-foreground">
+                    <th className="pb-2">Producto</th>
+                    <th className="pb-2 text-center">Cantidad</th>
+                    <th className="pb-2 text-right">Precio Unit.</th>
+                    <th className="pb-2 text-right">Subtotal</th>
+                    <th className="pb-2 text-center">Garantía</th>
+                    <th className="pb-2"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {venta.items.map((item) => {
+                    const garantia = getGarantiaForItem(item.id)
+                    return (
+                      <tr key={item.id} className="border-b last:border-0">
+                        <td className="py-3">
+                          <div className="font-medium">{item.descripcion}</div>
+                          {item.inventario && (
+                            <div className="text-xs text-muted-foreground">
+                              Código: {item.inventario.codigo}
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-3 text-center">{item.cantidad}</td>
+                        <td className="py-3 text-right">{formatCurrency(item.precioUnitario)}</td>
+                        <td className="py-3 text-right font-medium">{formatCurrency(item.subtotal)}</td>
+                        <td className="py-3 text-center">
+                          {item.diasGarantia > 0 ? (
+                            <Badge variant="outline" className="text-green-600">
+                              {item.diasGarantia} días
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </td>
+                        <td className="py-3 text-right">
+                          {garantia && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                window.open(
+                                  `/api/ventas/${ventaId}/garantia/${garantia.id}/pdf`,
+                                  "_blank"
+                                )
+                              }
+                            >
+                              <Shield className="mr-1 h-4 w-4" />
+                              Certificado
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t">
+                    <td colSpan={3} className="py-3 text-right font-medium">
+                      Subtotal:
                     </td>
-                    <td className="py-1 text-right text-destructive">
-                      -{formatCurrency(venta.descuento)}
+                    <td className="py-3 text-right">{formatCurrency(venta.subtotal)}</td>
+                    <td colSpan={2}></td>
+                  </tr>
+                  {venta.descuento > 0 && (
+                    <tr>
+                      <td colSpan={3} className="py-1 text-right text-destructive">
+                        Descuento:
+                      </td>
+                      <td className="py-1 text-right text-destructive">
+                        -{formatCurrency(venta.descuento)}
+                      </td>
+                      <td colSpan={2}></td>
+                    </tr>
+                  )}
+                  <tr className="bg-muted/50">
+                    <td colSpan={3} className="py-3 text-right text-lg font-bold">
+                      Total:
+                    </td>
+                    <td className="py-3 text-right text-lg font-bold text-primary">
+                      {formatCurrency(venta.total)}
                     </td>
                     <td colSpan={2}></td>
                   </tr>
-                )}
-                <tr className="bg-muted/50">
-                  <td colSpan={3} className="py-3 text-right text-lg font-bold">
-                    Total:
-                  </td>
-                  <td className="py-3 text-right text-lg font-bold text-primary">
-                    {formatCurrency(venta.total)}
-                  </td>
-                  <td colSpan={2}></td>
-                </tr>
-              </tfoot>
-            </table>
+                </tfoot>
+              </table>
+            </div>
           </div>
         </CardContent>
       </Card>

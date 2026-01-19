@@ -18,7 +18,8 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { VentaForm } from "./venta-form"
+import { VentaForm, type VentaCreadaData } from "./venta-form"
+import { VentaCreadaModal } from "./venta-creada-modal"
 import { useModal } from "@/contexts/modal-context"
 import { ExportButton } from "@/components/export/export-button"
 import { formatDate, formatCurrency } from "@/lib/utils"
@@ -53,6 +54,8 @@ export function VentasList() {
   const [ventas, setVentas] = useState<VentaListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [ventaCreada, setVentaCreada] = useState<VentaCreadaData | null>(null)
+  const [showVentaCreadaModal, setShowVentaCreadaModal] = useState(false)
   const { showError } = useModal()
 
   // Filters
@@ -332,10 +335,22 @@ export function VentasList() {
       <VentaForm
         open={showForm}
         onOpenChange={setShowForm}
-        onSuccess={() => {
+        onSuccess={(venta) => {
           setShowForm(false)
+          setVentaCreada(venta)
+          setShowVentaCreadaModal(true)
           fetchVentas()
         }}
+      />
+
+      {/* Modal de venta creada con opcion de WhatsApp */}
+      <VentaCreadaModal
+        open={showVentaCreadaModal}
+        onClose={() => {
+          setShowVentaCreadaModal(false)
+          setVentaCreada(null)
+        }}
+        venta={ventaCreada}
       />
     </div>
   )
