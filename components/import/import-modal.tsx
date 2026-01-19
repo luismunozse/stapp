@@ -196,7 +196,7 @@ export function ImportModal({ entityType, onClose, onSuccess }: ImportModalProps
         </CardHeader>
         <CardContent className="space-y-6">
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg flex items-start gap-2">
+            <div className="bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-400 px-4 py-3 rounded-lg flex items-start gap-2">
               <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
               <p className="text-sm">{error}</p>
             </div>

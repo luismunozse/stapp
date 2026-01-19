@@ -56,10 +56,10 @@ export function CurrentPlan({ subscription, onUpgrade, onManage, onCancel }: Cur
     : null
 
   const statusColors: Record<string, string> = {
-    ACTIVE: "bg-green-100 text-green-800",
-    TRIALING: "bg-gradient-to-r from-blue-100 to-purple-100 text-blue-800",
-    PAST_DUE: "bg-yellow-100 text-yellow-800",
-    CANCELED: "bg-red-100 text-red-800",
+    ACTIVE: "bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300",
+    TRIALING: "bg-gradient-to-r from-blue-100 to-purple-100 dark:from-blue-900/50 dark:to-purple-900/50 text-blue-800 dark:text-blue-300",
+    PAST_DUE: "bg-yellow-100 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-300",
+    CANCELED: "bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300",
   }
 
   const statusLabels: Record<string, string> = {
@@ -128,7 +128,7 @@ export function CurrentPlan({ subscription, onUpgrade, onManage, onCancel }: Cur
 
         {/* Cancellation warning */}
         {isCanceled && (
-          <div className="flex items-start gap-2 bg-yellow-50 text-yellow-800 p-4 rounded-lg">
+          <div className="flex items-start gap-2 bg-yellow-50 dark:bg-yellow-950/50 text-yellow-800 dark:text-yellow-300 p-4 rounded-lg">
             <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
             <div>
               <p className="font-medium">Suscripción cancelada</p>

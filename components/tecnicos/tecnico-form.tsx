@@ -97,7 +97,7 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm">
+            <div className="bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded text-sm">
               {error}
             </div>
           )}
@@ -144,9 +144,9 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
                 onClick={() => setShowPassword(!showPassword)}
               >
                 {showPassword ? (
-                  <EyeOff className="h-4 w-4 text-gray-500" />
+                  <EyeOff className="h-4 w-4 text-muted-foreground" />
                 ) : (
-                  <Eye className="h-4 w-4 text-gray-500" />
+                  <Eye className="h-4 w-4 text-muted-foreground" />
                 )}
               </Button>
             </div>

@@ -160,9 +160,6 @@ const styles = StyleSheet.create({
   orderNumber: {
     fontSize: 20,
     fontWeight: "bold",
-    color: "#1e1b4b",
-  },
-  orderNumberSpan: {
     color: "#6366f1",
   },
   orderDates: {
@@ -171,10 +168,6 @@ const styles = StyleSheet.create({
   orderDateText: {
     fontSize: 10,
     color: "#64748b",
-  },
-  orderDateLabel: {
-    fontWeight: "bold",
-    color: "#1e293b",
   },
   // Título principal
   mainTitle: {
@@ -509,18 +502,14 @@ const OrdenPDFDocument = ({ data }: { data: OrdenPDFData }) => (
             <View style={styles.docBadge}>
               <Text style={styles.docBadgeText}>RECEPCIÓN</Text>
             </View>
-            <Text style={styles.orderNumber}>
-              #<Text style={styles.orderNumberSpan}>{data.numeroOrden}</Text>
-            </Text>
+            <Text style={styles.orderNumber}>#{data.numeroOrden}</Text>
             <View style={styles.orderDates}>
               <Text style={styles.orderDateText}>
-                <Text style={styles.orderDateLabel}>Ingreso: </Text>
-                {formatDate(data.fechaIngreso)}
+                Ingreso: {formatDate(data.fechaIngreso)}
               </Text>
               {data.fechaPrometida && (
                 <Text style={styles.orderDateText}>
-                  <Text style={styles.orderDateLabel}>Entrega: </Text>
-                  {formatDate(data.fechaPrometida)}
+                  Entrega: {formatDate(data.fechaPrometida)}
                 </Text>
               )}
             </View>
