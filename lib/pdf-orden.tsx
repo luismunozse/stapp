@@ -7,9 +7,6 @@ import {
   Image,
   StyleSheet,
   renderToBuffer,
-  Svg,
-  Path,
-  Circle,
 } from "@react-pdf/renderer"
 
 // ========================================
@@ -72,14 +69,10 @@ const isPatternLock = (value: string): boolean => {
   return value.startsWith("Patrón: ")
 }
 
-// Parsear el patrón
-const parsePattern = (value: string): number[] => {
-  if (!value || !value.startsWith("Patrón: ")) return []
-  const patternStr = value.replace("Patrón: ", "")
-  return patternStr
-    .split("-")
-    .map(Number)
-    .filter((n) => n >= 1 && n <= 9)
+// Formatear el patrón para mostrar
+const formatPatternDisplay = (value: string): string => {
+  if (!value || !value.startsWith("Patrón: ")) return value
+  return value.replace("Patrón: ", "")
 }
 
 // ========================================
@@ -117,7 +110,6 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     marginRight: 12,
-    borderRadius: 10,
   },
   logoPlaceholder: {
     width: 50,
@@ -127,6 +119,11 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     justifyContent: "center",
     alignItems: "center",
+  },
+  logoPlaceholderText: {
+    color: "#ffffff",
+    fontSize: 20,
+    fontWeight: "bold",
   },
   companyInfo: {
     justifyContent: "center",
@@ -238,7 +235,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 11,
     color: "#1e293b",
-    fontWeight: "medium",
   },
   // Info boxes
   infoBoxes: {
@@ -280,6 +276,12 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#6366f1",
   },
+  patternValue: {
+    fontSize: 14,
+    fontWeight: "bold",
+    color: "#6366f1",
+    letterSpacing: 2,
+  },
   // Sections
   section: {
     backgroundColor: "#f8fafc",
@@ -320,7 +322,6 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     borderTopWidth: 2,
     borderTopColor: "#e2e8f0",
-    borderTopStyle: "dashed",
   },
   signatureBox: {
     flex: 1,
@@ -336,7 +337,6 @@ const styles = StyleSheet.create({
   signatureLabel: {
     fontSize: 10,
     color: "#64748b",
-    fontWeight: "medium",
   },
   // Footer
   footer: {
@@ -373,334 +373,261 @@ const styles = StyleSheet.create({
     marginTop: 14,
     borderRadius: 3,
   },
-  // Pattern
-  patternContainer: {
-    marginTop: 4,
-    alignItems: "center",
-  },
 })
-
-// ========================================
-// COMPONENTE DE PATRÓN SVG
-// ========================================
-const PatternLockSVG = ({ patternValue }: { patternValue: string }) => {
-  const pattern = parsePattern(patternValue)
-  if (pattern.length === 0) return null
-
-  const size = 60
-  const padding = 10
-  const spacing = (size - 2 * padding) / 2
-
-  // Calcular posición de cada punto (1-9)
-  const getPos = (num: number) => {
-    const index = num - 1
-    const row = Math.floor(index / 3)
-    const col = index % 3
-    return {
-      x: padding + col * spacing,
-      y: padding + row * spacing,
-    }
-  }
-
-  // Generar el path
-  let pathD = ""
-  if (pattern.length > 0) {
-    const first = getPos(pattern[0])
-    pathD = `M ${first.x} ${first.y}`
-    for (let i = 1; i < pattern.length; i++) {
-      const pos = getPos(pattern[i])
-      pathD += ` L ${pos.x} ${pos.y}`
-    }
-  }
-
-  return (
-    <Svg viewBox={`0 0 ${size} ${size}`} style={{ width: 60, height: 60 }}>
-      {/* Background */}
-      <Path
-        d={`M 4 0 L ${size - 4} 0 Q ${size} 0 ${size} 4 L ${size} ${size - 4} Q ${size} ${size} ${size - 4} ${size} L 4 ${size} Q 0 ${size} 0 ${size - 4} L 0 4 Q 0 0 4 0`}
-        fill="#f8fafc"
-        stroke="#e2e8f0"
-        strokeWidth={1}
-      />
-      {/* Pattern line */}
-      {pathD && (
-        <Path
-          d={pathD}
-          stroke="#6366f1"
-          strokeWidth={2}
-          fill="none"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      )}
-      {/* Dots */}
-      {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => {
-        const pos = getPos(i)
-        const isSelected = pattern.includes(i)
-        return (
-          <React.Fragment key={i}>
-            <Circle
-              cx={pos.x}
-              cy={pos.y}
-              r={5}
-              fill={isSelected ? "#6366f1" : "#e2e8f0"}
-            />
-            <Circle
-              cx={pos.x}
-              cy={pos.y}
-              r={2}
-              fill={isSelected ? "#4f46e5" : "#9ca3af"}
-            />
-          </React.Fragment>
-        )
-      })}
-    </Svg>
-  )
-}
 
 // ========================================
 // COMPONENTE DEL DOCUMENTO
 // ========================================
-const OrdenPDFDocument = ({ data }: { data: OrdenPDFData }) => (
-  <Document>
-    <Page size="A4" style={styles.page}>
-      {/* Barra de acento superior */}
-      <View style={styles.accentBar} />
+const OrdenPDFDocument = ({ data }: { data: OrdenPDFData }) => {
+  const fechaIngresoStr = formatDate(data.fechaIngreso)
+  const fechaPrometidaStr = data.fechaPrometida
+    ? formatDate(data.fechaPrometida)
+    : null
+  const tipoDispositivoStr =
+    tipoDispositivoLabels[data.tipoDispositivo] || data.tipoDispositivo
+  const presupuestoStr = data.presupuesto
+    ? formatCurrency(data.presupuesto)
+    : null
+  const passwordDisplay = data.passwordDispositivo
+    ? isPatternLock(data.passwordDispositivo)
+      ? formatPatternDisplay(data.passwordDispositivo)
+      : data.passwordDispositivo
+    : null
+  const isPattern = data.passwordDispositivo
+    ? isPatternLock(data.passwordDispositivo)
+    : false
 
-      <View style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            {data.logoUrl ? (
-              <Image src={data.logoUrl} style={styles.logo} />
-            ) : (
-              <View style={styles.logoPlaceholder}>
-                <Svg viewBox="0 0 24 24" style={{ width: 26, height: 26 }}>
-                  <Path
-                    d="M19 21V5a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v5m-4 0h4"
-                    stroke="#ffffff"
-                    strokeWidth={2}
-                    fill="none"
-                  />
-                </Svg>
-              </View>
-            )}
-            <View style={styles.companyInfo}>
-              <Text style={styles.companyName}>
-                {data.nombreEmpresa || "Servicio Técnico"}
-              </Text>
-              {data.telefonoEmpresa && (
-                <Text style={styles.companyDetail}>{data.telefonoEmpresa}</Text>
-              )}
-              {data.direccionEmpresa && (
-                <Text style={styles.companyDetail}>{data.direccionEmpresa}</Text>
-              )}
-            </View>
-          </View>
+  return (
+    <Document>
+      <Page size="A4" style={styles.page}>
+        <View style={styles.accentBar} />
 
-          <View style={styles.headerRight}>
-            <View style={styles.docBadge}>
-              <Text style={styles.docBadgeText}>RECEPCIÓN</Text>
-            </View>
-            <Text style={styles.orderNumber}>#{data.numeroOrden}</Text>
-            <View style={styles.orderDates}>
-              <Text style={styles.orderDateText}>
-                Ingreso: {formatDate(data.fechaIngreso)}
-              </Text>
-              {data.fechaPrometida && (
-                <Text style={styles.orderDateText}>
-                  Entrega: {formatDate(data.fechaPrometida)}
+        <View style={styles.container}>
+          {/* Header */}
+          <View style={styles.header}>
+            <View style={styles.headerLeft}>
+              {data.logoUrl ? (
+                <Image src={data.logoUrl} style={styles.logo} />
+              ) : (
+                <View style={styles.logoPlaceholder}>
+                  <Text style={styles.logoPlaceholderText}>ST</Text>
+                </View>
+              )}
+              <View style={styles.companyInfo}>
+                <Text style={styles.companyName}>
+                  {data.nombreEmpresa || "Servicio Tecnico"}
                 </Text>
-              )}
-            </View>
-          </View>
-        </View>
-
-        {/* Título */}
-        <View style={styles.mainTitle}>
-          <Text style={styles.mainTitleText}>COMPROBANTE DE RECEPCIÓN</Text>
-          <View style={styles.titleDecoration}>
-            <View style={styles.titleLine} />
-          </View>
-        </View>
-
-        {/* Grid Cliente y Dispositivo */}
-        <View style={styles.grid2}>
-          {/* Datos del Cliente */}
-          <View style={styles.gridCol}>
-            <View style={styles.card}>
-              <View style={styles.cardTitle}>
-                <View style={styles.cardTitleBar} />
-                <Text style={styles.cardTitleText}>DATOS DEL CLIENTE</Text>
-              </View>
-              <View style={styles.cardRow}>
-                <Text style={styles.cardLabel}>Nombre</Text>
-                <Text style={styles.cardValue}>{data.cliente.nombre}</Text>
-              </View>
-              <View style={styles.cardRow}>
-                <Text style={styles.cardLabel}>Teléfono</Text>
-                <Text style={styles.cardValue}>{data.cliente.telefono}</Text>
-              </View>
-              {data.cliente.email && (
-                <View style={styles.cardRow}>
-                  <Text style={styles.cardLabel}>Email</Text>
-                  <Text style={styles.cardValue}>{data.cliente.email}</Text>
-                </View>
-              )}
-              {data.cliente.direccion && (
-                <View style={styles.cardRow}>
-                  <Text style={styles.cardLabel}>Dirección</Text>
-                  <Text style={styles.cardValue}>{data.cliente.direccion}</Text>
-                </View>
-              )}
-            </View>
-          </View>
-
-          {/* Datos del Dispositivo */}
-          <View style={styles.gridCol}>
-            <View style={styles.card}>
-              <View style={styles.cardTitle}>
-                <View style={styles.cardTitleBar} />
-                <Text style={styles.cardTitleText}>DISPOSITIVO</Text>
-              </View>
-              <View style={styles.cardRow}>
-                <Text style={styles.cardLabel}>Tipo</Text>
-                <Text style={styles.cardValue}>
-                  {tipoDispositivoLabels[data.tipoDispositivo] ||
-                    data.tipoDispositivo}
-                </Text>
-              </View>
-              <View style={styles.cardRow}>
-                <Text style={styles.cardLabel}>Equipo</Text>
-                <Text style={styles.cardValue}>{data.dispositivo}</Text>
-              </View>
-              {data.marca && (
-                <View style={styles.cardRow}>
-                  <Text style={styles.cardLabel}>Marca</Text>
-                  <Text style={styles.cardValue}>{data.marca}</Text>
-                </View>
-              )}
-              {data.color && (
-                <View style={styles.cardRow}>
-                  <Text style={styles.cardLabel}>Color</Text>
-                  <Text style={styles.cardValue}>{data.color}</Text>
-                </View>
-              )}
-              {data.imei && (
-                <View style={styles.cardRow}>
-                  <Text style={styles.cardLabel}>IMEI/Serie</Text>
-                  <Text style={styles.cardValue}>{data.imei}</Text>
-                </View>
-              )}
-            </View>
-          </View>
-        </View>
-
-        {/* Info boxes */}
-        {(data.accesorios || data.passwordDispositivo || data.presupuesto) && (
-          <View style={styles.infoBoxes}>
-            {data.accesorios && (
-              <View style={styles.infoBox}>
-                <Text style={styles.infoBoxLabel}>ACCESORIOS</Text>
-                <Text style={styles.infoBoxValue}>{data.accesorios}</Text>
-              </View>
-            )}
-            {data.passwordDispositivo && (
-              <View style={styles.infoBox}>
-                <Text style={styles.infoBoxLabel}>
-                  {isPatternLock(data.passwordDispositivo)
-                    ? "PATRÓN"
-                    : "PIN/CONTRASEÑA"}
-                </Text>
-                {isPatternLock(data.passwordDispositivo) ? (
-                  <View style={styles.patternContainer}>
-                    <PatternLockSVG patternValue={data.passwordDispositivo} />
-                  </View>
-                ) : (
-                  <Text style={styles.infoBoxValue}>
-                    {data.passwordDispositivo}
+                {data.telefonoEmpresa ? (
+                  <Text style={styles.companyDetail}>
+                    {data.telefonoEmpresa}
                   </Text>
-                )}
+                ) : null}
+                {data.direccionEmpresa ? (
+                  <Text style={styles.companyDetail}>
+                    {data.direccionEmpresa}
+                  </Text>
+                ) : null}
               </View>
-            )}
-            {data.presupuesto && (
-              <View style={styles.infoBoxHighlight}>
-                <Text style={styles.infoBoxLabel}>PRESUPUESTO ESTIMADO</Text>
-                <Text style={styles.infoBoxValueHighlight}>
-                  {formatCurrency(data.presupuesto)}
+            </View>
+
+            <View style={styles.headerRight}>
+              <View style={styles.docBadge}>
+                <Text style={styles.docBadgeText}>RECEPCION</Text>
+              </View>
+              <Text style={styles.orderNumber}>#{String(data.numeroOrden)}</Text>
+              <View style={styles.orderDates}>
+                <Text style={styles.orderDateText}>
+                  Ingreso: {fechaIngresoStr}
                 </Text>
+                {fechaPrometidaStr ? (
+                  <Text style={styles.orderDateText}>
+                    Entrega: {fechaPrometidaStr}
+                  </Text>
+                ) : null}
               </View>
-            )}
+            </View>
           </View>
-        )}
 
-        {/* Problema Reportado */}
-        <View style={styles.section}>
-          <View style={styles.sectionTitle}>
-            <View style={styles.sectionTitleBar} />
-            <Text style={styles.sectionTitleText}>PROBLEMA REPORTADO</Text>
+          {/* Título */}
+          <View style={styles.mainTitle}>
+            <Text style={styles.mainTitleText}>COMPROBANTE DE RECEPCION</Text>
+            <View style={styles.titleDecoration}>
+              <View style={styles.titleLine} />
+            </View>
           </View>
-          <Text style={styles.sectionContent}>{data.problemaReportado}</Text>
-        </View>
 
-        {/* Observaciones */}
-        {data.observaciones && (
+          {/* Grid Cliente y Dispositivo */}
+          <View style={styles.grid2}>
+            {/* Datos del Cliente */}
+            <View style={styles.gridCol}>
+              <View style={styles.card}>
+                <View style={styles.cardTitle}>
+                  <View style={styles.cardTitleBar} />
+                  <Text style={styles.cardTitleText}>DATOS DEL CLIENTE</Text>
+                </View>
+                <View style={styles.cardRow}>
+                  <Text style={styles.cardLabel}>Nombre</Text>
+                  <Text style={styles.cardValue}>{data.cliente.nombre}</Text>
+                </View>
+                <View style={styles.cardRow}>
+                  <Text style={styles.cardLabel}>Telefono</Text>
+                  <Text style={styles.cardValue}>{data.cliente.telefono}</Text>
+                </View>
+                {data.cliente.email ? (
+                  <View style={styles.cardRow}>
+                    <Text style={styles.cardLabel}>Email</Text>
+                    <Text style={styles.cardValue}>{data.cliente.email}</Text>
+                  </View>
+                ) : null}
+                {data.cliente.direccion ? (
+                  <View style={styles.cardRow}>
+                    <Text style={styles.cardLabel}>Direccion</Text>
+                    <Text style={styles.cardValue}>
+                      {data.cliente.direccion}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+            </View>
+
+            {/* Datos del Dispositivo */}
+            <View style={styles.gridCol}>
+              <View style={styles.card}>
+                <View style={styles.cardTitle}>
+                  <View style={styles.cardTitleBar} />
+                  <Text style={styles.cardTitleText}>DISPOSITIVO</Text>
+                </View>
+                <View style={styles.cardRow}>
+                  <Text style={styles.cardLabel}>Tipo</Text>
+                  <Text style={styles.cardValue}>{tipoDispositivoStr}</Text>
+                </View>
+                <View style={styles.cardRow}>
+                  <Text style={styles.cardLabel}>Equipo</Text>
+                  <Text style={styles.cardValue}>{data.dispositivo}</Text>
+                </View>
+                {data.marca ? (
+                  <View style={styles.cardRow}>
+                    <Text style={styles.cardLabel}>Marca</Text>
+                    <Text style={styles.cardValue}>{data.marca}</Text>
+                  </View>
+                ) : null}
+                {data.color ? (
+                  <View style={styles.cardRow}>
+                    <Text style={styles.cardLabel}>Color</Text>
+                    <Text style={styles.cardValue}>{data.color}</Text>
+                  </View>
+                ) : null}
+                {data.imei ? (
+                  <View style={styles.cardRow}>
+                    <Text style={styles.cardLabel}>IMEI/Serie</Text>
+                    <Text style={styles.cardValue}>{data.imei}</Text>
+                  </View>
+                ) : null}
+              </View>
+            </View>
+          </View>
+
+          {/* Info boxes */}
+          {(data.accesorios || passwordDisplay || presupuestoStr) ? (
+            <View style={styles.infoBoxes}>
+              {data.accesorios ? (
+                <View style={styles.infoBox}>
+                  <Text style={styles.infoBoxLabel}>ACCESORIOS</Text>
+                  <Text style={styles.infoBoxValue}>{data.accesorios}</Text>
+                </View>
+              ) : null}
+              {passwordDisplay ? (
+                <View style={styles.infoBox}>
+                  <Text style={styles.infoBoxLabel}>
+                    {isPattern ? "PATRON" : "PIN/CONTRASENA"}
+                  </Text>
+                  <Text style={isPattern ? styles.patternValue : styles.infoBoxValue}>
+                    {passwordDisplay}
+                  </Text>
+                </View>
+              ) : null}
+              {presupuestoStr ? (
+                <View style={styles.infoBoxHighlight}>
+                  <Text style={styles.infoBoxLabel}>PRESUPUESTO ESTIMADO</Text>
+                  <Text style={styles.infoBoxValueHighlight}>
+                    {presupuestoStr}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
+          {/* Problema Reportado */}
           <View style={styles.section}>
             <View style={styles.sectionTitle}>
               <View style={styles.sectionTitleBar} />
-              <Text style={styles.sectionTitleText}>OBSERVACIONES</Text>
+              <Text style={styles.sectionTitleText}>PROBLEMA REPORTADO</Text>
             </View>
-            <Text style={styles.sectionContent}>{data.observaciones}</Text>
+            <Text style={styles.sectionContent}>{data.problemaReportado}</Text>
           </View>
-        )}
 
-        {/* Firmas */}
-        <View style={styles.signatures}>
-          <View style={styles.signatureBox}>
-            <View style={styles.signatureLine} />
-            <Text style={styles.signatureLabel}>Firma del Cliente</Text>
+          {/* Observaciones */}
+          {data.observaciones ? (
+            <View style={styles.section}>
+              <View style={styles.sectionTitle}>
+                <View style={styles.sectionTitleBar} />
+                <Text style={styles.sectionTitleText}>OBSERVACIONES</Text>
+              </View>
+              <Text style={styles.sectionContent}>{data.observaciones}</Text>
+            </View>
+          ) : null}
+
+          {/* Firmas */}
+          <View style={styles.signatures}>
+            <View style={styles.signatureBox}>
+              <View style={styles.signatureLine} />
+              <Text style={styles.signatureLabel}>Firma del Cliente</Text>
+            </View>
+            <View style={styles.signatureBox}>
+              <View style={styles.signatureLine} />
+              <Text style={styles.signatureLabel}>Firma del Tecnico</Text>
+            </View>
           </View>
-          <View style={styles.signatureBox}>
-            <View style={styles.signatureLine} />
-            <Text style={styles.signatureLabel}>Firma del Técnico</Text>
+
+          {/* Footer - Términos */}
+          <View style={styles.footer}>
+            <Text style={styles.footerTitle}>TERMINOS Y CONDICIONES</Text>
+            <View style={styles.footerItem}>
+              <Text style={styles.footerBullet}>*</Text>
+              <Text style={styles.footerText}>
+                El plazo de reparacion esta sujeto a disponibilidad de
+                repuestos.
+              </Text>
+            </View>
+            <View style={styles.footerItem}>
+              <Text style={styles.footerBullet}>*</Text>
+              <Text style={styles.footerText}>
+                Los equipos no retirados en 90 dias seran considerados en
+                abandono.
+              </Text>
+            </View>
+            <View style={styles.footerItem}>
+              <Text style={styles.footerBullet}>*</Text>
+              <Text style={styles.footerText}>
+                No nos hacemos responsables por datos almacenados en el
+                dispositivo.
+              </Text>
+            </View>
+            <View style={styles.footerItem}>
+              <Text style={styles.footerBullet}>*</Text>
+              <Text style={styles.footerText}>
+                El presupuesto puede variar segun el diagnostico tecnico.
+              </Text>
+            </View>
           </View>
+
+          {/* Bottom bar */}
+          <View style={styles.bottomBar} />
         </View>
-
-        {/* Footer - Términos */}
-        <View style={styles.footer}>
-          <Text style={styles.footerTitle}>TÉRMINOS Y CONDICIONES</Text>
-          <View style={styles.footerItem}>
-            <Text style={styles.footerBullet}>•</Text>
-            <Text style={styles.footerText}>
-              El plazo de reparación está sujeto a disponibilidad de repuestos.
-            </Text>
-          </View>
-          <View style={styles.footerItem}>
-            <Text style={styles.footerBullet}>•</Text>
-            <Text style={styles.footerText}>
-              Los equipos no retirados en 90 días serán considerados en abandono.
-            </Text>
-          </View>
-          <View style={styles.footerItem}>
-            <Text style={styles.footerBullet}>•</Text>
-            <Text style={styles.footerText}>
-              No nos hacemos responsables por datos almacenados en el dispositivo.
-            </Text>
-          </View>
-          <View style={styles.footerItem}>
-            <Text style={styles.footerBullet}>•</Text>
-            <Text style={styles.footerText}>
-              El presupuesto puede variar según el diagnóstico técnico.
-            </Text>
-          </View>
-        </View>
-
-        {/* Bottom bar */}
-        <View style={styles.bottomBar} />
-      </View>
-    </Page>
-  </Document>
-)
+      </Page>
+    </Document>
+  )
+}
 
 // ========================================
 // FUNCIÓN EXPORTADA PARA GENERAR PDF

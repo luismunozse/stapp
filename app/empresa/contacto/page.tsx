@@ -66,8 +66,8 @@ export default function ContactoPage() {
       description: "Nuestro equipo de soporte",
       value: "soporte@stapp.com",
       href: "mailto:soporte@stapp.com",
-      color: "text-blue-600",
-      bgColor: "bg-blue-50",
+      color: "text-blue-600 dark:text-blue-400",
+      bgColor: "bg-blue-50 dark:bg-blue-950/50",
     },
     {
       icon: Phone,
@@ -75,8 +75,8 @@ export default function ContactoPage() {
       description: "Lun a Vie, 9am - 6pm",
       value: "+54 11 1234-5678",
       href: "tel:+541112345678",
-      color: "text-green-600",
-      bgColor: "bg-green-50",
+      color: "text-green-600 dark:text-green-400",
+      bgColor: "bg-green-50 dark:bg-green-950/50",
     },
     {
       icon: WhatsAppIcon,
@@ -84,15 +84,15 @@ export default function ContactoPage() {
       description: "Respuesta rápida",
       value: "+54 11 1234-5678",
       href: "https://wa.me/541112345678",
-      color: "text-emerald-600",
-      bgColor: "bg-emerald-50",
+      color: "text-emerald-600 dark:text-emerald-400",
+      bgColor: "bg-emerald-50 dark:bg-emerald-950/50",
     },
   ]
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
+    <div className="min-h-screen bg-gradient-to-b from-muted/50 to-background">
       {/* Header */}
-      <header className="border-b bg-white">
+      <header className="border-b bg-card">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <Link href="/landing">
             <Button variant="ghost" className="gap-2">
@@ -107,10 +107,10 @@ export default function ContactoPage() {
       <section className="py-16 sm:py-20">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl mx-auto text-center">
-            <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-6">
+            <h1 className="text-4xl sm:text-5xl font-bold text-foreground mb-6">
               Contáctanos
             </h1>
-            <p className="text-xl text-gray-600">
+            <p className="text-xl text-muted-foreground">
               ¿Tienes preguntas? Estamos aquí para ayudarte. Envíanos un mensaje y
               te responderemos lo antes posible.
             </p>
@@ -138,10 +138,10 @@ export default function ContactoPage() {
                       >
                         <method.icon className={`h-7 w-7 ${method.color}`} />
                       </div>
-                      <h3 className="font-semibold text-gray-900 mb-1">
+                      <h3 className="font-semibold text-foreground mb-1">
                         {method.title}
                       </h3>
-                      <p className="text-sm text-gray-500 mb-2">
+                      <p className="text-sm text-muted-foreground mb-2">
                         {method.description}
                       </p>
                       <p className={`font-medium ${method.color}`}>
@@ -168,13 +168,13 @@ export default function ContactoPage() {
                 </CardHeader>
                 <CardContent>
                   {submitted && (
-                    <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-start gap-3">
-                      <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                    <div className="mb-6 p-4 bg-green-50 dark:bg-green-950/50 border border-green-200 dark:border-green-800 rounded-lg flex items-start gap-3">
+                      <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
                       <div>
-                        <p className="text-green-800 font-medium">
+                        <p className="text-green-800 dark:text-green-300 font-medium">
                           ¡Mensaje enviado exitosamente!
                         </p>
-                        <p className="text-green-700 text-sm mt-1">
+                        <p className="text-green-700 dark:text-green-400 text-sm mt-1">
                           Nos pondremos en contacto contigo pronto.
                         </p>
                       </div>
@@ -276,17 +276,17 @@ export default function ContactoPage() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="flex items-start gap-3">
-                    <Clock className="h-5 w-5 text-gray-400 mt-0.5" />
+                    <Clock className="h-5 w-5 text-muted-foreground mt-0.5" />
                     <div>
-                      <p className="font-medium text-gray-900">Lunes a Viernes</p>
-                      <p className="text-sm text-gray-600">9:00 AM - 6:00 PM (ART)</p>
+                      <p className="font-medium text-foreground">Lunes a Viernes</p>
+                      <p className="text-sm text-muted-foreground">9:00 AM - 6:00 PM (ART)</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <Clock className="h-5 w-5 text-gray-400 mt-0.5" />
+                    <Clock className="h-5 w-5 text-muted-foreground mt-0.5" />
                     <div>
-                      <p className="font-medium text-gray-900">Fin de Semana</p>
-                      <p className="text-sm text-gray-600">Cerrado</p>
+                      <p className="font-medium text-foreground">Fin de Semana</p>
+                      <p className="text-sm text-muted-foreground">Cerrado</p>
                     </div>
                   </div>
                 </CardContent>
@@ -298,10 +298,10 @@ export default function ContactoPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="flex items-start gap-3">
-                    <MapPin className="h-5 w-5 text-gray-400 mt-0.5" />
+                    <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
                     <div>
-                      <p className="text-gray-700">Buenos Aires, Argentina</p>
-                      <p className="text-sm text-gray-600 mt-1">
+                      <p className="text-foreground">Buenos Aires, Argentina</p>
+                      <p className="text-sm text-muted-foreground mt-1">
                         Servicio disponible en toda Latinoamérica
                       </p>
                     </div>
@@ -311,10 +311,10 @@ export default function ContactoPage() {
 
               <Card className="bg-primary/5 border-primary/20">
                 <CardContent className="pt-6">
-                  <h3 className="font-semibold text-gray-900 mb-2">
+                  <h3 className="font-semibold text-foreground mb-2">
                     ¿Necesitas ayuda inmediata?
                   </h3>
-                  <p className="text-sm text-gray-700 mb-4">
+                  <p className="text-sm text-muted-foreground mb-4">
                     Consulta nuestra sección de preguntas frecuentes o inicia una
                     prueba gratuita.
                   </p>
@@ -334,9 +334,9 @@ export default function ContactoPage() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t bg-white py-8">
+      <footer className="border-t bg-card py-8">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <p className="text-center text-gray-600">
+          <p className="text-center text-muted-foreground">
             © {new Date().getFullYear()} STApp. Todos los derechos reservados.
           </p>
         </div>

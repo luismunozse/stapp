@@ -64,7 +64,7 @@ export function SignaturePad({
       </Label>
       <div
         className={`relative border-2 rounded-lg bg-white ${
-          disabled ? "opacity-50 pointer-events-none" : "border-dashed border-gray-300"
+          disabled ? "opacity-50 pointer-events-none" : "border-dashed border-input"
         }`}
       >
         <SignatureCanvas
@@ -97,7 +97,7 @@ export function SignaturePad({
           Limpiar
         </Button>
         {!isEmpty && (
-          <span className="flex items-center text-sm text-green-600">
+          <span className="flex items-center text-sm text-green-600 dark:text-green-400">
             <Check className="mr-1 h-4 w-4" />
             Firma capturada
           </span>

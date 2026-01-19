@@ -142,7 +142,7 @@ export default function LogoPreviewPage() {
               <div
                 className={cn(
                   "rounded-lg p-6 transition-colors",
-                  previewDark ? "bg-gray-900" : "bg-gray-50"
+                  previewDark ? "bg-slate-900" : "bg-muted/50"
                 )}
               >
                 <div className="flex flex-wrap items-center gap-6">
@@ -156,7 +156,7 @@ export default function LogoPreviewPage() {
                     <span
                       className={cn(
                         "text-xs block mt-2",
-                        previewDark ? "text-gray-400" : "text-muted-foreground"
+                        previewDark ? "text-slate-400" : "text-muted-foreground"
                       )}
                     >
                       Icono
@@ -241,19 +241,19 @@ export default function LogoPreviewPage() {
             <div>
               <span className="text-sm text-muted-foreground mb-2 block">Favicon / App icon:</span>
               <div className="flex items-center gap-4">
-                <div className="w-8 h-8 rounded bg-white border shadow-sm flex items-center justify-center overflow-hidden">
+                <div className="w-8 h-8 rounded bg-white dark:bg-slate-100 border shadow-sm flex items-center justify-center overflow-hidden">
                   {(() => {
                     const Logo = logos.find((l) => l.id === selectedLogo)?.component
                     return Logo ? <Logo size="sm" variant="icon" /> : null
                   })()}
                 </div>
-                <div className="w-12 h-12 rounded-lg bg-white border shadow-sm flex items-center justify-center overflow-hidden">
+                <div className="w-12 h-12 rounded-lg bg-white dark:bg-slate-100 border shadow-sm flex items-center justify-center overflow-hidden">
                   {(() => {
                     const Logo = logos.find((l) => l.id === selectedLogo)?.component
                     return Logo ? <Logo size="md" variant="icon" /> : null
                   })()}
                 </div>
-                <div className="w-16 h-16 rounded-xl bg-white border shadow-sm flex items-center justify-center overflow-hidden">
+                <div className="w-16 h-16 rounded-xl bg-white dark:bg-slate-100 border shadow-sm flex items-center justify-center overflow-hidden">
                   {(() => {
                     const Logo = logos.find((l) => l.id === selectedLogo)?.component
                     return Logo ? <Logo size="lg" variant="icon" /> : null

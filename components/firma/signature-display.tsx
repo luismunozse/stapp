@@ -27,7 +27,7 @@ export function SignatureDisplay({
         <PenTool className="h-4 w-4 text-muted-foreground" />
         {label}
       </div>
-      <div className="border rounded-lg p-2 bg-white">
+      <div className="border rounded-lg p-2 bg-white dark:bg-slate-100">
         <img
           src={dataUrl}
           alt={label}
@@ -66,7 +66,7 @@ export function SignatureCard({
             <PenTool className="h-4 w-4" />
             {title}
           </div>
-          <div className="border rounded-lg p-3 bg-white">
+          <div className="border rounded-lg p-3 bg-white dark:bg-slate-100">
             <img
               src={dataUrl}
               alt={title}

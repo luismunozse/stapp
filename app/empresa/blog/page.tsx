@@ -94,9 +94,9 @@ export default function BlogPage() {
           { name: "Blog", url: "https://stapp.com.ar/empresa/blog" },
         ]}
       />
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
+    <div className="min-h-screen bg-gradient-to-b from-muted/50 to-background">
       {/* Header */}
-      <header className="border-b bg-white">
+      <header className="border-b bg-card">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <Link href="/landing">
             <Button variant="ghost" className="gap-2">
@@ -111,10 +111,10 @@ export default function BlogPage() {
       <section className="py-16 sm:py-20">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl mx-auto text-center">
-            <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-6">
+            <h1 className="text-4xl sm:text-5xl font-bold text-foreground mb-6">
               Blog de STApp
             </h1>
-            <p className="text-xl text-gray-600">
+            <p className="text-xl text-muted-foreground">
               Consejos, novedades y mejores prácticas para hacer crecer tu taller
               de reparación
             </p>
@@ -145,7 +145,7 @@ export default function BlogPage() {
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-7xl mx-auto">
             {blogPosts.map((post) => (
               <Card key={post.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-                <div className="aspect-video bg-gray-200 relative overflow-hidden">
+                <div className="aspect-video bg-muted relative overflow-hidden">
                   <Image
                     src={post.image}
                     alt={post.title}
@@ -161,7 +161,7 @@ export default function BlogPage() {
                   </div>
                 </div>
                 <CardHeader>
-                  <div className="flex items-center gap-4 text-sm text-gray-500 mb-3">
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground mb-3">
                     <div className="flex items-center gap-1">
                       <Calendar className="h-4 w-4" />
                       <span>
@@ -182,7 +182,7 @@ export default function BlogPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-gray-600 mb-4">{post.excerpt}</p>
+                  <p className="text-muted-foreground mb-4">{post.excerpt}</p>
                   <Button variant="ghost" className="gap-2 p-0 h-auto font-semibold text-primary">
                     Leer más
                     <ArrowRight className="h-4 w-4" />
@@ -205,17 +205,17 @@ export default function BlogPage() {
       <section className="py-16 bg-primary/5">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl mx-auto text-center">
-            <h2 className="text-3xl font-bold text-gray-900 mb-4">
+            <h2 className="text-3xl font-bold text-foreground mb-4">
               Suscríbete a nuestro newsletter
             </h2>
-            <p className="text-gray-600 mb-8">
+            <p className="text-muted-foreground mb-8">
               Recibe los últimos artículos, consejos y novedades directamente en tu correo
             </p>
             <div className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
               <input
                 type="email"
                 placeholder="Tu correo electrónico"
-                className="flex-1 px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary"
+                className="flex-1 px-4 py-3 rounded-lg border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               />
               <Button size="lg">Suscribirme</Button>
             </div>
@@ -224,9 +224,9 @@ export default function BlogPage() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t bg-white py-8">
+      <footer className="border-t bg-card py-8">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <p className="text-center text-gray-600">
+          <p className="text-center text-muted-foreground">
             © {new Date().getFullYear()} STApp. Todos los derechos reservados.
           </p>
         </div>

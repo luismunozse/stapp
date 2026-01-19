@@ -9,9 +9,9 @@ export const metadata = {
 
 export default function SobreNosotrosPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
+    <div className="min-h-screen bg-gradient-to-b from-muted/50 to-background">
       {/* Header */}
-      <header className="border-b bg-white">
+      <header className="border-b bg-card">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <Link href="/landing">
             <Button variant="ghost" className="gap-2">
@@ -26,10 +26,10 @@ export default function SobreNosotrosPage() {
       <section className="py-16 sm:py-24">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl mx-auto text-center">
-            <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-6">
+            <h1 className="text-4xl sm:text-5xl font-bold text-foreground mb-6">
               Sobre Nosotros
             </h1>
-            <p className="text-xl text-gray-600">
+            <p className="text-xl text-muted-foreground">
               Somos un equipo apasionado por facilitar la gestión de talleres de
               reparación de dispositivos electrónicos en toda Latinoamérica.
             </p>
@@ -38,25 +38,25 @@ export default function SobreNosotrosPage() {
       </section>
 
       {/* Nuestra Historia */}
-      <section className="py-16 bg-white">
+      <section className="py-16 bg-card">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-4xl mx-auto">
-            <h2 className="text-3xl font-bold text-gray-900 mb-8">Nuestra Historia</h2>
-            <div className="prose prose-lg max-w-none">
-              <p className="text-gray-700 mb-6">
+            <h2 className="text-3xl font-bold text-foreground mb-8">Nuestra Historia</h2>
+            <div className="prose prose-lg dark:prose-invert max-w-none">
+              <p className="text-muted-foreground mb-6">
                 STApp nació de la experiencia directa en la industria de reparación de
                 dispositivos electrónicos. Observamos que muchos talleres de reparación
                 enfrentaban desafíos similares: gestión de órdenes desorganizada, control
                 de inventario deficiente, y falta de herramientas para comunicarse
                 efectivamente con sus clientes.
               </p>
-              <p className="text-gray-700 mb-6">
+              <p className="text-muted-foreground mb-6">
                 En 2023, decidimos crear una solución integral que abordara estos problemas
                 de manera simple y efectiva. Desde entonces, hemos trabajado incansablemente
                 para desarrollar un sistema que no solo resuelva estos desafíos, sino que
                 también impulse el crecimiento de los negocios de nuestros clientes.
               </p>
-              <p className="text-gray-700">
+              <p className="text-muted-foreground">
                 Hoy, STApp es utilizado por talleres de reparación en toda Latinoamérica,
                 ayudándoles a gestionar miles de órdenes de servicio, optimizar su inventario
                 y brindar un mejor servicio a sus clientes.
@@ -70,7 +70,7 @@ export default function SobreNosotrosPage() {
       <section className="py-16">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-5xl mx-auto">
-            <h2 className="text-3xl font-bold text-gray-900 mb-12 text-center">
+            <h2 className="text-3xl font-bold text-foreground mb-12 text-center">
               Nuestros Valores
             </h2>
             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
@@ -78,10 +78,10 @@ export default function SobreNosotrosPage() {
                 <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Users className="h-8 w-8 text-primary" />
                 </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-3">
+                <h3 className="text-xl font-semibold text-foreground mb-3">
                   Orientados al Cliente
                 </h3>
-                <p className="text-gray-600">
+                <p className="text-muted-foreground">
                   Escuchamos las necesidades de nuestros usuarios y desarrollamos
                   soluciones que realmente les ayuden.
                 </p>
@@ -91,10 +91,10 @@ export default function SobreNosotrosPage() {
                 <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Target className="h-8 w-8 text-primary" />
                 </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-3">
+                <h3 className="text-xl font-semibold text-foreground mb-3">
                   Innovación Constante
                 </h3>
-                <p className="text-gray-600">
+                <p className="text-muted-foreground">
                   Mejoramos continuamente nuestra plataforma con nuevas funcionalidades
                   y tecnologías.
                 </p>
@@ -104,10 +104,10 @@ export default function SobreNosotrosPage() {
                 <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Award className="h-8 w-8 text-primary" />
                 </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-3">
+                <h3 className="text-xl font-semibold text-foreground mb-3">
                   Excelencia
                 </h3>
-                <p className="text-gray-600">
+                <p className="text-muted-foreground">
                   Nos esforzamos por ofrecer la mejor calidad en cada aspecto de
                   nuestro servicio.
                 </p>
@@ -117,10 +117,10 @@ export default function SobreNosotrosPage() {
                 <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Heart className="h-8 w-8 text-primary" />
                 </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-3">
+                <h3 className="text-xl font-semibold text-foreground mb-3">
                   Compromiso
                 </h3>
-                <p className="text-gray-600">
+                <p className="text-muted-foreground">
                   Estamos comprometidos con el éxito de cada taller que confía en
                   nosotros.
                 </p>
@@ -134,8 +134,8 @@ export default function SobreNosotrosPage() {
       <section className="py-16 bg-primary/5">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-4xl mx-auto text-center">
-            <h2 className="text-3xl font-bold text-gray-900 mb-6">Nuestra Misión</h2>
-            <p className="text-xl text-gray-700 mb-8">
+            <h2 className="text-3xl font-bold text-foreground mb-6">Nuestra Misión</h2>
+            <p className="text-xl text-muted-foreground mb-8">
               Empoderar a los talleres de reparación de dispositivos electrónicos con
               herramientas tecnológicas que simplifiquen su operación, mejoren la
               experiencia de sus clientes y les permitan crecer de manera sostenible.
@@ -150,9 +150,9 @@ export default function SobreNosotrosPage() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t bg-white py-8">
+      <footer className="border-t bg-card py-8">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <p className="text-center text-gray-600">
+          <p className="text-center text-muted-foreground">
             © {new Date().getFullYear()} STApp. Todos los derechos reservados.
           </p>
         </div>
