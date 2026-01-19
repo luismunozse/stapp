@@ -121,8 +121,8 @@ export function NotificationHistory({ ordenId }: NotificationHistoryProps) {
                       variant="outline"
                       className={
                         log.estado === "ENVIADO"
-                          ? "text-green-700 border-green-300 bg-green-50"
-                          : "text-red-700 border-red-300 bg-red-50"
+                          ? "text-green-700 dark:text-green-400 border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-950/50"
+                          : "text-red-700 dark:text-red-400 border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-950/50"
                       }
                     >
                       {log.estado === "ENVIADO" ? (

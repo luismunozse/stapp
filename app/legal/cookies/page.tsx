@@ -138,8 +138,8 @@ export default function CookiesPage() {
           <li><strong>Edge:</strong> Configuración → Privacidad → Cookies</li>
         </ul>
 
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-6">
-          <p className="text-yellow-800 text-sm">
+        <div className="bg-yellow-50 dark:bg-yellow-950/50 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mt-6">
+          <p className="text-yellow-800 dark:text-yellow-300 text-sm">
             <strong>Nota:</strong> Si deshabilita las cookies esenciales, es posible que algunas funciones
             del Servicio no funcionen correctamente y no pueda iniciar sesión en su cuenta.
           </p>

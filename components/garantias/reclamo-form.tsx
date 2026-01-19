@@ -47,7 +47,7 @@ export function ReclamoForm({ garantiaId, onClose, onSuccess }: ReclamoFormProps
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 p-4 border rounded-lg bg-yellow-50">
+    <form onSubmit={handleSubmit} className="space-y-4 p-4 border rounded-lg bg-yellow-50 dark:bg-yellow-950/30 dark:border-yellow-800">
       <div>
         <Label htmlFor="descripcion">Descripción del reclamo</Label>
         <Textarea

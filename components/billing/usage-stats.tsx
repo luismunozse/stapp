@@ -83,9 +83,9 @@ export function UsageStats({ usage, limits, planType }: UsageStatsProps) {
                     value={percentage}
                     className={
                       isAtLimit
-                        ? "bg-red-100 [&>div]:bg-red-500"
+                        ? "bg-red-100 dark:bg-red-950/50 [&>div]:bg-red-500"
                         : isNearLimit
-                        ? "bg-yellow-100 [&>div]:bg-yellow-500"
+                        ? "bg-yellow-100 dark:bg-yellow-950/50 [&>div]:bg-yellow-500"
                         : ""
                     }
                   />

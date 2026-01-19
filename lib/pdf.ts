@@ -1141,36 +1141,55 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   y -= 20
 
   // === GRID: CLIENTE | DISPOSITIVO ===
-  const cardHeight = 75
+  const cardHeight = 85
 
-  // Card Cliente
-  page.drawRectangle({ x: margin, y: y - cardHeight, width: halfWidth, height: cardHeight, color: bgGray })
-  page.drawText("CLIENTE", { x: margin + 12, y: y - 12, size: 9, font: helveticaBold, color: primaryColor })
-  page.drawText("Nombre", { x: margin + 12, y: y - 28, size: 8, font: helvetica, color: grayColor })
-  page.drawText(clienteNombre.substring(0, 28), { x: margin + 12, y: y - 40, size: 10, font: helveticaBold, color: textColor })
-  page.drawText("Telefono", { x: margin + 12, y: y - 55, size: 8, font: helvetica, color: grayColor })
-  page.drawText(clienteTelefono, { x: margin + 70, y: y - 55, size: 9, font: helvetica, color: textColor })
+  // Card Cliente - con borde y mejor diseño
+  page.drawRectangle({ x: margin, y: y - cardHeight, width: halfWidth, height: cardHeight, color: white, borderColor: lightGray, borderWidth: 1 })
+  // Barra de acento izquierda
+  page.drawRectangle({ x: margin, y: y - cardHeight, width: 4, height: cardHeight, color: primaryColor })
+  // Header del card
+  page.drawRectangle({ x: margin + 4, y: y - 20, width: halfWidth - 4, height: 20, color: bgGray })
+  page.drawText("CLIENTE", { x: margin + 14, y: y - 14, size: 9, font: helveticaBold, color: primaryColor })
+  // Contenido
+  page.drawText("Nombre:", { x: margin + 14, y: y - 35, size: 8, font: helvetica, color: grayColor })
+  page.drawText(clienteNombre.substring(0, 30), { x: margin + 60, y: y - 35, size: 9, font: helveticaBold, color: textColor })
+  page.drawText("Telefono:", { x: margin + 14, y: y - 50, size: 8, font: helvetica, color: grayColor })
+  page.drawText(clienteTelefono, { x: margin + 60, y: y - 50, size: 9, font: helvetica, color: textColor })
   if (clienteEmail) {
-    page.drawText("Email", { x: margin + 150, y: y - 55, size: 8, font: helvetica, color: grayColor })
-    page.drawText(clienteEmail.substring(0, 18), { x: margin + 180, y: y - 55, size: 8, font: helvetica, color: textColor })
+    page.drawText("Email:", { x: margin + 14, y: y - 65, size: 8, font: helvetica, color: grayColor })
+    page.drawText(clienteEmail.substring(0, 25), { x: margin + 60, y: y - 65, size: 8, font: helvetica, color: textColor })
+  }
+  if (clienteDireccion) {
+    page.drawText("Dir:", { x: margin + 14, y: y - 78, size: 8, font: helvetica, color: grayColor })
+    page.drawText(clienteDireccion.substring(0, 28), { x: margin + 60, y: y - 78, size: 8, font: helvetica, color: textColor })
   }
 
-  // Card Dispositivo
+  // Card Dispositivo - con borde y mejor diseño
   const cardX2 = margin + halfWidth + cardGap
-  page.drawRectangle({ x: cardX2, y: y - cardHeight, width: halfWidth, height: cardHeight, color: bgGray })
-  page.drawText("DISPOSITIVO", { x: cardX2 + 12, y: y - 12, size: 9, font: helveticaBold, color: primaryColor })
-  page.drawText(tipoDispositivo, { x: cardX2 + 12, y: y - 28, size: 8, font: helvetica, color: grayColor })
-  page.drawText(dispositivo.substring(0, 25), { x: cardX2 + 12, y: y - 40, size: 10, font: helveticaBold, color: textColor })
+  page.drawRectangle({ x: cardX2, y: y - cardHeight, width: halfWidth, height: cardHeight, color: white, borderColor: lightGray, borderWidth: 1 })
+  // Barra de acento izquierda
+  page.drawRectangle({ x: cardX2, y: y - cardHeight, width: 4, height: cardHeight, color: primaryColor })
+  // Header del card
+  page.drawRectangle({ x: cardX2 + 4, y: y - 20, width: halfWidth - 4, height: 20, color: bgGray })
+  page.drawText("DISPOSITIVO", { x: cardX2 + 14, y: y - 14, size: 9, font: helveticaBold, color: primaryColor })
+  // Contenido
+  page.drawText("Tipo:", { x: cardX2 + 14, y: y - 35, size: 8, font: helvetica, color: grayColor })
+  page.drawText(tipoDispositivo, { x: cardX2 + 50, y: y - 35, size: 9, font: helvetica, color: textColor })
+  page.drawText("Modelo:", { x: cardX2 + 14, y: y - 50, size: 8, font: helvetica, color: grayColor })
+  page.drawText(dispositivo.substring(0, 25), { x: cardX2 + 55, y: y - 50, size: 9, font: helveticaBold, color: textColor })
 
-  let deviceInfoY = y - 55
+  let deviceInfoY = y - 65
   if (marca) {
-    page.drawText(`Marca: ${marca}`, { x: cardX2 + 12, y: deviceInfoY, size: 8, font: helvetica, color: grayColor })
+    page.drawText("Marca:", { x: cardX2 + 14, y: deviceInfoY, size: 8, font: helvetica, color: grayColor })
+    page.drawText(marca, { x: cardX2 + 50, y: deviceInfoY, size: 8, font: helvetica, color: textColor })
   }
   if (colorDisp) {
-    page.drawText(`Color: ${colorDisp}`, { x: cardX2 + 100, y: deviceInfoY, size: 8, font: helvetica, color: grayColor })
+    page.drawText("Color:", { x: cardX2 + 130, y: deviceInfoY, size: 8, font: helvetica, color: grayColor })
+    page.drawText(colorDisp, { x: cardX2 + 160, y: deviceInfoY, size: 8, font: helvetica, color: textColor })
   }
   if (imei) {
-    page.drawText(`IMEI: ${imei}`, { x: cardX2 + 12, y: deviceInfoY - 11, size: 8, font: helvetica, color: grayColor })
+    page.drawText("IMEI:", { x: cardX2 + 14, y: deviceInfoY - 13, size: 8, font: helvetica, color: grayColor })
+    page.drawText(imei, { x: cardX2 + 50, y: deviceInfoY - 13, size: 8, font: helvetica, color: textColor })
   }
 
   y -= cardHeight + 15
@@ -1235,42 +1254,65 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     y -= 18
   }
 
-  // === SECCION DE FIRMAS ===
-  const firmaY = Math.max(y - 25, 165)
+  // === SECCION TERMINOS Y CONDICIONES ===
+  const terminosStartY = Math.max(y - 15, 230)
 
-  page.drawLine({ start: { x: margin, y: firmaY + 35 }, end: { x: width - margin, y: firmaY + 35 }, thickness: 1, color: lightGray })
-
-  // Firma Cliente
-  page.drawRectangle({ x: margin, y: firmaY - 45, width: halfWidth, height: 75, color: bgGray })
-  page.drawText("FIRMA CLIENTE", { x: margin + 12, y: firmaY + 20, size: 8, font: helveticaBold, color: grayColor })
-  page.drawLine({ start: { x: margin + 20, y: firmaY - 5 }, end: { x: margin + halfWidth - 20, y: firmaY - 5 }, thickness: 1, color: grayColor })
-  page.drawText("Aclaracion: _____________________", { x: margin + 20, y: firmaY - 20, size: 7, font: helvetica, color: grayColor })
-  page.drawText("DNI: _____________________", { x: margin + 20, y: firmaY - 32, size: 7, font: helvetica, color: grayColor })
-
-  // Firma Tecnico
-  page.drawRectangle({ x: cardX2, y: firmaY - 45, width: halfWidth, height: 75, color: bgGray })
-  page.drawText("FIRMA TECNICO", { x: cardX2 + 12, y: firmaY + 20, size: 8, font: helveticaBold, color: grayColor })
-  page.drawLine({ start: { x: cardX2 + 20, y: firmaY - 5 }, end: { x: cardX2 + halfWidth - 20, y: firmaY - 5 }, thickness: 1, color: grayColor })
-  page.drawText("Aclaracion: _____________________", { x: cardX2 + 20, y: firmaY - 20, size: 7, font: helvetica, color: grayColor })
-
-  // === FOOTER ===
-  const footerTop = 70
-  page.drawRectangle({ x: margin, y: 20, width: contentWidth, height: footerTop - 12, color: bgGray })
-
-  page.drawText("TERMINOS Y CONDICIONES", { x: margin + 10, y: footerTop - 5, size: 7, font: helveticaBold, color: grayColor })
-  const terminos = [
-    "• Conserve este comprobante para retirar su equipo. El plazo de retiro es de 30 dias.",
-    "• No nos hacemos responsables por datos perdidos. Realice backup antes de entregar el equipo.",
-    "• Al firmar, acepta haber revisado el estado del equipo al momento de la entrega."
-  ]
-  let termY = footerTop - 18
-  terminos.forEach(t => {
-    page.drawText(t, { x: margin + 10, y: termY, size: 6, font: helvetica, color: grayColor })
-    termY -= 10
+  // Caja de términos y condiciones
+  const terminosBoxHeight = 70
+  page.drawRectangle({
+    x: margin,
+    y: terminosStartY - terminosBoxHeight,
+    width: contentWidth,
+    height: terminosBoxHeight,
+    color: rgb(0.98, 0.98, 0.98),
+    borderColor: lightGray,
+    borderWidth: 1
   })
 
-  page.drawText(`Orden #${numeroOrden}`, { x: margin + 10, y: 25, size: 7, font: helveticaBold, color: primaryColor })
-  page.drawText(`Impreso: ${fechaImpresion}`, { x: width - margin - 90, y: 25, size: 6, font: helvetica, color: grayColor })
+  // Header de términos
+  page.drawRectangle({
+    x: margin,
+    y: terminosStartY - 18,
+    width: contentWidth,
+    height: 18,
+    color: rgb(0.95, 0.95, 0.95)
+  })
+  page.drawText("TERMINOS Y CONDICIONES", { x: margin + 12, y: terminosStartY - 13, size: 9, font: helveticaBold, color: grayColor })
+
+  // Términos
+  const terminos = [
+    "1. Conserve este comprobante para retirar su equipo. El plazo de retiro es de 30 dias.",
+    "2. No nos hacemos responsables por datos perdidos. Realice backup antes de entregar el equipo.",
+    "3. Al firmar, el cliente declara haber revisado el estado del equipo al momento de la entrega.",
+    "4. El presupuesto puede variar segun el diagnostico final del equipo."
+  ]
+  let termY = terminosStartY - 32
+  terminos.forEach(t => {
+    page.drawText(t, { x: margin + 12, y: termY, size: 8, font: helvetica, color: textColor })
+    termY -= 12
+  })
+
+  // === SECCION DE FIRMAS ===
+  const firmaY = terminosStartY - terminosBoxHeight - 25
+
+  // Firma Cliente
+  page.drawRectangle({ x: margin, y: firmaY - 55, width: halfWidth, height: 70, color: bgGray, borderColor: lightGray, borderWidth: 1 })
+  page.drawRectangle({ x: margin, y: firmaY + 5, width: halfWidth, height: 18, color: rgb(0.95, 0.95, 0.95) })
+  page.drawText("FIRMA CLIENTE", { x: margin + 12, y: firmaY + 10, size: 8, font: helveticaBold, color: grayColor })
+  page.drawLine({ start: { x: margin + 20, y: firmaY - 15 }, end: { x: margin + halfWidth - 20, y: firmaY - 15 }, thickness: 1, color: grayColor })
+  page.drawText("Aclaracion: _________________________", { x: margin + 15, y: firmaY - 32, size: 7, font: helvetica, color: grayColor })
+  page.drawText("DNI: _________________________", { x: margin + 15, y: firmaY - 45, size: 7, font: helvetica, color: grayColor })
+
+  // Firma Tecnico
+  page.drawRectangle({ x: cardX2, y: firmaY - 55, width: halfWidth, height: 70, color: bgGray, borderColor: lightGray, borderWidth: 1 })
+  page.drawRectangle({ x: cardX2, y: firmaY + 5, width: halfWidth, height: 18, color: rgb(0.95, 0.95, 0.95) })
+  page.drawText("FIRMA TECNICO", { x: cardX2 + 12, y: firmaY + 10, size: 8, font: helveticaBold, color: grayColor })
+  page.drawLine({ start: { x: cardX2 + 20, y: firmaY - 15 }, end: { x: cardX2 + halfWidth - 20, y: firmaY - 15 }, thickness: 1, color: grayColor })
+  page.drawText("Aclaracion: _________________________", { x: cardX2 + 15, y: firmaY - 32, size: 7, font: helvetica, color: grayColor })
+
+  // === FOOTER ===
+  page.drawText(`Orden #${numeroOrden}`, { x: margin, y: 25, size: 8, font: helveticaBold, color: primaryColor })
+  page.drawText(`Impreso: ${fechaImpresion}`, { x: width - margin - 100, y: 25, size: 7, font: helvetica, color: grayColor })
 
   // === BARRA INFERIOR ===
   page.drawRectangle({ x: 0, y: 0, width, height: 8, color: primaryColor })
