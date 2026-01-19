@@ -1,5 +1,9 @@
 import puppeteer from "puppeteer-core"
-import chromium from "@sparticuz/chromium"
+import chromium from "@sparticuz/chromium-min"
+
+// URL del binario de Chromium compatible con chromium-min v131
+const CHROMIUM_BINARY_URL =
+  "https://github.com/Sparticuz/chromium/releases/download/v131.0.0/chromium-v131.0.0-pack.tar"
 
 // ========================================
 // TIPOS
@@ -483,11 +487,11 @@ export async function generateOrdenPDFPuppeteer(
   let browser
 
   if (isVercel) {
-    // Producción: usar @sparticuz/chromium
+    // Producción: usar @sparticuz/chromium-min con binario remoto
     browser = await puppeteer.launch({
       args: chromium.args,
       defaultViewport: { width: 1280, height: 720 },
-      executablePath: await chromium.executablePath(),
+      executablePath: await chromium.executablePath(CHROMIUM_BINARY_URL),
       headless: true,
     })
   } else {
