@@ -1,9 +1,9 @@
 import puppeteer from "puppeteer-core"
 import chromium from "@sparticuz/chromium-min"
 
-// URL del binario de Chromium compatible con chromium-min v131
+// URL del binario de Chromium compatible con chromium-min v130
 const CHROMIUM_BINARY_URL =
-  "https://github.com/Sparticuz/chromium/releases/download/v131.0.0/chromium-v131.0.0-pack.tar"
+  "https://github.com/Sparticuz/chromium/releases/download/v130.0.0/chromium-v130.0.0-pack.tar"
 
 // ========================================
 // TIPOS
@@ -488,11 +488,15 @@ export async function generateOrdenPDFPuppeteer(
 
   if (isVercel) {
     // Producción: usar @sparticuz/chromium-min con binario remoto
+    // Configuración requerida para Lambda/Vercel
+    chromium.setHeadlessMode = true
+    chromium.setGraphicsMode = false
+
     browser = await puppeteer.launch({
       args: chromium.args,
       defaultViewport: { width: 1280, height: 720 },
       executablePath: await chromium.executablePath(CHROMIUM_BINARY_URL),
-      headless: true,
+      headless: chromium.headless,
     })
   } else {
     // Desarrollo local: usar Chrome instalado
