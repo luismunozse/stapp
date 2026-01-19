@@ -24,11 +24,11 @@ export function Hero() {
       {/* Background gradient */}
       <div className="absolute inset-0 bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-background dark:via-background dark:to-background" />
 
-      {/* Floating devices decoration */}
-      <div className="absolute top-20 right-10 opacity-10">
+      {/* Floating devices decoration - hidden on mobile */}
+      <div className="hidden md:block absolute top-20 right-10 opacity-10">
         <Smartphone className="w-32 h-32 text-primary rotate-12" />
       </div>
-      <div className="absolute bottom-20 left-10 opacity-10">
+      <div className="hidden md:block absolute bottom-20 left-10 opacity-10">
         <Laptop className="w-40 h-40 text-primary -rotate-12" />
       </div>
 
@@ -82,22 +82,22 @@ export function Hero() {
         </div>
 
         {/* Device types */}
-        <div className="flex justify-center gap-8 mt-16 opacity-60">
-          <div className="flex flex-col items-center gap-2">
-            <Smartphone className="w-8 h-8" />
-            <span className="text-xs">Celulares</span>
+        <div className="grid grid-cols-4 gap-4 sm:gap-8 mt-12 sm:mt-16 opacity-60 max-w-md mx-auto">
+          <div className="flex flex-col items-center gap-1 sm:gap-2">
+            <Smartphone className="w-6 h-6 sm:w-8 sm:h-8" />
+            <span className="text-[10px] sm:text-xs">Celulares</span>
           </div>
-          <div className="flex flex-col items-center gap-2">
-            <Laptop className="w-8 h-8" />
-            <span className="text-xs">Computadoras</span>
+          <div className="flex flex-col items-center gap-1 sm:gap-2">
+            <Laptop className="w-6 h-6 sm:w-8 sm:h-8" />
+            <span className="text-[10px] sm:text-xs">PCs</span>
           </div>
-          <div className="flex flex-col items-center gap-2">
-            <Tablet className="w-8 h-8" />
-            <span className="text-xs">Tablets</span>
+          <div className="flex flex-col items-center gap-1 sm:gap-2">
+            <Tablet className="w-6 h-6 sm:w-8 sm:h-8" />
+            <span className="text-[10px] sm:text-xs">Tablets</span>
           </div>
-          <div className="flex flex-col items-center gap-2">
-            <Gamepad2 className="w-8 h-8" />
-            <span className="text-xs">Consolas</span>
+          <div className="flex flex-col items-center gap-1 sm:gap-2">
+            <Gamepad2 className="w-6 h-6 sm:w-8 sm:h-8" />
+            <span className="text-[10px] sm:text-xs">Consolas</span>
           </div>
         </div>
       </div>

@@ -145,17 +145,16 @@ export function Features() {
 
         {/* Tabs */}
         <Tabs defaultValue="servicio" className="w-full">
-          <div className="flex justify-center mb-10">
-            <TabsList className="inline-flex h-auto p-1.5 bg-muted/80 backdrop-blur-sm rounded-2xl border shadow-sm gap-2">
+          <div className="flex justify-center mb-10 px-2">
+            <TabsList className="inline-flex h-auto p-1 sm:p-1.5 bg-muted/80 backdrop-blur-sm rounded-xl sm:rounded-2xl border shadow-sm gap-1 sm:gap-2">
               {categories.map((category) => (
                 <TabsTrigger
                   key={category.id}
                   value={category.id}
-                  className="inline-flex items-center gap-2 py-3 px-5 text-sm font-medium rounded-xl transition-all duration-200 data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground data-[state=inactive]:hover:bg-background/50 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md"
+                  className="inline-flex items-center gap-1.5 sm:gap-2 py-2 px-3 sm:py-3 sm:px-5 text-xs sm:text-sm font-medium rounded-lg sm:rounded-xl transition-all duration-200 data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground data-[state=inactive]:hover:bg-background/50 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md"
                 >
-                  <category.icon className="w-4 h-4" />
-                  <span className="hidden sm:inline">{category.name}</span>
-                  <span className="sm:hidden">{category.name.split(" ")[0]}</span>
+                  <category.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <span>{category.name.split(" ")[0]}</span>
                 </TabsTrigger>
               ))}
             </TabsList>
