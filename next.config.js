@@ -4,8 +4,14 @@ const nextConfig = {
   // Asegura que Vercel empaquete el binario de Chromium para los handlers de PDF
   serverExternalPackages: ["@sparticuz/chromium", "puppeteer-core"],
   outputFileTracingIncludes: {
-    "/api/ordenes/[id]/pdf": ["./node_modules/@sparticuz/chromium/bin/**"],
-    "/api/public/ordenes/[token]/pdf": ["./node_modules/@sparticuz/chromium/bin/**"],
+    "/api/ordenes/[id]/pdf": [
+      "./node_modules/@sparticuz/chromium/bin/**",
+      "./node_modules/@sparticuz/chromium/build/**"
+    ],
+    "/api/public/ordenes/[token]/pdf": [
+      "./node_modules/@sparticuz/chromium/bin/**",
+      "./node_modules/@sparticuz/chromium/build/**"
+    ],
   },
   images: {
     remotePatterns: [
