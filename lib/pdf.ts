@@ -1232,9 +1232,90 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   if (codigoAccesoDispositivo) {
     page.drawText("CONTRASEÑA / PIN / PATRON", { x: margin, y, size: 9, font: helveticaBold, color: primaryColor })
     y -= 12
-    page.drawRectangle({ x: margin, y: y - 22, width: 180, height: 22, color: bgGray, borderColor: lightGray, borderWidth: 1 })
-    page.drawText(codigoAccesoDispositivo, { x: margin + 10, y: y - 15, size: 12, font: courier, color: textColor })
-    y -= 34
+
+    // Detectar si es un patrón
+    const isPattern = codigoAccesoDispositivo.toLowerCase().startsWith("patrón:") ||
+                      codigoAccesoDispositivo.toLowerCase().startsWith("patron:")
+
+    if (isPattern) {
+      // Extraer los números del patrón (ej: "Patrón: 7-8-9-6-3-2-1-4" -> [7,8,9,6,3,2,1,4])
+      const patternMatch = codigoAccesoDispositivo.match(/[\d-]+$/)
+      const patternNumbers = patternMatch
+        ? patternMatch[0].split("-").map(n => parseInt(n.trim())).filter(n => n >= 1 && n <= 9)
+        : []
+
+      // Dibujar caja del patrón
+      const patternBoxWidth = 180
+      const patternBoxHeight = 90
+      page.drawRectangle({ x: margin, y: y - patternBoxHeight, width: patternBoxWidth, height: patternBoxHeight, color: bgGray, borderColor: lightGray, borderWidth: 1 })
+
+      // Posiciones de los 9 puntos en una grilla 3x3
+      // La grilla de Android es: 1-2-3 / 4-5-6 / 7-8-9
+      const gridStartX = margin + 30
+      const gridStartY = y - 20
+      const cellSize = 25
+      const dotRadius = 4
+
+      const getPointPosition = (num: number) => {
+        const row = Math.floor((num - 1) / 3)  // 0, 1, 2
+        const col = (num - 1) % 3              // 0, 1, 2
+        return {
+          x: gridStartX + col * cellSize + cellSize / 2,
+          y: gridStartY - row * cellSize - cellSize / 2
+        }
+      }
+
+      // Dibujar líneas conectando los puntos del patrón
+      if (patternNumbers.length > 1) {
+        for (let i = 0; i < patternNumbers.length - 1; i++) {
+          const start = getPointPosition(patternNumbers[i])
+          const end = getPointPosition(patternNumbers[i + 1])
+          page.drawLine({
+            start: { x: start.x, y: start.y },
+            end: { x: end.x, y: end.y },
+            thickness: 2,
+            color: primaryColor
+          })
+        }
+      }
+
+      // Dibujar los 9 puntos
+      for (let num = 1; num <= 9; num++) {
+        const pos = getPointPosition(num)
+        const isInPattern = patternNumbers.includes(num)
+
+        // Punto exterior (siempre visible)
+        page.drawCircle({
+          x: pos.x,
+          y: pos.y,
+          size: dotRadius,
+          color: isInPattern ? primaryColor : grayColor,
+          borderWidth: 0
+        })
+
+        // Punto interior más pequeño para los activos
+        if (isInPattern) {
+          page.drawCircle({
+            x: pos.x,
+            y: pos.y,
+            size: dotRadius - 2,
+            color: rgb(1, 1, 1),
+            borderWidth: 0
+          })
+        }
+      }
+
+      // Mostrar secuencia al lado
+      page.drawText("Secuencia:", { x: margin + 105, y: y - 30, size: 8, font: helveticaBold, color: grayColor })
+      page.drawText(patternNumbers.join(" → "), { x: margin + 105, y: y - 45, size: 10, font: courier, color: textColor })
+
+      y -= patternBoxHeight + 12
+    } else {
+      // PIN o Contraseña - mostrar como texto
+      page.drawRectangle({ x: margin, y: y - 22, width: 180, height: 22, color: bgGray, borderColor: lightGray, borderWidth: 1 })
+      page.drawText(codigoAccesoDispositivo, { x: margin + 10, y: y - 15, size: 12, font: courier, color: textColor })
+      y -= 34
+    }
   }
 
   // === PRESUPUESTO (si hay) ===
@@ -1293,7 +1374,10 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   })
 
   // === SECCION DE FIRMAS ===
-  const firmaY = terminosStartY - terminosBoxHeight - 25
+  const firmaY = terminosStartY - terminosBoxHeight - 45
+
+  // Línea separadora
+  page.drawLine({ start: { x: margin, y: firmaY + 30 }, end: { x: width - margin, y: firmaY + 30 }, thickness: 1, color: lightGray })
 
   // Firma Cliente
   page.drawRectangle({ x: margin, y: firmaY - 55, width: halfWidth, height: 70, color: bgGray, borderColor: lightGray, borderWidth: 1 })
