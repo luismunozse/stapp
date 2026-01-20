@@ -17,7 +17,24 @@ import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { useModal } from "@/contexts/modal-context"
 import { formatCurrency } from "@/lib/utils"
-import { Plus, Trash2, Package, Search } from "lucide-react"
+import { Plus, Trash2, Package, Search, Loader2 } from "lucide-react"
+
+const clienteSchema = z.object({
+  nombre: z.string()
+    .min(1, "El nombre es requerido")
+    .regex(/^[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s]+$/, "El nombre solo debe contener letras"),
+  telefono: z.string()
+    .min(1, "El teléfono es requerido")
+    .regex(/^\d{10}$/, "El teléfono debe tener exactamente 10 dígitos"),
+  email: z.string().email("Email inválido").optional().or(z.literal("")),
+  direccion: z.string().optional(),
+  dni: z.string()
+    .regex(/^(\d{7,8})?$/, "El DNI debe tener 7 u 8 dígitos")
+    .optional()
+    .or(z.literal("")),
+})
+
+type ClienteFormData = z.infer<typeof clienteSchema>
 
 const itemSchema = z.object({
   inventarioId: z.string().nullable().optional(),
@@ -90,6 +107,8 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
   const [searchCliente, setSearchCliente] = useState("")
   const [searchInventario, setSearchInventario] = useState("")
   const [showClienteSearch, setShowClienteSearch] = useState(false)
+  const [showClienteModal, setShowClienteModal] = useState(false)
+  const [clienteLoading, setClienteLoading] = useState(false)
 
   const {
     register,
@@ -115,6 +134,17 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
   const { fields, append, remove } = useFieldArray({
     control,
     name: "items",
+  })
+
+  const clienteForm = useForm<ClienteFormData>({
+    resolver: zodResolver(clienteSchema),
+    defaultValues: {
+      nombre: "",
+      telefono: "",
+      email: "",
+      direccion: "",
+      dni: "",
+    },
   })
 
   const watchItems = watch("items")
@@ -184,6 +214,40 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
     setValue(`items.${index}.precioUnitario`, inv.precioVenta)
   }
 
+  const handleCreateCliente = async (data: ClienteFormData) => {
+    setClienteLoading(true)
+    try {
+      const res = await fetch("/api/clientes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      })
+
+      if (!res.ok) {
+        const error = await res.json()
+        await showError(error.error || "Error al crear cliente")
+        return
+      }
+
+      const nuevoCliente = await res.json()
+
+      // Agregar el nuevo cliente a la lista y seleccionarlo
+      setClientes(prev => [...prev, nuevoCliente])
+      setValue("clienteId", nuevoCliente.id)
+      setValue("clienteNombre", nuevoCliente.nombre)
+      setValue("clienteTelefono", nuevoCliente.telefono)
+
+      // Cerrar modal y resetear formulario
+      setShowClienteModal(false)
+      clienteForm.reset()
+    } catch (error) {
+      console.error("Error creating cliente:", error)
+      await showError("Error al crear cliente")
+    } finally {
+      setClienteLoading(false)
+    }
+  }
+
   const onSubmit = async (data: VentaFormData) => {
     setLoading(true)
     try {
@@ -241,12 +305,13 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label>Nombre del Cliente *</Label>
-                <div className="relative">
-                  <Input
-                    {...register("clienteNombre")}
-                    placeholder="Nombre del cliente"
-                    onFocus={() => setShowClienteSearch(true)}
-                  />
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Input
+                      {...register("clienteNombre")}
+                      placeholder="Nombre del cliente"
+                      onFocus={() => setShowClienteSearch(true)}
+                    />
                   {showClienteSearch && (
                     <div className="absolute z-10 mt-1 w-full rounded-md border bg-background shadow-lg">
                       <div className="p-2">
@@ -292,6 +357,16 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
                       </div>
                     </div>
                   )}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setShowClienteModal(true)}
+                    title="Crear nuevo cliente"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
                 </div>
                 {errors.clienteNombre && (
                   <p className="text-sm text-destructive">{errors.clienteNombre.message}</p>
@@ -502,6 +577,107 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
             </Button>
           </div>
         </form>
+
+        {/* Modal para crear nuevo cliente */}
+        <Dialog open={showClienteModal} onOpenChange={setShowClienteModal}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Nuevo Cliente</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={clienteForm.handleSubmit(handleCreateCliente)} className="space-y-4">
+              <div>
+                <Label htmlFor="cliente-nombre">Nombre *</Label>
+                <Input
+                  id="cliente-nombre"
+                  {...clienteForm.register("nombre")}
+                  placeholder="Nombre completo"
+                />
+                {clienteForm.formState.errors.nombre && (
+                  <p className="text-sm text-destructive mt-1">
+                    {clienteForm.formState.errors.nombre.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="cliente-telefono">Teléfono *</Label>
+                <Input
+                  id="cliente-telefono"
+                  {...clienteForm.register("telefono")}
+                  placeholder="1123456789"
+                  maxLength={10}
+                />
+                {clienteForm.formState.errors.telefono && (
+                  <p className="text-sm text-destructive mt-1">
+                    {clienteForm.formState.errors.telefono.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="cliente-email">Email</Label>
+                <Input
+                  id="cliente-email"
+                  type="email"
+                  {...clienteForm.register("email")}
+                  placeholder="cliente@email.com"
+                />
+                {clienteForm.formState.errors.email && (
+                  <p className="text-sm text-destructive mt-1">
+                    {clienteForm.formState.errors.email.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="cliente-dni">DNI</Label>
+                <Input
+                  id="cliente-dni"
+                  {...clienteForm.register("dni")}
+                  placeholder="12345678"
+                  maxLength={8}
+                />
+                {clienteForm.formState.errors.dni && (
+                  <p className="text-sm text-destructive mt-1">
+                    {clienteForm.formState.errors.dni.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="cliente-direccion">Dirección</Label>
+                <Input
+                  id="cliente-direccion"
+                  {...clienteForm.register("direccion")}
+                  placeholder="Dirección completa"
+                />
+              </div>
+
+              <div className="flex gap-2 justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setShowClienteModal(false)
+                    clienteForm.reset()
+                  }}
+                >
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={clienteLoading}>
+                  {clienteLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Creando...
+                    </>
+                  ) : (
+                    "Crear Cliente"
+                  )}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
       </DialogContent>
     </Dialog>
   )
