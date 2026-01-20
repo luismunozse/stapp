@@ -200,65 +200,52 @@ export function VentaCreadaModal({ open, onClose, venta }: VentaCreadaModalProps
           </Button>
 
           {/* Mensaje para WhatsApp */}
-          {hasPhone ? (
-            <>
-              <div>
-                <Label className="flex items-center gap-2 mb-2">
-                  <WhatsAppIcon className="h-4 w-4 text-green-600" />
-                  Mensaje para WhatsApp
-                </Label>
-                <Textarea
-                  value={mensaje}
-                  onChange={(e) => setMensaje(e.target.value)}
-                  rows={8}
-                  className="font-mono text-sm"
-                />
-              </div>
+          <div>
+            <Label className="flex items-center gap-2 mb-2">
+              <WhatsAppIcon className="h-4 w-4 text-green-600" />
+              Mensaje para WhatsApp
+            </Label>
+            <Textarea
+              value={mensaje}
+              onChange={(e) => setMensaje(e.target.value)}
+              rows={8}
+              className="font-mono text-sm"
+            />
+          </div>
 
-              {/* Botones de accion */}
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={handleCopy} className="flex-1">
-                  {copied ? (
-                    <>
-                      <Check className="mr-2 h-4 w-4" />
-                      Copiado
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="mr-2 h-4 w-4" />
-                      Copiar
-                    </>
-                  )}
-                </Button>
-                <Button
-                  onClick={handleOpenWhatsApp}
-                  className="flex-1 bg-green-600 hover:bg-green-700"
-                >
-                  <WhatsAppIcon className="mr-2 h-4 w-4" />
-                  Abrir WhatsApp
-                  <ExternalLink className="ml-1 h-3 w-3" />
-                </Button>
-              </div>
-            </>
-          ) : (
-            <div className="text-center text-sm text-muted-foreground bg-muted/50 rounded-lg p-4">
-              <p>No se registro telefono del cliente.</p>
-              <p>Puede copiar el mensaje y enviarlo manualmente.</p>
-              <Button variant="outline" onClick={handleCopy} className="mt-2">
-                {copied ? (
-                  <>
-                    <Check className="mr-2 h-4 w-4" />
-                    Copiado
-                  </>
-                ) : (
-                  <>
-                    <Copy className="mr-2 h-4 w-4" />
-                    Copiar mensaje
-                  </>
-                )}
-              </Button>
+          {/* Aviso si no hay teléfono */}
+          {!hasPhone && (
+            <div className="text-sm text-amber-600 bg-amber-50 dark:bg-amber-950/30 rounded-lg px-3 py-2">
+              No se registró teléfono del cliente. Puede copiar el mensaje y enviarlo manualmente.
             </div>
           )}
+
+          {/* Botones de accion */}
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleCopy} className="flex-1">
+              {copied ? (
+                <>
+                  <Check className="mr-2 h-4 w-4" />
+                  Copiado
+                </>
+              ) : (
+                <>
+                  <Copy className="mr-2 h-4 w-4" />
+                  Copiar
+                </>
+              )}
+            </Button>
+            <Button
+              onClick={handleOpenWhatsApp}
+              className="flex-1 bg-green-600 hover:bg-green-700"
+              disabled={!hasPhone}
+              title={!hasPhone ? "Se requiere teléfono del cliente" : ""}
+            >
+              <WhatsAppIcon className="mr-2 h-4 w-4" />
+              Abrir WhatsApp
+              <ExternalLink className="ml-1 h-3 w-3" />
+            </Button>
+          </div>
 
           {/* Boton cerrar */}
           <Button variant="ghost" onClick={handleClose} className="w-full">
