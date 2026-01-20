@@ -93,8 +93,60 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Contraseña", type: "password" },
         rememberMe: { label: "Recordarme", type: "text" },
+        pwaRefreshToken: { label: "PWA Refresh Token", type: "text" },
       },
       authorize: async (credentials) => {
+        // Modo 1: Autenticación con refresh token (para PWA)
+        if (credentials?.pwaRefreshToken) {
+          const validUser = await validateRefreshToken(credentials.pwaRefreshToken as string)
+
+          if (!validUser) {
+            return null
+          }
+
+          // Obtener datos completos del usuario
+          const { data: fullUser, error: userError } = await supabaseAdmin
+            .from("users")
+            .select(`
+              id,
+              email,
+              nombre,
+              rol,
+              organization_id,
+              organizations (
+                id,
+                activo
+              )
+            `)
+            .eq("id", validUser.id)
+            .single()
+
+          if (userError || !fullUser) {
+            return null
+          }
+
+          // Verificar organización activa (Supabase puede retornar objeto o array)
+          const orgs = fullUser.organizations as unknown
+          const organization = Array.isArray(orgs) ? orgs[0] : orgs
+          if (!organization || !(organization as { activo: boolean }).activo) {
+            return null
+          }
+
+          // Rotar el refresh token
+          const newRefreshToken = await saveRefreshToken(fullUser.id, true)
+
+          return {
+            id: fullUser.id,
+            email: fullUser.email,
+            name: fullUser.nombre,
+            role: fullUser.rol as Rol,
+            organizationId: fullUser.organization_id,
+            rememberMe: true,
+            refreshToken: newRefreshToken,
+          }
+        }
+
+        // Modo 2: Autenticación tradicional con email/password
         if (!credentials?.email || !credentials?.password) {
           return null
         }

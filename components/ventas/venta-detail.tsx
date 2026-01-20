@@ -17,9 +17,11 @@ import {
   Package,
   XCircle,
   Download,
+  Pencil,
 } from "lucide-react"
 import Link from "next/link"
 import { WhatsAppDialog } from "@/components/ordenes/whatsapp-dialog"
+import { VentaEditForm } from "@/components/ventas/venta-edit-form"
 import type { MetodoPagoVenta } from "@/lib/notifications/types"
 
 interface VentaItem {
@@ -84,6 +86,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
   const [organization, setOrganization] = useState<Organization | null>(null)
   const [loading, setLoading] = useState(true)
   const [anulando, setAnulando] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
 
   const fetchOrganization = async () => {
     try {
@@ -246,16 +249,54 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
           Comprobante
         </Button>
         {venta.estado === "COMPLETADA" && (
-          <Button
-            variant="destructive"
-            onClick={handleAnular}
-            disabled={anulando}
-          >
-            <XCircle className="mr-2 h-4 w-4" />
-            {anulando ? "Anulando..." : "Anular"}
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              onClick={() => setShowEditModal(true)}
+            >
+              <Pencil className="mr-2 h-4 w-4" />
+              Editar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleAnular}
+              disabled={anulando}
+            >
+              <XCircle className="mr-2 h-4 w-4" />
+              {anulando ? "Anulando..." : "Anular"}
+            </Button>
+          </>
         )}
       </div>
+
+      {/* Modal de edición */}
+      {venta && (
+        <VentaEditForm
+          open={showEditModal}
+          onOpenChange={setShowEditModal}
+          venta={{
+            id: venta.id,
+            numeroVenta: venta.numeroVenta,
+            clienteId: venta.clienteId,
+            clienteNombre: venta.clienteNombre,
+            clienteTelefono: venta.clienteTelefono,
+            items: venta.items.map(item => ({
+              id: item.id,
+              inventarioId: item.inventarioId,
+              descripcion: item.descripcion,
+              cantidad: item.cantidad,
+              precioUnitario: item.precioUnitario,
+              diasGarantia: item.diasGarantia,
+            })),
+            descuento: venta.descuento,
+            metodoPago: venta.metodoPago,
+            observaciones: venta.observaciones,
+          }}
+          onSuccess={() => {
+            fetchVenta()
+          }}
+        />
+      )}
 
       {/* Grid de información */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

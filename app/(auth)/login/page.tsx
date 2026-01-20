@@ -149,6 +149,20 @@ function LoginForm() {
     }
   }
 
+  // Guardar refresh token en localStorage para PWA
+  const saveRefreshTokenForPWA = async () => {
+    try {
+      const res = await fetch("/api/auth/get-refresh-token")
+      if (res.ok) {
+        const { refreshToken, expiresAt } = await res.json()
+        localStorage.setItem("pwa_refresh_token", refreshToken)
+        localStorage.setItem("pwa_refresh_token_expires", expiresAt)
+      }
+    } catch (error) {
+      console.error("Error saving refresh token for PWA:", error)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
@@ -189,6 +203,9 @@ function LoginForm() {
           setLoading(false)
           return
         }
+
+        // Guardar refresh token para PWA antes de redirigir
+        await saveRefreshTokenForPWA()
 
         // Ya estamos en el subdominio correcto - usar window.location para navegación completa
         window.location.href = "/dashboard"
