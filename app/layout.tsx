@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
 import { PWAInstaller } from "@/components/pwa/pwa-installer"
+import { PWARecovery } from "@/components/pwa/pwa-recovery"
 import { Providers } from "@/components/providers"
 import { CookieConsent } from "@/components/cookie-consent"
 import {
@@ -152,6 +153,7 @@ export default function RootLayout({
         <Providers>
           {children}
           <PWAInstaller />
+          <PWARecovery />
           <CookieConsent />
         </Providers>
       </body>

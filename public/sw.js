@@ -1,5 +1,5 @@
 // Service Worker para PWA - Optimizado para móviles
-const CACHE_NAME = 'stapp-v4'
+const CACHE_NAME = 'stapp-v5'
 const API_CACHE_NAME = 'stapp-api-v1'
 const STATIC_CACHE_NAME = 'stapp-static-v1'
 
@@ -53,6 +53,31 @@ self.addEventListener('activate', (event) => {
       })
     ])
   )
+})
+
+// Manejar mensajes del cliente (ej: CLEAR_CACHE desde PWARecovery)
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'CLEAR_CACHE') {
+    event.waitUntil(
+      caches.keys().then((cacheNames) => {
+        return Promise.all(
+          cacheNames
+            .filter((name) => name.startsWith('stapp-'))
+            .map((name) => caches.delete(name))
+        )
+      }).then(() => {
+        // Notificar al cliente que el caché fue limpiado
+        if (event.source) {
+          event.source.postMessage({ type: 'CACHE_CLEARED' })
+        }
+      })
+    )
+  }
+
+  // Skip waiting para activar nueva versión del SW inmediatamente
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting()
+  }
 })
 
 self.addEventListener('fetch', (event) => {
