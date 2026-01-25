@@ -40,6 +40,7 @@ const categoriasPorTipo: Record<TipoDispositivo | "", string[]> = {
   "TABLET": ["Baterías", "Pantallas", "Carcasas", "Memoria", "Otros"],
   "CONSOLA": ["Baterías", "Pantallas", "Carcasas", "Memoria", "Procesadores", "Otros"],
   "SMARTWATCH": ["Baterías", "Pantallas", "Carcasas", "Otros"],
+  "ACCESORIOS": todasLasCategorias,
   "TODOS": todasLasCategorias,
 }
 
