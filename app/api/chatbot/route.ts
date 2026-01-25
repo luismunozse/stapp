@@ -228,46 +228,50 @@ Tu personalidad:
 
 Información sobre STApp:
 
-PLANES:
-1. Plan Free (Gratis para siempre):
-   - 50 órdenes por mes
-   - 2 técnicos
-   - 100 clientes
-   - Reportes básicos
-   - 100MB de almacenamiento
-   - Ideal para empezar o talleres pequeños
+PLAN:
+Un solo plan: Plan Premium, todo incluido.
+- Primeros 30 días gratis, sin tarjeta de crédito requerida
+- Después: $14.999/mes o $143.990/año (ahorro ~20% con plan anual)
+- Garantía de devolución de 30 días. Cancelás cuando quieras.
+- Pagos seguros con MercadoPago
 
-2. Plan Premium ($14.999/mes o $143.990/año con 20% de descuento):
-   - Órdenes ilimitadas
-   - Técnicos ilimitados
-   - Clientes ilimitados
-   - Reportes avanzados con gráficos
-   - 5GB de almacenamiento
-   - Notificaciones automáticas por WhatsApp y Email
-   - Logo personalizado en documentos
-   - Soporte prioritario
-   - Gestión de inventario completa
-   - Sistema de facturación integrado
-   - Módulo de ventas con garantías
+Todo incluido en el plan:
+- Órdenes ilimitadas
+- Técnicos ilimitados
+- Vendedores ilimitados
+- Clientes ilimitados
+- Reportes avanzados
+- 5GB de almacenamiento
+- Soporte prioritario
+- Notificaciones por WhatsApp
+- Logo personalizado
+- Exportación de datos
 
-CARACTERÍSTICAS PRINCIPALES:
-- Órdenes de servicio con seguimiento completo del estado
-- Control de inventario de repuestos y stock
-- Facturación integrada con pagos parciales
-- Gestión completa de clientes con historial
-- Asignación de técnicos a las reparaciones
-- Reportes y estadísticas en tiempo real
-- Notificaciones automáticas a clientes por WhatsApp/Email
-- App móvil (PWA) instalable en cualquier dispositivo
-- Checklist personalizable por tipo de dispositivo
-- Generación de PDFs profesionales
-- Sistema de garantías para reparaciones
+CARACTERÍSTICAS PRINCIPALES (12 herramientas):
+
+Servicio Técnico:
+- Órdenes de Servicio: gestión de cada reparación de principio a fin con estados en tiempo real y checklists personalizados
+- Presupuestos: generación de presupuestos profesionales en segundos, envío de PDF por WhatsApp y aprobación con firma digital
+- Fotos por Etapa: documentación visual del ingreso, durante la reparación y entrega para proteger ante reclamos
+- Firma Digital: captura de firma del cliente en la entrega desde cualquier dispositivo
+
+Administración:
+- Gestión de Clientes: toda la info en un solo lugar con historial completo de reparaciones
+- Control de Inventario: alertas automáticas de stock bajo, control de costos y gestión de proveedores
+- Control de Cobros: comprobantes internos, pagos parciales y control de cuentas por cobrar
+- Sistema de Garantías: alertas de vencimiento, registro de reclamos y trazabilidad completa
+
+Productividad:
+- Gestión de Equipo: administración de técnicos y vendedores, asignación de reparaciones y medición de rendimiento
+- Notificaciones por WhatsApp: plantillas listas para enviar con un click
+- Reportes y Métricas: dashboard con ingresos, tiempos de reparación, rendimiento del equipo y tendencias
+- App Móvil (PWA): instalable en el celular para gestionar todo desde cualquier lugar
 
 VENTAJAS:
 - No necesita instalación, funciona 100% en el navegador
 - Accesible desde cualquier dispositivo (PC, tablet, celular)
-- Datos seguros con encriptación de nivel bancario
-- Backups automáticos diarios de toda la información
+- Datos seguros con encriptación
+- Backups automáticos
 - Soporte en español
 - Interfaz intuitiva y fácil de usar
 - Actualizaciones automáticas sin costo adicional
