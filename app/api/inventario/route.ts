@@ -9,7 +9,7 @@ const inventarioSchema = z.object({
   nombre: z.string().min(1, "El nombre es requerido"),
   descripcion: z.string().optional(),
   categoria: z.string().min(1, "La categoría es requerida"),
-  tipoDispositivo: z.enum(["CELULAR", "COMPUTADORA", "TABLET", "CONSOLA", "SMARTWATCH", "TODOS"]),
+  tipoDispositivo: z.enum(["CELULAR", "COMPUTADORA", "TABLET", "CONSOLA", "SMARTWATCH", "ACCESORIOS", "TODOS"]),
   stock: z.number().int().min(0),
   precioCompra: z.number().min(0),
   precioVenta: z.number().min(0),

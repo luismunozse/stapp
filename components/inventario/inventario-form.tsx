@@ -23,15 +23,16 @@ const inventarioSchema = z.object({
 
 type InventarioFormData = z.infer<typeof inventarioSchema>
 
-const categorias = [
-  "Baterías",
-  "Pantallas",
-  "Carcasas",
-  "Teclados",
-  "Memoria",
-  "Procesadores",
-  "Otros",
-]
+// Categorías específicas por tipo de dispositivo
+const categoriasPorTipo: Record<string, string[]> = {
+  CELULAR: ["Pantallas", "Protectores", "Baterías", "Fundas", "Cargadores", "Flex", "Módulos", "Otros"],
+  COMPUTADORA: ["Pantallas", "Teclados", "Baterías", "Memorias", "Discos", "Cargadores", "Otros"],
+  TABLET: ["Pantallas", "Protectores", "Baterías", "Fundas", "Cargadores", "Flex", "Otros"],
+  CONSOLA: ["Joysticks", "Fuentes", "Flex", "Lectoras", "Coolers", "Otros"],
+  SMARTWATCH: ["Mallas", "Pantallas", "Baterías", "Cargadores", "Otros"],
+  ACCESORIOS: ["Auriculares", "Parlantes", "Cables", "Adaptadores", "Cargadores", "Soportes", "Otros"],
+  TODOS: ["Pantallas", "Baterías", "Fundas", "Teclados", "Memorias", "Cargadores", "Otros"],
+}
 
 interface InventarioFormProps {
   item?: Inventario | null
@@ -76,6 +77,16 @@ export function InventarioForm({
 
   const categoria = watch("categoria")
   const tipoDispositivo = watch("tipoDispositivo")
+
+  // Categorías disponibles según el tipo seleccionado
+  const categoriasDisponibles = tipoDispositivo ? (categoriasPorTipo[tipoDispositivo] || categoriasPorTipo.TODOS) : []
+
+  // Limpiar categoría cuando cambia el tipo
+  useEffect(() => {
+    if (tipoDispositivo && categoria && !categoriasDisponibles.includes(categoria)) {
+      setValue("categoria", "")
+    }
+  }, [tipoDispositivo, categoria, categoriasDisponibles, setValue])
 
   // Generar código automáticamente para items nuevos
   const fetchCode = useCallback(async (cat: string, tipo: string) => {
@@ -178,27 +189,6 @@ export function InventarioForm({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label htmlFor="categoria">Categoría *</Label>
-              <Select
-                id="categoria"
-                {...register("categoria")}
-                onChange={(e) => setValue("categoria", e.target.value)}
-              >
-                <option value="">Seleccionar...</option>
-                {categorias.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ))}
-              </Select>
-              {errors.categoria && (
-                <p className="text-sm text-destructive mt-1">
-                  {errors.categoria.message}
-                </p>
-              )}
-            </div>
-
-            <div>
               <Label htmlFor="tipoDispositivo">Tipo *</Label>
               <Select
                 id="tipoDispositivo"
@@ -216,6 +206,28 @@ export function InventarioForm({
               {errors.tipoDispositivo && (
                 <p className="text-sm text-destructive mt-1">
                   {errors.tipoDispositivo.message}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <Label htmlFor="categoria">Categoría *</Label>
+              <Select
+                id="categoria"
+                {...register("categoria")}
+                onChange={(e) => setValue("categoria", e.target.value)}
+                disabled={!tipoDispositivo}
+              >
+                <option value="">{tipoDispositivo ? "Seleccionar..." : "Elegí tipo primero"}</option>
+                {categoriasDisponibles.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </Select>
+              {errors.categoria && (
+                <p className="text-sm text-destructive mt-1">
+                  {errors.categoria.message}
                 </p>
               )}
             </div>

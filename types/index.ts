@@ -1,5 +1,5 @@
 export type Rol = "ADMIN" | "TECNICO" | "VENDEDOR"
-export type TipoDispositivo = "CELULAR" | "COMPUTADORA" | "TABLET" | "CONSOLA" | "SMARTWATCH" | "TODOS"
+export type TipoDispositivo = "CELULAR" | "COMPUTADORA" | "TABLET" | "CONSOLA" | "SMARTWATCH" | "ACCESORIOS" | "TODOS"
 
 export interface TipoDispositivoCustom {
   id: string

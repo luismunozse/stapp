@@ -33,6 +33,7 @@ export type TipoDispositivo =
   | "TABLET"
   | "CONSOLA"
   | "SMARTWATCH"
+  | "ACCESORIOS"
   | "TODOS"
 
 export type EstadoPago = "PENDIENTE" | "PAGADO_PARCIAL" | "PAGADO" | "ANULADA"

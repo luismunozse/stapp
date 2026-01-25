@@ -9,7 +9,7 @@ export default async function InventarioPage() {
       <div>
         <h1 className="text-3xl font-bold">Inventario</h1>
         <p className="text-muted-foreground">
-          Gestiona el stock de repuestos y componentes
+          Gestiona el stock de repuestos, accesorios y productos
         </p>
       </div>
       <InventarioList allowImport={allowImport} />

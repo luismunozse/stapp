@@ -13,7 +13,7 @@ const faqs = [
   {
     question: "¿Puedo probar antes de pagar?",
     answer:
-      "¡Claro! El plan Free es completamente gratuito y puedes usarlo el tiempo que quieras. Cuando necesites más capacidad, puedes actualizar a Premium.",
+      "¡Claro! Tienes 30 días gratis para probar todas las funciones sin necesidad de tarjeta de crédito. Si no te convence, puedes cancelar antes de que termine el período de prueba sin ningún cargo.",
   },
   {
     question: "¿Qué métodos de pago aceptan?",
@@ -26,19 +26,9 @@ const faqs = [
       "Sí, puedes cancelar cuando quieras. Mantendrás el acceso a las funciones Premium hasta el final del período facturado. No hay penalidades ni cargos ocultos.",
   },
   {
-    question: "¿Mis datos están seguros?",
-    answer:
-      "Absolutamente. Usamos encriptación de nivel bancario, backups automáticos diarios y cumplimos con las mejores prácticas de seguridad. Tus datos están protegidos 24/7.",
-  },
-  {
     question: "¿Puedo importar mis datos de otro sistema?",
     answer:
-      "Sí, ofrecemos importación de datos desde Excel/CSV. Si tienes un sistema anterior, nuestro equipo de soporte puede ayudarte con la migración.",
-  },
-  {
-    question: "¿Hay soporte en español?",
-    answer:
-      "Sí, todo el sistema está en español y nuestro equipo de soporte también. Estamos disponibles por email y chat para ayudarte con cualquier duda.",
+      "Sí, puedes importar clientes e inventario desde archivos Excel o CSV. El sistema incluye plantillas descargables y validación automática para facilitar el proceso.",
   },
   {
     question: "¿Pueden agregar funciones que necesito?",

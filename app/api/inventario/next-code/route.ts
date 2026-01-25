@@ -6,10 +6,24 @@ import { supabaseAdmin } from "@/lib/supabase"
 const CATEGORIA_PREFIJOS: Record<string, string> = {
   "Baterías": "BAT",
   "Pantallas": "PAN",
-  "Carcasas": "CAR",
+  "Protectores": "PRO",
+  "Fundas": "FUN",
+  "Cargadores": "CAR",
+  "Flex": "FLX",
+  "Módulos": "MOD",
   "Teclados": "TEC",
-  "Memoria": "MEM",
-  "Procesadores": "PRO",
+  "Memorias": "MEM",
+  "Discos": "DIS",
+  "Joysticks": "JOY",
+  "Fuentes": "FUE",
+  "Lectoras": "LEC",
+  "Coolers": "COO",
+  "Mallas": "MAL",
+  "Auriculares": "AUR",
+  "Parlantes": "PAR",
+  "Cables": "CAB",
+  "Adaptadores": "ADP",
+  "Soportes": "SOP",
   "Otros": "OTR",
 }
 
@@ -20,6 +34,7 @@ const TIPO_PREFIJOS: Record<string, string> = {
   "TABLET": "TAB",
   "CONSOLA": "CON",
   "SMARTWATCH": "SMA",
+  "ACCESORIOS": "ACC",
   "TODOS": "GEN",
 }
 
