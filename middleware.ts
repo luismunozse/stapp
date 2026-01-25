@@ -178,6 +178,19 @@ export async function middleware(request: NextRequest) {
     requestHeaders.set("x-superadmin-email", token.email as string)
     requestHeaders.set("x-user-id", token.id as string)
 
+    // Solo permitir rutas de superadmin o APIs
+    if (pathname.startsWith("/api/superadmin")) {
+      // APIs de superadmin permitidas
+      return NextResponse.next({
+        request: { headers: requestHeaders },
+      })
+    }
+
+    // Si NO está en ruta /superadmin/*, redirigir al dashboard
+    if (!pathname.startsWith("/superadmin/")) {
+      return NextResponse.redirect(new URL("/superadmin/dashboard", request.url))
+    }
+
     return NextResponse.next({
       request: { headers: requestHeaders },
     })
