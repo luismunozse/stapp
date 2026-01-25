@@ -76,9 +76,9 @@ const categories = [
         color: "bg-green-500",
       },
       {
-        name: "Facturación Integrada",
+        name: "Control de Cobros",
         description:
-          "De la orden a la factura en un click. Genera comprobantes, registra pagos parciales y controlá tus cuentas por cobrar.",
+          "De la orden al cobro en un click. Genera comprobantes internos, registra pagos parciales y controlá tus cuentas por cobrar.",
         icon: Receipt,
         color: "bg-purple-500",
       },

@@ -1,5 +1,4 @@
 import type { Metadata } from "next"
-import { auth } from "@/lib/auth"
 import { NavbarLanding } from "@/components/landing/navbar-landing"
 import { Hero } from "@/components/landing/hero"
 import { Features } from "@/components/landing/features"
@@ -19,13 +18,13 @@ export const metadata: Metadata = {
     "sistema órdenes de trabajo",
     "software reparación celulares",
     "gestión clientes taller",
-    "facturación servicio técnico",
+    "control de cobros taller",
     "inventario repuestos",
   ],
   openGraph: {
     title: "STApp - Software de Gestión para Servicio Técnico",
     description:
-      "El sistema más completo para talleres de reparación. Órdenes de trabajo, clientes, inventario y facturación en una plataforma.",
+      "El sistema más completo para talleres de reparación. Órdenes de trabajo, clientes, inventario y cobros en una plataforma.",
     url: "https://stapp.com.ar/landing",
   },
   alternates: {
@@ -33,7 +32,8 @@ export const metadata: Metadata = {
   },
 }
 
-export const dynamic = "force-dynamic"
+// Landing page estática - la sesión se verifica del lado del cliente en el navbar
+export const revalidate = 3600 // Revalidar cada hora
 
 const faqData = [
   {
@@ -68,15 +68,12 @@ const faqData = [
   },
 ]
 
-export default async function LandingPage() {
-  const session = await auth()
-
-  // Esta ruta SIEMPRE muestra la landing, incluso si está logueado
+export default function LandingPage() {
   return (
     <>
       <FAQPageJsonLd faqs={faqData} />
       <main className="min-h-screen">
-        <NavbarLanding isLoggedIn={!!session} />
+        <NavbarLanding />
         <Hero />
         <Features />
         <PricingSection />

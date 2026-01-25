@@ -1,9 +1,19 @@
 "use client"
 
 import { useState } from "react"
-import { Bot } from "lucide-react"
-import { ChatbotPanel } from "./chatbot-panel"
+import dynamic from "next/dynamic"
+import { Bot, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
+
+// Lazy load del panel - solo se carga cuando el usuario abre el chat
+const ChatbotPanel = dynamic(() => import("./chatbot-panel").then(mod => mod.ChatbotPanel), {
+  ssr: false,
+  loading: () => (
+    <div className="fixed bottom-6 right-6 z-50 w-[90vw] max-w-md h-[600px] max-h-[80vh] bg-card border shadow-2xl rounded-2xl flex items-center justify-center">
+      <Loader2 className="w-8 h-8 animate-spin text-primary" />
+    </div>
+  ),
+})
 
 export function ChatbotButton() {
   const [isOpen, setIsOpen] = useState(false)
@@ -28,12 +38,9 @@ export function ChatbotButton() {
             "flex items-center justify-center",
             "group",
             "focus:outline-none focus:ring-4 focus:ring-purple-400 focus:ring-offset-2",
-            "animate-bounce-slow"
+            "animate-bounce-slow animate-pulse-glow"
           )}
           aria-label="Abrir chat con Santi"
-          style={{
-            animation: "bounce-slow 3s ease-in-out infinite, pulse-glow 2s ease-in-out infinite",
-          }}
         >
           {/* Robot icon con animación de wave */}
           <Bot className="w-8 h-8 group-hover:scale-125 transition-transform duration-300 animate-wave" />
@@ -50,43 +57,6 @@ export function ChatbotButton() {
           </span>
         </button>
       )}
-
-      {/* Estilos de animación personalizados */}
-      <style jsx>{`
-        @keyframes bounce-slow {
-          0%, 100% {
-            transform: translateY(0);
-          }
-          50% {
-            transform: translateY(-10px);
-          }
-        }
-
-        @keyframes pulse-glow {
-          0%, 100% {
-            box-shadow: 0 0 20px rgba(139, 92, 246, 0.5), 0 0 40px rgba(139, 92, 246, 0.3);
-          }
-          50% {
-            box-shadow: 0 0 30px rgba(139, 92, 246, 0.7), 0 0 60px rgba(139, 92, 246, 0.5);
-          }
-        }
-
-        @keyframes wave {
-          0%, 100% {
-            transform: rotate(0deg);
-          }
-          25% {
-            transform: rotate(-15deg);
-          }
-          75% {
-            transform: rotate(15deg);
-          }
-        }
-
-        .animate-wave {
-          animation: wave 1s ease-in-out infinite;
-        }
-      `}</style>
     </>
   )
 }

@@ -1,9 +1,8 @@
-"use client"
-
 import Link from "next/link"
 import Image from "next/image"
 
 export function Footer() {
+  // Calculado en el servidor - sin hydration mismatch
   const currentYear = new Date().getFullYear()
 
   const footerLinks = {

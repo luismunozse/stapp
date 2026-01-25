@@ -1,18 +1,25 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { Menu, X, LayoutDashboard } from "lucide-react"
 
-interface NavbarLandingProps {
-  isLoggedIn?: boolean
-}
-
-export function NavbarLanding({ isLoggedIn = false }: NavbarLandingProps) {
+export function NavbarLanding() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [isChecking, setIsChecking] = useState(true)
+
+  // Verificar sesión del lado del cliente para permitir caching de la landing
+  useEffect(() => {
+    fetch("/api/auth/session")
+      .then(res => res.json())
+      .then(data => setIsLoggedIn(!!data?.user))
+      .catch(() => setIsLoggedIn(false))
+      .finally(() => setIsChecking(false))
+  }, [])
 
   const navigation = [
     { name: "Características", href: "#features" },
@@ -52,7 +59,9 @@ export function NavbarLanding({ isLoggedIn = false }: NavbarLandingProps) {
           {/* Desktop CTA */}
           <div className="hidden md:flex items-center gap-4">
             <ThemeToggle variant="icon" />
-            {isLoggedIn ? (
+            {isChecking ? (
+              <div className="w-32 h-9" /> // Placeholder para evitar layout shift
+            ) : isLoggedIn ? (
               <Link href="/dashboard">
                 <Button>
                   <LayoutDashboard className="mr-2 h-4 w-4" />
@@ -103,7 +112,7 @@ export function NavbarLanding({ isLoggedIn = false }: NavbarLandingProps) {
                 </a>
               ))}
               <div className="flex flex-col gap-2 pt-4 border-t">
-                {isLoggedIn ? (
+                {isChecking ? null : isLoggedIn ? (
                   <Link href="/dashboard">
                     <Button className="w-full">
                       <LayoutDashboard className="mr-2 h-4 w-4" />

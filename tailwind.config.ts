@@ -143,6 +143,28 @@ const config: Config = {
           from: { opacity: "1" },
           to: { opacity: "0" },
         },
+        // Chatbot animations
+        "bounce-slow": {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-10px)" },
+        },
+        "pulse-glow": {
+          "0%, 100%": { boxShadow: "0 0 20px rgba(139, 92, 246, 0.5), 0 0 40px rgba(139, 92, 246, 0.3)" },
+          "50%": { boxShadow: "0 0 30px rgba(139, 92, 246, 0.7), 0 0 60px rgba(139, 92, 246, 0.5)" },
+        },
+        wave: {
+          "0%, 100%": { transform: "rotate(0deg)" },
+          "25%": { transform: "rotate(-15deg)" },
+          "75%": { transform: "rotate(15deg)" },
+        },
+        "pulse-slow": {
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0.7" },
+        },
+        "bounce-subtle": {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-3px)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -155,6 +177,12 @@ const config: Config = {
         "slide-out-to-bottom": "slide-out-to-bottom 0.3s ease-in",
         "fade-in": "fade-in 0.2s ease-out",
         "fade-out": "fade-out 0.2s ease-in",
+        // Chatbot animations
+        "bounce-slow": "bounce-slow 3s ease-in-out infinite",
+        "pulse-glow": "pulse-glow 2s ease-in-out infinite",
+        wave: "wave 1s ease-in-out infinite",
+        "pulse-slow": "pulse-slow 2s ease-in-out infinite",
+        "bounce-subtle": "bounce-subtle 2s ease-in-out infinite",
       },
     },
   },

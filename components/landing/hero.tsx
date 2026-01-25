@@ -1,5 +1,3 @@
-"use client"
-
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import {
@@ -15,7 +13,7 @@ export function Hero() {
   const benefits = [
     "Gestión completa de órdenes",
     "Control de inventario",
-    "Facturación integrada",
+    "Registra pagos fácilmente",
     "Sin tarjeta de crédito",
   ]
 
@@ -44,7 +42,7 @@ export function Hero() {
           <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
             Sistema completo para talleres de reparación de celulares,
             computadoras y dispositivos electrónicos. Organiza tus órdenes,
-            controla tu inventario y factura en segundos.
+            controla tu inventario y registra pagos en segundos.
           </p>
 
           {/* Benefits list */}

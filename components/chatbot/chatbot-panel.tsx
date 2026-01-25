@@ -212,35 +212,6 @@ export function ChatbotPanel({ isOpen, onClose }: ChatbotPanelProps) {
           Presioná Enter para enviar
         </p>
       </div>
-
-      {/* Estilos de animación personalizados */}
-      <style jsx>{`
-        @keyframes pulse-slow {
-          0%, 100% {
-            opacity: 1;
-          }
-          50% {
-            opacity: 0.7;
-          }
-        }
-
-        @keyframes bounce-subtle {
-          0%, 100% {
-            transform: translateY(0);
-          }
-          50% {
-            transform: translateY(-3px);
-          }
-        }
-
-        .animate-pulse-slow {
-          animation: pulse-slow 2s ease-in-out infinite;
-        }
-
-        .animate-bounce-subtle {
-          animation: bounce-subtle 2s ease-in-out infinite;
-        }
-      `}</style>
     </div>
   )
 }

@@ -156,6 +156,7 @@ export function PricingSection() {
               width={100}
               height={28}
               className="inline-block"
+              loading="lazy"
             />
           </div>
         </div>

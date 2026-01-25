@@ -148,26 +148,42 @@ Instrucciones:
 - Si ya tenés suficiente información del usuario, agradecer y confirmar que alguien lo contactará pronto`
 
     console.log("[Chatbot] Sending prompt to Gemini...")
-    const result = await model.generateContent(fullPrompt)
-    const response = result.response
+    let assistantMessage: string
 
-    console.log("[Chatbot] Gemini response received:", {
-      hasCandidates: !!response?.candidates,
-      candidatesLength: response?.candidates?.length,
-      hasText: !!response?.text,
-    })
+    try {
+      const result = await model.generateContent(fullPrompt)
+      const response = result.response
 
-    // Verificar si la respuesta fue bloqueada por safety
-    if (!response?.candidates?.[0]?.content?.parts?.[0]?.text) {
-      console.error("[Chatbot] Gemini response blocked or empty:", {
-        candidates: response?.candidates,
-        promptFeedback: response?.promptFeedback,
+      console.log("[Chatbot] Gemini response received:", {
+        hasCandidates: !!response?.candidates,
+        candidatesLength: response?.candidates?.length,
+        hasText: !!response?.text,
       })
-      throw new Error("La respuesta fue bloqueada por el filtro de seguridad de Gemini o está vacía")
+
+      if (!response?.candidates?.[0]?.content?.parts?.[0]?.text) {
+        console.error("[Chatbot] Gemini response blocked or empty:", {
+          candidates: response?.candidates,
+          promptFeedback: response?.promptFeedback,
+        })
+        throw new Error("Respuesta bloqueada o vacía")
+      }
+
+      assistantMessage = response.text()
+    } catch (geminiError: any) {
+      console.error("[Chatbot] Gemini API error:", geminiError?.message || geminiError)
+
+      // Fallback response when API is unavailable or quota exceeded
+      if (geminiError?.status === 429 || geminiError?.message?.includes("429")) {
+        assistantMessage = "¡Hola! En este momento tenemos mucha demanda y no puedo responderte al instante. " +
+          "Si querés, podés escribirnos a contacto@stapp.com.ar o visitá nuestra página para más info sobre STApp. " +
+          "¡Gracias por tu paciencia!"
+      } else {
+        assistantMessage = "Disculpá, estoy teniendo algunos problemas técnicos. " +
+          "Podés intentar de nuevo en unos segundos o escribirnos a contacto@stapp.com.ar. ¡Gracias!"
+      }
     }
 
-    const assistantMessage = response.text()
-    console.log("[Chatbot] Assistant message extracted:", assistantMessage?.substring(0, 100))
+    console.log("[Chatbot] Assistant message:", assistantMessage?.substring(0, 100))
 
     const timeElapsed = Date.now() - startTime
 
