@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { signOut } from "next-auth/react"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import {
@@ -62,10 +63,24 @@ export function NavbarSuperadmin({ userEmail }: NavbarSuperadminProps) {
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 lg:border-r border-sidebar-border bg-sidebar">
         <div className="flex flex-col flex-1 min-h-0">
-          {/* Header con logo SUPERADMIN */}
-          <div className="flex items-center h-16 px-6 border-b border-sidebar-border bg-red-950/20">
-            <Shield className="h-6 w-6 text-red-500 mr-2" />
-            <span className="font-bold text-lg text-red-500">SUPERADMIN</span>
+          {/* Header con logo STApp + SUPERADMIN */}
+          <div className="flex flex-col items-center justify-center h-20 px-6 border-b border-sidebar-border bg-red-950/20">
+            <div className="flex items-center gap-2 mb-1">
+              <Image
+                src="/logo.png"
+                alt="STApp"
+                width={28}
+                height={28}
+                className="object-contain"
+              />
+              <span className="font-bold text-xl">STApp</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Shield className="h-3.5 w-3.5 text-red-500" />
+              <span className="text-xs font-semibold text-red-500 uppercase tracking-wider">
+                SuperAdmin
+              </span>
+            </div>
           </div>
 
           {/* Navegación */}
@@ -113,9 +128,20 @@ export function NavbarSuperadmin({ userEmail }: NavbarSuperadminProps) {
       {/* Mobile Header */}
       <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border">
         <div className="flex items-center justify-between h-14 px-4">
-          <div className="flex items-center">
-            <Shield className="h-5 w-5 text-red-500 mr-2" />
-            <span className="font-bold text-red-500">SUPERADMIN</span>
+          <div className="flex items-center gap-2">
+            <Image
+              src="/logo.png"
+              alt="STApp"
+              width={24}
+              height={24}
+              className="object-contain"
+            />
+            <div className="flex flex-col leading-none">
+              <span className="font-bold text-sm">STApp</span>
+              <span className="text-[10px] font-semibold text-red-500 uppercase tracking-wide">
+                SuperAdmin
+              </span>
+            </div>
           </div>
           <div className="flex items-center gap-1">
             <ThemeToggle variant="icon" />

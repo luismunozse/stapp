@@ -196,3 +196,178 @@ export interface AuditLogsResponse {
   page: number
   limit: number
 }
+
+// ========================================
+// MÓDULO PLANES - Types
+// ========================================
+
+export interface PlanWithUsage extends Plan {
+  organizations_count: number
+  active_subscriptions: number
+  deleted_at: string | null
+}
+
+export interface PlanAudit {
+  id: string
+  plan_id: string
+  changed_by_email: string
+  action: 'CREATE' | 'UPDATE' | 'DISABLE' | 'ENABLE'
+  before_data: Plan | null
+  after_data: Plan | null
+  created_at: string
+}
+
+export interface CreatePlanInput {
+  nombre: string
+  tipo: PlanType
+  descripcion: string | null
+  precio_mensual: number
+  precio_anual: number
+  moneda: string
+  limite_ordenes: number | null
+  limite_tecnicos: number | null
+  limite_clientes: number | null
+  limite_storage_mb: number | null
+  features: string[]
+}
+
+export interface UpdatePlanInput {
+  nombre?: string
+  descripcion?: string | null
+  precio_mensual?: number
+  precio_anual?: number
+  limite_ordenes?: number | null
+  limite_tecnicos?: number | null
+  limite_clientes?: number | null
+  limite_storage_mb?: number | null
+  features?: string[]
+}
+
+// ========================================
+// MÓDULO REPORTES/ANALYTICS - Types
+// ========================================
+
+export interface AnalyticsMetrics {
+  mrr: MRRData[]
+  churnRate: ChurnRateData[]
+  newOrganizations: NewOrgsData[]
+  planDistribution: PlanDistributionData
+  paymentSuccessRate: PaymentSuccessData
+  topOrganizations: TopOrgData[]
+}
+
+export interface MRRData {
+  month: string // '2025-01'
+  mrr: number
+  growth: number // % vs mes anterior
+}
+
+export interface ChurnRateData {
+  month: string
+  rate: number // porcentaje
+  canceled: number
+  active: number
+}
+
+export interface NewOrgsData {
+  month: string
+  count: number
+}
+
+export interface PlanDistributionData {
+  free: number
+  premium: number
+  total: number
+}
+
+export interface PaymentSuccessData {
+  successful: number
+  failed: number
+  total: number
+  successRate: number
+}
+
+export interface TopOrgData {
+  id: string
+  nombre: string
+  slug: string
+  totalRevenue: number
+  planTipo: PlanType | null
+  subscriptionStatus: SubscriptionStatus | null
+}
+
+export interface AnalyticsFilters {
+  startDate: string
+  endDate: string
+  compareWith?: 'previous_period' | 'previous_year'
+}
+
+// ========================================
+// MÓDULO SOPORTE - Types
+// ========================================
+
+export type TicketStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED'
+export type TicketPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'
+export type TicketCategory = 'BILLING' | 'TECHNICAL' | 'FEATURE_REQUEST' | 'BUG' | 'OTHER'
+
+export interface SupportTicket {
+  id: string
+  organization_id: string
+  title: string
+  category: TicketCategory
+  priority: TicketPriority
+  status: TicketStatus
+  assigned_to_email: string | null
+  assigned_at: string | null
+  created_by_name: string | null
+  created_by_email: string | null
+  created_at: string
+  updated_at: string
+  resolved_at: string | null
+  closed_at: string | null
+}
+
+export interface SupportMessage {
+  id: string
+  ticket_id: string
+  author_email: string
+  author_name: string
+  is_superadmin: boolean
+  message: string
+  attachments: Array<{ name: string; url: string; size: number }>
+  created_at: string
+}
+
+export interface TicketWithRelations extends SupportTicket {
+  organization: {
+    id: string
+    nombre: string
+    slug: string
+  }
+  messagesCount: number
+  lastMessage?: SupportMessage
+}
+
+export interface TicketDetail extends SupportTicket {
+  organization: {
+    id: string
+    nombre: string
+    slug: string
+    email: string | null
+  }
+  messages: SupportMessage[]
+}
+
+export interface CreateTicketInput {
+  organizationId: string
+  title: string
+  category: TicketCategory
+  priority: TicketPriority
+  message: string
+}
+
+export interface UpdateTicketInput {
+  status?: TicketStatus
+  priority?: TicketPriority
+  assigned_to_email?: string | null
+}
