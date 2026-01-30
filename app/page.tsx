@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import { auth } from "@/lib/auth"
 import { NavbarLanding } from "@/components/landing/navbar-landing"
 import { Hero } from "@/components/landing/hero"
+import { ProductShowcase } from "@/components/landing/product-showcase"
 import { Features } from "@/components/landing/features"
 import { PricingSection } from "@/components/landing/pricing-section"
 import { FAQ } from "@/components/landing/faq"
@@ -24,6 +25,7 @@ export default async function Home() {
     <main className="min-h-screen">
       <NavbarLanding />
       <Hero />
+      <ProductShowcase />
       <Features />
       <PricingSection />
       <FAQ />

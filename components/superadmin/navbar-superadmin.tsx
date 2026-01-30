@@ -16,15 +16,23 @@ import {
   Shield,
   Menu,
   X,
+  Package,
+  BarChart3,
+  Headset,
 } from "lucide-react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { cn } from "@/lib/utils"
+import { useFocusTrap } from "@/hooks/use-focus-trap"
+import { useEscapeKey } from "@/hooks/use-escape-key"
 
 const navItems = [
   { href: "/superadmin/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/superadmin/organizaciones", label: "Organizaciones", icon: Building2 },
   { href: "/superadmin/suscripciones", label: "Suscripciones", icon: CreditCard },
   { href: "/superadmin/pagos", label: "Pagos", icon: Receipt },
+  { href: "/superadmin/planes", label: "Planes", icon: Package },
+  { href: "/superadmin/reportes", label: "Reportes", icon: BarChart3 },
+  { href: "/superadmin/soporte", label: "Soporte", icon: Headset },
   { href: "/superadmin/logs", label: "Auditoría", icon: FileText },
 ]
 
@@ -35,6 +43,11 @@ interface NavbarSuperadminProps {
 export function NavbarSuperadmin({ userEmail }: NavbarSuperadminProps) {
   const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  // Hooks de accesibilidad para menú móvil
+  useFocusTrap(menuRef, mobileMenuOpen)
+  useEscapeKey(() => setMobileMenuOpen(false), mobileMenuOpen)
 
   // Cerrar menú cuando cambia la ruta
   useEffect(() => {
@@ -64,20 +77,23 @@ export function NavbarSuperadmin({ userEmail }: NavbarSuperadminProps) {
       <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 lg:border-r border-sidebar-border bg-sidebar">
         <div className="flex flex-col flex-1 min-h-0">
           {/* Header con logo STApp + SUPERADMIN */}
-          <div className="flex flex-col items-center justify-center h-20 px-6 border-b border-sidebar-border bg-red-950/20">
-            <div className="flex items-center gap-2 mb-1">
-              <Image
-                src="/logo.png"
-                alt="STApp"
-                width={28}
-                height={28}
-                className="object-contain"
-              />
-              <span className="font-bold text-xl">STApp</span>
+          <div className="flex flex-col items-center justify-center h-24 px-6 border-b border-sidebar-border bg-gradient-to-br from-red-950/20 to-red-900/10">
+            <div className="flex items-center gap-2.5 mb-2">
+              <div className="relative">
+                <Image
+                  src="/logo.png"
+                  alt="STApp"
+                  width={36}
+                  height={36}
+                  className="object-contain"
+                  priority
+                />
+              </div>
+              <span className="font-bold text-2xl tracking-tight">STApp</span>
             </div>
-            <div className="flex items-center gap-1.5">
-              <Shield className="h-3.5 w-3.5 text-red-500" />
-              <span className="text-xs font-semibold text-red-500 uppercase tracking-wider">
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-600/20 border border-red-500/30">
+              <Shield className="h-3.5 w-3.5 text-red-400" />
+              <span className="text-[11px] font-bold text-red-400 uppercase tracking-widest">
                 SuperAdmin
               </span>
             </div>
@@ -128,17 +144,18 @@ export function NavbarSuperadmin({ userEmail }: NavbarSuperadminProps) {
       {/* Mobile Header */}
       <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border">
         <div className="flex items-center justify-between h-14 px-4">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <Image
               src="/logo.png"
               alt="STApp"
-              width={24}
-              height={24}
+              width={28}
+              height={28}
               className="object-contain"
+              priority
             />
-            <div className="flex flex-col leading-none">
-              <span className="font-bold text-sm">STApp</span>
-              <span className="text-[10px] font-semibold text-red-500 uppercase tracking-wide">
+            <div className="flex flex-col leading-tight">
+              <span className="font-bold text-base">STApp</span>
+              <span className="text-[10px] font-bold text-red-500 uppercase tracking-wider">
                 SuperAdmin
               </span>
             </div>
@@ -150,6 +167,8 @@ export function NavbarSuperadmin({ userEmail }: NavbarSuperadminProps) {
               size="icon"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               aria-label={mobileMenuOpen ? "Cerrar menú" : "Abrir menú"}
+              aria-expanded={mobileMenuOpen}
+              aria-controls="mobile-menu-superadmin"
             >
               {mobileMenuOpen ? (
                 <X className="h-6 w-6" />
@@ -168,10 +187,13 @@ export function NavbarSuperadmin({ userEmail }: NavbarSuperadminProps) {
           mobileMenuOpen ? "opacity-100" : "opacity-0 pointer-events-none"
         )}
         onClick={() => setMobileMenuOpen(false)}
+        aria-hidden="true"
       />
 
       {/* Mobile Menu Drawer */}
       <div
+        id="mobile-menu-superadmin"
+        ref={menuRef}
         className={cn(
           "lg:hidden fixed top-0 right-0 bottom-0 z-40 w-72 bg-background shadow-xl transition-transform duration-200 ease-out",
           mobileMenuOpen ? "translate-x-0" : "translate-x-full"

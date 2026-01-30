@@ -61,22 +61,17 @@ function SkeletonCard({ className }: { className?: string }) {
 
 function SkeletonTable({ rows = 5, columns = 4 }: { rows?: number; columns?: number }) {
   return (
-    <div className="w-full space-y-3">
-      {/* Header */}
-      <div className="flex gap-4 pb-2 border-b">
-        {Array.from({ length: columns }).map((_, i) => (
-          <Skeleton key={i} className="h-4 flex-1" />
-        ))}
-      </div>
-      {/* Rows */}
+    <>
       {Array.from({ length: rows }).map((_, rowIndex) => (
-        <div key={rowIndex} className="flex gap-4 py-2">
+        <tr key={rowIndex} className="border-b">
           {Array.from({ length: columns }).map((_, colIndex) => (
-            <Skeleton key={colIndex} className="h-4 flex-1" />
+            <td key={colIndex} className="px-4 py-3">
+              <Skeleton className="h-4 w-full" />
+            </td>
           ))}
-        </div>
+        </tr>
       ))}
-    </div>
+    </>
   )
 }
 

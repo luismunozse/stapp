@@ -9,11 +9,14 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  FileX,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "./button"
 import { Select } from "./select"
 import { DatePicker } from "./date-picker"
+import { SkeletonTable } from "./skeleton"
+import { EmptyState } from "./empty-state"
 
 // Types
 export interface Column<T> {
@@ -147,23 +150,18 @@ export function DataTable<T>({
             <tbody>
               {loading ? (
                 <tr>
-                  <td
-                    colSpan={columns.length + (selectable ? 1 : 0)}
-                    className="px-4 py-8 text-center text-muted-foreground"
-                  >
-                    <div className="flex items-center justify-center gap-2">
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                      Cargando...
-                    </div>
+                  <td colSpan={columns.length + (selectable ? 1 : 0)} className="p-0">
+                    <SkeletonTable rows={5} columns={columns.length + (selectable ? 1 : 0)} />
                   </td>
                 </tr>
               ) : data.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan={columns.length + (selectable ? 1 : 0)}
-                    className="px-4 py-8 text-center text-muted-foreground"
-                  >
-                    {emptyMessage}
+                  <td colSpan={columns.length + (selectable ? 1 : 0)} className="p-0">
+                    <EmptyState
+                      icon={FileX}
+                      title={emptyMessage}
+                      description="Intenta ajustar los filtros o crea un nuevo registro"
+                    />
                   </td>
                 </tr>
               ) : (

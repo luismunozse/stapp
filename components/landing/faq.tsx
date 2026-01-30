@@ -61,7 +61,10 @@ export function FAQ() {
               <button
                 type="button"
                 onClick={() => setOpenIndex(openIndex === index ? null : index)}
-                className="flex items-center justify-between w-full py-5 text-left"
+                className="flex items-center justify-between w-full py-5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm"
+                aria-expanded={openIndex === index}
+                aria-controls={`faq-answer-${index}`}
+                id={`faq-question-${index}`}
               >
                 <span className="font-medium text-foreground">{faq.question}</span>
                 <ChevronDown
@@ -69,9 +72,13 @@ export function FAQ() {
                     "w-5 h-5 text-muted-foreground transition-transform",
                     openIndex === index && "rotate-180"
                   )}
+                  aria-hidden="true"
                 />
               </button>
               <div
+                id={`faq-answer-${index}`}
+                role="region"
+                aria-labelledby={`faq-question-${index}`}
                 className={cn(
                   "overflow-hidden transition-all duration-300",
                   openIndex === index ? "max-h-96 pb-5" : "max-h-0"

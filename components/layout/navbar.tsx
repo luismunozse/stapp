@@ -22,9 +22,11 @@ import {
   TrendingUp,
   ShoppingCart,
 } from "lucide-react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { cn } from "@/lib/utils"
 import { BusinessLogo } from "@/components/shared/business-logo"
+import { useFocusTrap } from "@/hooks/use-focus-trap"
+import { useEscapeKey } from "@/hooks/use-escape-key"
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -51,6 +53,11 @@ export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const { data: session } = useSession()
   const isAdmin = session?.user?.role === "ADMIN"
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  // Hooks de accesibilidad para menú móvil
+  useFocusTrap(menuRef, mobileMenuOpen)
+  useEscapeKey(() => setMobileMenuOpen(false), mobileMenuOpen)
 
   // Cerrar menú cuando cambia la ruta
   useEffect(() => {
@@ -162,6 +169,7 @@ export function Navbar() {
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               aria-label={mobileMenuOpen ? "Cerrar menú" : "Abrir menú"}
               aria-expanded={mobileMenuOpen}
+              aria-controls="mobile-menu-drawer"
             >
               {mobileMenuOpen ? (
                 <X className="h-6 w-6" />
@@ -185,6 +193,8 @@ export function Navbar() {
 
       {/* Mobile Menu Drawer */}
       <div
+        id="mobile-menu-drawer"
+        ref={menuRef}
         className={cn(
           "lg:hidden fixed top-0 right-0 bottom-0 z-40 w-72 bg-background shadow-xl transition-transform duration-200 ease-out",
           mobileMenuOpen ? "translate-x-0" : "translate-x-full"

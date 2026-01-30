@@ -1,16 +1,23 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { Menu, X, LayoutDashboard } from "lucide-react"
+import { useFocusTrap } from "@/hooks/use-focus-trap"
+import { useEscapeKey } from "@/hooks/use-escape-key"
 
 export function NavbarLanding() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isChecking, setIsChecking] = useState(true)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  // Hooks de accesibilidad para menú móvil
+  useFocusTrap(menuRef, mobileMenuOpen)
+  useEscapeKey(() => setMobileMenuOpen(false), mobileMenuOpen)
 
   // Verificar sesión del lado del cliente para permitir caching de la landing
   useEffect(() => {
@@ -49,7 +56,7 @@ export function NavbarLanding() {
               <a
                 key={item.name}
                 href={item.href}
-                className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors"
+                className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm"
               >
                 {item.name}
               </a>
@@ -87,6 +94,9 @@ export function NavbarLanding() {
               type="button"
               className="p-2"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label={mobileMenuOpen ? "Cerrar menú" : "Abrir menú"}
+              aria-expanded={mobileMenuOpen}
+              aria-controls="mobile-menu"
             >
               {mobileMenuOpen ? (
                 <X className="h-6 w-6" />
@@ -99,7 +109,7 @@ export function NavbarLanding() {
 
         {/* Mobile menu */}
         {mobileMenuOpen && (
-          <div className="md:hidden py-4 border-t">
+          <div id="mobile-menu" ref={menuRef} className="md:hidden py-4 border-t">
             <div className="flex flex-col gap-4">
               {navigation.map((item) => (
                 <a
