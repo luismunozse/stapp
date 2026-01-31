@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Select } from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DataTable, Column } from "@/components/ui/data-table"
 import { Search, Eye, Power, PowerOff, Building2 } from "lucide-react"
 import { formatDate } from "@/lib/utils"
@@ -187,28 +187,36 @@ export default function OrganizacionesPage() {
             </div>
             <div className="flex gap-2">
               <Select
-                value={statusFilter}
-                onChange={(e) => {
-                  setStatusFilter(e.target.value)
+                value={statusFilter || "all"}
+                onValueChange={(value) => {
+                  setStatusFilter(value === "all" ? "" : value)
                   setPage(1)
                 }}
-                className="w-[150px]"
               >
-                <option value="">Todos los estados</option>
-                <option value="active">Activas</option>
-                <option value="inactive">Inactivas</option>
+                <SelectTrigger className="w-[150px]">
+                  <SelectValue placeholder="Todos los estados" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los estados</SelectItem>
+                  <SelectItem value="active">Activas</SelectItem>
+                  <SelectItem value="inactive">Inactivas</SelectItem>
+                </SelectContent>
               </Select>
               <Select
-                value={planFilter}
-                onChange={(e) => {
-                  setPlanFilter(e.target.value)
+                value={planFilter || "all"}
+                onValueChange={(value) => {
+                  setPlanFilter(value === "all" ? "" : value)
                   setPage(1)
                 }}
-                className="w-[150px]"
               >
-                <option value="">Todos los planes</option>
-                <option value="free">Free</option>
-                <option value="premium">Premium</option>
+                <SelectTrigger className="w-[150px]">
+                  <SelectValue placeholder="Todos los planes" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los planes</SelectItem>
+                  <SelectItem value="free">Free</SelectItem>
+                  <SelectItem value="premium">Premium</SelectItem>
+                </SelectContent>
               </Select>
             </div>
           </div>

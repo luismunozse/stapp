@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { DemoButton } from "@/components/landing/demo-button"
 import {
   ClipboardList,
   LayoutDashboard,
@@ -310,6 +311,9 @@ export function ProductShowcase() {
                           </li>
                         ))}
                       </ul>
+                      <div className="pt-4">
+                        <DemoButton className="w-full sm:w-auto" />
+                      </div>
                     </div>
                   </div>
 

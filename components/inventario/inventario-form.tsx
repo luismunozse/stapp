@@ -7,7 +7,7 @@ import { z } from "zod"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select } from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { X } from "lucide-react"
 import type { Inventario } from "@/types"
@@ -191,17 +191,20 @@ export function InventarioForm({
             <div>
               <Label htmlFor="tipoDispositivo">Tipo *</Label>
               <Select
-                id="tipoDispositivo"
-                {...register("tipoDispositivo")}
-                onChange={(e) => setValue("tipoDispositivo", e.target.value)}
+                value={tipoDispositivo || ""}
+                onValueChange={(value) => setValue("tipoDispositivo", value)}
                 disabled={tiposLoading}
               >
-                <option value="">Seleccionar...</option>
-                {tiposDispositivo.map((tipo) => (
-                  <option key={tipo.id} value={tipo.codigo}>
-                    {tipo.nombre}
-                  </option>
-                ))}
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {tiposDispositivo.map((tipo) => (
+                    <SelectItem key={tipo.id} value={tipo.codigo}>
+                      {tipo.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
               {errors.tipoDispositivo && (
                 <p className="text-sm text-destructive mt-1">
@@ -213,17 +216,20 @@ export function InventarioForm({
             <div>
               <Label htmlFor="categoria">Categoría *</Label>
               <Select
-                id="categoria"
-                {...register("categoria")}
-                onChange={(e) => setValue("categoria", e.target.value)}
+                value={watch("categoria") || ""}
+                onValueChange={(value) => setValue("categoria", value)}
                 disabled={!tipoDispositivo}
               >
-                <option value="">{tipoDispositivo ? "Seleccionar..." : "Elegí tipo primero"}</option>
-                {categoriasDisponibles.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ))}
+                <SelectTrigger>
+                  <SelectValue placeholder={tipoDispositivo ? "Seleccionar..." : "Elegí tipo primero"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {categoriasDisponibles.map((cat) => (
+                    <SelectItem key={cat} value={cat}>
+                      {cat}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
               {errors.categoria && (
                 <p className="text-sm text-destructive mt-1">

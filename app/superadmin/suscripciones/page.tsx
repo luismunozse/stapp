@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Select } from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DataTable, Column } from "@/components/ui/data-table"
 import { CreditCard, Eye } from "lucide-react"
 import { formatDate } from "@/lib/utils"
@@ -148,30 +148,38 @@ export default function SuscripcionesPage() {
         <CardHeader>
           <div className="flex flex-col sm:flex-row gap-4">
             <Select
-              value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value)
+              value={statusFilter || "all"}
+              onValueChange={(value) => {
+                setStatusFilter(value === "all" ? "" : value)
                 setPage(1)
               }}
-              className="w-[180px]"
             >
-              <option value="">Todos los estados</option>
-              <option value="active">Activas</option>
-              <option value="trialing">En prueba</option>
-              <option value="past_due">Pago pendiente</option>
-              <option value="canceled">Canceladas</option>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Todos los estados" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los estados</SelectItem>
+                <SelectItem value="active">Activas</SelectItem>
+                <SelectItem value="trialing">En prueba</SelectItem>
+                <SelectItem value="past_due">Pago pendiente</SelectItem>
+                <SelectItem value="canceled">Canceladas</SelectItem>
+              </SelectContent>
             </Select>
             <Select
-              value={planFilter}
-              onChange={(e) => {
-                setPlanFilter(e.target.value)
+              value={planFilter || "all"}
+              onValueChange={(value) => {
+                setPlanFilter(value === "all" ? "" : value)
                 setPage(1)
               }}
-              className="w-[150px]"
             >
-              <option value="">Todos los planes</option>
-              <option value="free">Free</option>
-              <option value="premium">Premium</option>
+              <SelectTrigger className="w-[150px]">
+                <SelectValue placeholder="Todos los planes" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los planes</SelectItem>
+                <SelectItem value="free">Free</SelectItem>
+                <SelectItem value="premium">Premium</SelectItem>
+              </SelectContent>
             </Select>
           </div>
         </CardHeader>

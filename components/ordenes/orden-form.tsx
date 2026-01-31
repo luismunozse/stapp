@@ -7,7 +7,7 @@ import { z } from "zod"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select } from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { DatePicker } from "@/components/ui/date-picker"
@@ -566,17 +566,20 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
             <Label htmlFor="clienteId">Cliente *</Label>
             <div className="flex gap-2">
               <Select
-                id="clienteId"
-                {...register("clienteId")}
-                onChange={(e) => setValue("clienteId", e.target.value)}
-                className="flex-1"
+                value={watch("clienteId") || "none"}
+                onValueChange={(value) => setValue("clienteId", value === "none" ? "" : value)}
               >
-                <option value="">Seleccionar cliente...</option>
-                {clientes.map((cliente) => (
-                  <option key={cliente.id} value={cliente.id}>
-                    {cliente.nombre} - {cliente.telefono}
-                  </option>
-                ))}
+                <SelectTrigger className="flex-1">
+                  <SelectValue placeholder="Seleccionar cliente..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Seleccionar cliente...</SelectItem>
+                  {clientes.map((cliente) => (
+                    <SelectItem key={cliente.id} value={cliente.id}>
+                      {cliente.nombre} - {cliente.telefono}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
               <Button
                 type="button"
@@ -631,23 +634,27 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
               </Label>
               {tipoDispositivo === "CONSOLA" ? (
                 <Select
-                  id="dispositivo"
-                  value={watch("dispositivo")}
-                  onChange={(e) => {
-                    setValue("dispositivo", e.target.value)
+                  value={watch("dispositivo") || "none"}
+                  onValueChange={(value) => {
+                    const modelo = value === "none" ? "" : value
+                    setValue("dispositivo", modelo)
                     // Auto-completar marca según modelo
-                    const modelo = e.target.value
                     if (modelo.includes("PlayStation")) setValue("marca", "Sony PlayStation")
                     else if (modelo.includes("Xbox")) setValue("marca", "Microsoft Xbox")
                     else if (modelo.includes("Nintendo") || modelo.includes("Switch") || modelo.includes("Wii")) setValue("marca", "Nintendo")
                   }}
                 >
-                  <option value="">Seleccionar modelo...</option>
-                  {MODELOS_CONSOLA.map((modelo) => (
-                    <option key={modelo} value={modelo}>
-                      {modelo}
-                    </option>
-                  ))}
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar modelo..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Seleccionar modelo...</SelectItem>
+                    {MODELOS_CONSOLA.map((modelo) => (
+                      <SelectItem key={modelo} value={modelo}>
+                        {modelo}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
                 </Select>
               ) : (
                 <Input
@@ -710,13 +717,18 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
                 <div>
                   <Label className="text-xs">Tipo de PC</Label>
                   <Select
-                    value={watch("tipoPc") || ""}
-                    onChange={(e) => setValue("tipoPc", e.target.value as "DESKTOP" | "NOTEBOOK" | "ALL_IN_ONE" | undefined)}
+                    value={watch("tipoPc") || "none"}
+                    onValueChange={(value) => setValue("tipoPc", value === "none" ? undefined : value as "DESKTOP" | "NOTEBOOK" | "ALL_IN_ONE")}
                   >
-                    <option value="">Seleccionar...</option>
-                    <option value="NOTEBOOK">Notebook</option>
-                    <option value="DESKTOP">Desktop</option>
-                    <option value="ALL_IN_ONE">All-in-One</option>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Seleccionar...</SelectItem>
+                      <SelectItem value="NOTEBOOK">Notebook</SelectItem>
+                      <SelectItem value="DESKTOP">Desktop</SelectItem>
+                      <SelectItem value="ALL_IN_ONE">All-in-One</SelectItem>
+                    </SelectContent>
                   </Select>
                 </div>
                 <div>
@@ -730,32 +742,42 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
                 <div>
                   <Label className="text-xs">RAM</Label>
                   <Select
-                    value={watch("ram") || ""}
-                    onChange={(e) => setValue("ram", e.target.value)}
+                    value={watch("ram") || "none"}
+                    onValueChange={(value) => setValue("ram", value === "none" ? "" : value)}
                   >
-                    <option value="">Seleccionar...</option>
-                    <option value="2GB">2 GB</option>
-                    <option value="4GB">4 GB</option>
-                    <option value="8GB">8 GB</option>
-                    <option value="16GB">16 GB</option>
-                    <option value="32GB">32 GB</option>
-                    <option value="No sabe">No sabe</option>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Seleccionar...</SelectItem>
+                      <SelectItem value="2GB">2 GB</SelectItem>
+                      <SelectItem value="4GB">4 GB</SelectItem>
+                      <SelectItem value="8GB">8 GB</SelectItem>
+                      <SelectItem value="16GB">16 GB</SelectItem>
+                      <SelectItem value="32GB">32 GB</SelectItem>
+                      <SelectItem value="No sabe">No sabe</SelectItem>
+                    </SelectContent>
                   </Select>
                 </div>
                 <div>
                   <Label className="text-xs">Almacenamiento</Label>
                   <Select
-                    value={watch("almacenamiento") || ""}
-                    onChange={(e) => setValue("almacenamiento", e.target.value)}
+                    value={watch("almacenamiento") || "none"}
+                    onValueChange={(value) => setValue("almacenamiento", value === "none" ? "" : value)}
                   >
-                    <option value="">Seleccionar...</option>
-                    <option value="HDD 500GB">HDD 500GB</option>
-                    <option value="HDD 1TB">HDD 1TB</option>
-                    <option value="SSD 128GB">SSD 128GB</option>
-                    <option value="SSD 256GB">SSD 256GB</option>
-                    <option value="SSD 512GB">SSD 512GB</option>
-                    <option value="SSD 1TB">SSD 1TB</option>
-                    <option value="No sabe">No sabe</option>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Seleccionar...</SelectItem>
+                      <SelectItem value="HDD 500GB">HDD 500GB</SelectItem>
+                      <SelectItem value="HDD 1TB">HDD 1TB</SelectItem>
+                      <SelectItem value="SSD 128GB">SSD 128GB</SelectItem>
+                      <SelectItem value="SSD 256GB">SSD 256GB</SelectItem>
+                      <SelectItem value="SSD 512GB">SSD 512GB</SelectItem>
+                      <SelectItem value="SSD 1TB">SSD 1TB</SelectItem>
+                      <SelectItem value="No sabe">No sabe</SelectItem>
+                    </SelectContent>
                   </Select>
                 </div>
               </div>

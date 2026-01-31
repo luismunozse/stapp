@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Select } from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ClipboardCheck, Loader2, Save } from "lucide-react"
 import { SignaturePad } from "@/components/firma/signature-pad"
@@ -176,18 +176,21 @@ export function ChecklistForm({
               {item.requerido && <span className="text-red-500">*</span>}
             </Label>
             <Select
-              id={item.id}
-              value={(value as string) || ""}
-              onChange={(e) => handleValueChange(item.id, e.target.value)}
+              value={(value as string) || "none"}
+              onValueChange={(val) => handleValueChange(item.id, val === "none" ? "" : val)}
               disabled={loading}
-              className="mt-1"
             >
-              <option value="">Seleccionar...</option>
-              {opciones.map((opt: string) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
+              <SelectTrigger className="mt-1">
+                <SelectValue placeholder="Seleccionar..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Seleccionar...</SelectItem>
+                {opciones.map((opt: string) => (
+                  <SelectItem key={opt} value={opt}>
+                    {opt}
+                  </SelectItem>
+                ))}
+              </SelectContent>
             </Select>
           </div>
         )

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select } from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -460,31 +460,39 @@ export function TemplateEditor() {
                 <div>
                   <Label htmlFor="tipo">Tipo de respuesta</Label>
                   <Select
-                    id="tipo"
                     value={newItemTipo}
-                    onChange={(e) => setNewItemTipo(e.target.value)}
+                    onValueChange={setNewItemTipo}
                     disabled={saving}
                   >
-                    {tipoOptions.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar tipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {tipoOptions.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
                   </Select>
                 </div>
                 <div>
                   <Label htmlFor="categoria">Categoria</Label>
                   <Select
-                    id="categoria"
                     value={newItemCategoria}
-                    onChange={(e) => setNewItemCategoria(e.target.value)}
+                    onValueChange={setNewItemCategoria}
                     disabled={saving}
                   >
-                    {categoriaOptions.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar categoría" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categoriaOptions.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
                   </Select>
                 </div>
                 {newItemTipo === "SELECT" && (

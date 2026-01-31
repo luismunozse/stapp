@@ -4,6 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { signOut, useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import {
   LayoutDashboard,
@@ -53,6 +54,7 @@ export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const { data: session } = useSession()
   const isAdmin = session?.user?.role === "ADMIN"
+  const isDemoAccount = session?.user?.email === "demo@stapp.com"
   const menuRef = useRef<HTMLDivElement>(null)
 
   // Hooks de accesibilidad para menú móvil
@@ -105,10 +107,15 @@ export function Navbar() {
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 lg:border-r border-sidebar-border bg-sidebar">
         <div className="flex flex-col flex-1 min-h-0">
-          <div className="flex items-center h-16 px-6 border-b border-sidebar-border">
+          <div className="flex flex-col gap-2 px-6 py-4 border-b border-sidebar-border">
             <Link href="/dashboard" className="hover:opacity-80 transition-opacity">
               <BusinessLogo size="sm" showText={true} textClassName="text-xl" />
             </Link>
+            {isDemoAccount && (
+              <Badge variant="secondary" className="w-fit text-xs">
+                🎮 Cuenta Demo
+              </Badge>
+            )}
           </div>
           <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto scrollbar-thin">
             {allNavItems.map((item) => {
@@ -148,9 +155,16 @@ export function Navbar() {
       {/* Mobile Header */}
       <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border safe-area-inset-top">
         <div className="flex items-center justify-between h-14 px-4">
-          <Link href="/dashboard" className="hover:opacity-80 transition-opacity">
-            <BusinessLogo size="sm" showText={true} textClassName="text-lg" />
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/dashboard" className="hover:opacity-80 transition-opacity">
+              <BusinessLogo size="sm" showText={true} textClassName="text-lg" />
+            </Link>
+            {isDemoAccount && (
+              <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5">
+                DEMO
+              </Badge>
+            )}
+          </div>
           <div className="flex items-center gap-1">
             <ThemeToggle variant="icon" />
             <Button

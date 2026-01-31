@@ -4,7 +4,7 @@ import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select } from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Camera, Upload, X, Loader2 } from "lucide-react"
 import { compressImage } from "@/lib/image-compression"
@@ -195,16 +195,20 @@ export function FotoUpload({ ordenId, onSuccess, onClose }: FotoUploadProps) {
           <div>
             <Label htmlFor="tipo">Tipo de foto</Label>
             <Select
-              id="tipo"
               value={tipo}
-              onChange={(e) => setTipo(e.target.value)}
+              onValueChange={setTipo}
               disabled={loading}
             >
-              {tipoFotoOptions.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
+              <SelectTrigger>
+                <SelectValue placeholder="Seleccionar tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                {tipoFotoOptions.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
             </Select>
           </div>
           <div>

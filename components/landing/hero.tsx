@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import { DemoButton } from "@/components/landing/demo-button"
 import {
   ArrowRight,
   CheckCircle,
@@ -66,8 +67,9 @@ export function Hero() {
                 <ArrowRight className="ml-2 w-5 h-5" />
               </Button>
             </Link>
+            <DemoButton size="lg" className="text-lg px-8 py-6" />
             <a href="#features">
-              <Button size="lg" variant="outline" className="text-lg px-8 py-6">
+              <Button size="lg" variant="ghost" className="text-lg px-8 py-6">
                 Ver Características
               </Button>
             </a>

@@ -81,6 +81,7 @@ export interface Plan {
   id: string
   nombre: string
   tipo: PlanType
+  descripcion: string | null
   precio_mensual: number
   precio_anual: number
   limite_ordenes: number | null

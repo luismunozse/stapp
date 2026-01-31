@@ -7,7 +7,7 @@ import { z } from "zod"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select } from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { X, DollarSign } from "lucide-react"
@@ -140,14 +140,18 @@ export function PagoForm({
             <div>
               <Label htmlFor="metodoPago">Método de pago *</Label>
               <Select
-                id="metodoPago"
-                {...register("metodoPago")}
-                onChange={(e) =>
-                  setValue("metodoPago", e.target.value as "EFECTIVO" | "TRANSFERENCIA")
+                value={metodoPago}
+                onValueChange={(value) =>
+                  setValue("metodoPago", value as "EFECTIVO" | "TRANSFERENCIA")
                 }
               >
-                <option value="EFECTIVO">Efectivo</option>
-                <option value="TRANSFERENCIA">Transferencia</option>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar método" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="EFECTIVO">Efectivo</SelectItem>
+                  <SelectItem value="TRANSFERENCIA">Transferencia</SelectItem>
+                </SelectContent>
               </Select>
             </div>
           </div>

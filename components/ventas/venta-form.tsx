@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select } from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { useModal } from "@/contexts/modal-context"
 import { formatCurrency } from "@/lib/utils"
@@ -434,9 +434,9 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
                   <div className="sm:col-span-2">
                     <Label className="text-xs">Del Stock</Label>
                     <Select
-                      value={watchItems[index]?.inventarioId || ""}
-                      onChange={(e) => {
-                        const inv = inventario.find((i) => i.id === e.target.value)
+                      value={watchItems[index]?.inventarioId || "manual"}
+                      onValueChange={(value) => {
+                        const inv = inventario.find((i) => i.id === value)
                         if (inv) {
                           selectInventarioItem(index, inv)
                         } else {
@@ -444,12 +444,17 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
                         }
                       }}
                     >
-                      <option value="">Manual</option>
-                      {inventario.map((inv) => (
-                        <option key={inv.id} value={inv.id}>
-                          {inv.codigo} ({inv.stock})
-                        </option>
-                      ))}
+                      <SelectTrigger>
+                        <SelectValue placeholder="Manual" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="manual">Manual</SelectItem>
+                        {inventario.map((inv) => (
+                          <SelectItem key={inv.id} value={inv.id}>
+                            {inv.codigo} ({inv.stock})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
                     </Select>
                   </div>
 
@@ -512,10 +517,18 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-4 rounded-lg border p-4">
               <h3 className="font-medium">Método de Pago</h3>
-              <Select {...register("metodoPago")}>
-                <option value="EFECTIVO">Efectivo</option>
-                <option value="TRANSFERENCIA">Transferencia</option>
-                <option value="TARJETA">Tarjeta</option>
+              <Select
+                value={watch("metodoPago")}
+                onValueChange={(value) => setValue("metodoPago", value as "EFECTIVO" | "TRANSFERENCIA" | "TARJETA")}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="EFECTIVO">Efectivo</SelectItem>
+                  <SelectItem value="TRANSFERENCIA">Transferencia</SelectItem>
+                  <SelectItem value="TARJETA">Tarjeta</SelectItem>
+                </SelectContent>
               </Select>
 
               <div className="space-y-2">

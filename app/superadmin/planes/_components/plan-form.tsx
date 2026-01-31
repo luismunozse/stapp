@@ -10,8 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { FeaturesEditor } from "./features-editor"
 import { Loader2, Save } from "lucide-react"
-import type { PlanType } from "@/types/database"
-import type { CreatePlanInput, UpdatePlanInput } from "@/types/superadmin"
+import type { PlanType, CreatePlanInput, UpdatePlanInput } from "@/types/superadmin"
 
 interface PlanFormProps {
   mode: "create" | "edit"

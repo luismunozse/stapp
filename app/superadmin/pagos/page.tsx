@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Select } from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { DataTable, Column } from "@/components/ui/data-table"
 import { Receipt, Eye, ExternalLink, DollarSign } from "lucide-react"
@@ -175,18 +175,22 @@ export default function PagosPage() {
         <CardHeader>
           <div className="flex flex-col lg:flex-row gap-4">
             <Select
-              value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value)
+              value={statusFilter || "all"}
+              onValueChange={(value) => {
+                setStatusFilter(value === "all" ? "" : value)
                 setPage(1)
               }}
-              className="w-[180px]"
             >
-              <option value="">Todos los estados</option>
-              <option value="succeeded">Exitosos</option>
-              <option value="pending">Pendientes</option>
-              <option value="failed">Fallidos</option>
-              <option value="refunded">Reembolsados</option>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Todos los estados" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los estados</SelectItem>
+                <SelectItem value="succeeded">Exitosos</SelectItem>
+                <SelectItem value="pending">Pendientes</SelectItem>
+                <SelectItem value="failed">Fallidos</SelectItem>
+                <SelectItem value="refunded">Reembolsados</SelectItem>
+              </SelectContent>
             </Select>
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">Desde:</span>

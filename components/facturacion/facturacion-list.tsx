@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
-import { Select } from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { PaymentStatusBadge } from "@/components/ui/badge"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
@@ -122,15 +122,19 @@ export function FacturacionList() {
     <div className="space-y-4">
       <div className="flex gap-4">
         <Select
-          value={estadoPago}
-          onChange={(e) => setEstadoPago(e.target.value as EstadoPagoType)}
-          className="w-full sm:w-auto sm:min-w-[200px]"
+          value={estadoPago || "all"}
+          onValueChange={(value) => setEstadoPago(value === "all" ? "" : value as EstadoPagoType)}
         >
-          <option value="">Todos los estados</option>
-          <option value="PENDIENTE">Pendiente</option>
-          <option value="PAGADO_PARCIAL">Pago Parcial</option>
-          <option value="PAGADO">Pagado</option>
-          <option value="ANULADA">Anulada</option>
+          <SelectTrigger className="w-full sm:w-auto sm:min-w-[200px]">
+            <SelectValue placeholder="Todos los estados" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos los estados</SelectItem>
+            <SelectItem value="PENDIENTE">Pendiente</SelectItem>
+            <SelectItem value="PAGADO_PARCIAL">Pago Parcial</SelectItem>
+            <SelectItem value="PAGADO">Pagado</SelectItem>
+            <SelectItem value="ANULADA">Anulada</SelectItem>
+          </SelectContent>
         </Select>
       </div>
 

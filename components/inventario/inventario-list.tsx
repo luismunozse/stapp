@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Select } from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -126,31 +126,39 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
             />
           </div>
           <Select
-            value={categoria}
-            onChange={(e) => setCategoria(e.target.value)}
-            className="w-full"
+            value={categoria || "all"}
+            onValueChange={(value) => setCategoria(value === "all" ? "" : value)}
           >
-            <option value="">Todas las categorías</option>
-            {categoriasDisponibles.map((cat) => (
-              <option key={cat} value={cat}>
-                {cat}
-              </option>
-            ))}
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Todas las categorías" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas las categorías</SelectItem>
+              {categoriasDisponibles.map((cat) => (
+                <SelectItem key={cat} value={cat}>
+                  {cat}
+                </SelectItem>
+              ))}
+            </SelectContent>
           </Select>
           <Select
-            value={tipoDispositivo}
-            onChange={(e) => handleTipoChange(e.target.value as TipoDispositivo | "")}
+            value={tipoDispositivo || "all"}
+            onValueChange={(value) => handleTipoChange(value === "all" ? "" : value as TipoDispositivo | "")}
             disabled={tiposLoading}
-            className="w-full"
           >
-            <option value="">Todos los tipos</option>
-            {tiposDispositivo
-              .filter((t) => t.codigo !== "TODOS")
-              .map((tipo) => (
-                <option key={tipo.id} value={tipo.codigo}>
-                  {tipo.nombre}
-                </option>
-              ))}
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Todos los tipos" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos los tipos</SelectItem>
+              {tiposDispositivo
+                .filter((t) => t.codigo !== "TODOS")
+                .map((tipo) => (
+                  <SelectItem key={tipo.id} value={tipo.codigo}>
+                    {tipo.nombre}
+                  </SelectItem>
+                ))}
+            </SelectContent>
           </Select>
         </div>
         <div className="flex flex-wrap gap-2">

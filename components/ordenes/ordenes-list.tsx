@@ -4,7 +4,7 @@ import { useState, useCallback, useMemo } from "react"
 import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Select } from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DatePicker } from "@/components/ui/date-picker"
 import { DataTable, type Column } from "@/components/ui/data-table"
 import { OrderStatusBadge } from "@/components/ui/badge"
@@ -298,19 +298,23 @@ export function OrdenesList() {
       {showFilters && (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:flex md:flex-wrap items-center gap-3 p-4 bg-muted/30 rounded-lg border">
           <Select
-            value={estado}
-            onChange={(e) => {
-              setEstado(e.target.value as EstadoOrden | "")
+            value={estado || "all"}
+            onValueChange={(value) => {
+              setEstado(value === "all" ? "" : value as EstadoOrden)
               setPage(1)
             }}
-            className="w-full sm:w-auto sm:min-w-[180px]"
           >
-            <option value="">Todos los estados</option>
-            {estadoOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
+            <SelectTrigger className="w-full sm:w-auto sm:min-w-[180px]">
+              <SelectValue placeholder="Todos los estados" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos los estados</SelectItem>
+              {estadoOptions.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
           </Select>
 
           <DatePicker

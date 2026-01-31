@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Select } from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { DataTable, Column } from "@/components/ui/data-table"
 import { FileText, ChevronDown, ChevronUp } from "lucide-react"
@@ -163,33 +163,41 @@ export default function LogsPage() {
         <CardHeader>
           <div className="flex flex-col lg:flex-row gap-4">
             <Select
-              value={actionFilter}
-              onChange={(e) => {
-                setActionFilter(e.target.value)
+              value={actionFilter || "all"}
+              onValueChange={(value) => {
+                setActionFilter(value === "all" ? "" : value)
                 setPage(1)
               }}
-              className="w-[150px]"
             >
-              <option value="">Todas las acciones</option>
-              <option value="create">Crear</option>
-              <option value="update">Actualizar</option>
-              <option value="delete">Eliminar</option>
+              <SelectTrigger className="w-[150px]">
+                <SelectValue placeholder="Todas las acciones" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas las acciones</SelectItem>
+                <SelectItem value="create">Crear</SelectItem>
+                <SelectItem value="update">Actualizar</SelectItem>
+                <SelectItem value="delete">Eliminar</SelectItem>
+              </SelectContent>
             </Select>
             <Select
-              value={entityFilter}
-              onChange={(e) => {
-                setEntityFilter(e.target.value)
+              value={entityFilter || "all"}
+              onValueChange={(value) => {
+                setEntityFilter(value === "all" ? "" : value)
                 setPage(1)
               }}
-              className="w-[180px]"
             >
-              <option value="">Todas las entidades</option>
-              <option value="organizations">Organizaciones</option>
-              <option value="users">Usuarios</option>
-              <option value="ordenes_servicio">Órdenes</option>
-              <option value="clientes">Clientes</option>
-              <option value="inventario">Inventario</option>
-              <option value="subscriptions">Suscripciones</option>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Todas las entidades" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas las entidades</SelectItem>
+                <SelectItem value="organizations">Organizaciones</SelectItem>
+                <SelectItem value="users">Usuarios</SelectItem>
+                <SelectItem value="ordenes_servicio">Órdenes</SelectItem>
+                <SelectItem value="clientes">Clientes</SelectItem>
+                <SelectItem value="inventario">Inventario</SelectItem>
+                <SelectItem value="subscriptions">Suscripciones</SelectItem>
+              </SelectContent>
             </Select>
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">Desde:</span>

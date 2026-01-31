@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { OrderStatusBadge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select } from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -664,15 +664,20 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                           <div>
                             <Label className="text-xs">Item</Label>
                             <Select
-                              value={nuevoRepuesto.inventarioId}
-                              onChange={(e) => setNuevoRepuesto({ ...nuevoRepuesto, inventarioId: e.target.value })}
+                              value={nuevoRepuesto.inventarioId || "none"}
+                              onValueChange={(value) => setNuevoRepuesto({ ...nuevoRepuesto, inventarioId: value === "none" ? "" : value })}
                             >
-                              <option value="">Seleccionar...</option>
-                              {inventario.map((item) => (
-                                <option key={item.id} value={item.id}>
-                                  {item.nombre} (Stock: {item.stock})
-                                </option>
-                              ))}
+                              <SelectTrigger>
+                                <SelectValue placeholder="Seleccionar..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">Seleccionar...</SelectItem>
+                                {inventario.map((item) => (
+                                  <SelectItem key={item.id} value={item.id}>
+                                    {item.nombre} (Stock: {item.stock})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
                             </Select>
                           </div>
                           <div>
@@ -819,13 +824,17 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             <CardContent className="space-y-3">
               <Select
                 value={orden.estado}
-                onChange={(e) => handleUpdateEstado(e.target.value as EstadoOrden)}
+                onValueChange={(value) => handleUpdateEstado(value as EstadoOrden)}
                 disabled={updating}
-                className="w-full"
               >
-                {Object.entries(estadoLabels).map(([key, label]) => (
-                  <option key={key} value={key}>{label}</option>
-                ))}
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(estadoLabels).map(([key, label]) => (
+                    <SelectItem key={key} value={key}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
 
               <div className="space-y-2 text-sm">
@@ -859,16 +868,21 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             </CardHeader>
             <CardContent>
               <Select
-                value={orden.tecnicoId || ""}
-                onChange={(e) => handleAsignarTecnico(e.target.value || null)}
+                value={orden.tecnicoId || "none"}
+                onValueChange={(value) => handleAsignarTecnico(value === "none" ? null : value)}
                 disabled={updating}
               >
-                <option value="">Sin asignar</option>
-                {tecnicos.map((tecnico) => (
-                  <option key={tecnico.id} value={tecnico.id}>
-                    {tecnico.nombre}
-                  </option>
-                ))}
+                <SelectTrigger>
+                  <SelectValue placeholder="Sin asignar" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sin asignar</SelectItem>
+                  {tecnicos.map((tecnico) => (
+                    <SelectItem key={tecnico.id} value={tecnico.id}>
+                      {tecnico.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
             </CardContent>
           </Card>

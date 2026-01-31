@@ -13,7 +13,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "./button"
-import { Select } from "./select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select"
 import { DatePicker } from "./date-picker"
 import { SkeletonTable } from "./skeleton"
 import { EmptyState } from "./empty-state"
@@ -261,14 +261,18 @@ function DataTablePagination({
               <span>Filas:</span>
               <Select
                 value={pageSize.toString()}
-                onChange={(e) => onPageSizeChange(Number(e.target.value))}
-                className="h-8 w-auto min-w-[60px]"
+                onValueChange={(value) => onPageSizeChange(Number(value))}
               >
-                {pageSizeOptions.map((size) => (
-                  <option key={size} value={size}>
-                    {size}
-                  </option>
-                ))}
+                <SelectTrigger className="h-8 w-auto min-w-[60px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {pageSizeOptions.map((size) => (
+                    <SelectItem key={size} value={size.toString()}>
+                      {size}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
             </div>
           </>
@@ -353,16 +357,20 @@ export function DataTableFilters({ filters, onClearAll }: DataTableFiltersProps)
         <div key={filter.key} className="flex items-center gap-1 w-full sm:w-auto">
           {filter.type === "select" && filter.options && (
             <Select
-              value={filter.value}
-              onChange={(e) => filter.onChange(e.target.value)}
-              className="h-9 w-full sm:w-auto sm:min-w-[140px]"
+              value={filter.value || "all"}
+              onValueChange={(value) => filter.onChange(value === "all" ? "" : value)}
             >
-              <option value="">{filter.label}</option>
-              {filter.options.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
+              <SelectTrigger className="h-9 w-full sm:w-auto sm:min-w-[140px]">
+                <SelectValue placeholder={filter.label} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{filter.label}</SelectItem>
+                {filter.options.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
             </Select>
           )}
           {filter.type === "date" && (
