@@ -54,7 +54,6 @@ export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const { data: session } = useSession()
   const isAdmin = session?.user?.role === "ADMIN"
-  const isDemoAccount = session?.user?.email === "demo@stapp.com"
   const menuRef = useRef<HTMLDivElement>(null)
 
   // Hooks de accesibilidad para menú móvil
@@ -111,11 +110,6 @@ export function Navbar() {
             <Link href="/dashboard" className="hover:opacity-80 transition-opacity">
               <BusinessLogo size="sm" showText={true} textClassName="text-xl" />
             </Link>
-            {isDemoAccount && (
-              <Badge variant="secondary" className="w-fit text-xs">
-                🎮 Cuenta Demo
-              </Badge>
-            )}
           </div>
           <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto scrollbar-thin">
             {allNavItems.map((item) => {
@@ -159,11 +153,6 @@ export function Navbar() {
             <Link href="/dashboard" className="hover:opacity-80 transition-opacity">
               <BusinessLogo size="sm" showText={true} textClassName="text-lg" />
             </Link>
-            {isDemoAccount && (
-              <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5">
-                DEMO
-              </Badge>
-            )}
           </div>
           <div className="flex items-center gap-1">
             <ThemeToggle variant="icon" />

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth, isDemoAccount } from "@/lib/auth-utils"
+import { requireAuth } from "@/lib/auth-utils"
 import { parseCSV, parseExcel } from "@/lib/csv-parser"
 import { validateClienteRow, validateInventarioRow, validateCSVHeaders } from "@/lib/csv-validator"
 import { z } from "zod"
@@ -12,16 +12,8 @@ const previewSchema = z.object({
 
 export async function POST(request: Request) {
   try {
-    const { error, organizationId, session } = await requireAuth()
+    const { error, organizationId } = await requireAuth()
     if (error) return error
-
-    // Verificar que no sea cuenta demo
-    if (isDemoAccount(session?.user?.email)) {
-      return NextResponse.json(
-        { error: "Las cuentas demo no pueden importar datos" },
-        { status: 403 }
-      )
-    }
 
     const body = await request.json()
     const data = previewSchema.parse(body)

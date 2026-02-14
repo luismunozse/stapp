@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
-import Image from "next/image"
 import { Button } from "@/components/ui/button"
+import { STAppLogo } from "@/components/shared/stapp-logo"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { Menu, X, LayoutDashboard } from "lucide-react"
 import { useFocusTrap } from "@/hooks/use-focus-trap"
@@ -35,28 +35,21 @@ export function NavbarLanding() {
   ]
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b">
-      <nav className="container mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+    <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b w-full max-w-[100vw]">
+      <nav className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-full">
+        <div className="flex items-center justify-between h-16 gap-4">
           {/* Logo */}
-          <Link href="/" className="flex items-center">
-            <Image
-              src="/logo.png"
-              alt="STApp"
-              width={160}
-              height={48}
-              className="h-12 w-auto object-contain dark:invert"
-              priority
-            />
+          <Link href="/" className="flex items-center flex-shrink-0">
+            <STAppLogo size="lg" />
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center gap-8">
+          <div className="hidden md:flex items-center justify-center flex-1 gap-4 lg:gap-8 min-w-0">
             {navigation.map((item) => (
               <a
                 key={item.name}
                 href={item.href}
-                className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm"
+                className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm whitespace-nowrap"
               >
                 {item.name}
               </a>
@@ -64,13 +57,13 @@ export function NavbarLanding() {
           </div>
 
           {/* Desktop CTA */}
-          <div className="hidden md:flex items-center gap-4">
+          <div className="hidden md:flex items-center gap-2 lg:gap-4 flex-shrink-0">
             <ThemeToggle variant="icon" />
             {isChecking ? (
               <div className="w-32 h-9" /> // Placeholder para evitar layout shift
             ) : isLoggedIn ? (
               <Link href="/dashboard">
-                <Button>
+                <Button className="whitespace-nowrap">
                   <LayoutDashboard className="mr-2 h-4 w-4" />
                   Ir al Dashboard
                 </Button>
@@ -78,10 +71,10 @@ export function NavbarLanding() {
             ) : (
               <>
                 <Link href="/login">
-                  <Button variant="ghost">Iniciar Sesión</Button>
+                  <Button variant="ghost" className="whitespace-nowrap">Iniciar Sesión</Button>
                 </Link>
                 <Link href="/registro">
-                  <Button>Comenzar Gratis</Button>
+                  <Button className="whitespace-nowrap">Comenzar Gratis</Button>
                 </Link>
               </>
             )}

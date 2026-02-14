@@ -17,6 +17,7 @@ import {
   Zap,
 } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { motion } from "@/components/animations/motion"
 
 const categories = [
   {
@@ -134,14 +135,20 @@ export function Features() {
     <section id="features" className="py-12 sm:py-16 bg-muted/30">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="text-center max-w-3xl mx-auto mb-10">
+        <motion.div
+          className="text-center max-w-3xl mx-auto mb-10"
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-100px" }}
+          transition={{ duration: 0.6 }}
+        >
           <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
             Todo lo que necesitas en un solo lugar
           </h2>
           <p className="text-lg text-muted-foreground">
             12 herramientas poderosas diseñadas para que tu taller funcione como reloj.
           </p>
-        </div>
+        </motion.div>
 
         {/* Tabs */}
         <Tabs defaultValue="servicio" className="w-full">
@@ -169,23 +176,40 @@ export function Features() {
 
               {/* Features grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                {category.features.map((feature) => (
-                  <div
+                {category.features.map((feature, index) => (
+                  <motion.div
                     key={feature.name}
-                    className="bg-card rounded-xl p-6 shadow-sm hover:shadow-md transition-all duration-300 border hover:border-primary/20 group"
+                    className="bg-card rounded-xl p-6 shadow-sm border hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 group h-full transition-colors"
+                    initial={{ opacity: 0, y: 30 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: "-50px" }}
+                    transition={{ duration: 0.5, delay: index * 0.1 }}
+                    whileHover={{
+                      y: -8,
+                      boxShadow: "0 20px 40px -15px rgba(0,0,0,0.15)",
+                    }}
                   >
-                    <div
-                      className={`${feature.color} w-12 h-12 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300`}
+                    <motion.div
+                      className={`${feature.color} w-12 h-12 rounded-xl flex items-center justify-center mb-4`}
+                      whileHover={{
+                        scale: 1.15,
+                        rotate: [0, -5, 5, 0],
+                      }}
+                      transition={{
+                        type: "spring",
+                        stiffness: 400,
+                        damping: 17
+                      }}
                     >
                       <feature.icon className="w-6 h-6 text-white" />
-                    </div>
+                    </motion.div>
                     <h3 className="text-lg font-semibold text-foreground mb-2">
                       {feature.name}
                     </h3>
                     <p className="text-muted-foreground text-sm leading-relaxed">
                       {feature.description}
                     </p>
-                  </div>
+                  </motion.div>
                 ))}
               </div>
             </TabsContent>

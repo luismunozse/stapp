@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Check } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { motion } from "@/components/animations/motion"
 
 const features = [
   "Órdenes ilimitadas",
@@ -41,26 +42,52 @@ export function PricingSection() {
   )
 
   return (
-    <section id="pricing" className="py-12 sm:py-16">
+    <section id="pricing" className="py-12 sm:py-16 overflow-hidden">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="text-center max-w-3xl mx-auto mb-10">
+        <motion.div
+          className="text-center max-w-3xl mx-auto mb-10"
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-100px" }}
+          transition={{ duration: 0.6 }}
+        >
           <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
             Un solo plan, todo incluido
           </h2>
           <p className="text-lg text-muted-foreground">
             Comienza gratis por 30 días. Sin tarjeta de crédito.
           </p>
-        </div>
+        </motion.div>
 
         {/* Single pricing card */}
         <div className="max-w-lg mx-auto">
-          <div className="relative rounded-2xl bg-card border shadow-lg p-8">
+          <motion.div
+            className="relative rounded-2xl bg-card border-2 border-primary/20 shadow-xl p-8 hover:border-primary/40 transition-colors"
+            initial={{ opacity: 0, y: 40, scale: 0.95 }}
+            whileInView={{ opacity: 1, y: 0, scale: 1 }}
+            viewport={{ once: true, margin: "-50px" }}
+            transition={{ duration: 0.6, type: "spring", stiffness: 100 }}
+            whileHover={{
+              y: -8,
+              boxShadow: "0 25px 50px -12px rgba(59, 130, 246, 0.25)",
+            }}
+          >
             {/* Badge */}
             <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-              <span className="bg-green-500 text-white text-xs font-bold px-4 py-1.5 rounded-full">
+              <motion.span
+                className="bg-green-500 text-white text-xs font-bold px-4 py-1.5 rounded-full inline-block"
+                animate={{
+                  scale: [1, 1.05, 1],
+                }}
+                transition={{
+                  duration: 2,
+                  repeat: Infinity,
+                  ease: "easeInOut"
+                }}
+              >
                 30 DÍAS GRATIS
-              </span>
+              </motion.span>
             </div>
 
             {/* Plan name */}
@@ -72,10 +99,10 @@ export function PricingSection() {
             </div>
 
             {/* Billing toggle */}
-            <div className="flex items-center justify-center gap-3 mb-6">
+            <div className="flex items-center justify-center gap-2 sm:gap-3 mb-6">
               <span
                 className={cn(
-                  "text-sm font-medium transition-colors",
+                  "text-xs sm:text-sm font-medium transition-colors",
                   !annual ? "text-foreground" : "text-muted-foreground"
                 )}
               >
@@ -88,7 +115,7 @@ export function PricingSection() {
               />
               <span
                 className={cn(
-                  "text-sm font-medium transition-colors",
+                  "text-xs sm:text-sm font-medium transition-colors",
                   annual ? "text-foreground" : "text-muted-foreground"
                 )}
               >
@@ -102,9 +129,15 @@ export function PricingSection() {
             {/* Price */}
             <div className="text-center mb-6">
               <div className="flex items-baseline justify-center gap-1">
-                <span className="text-5xl font-bold text-foreground">
+                <motion.span
+                  key={currentPrice}
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                  className="text-5xl font-bold text-foreground"
+                >
                   ${formatPrice(currentPrice)}
-                </span>
+                </motion.span>
                 <span className="text-muted-foreground">/mes</span>
               </div>
               {annual && (
@@ -119,9 +152,15 @@ export function PricingSection() {
 
             {/* CTA */}
             <Link href="/registro">
-              <Button className="w-full mb-6" size="lg">
-                Comenzar 30 días gratis
-              </Button>
+              <motion.div
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                transition={{ type: "spring", stiffness: 400, damping: 17 }}
+              >
+                <Button className="w-full mb-6" size="lg">
+                  Comenzar 30 días gratis
+                </Button>
+              </motion.div>
             </Link>
 
             <p className="text-xs text-center text-muted-foreground mb-6">
@@ -133,14 +172,19 @@ export function PricingSection() {
               <p className="text-sm font-medium text-center mb-4">Todo incluido:</p>
               <ul className="grid grid-cols-2 gap-3">
                 {features.map((feature) => (
-                  <li key={feature} className="flex items-center gap-2 text-sm">
+                  <motion.li
+                    key={feature}
+                    className="flex items-center gap-2 text-sm list-none"
+                    whileHover={{ x: 3 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 17 }}
+                  >
                     <Check className="w-4 h-4 flex-shrink-0 text-green-500" />
                     <span>{feature}</span>
-                  </li>
+                  </motion.li>
                 ))}
               </ul>
             </div>
-          </div>
+          </motion.div>
         </div>
 
         {/* Money back guarantee + MercadoPago */}
@@ -148,7 +192,11 @@ export function PricingSection() {
           <p className="text-sm text-muted-foreground">
             Garantía de devolución de 30 días. Cancela cuando quieras.
           </p>
-          <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+          <motion.div
+            className="flex items-center justify-center gap-2 text-sm text-muted-foreground"
+            whileHover={{ scale: 1.05 }}
+            transition={{ type: "spring", stiffness: 400, damping: 17 }}
+          >
             <span>Pagos seguros con</span>
             <Image
               src="/Mercado_Pago.svg.png"
@@ -158,7 +206,7 @@ export function PricingSection() {
               className="inline-block"
               loading="lazy"
             />
-          </div>
+          </motion.div>
         </div>
       </div>
     </section>

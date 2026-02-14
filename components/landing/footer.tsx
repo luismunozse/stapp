@@ -1,5 +1,5 @@
 import Link from "next/link"
-import Image from "next/image"
+import { STAppLogo } from "@/components/shared/stapp-logo"
 
 export function Footer() {
   // Calculado en el servidor - sin hydration mismatch
@@ -25,13 +25,7 @@ export function Footer() {
           {/* Brand */}
           <div className="lg:col-span-2">
             <Link href="/" className="flex items-center mb-6">
-              <Image
-                src="/logo.png"
-                alt="STApp"
-                width={160}
-                height={48}
-                className="h-12 w-auto object-contain dark:invert"
-              />
+              <STAppLogo size="lg" />
             </Link>
             <p className="text-muted-foreground max-w-sm">
               Sistema completo para gestionar tu taller de reparación de

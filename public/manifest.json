@@ -16,27 +16,33 @@
   "prefer_related_applications": false,
   "icons": [
     {
-      "src": "/logo.png",
-      "sizes": "192x192",
-      "type": "image/png",
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "/logo.png",
+      "src": "/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.svg",
       "sizes": "512x512",
-      "type": "image/png",
+      "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "/logo.png",
+      "src": "/icon-192.svg",
       "sizes": "192x192",
-      "type": "image/png",
+      "type": "image/svg+xml",
       "purpose": "maskable"
     },
     {
-      "src": "/logo.png",
+      "src": "/icon-512.svg",
       "sizes": "512x512",
-      "type": "image/png",
+      "type": "image/svg+xml",
       "purpose": "maskable"
     }
   ],
@@ -46,21 +52,21 @@
       "short_name": "Nueva",
       "description": "Crear nueva orden de servicio",
       "url": "/ordenes?nueva=true",
-      "icons": [{ "src": "/logo.png", "sizes": "96x96" }]
+      "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
     },
     {
       "name": "Clientes",
       "short_name": "Clientes",
       "description": "Ver lista de clientes",
       "url": "/clientes",
-      "icons": [{ "src": "/logo.png", "sizes": "96x96" }]
+      "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
     },
     {
       "name": "Inventario",
       "short_name": "Inventario",
       "description": "Gestionar inventario",
       "url": "/inventario",
-      "icons": [{ "src": "/logo.png", "sizes": "96x96" }]
+      "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
     }
   ],
   "screenshots": [],

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import Image from "next/image"
 import { cn } from "@/lib/utils"
+import { STAppLogo } from "./stapp-logo"
 
 interface BusinessLogoProps {
   className?: string
@@ -86,16 +87,10 @@ export function BusinessLogo({
   }
 
   // Fallback: mostrar logo de STApp
+  const logoSize = size === "xl" ? "xl" : size === "lg" ? "lg" : size === "md" ? "md" : "sm"
   return (
     <div className={cn("flex items-center justify-center", className)}>
-      <Image
-        src="/logo.png"
-        alt="STApp"
-        width={size === "xl" ? 200 : size === "lg" ? 150 : 120}
-        height={size === "xl" ? 60 : size === "lg" ? 45 : 36}
-        className={cn("object-contain dark:invert", imageClassName)}
-        priority
-      />
+      <STAppLogo size={logoSize} showText={showText} />
     </div>
   )
 }

@@ -396,6 +396,323 @@ export function LogoShield({ className, size = "md", variant = "full" }: LogoPro
 }
 
 // ============================================
+// ALTERNATIVA 9: Device Futurista
+// Concepto: Smartphone con líneas de circuito tech
+// ============================================
+export function LogoDeviceFuturista({ className, size = "md", variant = "full" }: LogoProps) {
+  const { icon, text, gap } = sizeConfig[size]
+
+  return (
+    <div className={cn("flex items-center", gap, className)}>
+      <svg
+        width={icon}
+        height={icon}
+        viewBox="0 0 48 48"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        className="flex-shrink-0"
+      >
+        <defs>
+          <linearGradient id="deviceGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" className="[stop-color:hsl(var(--primary))]" />
+            <stop offset="100%" className="[stop-color:hsl(var(--primary)/0.7)]" />
+          </linearGradient>
+        </defs>
+        {/* Phone body */}
+        <rect
+          x="10"
+          y="4"
+          width="28"
+          height="40"
+          rx="6"
+          fill="url(#deviceGradient)"
+        />
+        {/* Screen */}
+        <rect
+          x="14"
+          y="10"
+          width="20"
+          height="28"
+          rx="2"
+          className="fill-background"
+        />
+        {/* Circuit lines on screen */}
+        <path
+          d="M18 18h4v4h6v-4h2M18 26h10M22 26v6"
+          className="stroke-primary"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          fill="none"
+        />
+        {/* Circuit nodes */}
+        <circle cx="18" cy="18" r="1.5" className="fill-primary" />
+        <circle cx="28" cy="26" r="1.5" className="fill-primary" />
+        <circle cx="22" cy="32" r="1.5" className="fill-primary" />
+        {/* Notch */}
+        <rect x="20" y="6" width="8" height="2" rx="1" className="fill-background/50" />
+        {/* Home bar */}
+        <rect x="18" y="40" width="12" height="2" rx="1" className="fill-white/30" />
+      </svg>
+      {variant === "full" && (
+        <span className={cn("font-bold tracking-tight", text)}>
+          <span className="text-primary">ST</span>
+          <span className="text-foreground">App</span>
+        </span>
+      )}
+    </div>
+  )
+}
+
+// ============================================
+// ALTERNATIVA 10: Multi-Device Stack
+// Concepto: Múltiples dispositivos apilados (laptop + phone)
+// ============================================
+export function LogoMultiDevice({ className, size = "md", variant = "full" }: LogoProps) {
+  const { icon, text, gap } = sizeConfig[size]
+
+  return (
+    <div className={cn("flex items-center", gap, className)}>
+      <svg
+        width={icon}
+        height={icon}
+        viewBox="0 0 48 48"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        className="flex-shrink-0"
+      >
+        <defs>
+          <linearGradient id="multiGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" className="[stop-color:hsl(var(--primary))]" />
+            <stop offset="100%" className="[stop-color:hsl(var(--primary)/0.6)]" />
+          </linearGradient>
+        </defs>
+        {/* Laptop screen */}
+        <rect
+          x="4"
+          y="8"
+          width="32"
+          height="22"
+          rx="3"
+          fill="url(#multiGradient)"
+        />
+        {/* Laptop screen inner */}
+        <rect
+          x="7"
+          y="11"
+          width="26"
+          height="16"
+          rx="1"
+          className="fill-background"
+        />
+        {/* Laptop base */}
+        <path
+          d="M2 30h36l-2 4H4l-2-4z"
+          className="fill-primary/80"
+        />
+        {/* Phone overlay */}
+        <rect
+          x="32"
+          y="18"
+          width="14"
+          height="26"
+          rx="3"
+          className="fill-primary"
+        />
+        <rect
+          x="34"
+          y="22"
+          width="10"
+          height="18"
+          rx="1"
+          className="fill-background"
+        />
+        {/* Signal waves */}
+        <path
+          d="M39 28c2 0 3 1 3 3M39 25c4 0 6 2 6 6"
+          className="stroke-primary"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          fill="none"
+        />
+        <circle cx="39" cy="31" r="1.5" className="fill-primary" />
+      </svg>
+      {variant === "full" && (
+        <span className={cn("font-bold tracking-tight", text)}>
+          <span className="text-primary">ST</span>
+          <span className="text-foreground">App</span>
+        </span>
+      )}
+    </div>
+  )
+}
+
+// ============================================
+// ALTERNATIVA 11: Holographic Device
+// Concepto: Dispositivo con efecto holográfico/3D
+// ============================================
+export function LogoHolographic({ className, size = "md", variant = "full" }: LogoProps) {
+  const { icon, text, gap } = sizeConfig[size]
+
+  return (
+    <div className={cn("flex items-center", gap, className)}>
+      <svg
+        width={icon}
+        height={icon}
+        viewBox="0 0 48 48"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        className="flex-shrink-0"
+      >
+        <defs>
+          <linearGradient id="holoGradient1" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" className="[stop-color:hsl(var(--primary))]" />
+            <stop offset="50%" className="[stop-color:hsl(var(--primary)/0.8)]" />
+            <stop offset="100%" className="[stop-color:hsl(var(--primary)/0.5)]" />
+          </linearGradient>
+        </defs>
+        {/* Back layer (3D effect) */}
+        <rect
+          x="18"
+          y="2"
+          width="20"
+          height="32"
+          rx="4"
+          className="fill-primary/20"
+        />
+        {/* Middle layer */}
+        <rect
+          x="14"
+          y="6"
+          width="20"
+          height="32"
+          rx="4"
+          className="fill-primary/40"
+        />
+        {/* Front phone */}
+        <rect
+          x="10"
+          y="10"
+          width="20"
+          height="32"
+          rx="4"
+          fill="url(#holoGradient1)"
+        />
+        {/* Screen */}
+        <rect
+          x="13"
+          y="15"
+          width="14"
+          height="22"
+          rx="1"
+          className="fill-background"
+        />
+        {/* Holographic lines */}
+        <path
+          d="M16 22h8M16 26h6M16 30h8"
+          className="stroke-primary/60"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
+        {/* Glow dots */}
+        <circle cx="36" cy="8" r="2" className="fill-primary/60" />
+        <circle cx="40" cy="16" r="1.5" className="fill-primary/40" />
+        <circle cx="38" cy="24" r="1" className="fill-primary/30" />
+      </svg>
+      {variant === "full" && (
+        <span className={cn("font-bold tracking-tight", text)}>
+          <span className="text-primary">ST</span>
+          <span className="text-foreground">App</span>
+        </span>
+      )}
+    </div>
+  )
+}
+
+// ============================================
+// ALTERNATIVA 12: Neon Device
+// Concepto: Dispositivo con bordes neón brillantes
+// ============================================
+export function LogoNeonDevice({ className, size = "md", variant = "full" }: LogoProps) {
+  const { icon, text, gap } = sizeConfig[size]
+
+  return (
+    <div className={cn("flex items-center", gap, className)}>
+      <svg
+        width={icon}
+        height={icon}
+        viewBox="0 0 48 48"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        className="flex-shrink-0"
+      >
+        <defs>
+          <filter id="neonGlow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="2" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+        {/* Glow background */}
+        <rect
+          x="12"
+          y="4"
+          width="24"
+          height="40"
+          rx="5"
+          className="fill-primary/10"
+        />
+        {/* Phone outline with glow */}
+        <rect
+          x="12"
+          y="4"
+          width="24"
+          height="40"
+          rx="5"
+          className="stroke-primary"
+          strokeWidth="2"
+          fill="none"
+          filter="url(#neonGlow)"
+        />
+        {/* Screen area */}
+        <rect
+          x="15"
+          y="10"
+          width="18"
+          height="28"
+          rx="2"
+          className="fill-background"
+        />
+        {/* ST text in screen */}
+        <text
+          x="24"
+          y="28"
+          textAnchor="middle"
+          className="fill-primary font-bold"
+          fontSize="12"
+          fontFamily="system-ui"
+        >
+          ST
+        </text>
+        {/* Pulse rings */}
+        <circle cx="24" cy="24" r="18" className="stroke-primary/30" strokeWidth="1" fill="none" />
+        <circle cx="24" cy="24" r="22" className="stroke-primary/15" strokeWidth="1" fill="none" />
+        {/* Corner accents */}
+        <circle cx="12" cy="4" r="2" className="fill-primary" />
+        <circle cx="36" cy="44" r="2" className="fill-primary" />
+      </svg>
+      {variant === "full" && (
+        <span className={cn("font-bold tracking-tight", text)}>
+          <span className="text-primary">ST</span>
+          <span className="text-foreground">App</span>
+        </span>
+      )}
+    </div>
+  )
+}
+
+// ============================================
 // Demo component to show all alternatives
 // ============================================
 export function LogoShowcase() {
@@ -408,6 +725,10 @@ export function LogoShowcase() {
     { name: "Bolt/Lightning", component: LogoBolt, desc: "Rayo en círculo, velocidad" },
     { name: "Gear/Engranaje", component: LogoGear, desc: "Engranaje minimalista" },
     { name: "Shield Pro", component: LogoShield, desc: "Escudo de confianza y garantía" },
+    { name: "Device Futurista", component: LogoDeviceFuturista, desc: "Smartphone con circuitos tech" },
+    { name: "Multi-Device", component: LogoMultiDevice, desc: "Laptop + phone con señal" },
+    { name: "Holographic", component: LogoHolographic, desc: "Dispositivo con efecto 3D" },
+    { name: "Neon Device", component: LogoNeonDevice, desc: "Teléfono con bordes neón" },
   ]
 
   return (

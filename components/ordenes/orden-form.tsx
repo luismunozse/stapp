@@ -566,14 +566,13 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
             <Label htmlFor="clienteId">Cliente *</Label>
             <div className="flex gap-2">
               <Select
-                value={watch("clienteId") || "none"}
-                onValueChange={(value) => setValue("clienteId", value === "none" ? "" : value)}
+                value={watch("clienteId") || ""}
+                onValueChange={(value) => setValue("clienteId", value)}
               >
                 <SelectTrigger className="flex-1">
                   <SelectValue placeholder="Seleccionar cliente..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Seleccionar cliente...</SelectItem>
                   {clientes.map((cliente) => (
                     <SelectItem key={cliente.id} value={cliente.id}>
                       {cliente.nombre} - {cliente.telefono}
@@ -634,21 +633,19 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
               </Label>
               {tipoDispositivo === "CONSOLA" ? (
                 <Select
-                  value={watch("dispositivo") || "none"}
+                  value={watch("dispositivo") || ""}
                   onValueChange={(value) => {
-                    const modelo = value === "none" ? "" : value
-                    setValue("dispositivo", modelo)
+                    setValue("dispositivo", value)
                     // Auto-completar marca según modelo
-                    if (modelo.includes("PlayStation")) setValue("marca", "Sony PlayStation")
-                    else if (modelo.includes("Xbox")) setValue("marca", "Microsoft Xbox")
-                    else if (modelo.includes("Nintendo") || modelo.includes("Switch") || modelo.includes("Wii")) setValue("marca", "Nintendo")
+                    if (value.includes("PlayStation")) setValue("marca", "Sony PlayStation")
+                    else if (value.includes("Xbox")) setValue("marca", "Microsoft Xbox")
+                    else if (value.includes("Nintendo") || value.includes("Switch") || value.includes("Wii")) setValue("marca", "Nintendo")
                   }}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar modelo..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Seleccionar modelo...</SelectItem>
                     {MODELOS_CONSOLA.map((modelo) => (
                       <SelectItem key={modelo} value={modelo}>
                         {modelo}
@@ -717,14 +714,13 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
                 <div>
                   <Label className="text-xs">Tipo de PC</Label>
                   <Select
-                    value={watch("tipoPc") || "none"}
-                    onValueChange={(value) => setValue("tipoPc", value === "none" ? undefined : value as "DESKTOP" | "NOTEBOOK" | "ALL_IN_ONE")}
+                    value={watch("tipoPc") || ""}
+                    onValueChange={(value) => setValue("tipoPc", value ? value as "DESKTOP" | "NOTEBOOK" | "ALL_IN_ONE" : undefined)}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccionar..." />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Seleccionar...</SelectItem>
                       <SelectItem value="NOTEBOOK">Notebook</SelectItem>
                       <SelectItem value="DESKTOP">Desktop</SelectItem>
                       <SelectItem value="ALL_IN_ONE">All-in-One</SelectItem>
@@ -742,14 +738,13 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
                 <div>
                   <Label className="text-xs">RAM</Label>
                   <Select
-                    value={watch("ram") || "none"}
-                    onValueChange={(value) => setValue("ram", value === "none" ? "" : value)}
+                    value={watch("ram") || ""}
+                    onValueChange={(value) => setValue("ram", value || undefined)}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccionar..." />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Seleccionar...</SelectItem>
                       <SelectItem value="2GB">2 GB</SelectItem>
                       <SelectItem value="4GB">4 GB</SelectItem>
                       <SelectItem value="8GB">8 GB</SelectItem>
@@ -762,14 +757,13 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
                 <div>
                   <Label className="text-xs">Almacenamiento</Label>
                   <Select
-                    value={watch("almacenamiento") || "none"}
-                    onValueChange={(value) => setValue("almacenamiento", value === "none" ? "" : value)}
+                    value={watch("almacenamiento") || ""}
+                    onValueChange={(value) => setValue("almacenamiento", value || undefined)}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccionar..." />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Seleccionar...</SelectItem>
                       <SelectItem value="HDD 500GB">HDD 500GB</SelectItem>
                       <SelectItem value="HDD 1TB">HDD 1TB</SelectItem>
                       <SelectItem value="SSD 128GB">SSD 128GB</SelectItem>

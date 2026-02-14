@@ -1,0 +1,24 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="deviceGradient512" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#2563eb"/>
+    </linearGradient>
+  </defs>
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="256" fill="#f8fafc"/>
+  <!-- Phone body -->
+  <rect x="160" y="96" width="192" height="320" rx="32" fill="url(#deviceGradient512)"/>
+  <!-- Screen -->
+  <rect x="180" y="128" width="152" height="256" rx="12" fill="white"/>
+  <!-- Circuit lines on screen -->
+  <path d="M212 192h32v32h48v-32h20M212 280h80M256 280v56" stroke="#3b82f6" stroke-width="8" stroke-linecap="round" fill="none"/>
+  <!-- Circuit nodes -->
+  <circle cx="212" cy="192" r="10" fill="#3b82f6"/>
+  <circle cx="292" cy="280" r="10" fill="#3b82f6"/>
+  <circle cx="256" cy="336" r="10" fill="#3b82f6"/>
+  <!-- Notch -->
+  <rect x="228" y="108" width="56" height="12" rx="6" fill="rgba(255,255,255,0.5)"/>
+  <!-- Home bar -->
+  <rect x="204" y="392" width="104" height="12" rx="6" fill="rgba(255,255,255,0.3)"/>
+</svg>
