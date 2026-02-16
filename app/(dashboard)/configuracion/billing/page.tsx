@@ -46,6 +46,7 @@ export default function BillingPage() {
   const canceled = searchParams.get("canceled") === "true"
   const mpSuccess = searchParams.get("mp_success") === "true"
   const mpFailure = searchParams.get("mp_failure") === "true"
+  const lsSuccess = searchParams.get("ls_success") === "true"
 
   useEffect(() => {
     loadData()
@@ -128,7 +129,7 @@ export default function BillingPage() {
       </div>
 
       {/* Success/Error messages */}
-      {(success || mpSuccess) && (
+      {(success || mpSuccess || lsSuccess) && (
         <div className="bg-green-50 dark:bg-green-950/50 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 px-4 py-3 rounded-lg flex items-center gap-2">
           <CheckCircle className="h-5 w-5" />
           <div>

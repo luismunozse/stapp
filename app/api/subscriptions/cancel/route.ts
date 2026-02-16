@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { cancelPreApproval } from "@/lib/mercadopago"
+import { cancelLemonSqueezySubscription } from "@/lib/lemonsqueezy"
 
 export async function POST() {
   try {
@@ -22,9 +23,13 @@ export async function POST() {
       )
     }
 
-    // Cancelar en MercadoPago si existe
+    // Cancelar en el proveedor correspondiente
     if (subscription.mercadopago_preapproval_id) {
       await cancelPreApproval(subscription.mercadopago_preapproval_id)
+    }
+
+    if (subscription.stripe_subscription_id) {
+      await cancelLemonSqueezySubscription(subscription.stripe_subscription_id)
     }
 
     // Actualizar en base de datos

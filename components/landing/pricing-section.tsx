@@ -23,11 +23,11 @@ const features = [
 ]
 
 const prices = {
-  monthly: 14999,
-  yearly: 143990,
+  ars: { monthly: 19999, yearly: 191990 },
+  usd: { monthly: 12, yearly: 115 },
 }
 
-// Formatear precio en pesos argentinos (formato fijo para evitar hydration mismatch)
+// Formatear precio (formato fijo para evitar hydration mismatch)
 function formatPrice(price: number): string {
   if (price === 0) return "0"
   return price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
@@ -36,9 +36,10 @@ function formatPrice(price: number): string {
 export function PricingSection() {
   const [annual, setAnnual] = useState(false)
 
-  const currentPrice = annual ? Math.round(prices.yearly / 12) : prices.monthly
+  const currentPriceArs = annual ? Math.round(prices.ars.yearly / 12) : prices.ars.monthly
+  const currentPriceUsd = annual ? Math.round(prices.usd.yearly / 12) : prices.usd.monthly
   const savingsPercent = Math.round(
-    ((prices.monthly * 12 - prices.yearly) / (prices.monthly * 12)) * 100
+    ((prices.ars.monthly * 12 - prices.ars.yearly) / (prices.ars.monthly * 12)) * 100
   )
 
   return (
@@ -130,22 +131,39 @@ export function PricingSection() {
             <div className="text-center mb-6">
               <div className="flex items-baseline justify-center gap-1">
                 <motion.span
-                  key={currentPrice}
+                  key={currentPriceArs}
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ type: "spring", stiffness: 300, damping: 20 }}
                   className="text-5xl font-bold text-foreground"
                 >
-                  ${formatPrice(currentPrice)}
+                  ${formatPrice(currentPriceArs)}
                 </motion.span>
                 <span className="text-muted-foreground">/mes</span>
               </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                🇦🇷 Precio en pesos argentinos (ARS)
+              </p>
+              <div className="mt-3 pt-3 border-t border-dashed">
+                <motion.div
+                  key={`usd-${currentPriceUsd}`}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="flex items-baseline justify-center gap-1"
+                >
+                  <span className="text-2xl font-bold text-foreground">USD ${currentPriceUsd}</span>
+                  <span className="text-muted-foreground text-sm">/mes</span>
+                </motion.div>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  🌎 Para el resto de Latinoamérica y otros países
+                </p>
+              </div>
               {annual && (
-                <p className="text-sm text-muted-foreground mt-1">
-                  Facturado anualmente (${formatPrice(prices.yearly)})
+                <p className="text-xs text-muted-foreground mt-2">
+                  Facturado anualmente: ARS ${formatPrice(prices.ars.yearly)} / USD ${prices.usd.yearly}
                 </p>
               )}
-              <p className="text-sm text-green-600 dark:text-green-400 mt-2 font-medium">
+              <p className="text-sm text-green-600 dark:text-green-400 mt-3 font-medium">
                 Primeros 30 días gratis
               </p>
             </div>

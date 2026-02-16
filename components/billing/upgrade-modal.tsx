@@ -10,8 +10,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Check, Loader2 } from "lucide-react"
+import { Check, Loader2, CreditCard, Globe } from "lucide-react"
 import { cn } from "@/lib/utils"
+
+type PaymentMethod = "mercadopago" | "stripe"
 
 interface UpgradeModalProps {
   open: boolean
@@ -20,37 +22,69 @@ interface UpgradeModalProps {
 
 export function UpgradeModal({ open, onClose }: UpgradeModalProps) {
   const [billingPeriod, setBillingPeriod] = useState<"MONTHLY" | "YEARLY">("MONTHLY")
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("mercadopago")
   const [loading, setLoading] = useState(false)
 
-  const prices = {
-    MONTHLY: 14999,
-    YEARLY: 143990,
+  const pricesArs = {
+    MONTHLY: 19999,
+    YEARLY: 191990,
   }
 
-  // Formatear precio en pesos argentinos
-  const formatPrice = (price: number) => {
-    return price.toLocaleString("es-AR")
+  const pricesUsd = {
+    MONTHLY: 12,
+    YEARLY: 115,
   }
+
+  const formatPriceArs = (price: number) => {
+    return price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
+  }
+
+  const currentPrices = paymentMethod === "mercadopago" ? pricesArs : pricesUsd
+  const currencySymbol = paymentMethod === "mercadopago" ? "$" : "USD $"
+  const currencyLabel = paymentMethod === "mercadopago" ? "ARS" : "USD"
 
   const monthlySavings = Math.round(
-    ((prices.MONTHLY * 12 - prices.YEARLY) / (prices.MONTHLY * 12)) * 100
+    ((currentPrices.MONTHLY * 12 - currentPrices.YEARLY) / (currentPrices.MONTHLY * 12)) * 100
   )
+
+  const formatCurrentPrice = (price: number) => {
+    if (paymentMethod === "mercadopago") return formatPriceArs(price)
+    return price.toString()
+  }
 
   const handleUpgrade = async () => {
     setLoading(true)
     try {
-      const response = await fetch("/api/mercadopago/preference", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ billingPeriod }),
-      })
+      if (paymentMethod === "mercadopago") {
+        // MercadoPago flow (Argentina - ARS)
+        const response = await fetch("/api/mercadopago/preference", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ billingPeriod }),
+        })
 
-      const data = await response.json()
+        const data = await response.json()
 
-      if (data.initPoint) {
-        window.location.href = data.initPoint
+        if (data.initPoint) {
+          window.location.href = data.initPoint
+        } else {
+          throw new Error("No se pudo iniciar el pago")
+        }
       } else {
-        throw new Error("No se pudo iniciar el pago")
+        // LemonSqueezy flow (International - USD)
+        const response = await fetch("/api/lemonsqueezy/checkout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ billingPeriod }),
+        })
+
+        const data = await response.json()
+
+        if (data.url) {
+          window.location.href = data.url
+        } else {
+          throw new Error("No se pudo iniciar el pago")
+        }
       }
     } catch (error) {
       console.error("Error starting checkout:", error)
@@ -82,6 +116,41 @@ export function UpgradeModal({ open, onClose }: UpgradeModalProps) {
         </DialogHeader>
 
         <div className="space-y-6 py-4">
+          {/* Payment method selection */}
+          <div className="space-y-3">
+            <label className="text-sm font-medium">Tu ubicación</label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setPaymentMethod("mercadopago")}
+                className={cn(
+                  "p-3 rounded-lg border-2 text-center transition-colors",
+                  paymentMethod === "mercadopago"
+                    ? "border-primary bg-primary/5"
+                    : "border-muted hover:border-muted-foreground/30"
+                )}
+              >
+                <div className="text-lg mb-1">🇦🇷</div>
+                <div className="text-sm font-semibold">Argentina</div>
+                <div className="text-xs text-muted-foreground">Pesos (ARS)</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentMethod("stripe")}
+                className={cn(
+                  "p-3 rounded-lg border-2 text-center transition-colors",
+                  paymentMethod === "stripe"
+                    ? "border-primary bg-primary/5"
+                    : "border-muted hover:border-muted-foreground/30"
+                )}
+              >
+                <div className="text-lg mb-1">🌎</div>
+                <div className="text-sm font-semibold">Otros países</div>
+                <div className="text-xs text-muted-foreground">Dólares (USD)</div>
+              </button>
+            </div>
+          </div>
+
           {/* Billing period selection */}
           <div className="space-y-3">
             <label className="text-sm font-medium">Período de facturación</label>
@@ -93,11 +162,13 @@ export function UpgradeModal({ open, onClose }: UpgradeModalProps) {
                   "p-4 rounded-lg border-2 text-left transition-colors",
                   billingPeriod === "MONTHLY"
                     ? "border-primary bg-primary/5"
-                    : "border-gray-200 hover:border-gray-300"
+                    : "border-muted hover:border-muted-foreground/30"
                 )}
               >
                 <div className="font-semibold">Mensual</div>
-                <div className="text-2xl font-bold">${formatPrice(prices.MONTHLY)}</div>
+                <div className="text-2xl font-bold">
+                  {currencySymbol}{formatCurrentPrice(currentPrices.MONTHLY)}
+                </div>
                 <div className="text-sm text-muted-foreground">por mes</div>
               </button>
               <button
@@ -107,7 +178,7 @@ export function UpgradeModal({ open, onClose }: UpgradeModalProps) {
                   "p-4 rounded-lg border-2 text-left transition-colors relative",
                   billingPeriod === "YEARLY"
                     ? "border-primary bg-primary/5"
-                    : "border-gray-200 hover:border-gray-300"
+                    : "border-muted hover:border-muted-foreground/30"
                 )}
               >
                 <div className="absolute -top-2 -right-2 bg-green-500 text-white text-xs px-2 py-0.5 rounded-full">
@@ -115,30 +186,41 @@ export function UpgradeModal({ open, onClose }: UpgradeModalProps) {
                 </div>
                 <div className="font-semibold">Anual</div>
                 <div className="text-2xl font-bold">
-                  ${formatPrice(Math.round(prices.YEARLY / 12))}
+                  {currencySymbol}{formatCurrentPrice(Math.round(currentPrices.YEARLY / 12))}
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  por mes (${formatPrice(prices.YEARLY)}/año)
+                  por mes ({currencySymbol}{formatCurrentPrice(currentPrices.YEARLY)}/año)
                 </div>
               </button>
             </div>
           </div>
 
-          {/* Payment method info - MercadoPago */}
-          <div className="space-y-3">
-            <label className="text-sm font-medium">Método de pago</label>
-            <div className="p-4 rounded-lg border-2 border-primary bg-primary/5 text-center">
-              <Image
-                src="/Mercado_Pago.svg.png"
-                alt="MercadoPago"
-                width={120}
-                height={32}
-                className="mx-auto mb-2"
-              />
-              <div className="text-xs text-muted-foreground">
-                Tarjeta de crédito, débito, efectivo y más opciones de pago
+          {/* Payment provider info */}
+          <div className="p-3 rounded-lg border bg-muted/30 text-center">
+            {paymentMethod === "mercadopago" ? (
+              <>
+                <Image
+                  src="/Mercado_Pago.svg.png"
+                  alt="MercadoPago"
+                  width={100}
+                  height={28}
+                  className="mx-auto mb-1"
+                />
+                <div className="text-xs text-muted-foreground">
+                  Tarjeta de crédito, débito, efectivo y más
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-center gap-2">
+                <CreditCard className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <div className="text-sm font-medium">Pago Internacional</div>
+                  <div className="text-xs text-muted-foreground">
+                    Tarjeta de crédito y débito internacional
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Features list */}
@@ -147,7 +229,7 @@ export function UpgradeModal({ open, onClose }: UpgradeModalProps) {
             <div className="grid grid-cols-2 gap-2">
               {features.map((feature) => (
                 <div key={feature} className="flex items-center gap-2 text-sm">
-                  <Check className="h-4 w-4 text-green-500" />
+                  <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
                   {feature}
                 </div>
               ))}
@@ -168,8 +250,8 @@ export function UpgradeModal({ open, onClose }: UpgradeModalProps) {
               </>
             ) : (
               <>
-                Continuar al pago - $
-                {formatPrice(billingPeriod === "YEARLY" ? prices.YEARLY : prices.MONTHLY)}
+                Continuar al pago - {currencySymbol}
+                {formatCurrentPrice(billingPeriod === "YEARLY" ? currentPrices.YEARLY : currentPrices.MONTHLY)}
                 {billingPeriod === "YEARLY" ? "/año" : "/mes"}
               </>
             )}

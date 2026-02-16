@@ -33,11 +33,11 @@ function getPreApprovalApi(): PreApproval {
 // Precios del plan Premium en pesos argentinos
 export const MP_PRICES = {
   MONTHLY: {
-    amount: 1499900, // $14.999 ARS (en centavos)
+    amount: 1999900, // $19.999 ARS (en centavos)
     currency: "ARS",
   },
   YEARLY: {
-    amount: 14399000, // $143.990 ARS (en centavos)
+    amount: 19199000, // $191.990 ARS (en centavos)
     currency: "ARS",
   },
 }
