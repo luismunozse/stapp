@@ -120,7 +120,7 @@ async function exportOrdenes(
       `
       *,
       cliente:clientes(nombre, telefono, email),
-      tecnico:usuarios!ordenes_servicio_tecnico_id_fkey(nombre)
+      tecnico:users!tecnico_id(nombre)
     `
     )
     .eq("organization_id", organizationId)
@@ -154,7 +154,7 @@ async function exportVentas(
     .select(
       `
       *,
-      vendedor:usuarios(nombre)
+      vendedor:users!vendedor_id(nombre)
     `
     )
     .eq("organization_id", organizationId)

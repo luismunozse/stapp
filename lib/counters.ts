@@ -36,12 +36,12 @@ export async function getNextOrderNumberByType(
 ): Promise<{ codigo: string; numero: number }> {
   const prefix = DEVICE_TYPE_PREFIXES[tipoDispositivo] || "ORD"
 
-  // Buscar el último número de orden para este tipo de dispositivo en esta organización
+  // Buscar el último número de orden de TODA la organización (sin filtrar por tipo)
+  // porque el unique constraint es (organization_id, numero_orden)
   const { data: lastOrder, error: searchError } = await supabaseAdmin
     .from("ordenes_servicio")
     .select("numero_orden")
     .eq("organization_id", organizationId)
-    .eq("tipo_dispositivo", tipoDispositivo)
     .order("numero_orden", { ascending: false })
     .limit(1)
     .single()

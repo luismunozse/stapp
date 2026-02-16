@@ -37,7 +37,7 @@ export function PricingSection() {
   const [annual, setAnnual] = useState(false)
 
   const currentPriceArs = annual ? Math.round(prices.ars.yearly / 12) : prices.ars.monthly
-  const currentPriceUsd = annual ? Math.round(prices.usd.yearly / 12) : prices.usd.monthly
+  const currentPriceUsd = annual ? parseFloat((prices.usd.yearly / 12).toFixed(1)) : prices.usd.monthly
   const savingsPercent = Math.round(
     ((prices.ars.monthly * 12 - prices.ars.yearly) / (prices.ars.monthly * 12)) * 100
   )

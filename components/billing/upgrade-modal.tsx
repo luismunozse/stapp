@@ -213,7 +213,7 @@ export function UpgradeModal({ open, onClose }: UpgradeModalProps) {
                 </div>
                 <div className="text-xs font-medium text-muted-foreground mb-1">Anual</div>
                 <div className="text-2xl font-bold tracking-tight">
-                  {currencySymbol}{formatCurrentPrice(Math.round(currentPrices.YEARLY / 12))}
+                  {currencySymbol}{paymentMethod === "mercadopago" ? formatCurrentPrice(Math.round(currentPrices.YEARLY / 12)) : (currentPrices.YEARLY / 12).toFixed(1).replace(/\.0$/, "")}
                 </div>
                 <div className="text-xs text-muted-foreground mt-0.5">
                   por mes <span className="text-muted-foreground/60">({currencySymbol}{formatCurrentPrice(currentPrices.YEARLY)}/año)</span>
