@@ -768,6 +768,8 @@ interface OrdenPDFData {
   telefonoEmpresa?: string
   direccionEmpresa?: string
   logoUrl?: string | null
+  firmaClienteRecepcion?: string | null
+  firmaClienteRecepcionMime?: string | null
 }
 
 const tipoDispositivoLabels: Record<string, string> = {
@@ -1383,9 +1385,29 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   page.drawRectangle({ x: margin, y: firmaY - 55, width: halfWidth, height: 70, color: bgGray, borderColor: lightGray, borderWidth: 1 })
   page.drawRectangle({ x: margin, y: firmaY + 5, width: halfWidth, height: 18, color: rgb(0.95, 0.95, 0.95) })
   page.drawText("FIRMA CLIENTE", { x: margin + 12, y: firmaY + 10, size: 8, font: helveticaBold, color: grayColor })
-  page.drawLine({ start: { x: margin + 20, y: firmaY - 15 }, end: { x: margin + halfWidth - 20, y: firmaY - 15 }, thickness: 1, color: grayColor })
-  page.drawText("Aclaracion: _________________________", { x: margin + 15, y: firmaY - 32, size: 7, font: helvetica, color: grayColor })
-  page.drawText("DNI: _________________________", { x: margin + 15, y: firmaY - 45, size: 7, font: helvetica, color: grayColor })
+
+  // Incrustar firma digital si existe
+  if (data.firmaClienteRecepcion) {
+    try {
+      const firmaBytes = Uint8Array.from(atob(data.firmaClienteRecepcion), c => c.charCodeAt(0))
+      const firmaImage = await pdfDoc.embedPng(firmaBytes)
+      const firmaDims = firmaImage.scale(1)
+      const firmaScale = Math.min((halfWidth - 40) / firmaDims.width, 45 / firmaDims.height)
+      page.drawImage(firmaImage, {
+        x: margin + (halfWidth - firmaDims.width * firmaScale) / 2,
+        y: firmaY - 50,
+        width: firmaDims.width * firmaScale,
+        height: firmaDims.height * firmaScale,
+      })
+    } catch (e) {
+      console.error("Error embedding reception signature:", e)
+      page.drawLine({ start: { x: margin + 20, y: firmaY - 15 }, end: { x: margin + halfWidth - 20, y: firmaY - 15 }, thickness: 1, color: grayColor })
+    }
+  } else {
+    page.drawLine({ start: { x: margin + 20, y: firmaY - 15 }, end: { x: margin + halfWidth - 20, y: firmaY - 15 }, thickness: 1, color: grayColor })
+    page.drawText("Aclaracion: _________________________", { x: margin + 15, y: firmaY - 32, size: 7, font: helvetica, color: grayColor })
+    page.drawText("DNI: _________________________", { x: margin + 15, y: firmaY - 45, size: 7, font: helvetica, color: grayColor })
+  }
 
   // Firma Tecnico
   page.drawRectangle({ x: cardX2, y: firmaY - 55, width: halfWidth, height: 70, color: bgGray, borderColor: lightGray, borderWidth: 1 })

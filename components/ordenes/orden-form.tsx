@@ -20,6 +20,7 @@ import {
 import { X, Plus, Camera, Upload, Trash2, Loader2, Lock, Grid3X3 } from "lucide-react"
 import { PatternLock } from "@/components/ui/pattern-lock"
 import { OrdenCreadaModal } from "./orden-creada-modal"
+import { SignaturePad } from "@/components/firma/signature-pad"
 import { compressImage } from "@/lib/image-compression"
 import type { Cliente } from "@/types"
 
@@ -253,6 +254,8 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
   const [presupuestoAceptado, setPresupuestoAceptado] = useState(false)
   const [sena, setSena] = useState<number | undefined>(undefined)
   const [comprimiendo, setComprimiendo] = useState(false)
+  const [firmaCliente, setFirmaCliente] = useState<string | null>(null)
+  const [firmaClienteMime, setFirmaClienteMime] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
 
@@ -513,6 +516,8 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
           presupuestoAceptado: presupuestoAceptado,
           sena: presupuestoAceptado && sena ? sena : undefined,
           observaciones: observacionesFinal || undefined,
+          firmaClienteRecepcion: firmaCliente || undefined,
+          firmaClienteRecepcionMime: firmaClienteMime || undefined,
         }),
       })
 
@@ -1206,6 +1211,21 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
               placeholder="Observaciones adicionales..."
               rows={2}
             />
+          </div>
+
+          {/* Firma del cliente */}
+          <div className="border-t pt-4">
+            <SignaturePad
+              label="Firma del Cliente (recepcion de equipo)"
+              onSignatureChange={(data, mime) => {
+                setFirmaCliente(data)
+                setFirmaClienteMime(mime)
+              }}
+              disabled={loading}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Al firmar, el cliente confirma la entrega del equipo para reparacion
+            </p>
           </div>
 
           <div className="flex gap-2 justify-end">

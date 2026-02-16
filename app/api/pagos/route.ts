@@ -67,13 +67,13 @@ export async function POST(request: Request) {
 
     // Crear pago
     const { data: pago, error: pagoError } = await supabaseAdmin
-      .from("pagos")
+      .from("pagos_parciales")
       .insert({
         factura_id: data.facturaId,
         monto: data.monto,
         metodo_pago: data.metodoPago,
-        referencia: data.numeroReferencia || null,
-        notas: data.observaciones || null,
+        numero_referencia: data.numeroReferencia || null,
+        observaciones: data.observaciones || null,
       })
       .select()
       .single()
@@ -95,7 +95,7 @@ export async function POST(request: Request) {
           id: pago.id,
           monto: pago.monto,
           metodoPago: pago.metodo_pago,
-          referencia: pago.referencia,
+          referencia: pago.numero_referencia,
           fecha: pago.fecha,
         },
         factura: {

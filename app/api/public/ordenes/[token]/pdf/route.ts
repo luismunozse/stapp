@@ -69,6 +69,8 @@ export async function GET(
       telefonoEmpresa: org?.telefono,
       direccionEmpresa: org?.direccion,
       logoUrl: org?.logo_url,
+      firmaClienteRecepcion: orden.firma_cliente_recepcion,
+      firmaClienteRecepcionMime: orden.firma_cliente_recepcion_mime,
     }
 
     // Generar PDF

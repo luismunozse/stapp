@@ -96,9 +96,10 @@ Problema: ${orden.problemaReportado}`
     mensaje += `\nFecha estimada de entrega: ${formatDate(orden.fechaPrometida)}`
   }
 
-  // Agregar link al PDF si hay token público
+  // Agregar links si hay token público
   if (orden.publicToken) {
     mensaje += `\n\nComprobante PDF: ${baseUrl}/api/public/ordenes/${orden.publicToken}/pdf`
+    mensaje += `\nSeguimiento en linea: ${baseUrl}/seguimiento/${orden.publicToken}`
   }
 
   mensaje += `

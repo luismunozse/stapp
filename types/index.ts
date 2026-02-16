@@ -69,6 +69,9 @@ export interface OrdenServicio {
   diagnostico?: string | null
   cliente?: Cliente
   tecnico?: User | null
+  // Campos de recepcion (firma)
+  firmaClienteRecepcion?: string | null
+  firmaClienteRecepcionMime?: string | null
   // Campos de entrega
   fechaEntrega?: Date | null
   firmaClienteEntrega?: string | null

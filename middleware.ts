@@ -59,6 +59,7 @@ function isPublicPath(pathname: string): boolean {
     "/sw.js",
     "/logo.png",
     "/icons",
+    "/seguimiento",
   ]
   return publicPaths.some((path) => pathname.startsWith(path))
 }

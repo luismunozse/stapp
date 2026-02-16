@@ -92,6 +92,8 @@ export async function GET(
       telefonoEmpresa: safeString(org?.telefono) || undefined,
       direccionEmpresa: safeString(org?.direccion) || undefined,
       logoUrl: safeString(org?.logo_url),
+      firmaClienteRecepcion: safeString(orden.firma_cliente_recepcion),
+      firmaClienteRecepcionMime: safeString(orden.firma_cliente_recepcion_mime),
     }
 
     // Generar PDF

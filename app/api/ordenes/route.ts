@@ -44,6 +44,9 @@ const ordenSchema = z.object({
   // Nuevos campos para presupuesto aceptado
   presupuestoAceptado: z.boolean().optional(),
   sena: z.number().optional(),
+  // Firma de recepcion del cliente
+  firmaClienteRecepcion: z.string().optional(),
+  firmaClienteRecepcionMime: z.string().optional(),
 })
 
 export async function GET(request: Request) {
@@ -214,6 +217,9 @@ export async function POST(request: Request) {
         estado: estadoInicial,
         costo_final: costoFinal,
         sena: data.sena || 0,
+        // Firma de recepcion
+        firma_cliente_recepcion: data.firmaClienteRecepcion || null,
+        firma_cliente_recepcion_mime: data.firmaClienteRecepcionMime || null,
       })
       .select(`
         *,

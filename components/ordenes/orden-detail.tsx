@@ -589,6 +589,18 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                   <p className="text-sm whitespace-pre-wrap">{orden.observaciones}</p>
                 </div>
               )}
+
+              {/* Firma de recepcion */}
+              {orden.firmaClienteRecepcion && (
+                <div className="mt-4 pt-4 border-t">
+                  <div className="text-sm font-medium text-muted-foreground mb-2">Firma del cliente (recepcion)</div>
+                  <img
+                    src={`data:${orden.firmaClienteRecepcionMime || "image/png"};base64,${orden.firmaClienteRecepcion}`}
+                    alt="Firma del cliente"
+                    className="max-w-[200px] border rounded bg-white p-2"
+                  />
+                </div>
+              )}
             </CardContent>
           </Card>
 
