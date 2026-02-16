@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Check, Loader2, CreditCard, Globe } from "lucide-react"
+import { Check, Loader2, Wallet, Crown, Shield, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 type PaymentMethod = "mercadopago" | "stripe"
@@ -41,7 +41,6 @@ export function UpgradeModal({ open, onClose }: UpgradeModalProps) {
 
   const currentPrices = paymentMethod === "mercadopago" ? pricesArs : pricesUsd
   const currencySymbol = paymentMethod === "mercadopago" ? "$" : "USD $"
-  const currencyLabel = paymentMethod === "mercadopago" ? "ARS" : "USD"
 
   const monthlySavings = Math.round(
     ((currentPrices.MONTHLY * 12 - currentPrices.YEARLY) / (currentPrices.MONTHLY * 12)) * 100
@@ -56,7 +55,6 @@ export function UpgradeModal({ open, onClose }: UpgradeModalProps) {
     setLoading(true)
     try {
       if (paymentMethod === "mercadopago") {
-        // MercadoPago flow (Argentina - ARS)
         const response = await fetch("/api/mercadopago/preference", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -71,7 +69,6 @@ export function UpgradeModal({ open, onClose }: UpgradeModalProps) {
           throw new Error("No se pudo iniciar el pago")
         }
       } else {
-        // LemonSqueezy flow (International - USD)
         const response = await fetch("/api/lemonsqueezy/checkout", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -95,42 +92,63 @@ export function UpgradeModal({ open, onClose }: UpgradeModalProps) {
   }
 
   const features = [
-    "Órdenes ilimitadas",
-    "Técnicos ilimitados",
-    "Clientes ilimitados",
-    "Reportes avanzados",
-    "5GB almacenamiento",
-    "Notificaciones WhatsApp",
-    "Logo personalizado",
-    "Soporte prioritario",
+    { icon: Zap, text: "Órdenes ilimitadas" },
+    { icon: Zap, text: "Técnicos ilimitados" },
+    { icon: Zap, text: "Clientes ilimitados" },
+    { icon: Zap, text: "Reportes avanzados" },
+    { icon: Zap, text: "5GB almacenamiento" },
+    { icon: Zap, text: "Notificaciones WhatsApp" },
+    { icon: Zap, text: "Logo personalizado" },
+    { icon: Zap, text: "Soporte prioritario" },
   ]
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Actualizar a Premium</DialogTitle>
-          <DialogDescription>
-            Desbloquea todas las funcionalidades sin límites
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="sm:max-w-[540px] p-0 gap-0 overflow-hidden">
+        {/* Header con gradiente */}
+        <div className="bg-gradient-to-br from-primary/10 via-primary/5 to-transparent px-6 pt-6 pb-4">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-primary/10">
+                <Crown className="h-5 w-5 text-primary" />
+              </div>
+              <DialogTitle className="text-xl">Activar Plan Premium</DialogTitle>
+            </div>
+            <DialogDescription className="text-sm">
+              Desbloquea todo el potencial de STApp sin límites
+            </DialogDescription>
+          </DialogHeader>
+        </div>
 
-        <div className="space-y-6 py-4">
-          {/* Payment method selection */}
-          <div className="space-y-3">
-            <label className="text-sm font-medium">Tu ubicación</label>
+        <div className="px-6 pb-6 space-y-5">
+          {/* Método de pago */}
+          <div className="space-y-2.5">
+            <label className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+              Método de pago
+            </label>
             <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
                 onClick={() => setPaymentMethod("mercadopago")}
                 className={cn(
-                  "p-3 rounded-lg border-2 text-center transition-colors",
+                  "relative p-4 rounded-xl border-2 text-center transition-all duration-200",
                   paymentMethod === "mercadopago"
-                    ? "border-primary bg-primary/5"
-                    : "border-muted hover:border-muted-foreground/30"
+                    ? "border-primary bg-primary/5 shadow-sm shadow-primary/10"
+                    : "border-border hover:border-muted-foreground/30 hover:bg-muted/50"
                 )}
               >
-                <div className="text-lg mb-1">🇦🇷</div>
+                {paymentMethod === "mercadopago" && (
+                  <div className="absolute top-2 right-2">
+                    <div className="h-2 w-2 rounded-full bg-primary" />
+                  </div>
+                )}
+                <Image
+                  src="/Mercado_Pago.svg.png"
+                  alt="MercadoPago"
+                  width={80}
+                  height={22}
+                  className="mx-auto mb-2"
+                />
                 <div className="text-sm font-semibold">Argentina</div>
                 <div className="text-xs text-muted-foreground">Pesos (ARS)</div>
               </button>
@@ -138,107 +156,87 @@ export function UpgradeModal({ open, onClose }: UpgradeModalProps) {
                 type="button"
                 onClick={() => setPaymentMethod("stripe")}
                 className={cn(
-                  "p-3 rounded-lg border-2 text-center transition-colors",
+                  "relative p-4 rounded-xl border-2 text-center transition-all duration-200",
                   paymentMethod === "stripe"
-                    ? "border-primary bg-primary/5"
-                    : "border-muted hover:border-muted-foreground/30"
+                    ? "border-primary bg-primary/5 shadow-sm shadow-primary/10"
+                    : "border-border hover:border-muted-foreground/30 hover:bg-muted/50"
                 )}
               >
-                <div className="text-lg mb-1">🌎</div>
+                {paymentMethod === "stripe" && (
+                  <div className="absolute top-2 right-2">
+                    <div className="h-2 w-2 rounded-full bg-primary" />
+                  </div>
+                )}
+                <div className="flex justify-center mb-2">
+                  <Wallet className="h-6 w-6 text-muted-foreground" />
+                </div>
                 <div className="text-sm font-semibold">Otros países</div>
                 <div className="text-xs text-muted-foreground">Dólares (USD)</div>
               </button>
             </div>
           </div>
 
-          {/* Billing period selection */}
-          <div className="space-y-3">
-            <label className="text-sm font-medium">Período de facturación</label>
+          {/* Período de facturación */}
+          <div className="space-y-2.5">
+            <label className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+              Período de facturación
+            </label>
             <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
                 onClick={() => setBillingPeriod("MONTHLY")}
                 className={cn(
-                  "p-4 rounded-lg border-2 text-left transition-colors",
+                  "relative p-4 rounded-xl border-2 text-left transition-all duration-200",
                   billingPeriod === "MONTHLY"
-                    ? "border-primary bg-primary/5"
-                    : "border-muted hover:border-muted-foreground/30"
+                    ? "border-primary bg-primary/5 shadow-sm shadow-primary/10"
+                    : "border-border hover:border-muted-foreground/30 hover:bg-muted/50"
                 )}
               >
-                <div className="font-semibold">Mensual</div>
-                <div className="text-2xl font-bold">
+                <div className="text-xs font-medium text-muted-foreground mb-1">Mensual</div>
+                <div className="text-2xl font-bold tracking-tight">
                   {currencySymbol}{formatCurrentPrice(currentPrices.MONTHLY)}
                 </div>
-                <div className="text-sm text-muted-foreground">por mes</div>
+                <div className="text-xs text-muted-foreground mt-0.5">por mes</div>
               </button>
               <button
                 type="button"
                 onClick={() => setBillingPeriod("YEARLY")}
                 className={cn(
-                  "p-4 rounded-lg border-2 text-left transition-colors relative",
+                  "relative p-4 rounded-xl border-2 text-left transition-all duration-200",
                   billingPeriod === "YEARLY"
-                    ? "border-primary bg-primary/5"
-                    : "border-muted hover:border-muted-foreground/30"
+                    ? "border-primary bg-primary/5 shadow-sm shadow-primary/10"
+                    : "border-border hover:border-muted-foreground/30 hover:bg-muted/50"
                 )}
               >
-                <div className="absolute -top-2 -right-2 bg-green-500 text-white text-xs px-2 py-0.5 rounded-full">
-                  -{monthlySavings}%
+                <div className="absolute -top-2.5 -right-2 bg-green-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
+                  AHORRA {monthlySavings}%
                 </div>
-                <div className="font-semibold">Anual</div>
-                <div className="text-2xl font-bold">
+                <div className="text-xs font-medium text-muted-foreground mb-1">Anual</div>
+                <div className="text-2xl font-bold tracking-tight">
                   {currencySymbol}{formatCurrentPrice(Math.round(currentPrices.YEARLY / 12))}
                 </div>
-                <div className="text-sm text-muted-foreground">
-                  por mes ({currencySymbol}{formatCurrentPrice(currentPrices.YEARLY)}/año)
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  por mes <span className="text-muted-foreground/60">({currencySymbol}{formatCurrentPrice(currentPrices.YEARLY)}/año)</span>
                 </div>
               </button>
             </div>
           </div>
 
-          {/* Payment provider info */}
-          <div className="p-3 rounded-lg border bg-muted/30 text-center">
-            {paymentMethod === "mercadopago" ? (
-              <>
-                <Image
-                  src="/Mercado_Pago.svg.png"
-                  alt="MercadoPago"
-                  width={100}
-                  height={28}
-                  className="mx-auto mb-1"
-                />
-                <div className="text-xs text-muted-foreground">
-                  Tarjeta de crédito, débito, efectivo y más
-                </div>
-              </>
-            ) : (
-              <div className="flex items-center justify-center gap-2">
-                <CreditCard className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <div className="text-sm font-medium">Pago Internacional</div>
-                  <div className="text-xs text-muted-foreground">
-                    Tarjeta de crédito y débito internacional
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Features list */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Incluye:</label>
-            <div className="grid grid-cols-2 gap-2">
-              {features.map((feature) => (
-                <div key={feature} className="flex items-center gap-2 text-sm">
-                  <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
-                  {feature}
+          {/* Features compactas */}
+          <div className="bg-muted/40 rounded-xl p-4">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+              {features.map(({ text }) => (
+                <div key={text} className="flex items-center gap-2 text-sm">
+                  <Check className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />
+                  <span className="text-muted-foreground">{text}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Action button */}
+          {/* Botón de acción */}
           <Button
-            className="w-full"
+            className="w-full h-12 text-base font-semibold"
             size="lg"
             onClick={handleUpgrade}
             disabled={loading}
@@ -250,16 +248,24 @@ export function UpgradeModal({ open, onClose }: UpgradeModalProps) {
               </>
             ) : (
               <>
-                Continuar al pago - {currencySymbol}
+                Continuar al pago — {currencySymbol}
                 {formatCurrentPrice(billingPeriod === "YEARLY" ? currentPrices.YEARLY : currentPrices.MONTHLY)}
                 {billingPeriod === "YEARLY" ? "/año" : "/mes"}
               </>
             )}
           </Button>
 
-          <p className="text-xs text-center text-muted-foreground">
-            Garantía de devolución de 30 días. Cancela cuando quieras.
-          </p>
+          {/* Footer de confianza */}
+          <div className="flex items-center justify-center gap-4 text-[11px] text-muted-foreground">
+            <div className="flex items-center gap-1">
+              <Shield className="h-3 w-3" />
+              <span>Pago seguro</span>
+            </div>
+            <span className="text-muted-foreground/30">|</span>
+            <span>Cancela cuando quieras</span>
+            <span className="text-muted-foreground/30">|</span>
+            <span>Garantía 30 días</span>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

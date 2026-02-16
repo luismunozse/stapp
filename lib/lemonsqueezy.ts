@@ -17,7 +17,7 @@ function initLemonSqueezy() {
 // Precios del plan Premium en USD
 export const LS_PRICES = {
   MONTHLY: 12, // $12 USD
-  YEARLY: 115, // $115 USD
+  YEARLY: 115, // $115 USD (~20% off $144)
 }
 
 // Crear checkout session de LemonSqueezy
