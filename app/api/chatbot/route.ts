@@ -231,9 +231,10 @@ Información sobre STApp:
 PLAN:
 Un solo plan: Plan Premium, todo incluido.
 - Primeros 30 días gratis, sin tarjeta de crédito requerida
-- Después: $14.999/mes o $143.990/año (ahorro ~20% con plan anual)
+- Argentina: $19.999 ARS/mes o $191.990/año (ahorro ~20% con plan anual)
+- Otros países: USD $12/mes o USD $115/año
 - Garantía de devolución de 30 días. Cancelás cuando quieras.
-- Pagos seguros con MercadoPago
+- Pagos seguros con MercadoPago (Argentina) o tarjeta internacional (otros países)
 
 Todo incluido en el plan:
 - Órdenes ilimitadas

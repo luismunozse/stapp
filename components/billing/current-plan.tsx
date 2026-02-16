@@ -105,7 +105,7 @@ export function CurrentPlan({ subscription, onUpgrade, onManage, onCancel }: Cur
             </p>
             <Button onClick={onUpgrade} className="w-full">
               <Sparkles className="h-4 w-4 mr-2" />
-              Suscribirse ahora - $14.999/mes
+              Suscribirse ahora - $19.999/mes
             </Button>
           </div>
         )}

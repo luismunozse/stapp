@@ -93,10 +93,16 @@ export function SubscriptionRequiredView({
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="text-center">
-                <div className="text-4xl font-bold">$14.999</div>
-                <div className="text-muted-foreground">ARS / mes</div>
+                <div className="text-4xl font-bold">$19.999</div>
+                <div className="text-sm text-muted-foreground">ARS / mes</div>
+                <div className="text-xs text-muted-foreground mt-0.5">🇦🇷 Argentina</div>
                 <div className="text-sm text-green-600 mt-1">
-                  o $143.990/año (ahorra 20%)
+                  o $191.990/año (ahorra 20%)
+                </div>
+                <div className="mt-3 pt-3 border-t border-dashed">
+                  <div className="text-2xl font-bold">USD $12</div>
+                  <div className="text-sm text-muted-foreground">/mes</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">🌎 Otros países</div>
                 </div>
               </div>
 
@@ -133,7 +139,7 @@ export function SubscriptionRequiredView({
               <div>
                 <h4 className="font-medium mb-1">¿Puedo pagar con tarjeta?</h4>
                 <p className="text-sm text-muted-foreground">
-                  Sí, aceptamos todas las tarjetas de crédito y débito a través de MercadoPago.
+                  Sí, aceptamos tarjetas de crédito y débito. En Argentina a través de MercadoPago, y para otros países con tarjeta internacional.
                 </p>
               </div>
               <div>
