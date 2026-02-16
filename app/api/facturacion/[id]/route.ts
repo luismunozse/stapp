@@ -64,6 +64,9 @@ export async function GET(
         referencia: p.referencia,
         fecha: p.fecha,
         notas: p.notas,
+        cuotas: p.cuotas,
+        recargoPorcentaje: p.recargo_porcentaje,
+        montoOriginal: p.monto_original,
       })).sort((a: any, b: any) =>
         new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
       ),
@@ -163,6 +166,9 @@ export async function PUT(
         referencia: p.referencia,
         fecha: p.fecha,
         notas: p.notas,
+        cuotas: p.cuotas,
+        recargoPorcentaje: p.recargo_porcentaje,
+        montoOriginal: p.monto_original,
       })),
     })
   } catch (error) {

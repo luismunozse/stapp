@@ -9,6 +9,9 @@ interface Pago {
   metodoPago: string
   referencia?: string
   notas?: string
+  cuotas?: number | null
+  recargoPorcentaje?: number | null
+  montoOriginal?: number | null
 }
 
 interface PagosHistorialProps {
@@ -40,13 +43,24 @@ export function PagosHistorial({ pagos }: PagosHistorialProps) {
           key={pago.id}
           className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
         >
-          <div>
+          <div className="space-y-0.5">
             <div className="font-medium text-green-600">
               {formatCurrency(pago.monto)}
             </div>
             <div className="text-xs text-muted-foreground">
-              {formatDate(pago.fecha)} - {metodoPagoLabels[pago.metodoPago] || pago.metodoPago}
+              {formatDate(pago.fecha)} · {metodoPagoLabels[pago.metodoPago] || pago.metodoPago}
+              {pago.cuotas && pago.cuotas > 1 && (
+                <span> · {pago.cuotas} cuotas</span>
+              )}
+              {pago.recargoPorcentaje && pago.recargoPorcentaje > 0 && (
+                <span> · {pago.recargoPorcentaje}% recargo</span>
+              )}
             </div>
+            {pago.montoOriginal && pago.recargoPorcentaje && pago.recargoPorcentaje > 0 && (
+              <div className="text-xs text-muted-foreground">
+                Sin recargo: {formatCurrency(pago.montoOriginal)}
+              </div>
+            )}
             {pago.referencia && (
               <div className="text-xs text-muted-foreground">
                 Ref: {pago.referencia}

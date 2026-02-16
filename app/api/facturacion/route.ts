@@ -17,6 +17,7 @@ export async function GET(request: Request) {
         ordenes_servicio!inner (
           id,
           numero_orden,
+          codigo_orden,
           dispositivo,
           organization_id,
           clientes (*)
@@ -45,11 +46,13 @@ export async function GET(request: Request) {
       subtotal: f.subtotal,
       iva: f.iva,
       total: f.total,
+      montoAbonado: f.monto_abonado,
       estadoPago: f.estado_pago,
       createdAt: f.created_at,
       orden: {
         id: f.ordenes_servicio.id,
         numeroOrden: f.ordenes_servicio.numero_orden,
+        codigoOrden: f.ordenes_servicio.codigo_orden,
         dispositivo: f.ordenes_servicio.dispositivo,
         cliente: f.ordenes_servicio.clientes,
       },
@@ -57,9 +60,12 @@ export async function GET(request: Request) {
         id: p.id,
         monto: p.monto,
         metodoPago: p.metodo_pago,
-        referencia: p.referencia,
+        referencia: p.numero_referencia,
         fecha: p.fecha,
-        notas: p.notas,
+        notas: p.observaciones,
+        cuotas: p.cuotas,
+        recargoPorcentaje: p.recargo_porcentaje,
+        montoOriginal: p.monto_original,
       })).sort((a: any, b: any) =>
         new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
       ),

@@ -6,9 +6,12 @@ import { z } from "zod"
 const pagoSchema = z.object({
   facturaId: z.string().min(1, "Factura requerida"),
   monto: z.number().positive("El monto debe ser mayor a 0"),
-  metodoPago: z.enum(["EFECTIVO", "TRANSFERENCIA"]),
+  metodoPago: z.enum(["EFECTIVO", "TRANSFERENCIA", "TARJETA_DEBITO", "TARJETA_CREDITO", "MERCADOPAGO", "OTRO"]),
   numeroReferencia: z.string().optional(),
   observaciones: z.string().optional(),
+  cuotas: z.number().int().min(1).nullable().optional(),
+  recargoPorcentaje: z.number().min(0).nullable().optional(),
+  montoOriginal: z.number().positive().nullable().optional(),
 })
 
 // Función para calcular el estado de pago
@@ -74,6 +77,9 @@ export async function POST(request: Request) {
         metodo_pago: data.metodoPago,
         numero_referencia: data.numeroReferencia || null,
         observaciones: data.observaciones || null,
+        cuotas: data.cuotas || null,
+        recargo_porcentaje: data.recargoPorcentaje || null,
+        monto_original: data.montoOriginal || null,
       })
       .select()
       .single()
@@ -97,6 +103,9 @@ export async function POST(request: Request) {
           metodoPago: pago.metodo_pago,
           referencia: pago.numero_referencia,
           fecha: pago.fecha,
+          cuotas: pago.cuotas,
+          recargoPorcentaje: pago.recargo_porcentaje,
+          montoOriginal: pago.monto_original,
         },
         factura: {
           montoAbonado: nuevoMontoAbonado,
