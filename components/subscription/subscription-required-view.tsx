@@ -1,11 +1,13 @@
 "use client"
 
-import Link from "next/link"
+import { useState } from "react"
 import { signOut } from "next-auth/react"
+
 import { Clock, AlertTriangle, CreditCard, LogOut, Sparkles, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { BusinessLogo } from "@/components/shared/business-logo"
+import { UpgradeModal } from "@/components/billing/upgrade-modal"
 
 interface SubscriptionRequiredViewProps {
   reason?: "trial_expired" | "canceled" | "past_due"
@@ -49,6 +51,7 @@ export function SubscriptionRequiredView({
   reason = "trial_expired",
   planNombre,
 }: SubscriptionRequiredViewProps) {
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false)
   const message = reasonMessages[reason]
   const Icon = message.icon
 
@@ -115,12 +118,10 @@ export function SubscriptionRequiredView({
                 ))}
               </ul>
 
-              <Link href="/configuracion/billing" className="block">
-                <Button className="w-full" size="lg">
-                  <CreditCard className="h-4 w-4 mr-2" />
-                  Activar suscripción
-                </Button>
-              </Link>
+              <Button className="w-full" size="lg" onClick={() => setUpgradeModalOpen(true)}>
+                <CreditCard className="h-4 w-4 mr-2" />
+                Activar suscripción
+              </Button>
             </CardContent>
           </Card>
 
@@ -163,6 +164,12 @@ export function SubscriptionRequiredView({
       <footer className="p-4 border-t text-center text-sm text-muted-foreground">
         <p>¿Tienes preguntas? Contáctanos y te ayudamos.</p>
       </footer>
+
+      {/* Modal de pago */}
+      <UpgradeModal
+        open={upgradeModalOpen}
+        onClose={() => setUpgradeModalOpen(false)}
+      />
     </div>
   )
 }

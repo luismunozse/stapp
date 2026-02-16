@@ -20,7 +20,24 @@ import {
   PowerOff,
   Save,
   ExternalLink,
+  RefreshCw,
+  Loader2,
+  CheckCircle,
 } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils"
 import type {
   OrganizationDetail,
@@ -45,6 +62,12 @@ export default function OrganizacionDetallePage({ params }: PageProps) {
   const [usage, setUsage] = useState<OrganizationUsage | null>(null)
   const [subscription, setSubscription] = useState<SubscriptionWithPlan | null>(null)
   const [payments, setPayments] = useState<PaymentWithOrg[]>([])
+
+  // Renewal state
+  const [renewModalOpen, setRenewModalOpen] = useState(false)
+  const [renewPeriod, setRenewPeriod] = useState<"MONTHLY" | "YEARLY">("MONTHLY")
+  const [renewLoading, setRenewLoading] = useState(false)
+  const [renewSuccess, setRenewSuccess] = useState("")
 
   // Form state
   const [formData, setFormData] = useState({
@@ -116,6 +139,34 @@ export default function OrganizacionDetallePage({ params }: PageProps) {
       console.error("Error:", error)
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleRenewSubscription = async () => {
+    setRenewLoading(true)
+    setRenewSuccess("")
+    try {
+      const res = await fetch("/api/superadmin/subscriptions/renew", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          organizationId: id,
+          billingPeriod: renewPeriod,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Error al renovar")
+      setRenewSuccess(data.message)
+      fetchOrganization()
+      setTimeout(() => {
+        setRenewModalOpen(false)
+        setRenewSuccess("")
+      }, 2000)
+    } catch (error: any) {
+      console.error("Error:", error)
+      alert(error.message || "Error al renovar suscripción")
+    } finally {
+      setRenewLoading(false)
     }
   }
 
@@ -396,10 +447,18 @@ export default function OrganizacionDetallePage({ params }: PageProps) {
         <TabsContent value="subscription">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CreditCard className="h-5 w-5" />
-                Suscripción
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <CreditCard className="h-5 w-5" />
+                  Suscripción
+                </CardTitle>
+                <Button onClick={() => setRenewModalOpen(true)}>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  {subscription?.status === "ACTIVE"
+                    ? "Extender suscripción"
+                    : "Activar Premium"}
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {subscription ? (
@@ -444,7 +503,7 @@ export default function OrganizacionDetallePage({ params }: PageProps) {
                         Proveedor de pago
                       </div>
                       <div className="font-medium">
-                        {subscription.payment_provider || "N/A"}
+                        {subscription.payment_provider || "Manual"}
                       </div>
                     </div>
                     <div>
@@ -482,9 +541,15 @@ export default function OrganizacionDetallePage({ params }: PageProps) {
                   )}
                 </div>
               ) : (
-                <p className="text-muted-foreground">
-                  Esta organización no tiene una suscripción activa (Plan Free)
-                </p>
+                <div className="text-center py-6 space-y-3">
+                  <p className="text-muted-foreground">
+                    Esta organización no tiene una suscripción activa (Plan Free)
+                  </p>
+                  <Button onClick={() => setRenewModalOpen(true)}>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Activar Premium
+                  </Button>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -567,6 +632,81 @@ export default function OrganizacionDetallePage({ params }: PageProps) {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Renewal Modal */}
+      <Dialog open={renewModalOpen} onOpenChange={setRenewModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {subscription?.status === "ACTIVE"
+                ? "Extender suscripción Premium"
+                : "Activar suscripción Premium"}
+            </DialogTitle>
+            <DialogDescription>
+              {subscription?.status === "ACTIVE"
+                ? `La suscripción actual vence el ${subscription.current_period_end ? formatDate(subscription.current_period_end) : "-"}. El nuevo período se sumará al existente.`
+                : `Activar manualmente el plan Premium para ${organization.nombre}.`}
+            </DialogDescription>
+          </DialogHeader>
+
+          {renewSuccess ? (
+            <div className="flex flex-col items-center gap-3 py-6">
+              <CheckCircle className="h-12 w-12 text-green-500" />
+              <p className="text-center font-medium">{renewSuccess}</p>
+            </div>
+          ) : (
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Período de facturación</label>
+                <Select
+                  value={renewPeriod}
+                  onValueChange={(v) => setRenewPeriod(v as "MONTHLY" | "YEARLY")}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="MONTHLY">Mensual (1 mes)</SelectItem>
+                    <SelectItem value="YEARLY">Anual (12 meses)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="p-3 rounded-lg bg-muted text-sm">
+                <p className="text-muted-foreground">
+                  Esto activará el plan Premium sin proceso de pago. Se registrará en el log de auditoría.
+                </p>
+              </div>
+
+              <div className="flex gap-3 justify-end">
+                <Button
+                  variant="outline"
+                  onClick={() => setRenewModalOpen(false)}
+                  disabled={renewLoading}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleRenewSubscription}
+                  disabled={renewLoading}
+                >
+                  {renewLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Procesando...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      {subscription?.status === "ACTIVE" ? "Extender" : "Activar"}
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -3,8 +3,8 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { signOut } from "next-auth/react"
-import Image from "next/image"
 import { Button } from "@/components/ui/button"
+import { STAppLogo } from "@/components/shared/stapp-logo"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import {
   LayoutDashboard,
@@ -78,18 +78,8 @@ export function NavbarSuperadmin({ userEmail }: NavbarSuperadminProps) {
         <div className="flex flex-col flex-1 min-h-0">
           {/* Header con logo STApp + SUPERADMIN */}
           <div className="flex flex-col items-center justify-center h-24 px-6 border-b border-sidebar-border bg-gradient-to-br from-red-950/20 to-red-900/10">
-            <div className="flex items-center gap-2.5 mb-2">
-              <div className="relative">
-                <Image
-                  src="/logo.png"
-                  alt="STApp"
-                  width={36}
-                  height={36}
-                  className="object-contain"
-                  priority
-                />
-              </div>
-              <span className="font-bold text-2xl tracking-tight">STApp</span>
+            <div className="mb-2">
+              <STAppLogo size="md" />
             </div>
             <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-600/20 border border-red-500/30">
               <Shield className="h-3.5 w-3.5 text-red-400" />
@@ -144,21 +134,11 @@ export function NavbarSuperadmin({ userEmail }: NavbarSuperadminProps) {
       {/* Mobile Header */}
       <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border">
         <div className="flex items-center justify-between h-14 px-4">
-          <div className="flex items-center gap-2.5">
-            <Image
-              src="/logo.png"
-              alt="STApp"
-              width={28}
-              height={28}
-              className="object-contain"
-              priority
-            />
-            <div className="flex flex-col leading-tight">
-              <span className="font-bold text-base">STApp</span>
-              <span className="text-[10px] font-bold text-red-500 uppercase tracking-wider">
-                SuperAdmin
-              </span>
-            </div>
+          <div className="flex items-center gap-2">
+            <STAppLogo size="sm" />
+            <span className="text-[10px] font-bold text-red-500 uppercase tracking-wider">
+              SuperAdmin
+            </span>
           </div>
           <div className="flex items-center gap-1">
             <ThemeToggle variant="icon" />

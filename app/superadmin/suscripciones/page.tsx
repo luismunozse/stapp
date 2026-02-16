@@ -122,7 +122,7 @@ export default function SuscripcionesPage() {
           size="sm"
           variant="ghost"
           onClick={() =>
-            router.push(`/organizaciones/${sub.organization?.id}`)
+            router.push(`/superadmin/organizaciones/${sub.organization?.id}`)
           }
           title="Ver organización"
         >
