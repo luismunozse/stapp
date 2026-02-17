@@ -3,11 +3,13 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { DataTable, type Column } from "@/components/ui/data-table"
+import { DataTable, DataTablePagination, type Column } from "@/components/ui/data-table"
 import { Plus, Search, Phone, Mail, Edit, Trash2, User, Upload } from "lucide-react"
 import { ClienteForm } from "./cliente-form"
 import { ImportModal } from "@/components/import/import-modal"
 import { ExportButton } from "@/components/export/export-button"
+import { ClienteMobileCard } from "./cliente-mobile-card"
+import { Card, CardContent } from "@/components/ui/card"
 import { formatDate } from "@/lib/utils"
 import type { Cliente } from "@/types"
 import { useModal } from "@/contexts/modal-context"
@@ -272,27 +274,81 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
         />
       )}
 
-      {/* Data Table */}
-      <DataTable
-        data={clientes}
-        columns={columns}
-        keyExtractor={(cliente) => cliente.id}
-        loading={loading}
-        emptyMessage="No hay clientes registrados"
-        sortKey={sortKey}
-        sortDirection={sortDirection}
-        onSort={handleSort}
-        pagination={{
-          page,
-          pageSize,
-          total,
-          onPageChange: setPage,
-          onPageSizeChange: (size) => {
-            setPageSize(size)
-            setPage(1)
-          },
-        }}
-      />
+      {/* Desktop: Data Table */}
+      <div className="hidden sm:block">
+        <DataTable
+          data={clientes}
+          columns={columns}
+          keyExtractor={(cliente) => cliente.id}
+          loading={loading}
+          emptyMessage="No hay clientes registrados"
+          sortKey={sortKey}
+          sortDirection={sortDirection}
+          onSort={handleSort}
+          pagination={{
+            page,
+            pageSize,
+            total,
+            onPageChange: setPage,
+            onPageSizeChange: (size) => {
+              setPageSize(size)
+              setPage(1)
+            },
+          }}
+        />
+      </div>
+
+      {/* Mobile: Cards */}
+      <div className="sm:hidden">
+        {loading ? (
+          <div className="space-y-3">
+            {[...Array(3)].map((_, i) => (
+              <Card key={i}>
+                <CardContent className="p-4">
+                  <div className="h-4 bg-muted animate-pulse rounded w-1/3 mb-3" />
+                  <div className="h-3 bg-muted animate-pulse rounded w-2/3 mb-2" />
+                  <div className="h-3 bg-muted animate-pulse rounded w-1/2" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : clientes.length === 0 ? (
+          <Card>
+            <CardContent className="py-8 text-center text-sm text-muted-foreground">
+              No hay clientes registrados
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            <div className="space-y-3">
+              {clientes.map((cliente) => (
+                <ClienteMobileCard
+                  key={cliente.id}
+                  cliente={cliente}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                  deleting={deleting === cliente.id}
+                />
+              ))}
+            </div>
+            {total > pageSize && (
+              <div className="mt-4">
+                <DataTablePagination
+                  page={page}
+                  pageSize={pageSize}
+                  total={total}
+                  dataLength={clientes.length}
+                  onPageChange={setPage}
+                  onPageSizeChange={(size) => {
+                    setPageSize(size)
+                    setPage(1)
+                  }}
+                />
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   )
 }

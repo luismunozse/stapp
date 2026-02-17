@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DatePicker } from "@/components/ui/date-picker"
-import { DataTable, type Column } from "@/components/ui/data-table"
+import { DataTable, DataTablePagination, type Column } from "@/components/ui/data-table"
 import { OrderStatusBadge } from "@/components/ui/badge"
 import {
   Plus,
@@ -21,6 +21,8 @@ import { useRouter } from "next/navigation"
 import { OrdenForm } from "./orden-form"
 import { useModal } from "@/contexts/modal-context"
 import { ExportButton } from "@/components/export/export-button"
+import { OrdenMobileCard } from "./orden-mobile-card"
+import { Card, CardContent } from "@/components/ui/card"
 import { formatDate, formatCurrency } from "@/lib/utils"
 import type { OrdenServicio, EstadoOrden } from "@/types"
 
@@ -93,7 +95,7 @@ export function OrdenesList() {
   })
 
   // Extraer datos de la respuesta
-  const ordenes = data?.data || []
+  const ordenes: OrdenServicio[] = data?.data || []
   const total = data?.total || 0
 
   const handleSort = (key: string) => {
@@ -360,28 +362,82 @@ export function OrdenesList() {
         />
       )}
 
-      {/* Data Table */}
-      <DataTable
-        data={ordenes}
-        columns={columns}
-        keyExtractor={(orden) => orden.id}
-        loading={isLoading}
-        emptyMessage="No hay órdenes registradas"
-        sortKey={sortKey}
-        sortDirection={sortDirection}
-        onSort={handleSort}
-        onRowClick={(orden) => router.push(`/ordenes/${orden.id}`)}
-        pagination={{
-          page,
-          pageSize,
-          total,
-          onPageChange: setPage,
-          onPageSizeChange: (size) => {
-            setPageSize(size)
-            setPage(1)
-          },
-        }}
-      />
+      {/* Desktop: Data Table */}
+      <div className="hidden sm:block">
+        <DataTable
+          data={ordenes}
+          columns={columns}
+          keyExtractor={(orden) => orden.id}
+          loading={isLoading}
+          emptyMessage="No hay órdenes registradas"
+          sortKey={sortKey}
+          sortDirection={sortDirection}
+          onSort={handleSort}
+          onRowClick={(orden) => router.push(`/ordenes/${orden.id}`)}
+          pagination={{
+            page,
+            pageSize,
+            total,
+            onPageChange: setPage,
+            onPageSizeChange: (size) => {
+              setPageSize(size)
+              setPage(1)
+            },
+          }}
+        />
+      </div>
+
+      {/* Mobile: Cards */}
+      <div className="sm:hidden">
+        {isLoading ? (
+          <div className="space-y-3">
+            {[...Array(3)].map((_, i) => (
+              <Card key={i}>
+                <CardContent className="p-4">
+                  <div className="h-4 bg-muted animate-pulse rounded w-1/3 mb-3" />
+                  <div className="h-3 bg-muted animate-pulse rounded w-2/3 mb-2" />
+                  <div className="h-3 bg-muted animate-pulse rounded w-1/2" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : ordenes.length === 0 ? (
+          <Card>
+            <CardContent className="py-8 text-center text-sm text-muted-foreground">
+              No hay órdenes registradas
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            <div className="space-y-3">
+              {ordenes.map((orden) => (
+                <OrdenMobileCard
+                  key={orden.id}
+                  orden={orden}
+                  onDelete={handleDelete}
+                  deleting={deleting === orden.id}
+                  onClick={() => router.push(`/ordenes/${orden.id}`)}
+                />
+              ))}
+            </div>
+            {total > pageSize && (
+              <div className="mt-4">
+                <DataTablePagination
+                  page={page}
+                  pageSize={pageSize}
+                  total={total}
+                  dataLength={ordenes.length}
+                  onPageChange={setPage}
+                  onPageSizeChange={(size) => {
+                    setPageSize(size)
+                    setPage(1)
+                  }}
+                />
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   )
 }

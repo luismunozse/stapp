@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DatePicker } from "@/components/ui/date-picker"
-import { DataTable, type Column } from "@/components/ui/data-table"
+import { DataTable, DataTablePagination, type Column } from "@/components/ui/data-table"
 import { Badge, PaymentStatusBadge } from "@/components/ui/badge"
 import {
   Plus,
@@ -22,6 +22,8 @@ import { VentaForm, type VentaCreadaData } from "./venta-form"
 import { VentaCreadaModal } from "./venta-creada-modal"
 import { useModal } from "@/contexts/modal-context"
 import { ExportButton } from "@/components/export/export-button"
+import { VentaMobileCard } from "./venta-mobile-card"
+import { Card, CardContent } from "@/components/ui/card"
 import { formatDate, formatCurrency } from "@/lib/utils"
 
 interface VentaListItem {
@@ -332,22 +334,71 @@ export function VentasList() {
         </div>
       )}
 
-      {/* Data Table */}
-      <DataTable
-        data={ventas}
-        columns={columns}
-        loading={loading}
-        emptyMessage="No hay ventas registradas"
-        keyExtractor={(venta) => venta.id}
-        onRowClick={(venta) => router.push(`/ventas/${venta.id}`)}
-        pagination={{
-          page,
-          pageSize,
-          total,
-          onPageChange: setPage,
-          onPageSizeChange: setPageSize,
-        }}
-      />
+      {/* Desktop: Data Table */}
+      <div className="hidden sm:block">
+        <DataTable
+          data={ventas}
+          columns={columns}
+          loading={loading}
+          emptyMessage="No hay ventas registradas"
+          keyExtractor={(venta) => venta.id}
+          onRowClick={(venta) => router.push(`/ventas/${venta.id}`)}
+          pagination={{
+            page,
+            pageSize,
+            total,
+            onPageChange: setPage,
+            onPageSizeChange: setPageSize,
+          }}
+        />
+      </div>
+
+      {/* Mobile: Cards */}
+      <div className="sm:hidden">
+        {loading ? (
+          <div className="space-y-3">
+            {[...Array(3)].map((_, i) => (
+              <Card key={i}>
+                <CardContent className="p-4">
+                  <div className="h-4 bg-muted animate-pulse rounded w-1/3 mb-3" />
+                  <div className="h-3 bg-muted animate-pulse rounded w-2/3 mb-2" />
+                  <div className="h-3 bg-muted animate-pulse rounded w-1/2" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : ventas.length === 0 ? (
+          <Card>
+            <CardContent className="py-8 text-center text-sm text-muted-foreground">
+              No hay ventas registradas
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            <div className="space-y-3">
+              {ventas.map((venta) => (
+                <VentaMobileCard
+                  key={venta.id}
+                  venta={venta}
+                  onClick={() => router.push(`/ventas/${venta.id}`)}
+                />
+              ))}
+            </div>
+            {total > pageSize && (
+              <div className="mt-4">
+                <DataTablePagination
+                  page={page}
+                  pageSize={pageSize}
+                  total={total}
+                  dataLength={ventas.length}
+                  onPageChange={setPage}
+                  onPageSizeChange={setPageSize}
+                />
+              </div>
+            )}
+          </>
+        )}
+      </div>
 
       {/* Form Dialog */}
       <VentaForm

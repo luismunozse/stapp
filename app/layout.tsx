@@ -32,7 +32,7 @@ export const metadata: Metadata = {
       { url: "/favicon.svg", type: "image/svg+xml" },
       { url: "/favicon.ico", sizes: "32x32" },
     ],
-    apple: "/icon-192.svg",
+    apple: "/apple-touch-icon.png",
   },
   appleWebApp: {
     capable: true,
@@ -127,11 +127,11 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="STApp" />
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-        <link rel="apple-touch-icon" href="/icon-192.svg" />
-        <link rel="apple-touch-icon" sizes="180x180" href="/icon-192.svg" />
-        <link rel="apple-touch-icon" sizes="152x152" href="/icon-192.svg" />
-        <link rel="apple-touch-icon" sizes="144x144" href="/icon-192.svg" />
-        <link rel="apple-touch-icon" sizes="120x120" href="/icon-192.svg" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+        <link rel="apple-touch-icon" sizes="152x152" href="/apple-touch-icon.png" />
+        <link rel="apple-touch-icon" sizes="144x144" href="/apple-touch-icon.png" />
+        <link rel="apple-touch-icon" sizes="120x120" href="/apple-touch-icon.png" />
 
         {/* Optimizaciones móviles adicionales */}
         <meta name="mobile-web-app-capable" content="yes" />

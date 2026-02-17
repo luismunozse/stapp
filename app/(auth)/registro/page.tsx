@@ -383,11 +383,18 @@ export default function RegistroPage() {
             Al crear tu cuenta aceptas nuestros términos de servicio
           </p>
 
-          <div className="mt-6 text-center text-sm text-muted-foreground">
-            ¿Ya tienes cuenta?{" "}
-            <Link href="/login" className="text-primary hover:underline font-medium">
-              Inicia sesión
-            </Link>
+          <div className="mt-6 text-center text-sm text-muted-foreground space-y-2">
+            <div>
+              ¿Ya tienes cuenta?{" "}
+              <Link href="/login" className="text-primary hover:underline font-medium">
+                Inicia sesion
+              </Link>
+            </div>
+            <div>
+              <Link href="/" className="text-muted-foreground hover:text-primary hover:underline">
+                Volver al inicio
+              </Link>
+            </div>
           </div>
         </CardContent>
       </Card>

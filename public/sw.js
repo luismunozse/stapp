@@ -1,12 +1,16 @@
 // Service Worker para PWA - Optimizado para móviles
-const CACHE_NAME = 'stapp-v5'
+const CACHE_NAME = 'stapp-v6'
 const API_CACHE_NAME = 'stapp-api-v1'
-const STATIC_CACHE_NAME = 'stapp-static-v1'
+const STATIC_CACHE_NAME = 'stapp-static-v2'
 
 // Assets estáticos para cachear inmediatamente
 const STATIC_ASSETS = [
   '/logo.png',
   '/manifest.json',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/apple-touch-icon.png',
+  '/favicon.svg',
 ]
 
 // Rutas que NO deben cachearse (landing page y rutas públicas de marketing)
