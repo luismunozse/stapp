@@ -19,9 +19,9 @@ import {
   Search,
   Cpu,
 } from "lucide-react"
-import { formatDate } from "@/lib/utils"
 import { FotoUpload } from "./foto-upload"
 import { useModal } from "@/contexts/modal-context"
+import { useCurrency } from "@/contexts/currency-context"
 
 interface Foto {
   id: string
@@ -51,6 +51,7 @@ export function FotoGallery({ ordenId }: FotoGalleryProps) {
   const [selectedFoto, setSelectedFoto] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
   const { confirm, showError } = useModal()
+  const { formatDate } = useCurrency()
 
   const fetchFotos = async () => {
     try {

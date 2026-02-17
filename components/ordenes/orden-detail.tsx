@@ -35,7 +35,7 @@ import {
   Shield,
 } from "lucide-react"
 import Link from "next/link"
-import { formatDate, formatCurrency } from "@/lib/utils"
+import { useCurrency } from "@/contexts/currency-context"
 import { CotizacionList } from "@/components/cotizaciones/cotizacion-list"
 import { GarantiaCard } from "@/components/garantias/garantia-card"
 import { FotoGallery } from "@/components/fotos/foto-gallery"
@@ -79,6 +79,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const router = useRouter()
   const { data: session } = useSession()
   const { confirm, alert } = useModal()
+  const { formatPrice, formatDate } = useCurrency()
   const [orden, setOrden] = useState<any>(null)
   const [tecnicos, setTecnicos] = useState<UserType[]>([])
   const [inventario, setInventario] = useState<any[]>([])
@@ -771,12 +772,12 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                               )}
                             </div>
                             <div className="text-sm text-muted-foreground">
-                              {repuesto.cantidad} × {formatCurrency(repuesto.precioUnitario)}
+                              {repuesto.cantidad} × {formatPrice(repuesto.precioUnitario)}
                             </div>
                           </div>
                           <div className="flex items-center gap-3">
                             <span className="font-semibold">
-                              {formatCurrency(repuesto.cantidad * repuesto.precioUnitario)}
+                              {formatPrice(repuesto.cantidad * repuesto.precioUnitario)}
                             </span>
                             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleRemoveRepuesto(repuesto.id)}>
                               <Trash2 className="h-4 w-4 text-destructive" />
@@ -786,7 +787,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                       ))}
                       <div className="flex justify-between pt-3 border-t font-semibold">
                         <span>Subtotal Repuestos</span>
-                        <span>{formatCurrency(subtotalRepuestos)}</span>
+                        <span>{formatPrice(subtotalRepuestos)}</span>
                       </div>
                     </div>
                   ) : (
@@ -946,14 +947,14 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                   {orden.sena > 0 && (
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Seña/Adelanto</span>
-                      <span className="text-success">-{formatCurrency(orden.sena)}</span>
+                      <span className="text-success">-{formatPrice(orden.sena)}</span>
                     </div>
                   )}
                   {orden.costoFinal && (
                     <div className="flex justify-between font-semibold">
                       <span>Saldo Pendiente</span>
                       <span className="text-lg">
-                        {formatCurrency(Math.max(0, (orden.costoFinal || 0) - (orden.sena || 0)))}
+                        {formatPrice(Math.max(0, (orden.costoFinal || 0) - (orden.sena || 0)))}
                       </span>
                     </div>
                   )}

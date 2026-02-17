@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { SignaturePad } from "@/components/firma/signature-pad"
-import { formatCurrency } from "@/lib/utils"
+import { useCurrency } from "@/contexts/currency-context"
 import { Loader2, CheckCircle } from "lucide-react"
 
 interface CotizacionApprovalDialogProps {
@@ -31,6 +31,7 @@ export function CotizacionApprovalDialog({
   cotizacion,
 }: CotizacionApprovalDialogProps) {
   const [loading, setLoading] = useState(false)
+  const { formatPrice } = useCurrency()
   const [firma, setFirma] = useState<string | null>(null)
   const [firmaMime, setFirmaMime] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -91,7 +92,7 @@ export function CotizacionApprovalDialog({
         <DialogHeader>
           <DialogTitle>Aprobar Cotizacion</DialogTitle>
           <DialogDescription>
-            Cotizacion {cotizacion.numeroCotizacion} por {formatCurrency(cotizacion.total)}
+            Cotizacion {cotizacion.numeroCotizacion} por {formatPrice(cotizacion.total)}
           </DialogDescription>
         </DialogHeader>
 

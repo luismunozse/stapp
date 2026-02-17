@@ -1,3 +1,6 @@
+import { formatCurrencyValue, type CurrencyCode, DEFAULT_CURRENCY } from "@/lib/currency"
+import { formatDateValue } from "@/lib/timezone"
+
 const ENVIALOSIMPLE_API_URL = "https://backend.envialosimple.email/api/v1/mail/send"
 const EMAIL_FROM = process.env.EMAIL_FROM || "noreply@stapp.com.ar"
 
@@ -379,6 +382,8 @@ interface SendCotizacionEmailParams {
   total: number
   fechaVencimiento?: Date | null
   pdfBuffer: Buffer
+  moneda?: string
+  zonaHoraria?: string
 }
 
 export async function sendCotizacionEmail({
@@ -389,13 +394,15 @@ export async function sendCotizacionEmail({
   total,
   fechaVencimiento,
   pdfBuffer,
+  moneda,
+  zonaHoraria,
 }: SendCotizacionEmailParams) {
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
   const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(amount)
+    formatCurrencyValue(amount, (moneda as CurrencyCode) || DEFAULT_CURRENCY)
 
   const vencimientoText = fechaVencimiento
-    ? `📅 Válida hasta el <strong>${new Date(fechaVencimiento).toLocaleDateString("es-AR")}</strong>`
+    ? `📅 Válida hasta el <strong>${formatDateValue(fechaVencimiento, zonaHoraria)}</strong>`
     : "Sin fecha de vencimiento especificada"
 
   const content = `

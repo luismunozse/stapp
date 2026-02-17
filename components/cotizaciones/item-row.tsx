@@ -3,7 +3,7 @@
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Trash2 } from "lucide-react"
-import { formatCurrency } from "@/lib/utils"
+import { useCurrency } from "@/contexts/currency-context"
 
 interface ItemRowProps {
   item: {
@@ -18,6 +18,7 @@ interface ItemRowProps {
 }
 
 export function ItemRow({ item, index, onUpdate, onRemove, disabled }: ItemRowProps) {
+  const { formatPrice } = useCurrency()
   const subtotal = item.cantidad * item.precioUnitario
 
   return (
@@ -70,7 +71,7 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled }: ItemRowPr
           <div>
             <label className="text-xs text-muted-foreground">Subtotal</label>
             <div className="h-10 flex items-center justify-end font-medium">
-              {formatCurrency(subtotal)}
+              {formatPrice(subtotal)}
             </div>
           </div>
         </div>
@@ -108,7 +109,7 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled }: ItemRowPr
           />
         </div>
         <div className="col-span-2 text-right font-medium">
-          {formatCurrency(subtotal)}
+          {formatPrice(subtotal)}
         </div>
         <div className="col-span-1 text-right">
           <Button

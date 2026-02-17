@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { DatePicker } from "@/components/ui/date-picker"
 import { DollarSign, TrendingUp, FileText, Package } from "lucide-react"
-import { formatCurrency } from "@/lib/utils"
+import { useCurrency } from "@/contexts/currency-context"
 import {
   LineChart,
   Line,
@@ -22,6 +22,7 @@ import {
 } from "recharts"
 
 export function ReportesView() {
+  const { formatPrice, formatDate } = useCurrency()
   const [ingresos, setIngresos] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [desde, setDesde] = useState("")
@@ -50,7 +51,7 @@ export function ReportesView() {
   // Agrupar por fecha para el gráfico
   const ingresosPorFecha =
     ingresos?.facturas?.reduce((acc: any, factura: any) => {
-      const fecha = new Date(factura.fecha).toLocaleDateString("es-AR")
+      const fecha = formatDate(factura.fecha)
       if (!acc[fecha]) {
         acc[fecha] = 0
       }
@@ -105,7 +106,7 @@ export function ReportesView() {
           <CardContent>
             <div className="text-2xl font-bold">
               {ingresos?.resumen?.total
-                ? formatCurrency(ingresos.resumen.total)
+                ? formatPrice(ingresos.resumen.total)
                 : "$0"}
             </div>
           </CardContent>
@@ -131,7 +132,7 @@ export function ReportesView() {
           <CardContent>
             <div className="text-2xl font-bold">
               {ingresos?.resumen?.cantidad
-                ? formatCurrency(
+                ? formatPrice(
                     ingresos.resumen.total / ingresos.resumen.cantidad
                   )
                 : "$0"}
@@ -151,7 +152,7 @@ export function ReportesView() {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="fecha" />
                 <YAxis />
-                <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                <Tooltip formatter={(value: number) => formatPrice(value)} />
                 <Legend />
                 <Line
                   type="monotone"

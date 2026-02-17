@@ -369,17 +369,22 @@ function LoginForm() {
               {loading ? "Iniciando sesión..." : "Iniciar Sesión"}
             </Button>
           </form>
-          {/* Solo mostrar enlace de registro si no estamos en subdominio */}
-          {!tenantSlug && (
-            <div className="mt-6 text-center">
-              <p className="text-sm text-muted-foreground">
+          <div className="mt-6 text-center text-sm text-muted-foreground space-y-2">
+            {/* Solo mostrar enlace de registro si no estamos en subdominio */}
+            {!tenantSlug && (
+              <div>
                 ¿No tienes cuenta?{" "}
                 <Link href="/registro" className="text-primary hover:underline font-medium">
                   Registra tu negocio
                 </Link>
-              </p>
+              </div>
+            )}
+            <div>
+              <Link href="/" className="text-muted-foreground hover:text-primary hover:underline">
+                Volver al inicio
+              </Link>
             </div>
-          )}
+          </div>
 
         </CardContent>
       </Card>

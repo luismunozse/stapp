@@ -26,7 +26,9 @@ export async function GET(
           nombre_mostrar,
           telefono,
           direccion,
-          logo_url
+          logo_url,
+          moneda,
+          zona_horaria
         )
       `)
       .eq("id", id)
@@ -73,6 +75,8 @@ export async function GET(
       telefonoEmpresa: venta.organizations?.telefono,
       direccionEmpresa: venta.organizations?.direccion,
       logoUrl: venta.organizations?.logo_url,
+      moneda: venta.organizations?.moneda || "ARS",
+      zonaHoraria: venta.organizations?.zona_horaria || "America/Argentina/Buenos_Aires",
     }
 
     // Generar PDF

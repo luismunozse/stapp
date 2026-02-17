@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Search, Eye, Mail, Phone, Calendar } from "lucide-react"
 import { LeadDetailDialog } from "./lead-detail-dialog"
+import { useCurrency } from "@/contexts/currency-context"
 import type { Lead } from "@/types/database"
 
 const ESTADOS_LEAD = [
@@ -19,6 +20,7 @@ const ESTADOS_LEAD = [
 ]
 
 export function LeadsList() {
+  const { formatDate } = useCurrency()
   const [leads, setLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
@@ -141,7 +143,7 @@ export function LeadsList() {
                       </td>
                       <td className="p-4">{getEstadoBadge(lead.estado)}</td>
                       <td className="p-4 text-sm text-muted-foreground">
-                        {new Date(lead.created_at).toLocaleDateString("es-AR")}
+                        {formatDate(lead.created_at)}
                       </td>
                       <td className="p-4">
                         <Button variant="ghost" size="sm" onClick={() => setSelectedLead(lead)}>
@@ -189,7 +191,7 @@ export function LeadsList() {
                     )}
                     <div className="flex items-center gap-1.5">
                       <Calendar className="h-3 w-3 shrink-0" />
-                      <span>{new Date(lead.created_at).toLocaleDateString("es-AR")}</span>
+                      <span>{formatDate(lead.created_at)}</span>
                     </div>
                   </div>
                 </CardContent>

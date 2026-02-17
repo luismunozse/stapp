@@ -20,6 +20,7 @@ import {
   Loader2,
 } from "lucide-react"
 import { generateWhatsAppUrl, formatPhoneForWhatsApp } from "@/lib/notifications/whatsapp-templates"
+import { useCurrency } from "@/contexts/currency-context"
 
 // WhatsApp icon SVG component
 function WhatsAppIcon({ className }: { className?: string }) {
@@ -57,28 +58,7 @@ interface OrdenCreadaModalProps {
   orden: OrdenCreadaData | null
 }
 
-const formatCurrency = (amount: number) =>
-  new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(amount)
-
-const formatDate = (dateStr: string) => {
-  if (!dateStr) return ""
-  // Manejar formato YYYY-MM-DD del input date
-  const parts = dateStr.split("-")
-  if (parts.length === 3) {
-    const [year, month, day] = parts
-    return `${day}/${month}/${year}`
-  }
-  // Fallback para otros formatos
-  const date = new Date(dateStr)
-  if (isNaN(date.getTime())) return ""
-  return date.toLocaleDateString("es-AR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  })
-}
-
-function generateOrdenMessage(orden: OrdenCreadaData, baseUrl: string): string {
+function generateOrdenMessage(orden: OrdenCreadaData, baseUrl: string, formatCurrency: (amount: number | string | null | undefined) => string, formatDate: (date: Date | string | null | undefined) => string): string {
   // Usar código con prefijo si existe, sino el número simple
   const codigoDisplay = orden.codigoOrden || `#${orden.numeroOrden}`
   let mensaje = `Hola ${orden.cliente.nombre}, le confirmamos la recepcion de su equipo:
@@ -116,6 +96,7 @@ export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps
   const [copied, setCopied] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [mensaje, setMensaje] = useState("")
+  const { formatPrice, formatDate } = useCurrency()
 
   // Actualizar mensaje cuando cambia la orden
   useEffect(() => {
@@ -124,9 +105,9 @@ export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps
       const baseUrl = typeof window !== "undefined"
         ? window.location.origin
         : ""
-      setMensaje(generateOrdenMessage(orden, baseUrl))
+      setMensaje(generateOrdenMessage(orden, baseUrl, formatPrice, formatDate))
     }
-  }, [orden])
+  }, [orden, formatPrice, formatDate])
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(mensaje)
@@ -200,7 +181,7 @@ export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps
             {orden.presupuesto && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Presupuesto:</span>
-                <span className="font-medium text-primary">{formatCurrency(orden.presupuesto)}</span>
+                <span className="font-medium text-primary">{formatPrice(orden.presupuesto)}</span>
               </div>
             )}
           </div>

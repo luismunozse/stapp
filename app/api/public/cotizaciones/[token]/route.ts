@@ -45,7 +45,9 @@ export async function GET(
             nombre_mostrar,
             telefono,
             direccion,
-            logo_url
+            logo_url,
+            moneda,
+            zona_horaria
           )
         ),
         items_cotizacion (
@@ -96,6 +98,8 @@ export async function GET(
         telefono: cliente?.telefono || null,
         email: cliente?.email || null,
       },
+      moneda: org?.moneda || "ARS",
+      zonaHoraria: org?.zona_horaria || "America/Argentina/Buenos_Aires",
       organizacion: {
         nombre: org?.nombre_mostrar || org?.nombre || null,
         telefono: org?.telefono || null,

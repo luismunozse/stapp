@@ -26,7 +26,7 @@ export async function POST(
         ordenes_servicio!inner (
           id, numero_orden, dispositivo, problema_reportado, organization_id,
           clientes (*),
-          organizations (id, nombre_mostrar)
+          organizations (id, nombre_mostrar, moneda, zona_horaria)
         ),
         items_cotizacion (*)
       `)
@@ -72,6 +72,8 @@ export async function POST(
       firmaAprobacion: cotizacion.firma_aprobacion,
       firmaMime: cotizacion.firma_mime,
       fechaAprobacion: cotizacion.fecha_aprobacion,
+      moneda: cotizacion.ordenes_servicio.organizations?.moneda || "ARS",
+      zonaHoraria: cotizacion.ordenes_servicio.organizations?.zona_horaria || "America/Argentina/Buenos_Aires",
     })
 
     // Enviar email
@@ -83,6 +85,8 @@ export async function POST(
       total: cotizacion.total,
       fechaVencimiento: cotizacion.fecha_vencimiento,
       pdfBuffer,
+      moneda: cotizacion.ordenes_servicio.organizations?.moneda || "ARS",
+      zonaHoraria: cotizacion.ordenes_servicio.organizations?.zona_horaria || "America/Argentina/Buenos_Aires",
     })
 
     // Actualizar estado a ENVIADA

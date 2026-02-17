@@ -19,7 +19,7 @@ import {
   Share2,
   Link2,
 } from "lucide-react"
-import { formatDate, formatCurrency } from "@/lib/utils"
+import { useCurrency } from "@/contexts/currency-context"
 import { CotizacionForm } from "./cotizacion-form"
 import { CotizacionApprovalDialog } from "./cotizacion-approval-dialog"
 import { SignatureDisplay } from "@/components/firma/signature-display"
@@ -61,6 +61,7 @@ const estadoConfig: Record<string, { label: string; icon: typeof Clock; color: s
 }
 
 export function CotizacionList({ ordenId, clienteEmail }: CotizacionListProps) {
+  const { formatPrice, formatDate } = useCurrency()
   const [cotizaciones, setCotizaciones] = useState<Cotizacion[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -281,7 +282,7 @@ export function CotizacionList({ ordenId, clienteEmail }: CotizacionListProps) {
                       </Badge>
                     </div>
                     <div className="text-lg font-bold">
-                      {formatCurrency(cotizacion.total)}
+                      {formatPrice(cotizacion.total)}
                     </div>
                   </div>
                 </CardHeader>
@@ -301,7 +302,7 @@ export function CotizacionList({ ordenId, clienteEmail }: CotizacionListProps) {
                     <ul className="list-disc list-inside text-muted-foreground">
                       {cotizacion.items.slice(0, 3).map((item, i) => (
                         <li key={i}>
-                          {item.descripcion} x{item.cantidad} - {formatCurrency(item.subtotal)}
+                          {item.descripcion} x{item.cantidad} - {formatPrice(item.subtotal)}
                         </li>
                       ))}
                       {cotizacion.items.length > 3 && (

@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge, PaymentStatusBadge } from "@/components/ui/badge"
 import { Eye, FileText, Calendar, ShoppingCart } from "lucide-react"
-import { formatDate, formatCurrency } from "@/lib/utils"
+import { useCurrency } from "@/contexts/currency-context"
 
 const metodoPagoLabels: Record<string, string> = {
   EFECTIVO: "Efectivo",
@@ -38,6 +38,8 @@ interface VentaMobileCardProps {
 }
 
 export function VentaMobileCard({ venta, onClick }: VentaMobileCardProps) {
+  const { formatPrice, formatDate } = useCurrency()
+
   return (
     <Card className="cursor-pointer active:bg-muted/50 transition-colors" onClick={onClick}>
       <CardContent className="p-4">
@@ -78,7 +80,7 @@ export function VentaMobileCard({ venta, onClick }: VentaMobileCardProps) {
             <span className="text-xs text-muted-foreground">
               {metodoPagoLabels[venta.metodoPago] || venta.metodoPago}
             </span>
-            <span className="font-semibold">{formatCurrency(venta.total)}</span>
+            <span className="font-semibold">{formatPrice(venta.total)}</span>
           </div>
         </div>
 

@@ -124,7 +124,7 @@ export async function POST(request: Request) {
         dispositivo,
         organization_id,
         clientes (*),
-        organizations (id, nombre),
+        organizations (id, nombre, moneda, zona_horaria),
         garantias (id)
       `)
       .eq("id", data.ordenId)
@@ -185,6 +185,8 @@ export async function POST(request: Request) {
       tipo: "GARANTIA_CREADA",
       context: {
         organizationName: org.nombre,
+        moneda: org.moneda || "ARS",
+        zonaHoraria: org.zona_horaria || "America/Argentina/Buenos_Aires",
         cliente: {
           id: cliente.id,
           nombre: cliente.nombre,

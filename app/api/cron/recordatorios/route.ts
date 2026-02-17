@@ -23,7 +23,7 @@ export async function GET(request: Request) {
     // Obtener todas las organizaciones con sus configuraciones
     const { data: organizations } = await supabaseAdmin
       .from("organizations")
-      .select("id, dias_recordatorio, notificaciones_email")
+      .select("id, dias_recordatorio, notificaciones_email, moneda, zona_horaria")
       .eq("activo", true)
 
     if (!organizations) {

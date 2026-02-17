@@ -303,7 +303,7 @@ export async function createNotificationContext(
     .select(`
       *,
       clientes (*),
-      organizations (nombre_mostrar),
+      organizations (nombre_mostrar, moneda, zona_horaria),
       garantias (id, dias_validez, fecha_vencimiento)
     `)
     .eq("id", ordenId)
@@ -316,6 +316,8 @@ export async function createNotificationContext(
   return {
     organizationId: orden.organization_id,
     organizationName: orden.organizations?.nombre_mostrar,
+    moneda: orden.organizations?.moneda || "ARS",
+    zonaHoraria: orden.organizations?.zona_horaria || "America/Argentina/Buenos_Aires",
     cliente: {
       id: orden.clientes.id,
       nombre: orden.clientes.nombre,

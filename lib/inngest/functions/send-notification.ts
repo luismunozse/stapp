@@ -1,6 +1,7 @@
 import { inngest } from "../client"
 import { supabaseAdmin } from "@/lib/supabase"
 import { Resend } from "resend"
+import { formatDateValue } from "@/lib/timezone"
 
 // Lazy initialization to avoid errors during build
 let _resend: Resend | null = null
@@ -143,6 +144,7 @@ function generateEmailContent(
   tipo: string,
   context: {
     organizationName: string
+    zonaHoraria?: string
     cliente: { nombre: string }
     orden?: {
       numeroOrden: number
@@ -208,7 +210,7 @@ function generateEmailContent(
               <strong>Orden:</strong> #${context.orden?.numeroOrden}<br>
               <strong>Dispositivo:</strong> ${context.orden?.dispositivo}<br>
               <strong>Días de garantía:</strong> ${context.garantia?.diasValidez}<br>
-              <strong>Vencimiento:</strong> ${new Date(context.garantia?.fechaVencimiento || "").toLocaleDateString()}
+              <strong>Vencimiento:</strong> ${formatDateValue(context.garantia?.fechaVencimiento, context.zonaHoraria)}
             </p>
             <p>Guarda este correo como comprobante de tu garantía.</p>
             <p>Gracias por confiar en ${context.organizationName}.</p>

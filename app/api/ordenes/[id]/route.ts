@@ -101,7 +101,7 @@ export async function PUT(
       .select(`
         *,
         clientes (*),
-        organizations (id, nombre)
+        organizations (id, nombre, moneda, zona_horaria)
       `)
       .eq("id", id)
       .eq("organization_id", organizationId!)
@@ -178,6 +178,8 @@ export async function PUT(
         tipo: "CAMBIO_ESTADO",
         context: {
           organizationName: org.nombre,
+          moneda: org.moneda || "ARS",
+          zonaHoraria: org.zona_horaria || "America/Argentina/Buenos_Aires",
           cliente: {
             id: cliente.id,
             nombre: cliente.nombre,
@@ -208,6 +210,8 @@ export async function PUT(
         tipo: "PRESUPUESTO_DEFINIDO",
         context: {
           organizationName: org.nombre,
+          moneda: org.moneda || "ARS",
+          zonaHoraria: org.zona_horaria || "America/Argentina/Buenos_Aires",
           cliente: {
             id: cliente.id,
             nombre: cliente.nombre,

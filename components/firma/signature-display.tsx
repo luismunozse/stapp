@@ -2,7 +2,7 @@
 
 import { Card, CardContent } from "@/components/ui/card"
 import { PenTool } from "lucide-react"
-import { formatDate } from "@/lib/utils"
+import { useCurrency } from "@/contexts/currency-context"
 
 interface SignatureDisplayProps {
   signature: string
@@ -19,6 +19,7 @@ export function SignatureDisplay({
   date,
   className = "",
 }: SignatureDisplayProps) {
+  const { formatDate } = useCurrency()
   const dataUrl = `data:${mime};base64,${signature}`
 
   return (
@@ -56,6 +57,7 @@ export function SignatureCard({
   title = "Firma del Cliente",
   date,
 }: SignatureCardProps) {
+  const { formatDate } = useCurrency()
   const dataUrl = `data:${mime};base64,${signature}`
 
   return (

@@ -1,3 +1,5 @@
+import { formatCurrencyValue, type CurrencyCode, DEFAULT_CURRENCY } from "@/lib/currency"
+import { formatDateValue } from "@/lib/timezone"
 import { EstadoOrden, NotificationContext, MetodoPagoVenta } from "./types"
 
 export interface WhatsAppTemplate {
@@ -156,10 +158,7 @@ function generateEstadoMessage(ctx: NotificationContext): string {
 
 function generatePresupuestoMessage(ctx: NotificationContext): string {
   const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat("es-AR", {
-      style: "currency",
-      currency: "ARS",
-    }).format(amount)
+    formatCurrencyValue(amount, (ctx.moneda as CurrencyCode) || DEFAULT_CURRENCY)
 
   return `Hola ${ctx.cliente.nombre}, le informamos el presupuesto para la reparacion de su ${ctx.orden!.dispositivo}:
 
@@ -173,7 +172,7 @@ ${ctx.organizationName}`
 }
 
 function generateGarantiaMessage(ctx: NotificationContext): string {
-  const formatDate = (date: Date) => new Date(date).toLocaleDateString("es-AR")
+  const formatDate = (date: Date) => formatDateValue(date, ctx.zonaHoraria)
 
   return `Hola ${ctx.cliente.nombre}, su reparacion ahora cuenta con garantia:
 
@@ -239,10 +238,7 @@ function getBaseUrl(ctx: NotificationContext): string {
 
 function generateVentaConfirmacionMessage(ctx: NotificationContext): string {
   const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat("es-AR", {
-      style: "currency",
-      currency: "ARS",
-    }).format(amount)
+    formatCurrencyValue(amount, (ctx.moneda as CurrencyCode) || DEFAULT_CURRENCY)
 
   const venta = ctx.venta!
   const numeroVenta = `V${String(venta.numeroVenta).padStart(4, "0")}`
@@ -271,7 +267,7 @@ ${ctx.organizationName}`
 }
 
 function generateVentaGarantiaMessage(ctx: NotificationContext): string {
-  const formatDate = (date: Date) => new Date(date).toLocaleDateString("es-AR")
+  const formatDate = (date: Date) => formatDateValue(date, ctx.zonaHoraria)
   const venta = ctx.venta!
   const numeroVenta = `V${String(venta.numeroVenta).padStart(4, "0")}`
   const baseUrl = getBaseUrl(ctx)

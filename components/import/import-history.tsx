@@ -5,14 +5,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { DataTable, type Column } from "@/components/ui/data-table"
 import { Badge } from "@/components/ui/badge"
 import { FileText, CheckCircle2, AlertCircle, Clock } from "lucide-react"
-import { formatDate } from "@/lib/utils"
 import type { Importacion, EntityImportType } from "@/types"
+import { useCurrency } from "@/contexts/currency-context"
 
 interface ImportHistoryProps {
   entityType?: EntityImportType
 }
 
 export function ImportHistory({ entityType }: ImportHistoryProps) {
+  const { formatDate } = useCurrency()
   const [importaciones, setImportaciones] = useState<Importacion[]>([])
   const [loading, setLoading] = useState(true)
 

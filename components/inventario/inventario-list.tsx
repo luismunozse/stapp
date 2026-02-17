@@ -18,7 +18,7 @@ import {
 import { InventarioForm } from "./inventario-form"
 import { ImportModal } from "@/components/import/import-modal"
 import { ExportButton } from "@/components/export/export-button"
-import { formatCurrency } from "@/lib/utils"
+import { useCurrency } from "@/contexts/currency-context"
 import type { Inventario, TipoDispositivo, TipoDispositivoCustom } from "@/types"
 import { useModal } from "@/contexts/modal-context"
 import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
@@ -50,6 +50,7 @@ interface InventarioListProps {
 
 export function InventarioList({ allowImport = true }: InventarioListProps) {
   const { confirm } = useModal()
+  const { formatPrice } = useCurrency()
   const { tipos: tiposDispositivo, loading: tiposLoading } = useTiposDispositivo()
   const [items, setItems] = useState<Inventario[]>([])
   const [loading, setLoading] = useState(true)
@@ -281,7 +282,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                       Precio Venta
                     </div>
                     <div className="font-bold">
-                      {formatCurrency(item.precioVenta)}
+                      {formatPrice(item.precioVenta)}
                     </div>
                   </div>
                 </div>

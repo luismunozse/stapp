@@ -11,8 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { X, DollarSign, CreditCard, Banknote, ArrowRightLeft, Wallet, CircleDollarSign, MoreHorizontal } from "lucide-react"
-import { formatCurrency } from "@/lib/utils"
 import { cn } from "@/lib/utils"
+import { useCurrency } from "@/contexts/currency-context"
 
 const METODOS_PAGO = [
   { value: "EFECTIVO", label: "Efectivo", icon: Banknote },
@@ -52,6 +52,7 @@ export function PagoForm({
   onSuccess,
 }: PagoFormProps) {
   const [loading, setLoading] = useState(false)
+  const { formatPrice } = useCurrency()
   const pendiente = total - montoAbonado
 
   const {
@@ -167,18 +168,18 @@ export function PagoForm({
           <div className="grid grid-cols-3 gap-2 text-sm">
             <div>
               <span className="text-muted-foreground">Total</span>
-              <div className="font-semibold">{formatCurrency(total)}</div>
+              <div className="font-semibold">{formatPrice(total)}</div>
             </div>
             <div>
               <span className="text-muted-foreground">Abonado</span>
               <div className="font-semibold text-green-600">
-                {formatCurrency(montoAbonado)}
+                {formatPrice(montoAbonado)}
               </div>
             </div>
             <div>
               <span className="text-muted-foreground">Pendiente</span>
               <div className="font-semibold text-red-600">
-                {formatCurrency(pendiente)}
+                {formatPrice(pendiente)}
               </div>
             </div>
           </div>
@@ -277,20 +278,20 @@ export function PagoForm({
             <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg text-sm space-y-1">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Monto sin recargo:</span>
-                <span className="font-medium">{formatCurrency(recargoInfo.montoOriginal)}</span>
+                <span className="font-medium">{formatPrice(recargoInfo.montoOriginal)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Recargo ({recargoPorcentaje}%):</span>
-                <span className="font-medium text-amber-600">+{formatCurrency(recargoInfo.montoRecargo)}</span>
+                <span className="font-medium text-amber-600">+{formatPrice(recargoInfo.montoRecargo)}</span>
               </div>
               <div className="flex justify-between border-t border-amber-200 dark:border-amber-800 pt-1">
                 <span className="font-medium">Total cobrado:</span>
-                <span className="font-bold">{formatCurrency(monto)}</span>
+                <span className="font-bold">{formatPrice(monto)}</span>
               </div>
               {recargoInfo.montoCuota && cuotas && cuotas > 1 && (
                 <div className="flex justify-between text-muted-foreground">
                   <span>{cuotas} cuotas de:</span>
-                  <span>{formatCurrency(recargoInfo.montoCuota)}</span>
+                  <span>{formatPrice(recargoInfo.montoCuota)}</span>
                 </div>
               )}
             </div>

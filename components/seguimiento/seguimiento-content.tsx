@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { formatDateValue } from "@/lib/timezone"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -74,6 +75,7 @@ interface TrackingData {
   fechaCompletado?: string
   fechaEntrega?: string
   publicToken?: string
+  zonaHoraria?: string
   cliente: { nombre: string }
   organizacion: {
     nombre: string
@@ -83,20 +85,13 @@ interface TrackingData {
   }
 }
 
-function formatDate(dateStr: string | null | undefined): string {
-  if (!dateStr) return ""
-  const d = new Date(dateStr)
-  return d.toLocaleDateString("es-AR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  })
-}
-
 export function SeguimientoContent({ token }: { token: string }) {
   const [data, setData] = useState<TrackingData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+
+  const formatDate = (dateStr: string | null | undefined) =>
+    formatDateValue(dateStr, data?.zonaHoraria)
 
   useEffect(() => {
     fetch(`/api/public/ordenes/${token}`)

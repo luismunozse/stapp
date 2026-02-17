@@ -2,7 +2,7 @@
   "name": "STApp - Gestión de Servicio Técnico",
   "short_name": "STApp",
   "description": "Sistema de gestión para servicio técnico de dispositivos electrónicos",
-  "start_url": "/login",
+  "start_url": "/dashboard",
   "scope": "/",
   "id": "/app",
   "display": "standalone",

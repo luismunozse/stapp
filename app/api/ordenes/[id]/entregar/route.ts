@@ -74,7 +74,7 @@ export async function POST(
     // Obtener datos de organización para notificación
     const { data: org } = await supabaseAdmin
       .from("organizations")
-      .select("nombre")
+      .select("nombre, moneda, zona_horaria")
       .eq("id", organizationId!)
       .single()
 
@@ -88,6 +88,8 @@ export async function POST(
         tipo: "CAMBIO_ESTADO",
         context: {
           organizationName: org?.nombre || "",
+          moneda: org?.moneda || "ARS",
+          zonaHoraria: org?.zona_horaria || "America/Argentina/Buenos_Aires",
           cliente: {
             id: cliente.id,
             nombre: cliente.nombre,

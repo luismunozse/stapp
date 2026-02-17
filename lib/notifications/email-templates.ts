@@ -1,3 +1,5 @@
+import { formatCurrencyValue, type CurrencyCode, DEFAULT_CURRENCY } from "@/lib/currency"
+import { formatDateValue } from "@/lib/timezone"
 import { EstadoOrden, NotificationContext } from "./types"
 
 const baseStyles = `
@@ -133,10 +135,7 @@ export function generatePresupuestoEmail(ctx: NotificationContext): {
   html: string
 } {
   const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat("es-AR", {
-      style: "currency",
-      currency: "ARS",
-    }).format(amount)
+    formatCurrencyValue(amount, (ctx.moneda as CurrencyCode) || DEFAULT_CURRENCY)
 
   return {
     subject: `Presupuesto definido - Orden #${ctx.orden!.numeroOrden}`,
@@ -190,12 +189,7 @@ export function generateGarantiaEmail(ctx: NotificationContext): {
   subject: string
   html: string
 } {
-  const formatDate = (date: Date) =>
-    new Date(date).toLocaleDateString("es-AR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    })
+  const formatDate = (date: Date) => formatDateValue(date, ctx.zonaHoraria)
 
   return {
     subject: `Garantia activada - Orden #${ctx.orden!.numeroOrden}`,

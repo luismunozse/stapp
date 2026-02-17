@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { TrendingUp, TrendingDown, Minus, DollarSign, Receipt, Calculator } from "lucide-react"
-import { formatCurrency } from "@/lib/utils"
+import { useCurrency } from "@/contexts/currency-context"
 import {
   BarChart,
   Bar,
@@ -37,6 +37,7 @@ interface ComparativaData {
 }
 
 export function ComparativaIngresos() {
+  const { formatPrice } = useCurrency()
   const [data, setData] = useState<ComparativaData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -114,7 +115,7 @@ export function ComparativaIngresos() {
             <DollarSign className="h-4 w-4 text-muted-foreground hidden sm:block" />
           </CardHeader>
           <CardContent className="p-3 sm:p-6 pt-0">
-            <div className="text-base sm:text-2xl font-bold truncate">{formatCurrency(data.mesActual.total)}</div>
+            <div className="text-base sm:text-2xl font-bold truncate">{formatPrice(data.mesActual.total)}</div>
             <p className="text-[10px] sm:text-xs text-muted-foreground capitalize">{data.mesActual.nombre}</p>
           </CardContent>
         </Card>
@@ -126,7 +127,7 @@ export function ComparativaIngresos() {
           </CardHeader>
           <CardContent className="p-3 sm:p-6 pt-0">
             <div className="text-base sm:text-2xl font-bold text-muted-foreground truncate">
-              {formatCurrency(data.mesAnterior.total)}
+              {formatPrice(data.mesAnterior.total)}
             </div>
             <p className="text-[10px] sm:text-xs text-muted-foreground capitalize">{data.mesAnterior.nombre}</p>
           </CardContent>
@@ -144,7 +145,7 @@ export function ComparativaIngresos() {
             </div>
             <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
               {data.cambio.diferencia >= 0 ? "+" : ""}
-              {formatCurrency(data.cambio.diferencia)}
+              {formatPrice(data.cambio.diferencia)}
             </p>
           </CardContent>
         </Card>
@@ -157,7 +158,7 @@ export function ComparativaIngresos() {
           <CardContent className="p-3 sm:p-6 pt-0">
             <div className="text-base sm:text-2xl font-bold">{data.mesActual.cantidad}</div>
             <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
-              Prom: {formatCurrency(data.mesActual.promedio)}
+              Prom: {formatPrice(data.mesActual.promedio)}
             </p>
           </CardContent>
         </Card>
@@ -179,7 +180,7 @@ export function ComparativaIngresos() {
                 <XAxis type="number" tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} fontSize={12} />
                 <YAxis dataKey="name" type="category" width={60} fontSize={12} />
                 <Tooltip
-                  formatter={(value: number) => formatCurrency(value)}
+                  formatter={(value: number) => formatPrice(value)}
                   labelFormatter={(label) => `Mes: ${label}`}
                 />
                 <Bar dataKey="total" radius={[0, 4, 4, 0]}>

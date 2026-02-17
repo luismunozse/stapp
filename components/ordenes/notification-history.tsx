@@ -11,6 +11,7 @@ import {
   Bell,
 } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
+import { useCurrency } from "@/contexts/currency-context"
 
 interface NotificationLog {
   id: string
@@ -35,18 +36,8 @@ const tipoLabels: Record<string, string> = {
   RECORDATORIO_RETIRO: "Recordatorio",
 }
 
-function formatDateTime(dateString: string): string {
-  const date = new Date(dateString)
-  return date.toLocaleString("es-AR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  })
-}
-
 export function NotificationHistory({ ordenId }: NotificationHistoryProps) {
+  const { formatDateTime } = useCurrency()
   const [logs, setLogs] = useState<NotificationLog[]>([])
   const [loading, setLoading] = useState(true)
 

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { OrderStatusBadge } from "@/components/ui/badge"
 import { Eye, Trash2, Calendar, DollarSign, Smartphone } from "lucide-react"
 import Link from "next/link"
-import { formatDate, formatCurrency } from "@/lib/utils"
+import { useCurrency } from "@/contexts/currency-context"
 import type { OrdenServicio } from "@/types"
 
 interface OrdenMobileCardProps {
@@ -16,6 +16,8 @@ interface OrdenMobileCardProps {
 }
 
 export function OrdenMobileCard({ orden, onDelete, deleting, onClick }: OrdenMobileCardProps) {
+  const { formatPrice, formatDate } = useCurrency()
+
   return (
     <Card className="cursor-pointer active:bg-muted/50 transition-colors" onClick={onClick}>
       <CardContent className="p-4">
@@ -52,7 +54,7 @@ export function OrdenMobileCard({ orden, onDelete, deleting, onClick }: OrdenMob
             {orden.presupuesto && (
               <div className="flex items-center gap-1 font-medium text-foreground">
                 <DollarSign className="h-3 w-3" />
-                {formatCurrency(orden.presupuesto)}
+                {formatPrice(orden.presupuesto)}
               </div>
             )}
           </div>

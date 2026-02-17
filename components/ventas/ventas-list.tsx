@@ -24,7 +24,7 @@ import { useModal } from "@/contexts/modal-context"
 import { ExportButton } from "@/components/export/export-button"
 import { VentaMobileCard } from "./venta-mobile-card"
 import { Card, CardContent } from "@/components/ui/card"
-import { formatDate, formatCurrency } from "@/lib/utils"
+import { useCurrency } from "@/contexts/currency-context"
 
 interface VentaListItem {
   id: string
@@ -59,6 +59,7 @@ const metodoPagoLabels: Record<string, string> = {
 
 export function VentasList() {
   const router = useRouter()
+  const { formatPrice, formatDate } = useCurrency()
   const [ventas, setVentas] = useState<VentaListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -164,7 +165,7 @@ export function VentasList() {
       header: "Total",
       sortable: true,
       render: (venta) => (
-        <span className="font-medium">{formatCurrency(venta.total)}</span>
+        <span className="font-medium">{formatPrice(venta.total)}</span>
       ),
     },
     {

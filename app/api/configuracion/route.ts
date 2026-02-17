@@ -19,7 +19,9 @@ export async function GET() {
         nombre,
         email,
         telefono,
-        direccion
+        direccion,
+        moneda,
+        zona_horaria
       `)
       .eq("id", organizationId!)
       .single()
@@ -39,6 +41,8 @@ export async function GET() {
       email: organization.email,
       telefono: organization.telefono,
       direccion: organization.direccion,
+      moneda: organization.moneda || "ARS",
+      zonaHoraria: organization.zona_horaria || "America/Argentina/Buenos_Aires",
     })
   } catch (error) {
     console.error("Error fetching config:", error)
@@ -53,7 +57,7 @@ export async function PUT(request: Request) {
     if (error) return error
 
     const body = await request.json()
-    const { logoData, logoMime, nombreEmpresa, telefono, direccion } = body
+    const { logoData, logoMime, nombreEmpresa, telefono, direccion, moneda, zonaHoraria } = body
 
     const updateData: Record<string, any> = {}
 
@@ -100,12 +104,29 @@ export async function PUT(request: Request) {
       updateData.nombre_mostrar = nombreEmpresa
     }
 
+    if (moneda !== undefined) {
+      const validCurrencies = ["ARS","USD","MXN","CLP","COP","PEN","UYU","BRL","BOB","PYG","EUR"]
+      if (validCurrencies.includes(moneda)) {
+        updateData.moneda = moneda
+      }
+    }
+
+    if (zonaHoraria !== undefined && typeof zonaHoraria === "string") {
+      // Validate timezone by trying to use it
+      try {
+        Intl.DateTimeFormat(undefined, { timeZone: zonaHoraria })
+        updateData.zona_horaria = zonaHoraria
+      } catch {
+        // Invalid timezone, ignore
+      }
+    }
+
     // Solo actualizar si hay cambios
     if (Object.keys(updateData).length === 0) {
       // Retornar estado actual
       const { data: org } = await supabaseAdmin
         .from("organizations")
-        .select("id, logo_url, nombre_mostrar, telefono, direccion")
+        .select("id, logo_url, nombre_mostrar, telefono, direccion, moneda, zona_horaria")
         .eq("id", organizationId!)
         .single()
 
@@ -115,6 +136,8 @@ export async function PUT(request: Request) {
         nombreEmpresa: org?.nombre_mostrar,
         telefono: org?.telefono,
         direccion: org?.direccion,
+        moneda: org?.moneda || "ARS",
+        zonaHoraria: org?.zona_horaria || "America/Argentina/Buenos_Aires",
       })
     }
 
@@ -122,7 +145,7 @@ export async function PUT(request: Request) {
       .from("organizations")
       .update(updateData)
       .eq("id", organizationId!)
-      .select("id, logo_url, logo_path, nombre_mostrar, telefono, direccion")
+      .select("id, logo_url, logo_path, nombre_mostrar, telefono, direccion, moneda, zona_horaria")
       .single()
 
     if (dbError) {
@@ -135,6 +158,8 @@ export async function PUT(request: Request) {
       nombreEmpresa: organization.nombre_mostrar,
       telefono: organization.telefono,
       direccion: organization.direccion,
+      moneda: organization.moneda || "ARS",
+      zonaHoraria: organization.zona_horaria || "America/Argentina/Buenos_Aires",
     })
   } catch (error) {
     console.error("Error updating config:", error)

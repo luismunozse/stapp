@@ -6,7 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Package, AlertTriangle, DollarSign, Layers, TrendingUp } from "lucide-react"
-import { formatCurrency } from "@/lib/utils"
+import { useCurrency } from "@/contexts/currency-context"
 import {
   PieChart,
   Pie,
@@ -54,6 +54,7 @@ interface AnalisisData {
 const COLORS = ["#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899", "#84cc16"]
 
 export function AnalisisInventario() {
+  const { formatPrice } = useCurrency()
   const [data, setData] = useState<AnalisisData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -133,7 +134,7 @@ export function AnalisisInventario() {
             <DollarSign className="h-4 w-4 text-muted-foreground hidden sm:block" />
           </CardHeader>
           <CardContent className="p-3 sm:p-6 pt-0">
-            <div className="text-base sm:text-2xl font-bold truncate">{formatCurrency(data.resumen.valorCompra)}</div>
+            <div className="text-base sm:text-2xl font-bold truncate">{formatPrice(data.resumen.valorCompra)}</div>
             <p className="text-[10px] sm:text-xs text-muted-foreground">Costo compra</p>
           </CardContent>
         </Card>
@@ -145,7 +146,7 @@ export function AnalisisInventario() {
           </CardHeader>
           <CardContent className="p-3 sm:p-6 pt-0">
             <div className="text-base sm:text-2xl font-bold text-green-600 truncate">
-              {formatCurrency(data.resumen.margenPotencial)}
+              {formatPrice(data.resumen.margenPotencial)}
             </div>
             <p className="text-[10px] sm:text-xs text-muted-foreground hidden sm:block">
               Si se vende todo
@@ -200,7 +201,7 @@ export function AnalisisInventario() {
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                    <Tooltip formatter={(value: number) => formatPrice(value)} />
                     <Legend wrapperStyle={{ fontSize: 12 }} />
                   </PieChart>
                 </ResponsiveContainer>
@@ -239,12 +240,12 @@ export function AnalisisInventario() {
                       <div className="min-w-0">
                         <p className="font-medium text-xs sm:text-sm truncate">{item.nombre}</p>
                         <p className="text-[10px] sm:text-xs text-muted-foreground">
-                          {item.stock} uds x {formatCurrency(item.precioCompra || 0)}
+                          {item.stock} uds x {formatPrice(item.precioCompra || 0)}
                         </p>
                       </div>
                     </div>
                     <Badge variant="default" className="bg-green-500 text-[10px] sm:text-xs shrink-0">
-                      {formatCurrency(item.valorEnStock)}
+                      {formatPrice(item.valorEnStock)}
                     </Badge>
                   </div>
                 ))}
@@ -326,7 +327,7 @@ export function AnalisisInventario() {
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5 text-sm">
                     <span className="font-medium">{cat.categoria}</span>
                     <span className="text-xs text-muted-foreground">
-                      {cat.cantidad} items · {cat.stockTotal} uds · {formatCurrency(cat.valorTotal)}
+                      {cat.cantidad} items · {cat.stockTotal} uds · {formatPrice(cat.valorTotal)}
                     </span>
                   </div>
                   <Progress value={porcentaje} className="h-2" />

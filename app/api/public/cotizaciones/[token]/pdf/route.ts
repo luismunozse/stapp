@@ -23,7 +23,7 @@ export async function GET(
         ordenes_servicio!inner (
           id, numero_orden, dispositivo, problema_reportado, organization_id,
           clientes (*),
-          organizations (id, nombre_mostrar, telefono, direccion, logo_url)
+          organizations (id, nombre_mostrar, telefono, direccion, logo_url, moneda, zona_horaria)
         ),
         items_cotizacion (*)
       `)
@@ -66,6 +66,8 @@ export async function GET(
       firmaAprobacion: cotizacion.firma_aprobacion,
       firmaMime: cotizacion.firma_mime,
       fechaAprobacion: cotizacion.fecha_aprobacion,
+      moneda: org?.moneda || "ARS",
+      zonaHoraria: org?.zona_horaria || "America/Argentina/Buenos_Aires",
     })
 
     return new NextResponse(new Uint8Array(pdfBuffer), {

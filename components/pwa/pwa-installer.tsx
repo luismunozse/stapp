@@ -16,6 +16,19 @@ export function PWAInstaller() {
     // No mostrar si estamos en Capacitor (ya es app nativa)
     if (isNativePlatform()) return
 
+    // Solo activar PWA en subdominios de tenant (slug.stapp.com.ar)
+    // No en el dominio principal (stapp.com.ar) ni en admin
+    const hostname = window.location.hostname
+    const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
+    const rootParts = rootDomain.split(".").length
+    const hostParts = hostname.split(".").length
+    const isLocalDev = hostname === "localhost" || hostname === "127.0.0.1"
+    const isLocalSubdomain = hostname.endsWith(".local") && hostname.split(".").length >= 2 && hostname.split(".")[0] !== "stapp" && hostname.split(".")[0] !== "www"
+    const isProductionSubdomain = hostParts > rootParts && hostname.split(".")[0] !== "www" && hostname.split(".")[0] !== "admin"
+    const isTenantSubdomain = isLocalSubdomain || isProductionSubdomain
+
+    if (isLocalDev || !isTenantSubdomain) return
+
     // Check if already installed or dismissed
     if (window.matchMedia("(display-mode: standalone)").matches) {
       return // Already installed as PWA
@@ -30,7 +43,7 @@ export function PWAInstaller() {
       }
     }
 
-    // Registrar service worker
+    // Registrar service worker (solo en subdominio de tenant)
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker
         .register("/sw.js")

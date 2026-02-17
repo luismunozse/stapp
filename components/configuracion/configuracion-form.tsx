@@ -5,9 +5,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Upload, Trash2, Save, ImageIcon } from "lucide-react"
 import { useModal } from "@/contexts/modal-context"
 import { NotificationSettings } from "@/components/configuracion/notification-settings"
+import { CURRENCY_OPTIONS } from "@/lib/currency"
+import { TIMEZONE_OPTIONS } from "@/lib/timezone"
 
 interface Config {
   logoData: string | null
@@ -16,6 +19,8 @@ interface Config {
   nombreEmpresa: string
   telefono: string | null
   direccion: string | null
+  moneda: string
+  zonaHoraria: string
 }
 
 interface ConfiguracionFormProps {
@@ -31,6 +36,8 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
   const [nombreEmpresa, setNombreEmpresa] = useState("Servicio Técnico")
   const [telefono, setTelefono] = useState("")
   const [direccion, setDireccion] = useState("")
+  const [moneda, setMoneda] = useState("ARS")
+  const [zonaHoraria, setZonaHoraria] = useState("America/Argentina/Buenos_Aires")
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -47,6 +54,8 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
         setNombreEmpresa(data.nombreEmpresa || "Servicio Técnico")
         setTelefono(data.telefono || "")
         setDireccion(data.direccion || "")
+        setMoneda(data.moneda || "ARS")
+        setZonaHoraria(data.zonaHoraria || "America/Argentina/Buenos_Aires")
         // Usar logoUrl si existe, o logoData para compatibilidad
         if (data.logoUrl) {
           setPreview(data.logoUrl)
@@ -100,7 +109,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
       const res = await fetch("/api/configuracion", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion }),
+        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, moneda, zonaHoraria }),
       })
 
       if (res.ok) {
@@ -268,6 +277,64 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
             />
             <p className="text-xs sm:text-sm text-muted-foreground mt-1">
               Se mostrará en los comprobantes PDF
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="text-base sm:text-lg">Moneda</CardTitle>
+          <CardDescription className="text-xs sm:text-sm">
+            Moneda utilizada para montos, facturas y comprobantes.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-4 sm:p-6 pt-0">
+          <div>
+            <Label htmlFor="moneda" className="text-sm">Moneda</Label>
+            <Select value={moneda} onValueChange={setMoneda} disabled={!allowEdit}>
+              <SelectTrigger id="moneda">
+                <SelectValue placeholder="Seleccionar moneda" />
+              </SelectTrigger>
+              <SelectContent>
+                {CURRENCY_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+              Se utilizará en toda la app, PDFs y notificaciones
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="text-base sm:text-lg">Zona Horaria</CardTitle>
+          <CardDescription className="text-xs sm:text-sm">
+            Zona horaria del taller. Se utiliza para mostrar fechas y horas correctamente.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-4 sm:p-6 pt-0">
+          <div>
+            <Label htmlFor="zonaHoraria" className="text-sm">Zona Horaria</Label>
+            <Select value={zonaHoraria} onValueChange={setZonaHoraria} disabled={!allowEdit}>
+              <SelectTrigger id="zonaHoraria">
+                <SelectValue placeholder="Seleccionar zona horaria" />
+              </SelectTrigger>
+              <SelectContent>
+                {TIMEZONE_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label} ({opt.offset})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+              Se utilizara en toda la app, PDFs y notificaciones
             </p>
           </div>
         </CardContent>

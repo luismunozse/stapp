@@ -6,7 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Users, DollarSign, ShoppingCart, Award, Phone, Mail } from "lucide-react"
-import { formatCurrency, formatDate } from "@/lib/utils"
+import { useCurrency } from "@/contexts/currency-context"
 import {
   BarChart,
   Bar,
@@ -41,6 +41,7 @@ interface TopClientesData {
 }
 
 export function TopClientes() {
+  const { formatPrice, formatDate } = useCurrency()
   const [data, setData] = useState<TopClientesData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -135,7 +136,7 @@ export function TopClientes() {
           </CardHeader>
           <CardContent className="p-3 sm:p-6 pt-0">
             <div className="text-base sm:text-2xl font-bold truncate">
-              {formatCurrency(data.estadisticas.promedioGastoCliente)}
+              {formatPrice(data.estadisticas.promedioGastoCliente)}
             </div>
             <p className="text-[10px] sm:text-xs text-muted-foreground">por cliente</p>
           </CardContent>
@@ -184,7 +185,7 @@ export function TopClientes() {
                   <YAxis dataKey="nombre" type="category" width={80} fontSize={11} />
                   <Tooltip
                     formatter={(value: number) =>
-                      ordenarPor === "monto" ? formatCurrency(value) : `${value} órdenes`
+                      ordenarPor === "monto" ? formatPrice(value) : `${value} órdenes`
                     }
                   />
                   <Bar dataKey="valor" fill="#3b82f6" radius={[0, 4, 4, 0]} />
@@ -252,7 +253,7 @@ export function TopClientes() {
                       {cliente.totalOrdenes} {cliente.totalOrdenes === 1 ? "orden" : "órdenes"}
                     </Badge>
                     <Badge variant="default" className="bg-green-500 text-[10px] sm:text-xs">
-                      {formatCurrency(cliente.totalGastado)}
+                      {formatPrice(cliente.totalGastado)}
                     </Badge>
                     {cliente.ultimaVisita && (
                       <span className="text-[10px] sm:text-xs text-muted-foreground">

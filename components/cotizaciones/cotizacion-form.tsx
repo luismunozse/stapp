@@ -8,7 +8,7 @@ import { DatePicker } from "@/components/ui/date-picker"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { X, Plus, FileText, Calculator } from "lucide-react"
-import { formatCurrency } from "@/lib/utils"
+import { useCurrency } from "@/contexts/currency-context"
 import { ItemRow } from "./item-row"
 
 interface CotizacionItem {
@@ -36,6 +36,7 @@ export function CotizacionForm({
   initialData,
 }: CotizacionFormProps) {
   const [loading, setLoading] = useState(false)
+  const { formatPrice } = useCurrency()
   const [items, setItems] = useState<CotizacionItem[]>(
     initialData?.items || [{ descripcion: "", cantidad: 1, precioUnitario: 0 }]
   )
@@ -164,7 +165,7 @@ export function CotizacionForm({
             <div className="w-64 p-4 bg-muted rounded-lg">
               <div className="flex justify-between">
                 <span className="font-bold">Total:</span>
-                <span className="font-bold text-lg">{formatCurrency(total)}</span>
+                <span className="font-bold text-lg">{formatPrice(total)}</span>
               </div>
             </div>
           </div>

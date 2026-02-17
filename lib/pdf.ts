@@ -9,6 +9,8 @@ import {
   renderToBuffer,
 } from "@react-pdf/renderer"
 import { PDFDocument as PDFLib, rgb, StandardFonts } from "pdf-lib"
+import { formatCurrencyValue, type CurrencyCode, DEFAULT_CURRENCY } from "@/lib/currency"
+import { formatDateValue, formatDateTimeValue, DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 // ========================================
 // ESTILOS MODERNOS PARA COTIZACION
@@ -351,31 +353,24 @@ interface CotizacionPDFData {
   telefonoEmpresa?: string | null
   direccionEmpresa?: string | null
   logoUrl?: string | null
+  moneda?: string
+  zonaHoraria?: string
   // Firma de aprobacion
   firmaAprobacion?: string | null
   firmaMime?: string | null
   fechaAprobacion?: Date | null
 }
 
-const formatCurrency = (amount: number | string | null | undefined) => {
-  if (amount === null || amount === undefined) return ""
-  const numericAmount = typeof amount === "string" ? Number(amount) : amount
-  if (Number.isNaN(numericAmount)) return ""
-  return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(
-    numericAmount
-  )
+const formatCurrency = (amount: number | string | null | undefined, currency?: string) => {
+  return formatCurrencyValue(amount, (currency as CurrencyCode) || DEFAULT_CURRENCY)
 }
 
-const formatDate = (date: Date | string | number | null | undefined) => {
+const formatDate = (date: Date | string | number | null | undefined, timezone?: string) => {
   if (!date) return ""
   const parsed = new Date(date)
   if (Number.isNaN(parsed.getTime())) return ""
 
-  return parsed.toLocaleDateString("es-AR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  })
+  return formatDateValue(parsed, timezone || DEFAULT_TIMEZONE)
 }
 
 // Ensure we never pass objects/React nodes into <Text>, which triggers React error #31
@@ -408,7 +403,7 @@ const CotizacionDocument = ({ data }: { data: CotizacionPDFData }) => {
   const direccionEmpresa = toText(data.direccionEmpresa)
   const logoUrl = toText(data.logoUrl)
   const cotizacionNumber = toText(data.numeroCotizacion)
-  const cotizacionDate = formatDate(data.fecha)
+  const cotizacionDate = formatDate(data.fecha, data.zonaHoraria)
   const clienteNombre = toText(data.cliente.nombre)
   const clienteTelefono = toText(data.cliente.telefono)
   const clienteEmail = toText(data.cliente.email)
@@ -417,10 +412,10 @@ const CotizacionDocument = ({ data }: { data: CotizacionPDFData }) => {
   const dispositivo = toText(data.orden.dispositivo)
   const problemaReportado = toText(data.orden.problemaReportado)
   const notas = toText(data.notas)
-  const fechaVencimiento = formatDate(data.fechaVencimiento)
+  const fechaVencimiento = formatDate(data.fechaVencimiento, data.zonaHoraria)
   const firmaAprobacion = toText(data.firmaAprobacion)
   const firmaMime = toText(data.firmaMime)
-  const fechaAprobacion = formatDate(data.fechaAprobacion)
+  const fechaAprobacion = formatDate(data.fechaAprobacion, data.zonaHoraria)
 
   return React.createElement(Document, null,
     React.createElement(Page, { size: "A4", style: styles.page },
@@ -498,8 +493,8 @@ const CotizacionDocument = ({ data }: { data: CotizacionPDFData }) => {
               React.createElement(View, { key: index, style: index % 2 === 0 ? styles.tableRow : styles.tableRowAlt },
                 React.createElement(Text, { style: styles.colDescription }, toText(item.descripcion)),
                 React.createElement(Text, { style: styles.colQuantity }, toText(item.cantidad)),
-                React.createElement(Text, { style: styles.colPrice }, formatCurrency(item.precioUnitario)),
-                React.createElement(Text, { style: styles.colSubtotal }, formatCurrency(item.subtotal))
+                React.createElement(Text, { style: styles.colPrice }, formatCurrency(item.precioUnitario, data.moneda)),
+                React.createElement(Text, { style: styles.colSubtotal }, formatCurrency(item.subtotal, data.moneda))
               )
             )
           )
@@ -510,15 +505,15 @@ const CotizacionDocument = ({ data }: { data: CotizacionPDFData }) => {
           React.createElement(View, { style: styles.totalsBox },
             React.createElement(View, { style: styles.totalRow },
               React.createElement(Text, { style: styles.totalLabel }, "Subtotal"),
-              React.createElement(Text, { style: styles.totalValue }, formatCurrency(data.subtotal))
+              React.createElement(Text, { style: styles.totalValue }, formatCurrency(data.subtotal, data.moneda))
             ),
             data.iva > 0 ? React.createElement(View, { style: styles.totalRow },
               React.createElement(Text, { style: styles.totalLabel }, "IVA"),
-              React.createElement(Text, { style: styles.totalValue }, formatCurrency(data.iva))
+              React.createElement(Text, { style: styles.totalValue }, formatCurrency(data.iva, data.moneda))
             ) : null,
             React.createElement(View, { style: styles.grandTotalRow },
               React.createElement(Text, { style: styles.grandTotalLabel }, "TOTAL"),
-              React.createElement(Text, { style: styles.grandTotalValue }, formatCurrency(data.total))
+              React.createElement(Text, { style: styles.grandTotalValue }, formatCurrency(data.total, data.moneda))
             )
           )
         ),
@@ -768,6 +763,8 @@ interface OrdenPDFData {
   telefonoEmpresa?: string
   direccionEmpresa?: string
   logoUrl?: string | null
+  moneda?: string
+  zonaHoraria?: string
   firmaClienteRecepcion?: string | null
   firmaClienteRecepcionMime?: string | null
 }
@@ -784,8 +781,8 @@ const OrdenDocument = ({ data }: { data: OrdenPDFData }) => {
   // Ensure all values are primitives, never objects
   const empresaNombre = toText(data.nombreEmpresa) || "Servicio Tecnico"
   const numeroOrden = toText(data.numeroOrden)
-  const fechaIngreso = formatDate(data.fechaIngreso)
-  const fechaPrometida = formatDate(data.fechaPrometida)
+  const fechaIngreso = formatDate(data.fechaIngreso, data.zonaHoraria)
+  const fechaPrometida = formatDate(data.fechaPrometida, data.zonaHoraria)
 
   // Safely extract cliente data with fallbacks
   const cliente = data.cliente || { nombre: "", telefono: "", email: null, direccion: null }
@@ -803,7 +800,7 @@ const OrdenDocument = ({ data }: { data: OrdenPDFData }) => {
   const codigoAccesoDispositivo = toText(data.codigoAccesoDispositivo)
   const presupuesto =
     data.presupuesto !== null && data.presupuesto !== undefined
-      ? formatCurrency(data.presupuesto)
+      ? formatCurrency(data.presupuesto, data.moneda)
       : ""
   const observaciones = toText(data.observaciones)
   const telefonoEmpresa = toText(data.telefonoEmpresa)
@@ -994,15 +991,11 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   }
 
   const formatDatePDF = (date: Date | string | null | undefined): string => {
-    if (!date) return ""
-    const d = new Date(date)
-    if (isNaN(d.getTime())) return ""
-    return d.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" })
+    return formatDateValue(date, data.zonaHoraria || DEFAULT_TIMEZONE)
   }
 
   const formatCurrencyPDF = (amount: number | null | undefined): string => {
-    if (amount === null || amount === undefined) return ""
-    return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(amount)
+    return formatCurrencyValue(amount, (data.moneda as CurrencyCode) || DEFAULT_CURRENCY)
   }
 
   // Extraer datos de forma segura
@@ -1035,10 +1028,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const observaciones = safe(data.observaciones)
 
   // Fecha y hora de impresion
-  const fechaImpresion = new Date().toLocaleString("es-AR", {
-    day: "2-digit", month: "2-digit", year: "numeric",
-    hour: "2-digit", minute: "2-digit"
-  })
+  const fechaImpresion = formatDateTimeValue(new Date(), data.zonaHoraria || DEFAULT_TIMEZONE)
 
   // Crear documento PDF
   const pdfDoc = await PDFLib.create()
@@ -1456,6 +1446,8 @@ interface VentaPDFData {
   telefonoEmpresa?: string | null
   direccionEmpresa?: string | null
   logoUrl?: string | null
+  moneda?: string
+  zonaHoraria?: string
 }
 
 const metodoPagoLabels: Record<string, string> = {
@@ -1473,15 +1465,11 @@ export async function generateVentaPDF(data: VentaPDFData): Promise<Buffer> {
   }
 
   const formatDatePDF = (date: Date | string | null | undefined): string => {
-    if (!date) return ""
-    const d = new Date(date)
-    if (isNaN(d.getTime())) return ""
-    return d.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" })
+    return formatDateValue(date, data.zonaHoraria || DEFAULT_TIMEZONE)
   }
 
   const formatCurrencyPDF = (amount: number | null | undefined): string => {
-    if (amount === null || amount === undefined) return "$0"
-    return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(amount)
+    return formatCurrencyValue(amount, (data.moneda as CurrencyCode) || DEFAULT_CURRENCY)
   }
 
   // Extraer datos
@@ -1690,7 +1678,7 @@ export async function generateVentaPDF(data: VentaPDFData): Promise<Buffer> {
   page.drawText("Los productos con garantia incluyen certificado por separado.", { x: margin, y: footerY - 27, size: 8, font: helvetica, color: grayColor })
   page.drawText("Gracias por su compra!", { x: margin, y: footerY - 42, size: 9, font: helveticaBold, color: primaryColor })
 
-  const fechaImpresion = new Date().toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
+  const fechaImpresion = formatDateTimeValue(new Date(), data.zonaHoraria || DEFAULT_TIMEZONE)
   page.drawText(`Impreso: ${fechaImpresion}`, { x: width - margin - 110, y: footerY - 42, size: 7, font: helvetica, color: grayColor })
 
   // Barra inferior de acento
@@ -1732,6 +1720,8 @@ interface GarantiaVentaPDFData {
   telefonoEmpresa?: string | null
   direccionEmpresa?: string | null
   logoUrl?: string | null
+  moneda?: string
+  zonaHoraria?: string
 }
 
 export async function generateGarantiaVentaPDF(data: GarantiaVentaPDFData): Promise<Buffer> {
@@ -1746,7 +1736,7 @@ export async function generateGarantiaVentaPDF(data: GarantiaVentaPDFData): Prom
     if (!date) return ""
     const d = new Date(date)
     if (isNaN(d.getTime())) return ""
-    return d.toLocaleDateString("es-AR", { day: "2-digit", month: "long", year: "numeric" })
+    return d.toLocaleDateString("es-AR", { day: "2-digit", month: "long", year: "numeric", timeZone: data.zonaHoraria || DEFAULT_TIMEZONE })
   }
 
   // Extraer datos
@@ -2161,7 +2151,7 @@ export async function generateGarantiaVentaPDF(data: GarantiaVentaPDFData): Prom
     color: rgb(0.8, 0.8, 0.85),
   })
 
-  const fechaImpresion = new Date().toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" })
+  const fechaImpresion = formatDateValue(new Date(), data.zonaHoraria || DEFAULT_TIMEZONE)
   page.drawText(`Emitido: ${fechaImpresion}`, { x: width - margin - 80, y: 8, size: 7, font: helvetica, color: rgb(0.6, 0.6, 0.65) })
 
   const pdfBytes = await pdfDoc.save()
@@ -2199,6 +2189,8 @@ interface ComprobanteEntregaPDFData {
   telefonoEmpresa?: string | null
   direccionEmpresa?: string | null
   logoUrl?: string | null
+  moneda?: string
+  zonaHoraria?: string
 }
 
 export async function generateComprobanteEntregaPDF(data: ComprobanteEntregaPDFData): Promise<Buffer> {
@@ -2210,17 +2202,11 @@ export async function generateComprobanteEntregaPDF(data: ComprobanteEntregaPDFD
   }
 
   const formatDatePDF = (date: Date | string | null | undefined): string => {
-    if (!date) return ""
-    const d = new Date(date)
-    if (isNaN(d.getTime())) return ""
-    return d.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" })
+    return formatDateValue(date, data.zonaHoraria || DEFAULT_TIMEZONE)
   }
 
   const formatDateTimePDF = (date: Date | string | null | undefined): string => {
-    if (!date) return ""
-    const d = new Date(date)
-    if (isNaN(d.getTime())) return ""
-    return d.toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
+    return formatDateTimeValue(date, data.zonaHoraria || DEFAULT_TIMEZONE)
   }
 
   // Extraer datos
@@ -2464,8 +2450,8 @@ export async function generateComprobanteEntregaPDF(data: ComprobanteEntregaPDFD
 
   page.drawText(`Orden ${ordenDisplay}`, { x: margin + 10, y: 30, size: 7, font: helveticaBold, color: greenColor })
 
-  const fechaImpresion = new Date().toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
-  page.drawText(`Impreso: ${fechaImpresion}`, { x: width - margin - 90, y: 30, size: 6, font: helvetica, color: grayColor })
+  const fechaImpresion2 = formatDateTimeValue(new Date(), data.zonaHoraria || DEFAULT_TIMEZONE)
+  page.drawText(`Impreso: ${fechaImpresion2}`, { x: width - margin - 90, y: 30, size: 6, font: helvetica, color: grayColor })
 
   // === BARRA INFERIOR ===
   page.drawRectangle({ x: 0, y: 0, width, height: 8, color: greenColor })

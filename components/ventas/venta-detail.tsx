@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useModal } from "@/contexts/modal-context"
-import { formatDate, formatCurrency } from "@/lib/utils"
+import { useCurrency } from "@/contexts/currency-context"
 import { PaymentStatusBadge } from "@/components/ui/badge"
 import {
   ArrowLeft,
@@ -111,6 +111,7 @@ interface Organization {
 
 export function VentaDetail({ ventaId }: VentaDetailProps) {
   const router = useRouter()
+  const { formatPrice, formatDate } = useCurrency()
   const { confirm, showError, showSuccess } = useModal()
   const [venta, setVenta] = useState<VentaDetail | null>(null)
   const [organization, setOrganization] = useState<Organization | null>(null)
@@ -374,11 +375,11 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-primary">
-              {formatCurrency(venta.total)}
+              {formatPrice(venta.total)}
             </div>
             {venta.descuento > 0 && (
               <div className="text-sm text-muted-foreground">
-                Descuento: {formatCurrency(venta.descuento)}
+                Descuento: {formatPrice(venta.descuento)}
               </div>
             )}
           </CardContent>
@@ -401,18 +402,18 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
           <div className="grid grid-cols-3 gap-2 sm:gap-4 p-3 bg-muted rounded-lg">
             <div>
               <div className="text-xs text-muted-foreground">Total</div>
-              <div className="font-bold text-base sm:text-lg">{formatCurrency(venta.total)}</div>
+              <div className="font-bold text-base sm:text-lg">{formatPrice(venta.total)}</div>
             </div>
             <div>
               <div className="text-xs text-muted-foreground">Abonado</div>
               <div className="font-medium text-base sm:text-lg text-green-600">
-                {formatCurrency(venta.montoAbonado || 0)}
+                {formatPrice(venta.montoAbonado || 0)}
               </div>
             </div>
             <div>
               <div className="text-xs text-muted-foreground">Pendiente</div>
               <div className="font-medium text-base sm:text-lg text-red-600">
-                {formatCurrency(venta.total - (venta.montoAbonado || 0))}
+                {formatPrice(venta.total - (venta.montoAbonado || 0))}
               </div>
             </div>
           </div>
@@ -423,7 +424,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
               <div>
                 <div className="text-sm text-muted-foreground">Pendiente de pago</div>
                 <div className="text-xl font-bold text-red-600">
-                  {formatCurrency(venta.total - (venta.montoAbonado || 0))}
+                  {formatPrice(venta.total - (venta.montoAbonado || 0))}
                 </div>
               </div>
               <Button
@@ -504,9 +505,9 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                   </div>
                   <div className="mt-2 flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">
-                      {item.cantidad} x {formatCurrency(item.precioUnitario)}
+                      {item.cantidad} x {formatPrice(item.precioUnitario)}
                     </span>
-                    <span className="font-medium">{formatCurrency(item.subtotal)}</span>
+                    <span className="font-medium">{formatPrice(item.subtotal)}</span>
                   </div>
                   {garantia && (
                     <Button
@@ -531,17 +532,17 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
             <div className="rounded-lg border bg-muted/50 p-3">
               <div className="flex justify-between text-sm">
                 <span>Subtotal:</span>
-                <span>{formatCurrency(venta.subtotal)}</span>
+                <span>{formatPrice(venta.subtotal)}</span>
               </div>
               {venta.descuento > 0 && (
                 <div className="flex justify-between text-sm text-destructive">
                   <span>Descuento:</span>
-                  <span>-{formatCurrency(venta.descuento)}</span>
+                  <span>-{formatPrice(venta.descuento)}</span>
                 </div>
               )}
               <div className="mt-2 flex justify-between border-t pt-2 text-lg font-bold">
                 <span>Total:</span>
-                <span className="text-primary">{formatCurrency(venta.total)}</span>
+                <span className="text-primary">{formatPrice(venta.total)}</span>
               </div>
             </div>
           </div>
@@ -574,8 +575,8 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                           )}
                         </td>
                         <td className="py-3 text-center">{item.cantidad}</td>
-                        <td className="py-3 text-right">{formatCurrency(item.precioUnitario)}</td>
-                        <td className="py-3 text-right font-medium">{formatCurrency(item.subtotal)}</td>
+                        <td className="py-3 text-right">{formatPrice(item.precioUnitario)}</td>
+                        <td className="py-3 text-right font-medium">{formatPrice(item.subtotal)}</td>
                         <td className="py-3 text-center">
                           {item.diasGarantia > 0 ? (
                             <Badge variant="outline" className="text-green-600">
@@ -611,7 +612,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                     <td colSpan={3} className="py-3 text-right font-medium">
                       Subtotal:
                     </td>
-                    <td className="py-3 text-right">{formatCurrency(venta.subtotal)}</td>
+                    <td className="py-3 text-right">{formatPrice(venta.subtotal)}</td>
                     <td colSpan={2}></td>
                   </tr>
                   {venta.descuento > 0 && (
@@ -620,7 +621,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                         Descuento:
                       </td>
                       <td className="py-1 text-right text-destructive">
-                        -{formatCurrency(venta.descuento)}
+                        -{formatPrice(venta.descuento)}
                       </td>
                       <td colSpan={2}></td>
                     </tr>
@@ -630,7 +631,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                       Total:
                     </td>
                     <td className="py-3 text-right text-lg font-bold text-primary">
-                      {formatCurrency(venta.total)}
+                      {formatPrice(venta.total)}
                     </td>
                     <td colSpan={2}></td>
                   </tr>

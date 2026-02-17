@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Loader2 } from "lucide-react"
+import { useCurrency } from "@/contexts/currency-context"
 import type { Lead } from "@/types/database"
 
 interface LeadDetailDialogProps {
@@ -24,6 +25,7 @@ interface Conversacion {
 }
 
 export function LeadDetailDialog({ lead, isOpen, onClose, onUpdate }: LeadDetailDialogProps) {
+  const { formatDateTime } = useCurrency()
   const [loading, setLoading] = useState(false)
   const [conversacion, setConversacion] = useState<Conversacion | null>(null)
   const [notas, setNotas] = useState(lead.notas || "")
@@ -100,7 +102,7 @@ export function LeadDetailDialog({ lead, isOpen, onClose, onUpdate }: LeadDetail
             <div>
               <label className="text-sm font-medium">Fecha de creación</label>
               <p className="text-sm text-muted-foreground">
-                {new Date(lead.created_at).toLocaleString("es-AR")}
+                {formatDateTime(lead.created_at)}
               </p>
             </div>
           </div>

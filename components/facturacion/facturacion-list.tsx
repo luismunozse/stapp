@@ -15,7 +15,7 @@ import {
   Trash2,
   Ban,
 } from "lucide-react"
-import { formatDate, formatCurrency } from "@/lib/utils"
+import { useCurrency } from "@/contexts/currency-context"
 import { PagoForm } from "./pago-form"
 import { PagosHistorial } from "./pagos-historial"
 
@@ -24,6 +24,7 @@ type EstadoPagoType = "PENDIENTE" | "PAGADO_PARCIAL" | "PAGADO" | "ANULADA" | ""
 export function FacturacionList() {
   const { data: session } = useSession()
   const isAdmin = session?.user?.role === "ADMIN"
+  const { formatPrice, formatDate } = useCurrency()
 
   const [facturas, setFacturas] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -177,18 +178,18 @@ export function FacturacionList() {
                   <div className="grid grid-cols-3 gap-2 sm:gap-4 p-3 bg-muted rounded-lg">
                     <div className="min-w-0">
                       <div className="text-xs text-muted-foreground">Total</div>
-                      <div className="font-bold text-sm sm:text-lg truncate">{formatCurrency(factura.total)}</div>
+                      <div className="font-bold text-sm sm:text-lg truncate">{formatPrice(factura.total)}</div>
                     </div>
                     <div className="min-w-0">
                       <div className="text-xs text-muted-foreground">Abonado</div>
                       <div className="font-medium text-sm sm:text-lg text-green-600 truncate">
-                        {formatCurrency(factura.montoAbonado || 0)}
+                        {formatPrice(factura.montoAbonado || 0)}
                       </div>
                     </div>
                     <div className="min-w-0">
                       <div className="text-xs text-muted-foreground">Pendiente</div>
                       <div className="font-medium text-sm sm:text-lg text-red-600 truncate">
-                        {formatCurrency(factura.total - (factura.montoAbonado || 0))}
+                        {formatPrice(factura.total - (factura.montoAbonado || 0))}
                       </div>
                     </div>
                   </div>
@@ -199,7 +200,7 @@ export function FacturacionList() {
                       <div>
                         <div className="text-sm text-muted-foreground">Pendiente de pago</div>
                         <div className="text-xl font-bold text-red-600">
-                          {formatCurrency(pendiente)}
+                          {formatPrice(pendiente)}
                         </div>
                       </div>
                       <Button

@@ -98,6 +98,8 @@ export interface Organization {
   notificaciones_email: boolean
   notificaciones_whatsapp: boolean
   dias_recordatorio: number
+  moneda: string
+  zona_horaria: string
 }
 
 export interface OrganizationCounters {

@@ -11,7 +11,7 @@ import {
   ResponsiveContainer,
 } from "recharts"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { formatCurrency } from "@/lib/utils"
+import { useCurrency } from "@/contexts/currency-context"
 
 interface IngresosDia {
   fecha: string
@@ -24,6 +24,7 @@ interface IngresosChartProps {
 }
 
 export const IngresosChart = memo(function IngresosChart({ data, totalPeriodo }: IngresosChartProps) {
+  const { formatPrice } = useCurrency()
   const formatFecha = useCallback((fecha: string) => {
     const date = new Date(fecha)
     return date.toLocaleDateString("es-AR", { weekday: "short", day: "numeric" })
@@ -55,7 +56,7 @@ export const IngresosChart = memo(function IngresosChart({ data, totalPeriodo }:
       <CardHeader className="p-3 sm:p-6 pb-1 sm:pb-2">
         <CardTitle className="text-sm sm:text-base">Ingresos Últimos 7 Días</CardTitle>
         <CardDescription className="text-xs sm:text-sm">
-          Total: <span className="font-semibold text-foreground">{formatCurrency(totalPeriodo)}</span>
+          Total: <span className="font-semibold text-foreground">{formatPrice(totalPeriodo)}</span>
         </CardDescription>
       </CardHeader>
       <CardContent className="p-3 sm:p-6 pt-0">
@@ -81,7 +82,7 @@ export const IngresosChart = memo(function IngresosChart({ data, totalPeriodo }:
               tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
             />
             <Tooltip
-              formatter={(value: number) => [formatCurrency(value), "Ingresos"]}
+              formatter={(value: number) => [formatPrice(value), "Ingresos"]}
               contentStyle={{
                 backgroundColor: "hsl(var(--card))",
                 border: "1px solid hsl(var(--border))",

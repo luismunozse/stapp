@@ -28,7 +28,9 @@ export async function GET(
           nombre_mostrar,
           telefono,
           direccion,
-          logo_url
+          logo_url,
+          moneda,
+          zona_horaria
         )
       `)
       .eq("public_token", token)
@@ -71,6 +73,8 @@ export async function GET(
       logoUrl: org?.logo_url,
       firmaClienteRecepcion: orden.firma_cliente_recepcion,
       firmaClienteRecepcionMime: orden.firma_cliente_recepcion_mime,
+      moneda: org?.moneda || "ARS",
+      zonaHoraria: org?.zona_horaria || "America/Argentina/Buenos_Aires",
     }
 
     // Generar PDF

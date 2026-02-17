@@ -3,8 +3,8 @@
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { User, Phone, Mail, MapPin, Edit, Trash2 } from "lucide-react"
-import { formatDate } from "@/lib/utils"
 import type { Cliente } from "@/types"
+import { useCurrency } from "@/contexts/currency-context"
 
 interface ClienteMobileCardProps {
   cliente: Cliente
@@ -14,6 +14,8 @@ interface ClienteMobileCardProps {
 }
 
 export function ClienteMobileCard({ cliente, onEdit, onDelete, deleting }: ClienteMobileCardProps) {
+  const { formatDate } = useCurrency()
+
   return (
     <Card>
       <CardContent className="p-4">

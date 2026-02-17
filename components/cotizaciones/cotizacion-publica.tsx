@@ -20,6 +20,8 @@ import {
   PenTool,
   CalendarClock,
 } from "lucide-react"
+import { formatCurrencyValue, type CurrencyCode } from "@/lib/currency"
+import { formatDateValue } from "@/lib/timezone"
 
 interface CotizacionData {
   id: string
@@ -35,6 +37,8 @@ interface CotizacionData {
   firmaAprobacion: string | null
   firmaMime: string | null
   fechaAprobacion: string | null
+  moneda?: string
+  zonaHoraria?: string
   orden: {
     numeroOrden: number
     dispositivo: string
@@ -69,24 +73,6 @@ const estadoConfig: Record<string, { label: string; color: string }> = {
   RECHAZADA: { label: "Rechazada", color: "bg-red-100 text-red-800" },
 }
 
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("es-AR", {
-    style: "currency",
-    currency: "ARS",
-    minimumFractionDigits: 2,
-  }).format(amount)
-}
-
-function formatDate(dateStr: string | null | undefined): string {
-  if (!dateStr) return ""
-  const d = new Date(dateStr)
-  return d.toLocaleDateString("es-AR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  })
-}
-
 export function CotizacionPublica({ token }: { token: string }) {
   const [data, setData] = useState<CotizacionData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -97,6 +83,9 @@ export function CotizacionPublica({ token }: { token: string }) {
   const [approving, setApproving] = useState(false)
   const [approveError, setApproveError] = useState<string | null>(null)
   const [approved, setApproved] = useState(false)
+
+  const formatDate = (dateStr: string | null | undefined) =>
+    formatDateValue(dateStr, data?.zonaHoraria)
 
   useEffect(() => {
     fetch(`/api/public/cotizaciones/${token}`)
@@ -301,10 +290,10 @@ export function CotizacionPublica({ token }: { token: string }) {
                 <div className="col-span-5">{item.descripcion}</div>
                 <div className="col-span-2 text-center">{item.cantidad}</div>
                 <div className="col-span-2 text-right">
-                  {formatCurrency(item.precioUnitario)}
+                  {formatCurrencyValue(item.precioUnitario, (data.moneda as CurrencyCode) || "ARS")}
                 </div>
                 <div className="col-span-3 text-right font-medium">
-                  {formatCurrency(item.subtotal)}
+                  {formatCurrencyValue(item.subtotal, (data.moneda as CurrencyCode) || "ARS")}
                 </div>
               </div>
             ))}
@@ -314,7 +303,7 @@ export function CotizacionPublica({ token }: { token: string }) {
           <div className="mt-4 pt-4 border-t-2">
             <div className="flex justify-between text-lg font-bold">
               <span>Total</span>
-              <span>{formatCurrency(data.total)}</span>
+              <span>{formatCurrencyValue(data.total, (data.moneda as CurrencyCode) || "ARS")}</span>
             </div>
           </div>
         </CardContent>
@@ -421,7 +410,7 @@ export function CotizacionPublica({ token }: { token: string }) {
             <CardTitle className="text-lg">Aprobar cotizacion</CardTitle>
             <p className="text-sm text-muted-foreground">
               Firme a continuacion para confirmar la aprobacion del presupuesto
-              por {formatCurrency(data.total)}.
+              por {formatCurrencyValue(data.total, (data.moneda as CurrencyCode) || "ARS")}.
             </p>
           </CardHeader>
           <CardContent className="space-y-4">

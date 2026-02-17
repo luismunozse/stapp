@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ClipboardCheck, Check, X, Edit2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { formatDate } from "@/lib/utils"
+import { useCurrency } from "@/contexts/currency-context"
 
 interface TemplateItem {
   id: string
@@ -48,6 +48,8 @@ const categoriaLabels: Record<string, string> = {
 }
 
 export function ChecklistView({ checklist, onEdit }: ChecklistViewProps) {
+  const { formatDate } = useCurrency()
+
   // Agrupar items por categoria
   const itemsByCategory = checklist.template.items.reduce((acc, item) => {
     const cat = item.categoria || "GENERAL"

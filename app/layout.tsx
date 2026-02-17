@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next"
 import { Inter } from "next/font/google"
+import { headers } from "next/headers"
 import "./globals.css"
 import { PWAInstaller } from "@/components/pwa/pwa-installer"
 import { PWARecovery } from "@/components/pwa/pwa-recovery"
@@ -15,6 +16,29 @@ const inter = Inter({ subsets: ["latin"] })
 
 const siteUrl = "https://stapp.com.ar"
 
+function extractSubdomain(hostname: string): string | null {
+  const host = hostname.split(":")[0]
+  if (host === "localhost" || host === "127.0.0.1") return null
+
+  if (host.endsWith(".local")) {
+    const parts = host.split(".")
+    if (parts.length >= 2 && parts[0] !== "stapp" && parts[0] !== "www") {
+      return parts[0]
+    }
+    return null
+  }
+
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
+  const rootParts = rootDomain.split(".").length
+  const parts = host.split(".")
+
+  if (parts.length <= rootParts) return null
+  const subdomain = parts[0]
+  if (subdomain === "www") return null
+
+  return subdomain
+}
+
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
@@ -26,7 +50,6 @@ export const metadata: Metadata = {
   authors: [{ name: "STApp" }],
   creator: "STApp",
   publisher: "STApp",
-  manifest: "/manifest.json",
   icons: {
     icon: [
       { url: "/favicon.svg", type: "image/svg+xml" },
@@ -114,15 +137,22 @@ const themeScript = `
   })();
 `
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const headersList = await headers()
+  const hostname = headersList.get("host") || ""
+  const subdomain = extractSubdomain(hostname)
+  const isTenant = !!subdomain && subdomain !== "admin"
+
   return (
     <html lang="es" suppressHydrationWarning>
       <head>
-        <link rel="manifest" href="/manifest.json" />
+        {/* Manifest solo en subdominios de tenant (PWA instalable) */}
+        {isTenant && <link rel="manifest" href="/manifest.json" />}
+
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="STApp" />
@@ -156,8 +186,9 @@ export default function RootLayout({
       <body className={inter.className}>
         <Providers>
           {children}
-          <PWAInstaller />
-          <PWARecovery />
+          {/* PWA solo en subdominios de tenant */}
+          {isTenant && <PWAInstaller />}
+          {isTenant && <PWARecovery />}
           <CookieConsent />
         </Providers>
       </body>

@@ -23,7 +23,7 @@ import { useModal } from "@/contexts/modal-context"
 import { ExportButton } from "@/components/export/export-button"
 import { OrdenMobileCard } from "./orden-mobile-card"
 import { Card, CardContent } from "@/components/ui/card"
-import { formatDate, formatCurrency } from "@/lib/utils"
+import { useCurrency } from "@/contexts/currency-context"
 import type { OrdenServicio, EstadoOrden } from "@/types"
 
 // Fetcher para SWR
@@ -44,6 +44,7 @@ const estadoOptions = [
 
 export function OrdenesList() {
   const router = useRouter()
+  const { formatPrice, formatDate } = useCurrency()
   const [showForm, setShowForm] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
   const { confirm, showError } = useModal()
@@ -219,7 +220,7 @@ export function OrdenesList() {
       hideOnMobile: true,
       render: (orden) =>
         orden.presupuesto ? (
-          <span className="font-medium">{formatCurrency(orden.presupuesto)}</span>
+          <span className="font-medium">{formatPrice(orden.presupuesto)}</span>
         ) : (
           <span className="text-muted-foreground">-</span>
         ),

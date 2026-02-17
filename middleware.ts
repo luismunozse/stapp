@@ -53,6 +53,7 @@ function isPublicPath(pathname: string): boolean {
     "/api/inngest",
     "/api/cron",
     "/api/mercadopago/webhook",
+    "/api/lemonsqueezy/webhook",
     "/_next",
     "/favicon.ico",
     "/manifest.json",
@@ -61,6 +62,7 @@ function isPublicPath(pathname: string): boolean {
     "/icons",
     "/seguimiento",
     "/cotizacion",
+    "/app-entry",
   ]
   return publicPaths.some((path) => pathname.startsWith(path))
 }

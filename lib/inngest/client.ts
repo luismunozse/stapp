@@ -17,6 +17,8 @@ export type NotificationEvent = {
     tipo: "CAMBIO_ESTADO" | "PRESUPUESTO_DEFINIDO" | "GARANTIA_CREADA" | "RECORDATORIO_RETIRO"
     context: {
       organizationName: string
+      moneda?: string
+      zonaHoraria?: string
       cliente: {
         id: string
         nombre: string

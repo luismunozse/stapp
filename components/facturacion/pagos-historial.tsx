@@ -1,6 +1,6 @@
 "use client"
 
-import { formatDate, formatCurrency } from "@/lib/utils"
+import { useCurrency } from "@/contexts/currency-context"
 
 interface Pago {
   id: string
@@ -28,6 +28,7 @@ const metodoPagoLabels: Record<string, string> = {
 }
 
 export function PagosHistorial({ pagos }: PagosHistorialProps) {
+  const { formatPrice, formatDate } = useCurrency()
   if (!pagos || pagos.length === 0) {
     return (
       <div className="text-sm text-muted-foreground text-center py-4">
@@ -45,7 +46,7 @@ export function PagosHistorial({ pagos }: PagosHistorialProps) {
         >
           <div className="space-y-0.5">
             <div className="font-medium text-green-600">
-              {formatCurrency(pago.monto)}
+              {formatPrice(pago.monto)}
             </div>
             <div className="text-xs text-muted-foreground">
               {formatDate(pago.fecha)} · {metodoPagoLabels[pago.metodoPago] || pago.metodoPago}
@@ -58,7 +59,7 @@ export function PagosHistorial({ pagos }: PagosHistorialProps) {
             </div>
             {pago.montoOriginal && pago.recargoPorcentaje && pago.recargoPorcentaje > 0 && (
               <div className="text-xs text-muted-foreground">
-                Sin recargo: {formatCurrency(pago.montoOriginal)}
+                Sin recargo: {formatPrice(pago.montoOriginal)}
               </div>
             )}
             {pago.referencia && (

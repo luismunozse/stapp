@@ -10,9 +10,9 @@ import { ImportModal } from "@/components/import/import-modal"
 import { ExportButton } from "@/components/export/export-button"
 import { ClienteMobileCard } from "./cliente-mobile-card"
 import { Card, CardContent } from "@/components/ui/card"
-import { formatDate } from "@/lib/utils"
 import type { Cliente } from "@/types"
 import { useModal } from "@/contexts/modal-context"
+import { useCurrency } from "@/contexts/currency-context"
 
 interface ClientesListProps {
   allowImport?: boolean
@@ -20,6 +20,7 @@ interface ClientesListProps {
 
 export function ClientesList({ allowImport = true }: ClientesListProps) {
   const { confirm, showError } = useModal()
+  const { formatDate } = useCurrency()
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)

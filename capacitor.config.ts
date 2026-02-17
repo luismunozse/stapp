@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: 'STApp',
   webDir: 'public',
   server: {
-    url: 'https://stapp.com.ar',
+    url: 'https://stapp.com.ar/app-entry',
     cleartext: false,
   },
   plugins: {

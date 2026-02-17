@@ -20,9 +20,9 @@ import {
   AlertTriangle,
   FileText,
 } from "lucide-react"
-import { formatDate } from "@/lib/utils"
 import { ReclamoForm } from "./reclamo-form"
 import { useModal } from "@/contexts/modal-context"
+import { useCurrency } from "@/contexts/currency-context"
 
 interface Reclamo {
   id: string
@@ -66,6 +66,7 @@ const estadoReclamoConfig: Record<string, { label: string; color: string }> = {
 
 export function GarantiaCard({ ordenId, ordenEstado }: GarantiaCardProps) {
   const { confirm } = useModal()
+  const { formatDate } = useCurrency()
   const [garantia, setGarantia] = useState<Garantia | null>(null)
   const [loading, setLoading] = useState(true)
   const [showCreateForm, setShowCreateForm] = useState(false)

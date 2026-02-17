@@ -42,7 +42,8 @@ export async function GET(
           nombre_mostrar,
           telefono,
           direccion,
-          logo_url
+          logo_url,
+          zona_horaria
         )
       `)
       .eq("public_token", token)
@@ -76,6 +77,7 @@ export async function GET(
       cliente: {
         nombre: cliente?.nombre || null,
       },
+      zonaHoraria: org?.zona_horaria || "America/Argentina/Buenos_Aires",
       organizacion: {
         nombre: org?.nombre_mostrar || org?.nombre || null,
         telefono: org?.telefono || null,

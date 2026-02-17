@@ -22,6 +22,7 @@ import {
 } from "lucide-react"
 import { generateWhatsAppUrl } from "@/lib/notifications/whatsapp-templates"
 import type { VentaCreadaData } from "./venta-form"
+import { useCurrency } from "@/contexts/currency-context"
 
 // WhatsApp icon SVG component
 function WhatsAppIcon({ className }: { className?: string }) {
@@ -43,16 +44,13 @@ interface VentaCreadaModalProps {
   venta: VentaCreadaData | null
 }
 
-const formatCurrency = (amount: number) =>
-  new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(amount)
-
 const metodoPagoLabel: Record<string, string> = {
   EFECTIVO: "Efectivo",
   TRANSFERENCIA: "Transferencia",
   TARJETA: "Tarjeta",
 }
 
-function generateVentaMessage(venta: VentaCreadaData, baseUrl: string): string {
+function generateVentaMessage(venta: VentaCreadaData, baseUrl: string, formatPrice: (amount: number) => string): string {
   let mensaje = `Hola ${venta.clienteNombre}, gracias por tu compra!
 
 *COMPROBANTE DE VENTA #${venta.numeroVenta}*
@@ -61,14 +59,14 @@ function generateVentaMessage(venta: VentaCreadaData, baseUrl: string): string {
 
   // Listar items
   venta.items.forEach((item) => {
-    mensaje += `- ${item.descripcion} x${item.cantidad}: ${formatCurrency(item.cantidad * item.precioUnitario)}\n`
+    mensaje += `- ${item.descripcion} x${item.cantidad}: ${formatPrice(item.cantidad * item.precioUnitario)}\n`
   })
 
   if (venta.descuento > 0) {
-    mensaje += `\nDescuento: -${formatCurrency(venta.descuento)}`
+    mensaje += `\nDescuento: -${formatPrice(venta.descuento)}`
   }
 
-  mensaje += `\n*Total: ${formatCurrency(venta.total)}*`
+  mensaje += `\n*Total: ${formatPrice(venta.total)}*`
   mensaje += `\nMetodo de pago: ${metodoPagoLabel[venta.metodoPago] || venta.metodoPago}`
 
   // Información de garantías
@@ -89,6 +87,7 @@ ${venta.organizationName || "Servicio Tecnico"}`
 }
 
 export function VentaCreadaModal({ open, onClose, venta }: VentaCreadaModalProps) {
+  const { formatPrice } = useCurrency()
   const [copied, setCopied] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [mensaje, setMensaje] = useState("")
@@ -97,7 +96,7 @@ export function VentaCreadaModal({ open, onClose, venta }: VentaCreadaModalProps
   useEffect(() => {
     if (venta) {
       const baseUrl = typeof window !== "undefined" ? window.location.origin : ""
-      setMensaje(generateVentaMessage(venta, baseUrl))
+      setMensaje(generateVentaMessage(venta, baseUrl, formatPrice))
     }
   }, [venta])
 
@@ -174,7 +173,7 @@ export function VentaCreadaModal({ open, onClose, venta }: VentaCreadaModalProps
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Total:</span>
-              <span className="font-medium text-primary">{formatCurrency(venta.total)}</span>
+              <span className="font-medium text-primary">{formatPrice(venta.total)}</span>
             </div>
             {venta.garantias.length > 0 && (
               <div className="flex justify-between">

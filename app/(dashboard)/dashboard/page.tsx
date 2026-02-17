@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ClipboardList, Users, Package, DollarSign, Shield } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
+import type { CurrencyCode } from "@/lib/currency"
 import { redirect } from "next/navigation"
 import Link from "next/link"
 import { DolarWidget } from "@/components/cotizacion-dolar"
@@ -138,6 +139,14 @@ export default async function DashboardPage() {
     .single()
   const lastSeenVersion: string | null = userData?.last_seen_version ?? null
 
+  // Obtener moneda de la organización
+  const { data: orgData } = await supabaseAdmin
+    .from("organizations")
+    .select("moneda, zona_horaria")
+    .eq("id", organizationId)
+    .single()
+  const moneda = (orgData?.moneda || "ARS") as CurrencyCode
+
   // Obtener datos del dashboard con caché (2 minutos)
   const {
     totalOrdenesResult,
@@ -257,7 +266,7 @@ export default async function DashboardPage() {
     },
     {
       title: "Ingresos del Mes",
-      value: formatCurrency(ingresos),
+      value: formatCurrency(ingresos, moneda),
       description: "Facturas pagadas",
       icon: DollarSign,
       colorClass: "text-purple-600 dark:text-purple-400",

@@ -48,7 +48,9 @@
       "Bash(npx next build:*)",
       "Bash(node scripts/generate-icons.mjs:*)",
       "Bash(npx cap add:*)",
-      "Bash(npx cap sync:*)"
+      "Bash(npx cap sync:*)",
+      "Bash(gradlew assembleDebug:*)",
+      "Bash(./gradlew.bat assembleDebug:*)"
     ]
   }
 }

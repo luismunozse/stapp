@@ -16,8 +16,8 @@ import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { useModal } from "@/contexts/modal-context"
-import { formatCurrency } from "@/lib/utils"
 import { Plus, Trash2, Package, Search, Loader2 } from "lucide-react"
+import { useCurrency } from "@/contexts/currency-context"
 
 const itemSchema = z.object({
   id: z.string().optional(), // Para items existentes
@@ -84,6 +84,7 @@ interface VentaEditFormProps {
 
 export function VentaEditForm({ open, onOpenChange, venta, onSuccess }: VentaEditFormProps) {
   const { showError, showSuccess } = useModal()
+  const { formatPrice } = useCurrency()
   const [loading, setLoading] = useState(false)
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [inventario, setInventario] = useState<Inventario[]>([])
@@ -376,7 +377,7 @@ export function VentaEditForm({ open, onOpenChange, venta, onSuccess }: VentaEdi
                                     </span>
                                   </div>
                                   <div className="text-xs text-muted-foreground">
-                                    {inv.codigo} - {formatCurrency(inv.precioVenta)}
+                                    {inv.codigo} - {formatPrice(inv.precioVenta)}
                                   </div>
                                 </button>
                               ))}
@@ -426,7 +427,7 @@ export function VentaEditForm({ open, onOpenChange, venta, onSuccess }: VentaEdi
                   </div>
                   <div className="flex items-end">
                     <div className="w-full rounded bg-muted px-3 py-2 text-right font-medium">
-                      {formatCurrency(
+                      {formatPrice(
                         (watchItems[index]?.cantidad || 0) *
                           (watchItems[index]?.precioUnitario || 0)
                       )}
@@ -478,17 +479,17 @@ export function VentaEditForm({ open, onOpenChange, venta, onSuccess }: VentaEdi
             <div className="rounded-lg bg-muted p-4">
               <div className="flex justify-between text-sm">
                 <span>Subtotal:</span>
-                <span>{formatCurrency(subtotal)}</span>
+                <span>{formatPrice(subtotal)}</span>
               </div>
               {watchDescuento > 0 && (
                 <div className="flex justify-between text-sm text-destructive">
                   <span>Descuento:</span>
-                  <span>-{formatCurrency(watchDescuento)}</span>
+                  <span>-{formatPrice(watchDescuento)}</span>
                 </div>
               )}
               <div className="mt-2 flex justify-between border-t pt-2 text-lg font-bold">
                 <span>Total:</span>
-                <span className="text-primary">{formatCurrency(total)}</span>
+                <span className="text-primary">{formatPrice(total)}</span>
               </div>
             </div>
           </div>

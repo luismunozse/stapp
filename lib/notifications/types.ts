@@ -25,6 +25,8 @@ export interface NotificationContext {
   organizationId: string
   organizationName: string
   organizationSlug?: string
+  moneda?: string
+  zonaHoraria?: string
   cliente: {
     id: string
     nombre: string
