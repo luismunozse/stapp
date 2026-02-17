@@ -227,7 +227,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
             />
           </div>
         </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap sm:flex-nowrap">
+        <div className="grid grid-cols-3 sm:flex sm:items-center gap-2 w-full sm:w-auto">
           <ExportButton
             entity="clientes"
             filters={{ ...(search && { search }) }}
@@ -241,7 +241,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
               <span className="sm:hidden">Importar</span>
             </Button>
           )}
-          <Button onClick={() => setShowForm(true)} size="sm" className="gap-1.5 ml-auto">
+          <Button onClick={() => setShowForm(true)} size="sm" className="gap-1.5">
             <Plus className="h-4 w-4" />
             Nuevo
           </Button>
