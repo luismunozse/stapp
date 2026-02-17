@@ -4,6 +4,9 @@ import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { STAppLogo } from "@/components/shared/stapp-logo"
+import { ThemeToggle } from "@/components/ui/theme-toggle"
 import {
   ArrowRight,
   Building2,
@@ -291,19 +294,20 @@ export default function AppEntryPage() {
   // --- Loading / Navigating screen ---
   if (loading || navigating) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-blue-600 to-blue-700">
+      <div className="min-h-screen flex items-center justify-center bg-muted/30 dark:bg-background">
         <div className="text-center space-y-6">
-          <div className="w-20 h-20 rounded-[22px] bg-white/20 backdrop-blur flex items-center justify-center mx-auto shadow-lg">
-            <span className="text-white font-bold text-3xl">ST</span>
-          </div>
+          <STAppLogo size="xl" showText={false} className="justify-center" />
           <div className="space-y-2">
-            <h1 className="text-white text-2xl font-bold">STApp</h1>
-            <p className="text-blue-100 text-sm">
+            <h1 className="text-2xl font-bold">
+              <span className="text-primary">ST</span>
+              <span className="text-foreground">App</span>
+            </h1>
+            <p className="text-sm text-muted-foreground">
               Gestion de Servicio Tecnico
             </p>
           </div>
-          <Loader2 className="h-6 w-6 animate-spin mx-auto text-white/70" />
-          <p className="text-blue-200 text-xs">
+          <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" />
+          <p className="text-xs text-muted-foreground">
             {navigating ? "Conectando con tu empresa..." : "Cargando..."}
           </p>
         </div>
@@ -314,71 +318,73 @@ export default function AppEntryPage() {
   // --- Registration success screen ---
   if (view === "register-success") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-blue-600 to-blue-700 p-4">
-        <div className="w-full max-w-sm">
-          <div className="text-center space-y-6">
-            <div className="w-16 h-16 rounded-full bg-green-500 flex items-center justify-center mx-auto shadow-lg">
-              <CheckCircle className="h-8 w-8 text-white" />
+      <div className="min-h-screen flex items-center justify-center bg-muted/30 dark:bg-background p-4">
+        <div className="w-full max-w-sm space-y-6">
+          <div className="text-center space-y-4">
+            <div className="w-16 h-16 rounded-full bg-success/10 dark:bg-success/20 flex items-center justify-center mx-auto">
+              <CheckCircle className="h-8 w-8 text-success" />
             </div>
             <div className="space-y-2">
-              <h2 className="text-white text-xl font-bold">
+              <h2 className="text-xl font-bold">
                 Cuenta creada exitosamente
               </h2>
-              <p className="text-blue-100 text-sm leading-relaxed">
+              <p className="text-sm text-muted-foreground leading-relaxed">
                 Enviamos un email de verificacion a{" "}
-                <span className="font-medium text-white">
+                <span className="font-medium text-foreground">
                   {formData.email}
                 </span>
               </p>
             </div>
+          </div>
 
-            <div className="bg-white/10 backdrop-blur rounded-xl p-4 text-left space-y-3">
+          <Card>
+            <CardContent className="p-4 space-y-4">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
-                  <Mail className="h-4 w-4 text-white" />
+                <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <Mail className="h-4 w-4 text-primary" />
                 </div>
                 <div>
-                  <p className="text-white text-sm font-medium">
+                  <p className="text-sm font-medium">
                     Paso 1: Verifica tu email
                   </p>
-                  <p className="text-blue-200 text-xs">
+                  <p className="text-xs text-muted-foreground">
                     Revisa tu bandeja de entrada y haz clic en el enlace
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
-                  <LogIn className="h-4 w-4 text-white" />
+                <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <LogIn className="h-4 w-4 text-primary" />
                 </div>
                 <div>
-                  <p className="text-white text-sm font-medium">
+                  <p className="text-sm font-medium">
                     Paso 2: Inicia sesion
                   </p>
-                  <p className="text-blue-200 text-xs">
+                  <p className="text-xs text-muted-foreground">
                     Usa tus credenciales para acceder a{" "}
-                    <span className="font-medium">
+                    <span className="font-medium text-primary">
                       {registeredSlug}.{ROOT_DOMAIN}
                     </span>
                   </p>
                 </div>
               </div>
-            </div>
+            </CardContent>
+          </Card>
 
-            <div className="space-y-3 pt-2">
-              <Button
-                onClick={goToRegisteredLogin}
-                className="w-full bg-white text-blue-600 hover:bg-blue-50 font-semibold h-12"
-              >
-                Ir a iniciar sesion
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-              <button
-                onClick={resetToSelect}
-                className="text-blue-200 text-sm hover:text-white transition-colors"
-              >
-                Volver al inicio
-              </button>
-            </div>
+          <div className="space-y-3">
+            <Button
+              onClick={goToRegisteredLogin}
+              className="w-full h-12"
+            >
+              Ir a iniciar sesion
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+            <button
+              onClick={resetToSelect}
+              className="w-full text-sm text-muted-foreground hover:text-primary transition-colors"
+            >
+              Volver al inicio
+            </button>
           </div>
         </div>
       </div>
@@ -388,26 +394,26 @@ export default function AppEntryPage() {
   // --- Registration form ---
   if (view === "register") {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-600 to-blue-700 flex flex-col">
+      <div className="min-h-screen bg-muted/30 dark:bg-background flex flex-col">
         {/* Header */}
-        <div className="flex items-center px-4 pt-3 pb-2">
+        <div className="flex items-center justify-between px-4 pt-3 pb-2">
           <button
             onClick={resetToSelect}
-            className="flex items-center gap-1 text-white/80 hover:text-white transition-colors"
+            className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-5 w-5" />
             <span className="text-sm">Volver</span>
           </button>
+          <ThemeToggle variant="icon" />
         </div>
 
         <div className="flex-1 overflow-auto px-4 pb-8">
-          <div className="w-full max-w-sm mx-auto space-y-5">
-            {/* Title */}
-            <div className="text-center space-y-1">
-              <h2 className="text-white text-xl font-bold">
-                Registra tu negocio
-              </h2>
-              <p className="text-blue-200 text-sm">
+          <div className="w-full max-w-md mx-auto space-y-6">
+            {/* Logo + Title */}
+            <div className="text-center space-y-2 py-2">
+              <STAppLogo size="lg" showText={false} className="justify-center" />
+              <h2 className="text-2xl font-bold">Registra tu negocio</h2>
+              <p className="text-sm text-muted-foreground">
                 Crea tu cuenta en menos de 1 minuto
               </p>
             </div>
@@ -415,144 +421,138 @@ export default function AppEntryPage() {
             {/* Form */}
             <form onSubmit={handleRegister} className="space-y-4">
               {regError && (
-                <div className="bg-red-500/20 border border-red-400/30 text-white px-4 py-3 rounded-xl text-sm">
+                <div className="bg-destructive/10 border border-destructive/30 text-destructive px-4 py-3 rounded-md text-sm">
                   {regError}
                 </div>
               )}
 
               {/* Organization section */}
-              <div className="bg-white/10 backdrop-blur rounded-xl p-4 space-y-4">
-                <p className="text-blue-200 text-xs font-medium uppercase tracking-wider">
-                  Datos del negocio
-                </p>
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="orgNombre"
-                    className="text-white text-sm"
-                  >
-                    Nombre del negocio
-                  </Label>
-                  <Input
-                    id="orgNombre"
-                    value={formData.orgNombre}
-                    onChange={(e) => handleNombreChange(e.target.value)}
-                    placeholder="Ej: TechFix Reparaciones"
-                    className="bg-white/10 border-white/20 text-white placeholder:text-blue-300/50 focus-visible:ring-white/30"
-                    autoFocus
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="orgSlug" className="text-white text-sm">
-                    <div className="flex items-center gap-2">
-                      <Globe className="h-3.5 w-3.5" />
-                      <span>URL de tu negocio</span>
-                    </div>
-                  </Label>
-                  <div className="relative">
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardDescription className="text-xs font-medium uppercase tracking-wider">
+                    Datos del negocio
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="orgNombre">Nombre del negocio</Label>
                     <Input
-                      id="orgSlug"
-                      value={formData.orgSlug}
-                      onChange={(e) => handleSlugChange(e.target.value)}
-                      placeholder="mi-negocio"
-                      className={`bg-white/10 border-white/20 text-white placeholder:text-blue-300/50 focus-visible:ring-white/30 pr-10 ${
-                        slugStatus === "available"
-                          ? "border-green-400"
-                          : slugStatus === "taken" || slugStatus === "invalid"
-                          ? "border-red-400"
-                          : ""
-                      }`}
+                      id="orgNombre"
+                      value={formData.orgNombre}
+                      onChange={(e) => handleNombreChange(e.target.value)}
+                      placeholder="Ej: TechFix Reparaciones"
+                      autoFocus
                     />
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                      {slugStatus === "checking" && (
-                        <Loader2 className="h-4 w-4 animate-spin text-blue-200" />
-                      )}
-                      {slugStatus === "available" && (
-                        <CheckCircle2 className="h-4 w-4 text-green-400" />
-                      )}
-                      {(slugStatus === "taken" ||
-                        slugStatus === "invalid") && (
-                        <AlertCircle className="h-4 w-4 text-red-400" />
-                      )}
-                    </div>
                   </div>
-                  <p className="text-xs text-blue-200">
-                    <span className="font-medium text-white">
-                      {formData.orgSlug || "tu-negocio"}.{ROOT_DOMAIN}
-                    </span>
-                  </p>
-                  {(slugStatus === "taken" || slugStatus === "invalid") && slugError && (
-                    <p className="text-xs text-red-300">{slugError}</p>
-                  )}
-                </div>
-              </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="orgSlug">
+                      <div className="flex items-center gap-2">
+                        <Globe className="h-3.5 w-3.5" />
+                        <span>URL de tu negocio</span>
+                      </div>
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id="orgSlug"
+                        value={formData.orgSlug}
+                        onChange={(e) => handleSlugChange(e.target.value)}
+                        placeholder="mi-negocio"
+                        className={`pr-10 ${
+                          slugStatus === "available"
+                            ? "border-green-500 focus-visible:ring-green-500"
+                            : slugStatus === "taken" || slugStatus === "invalid"
+                            ? "border-red-500 focus-visible:ring-red-500"
+                            : ""
+                        }`}
+                      />
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        {slugStatus === "checking" && (
+                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        )}
+                        {slugStatus === "available" && (
+                          <CheckCircle2 className="h-4 w-4 text-green-500" />
+                        )}
+                        {(slugStatus === "taken" ||
+                          slugStatus === "invalid") && (
+                          <AlertCircle className="h-4 w-4 text-red-500" />
+                        )}
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      <span className="font-medium text-primary">
+                        {formData.orgSlug || "tu-negocio"}.{ROOT_DOMAIN}
+                      </span>
+                    </p>
+                    {(slugStatus === "taken" || slugStatus === "invalid") && slugError && (
+                      <p className="text-xs text-destructive">{slugError}</p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
 
               {/* User section */}
-              <div className="bg-white/10 backdrop-blur rounded-xl p-4 space-y-4">
-                <p className="text-blue-200 text-xs font-medium uppercase tracking-wider">
-                  Tu cuenta
-                </p>
-                <div className="space-y-2">
-                  <Label htmlFor="nombre" className="text-white text-sm">
-                    Tu nombre
-                  </Label>
-                  <Input
-                    id="nombre"
-                    value={formData.nombre}
-                    onChange={(e) => updateForm("nombre", e.target.value)}
-                    placeholder="Juan Perez"
-                    className="bg-white/10 border-white/20 text-white placeholder:text-blue-300/50 focus-visible:ring-white/30"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="regEmail" className="text-white text-sm">
-                    Email
-                  </Label>
-                  <Input
-                    id="regEmail"
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => updateForm("email", e.target.value)}
-                    placeholder="tu@email.com"
-                    autoComplete="email"
-                    className="bg-white/10 border-white/20 text-white placeholder:text-blue-300/50 focus-visible:ring-white/30"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="regPassword"
-                    className="text-white text-sm"
-                  >
-                    Contrasena
-                  </Label>
-                  <div className="relative">
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardDescription className="text-xs font-medium uppercase tracking-wider">
+                    Tu cuenta
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="nombre">Tu nombre</Label>
                     <Input
-                      id="regPassword"
-                      type={showPassword ? "text" : "password"}
-                      value={formData.password}
-                      onChange={(e) =>
-                        updateForm("password", e.target.value)
-                      }
-                      placeholder="Minimo 6 caracteres"
-                      className="bg-white/10 border-white/20 text-white placeholder:text-blue-300/50 focus-visible:ring-white/30 pr-10"
+                      id="nombre"
+                      value={formData.nombre}
+                      onChange={(e) => updateForm("nombre", e.target.value)}
+                      placeholder="Juan Perez"
                     />
-                    <button
-                      type="button"
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-200 hover:text-white"
-                      onClick={() => setShowPassword(!showPassword)}
-                    >
-                      {showPassword ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
-                    </button>
                   </div>
-                </div>
-              </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="regEmail">Email</Label>
+                    <Input
+                      id="regEmail"
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => updateForm("email", e.target.value)}
+                      placeholder="tu@email.com"
+                      autoComplete="email"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="regPassword">Contrasena</Label>
+                    <div className="relative">
+                      <Input
+                        id="regPassword"
+                        type={showPassword ? "text" : "password"}
+                        value={formData.password}
+                        onChange={(e) =>
+                          updateForm("password", e.target.value)
+                        }
+                        placeholder="Minimo 6 caracteres"
+                        className="pr-10"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => setShowPassword(!showPassword)}
+                        aria-label={showPassword ? "Ocultar contrasena" : "Mostrar contrasena"}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <Eye className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
               <Button
                 type="submit"
-                className="w-full bg-white text-blue-600 hover:bg-blue-50 font-semibold h-12"
+                className="w-full h-12"
                 disabled={regLoading}
               >
                 {regLoading ? (
@@ -565,7 +565,7 @@ export default function AppEntryPage() {
                 )}
               </Button>
 
-              <p className="text-xs text-center text-blue-200/70">
+              <p className="text-xs text-center text-muted-foreground">
                 Al crear tu cuenta aceptas nuestros terminos de servicio
               </p>
             </form>
@@ -577,16 +577,22 @@ export default function AppEntryPage() {
 
   // --- Main: Organization selection ---
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-600 to-blue-700 flex flex-col">
+    <div className="min-h-screen bg-muted/30 dark:bg-background flex flex-col">
+      {/* Theme toggle */}
+      <div className="absolute top-4 right-4">
+        <ThemeToggle variant="icon" />
+      </div>
+
       <div className="flex-1 flex flex-col px-4 pb-8">
         {/* Logo + branding */}
-        <div className="text-center pt-12 pb-8 space-y-3">
-          <div className="w-20 h-20 rounded-[22px] bg-white/20 backdrop-blur flex items-center justify-center mx-auto shadow-lg">
-            <span className="text-white font-bold text-3xl">ST</span>
-          </div>
+        <div className="text-center pt-12 pb-8 space-y-4">
+          <STAppLogo size="xl" showText={false} className="justify-center" />
           <div className="space-y-1">
-            <h1 className="text-white text-2xl font-bold">STApp</h1>
-            <p className="text-blue-200 text-sm">
+            <h1 className="text-2xl font-bold">
+              <span className="text-primary">ST</span>
+              <span className="text-foreground">App</span>
+            </h1>
+            <p className="text-sm text-muted-foreground">
               Gestion de Servicio Tecnico
             </p>
           </div>
@@ -594,54 +600,53 @@ export default function AppEntryPage() {
 
         <div className="w-full max-w-sm mx-auto flex-1 flex flex-col space-y-5">
           {/* Organization input */}
-          <div className="bg-white/10 backdrop-blur rounded-xl p-4 space-y-4">
-            <div className="space-y-1">
-              <h2 className="text-white font-semibold">
-                Acceder a tu empresa
-              </h2>
-              <p className="text-blue-200 text-xs">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">Acceder a tu empresa</CardTitle>
+              <CardDescription>
                 Ingresa el identificador de tu empresa
-              </p>
-            </div>
-            <form onSubmit={handleSubmit} className="space-y-3">
-              <div className="flex items-center gap-0">
-                <Input
-                  value={slug}
-                  onChange={(e) => {
-                    setSlug(
-                      e.target.value.toLowerCase().replace(/\s/g, "-")
-                    )
-                    setError("")
-                  }}
-                  placeholder="mi-empresa"
-                  className="rounded-r-none bg-white/10 border-white/20 text-white placeholder:text-blue-300/50 focus-visible:ring-white/30"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                />
-                <div className="h-10 px-3 flex items-center bg-white/5 border border-l-0 border-white/20 rounded-r-md text-xs text-blue-200 whitespace-nowrap">
-                  .{ROOT_DOMAIN}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSubmit} className="space-y-3">
+                <div className="flex items-center gap-0">
+                  <Input
+                    value={slug}
+                    onChange={(e) => {
+                      setSlug(
+                        e.target.value.toLowerCase().replace(/\s/g, "-")
+                      )
+                      setError("")
+                    }}
+                    placeholder="mi-empresa"
+                    className="rounded-r-none"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                  />
+                  <div className="h-10 px-3 flex items-center bg-muted border border-l-0 rounded-r-md text-xs text-muted-foreground whitespace-nowrap">
+                    .{ROOT_DOMAIN}
+                  </div>
                 </div>
-              </div>
-              {error && (
-                <p className="text-sm text-red-300">{error}</p>
-              )}
-              <Button
-                type="submit"
-                className="w-full bg-white text-blue-600 hover:bg-blue-50 font-semibold h-11"
-              >
-                Acceder
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </form>
-          </div>
+                {error && (
+                  <p className="text-sm text-destructive">{error}</p>
+                )}
+                <Button type="submit" className="w-full h-11">
+                  Acceder
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
 
           {/* Recent tenants */}
           {recentTenants.length > 0 && (
-            <div className="bg-white/10 backdrop-blur rounded-xl p-4 space-y-3">
-              <p className="text-blue-200 text-xs font-medium uppercase tracking-wider">
-                Empresas recientes
-              </p>
-              <div className="space-y-1">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardDescription className="text-xs font-medium uppercase tracking-wider">
+                  Empresas recientes
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-1">
                 {recentTenants.map((tenant) => (
                   <div
                     key={tenant}
@@ -649,30 +654,30 @@ export default function AppEntryPage() {
                   >
                     <button
                       onClick={() => navigateToTenant(tenant)}
-                      className="flex items-center gap-3 py-2.5 px-3 rounded-lg hover:bg-white/10 flex-1 text-left transition-colors"
+                      className="flex items-center gap-3 py-2.5 px-3 rounded-lg hover:bg-accent flex-1 text-left transition-colors"
                     >
-                      <div className="w-9 h-9 rounded-lg bg-white/15 flex items-center justify-center flex-shrink-0">
-                        <Building2 className="h-4 w-4 text-white" />
+                      <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <Building2 className="h-4 w-4 text-primary" />
                       </div>
                       <div className="min-w-0">
-                        <div className="text-white text-sm font-medium truncate">
+                        <div className="text-sm font-medium truncate">
                           {tenant}
                         </div>
-                        <div className="text-blue-300 text-xs truncate">
+                        <div className="text-xs text-muted-foreground truncate">
                           {tenant}.{ROOT_DOMAIN}
                         </div>
                       </div>
                     </button>
                     <button
-                      className="p-2 rounded-lg text-blue-300/50 hover:text-red-300 hover:bg-white/10 transition-colors"
+                      className="p-2 rounded-lg text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors"
                       onClick={(e) => removeTenant(tenant, e)}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
                 ))}
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           )}
 
           {/* Spacer to push register to bottom */}
@@ -681,15 +686,15 @@ export default function AppEntryPage() {
           {/* Register CTA */}
           <div className="text-center space-y-4 pb-4">
             <div className="flex items-center gap-3">
-              <div className="flex-1 h-px bg-white/20" />
-              <span className="text-blue-200 text-xs">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-muted-foreground text-xs">
                 No tienes cuenta?
               </span>
-              <div className="flex-1 h-px bg-white/20" />
+              <div className="flex-1 h-px bg-border" />
             </div>
             <Button
               variant="outline"
-              className="w-full border-white/30 text-white bg-white/5 hover:bg-white/15 hover:text-white font-medium h-11"
+              className="w-full h-11"
               onClick={() => setView("register")}
             >
               <UserPlus className="mr-2 h-4 w-4" />
