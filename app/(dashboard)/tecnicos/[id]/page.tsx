@@ -135,112 +135,119 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" asChild>
+    <div className="space-y-4 sm:space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <Button variant="ghost" size="icon" asChild className="shrink-0">
             <Link href="/tecnicos">
               <ArrowLeft className="h-5 w-5" />
             </Link>
           </Button>
-          <div>
-            <h1 className="text-3xl font-bold">{tecnico.nombre}</h1>
-            <p className="text-muted-foreground">Detalle del técnico</p>
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-3xl font-bold truncate">{tecnico.nombre}</h1>
+            <p className="text-xs sm:text-sm text-muted-foreground">Detalle del técnico</p>
           </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setEditOpen(true)}>
-            <Edit className="mr-2 h-4 w-4" />
+        <div className="flex gap-2 pl-12 sm:pl-0">
+          <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+            <Edit className="mr-1.5 h-4 w-4" />
             Editar
           </Button>
           <Button
             variant="destructive"
+            size="sm"
             onClick={handleDelete}
             disabled={deleting || tecnico.ordenesActivas > 0}
           >
-            <Trash2 className="mr-2 h-4 w-4" />
-            {deleting ? "Eliminando..." : "Eliminar"}
+            <Trash2 className="mr-1.5 h-4 w-4" />
+            <span className="hidden sm:inline">{deleting ? "Eliminando..." : "Eliminar"}</span>
+            <span className="sm:hidden">{deleting ? "..." : "Eliminar"}</span>
           </Button>
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-3">
+      {/* Stats */}
+      <div className="grid gap-3 sm:gap-6 grid-cols-3">
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+          <CardHeader className="p-3 sm:p-6 pb-1 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
               Información
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Wrench className="h-4 w-4 text-muted-foreground" />
-              <span>{tecnico.nombre}</span>
+          <CardContent className="p-3 sm:p-6 pt-0 space-y-2 sm:space-y-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <Wrench className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground shrink-0" />
+              <span className="text-xs sm:text-sm truncate">{tecnico.nombre}</span>
+            </div>
+            <div className="flex items-center gap-2 min-w-0">
+              <Mail className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground shrink-0" />
+              <span className="text-xs sm:text-sm truncate">{tecnico.email}</span>
             </div>
             <div className="flex items-center gap-2">
-              <Mail className="h-4 w-4 text-muted-foreground" />
-              <span>{tecnico.email}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-              <span>Desde {new Date(tecnico.createdAt).toLocaleDateString()}</span>
+              <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground shrink-0" />
+              <span className="text-xs sm:text-sm">{new Date(tecnico.createdAt).toLocaleDateString()}</span>
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <ClipboardList className="h-4 w-4" />
-              Órdenes Activas
+          <CardHeader className="p-3 sm:p-6 pb-1 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground flex items-center gap-1.5 sm:gap-2">
+              <ClipboardList className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">Órdenes Activas</span>
+              <span className="sm:hidden">Activas</span>
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{tecnico.ordenesActivas}</div>
+          <CardContent className="p-3 sm:p-6 pt-0">
+            <div className="text-xl sm:text-3xl font-bold">{tecnico.ordenesActivas}</div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <CheckCircle className="h-4 w-4" />
-              Órdenes Completadas
+          <CardHeader className="p-3 sm:p-6 pb-1 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground flex items-center gap-1.5 sm:gap-2">
+              <CheckCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">Completadas</span>
+              <span className="sm:hidden">Hechas</span>
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-green-600">{tecnico.ordenesCompletadas}</div>
+          <CardContent className="p-3 sm:p-6 pt-0">
+            <div className="text-xl sm:text-3xl font-bold text-green-600">{tecnico.ordenesCompletadas}</div>
           </CardContent>
         </Card>
       </div>
 
+      {/* Historial */}
       <Card>
-        <CardHeader>
-          <CardTitle>Historial de Órdenes</CardTitle>
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="text-base sm:text-lg">Historial de Órdenes</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4 sm:p-6 pt-0">
           {tecnico.ordenes.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">
+            <p className="text-center text-muted-foreground py-6 sm:py-8 text-sm">
               No hay órdenes asignadas a este técnico
             </p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2 sm:space-y-3">
               {tecnico.ordenes.map((orden) => (
                 <Link
                   key={orden.id}
                   href={`/ordenes/${orden.id}`}
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4 border rounded-lg hover:bg-muted/50 transition-colors gap-2"
                 >
-                  <div className="flex items-center gap-4">
-                    <div className="font-medium">#{orden.numeroOrden}</div>
-                    <div>
-                      <div className="font-medium">{orden.dispositivo}</div>
-                      <div className="text-sm text-muted-foreground">{orden.cliente}</div>
+                  <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+                    <div className="font-medium text-sm shrink-0">#{orden.numeroOrden}</div>
+                    <div className="min-w-0">
+                      <div className="font-medium text-sm truncate">{orden.dispositivo}</div>
+                      <div className="text-xs sm:text-sm text-muted-foreground truncate">{orden.cliente}</div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <span className="text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2 sm:gap-4 pl-7 sm:pl-0">
+                    <span className="text-[10px] sm:text-sm text-muted-foreground">
                       {new Date(orden.fechaIngreso).toLocaleDateString()}
                     </span>
-                    <Badge className={estadoColors[orden.estado]}>
+                    <Badge className={`text-[10px] sm:text-xs ${estadoColors[orden.estado]}`}>
                       {estadoLabels[orden.estado]}
                     </Badge>
                   </div>

@@ -87,13 +87,13 @@ export function DashboardCharts({
   return (
     <>
       {/* Gráficos principales */}
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
         <OrdenesPorEstadoChart data={ordenesPorEstado} />
         <IngresosChart data={ingresosUltimos7Dias} totalPeriodo={totalIngresos7Dias} />
       </div>
 
       {/* Órdenes por técnico + contenido adicional */}
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
         <OrdenesPorTecnicoChart data={ordenesPorTecnico} />
         {children}
       </div>

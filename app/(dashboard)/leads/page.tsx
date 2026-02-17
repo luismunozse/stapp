@@ -12,14 +12,12 @@ export default async function LeadsPage() {
   if (error) redirect("/login")
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Leads del Chatbot</h1>
-          <p className="text-muted-foreground">
-            Gestiona los contactos capturados por Santi, tu asistente virtual
-          </p>
-        </div>
+    <div className="space-y-4 sm:space-y-6">
+      <div>
+        <h1 className="text-2xl sm:text-3xl font-bold">Leads del Chatbot</h1>
+        <p className="text-sm sm:text-base text-muted-foreground">
+          Contactos capturados por Santi, tu asistente virtual
+        </p>
       </div>
       <LeadsList />
     </div>

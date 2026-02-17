@@ -4,7 +4,8 @@ import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Search, Eye } from "lucide-react"
+import { Card, CardContent } from "@/components/ui/card"
+import { Search, Eye, Mail, Phone, Calendar } from "lucide-react"
 import { LeadDetailDialog } from "./lead-detail-dialog"
 import type { Lead } from "@/types/database"
 
@@ -91,8 +92,8 @@ export function LeadsList() {
       </div>
 
       {/* Estadísticas */}
-      <div className="bg-muted p-4 rounded-lg">
-        <p className="text-sm text-muted-foreground">
+      <div className="bg-muted p-3 sm:p-4 rounded-lg">
+        <p className="text-xs sm:text-sm text-muted-foreground">
           Total de leads: <span className="font-bold text-foreground">{total}</span>
         </p>
       </div>
@@ -100,57 +101,102 @@ export function LeadsList() {
       {/* Lista */}
       {loading ? (
         <div className="text-center py-12">
-          <p className="text-muted-foreground">Cargando leads...</p>
+          <p className="text-muted-foreground text-sm">Cargando leads...</p>
         </div>
       ) : leads.length === 0 ? (
         <div className="text-center py-12 border border-dashed rounded-lg">
-          <p className="text-muted-foreground">No se encontraron leads</p>
+          <p className="text-muted-foreground text-sm">No se encontraron leads</p>
         </div>
       ) : (
-        <div className="border rounded-lg overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-muted">
-                <tr>
-                  <th className="text-left p-4 font-medium">Nombre</th>
-                  <th className="text-left p-4 font-medium">Contacto</th>
-                  <th className="text-left p-4 font-medium">Interés</th>
-                  <th className="text-left p-4 font-medium">Estado</th>
-                  <th className="text-left p-4 font-medium">Fecha</th>
-                  <th className="text-left p-4 font-medium"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {leads.map((lead) => (
-                  <tr key={lead.id} className="border-t hover:bg-muted/50">
-                    <td className="p-4 font-medium">{lead.nombre || "Sin nombre"}</td>
-                    <td className="p-4">
-                      <div className="text-sm">
-                        {lead.email && <div>{lead.email}</div>}
-                        {lead.telefono && <div>{lead.telefono}</div>}
-                        {!lead.email && !lead.telefono && <div className="text-muted-foreground">Sin contacto</div>}
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      {lead.plan_interes && (
-                        <Badge variant="outline">{lead.plan_interes}</Badge>
-                      )}
-                    </td>
-                    <td className="p-4">{getEstadoBadge(lead.estado)}</td>
-                    <td className="p-4 text-sm text-muted-foreground">
-                      {new Date(lead.created_at).toLocaleDateString("es-AR")}
-                    </td>
-                    <td className="p-4">
-                      <Button variant="ghost" size="sm" onClick={() => setSelectedLead(lead)}>
-                        <Eye className="w-4 h-4" />
-                      </Button>
-                    </td>
+        <>
+          {/* Desktop: Table */}
+          <div className="hidden sm:block border rounded-lg overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-muted">
+                  <tr>
+                    <th className="text-left p-4 font-medium">Nombre</th>
+                    <th className="text-left p-4 font-medium">Contacto</th>
+                    <th className="text-left p-4 font-medium">Interés</th>
+                    <th className="text-left p-4 font-medium">Estado</th>
+                    <th className="text-left p-4 font-medium">Fecha</th>
+                    <th className="text-left p-4 font-medium"></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {leads.map((lead) => (
+                    <tr key={lead.id} className="border-t hover:bg-muted/50">
+                      <td className="p-4 font-medium">{lead.nombre || "Sin nombre"}</td>
+                      <td className="p-4">
+                        <div className="text-sm">
+                          {lead.email && <div>{lead.email}</div>}
+                          {lead.telefono && <div>{lead.telefono}</div>}
+                          {!lead.email && !lead.telefono && <div className="text-muted-foreground">Sin contacto</div>}
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        {lead.plan_interes && (
+                          <Badge variant="outline">{lead.plan_interes}</Badge>
+                        )}
+                      </td>
+                      <td className="p-4">{getEstadoBadge(lead.estado)}</td>
+                      <td className="p-4 text-sm text-muted-foreground">
+                        {new Date(lead.created_at).toLocaleDateString("es-AR")}
+                      </td>
+                      <td className="p-4">
+                        <Button variant="ghost" size="sm" onClick={() => setSelectedLead(lead)}>
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+
+          {/* Mobile: Cards */}
+          <div className="sm:hidden space-y-3">
+            {leads.map((lead) => (
+              <Card key={lead.id} className="hover:shadow-md transition-shadow">
+                <CardContent className="p-3">
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm truncate">{lead.nombre || "Sin nombre"}</p>
+                      {lead.plan_interes && (
+                        <Badge variant="outline" className="text-[10px] mt-1">{lead.plan_interes}</Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {getEstadoBadge(lead.estado)}
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setSelectedLead(lead)}>
+                        <Eye className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5 text-xs text-muted-foreground">
+                    {lead.email && (
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <Mail className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{lead.email}</span>
+                      </div>
+                    )}
+                    {lead.telefono && (
+                      <div className="flex items-center gap-1.5">
+                        <Phone className="h-3 w-3 shrink-0" />
+                        <span>{lead.telefono}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-1.5">
+                      <Calendar className="h-3 w-3 shrink-0" />
+                      <span>{new Date(lead.created_at).toLocaleDateString("es-AR")}</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </>
       )}
 
       {/* Dialog de detalle */}

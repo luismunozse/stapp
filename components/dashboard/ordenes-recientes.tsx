@@ -49,46 +49,47 @@ export function OrdenesRecientes({ ordenes }: OrdenesRecientesProps) {
 
   return (
     <Card>
-      <CardHeader className="pb-3">
+      <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-3">
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle className="text-base">Órdenes Recientes</CardTitle>
-            <CardDescription>Últimas órdenes de servicio</CardDescription>
+            <CardTitle className="text-sm sm:text-base">Órdenes Recientes</CardTitle>
+            <CardDescription className="text-xs sm:text-sm">Últimas órdenes de servicio</CardDescription>
           </div>
           <Link
             href="/ordenes"
-            className="text-sm text-primary hover:underline flex items-center gap-1"
+            className="text-xs sm:text-sm text-primary hover:underline flex items-center gap-1"
           >
             Ver todas
             <ArrowRight className="h-3 w-3" />
           </Link>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="p-3 sm:p-6 pt-0 space-y-2 sm:space-y-3">
         {ordenes.map((orden) => (
           <Link
             key={orden.id}
             href={`/ordenes/${orden.id}`}
-            className="block p-3 rounded-lg border hover:bg-muted/50 transition-colors"
+            className="block p-2.5 sm:p-3 rounded-lg border hover:bg-muted/50 transition-colors"
           >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-sm">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <span className="font-medium text-xs sm:text-sm">
                     #{orden.codigoOrden || orden.numeroOrden}
                   </span>
                   <OrderStatusBadge status={orden.estado} showIcon={false} />
                 </div>
-                <p className="text-sm text-muted-foreground truncate mt-1">
+                <p className="text-xs sm:text-sm text-muted-foreground truncate mt-0.5 sm:mt-1">
                   {orden.cliente}
                 </p>
-                <p className="text-xs text-muted-foreground truncate">
+                <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
                   {orden.dispositivo}
                 </p>
               </div>
-              <div className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
+              <div className="flex items-center gap-1 text-[10px] sm:text-xs text-muted-foreground shrink-0">
                 <Clock className="h-3 w-3" />
-                {formatFecha(orden.fechaIngreso)}
+                <span className="hidden sm:inline">{formatFecha(orden.fechaIngreso)}</span>
+                <span className="sm:hidden">{formatFecha(orden.fechaIngreso).replace("Hace menos de 1 hora", "<1h").replace("Hace ", "").replace(" horas", "h").replace(" hora", "h").replace(" días", "d").replace(" día", "d")}</span>
               </div>
             </div>
           </Link>

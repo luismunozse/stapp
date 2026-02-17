@@ -141,60 +141,60 @@ export function VendedoresList() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {vendedores.map((vendedor) => (
             <Link key={vendedor.id} href={`/vendedores/${vendedor.id}`}>
               <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-green-100 rounded-lg">
-                        <TrendingUp className="h-6 w-6 text-green-600" />
+                <CardHeader className="p-3 sm:p-6">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                      <div className="p-1.5 sm:p-2 bg-green-100 rounded-lg shrink-0">
+                        <TrendingUp className="h-4 w-4 sm:h-6 sm:w-6 text-green-600" />
                       </div>
-                      <div>
-                        <CardTitle className="text-lg">{vendedor.nombre}</CardTitle>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
-                          <Mail className="h-4 w-4" />
-                          {vendedor.email}
+                      <div className="min-w-0">
+                        <CardTitle className="text-sm sm:text-lg truncate">{vendedor.nombre}</CardTitle>
+                        <div className="flex items-center gap-1.5 text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1">
+                          <Mail className="h-3 w-3 sm:h-4 sm:w-4 shrink-0" />
+                          <span className="truncate">{vendedor.email}</span>
                         </div>
                       </div>
                     </div>
                     {isAdmin && (
-                      <div className="flex gap-1">
+                      <div className="flex gap-1 shrink-0">
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8"
+                          className="h-7 w-7 sm:h-8 sm:w-8"
                           onClick={(e) => handleEdit(vendedor, e)}
                         >
-                          <Edit className="h-4 w-4" />
+                          <Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          className="h-7 w-7 sm:h-8 sm:w-8 text-destructive hover:text-destructive"
                           onClick={(e) => handleDelete(vendedor.id, e)}
                           disabled={deletingId === vendedor.id}
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                         </Button>
                       </div>
                     )}
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-3">
+                <CardContent className="p-3 sm:p-6 pt-0 space-y-2 sm:space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">Registrado</span>
+                      <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
+                      <span className="text-xs sm:text-sm">Registrado</span>
                     </div>
-                    <span className="text-sm text-muted-foreground">
+                    <span className="text-xs sm:text-sm text-muted-foreground">
                       {formatDate(vendedor.created_at)}
                     </span>
                   </div>
                   <div className="pt-2 border-t">
-                    <div className="flex items-center gap-2 text-sm text-primary">
-                      <Eye className="h-4 w-4" />
+                    <div className="flex items-center gap-2 text-xs sm:text-sm text-primary">
+                      <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                       Ver detalle
                     </div>
                   </div>

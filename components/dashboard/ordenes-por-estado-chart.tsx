@@ -64,18 +64,18 @@ export const OrdenesPorEstadoChart = memo(function OrdenesPorEstadoChart({ data 
 
   return (
     <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base">Órdenes por Estado</CardTitle>
+      <CardHeader className="p-3 sm:p-6 pb-1 sm:pb-2">
+        <CardTitle className="text-sm sm:text-base">Órdenes por Estado</CardTitle>
       </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={280}>
+      <CardContent className="p-3 sm:p-6 pt-0">
+        <ResponsiveContainer width="100%" height={240}>
           <PieChart>
             <Pie
               data={chartData}
               cx="50%"
               cy="50%"
-              innerRadius={60}
-              outerRadius={90}
+              innerRadius={50}
+              outerRadius={75}
               paddingAngle={2}
               dataKey="value"
             >
@@ -98,13 +98,13 @@ export const OrdenesPorEstadoChart = memo(function OrdenesPorEstadoChart({ data 
               layout="horizontal"
               verticalAlign="bottom"
               align="center"
-              wrapperStyle={{ fontSize: "12px", color: "hsl(var(--foreground))" }}
+              wrapperStyle={{ fontSize: "11px", color: "hsl(var(--foreground))" }}
             />
           </PieChart>
         </ResponsiveContainer>
-        <div className="text-center mt-2">
-          <span className="text-2xl font-bold">{total}</span>
-          <span className="text-sm text-muted-foreground ml-2">total</span>
+        <div className="text-center mt-1 sm:mt-2">
+          <span className="text-xl sm:text-2xl font-bold">{total}</span>
+          <span className="text-xs sm:text-sm text-muted-foreground ml-2">total</span>
         </div>
       </CardContent>
     </Card>

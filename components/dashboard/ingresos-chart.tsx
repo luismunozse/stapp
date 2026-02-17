@@ -52,15 +52,15 @@ export const IngresosChart = memo(function IngresosChart({ data, totalPeriodo }:
 
   return (
     <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base">Ingresos Últimos 7 Días</CardTitle>
-        <CardDescription>
+      <CardHeader className="p-3 sm:p-6 pb-1 sm:pb-2">
+        <CardTitle className="text-sm sm:text-base">Ingresos Últimos 7 Días</CardTitle>
+        <CardDescription className="text-xs sm:text-sm">
           Total: <span className="font-semibold text-foreground">{formatCurrency(totalPeriodo)}</span>
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={220}>
-          <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+      <CardContent className="p-3 sm:p-6 pt-0">
+        <ResponsiveContainer width="100%" height={200}>
+          <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
             <defs>
               <linearGradient id="colorIngresos" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />

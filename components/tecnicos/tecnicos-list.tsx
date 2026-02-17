@@ -141,67 +141,67 @@ export function TecnicosList() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {tecnicos.map((tecnico) => (
             <Link key={tecnico.id} href={`/tecnicos/${tecnico.id}`}>
               <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-primary/10 rounded-lg">
-                        <Wrench className="h-6 w-6 text-primary" />
+                <CardHeader className="p-3 sm:p-6">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                      <div className="p-1.5 sm:p-2 bg-primary/10 rounded-lg shrink-0">
+                        <Wrench className="h-4 w-4 sm:h-6 sm:w-6 text-primary" />
                       </div>
-                      <div>
-                        <CardTitle className="text-lg">{tecnico.nombre}</CardTitle>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
-                          <Mail className="h-4 w-4" />
-                          {tecnico.email}
+                      <div className="min-w-0">
+                        <CardTitle className="text-sm sm:text-lg truncate">{tecnico.nombre}</CardTitle>
+                        <div className="flex items-center gap-1.5 text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1">
+                          <Mail className="h-3 w-3 sm:h-4 sm:w-4 shrink-0" />
+                          <span className="truncate">{tecnico.email}</span>
                         </div>
                       </div>
                     </div>
                     {isAdmin && (
-                      <div className="flex gap-1">
+                      <div className="flex gap-1 shrink-0">
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8"
+                          className="h-7 w-7 sm:h-8 sm:w-8"
                           onClick={(e) => handleEdit(tecnico, e)}
                         >
-                          <Edit className="h-4 w-4" />
+                          <Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          className="h-7 w-7 sm:h-8 sm:w-8 text-destructive hover:text-destructive"
                           onClick={(e) => handleDelete(tecnico.id, tecnico.ordenesActivas, e)}
                           disabled={deletingId === tecnico.id}
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                         </Button>
                       </div>
                     )}
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-3">
+                <CardContent className="p-3 sm:p-6 pt-0 space-y-2 sm:space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <ClipboardList className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">Órdenes Activas</span>
+                      <ClipboardList className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
+                      <span className="text-xs sm:text-sm">Activas</span>
                     </div>
-                    <Badge variant="secondary">{tecnico.ordenesActivas}</Badge>
+                    <Badge variant="secondary" className="text-[10px] sm:text-xs">{tecnico.ordenesActivas}</Badge>
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">Completadas</span>
+                      <CheckCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
+                      <span className="text-xs sm:text-sm">Completadas</span>
                     </div>
-                    <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+                    <Badge className="bg-green-100 text-green-800 hover:bg-green-100 text-[10px] sm:text-xs">
                       {tecnico.ordenesCompletadas}
                     </Badge>
                   </div>
                   <div className="pt-2 border-t">
-                    <div className="flex items-center gap-2 text-sm text-primary">
-                      <Eye className="h-4 w-4" />
+                    <div className="flex items-center gap-2 text-xs sm:text-sm text-primary">
+                      <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                       Ver detalle
                     </div>
                   </div>
