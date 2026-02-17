@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { Eye, EyeOff, CheckCircle } from "lucide-react"
 import { BusinessLogo } from "@/components/shared/business-logo"
+import { savePWATokens } from "@/components/auth/session-refresher"
 
 interface TenantInfo {
   nombre: string
@@ -149,14 +150,13 @@ function LoginForm() {
     }
   }
 
-  // Guardar refresh token en localStorage para PWA
+  // Guardar refresh token en localStorage + IndexedDB para PWA
   const saveRefreshTokenForPWA = async () => {
     try {
       const res = await fetch("/api/auth/get-refresh-token")
       if (res.ok) {
         const { refreshToken, expiresAt } = await res.json()
-        localStorage.setItem("pwa_refresh_token", refreshToken)
-        localStorage.setItem("pwa_refresh_token_expires", expiresAt)
+        await savePWATokens(refreshToken, expiresAt)
       }
     } catch (error) {
       console.error("Error saving refresh token for PWA:", error)

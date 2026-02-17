@@ -50,7 +50,8 @@
       "Bash(npx cap add:*)",
       "Bash(npx cap sync:*)",
       "Bash(gradlew assembleDebug:*)",
-      "Bash(./gradlew.bat assembleDebug:*)"
+      "Bash(./gradlew.bat assembleDebug:*)",
+      "Bash(npx @capacitor/assets generate:*)"
     ]
   }
 }

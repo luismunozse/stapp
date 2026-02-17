@@ -227,24 +227,19 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       const timeUntilExpiry = exp - now
 
       if (timeUntilExpiry < REFRESH_THRESHOLD && token.refreshToken) {
-        // Intentar refrescar el token
+        // Validar que el refresh token siga vigente (sin rotarlo).
+        // No rotamos acá porque la PWA guarda el token en localStorage
+        // y no puede sincronizar un token nuevo. Solo se rota en login/restore.
         const validUser = await validateRefreshToken(token.refreshToken as string)
 
         if (validUser) {
-          // Rotar refresh token para mayor seguridad
-          const newRefreshToken = await rotateRefreshToken(
-            validUser.id,
-            token.rememberMe as boolean
-          )
-
-          // Actualizar token
-          token.refreshToken = newRefreshToken
+          // Extender el JWT sin rotar el refresh token
           token.exp = Math.floor(Date.now() / 1000) + ONE_DAY
           token.iat = Math.floor(Date.now() / 1000)
 
-          console.log(`[Auth] Token refreshed for user ${validUser.id}`)
+          console.log(`[Auth] JWT extended for user ${validUser.id}`)
         } else {
-          // Refresh token inválido, forzar re-login
+          // Refresh token inválido o expirado, forzar re-login
           console.log(`[Auth] Refresh token invalid, session expired`)
           token.error = "RefreshTokenExpired"
         }

@@ -22,13 +22,137 @@ const PUBLIC_PATHS = [
 const PWA_REFRESH_TOKEN_KEY = "pwa_refresh_token"
 const PWA_REFRESH_TOKEN_EXPIRES_KEY = "pwa_refresh_token_expires"
 
+// IndexedDB como backup para iOS PWA (localStorage puede limpiarse)
+const IDB_NAME = "stapp_auth"
+const IDB_STORE = "tokens"
+
+async function idbGet(key: string): Promise<string | null> {
+  try {
+    return await new Promise((resolve) => {
+      const req = indexedDB.open(IDB_NAME, 1)
+      req.onupgradeneeded = () => {
+        req.result.createObjectStore(IDB_STORE)
+      }
+      req.onsuccess = () => {
+        const tx = req.result.transaction(IDB_STORE, "readonly")
+        const store = tx.objectStore(IDB_STORE)
+        const get = store.get(key)
+        get.onsuccess = () => resolve(get.result ?? null)
+        get.onerror = () => resolve(null)
+        tx.oncomplete = () => req.result.close()
+      }
+      req.onerror = () => resolve(null)
+    })
+  } catch {
+    return null
+  }
+}
+
+async function idbSet(key: string, value: string): Promise<void> {
+  try {
+    await new Promise<void>((resolve) => {
+      const req = indexedDB.open(IDB_NAME, 1)
+      req.onupgradeneeded = () => {
+        req.result.createObjectStore(IDB_STORE)
+      }
+      req.onsuccess = () => {
+        const tx = req.result.transaction(IDB_STORE, "readwrite")
+        tx.objectStore(IDB_STORE).put(value, key)
+        tx.oncomplete = () => {
+          req.result.close()
+          resolve()
+        }
+        tx.onerror = () => {
+          req.result.close()
+          resolve()
+        }
+      }
+      req.onerror = () => resolve()
+    })
+  } catch {
+    // silenciar
+  }
+}
+
+async function idbDelete(key: string): Promise<void> {
+  try {
+    await new Promise<void>((resolve) => {
+      const req = indexedDB.open(IDB_NAME, 1)
+      req.onupgradeneeded = () => {
+        req.result.createObjectStore(IDB_STORE)
+      }
+      req.onsuccess = () => {
+        const tx = req.result.transaction(IDB_STORE, "readwrite")
+        tx.objectStore(IDB_STORE).delete(key)
+        tx.oncomplete = () => {
+          req.result.close()
+          resolve()
+        }
+        tx.onerror = () => {
+          req.result.close()
+          resolve()
+        }
+      }
+      req.onerror = () => resolve()
+    })
+  } catch {
+    // silenciar
+  }
+}
+
+/**
+ * Guardar refresh token en localStorage + IndexedDB (dual write)
+ */
+export async function savePWATokens(refreshToken: string, expiresAt: string) {
+  if (typeof window === "undefined") return
+  localStorage.setItem(PWA_REFRESH_TOKEN_KEY, refreshToken)
+  localStorage.setItem(PWA_REFRESH_TOKEN_EXPIRES_KEY, expiresAt)
+  await idbSet(PWA_REFRESH_TOKEN_KEY, refreshToken)
+  await idbSet(PWA_REFRESH_TOKEN_EXPIRES_KEY, expiresAt)
+}
+
+/**
+ * Leer refresh token (localStorage primero, IndexedDB como fallback)
+ */
+async function readPWATokens(): Promise<{ refreshToken: string | null; expiresAt: string | null }> {
+  if (typeof window === "undefined") return { refreshToken: null, expiresAt: null }
+
+  let refreshToken = localStorage.getItem(PWA_REFRESH_TOKEN_KEY)
+  let expiresAt = localStorage.getItem(PWA_REFRESH_TOKEN_EXPIRES_KEY)
+
+  // Fallback a IndexedDB (iOS PWA puede borrar localStorage)
+  if (!refreshToken) {
+    refreshToken = await idbGet(PWA_REFRESH_TOKEN_KEY)
+    expiresAt = await idbGet(PWA_REFRESH_TOKEN_EXPIRES_KEY)
+
+    // Re-sync a localStorage si encontramos en IDB
+    if (refreshToken) {
+      localStorage.setItem(PWA_REFRESH_TOKEN_KEY, refreshToken)
+      if (expiresAt) localStorage.setItem(PWA_REFRESH_TOKEN_EXPIRES_KEY, expiresAt)
+    }
+  }
+
+  return { refreshToken, expiresAt }
+}
+
+/**
+ * Limpiar tokens de ambos storages
+ */
+async function clearPWATokens() {
+  if (typeof window === "undefined") return
+  localStorage.removeItem(PWA_REFRESH_TOKEN_KEY)
+  localStorage.removeItem(PWA_REFRESH_TOKEN_EXPIRES_KEY)
+  await idbDelete(PWA_REFRESH_TOKEN_KEY)
+  await idbDelete(PWA_REFRESH_TOKEN_EXPIRES_KEY)
+}
+
 export function SessionRefresher({ children }: { children: React.ReactNode }) {
   const { data: session, status, update } = useSession()
   const pathname = usePathname()
   const router = useRouter()
   const lastActivityRef = useRef(Date.now())
   const [isRestoring, setIsRestoring] = useState(false)
-  const restorationAttemptedRef = useRef(false)
+  const isRestoringRef = useRef(false)
 
   // Verificar si es ruta pública
   const isPublicPath = PUBLIC_PATHS.some(
@@ -40,39 +164,32 @@ export function SessionRefresher({ children }: { children: React.ReactNode }) {
     lastActivityRef.current = Date.now()
   }, [])
 
-  // Limpiar tokens de localStorage
-  const clearPWATokens = useCallback(() => {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem(PWA_REFRESH_TOKEN_KEY)
-      localStorage.removeItem(PWA_REFRESH_TOKEN_EXPIRES_KEY)
-    }
-  }, [])
-
-  // Intentar restaurar sesión usando refresh token de localStorage (para PWA)
+  // Intentar restaurar sesión usando refresh token (para PWA)
   const tryRestoreSession = useCallback(async () => {
     if (typeof window === "undefined") return false
-    if (restorationAttemptedRef.current) return false
-
-    const refreshToken = localStorage.getItem(PWA_REFRESH_TOKEN_KEY)
-    const expiresAt = localStorage.getItem(PWA_REFRESH_TOKEN_EXPIRES_KEY)
-
-    if (!refreshToken) return false
-
-    // Verificar si el token no ha expirado
-    if (expiresAt) {
-      const expires = new Date(expiresAt)
-      if (expires < new Date()) {
-        console.log("[SessionRefresher] PWA refresh token expired, clearing")
-        clearPWATokens()
-        return false
-      }
-    }
-
-    console.log("[SessionRefresher] Attempting to restore session from PWA token")
-    restorationAttemptedRef.current = true
+    if (isRestoringRef.current) return false
+    isRestoringRef.current = true
     setIsRestoring(true)
 
     try {
+      const { refreshToken, expiresAt } = await readPWATokens()
+
+      if (!refreshToken) {
+        return false
+      }
+
+      // Verificar si el token no ha expirado
+      if (expiresAt) {
+        const expires = new Date(expiresAt)
+        if (expires < new Date()) {
+          console.log("[SessionRefresher] PWA refresh token expired, clearing")
+          await clearPWATokens()
+          return false
+        }
+      }
+
+      console.log("[SessionRefresher] Attempting to restore session from PWA token")
+
       // Usar signIn con el refresh token
       const result = await signIn("credentials", {
         pwaRefreshToken: refreshToken,
@@ -82,13 +199,12 @@ export function SessionRefresher({ children }: { children: React.ReactNode }) {
       if (result?.ok && !result?.error) {
         console.log("[SessionRefresher] Session restored successfully")
 
-        // Obtener el nuevo refresh token y guardarlo
+        // Obtener el nuevo refresh token (se rotó en authorize) y guardarlo
         try {
           const tokenRes = await fetch("/api/auth/get-refresh-token")
           if (tokenRes.ok) {
             const { refreshToken: newToken, expiresAt: newExpires } = await tokenRes.json()
-            localStorage.setItem(PWA_REFRESH_TOKEN_KEY, newToken)
-            localStorage.setItem(PWA_REFRESH_TOKEN_EXPIRES_KEY, newExpires)
+            await savePWATokens(newToken, newExpires)
           }
         } catch (e) {
           console.error("[SessionRefresher] Error updating stored refresh token:", e)
@@ -99,25 +215,26 @@ export function SessionRefresher({ children }: { children: React.ReactNode }) {
         return true
       } else {
         console.log("[SessionRefresher] Failed to restore session, clearing tokens")
-        clearPWATokens()
+        await clearPWATokens()
         return false
       }
     } catch (error) {
       console.error("[SessionRefresher] Error restoring session:", error)
-      clearPWATokens()
+      await clearPWATokens()
       return false
     } finally {
+      isRestoringRef.current = false
       setIsRestoring(false)
     }
-  }, [clearPWATokens])
+  }, [])
 
   // Manejar error de sesión expirada
   const handleSessionError = useCallback(async () => {
     console.log("[SessionRefresher] Session expired, clearing PWA tokens")
-    clearPWATokens()
+    await clearPWATokens()
     await signOut({ redirect: false })
     router.push("/login?expired=true")
-  }, [router, clearPWATokens])
+  }, [router])
 
   // Verificar y refrescar sesión
   const checkSession = useCallback(async () => {
@@ -140,20 +257,14 @@ export function SessionRefresher({ children }: { children: React.ReactNode }) {
 
   // Intentar restaurar sesión si no hay sesión activa (para PWA)
   useEffect(() => {
-    // Solo intentar si:
-    // - El estado de sesión ya se cargó (no está "loading")
-    // - No hay sesión autenticada
-    // - No estamos en una ruta pública
-    // - No estamos ya intentando restaurar
     if (
       status === "unauthenticated" &&
       !isPublicPath &&
-      !isRestoring &&
-      !restorationAttemptedRef.current
+      !isRestoringRef.current
     ) {
       tryRestoreSession()
     }
-  }, [status, isPublicPath, isRestoring, tryRestoreSession])
+  }, [status, isPublicPath, tryRestoreSession])
 
   // Polling periódico para mantener sesión activa
   useEffect(() => {
@@ -194,9 +305,7 @@ export function SessionRefresher({ children }: { children: React.ReactNode }) {
       if (document.visibilityState === "visible") {
         if (status === "authenticated") {
           checkSession()
-        } else if (status === "unauthenticated" && !isPublicPath && !restorationAttemptedRef.current) {
-          // Intentar restaurar sesión si no hay sesión al volver al foco
-          restorationAttemptedRef.current = false // Reset para permitir nuevo intento
+        } else if (status === "unauthenticated" && !isPublicPath && !isRestoringRef.current) {
           tryRestoreSession()
         }
       }
@@ -205,8 +314,7 @@ export function SessionRefresher({ children }: { children: React.ReactNode }) {
     const handleFocus = () => {
       if (status === "authenticated") {
         checkSession()
-      } else if (status === "unauthenticated" && !isPublicPath && !restorationAttemptedRef.current) {
-        restorationAttemptedRef.current = false
+      } else if (status === "unauthenticated" && !isPublicPath && !isRestoringRef.current) {
         tryRestoreSession()
       }
     }
