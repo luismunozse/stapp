@@ -17,7 +17,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { useModal } from "@/contexts/modal-context"
 import { formatCurrency } from "@/lib/utils"
-import { Plus, Trash2, Package, Search, Loader2 } from "lucide-react"
+import { Plus, Trash2, Package, Search, Loader2, Banknote, ArrowRightLeft, CreditCard, Wallet, MoreHorizontal } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 const clienteSchema = z.object({
   nombre: z.string()
@@ -44,14 +45,28 @@ const itemSchema = z.object({
   diasGarantia: z.number().min(0).default(0),
 })
 
+const METODOS_PAGO = [
+  { value: "EFECTIVO", label: "Efectivo", icon: Banknote },
+  { value: "TRANSFERENCIA", label: "Transferencia", icon: ArrowRightLeft },
+  { value: "TARJETA_DEBITO", label: "Tarjeta Débito", icon: CreditCard },
+  { value: "TARJETA_CREDITO", label: "Tarjeta Crédito", icon: CreditCard },
+  { value: "MERCADOPAGO", label: "MercadoPago", icon: Wallet },
+  { value: "OTRO", label: "Otro", icon: MoreHorizontal },
+] as const
+
+type MetodoPago = typeof METODOS_PAGO[number]["value"]
+
 const ventaSchema = z.object({
   clienteId: z.string().nullable().optional(),
   clienteNombre: z.string().min(1, "Nombre del cliente requerido"),
   clienteTelefono: z.string().optional(),
   items: z.array(itemSchema).min(1, "Agrega al menos un producto"),
   descuento: z.number().min(0).default(0),
-  metodoPago: z.enum(["EFECTIVO", "TRANSFERENCIA", "TARJETA"]),
+  metodoPago: z.enum(["EFECTIVO", "TRANSFERENCIA", "TARJETA", "TARJETA_DEBITO", "TARJETA_CREDITO", "MERCADOPAGO", "OTRO"]),
   observaciones: z.string().optional(),
+  cuotas: z.number().int().min(1).nullable().optional(),
+  recargoPorcentaje: z.number().min(0).max(100).nullable().optional(),
+  numeroReferencia: z.string().optional(),
 })
 
 type VentaFormData = z.infer<typeof ventaSchema>
@@ -128,6 +143,9 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
       descuento: 0,
       metodoPago: "EFECTIVO",
       observaciones: "",
+      cuotas: null,
+      recargoPorcentaje: null,
+      numeroReferencia: "",
     },
   })
 
@@ -149,6 +167,13 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
 
   const watchItems = watch("items")
   const watchDescuento = watch("descuento") || 0
+  const watchMetodoPago = watch("metodoPago")
+  const watchCuotas = watch("cuotas")
+  const watchRecargo = watch("recargoPorcentaje")
+
+  const showReferencia = watchMetodoPago === "TRANSFERENCIA" || watchMetodoPago === "MERCADOPAGO"
+  const showCuotas = watchMetodoPago === "TARJETA_CREDITO"
+  const showRecargo = watchMetodoPago === "TARJETA_CREDITO" || watchMetodoPago === "TARJETA_DEBITO"
 
   const subtotal = watchItems.reduce(
     (sum, item) => sum + (item.cantidad || 0) * (item.precioUnitario || 0),
@@ -245,6 +270,20 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
       await showError("Error al crear cliente")
     } finally {
       setClienteLoading(false)
+    }
+  }
+
+  const handleMetodoChange = (value: MetodoPago) => {
+    setValue("metodoPago", value)
+    if (value !== "TARJETA_CREDITO" && value !== "TARJETA_DEBITO") {
+      setValue("cuotas", null)
+      setValue("recargoPorcentaje", null)
+    }
+    if (value !== "TRANSFERENCIA" && value !== "MERCADOPAGO") {
+      setValue("numeroReferencia", "")
+    }
+    if (value === "TARJETA_CREDITO") {
+      setValue("cuotas", 1)
     }
   }
 
@@ -517,19 +556,81 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-4 rounded-lg border p-4">
               <h3 className="font-medium">Método de Pago</h3>
-              <Select
-                value={watch("metodoPago")}
-                onValueChange={(value) => setValue("metodoPago", value as "EFECTIVO" | "TRANSFERENCIA" | "TARJETA")}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="EFECTIVO">Efectivo</SelectItem>
-                  <SelectItem value="TRANSFERENCIA">Transferencia</SelectItem>
-                  <SelectItem value="TARJETA">Tarjeta</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="grid grid-cols-3 sm:grid-cols-3 gap-2">
+                {METODOS_PAGO.map(({ value, label, icon: Icon }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => handleMetodoChange(value)}
+                    className={cn(
+                      "flex flex-col items-center gap-1 p-2.5 rounded-lg border-2 text-center transition-all text-xs",
+                      watchMetodoPago === value
+                        ? "border-primary bg-primary/5 text-primary font-medium"
+                        : "border-border hover:border-muted-foreground/30 text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span className="leading-tight">{label}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Cuotas y recargo para tarjeta crédito */}
+              {showCuotas && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Cuotas</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={48}
+                      placeholder="1"
+                      {...register("cuotas", { valueAsNumber: true })}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Recargo %</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      max={100}
+                      placeholder="0"
+                      {...register("recargoPorcentaje", { valueAsNumber: true })}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Recargo solo débito */}
+              {watchMetodoPago === "TARJETA_DEBITO" && (
+                <div className="space-y-1">
+                  <Label className="text-xs">Recargo % (si aplica)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min={0}
+                    max={100}
+                    placeholder="0"
+                    {...register("recargoPorcentaje", { valueAsNumber: true })}
+                  />
+                </div>
+              )}
+
+              {/* Referencia para transferencia/mercadopago */}
+              {showReferencia && (
+                <div className="space-y-1">
+                  <Label className="text-xs">Nro. de referencia</Label>
+                  <Input
+                    {...register("numeroReferencia")}
+                    placeholder={
+                      watchMetodoPago === "TRANSFERENCIA"
+                        ? "CBU, alias o nro. de operación"
+                        : "Nro. de operación MercadoPago"
+                    }
+                  />
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label>Descuento</Label>

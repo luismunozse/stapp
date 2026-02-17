@@ -19,8 +19,12 @@ const ventaSchema = z.object({
   clienteTelefono: z.string().optional(),
   items: z.array(itemSchema).min(1, "Debe agregar al menos un item"),
   descuento: z.number().min(0).default(0),
-  metodoPago: z.enum(["EFECTIVO", "TRANSFERENCIA", "TARJETA"]),
+  metodoPago: z.enum(["EFECTIVO", "TRANSFERENCIA", "TARJETA", "TARJETA_DEBITO", "TARJETA_CREDITO", "MERCADOPAGO", "OTRO"]),
   observaciones: z.string().optional(),
+  cuotas: z.number().int().min(1).nullable().optional(),
+  recargoPorcentaje: z.number().min(0).nullable().optional(),
+  montoOriginal: z.number().positive().nullable().optional(),
+  numeroReferencia: z.string().optional(),
 })
 
 export async function GET(request: Request) {
@@ -47,7 +51,8 @@ export async function GET(request: Request) {
           *,
           inventario (*)
         ),
-        garantias_venta (*)
+        garantias_venta (*),
+        pagos_venta (*)
       `)
       .eq("organization_id", organizationId!)
       .order("created_at", { ascending: false })
@@ -113,10 +118,25 @@ export async function GET(request: Request) {
       subtotal: parseFloat(venta.subtotal),
       descuento: parseFloat(venta.descuento),
       total: parseFloat(venta.total),
+      montoAbonado: parseFloat(venta.monto_abonado || "0"),
+      estadoPago: venta.estado_pago || "PAGADO",
       metodoPago: venta.metodo_pago,
       estado: venta.estado,
       observaciones: venta.observaciones,
       createdAt: venta.created_at,
+      pagos: venta.pagos_venta?.map((p: any) => ({
+        id: p.id,
+        monto: parseFloat(p.monto),
+        metodoPago: p.metodo_pago,
+        referencia: p.numero_referencia,
+        fecha: p.fecha,
+        observaciones: p.observaciones,
+        cuotas: p.cuotas,
+        recargoPorcentaje: p.recargo_porcentaje ? parseFloat(p.recargo_porcentaje) : null,
+        montoOriginal: p.monto_original ? parseFloat(p.monto_original) : null,
+      })).sort((a: any, b: any) =>
+        new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
+      ) || [],
     }))
 
     return NextResponse.json(ventasFormatted)
@@ -181,7 +201,7 @@ export async function POST(request: Request) {
     )
     const total = subtotal - data.descuento
 
-    // Crear venta
+    // Crear venta (marcada como pagada por defecto)
     const { data: venta, error: dbError } = await supabaseAdmin
       .from("ventas")
       .insert({
@@ -194,6 +214,8 @@ export async function POST(request: Request) {
         descuento: data.descuento,
         total,
         metodo_pago: data.metodoPago,
+        monto_abonado: total,
+        estado_pago: "PAGADO",
         observaciones: data.observaciones || null,
         organization_id: organizationId!,
       })
@@ -203,6 +225,19 @@ export async function POST(request: Request) {
     if (dbError) {
       throw dbError
     }
+
+    // Registrar pago automático por el total
+    await supabaseAdmin
+      .from("pagos_venta")
+      .insert({
+        venta_id: venta.id,
+        monto: total,
+        metodo_pago: data.metodoPago,
+        numero_referencia: data.numeroReferencia || null,
+        cuotas: data.cuotas || null,
+        recargo_porcentaje: data.recargoPorcentaje || null,
+        monto_original: data.montoOriginal || null,
+      })
 
     // Insertar items de venta
     const itemsToInsert = data.items.map(item => ({

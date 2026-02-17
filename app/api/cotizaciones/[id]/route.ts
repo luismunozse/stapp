@@ -62,7 +62,9 @@ export async function GET(
       iva: cotizacion.iva,
       total: cotizacion.total,
       createdAt: cotizacion.created_at,
-      firmaUrl: cotizacion.firma_url,
+      publicToken: cotizacion.public_token,
+      firmaAprobacion: cotizacion.firma_aprobacion,
+      firmaMime: cotizacion.firma_mime,
       fechaAprobacion: cotizacion.fecha_aprobacion,
       orden: {
         id: cotizacion.ordenes_servicio.id,

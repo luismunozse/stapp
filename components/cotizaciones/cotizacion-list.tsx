@@ -16,6 +16,8 @@ import {
   Mail,
   PenTool,
   Download,
+  Share2,
+  Link2,
 } from "lucide-react"
 import { formatDate, formatCurrency } from "@/lib/utils"
 import { CotizacionForm } from "./cotizacion-form"
@@ -33,6 +35,7 @@ interface Cotizacion {
   iva: number
   total: number
   createdAt: string
+  publicToken: string | null
   firmaAprobacion: string | null
   firmaMime: string | null
   fechaAprobacion: string | null
@@ -166,6 +169,19 @@ export function CotizacionList({ ordenId, clienteEmail }: CotizacionListProps) {
       fetchCotizaciones()
     } catch (error) {
       console.error("Error:", error)
+    }
+  }
+
+  const handleShare = async (cotizacion: Cotizacion) => {
+    if (!cotizacion.publicToken) return
+    const baseUrl = window.location.origin
+    const url = `${baseUrl}/cotizacion/${cotizacion.publicToken}`
+    try {
+      await navigator.clipboard.writeText(url)
+      await showSuccess("Link copiado al portapapeles")
+    } catch {
+      // Fallback
+      prompt("Copiar este link:", url)
     }
   }
 
@@ -309,16 +325,27 @@ export function CotizacionList({ ordenId, clienteEmail }: CotizacionListProps) {
                   {/* Actions */}
                   <div className="flex flex-wrap gap-2 pt-2 border-t">
                     {canSend && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleSend(cotizacion.id)}
-                        disabled={sendingId === cotizacion.id || !clienteEmail}
-                        title={!clienteEmail ? "El cliente no tiene email" : "Enviar por email"}
-                      >
-                        <Send className="mr-2 h-3 w-3" />
-                        {sendingId === cotizacion.id ? "Enviando..." : "Enviar"}
-                      </Button>
+                      !clienteEmail ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled
+                          className="opacity-60"
+                        >
+                          <Mail className="mr-2 h-3 w-3" />
+                          Sin email del cliente
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleSend(cotizacion.id)}
+                          disabled={sendingId === cotizacion.id}
+                        >
+                          <Send className="mr-2 h-3 w-3" />
+                          {sendingId === cotizacion.id ? "Enviando..." : "Enviar"}
+                        </Button>
+                      )
                     )}
                     {canEdit && (
                       <Button
@@ -372,6 +399,17 @@ export function CotizacionList({ ordenId, clienteEmail }: CotizacionListProps) {
                       <Download className="mr-2 h-3 w-3" />
                       PDF
                     </Button>
+                    {cotizacion.publicToken && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleShare(cotizacion)}
+                        title="Copiar link publico"
+                      >
+                        <Link2 className="mr-2 h-3 w-3" />
+                        Compartir
+                      </Button>
+                    )}
                   </div>
                 </CardContent>
               </Card>

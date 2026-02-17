@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getNextQuoteNumber } from "@/lib/counters"
+import { randomBytes } from "crypto"
 import { z } from "zod"
 
 const itemSchema = z.object({
@@ -68,7 +69,9 @@ export async function GET(request: Request) {
       iva: c.iva,
       total: c.total,
       createdAt: c.created_at,
-      firmaUrl: c.firma_url,
+      publicToken: c.public_token,
+      firmaAprobacion: c.firma_aprobacion,
+      firmaMime: c.firma_mime,
       fechaAprobacion: c.fecha_aprobacion,
       orden: {
         id: c.ordenes_servicio.id,
@@ -138,11 +141,13 @@ export async function POST(request: Request) {
     const numeroCotizacion = await getNextQuoteNumber(organizationId!)
 
     // Crear cotización
+    const publicToken = randomBytes(16).toString("hex")
     const { data: cotizacion, error: createError } = await supabaseAdmin
       .from("cotizaciones")
       .insert({
         orden_id: data.ordenId,
         numero_cotizacion: numeroCotizacion,
+        public_token: publicToken,
         notas: data.notas || null,
         fecha_vencimiento: data.fechaVencimiento
           ? new Date(data.fechaVencimiento).toISOString()
@@ -198,6 +203,7 @@ export async function POST(request: Request) {
       ordenId: cotizacionCompleta.orden_id,
       numeroCotizacion: cotizacionCompleta.numero_cotizacion,
       estado: cotizacionCompleta.estado,
+      publicToken: cotizacionCompleta.public_token,
       subtotal: cotizacionCompleta.subtotal,
       iva: cotizacionCompleta.iva,
       total: cotizacionCompleta.total,

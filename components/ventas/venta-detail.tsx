@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useModal } from "@/contexts/modal-context"
 import { formatDate, formatCurrency } from "@/lib/utils"
+import { PaymentStatusBadge } from "@/components/ui/badge"
 import {
   ArrowLeft,
   FileText,
@@ -18,10 +19,20 @@ import {
   XCircle,
   Download,
   Pencil,
+  Plus,
+  ChevronDown,
+  ChevronUp,
+  DollarSign,
+  Banknote,
+  ArrowRightLeft,
+  Wallet,
+  MoreHorizontal,
 } from "lucide-react"
 import Link from "next/link"
 import { WhatsAppDialog } from "@/components/ordenes/whatsapp-dialog"
 import { VentaEditForm } from "@/components/ventas/venta-edit-form"
+import { PagosHistorial } from "@/components/facturacion/pagos-historial"
+import { VentaPagoForm } from "@/components/ventas/venta-pago-form"
 import type { MetodoPagoVenta } from "@/lib/notifications/types"
 
 interface VentaItem {
@@ -45,6 +56,18 @@ interface Garantia {
   estado: string
 }
 
+interface Pago {
+  id: string
+  monto: number
+  metodoPago: string
+  referencia?: string
+  fecha: string
+  observaciones?: string
+  cuotas?: number | null
+  recargoPorcentaje?: number | null
+  montoOriginal?: number | null
+}
+
 interface VentaDetail {
   id: string
   numeroVenta: number
@@ -57,16 +80,23 @@ interface VentaDetail {
   subtotal: number
   descuento: number
   total: number
+  montoAbonado: number
+  estadoPago: string
   metodoPago: string
   estado: string
   observaciones: string | null
   createdAt: string
+  pagos: Pago[]
 }
 
 const metodoPagoLabels: Record<string, string> = {
   EFECTIVO: "Efectivo",
   TRANSFERENCIA: "Transferencia",
   TARJETA: "Tarjeta",
+  TARJETA_DEBITO: "Tarjeta Débito",
+  TARJETA_CREDITO: "Tarjeta Crédito",
+  MERCADOPAGO: "MercadoPago",
+  OTRO: "Otro",
 }
 
 interface VentaDetailProps {
@@ -87,6 +117,8 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
   const [loading, setLoading] = useState(true)
   const [anulando, setAnulando] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
+  const [showPagoForm, setShowPagoForm] = useState(false)
+  const [expandedPagos, setExpandedPagos] = useState(false)
 
   const fetchOrganization = async () => {
     try {
@@ -352,6 +384,93 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
           </CardContent>
         </Card>
       </div>
+
+      {/* Sección de Pagos */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-start justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <DollarSign className="h-5 w-5" />
+              Pagos
+            </CardTitle>
+            <PaymentStatusBadge status={venta.estadoPago} showIcon />
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Resumen financiero */}
+          <div className="grid grid-cols-3 gap-2 sm:gap-4 p-3 bg-muted rounded-lg">
+            <div>
+              <div className="text-xs text-muted-foreground">Total</div>
+              <div className="font-bold text-base sm:text-lg">{formatCurrency(venta.total)}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">Abonado</div>
+              <div className="font-medium text-base sm:text-lg text-green-600">
+                {formatCurrency(venta.montoAbonado || 0)}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">Pendiente</div>
+              <div className="font-medium text-base sm:text-lg text-red-600">
+                {formatCurrency(venta.total - (venta.montoAbonado || 0))}
+              </div>
+            </div>
+          </div>
+
+          {/* Botón registrar pago si hay pendiente */}
+          {venta.estadoPago !== "PAGADO" && venta.estadoPago !== "ANULADA" && venta.estado !== "ANULADA" && (
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 border border-dashed rounded-lg">
+              <div>
+                <div className="text-sm text-muted-foreground">Pendiente de pago</div>
+                <div className="text-xl font-bold text-red-600">
+                  {formatCurrency(venta.total - (venta.montoAbonado || 0))}
+                </div>
+              </div>
+              <Button
+                onClick={() => setShowPagoForm(!showPagoForm)}
+                variant={showPagoForm ? "outline" : "default"}
+                className="w-full sm:w-auto"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Registrar Pago
+              </Button>
+            </div>
+          )}
+
+          {/* Formulario de pago */}
+          {showPagoForm && (
+            <VentaPagoForm
+              ventaId={venta.id}
+              total={venta.total}
+              montoAbonado={venta.montoAbonado || 0}
+              onClose={() => setShowPagoForm(false)}
+              onSuccess={() => {
+                setShowPagoForm(false)
+                fetchVenta()
+              }}
+            />
+          )}
+
+          {/* Historial de pagos */}
+          {venta.pagos && venta.pagos.length > 0 && (
+            <div>
+              <Button
+                variant="ghost"
+                className="w-full justify-between"
+                onClick={() => setExpandedPagos(!expandedPagos)}
+              >
+                <span>Historial de pagos ({venta.pagos.length})</span>
+                {expandedPagos ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+              </Button>
+              {expandedPagos && <PagosHistorial pagos={venta.pagos} />}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Items */}
       <Card>

@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DatePicker } from "@/components/ui/date-picker"
 import { DataTable, type Column } from "@/components/ui/data-table"
-import { Badge } from "@/components/ui/badge"
+import { Badge, PaymentStatusBadge } from "@/components/ui/badge"
 import {
   Plus,
   Search,
@@ -32,6 +32,8 @@ interface VentaListItem {
   vendedor?: { nombre: string } | null
   items: Array<{ descripcion: string; cantidad: number }>
   total: number
+  montoAbonado: number
+  estadoPago: string
   metodoPago: string
   estado: string
   garantias: Array<{ id: string }>
@@ -47,6 +49,10 @@ const metodoPagoLabels: Record<string, string> = {
   EFECTIVO: "Efectivo",
   TRANSFERENCIA: "Transferencia",
   TARJETA: "Tarjeta",
+  TARJETA_DEBITO: "T. Débito",
+  TARJETA_CREDITO: "T. Crédito",
+  MERCADOPAGO: "MercadoPago",
+  OTRO: "Otro",
 }
 
 export function VentasList() {
@@ -165,6 +171,13 @@ export function VentasList() {
       hideOnTablet: true,
       render: (venta) => (
         <span className="text-sm">{metodoPagoLabels[venta.metodoPago] || venta.metodoPago}</span>
+      ),
+    },
+    {
+      key: "estadoPago",
+      header: "Estado Pago",
+      render: (venta) => (
+        <PaymentStatusBadge status={venta.estadoPago} />
       ),
     },
     {

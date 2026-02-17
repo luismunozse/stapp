@@ -10,6 +10,7 @@ import {
   OrdenesRecientes,
   DashboardCharts,
 } from "@/components/dashboard"
+import { WhatsNewModal } from "@/components/whats-new-modal"
 import { unstable_cache } from "next/cache"
 
 // Cachear datos del dashboard por 2 minutos
@@ -128,6 +129,14 @@ export default async function DashboardPage() {
   }
 
   const organizationId = session.user.organizationId
+
+  // Obtener la última versión vista por el usuario (sin caché, es por usuario)
+  const { data: userData } = await supabaseAdmin
+    .from("users")
+    .select("last_seen_version")
+    .eq("id", session.user.id)
+    .single()
+  const lastSeenVersion: string | null = userData?.last_seen_version ?? null
 
   // Obtener datos del dashboard con caché (2 minutos)
   const {
@@ -370,6 +379,9 @@ export default async function DashboardPage() {
         </Card>
         <DolarWidget />
       </div>
+
+      {/* Modal de novedades — se muestra si hay nueva versión */}
+      <WhatsNewModal lastSeenVersion={lastSeenVersion} />
     </div>
   )
 }

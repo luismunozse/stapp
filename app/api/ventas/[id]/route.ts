@@ -20,7 +20,8 @@ export async function GET(
         clientes (*),
         users:vendedor_id (id, nombre, email),
         items_venta (*, inventario (*)),
-        garantias_venta (*)
+        garantias_venta (*),
+        pagos_venta (*)
       `)
       .eq("id", id)
       .eq("organization_id", organizationId!)
@@ -74,11 +75,26 @@ export async function GET(
       subtotal: parseFloat(venta.subtotal),
       descuento: parseFloat(venta.descuento),
       total: parseFloat(venta.total),
+      montoAbonado: parseFloat(venta.monto_abonado || "0"),
+      estadoPago: venta.estado_pago || "PAGADO",
       metodoPago: venta.metodo_pago,
       estado: venta.estado,
       observaciones: venta.observaciones,
       createdAt: venta.created_at,
       updatedAt: venta.updated_at,
+      pagos: venta.pagos_venta?.map((p: any) => ({
+        id: p.id,
+        monto: parseFloat(p.monto),
+        metodoPago: p.metodo_pago,
+        referencia: p.numero_referencia,
+        fecha: p.fecha,
+        observaciones: p.observaciones,
+        cuotas: p.cuotas,
+        recargoPorcentaje: p.recargo_porcentaje ? parseFloat(p.recargo_porcentaje) : null,
+        montoOriginal: p.monto_original ? parseFloat(p.monto_original) : null,
+      })).sort((a: any, b: any) =>
+        new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
+      ) || [],
     }
 
     return NextResponse.json(response)
