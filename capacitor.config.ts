@@ -7,6 +7,7 @@ const config: CapacitorConfig = {
   server: {
     url: 'https://stapp.com.ar/app-entry',
     cleartext: false,
+    allowNavigation: ['*.stapp.com.ar', 'stapp.com.ar'],
   },
   plugins: {
     SplashScreen: {
