@@ -227,21 +227,23 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
             />
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap sm:flex-nowrap">
           <ExportButton
             entity="clientes"
             filters={{ ...(search && { search }) }}
             variant="outline"
+            size="sm"
           />
           {allowImport && (
-            <Button onClick={() => setShowImport(true)} variant="outline" className="gap-2">
+            <Button onClick={() => setShowImport(true)} variant="outline" size="sm" className="gap-1.5">
               <Upload className="h-4 w-4" />
-              Importar CSV
+              <span className="hidden sm:inline">Importar CSV</span>
+              <span className="sm:hidden">Importar</span>
             </Button>
           )}
-          <Button onClick={() => setShowForm(true)} className="gap-2">
+          <Button onClick={() => setShowForm(true)} size="sm" className="gap-1.5 ml-auto">
             <Plus className="h-4 w-4" />
-            Nuevo Cliente
+            Nuevo
           </Button>
         </div>
       </div>

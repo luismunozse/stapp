@@ -175,19 +175,19 @@ export function FacturacionList() {
 
                   {/* Resumen financiero */}
                   <div className="grid grid-cols-3 gap-2 sm:gap-4 p-3 bg-muted rounded-lg">
-                    <div>
+                    <div className="min-w-0">
                       <div className="text-xs text-muted-foreground">Total</div>
-                      <div className="font-bold text-base sm:text-lg">{formatCurrency(factura.total)}</div>
+                      <div className="font-bold text-sm sm:text-lg truncate">{formatCurrency(factura.total)}</div>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <div className="text-xs text-muted-foreground">Abonado</div>
-                      <div className="font-medium text-base sm:text-lg text-green-600">
+                      <div className="font-medium text-sm sm:text-lg text-green-600 truncate">
                         {formatCurrency(factura.montoAbonado || 0)}
                       </div>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <div className="text-xs text-muted-foreground">Pendiente</div>
-                      <div className="font-medium text-base sm:text-lg text-red-600">
+                      <div className="font-medium text-sm sm:text-lg text-red-600 truncate">
                         {formatCurrency(factura.total - (factura.montoAbonado || 0))}
                       </div>
                     </div>
