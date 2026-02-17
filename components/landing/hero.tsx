@@ -519,7 +519,7 @@ function MockupSlider() {
               key={module.id}
               onClick={() => setActiveModule(module.id)}
               className={cn(
-                "flex items-center justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-medium transition-all",
+                "no-touch-min flex items-center justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-medium transition-all",
                 isActive
                   ? "bg-primary text-primary-foreground shadow-md"
                   : "bg-muted/80 text-muted-foreground hover:bg-muted"
@@ -558,14 +558,16 @@ function MockupSlider() {
       </AnimatePresence>
 
       {/* Progress dots */}
-      <div className="flex justify-center gap-1 mt-2 sm:mt-3">
+      <div className="flex justify-center gap-2.5 mt-3 sm:mt-4">
         {modules.map((module) => (
           <button
             key={module.id}
             onClick={() => setActiveModule(module.id)}
             className={cn(
-              "h-1 sm:h-1.5 rounded-full transition-all",
-              activeModule === module.id ? "bg-primary w-3 sm:w-4" : "w-1 sm:w-1.5 bg-muted-foreground/30 hover:bg-muted-foreground/50"
+              "no-touch-min w-2.5 h-2.5 rounded-full transition-all duration-300",
+              activeModule === module.id
+                ? "bg-primary scale-110"
+                : "bg-muted-foreground/25 hover:bg-muted-foreground/40"
             )}
           />
         ))}

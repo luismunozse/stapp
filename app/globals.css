@@ -355,8 +355,8 @@
 /* Mejoras para dispositivos táctiles */
 @media (pointer: coarse) {
   /* Aumentar área de tap en dispositivos táctiles */
-  button,
-  [role="button"],
+  button:not(.no-touch-min):not([role="switch"]),
+  [role="button"]:not(.no-touch-min),
   input[type="checkbox"],
   input[type="radio"],
   select {
