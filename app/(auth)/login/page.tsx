@@ -12,6 +12,7 @@ import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { Eye, EyeOff, CheckCircle } from "lucide-react"
 import { BusinessLogo } from "@/components/shared/business-logo"
 import { savePWATokens } from "@/components/auth/session-refresher"
+import { isNativePlatform } from "@/lib/capacitor"
 
 interface TenantInfo {
   nombre: string
@@ -379,11 +380,26 @@ function LoginForm() {
                 </Link>
               </div>
             )}
-            <div>
-              <Link href="/" className="text-muted-foreground hover:text-primary hover:underline">
-                Volver al inicio
-              </Link>
-            </div>
+            {isNativePlatform() ? (
+              <div>
+                <button
+                  onClick={() => {
+                    localStorage.removeItem("stapp-tenant-slug")
+                    const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
+                    window.location.href = `https://${rootDomain}/app-entry`
+                  }}
+                  className="text-muted-foreground hover:text-primary hover:underline"
+                >
+                  Cambiar de empresa
+                </button>
+              </div>
+            ) : (
+              <div>
+                <Link href="/" className="text-muted-foreground hover:text-primary hover:underline">
+                  Volver al inicio
+                </Link>
+              </div>
+            )}
           </div>
 
         </CardContent>

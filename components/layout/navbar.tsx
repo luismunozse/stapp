@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils"
 import { BusinessLogo } from "@/components/shared/business-logo"
 import { useFocusTrap } from "@/hooks/use-focus-trap"
 import { useEscapeKey } from "@/hooks/use-escape-key"
+import { isNativePlatform } from "@/lib/capacitor"
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -88,7 +89,14 @@ export function Navbar() {
   // Logout que redirige al login del mismo dominio/subdominio
   const handleLogout = async () => {
     await signOut({ redirect: false })
-    window.location.href = "/login"
+    if (isNativePlatform()) {
+      // En la app nativa, volver a la pantalla de seleccion de empresa
+      localStorage.removeItem("stapp-tenant-slug")
+      const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
+      window.location.href = `https://${rootDomain}/app-entry`
+    } else {
+      window.location.href = "/login"
+    }
   }
 
   // Items que no están en el bottom nav (para el menú "Más")
