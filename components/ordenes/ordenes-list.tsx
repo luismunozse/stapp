@@ -264,7 +264,7 @@ export function OrdenesList() {
             />
           </div>
         </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+        <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap sm:flex-nowrap">
           <Button
             variant={showFilters ? "secondary" : "outline"}
             size="sm"
@@ -289,9 +289,9 @@ export function OrdenesList() {
             variant="outline"
             size="sm"
           />
-          <Button onClick={() => setShowForm(true)} className="gap-2">
+          <Button onClick={() => setShowForm(true)} size="sm" className="gap-1.5 ml-auto">
             <Plus className="h-4 w-4" />
-            Nueva Orden
+            Nueva
           </Button>
         </div>
       </div>
