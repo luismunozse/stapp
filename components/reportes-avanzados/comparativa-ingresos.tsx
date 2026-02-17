@@ -107,42 +107,42 @@ export function ComparativaIngresos() {
   return (
     <div className="space-y-6">
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Ingresos Mes Actual</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium">Ingresos Mes Actual</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground hidden sm:block" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(data.mesActual.total)}</div>
-            <p className="text-xs text-muted-foreground capitalize">{data.mesActual.nombre}</p>
+          <CardContent className="p-3 sm:p-6 pt-0">
+            <div className="text-base sm:text-2xl font-bold truncate">{formatCurrency(data.mesActual.total)}</div>
+            <p className="text-[10px] sm:text-xs text-muted-foreground capitalize">{data.mesActual.nombre}</p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Mes Anterior</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium">Mes Anterior</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground hidden sm:block" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-muted-foreground">
+          <CardContent className="p-3 sm:p-6 pt-0">
+            <div className="text-base sm:text-2xl font-bold text-muted-foreground truncate">
               {formatCurrency(data.mesAnterior.total)}
             </div>
-            <p className="text-xs text-muted-foreground capitalize">{data.mesAnterior.nombre}</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground capitalize">{data.mesAnterior.nombre}</p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Cambio</CardTitle>
-            <TrendIcon className={`h-4 w-4 ${trendColor}`} />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium">Cambio</CardTitle>
+            <TrendIcon className={`h-4 w-4 ${trendColor} hidden sm:block`} />
           </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${trendColor}`}>
+          <CardContent className="p-3 sm:p-6 pt-0">
+            <div className={`text-base sm:text-2xl font-bold ${trendColor}`}>
               {data.cambio.direccion === "up" ? "+" : ""}
               {data.cambio.porcentaje}%
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
               {data.cambio.diferencia >= 0 ? "+" : ""}
               {formatCurrency(data.cambio.diferencia)}
             </p>
@@ -150,14 +150,14 @@ export function ComparativaIngresos() {
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Facturas Este Mes</CardTitle>
-            <Receipt className="h-4 w-4 text-muted-foreground" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium">Facturas Este Mes</CardTitle>
+            <Receipt className="h-4 w-4 text-muted-foreground hidden sm:block" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{data.mesActual.cantidad}</div>
-            <p className="text-xs text-muted-foreground">
-              Promedio: {formatCurrency(data.mesActual.promedio)}
+          <CardContent className="p-3 sm:p-6 pt-0">
+            <div className="text-base sm:text-2xl font-bold">{data.mesActual.cantidad}</div>
+            <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
+              Prom: {formatCurrency(data.mesActual.promedio)}
             </p>
           </CardContent>
         </Card>
@@ -166,18 +166,18 @@ export function ComparativaIngresos() {
       {/* Chart */}
       <Card>
         <CardHeader>
-          <CardTitle>Comparativa de Ingresos</CardTitle>
+          <CardTitle className="text-base sm:text-lg">Comparativa de Ingresos</CardTitle>
           <CardDescription>
             Ingresos totales por mes
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="h-[300px]">
+          <div className="h-[220px] sm:h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                <XAxis type="number" tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} />
-                <YAxis dataKey="name" type="category" width={80} />
+                <XAxis type="number" tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} fontSize={12} />
+                <YAxis dataKey="name" type="category" width={60} fontSize={12} />
                 <Tooltip
                   formatter={(value: number) => formatCurrency(value)}
                   labelFormatter={(label) => `Mes: ${label}`}

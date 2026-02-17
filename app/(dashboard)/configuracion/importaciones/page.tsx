@@ -1,6 +1,8 @@
 import { auth } from "@/lib/auth"
 import { redirect } from "next/navigation"
 import { ImportHistory } from "@/components/import/import-history"
+import Link from "next/link"
+import { ChevronLeft } from "lucide-react"
 
 export default async function ImportacionesPage() {
   const session = await auth()
@@ -14,11 +16,18 @@ export default async function ImportacionesPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Historial de Importaciones</h1>
-        <p className="text-muted-foreground">
-          Revisa todas las importaciones realizadas en tu organización
+        <Link
+          href="/configuracion"
+          className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-2"
+        >
+          <ChevronLeft className="h-4 w-4 mr-1" />
+          Volver a Configuracion
+        </Link>
+        <h1 className="text-2xl sm:text-3xl font-bold">Importaciones</h1>
+        <p className="text-sm sm:text-base text-muted-foreground">
+          Revisa todas las importaciones realizadas
         </p>
       </div>
 

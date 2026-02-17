@@ -155,10 +155,10 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-4 sm:space-y-6 max-w-2xl">
       {message && (
         <div
-          className={`px-4 py-3 rounded ${
+          className={`px-3 sm:px-4 py-2 sm:py-3 rounded text-sm ${
             message.type === "success"
               ? "bg-green-500/10 border border-green-500/30 text-green-600 dark:text-green-400"
               : "bg-destructive/10 border border-destructive/30 text-destructive"
@@ -169,15 +169,15 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
       )}
 
       <Card>
-        <CardHeader>
-          <CardTitle>Logo de la Empresa</CardTitle>
-          <CardDescription>
-            Sube un logo para personalizar la aplicación. Se mostrará en el login, la barra de navegación y los comprobantes PDF.
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="text-base sm:text-lg">Logo de la Empresa</CardTitle>
+          <CardDescription className="text-xs sm:text-sm">
+            Se mostrará en el login, navegación y comprobantes PDF.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center gap-4">
-            <div className="w-24 h-24 border-2 border-dashed border-border rounded-lg flex items-center justify-center overflow-hidden bg-muted">
+        <CardContent className="p-4 sm:p-6 pt-0 space-y-4">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="w-16 h-16 sm:w-24 sm:h-24 border-2 border-dashed border-border rounded-lg flex items-center justify-center overflow-hidden bg-muted shrink-0">
               {preview ? (
                 <img
                   src={preview}
@@ -185,7 +185,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
                   className="max-w-full max-h-full object-contain"
                 />
               ) : (
-                <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                <ImageIcon className="h-6 w-6 sm:h-8 sm:w-8 text-muted-foreground" />
               )}
             </div>
             <div className="space-y-2">
@@ -199,6 +199,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
               <Button
                 type="button"
                 variant="outline"
+                size="sm"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={!allowEdit}
               >
@@ -219,22 +220,22 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
               )}
             </div>
           </div>
-          <p className="text-sm text-muted-foreground">
-            Formatos aceptados: PNG, JPG, GIF, WebP. Tamaño máximo: 2MB.
+          <p className="text-xs sm:text-sm text-muted-foreground">
+            PNG, JPG, GIF, WebP. Máximo 2MB.
           </p>
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Datos de la Empresa</CardTitle>
-          <CardDescription>
-            Estos datos se mostrarán en la aplicación y en los comprobantes PDF generados.
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="text-base sm:text-lg">Datos de la Empresa</CardTitle>
+          <CardDescription className="text-xs sm:text-sm">
+            Se mostrarán en la app y en los comprobantes PDF.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="p-4 sm:p-6 pt-0 space-y-4">
           <div>
-            <Label htmlFor="nombreEmpresa">Nombre de la Empresa</Label>
+            <Label htmlFor="nombreEmpresa" className="text-sm">Nombre de la Empresa</Label>
             <Input
               id="nombreEmpresa"
               value={nombreEmpresa}
@@ -244,7 +245,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
             />
           </div>
           <div>
-            <Label htmlFor="telefono">Teléfono</Label>
+            <Label htmlFor="telefono" className="text-sm">Teléfono</Label>
             <Input
               id="telefono"
               value={telefono}
@@ -252,12 +253,12 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
               placeholder="+54 11 1234-5678"
               disabled={!allowEdit}
             />
-            <p className="text-sm text-muted-foreground mt-1">
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
               Se mostrará en los comprobantes PDF
             </p>
           </div>
           <div>
-            <Label htmlFor="direccion">Dirección</Label>
+            <Label htmlFor="direccion" className="text-sm">Dirección</Label>
             <Input
               id="direccion"
               value={direccion}
@@ -265,7 +266,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
               placeholder="Av. Principal 123, Ciudad"
               disabled={!allowEdit}
             />
-            <p className="text-sm text-muted-foreground mt-1">
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
               Se mostrará en los comprobantes PDF
             </p>
           </div>

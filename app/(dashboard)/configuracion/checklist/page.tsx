@@ -16,7 +16,7 @@ export default async function ChecklistConfigPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div>
         <Link
           href="/configuracion"
@@ -25,9 +25,9 @@ export default async function ChecklistConfigPage() {
           <ChevronLeft className="h-4 w-4 mr-1" />
           Volver a Configuracion
         </Link>
-        <h1 className="text-3xl font-bold">Checklist de Recepcion</h1>
-        <p className="text-muted-foreground">
-          Configure los items que apareceran al registrar el ingreso de un equipo
+        <h1 className="text-2xl sm:text-3xl font-bold">Checklist de Recepcion</h1>
+        <p className="text-sm sm:text-base text-muted-foreground">
+          Items que apareceran al registrar el ingreso de un equipo
         </p>
       </div>
       <TemplateEditor />

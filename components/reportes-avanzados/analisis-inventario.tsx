@@ -113,56 +113,56 @@ export function AnalisisInventario() {
   return (
     <div className="space-y-6">
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Items</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium">Total Items</CardTitle>
+            <Package className="h-4 w-4 text-muted-foreground hidden sm:block" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{data.resumen.totalItems}</div>
-            <p className="text-xs text-muted-foreground">
-              {data.resumen.totalUnidades} unidades en stock
+          <CardContent className="p-3 sm:p-6 pt-0">
+            <div className="text-base sm:text-2xl font-bold">{data.resumen.totalItems}</div>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">
+              {data.resumen.totalUnidades} uds
             </p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Valor Inventario</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium">Valor Inventario</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground hidden sm:block" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(data.resumen.valorCompra)}</div>
-            <p className="text-xs text-muted-foreground">Costo de compra</p>
+          <CardContent className="p-3 sm:p-6 pt-0">
+            <div className="text-base sm:text-2xl font-bold truncate">{formatCurrency(data.resumen.valorCompra)}</div>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">Costo compra</p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Margen Potencial</CardTitle>
-            <TrendingUp className="h-4 w-4 text-green-500" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium">Margen Pot.</CardTitle>
+            <TrendingUp className="h-4 w-4 text-green-500 hidden sm:block" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
+          <CardContent className="p-3 sm:p-6 pt-0">
+            <div className="text-base sm:text-2xl font-bold text-green-600 truncate">
               {formatCurrency(data.resumen.margenPotencial)}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Si se vende todo el stock
+            <p className="text-[10px] sm:text-xs text-muted-foreground hidden sm:block">
+              Si se vende todo
             </p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Stock Crítico</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-yellow-500" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium">Stock Crítico</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-yellow-500 hidden sm:block" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">
+          <CardContent className="p-3 sm:p-6 pt-0">
+            <div className="text-base sm:text-2xl font-bold text-yellow-600">
               {data.resumen.itemsStockCritico}
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[10px] sm:text-xs text-muted-foreground">
               {data.resumen.itemsSinStock} sin stock
             </p>
           </CardContent>
@@ -174,13 +174,13 @@ export function AnalisisInventario() {
         {chartData.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle>Valor por Categoría</CardTitle>
-              <CardDescription>
+              <CardTitle className="text-base sm:text-lg">Valor por Categoría</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
                 Distribución del valor del inventario
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="h-[300px]">
+              <div className="h-[250px] sm:h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -188,18 +188,20 @@ export function AnalisisInventario() {
                       cx="50%"
                       cy="50%"
                       labelLine={false}
-                      outerRadius={100}
+                      outerRadius={80}
                       fill="#8884d8"
                       dataKey="value"
-                      label={({ name, percent }) =>
-                        `${name} (${(percent * 100).toFixed(0)}%)`
+                      label={({ percent }) =>
+                        `${(percent * 100).toFixed(0)}%`
                       }
+                      fontSize={11}
                     >
                       {chartData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
                     <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -210,12 +212,12 @@ export function AnalisisInventario() {
         {/* Items Más Valiosos */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <DollarSign className="h-5 w-5 text-green-500" />
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-green-500" />
               Items Más Valiosos
             </CardTitle>
-            <CardDescription>
-              Mayor valor en stock (costo x cantidad)
+            <CardDescription className="text-xs sm:text-sm">
+              Mayor valor en stock
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -224,24 +226,24 @@ export function AnalisisInventario() {
                 No hay items con valor en stock
               </p>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {data.masValiosos.slice(0, 5).map((item, index) => (
                   <div
                     key={item.id}
-                    className="flex items-center justify-between p-3 border rounded-lg"
+                    className="flex items-center justify-between p-2.5 sm:p-3 border rounded-lg gap-2"
                   >
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-medium text-muted-foreground">
+                    <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                      <span className="text-xs sm:text-sm font-medium text-muted-foreground shrink-0">
                         #{index + 1}
                       </span>
-                      <div>
-                        <p className="font-medium text-sm">{item.nombre}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {item.stock} unidades x {formatCurrency(item.precioCompra || 0)}
+                      <div className="min-w-0">
+                        <p className="font-medium text-xs sm:text-sm truncate">{item.nombre}</p>
+                        <p className="text-[10px] sm:text-xs text-muted-foreground">
+                          {item.stock} uds x {formatCurrency(item.precioCompra || 0)}
                         </p>
                       </div>
                     </div>
-                    <Badge variant="default" className="bg-green-500">
+                    <Badge variant="default" className="bg-green-500 text-[10px] sm:text-xs shrink-0">
                       {formatCurrency(item.valorEnStock)}
                     </Badge>
                   </div>
@@ -320,12 +322,11 @@ export function AnalisisInventario() {
                   ? (cat.valorTotal / data.resumen.valorCompra) * 100
                   : 0
               return (
-                <div key={cat.categoria} className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
+                <div key={cat.categoria} className="space-y-1.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5 text-sm">
                     <span className="font-medium">{cat.categoria}</span>
-                    <span className="text-muted-foreground">
-                      {cat.cantidad} items • {cat.stockTotal} unidades •{" "}
-                      {formatCurrency(cat.valorTotal)}
+                    <span className="text-xs text-muted-foreground">
+                      {cat.cantidad} items · {cat.stockTotal} uds · {formatCurrency(cat.valorTotal)}
                     </span>
                   </div>
                   <Progress value={porcentaje} className="h-2" />

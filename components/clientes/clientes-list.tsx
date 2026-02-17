@@ -233,6 +233,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
             filters={{ ...(search && { search }) }}
             variant="outline"
             size="sm"
+            label="Exportar"
           />
           {allowImport && (
             <Button onClick={() => setShowImport(true)} variant="outline" size="sm" className="gap-1.5">

@@ -53,14 +53,14 @@ export function PaymentHistory({ payments }: PaymentHistoryProps) {
   if (payments.length === 0) {
     return (
       <Card>
-        <CardHeader>
-          <CardTitle>Historial de Pagos</CardTitle>
-          <CardDescription>Tus pagos y facturas</CardDescription>
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="text-base sm:text-lg">Historial de Pagos</CardTitle>
+          <CardDescription className="text-xs sm:text-sm">Tus pagos y facturas</CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="text-center py-8 text-muted-foreground">
-            <Receipt className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p>No hay pagos registrados</p>
+        <CardContent className="p-4 sm:p-6 pt-0">
+          <div className="text-center py-6 sm:py-8 text-muted-foreground">
+            <Receipt className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-3 sm:mb-4 opacity-50" />
+            <p className="text-sm">No hay pagos registrados</p>
           </div>
         </CardContent>
       </Card>
@@ -69,33 +69,32 @@ export function PaymentHistory({ payments }: PaymentHistoryProps) {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Historial de Pagos</CardTitle>
-        <CardDescription>Tus pagos y facturas</CardDescription>
+      <CardHeader className="p-4 sm:p-6">
+        <CardTitle className="text-base sm:text-lg">Historial de Pagos</CardTitle>
+        <CardDescription className="text-xs sm:text-sm">Tus pagos y facturas</CardDescription>
       </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
+      <CardContent className="p-4 sm:p-6 pt-0">
+        <div className="space-y-3 sm:space-y-4">
           {payments.map((payment) => (
             <div
               key={payment.id}
-              className="flex items-center justify-between py-3 border-b last:border-0"
+              className="flex items-center justify-between py-2 sm:py-3 border-b last:border-0 gap-2"
             >
-              <div className="flex items-center gap-4">
-                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                  <Receipt className="h-5 w-5 text-primary" />
+              <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+                <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                  <Receipt className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                 </div>
-                <div>
-                  <p className="font-medium">
+                <div className="min-w-0">
+                  <p className="font-medium text-sm truncate">
                     {formatCurrency(payment.amount, payment.currency)}
                   </p>
-                  <p className="text-sm text-muted-foreground">
-                    {formatDate(payment.paid_at)} •{" "}
-                    MercadoPago
+                  <p className="text-[10px] sm:text-sm text-muted-foreground truncate">
+                    {formatDate(payment.paid_at)}
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <Badge className={statusColors[payment.status]}>
+              <div className="flex items-center gap-1 sm:gap-3 shrink-0">
+                <Badge className={`text-[10px] sm:text-xs ${statusColors[payment.status]}`}>
                   {statusLabels[payment.status]}
                 </Badge>
                 {(payment.invoice_url || payment.receipt_url) && (
@@ -103,6 +102,7 @@ export function PaymentHistory({ payments }: PaymentHistoryProps) {
                     variant="ghost"
                     size="sm"
                     asChild
+                    className="h-8 w-8 p-0"
                   >
                     <a
                       href={payment.invoice_url || payment.receipt_url}

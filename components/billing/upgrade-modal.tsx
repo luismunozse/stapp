@@ -51,6 +51,20 @@ export function UpgradeModal({ open, onClose }: UpgradeModalProps) {
     return price.toString()
   }
 
+  const openPaymentUrl = async (url: string) => {
+    try {
+      const { Capacitor } = await import("@capacitor/core")
+      if (Capacitor.isNativePlatform()) {
+        const { Browser } = await import("@capacitor/browser")
+        await Browser.open({ url })
+      } else {
+        window.location.href = url
+      }
+    } catch {
+      window.location.href = url
+    }
+  }
+
   const handleUpgrade = async () => {
     setLoading(true)
     try {
@@ -64,7 +78,7 @@ export function UpgradeModal({ open, onClose }: UpgradeModalProps) {
         const data = await response.json()
 
         if (data.initPoint) {
-          window.location.href = data.initPoint
+          await openPaymentUrl(data.initPoint)
         } else {
           throw new Error("No se pudo iniciar el pago")
         }
@@ -78,7 +92,7 @@ export function UpgradeModal({ open, onClose }: UpgradeModalProps) {
         const data = await response.json()
 
         if (data.url) {
-          window.location.href = data.url
+          await openPaymentUrl(data.url)
         } else {
           throw new Error("No se pudo iniciar el pago")
         }

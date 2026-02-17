@@ -71,70 +71,64 @@ export function CurrentPlan({ subscription, onUpgrade, onManage, onCancel }: Cur
 
   return (
     <Card>
-      <CardHeader>
-        <div className="flex items-start justify-between">
+      <CardHeader className="p-4 sm:p-6">
+        <div className="flex items-start justify-between gap-2">
           <div>
-            <CardTitle className="flex items-center gap-2">
-              {isPremium && <Crown className="h-5 w-5 text-yellow-500" />}
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              {isPremium && <Crown className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-500" />}
               Plan {subscription.planNombre}
             </CardTitle>
-            <CardDescription>Tu plan actual y beneficios</CardDescription>
+            <CardDescription className="text-xs sm:text-sm">Tu plan actual</CardDescription>
           </div>
-          <Badge className={statusColors[subscription.status]}>
+          <Badge className={`text-[10px] sm:text-xs shrink-0 ${statusColors[subscription.status]}`}>
             {statusLabels[subscription.status]}
           </Badge>
         </div>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="p-4 sm:p-6 pt-0 space-y-4 sm:space-y-6">
         {/* Trial info - prominente */}
         {isTrialing && !isPaid && (
-          <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 border border-blue-200 dark:border-blue-800 p-4 rounded-lg space-y-3">
-            <div className="flex items-center justify-between">
+          <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 border border-blue-200 dark:border-blue-800 p-3 sm:p-4 rounded-lg space-y-3">
+            <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <Clock className="h-5 w-5 text-blue-600" />
-                <span className="font-medium">Período de prueba</span>
+                <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
+                <span className="font-medium text-sm">Período de prueba</span>
               </div>
-              <Badge variant="outline" className="bg-white dark:bg-background">
-                {daysRemaining} {daysRemaining === 1 ? "día" : "días"} restantes
+              <Badge variant="outline" className="bg-white dark:bg-background text-[10px] sm:text-xs">
+                {daysRemaining} {daysRemaining === 1 ? "día" : "días"}
               </Badge>
             </div>
             <Progress value={trialProgress} className="h-2" />
-            <p className="text-sm text-muted-foreground">
-              Tu prueba gratuita termina el {trialEndFormatted}.
-              Suscríbete antes para no perder acceso.
+            <p className="text-xs sm:text-sm text-muted-foreground">
+              Termina el {trialEndFormatted}. Suscríbete para no perder acceso.
             </p>
-            <Button onClick={onUpgrade} className="w-full">
+            <Button onClick={onUpgrade} className="w-full" size="sm">
               <Sparkles className="h-4 w-4 mr-2" />
-              Suscribirse ahora - $19.999/mes
+              Suscribirse - $19.999/mes
             </Button>
           </div>
         )}
 
         {/* Period info for paid users */}
         {periodEnd && isPremium && isPaid && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Calendar className="h-4 w-4" />
+          <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground">
+            <Calendar className="h-4 w-4 shrink-0" />
             {isCanceled ? (
-              <span>
-                Tu suscripción termina el {periodEnd}
-              </span>
+              <span>Termina el {periodEnd}</span>
             ) : (
-              <span>
-                Próxima facturación: {periodEnd}
-              </span>
+              <span>Próxima facturación: {periodEnd}</span>
             )}
           </div>
         )}
 
         {/* Cancellation warning */}
         {isCanceled && (
-          <div className="flex items-start gap-2 bg-yellow-50 dark:bg-yellow-950/50 text-yellow-800 dark:text-yellow-300 p-4 rounded-lg">
-            <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+          <div className="flex items-start gap-2 bg-yellow-50 dark:bg-yellow-950/50 text-yellow-800 dark:text-yellow-300 p-3 sm:p-4 rounded-lg">
+            <AlertCircle className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="font-medium">Suscripción cancelada</p>
-              <p className="text-sm">
-                Mantendrás acceso a Premium hasta {periodEnd}. Después se bloqueará
-                el acceso hasta que reactives tu suscripción.
+              <p className="font-medium text-sm">Suscripción cancelada</p>
+              <p className="text-xs sm:text-sm">
+                Acceso Premium hasta {periodEnd}.
               </p>
             </div>
           </div>
@@ -142,11 +136,11 @@ export function CurrentPlan({ subscription, onUpgrade, onManage, onCancel }: Cur
 
         {/* Features list */}
         <div>
-          <h4 className="font-medium mb-3">Incluido en tu plan:</h4>
-          <ul className="space-y-2">
+          <h4 className="font-medium text-sm mb-2 sm:mb-3">Incluido en tu plan:</h4>
+          <ul className="space-y-1.5 sm:space-y-2">
             {subscription.features.map((feature, index) => (
-              <li key={index} className="flex items-center gap-2 text-sm">
-                <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+              <li key={index} className="flex items-center gap-2 text-xs sm:text-sm">
+                <span className="h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
                 {feature}
               </li>
             ))}
@@ -154,17 +148,15 @@ export function CurrentPlan({ subscription, onUpgrade, onManage, onCancel }: Cur
         </div>
 
         {/* Actions */}
-        <div className="flex flex-wrap gap-3 pt-4 border-t">
-          {/* Solo mostrar botón de upgrade si NO está en trial (porque ya tiene botón arriba) */}
+        <div className="flex flex-wrap gap-2 sm:gap-3 pt-3 sm:pt-4 border-t">
           {!isPremium && !isTrialing && (
-            <Button onClick={onUpgrade}>
+            <Button onClick={onUpgrade} size="sm">
               <Crown className="h-4 w-4 mr-2" />
               Actualizar a Premium
             </Button>
           )}
-          {/* Permitir cancelar solo si está pagando (no en trial) */}
           {isPremium && isPaid && !isCanceled && (
-            <Button variant="ghost" className="text-red-600" onClick={onCancel}>
+            <Button variant="ghost" size="sm" className="text-red-600" onClick={onCancel}>
               Cancelar suscripción
             </Button>
           )}

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Download, Share, X, Plus } from "lucide-react"
+import { isNativePlatform } from "@/lib/capacitor"
 
 type InstallState = "hidden" | "android" | "ios"
 
@@ -12,6 +13,9 @@ export function PWAInstaller() {
   const [dismissed, setDismissed] = useState(false)
 
   useEffect(() => {
+    // No mostrar si estamos en Capacitor (ya es app nativa)
+    if (isNativePlatform()) return
+
     // Check if already installed or dismissed
     if (window.matchMedia("(display-mode: standalone)").matches) {
       return // Already installed as PWA

@@ -112,17 +112,17 @@ export default function BillingPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3 sm:gap-4">
         <Link href="/configuracion">
-          <Button variant="ghost" size="icon">
+          <Button variant="ghost" size="icon" className="shrink-0">
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </Link>
         <div>
-          <h1 className="text-2xl font-bold">Facturación</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-xl sm:text-2xl font-bold">Facturación</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground">
             Gestiona tu suscripción y pagos
           </p>
         </div>
@@ -130,31 +130,31 @@ export default function BillingPage() {
 
       {/* Success/Error messages */}
       {(success || mpSuccess || lsSuccess) && (
-        <div className="bg-green-50 dark:bg-green-950/50 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 px-4 py-3 rounded-lg flex items-center gap-2">
-          <CheckCircle className="h-5 w-5" />
+        <div className="bg-green-50 dark:bg-green-950/50 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 px-3 sm:px-4 py-2 sm:py-3 rounded-lg flex items-center gap-2">
+          <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
           <div>
-            <p className="font-medium">¡Pago exitoso!</p>
-            <p className="text-sm">
-              Tu suscripción Premium ha sido activada correctamente.
+            <p className="font-medium text-sm">¡Pago exitoso!</p>
+            <p className="text-xs sm:text-sm">
+              Tu suscripción Premium ha sido activada.
             </p>
           </div>
         </div>
       )}
 
       {(canceled || mpFailure) && (
-        <div className="bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded-lg flex items-center gap-2">
-          <XCircle className="h-5 w-5" />
+        <div className="bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-3 sm:px-4 py-2 sm:py-3 rounded-lg flex items-center gap-2">
+          <XCircle className="h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
           <div>
-            <p className="font-medium">Pago cancelado</p>
-            <p className="text-sm">
-              El proceso de pago fue cancelado. Puedes intentarlo de nuevo cuando quieras.
+            <p className="font-medium text-sm">Pago cancelado</p>
+            <p className="text-xs sm:text-sm">
+              Puedes intentarlo de nuevo cuando quieras.
             </p>
           </div>
         </div>
       )}
 
       {/* Main content */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         <CurrentPlan
           subscription={subscription}
           onUpgrade={() => setUpgradeModalOpen(true)}

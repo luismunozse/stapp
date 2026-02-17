@@ -46,16 +46,16 @@ export function UsageStats({ usage, limits, planType }: UsageStatsProps) {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Uso del Plan</CardTitle>
-        <CardDescription>
+      <CardHeader className="p-4 sm:p-6">
+        <CardTitle className="text-base sm:text-lg">Uso del Plan</CardTitle>
+        <CardDescription className="text-xs sm:text-sm">
           {planType === "FREE"
-            ? "Recursos utilizados de tu plan Free"
+            ? "Recursos de tu plan Free"
             : "Recursos utilizados (sin límites)"}
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <div className="space-y-6">
+      <CardContent className="p-4 sm:p-6 pt-0">
+        <div className="space-y-4 sm:space-y-6">
           {stats.map((stat) => {
             const percentage =
               stat.limit !== null
@@ -66,13 +66,13 @@ export function UsageStats({ usage, limits, planType }: UsageStatsProps) {
             const format = stat.format || ((v: number) => v.toString())
 
             return (
-              <div key={stat.name} className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <stat.icon className={`h-4 w-4 ${stat.color}`} />
-                    <span className="text-sm font-medium">{stat.name}</span>
+              <div key={stat.name} className="space-y-1.5 sm:space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <stat.icon className={`h-4 w-4 shrink-0 ${stat.color}`} />
+                    <span className="text-xs sm:text-sm font-medium truncate">{stat.name}</span>
                   </div>
-                  <span className="text-sm text-muted-foreground">
+                  <span className="text-xs sm:text-sm text-muted-foreground shrink-0">
                     {format(stat.current)}
                     {stat.limit !== null && ` / ${format(stat.limit)}`}
                     {stat.limit === null && " (ilimitado)"}
@@ -91,13 +91,13 @@ export function UsageStats({ usage, limits, planType }: UsageStatsProps) {
                   />
                 )}
                 {isAtLimit && (
-                  <p className="text-xs text-red-600">
-                    Has alcanzado el límite de tu plan
+                  <p className="text-[10px] sm:text-xs text-red-600">
+                    Has alcanzado el límite
                   </p>
                 )}
                 {isNearLimit && !isAtLimit && (
-                  <p className="text-xs text-yellow-600">
-                    Te estás acercando al límite
+                  <p className="text-[10px] sm:text-xs text-yellow-600">
+                    Cerca del límite
                   </p>
                 )}
               </div>

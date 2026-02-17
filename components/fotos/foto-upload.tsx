@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Camera, Upload, X, Loader2 } from "lucide-react"
 import { compressImage } from "@/lib/image-compression"
+import { isNativePlatform } from "@/lib/capacitor"
 
 interface FotoUploadProps {
   ordenId: string
@@ -31,6 +32,40 @@ export function FotoUpload({ ordenId, onSuccess, onClose }: FotoUploadProps) {
   const [descripcion, setDescripcion] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
+
+  const handleNativeCamera = async () => {
+    try {
+      const { Camera: CapCamera, CameraResultType, CameraSource } = await import("@capacitor/camera")
+      const image = await CapCamera.getPhoto({
+        quality: 80,
+        allowEditing: false,
+        resultType: CameraResultType.DataUrl,
+        source: CameraSource.Camera,
+      })
+      if (image.dataUrl) {
+        setPreview(image.dataUrl)
+      }
+    } catch (error) {
+      console.error("Error cámara nativa:", error)
+    }
+  }
+
+  const handleNativeGallery = async () => {
+    try {
+      const { Camera: CapCamera, CameraResultType, CameraSource } = await import("@capacitor/camera")
+      const image = await CapCamera.getPhoto({
+        quality: 80,
+        allowEditing: false,
+        resultType: CameraResultType.DataUrl,
+        source: CameraSource.Photos,
+      })
+      if (image.dataUrl) {
+        setPreview(image.dataUrl)
+      }
+    } catch (error) {
+      console.error("Error galería nativa:", error)
+    }
+  }
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -127,26 +162,30 @@ export function FotoUpload({ ordenId, onSuccess, onClose }: FotoUploadProps) {
         {/* Botones para seleccionar imagen */}
         {!preview && !comprimiendo && (
           <div className="flex gap-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleFileChange}
-              className="hidden"
-            />
-            <input
-              ref={cameraInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={handleFileChange}
-              className="hidden"
-            />
+            {!isNativePlatform() && (
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+              </>
+            )}
             <Button
               type="button"
               variant="outline"
               className="flex-1"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={isNativePlatform() ? handleNativeGallery : () => fileInputRef.current?.click()}
             >
               <Upload className="mr-2 h-4 w-4" />
               Seleccionar archivo
@@ -155,7 +194,7 @@ export function FotoUpload({ ordenId, onSuccess, onClose }: FotoUploadProps) {
               type="button"
               variant="outline"
               className="flex-1"
-              onClick={() => cameraInputRef.current?.click()}
+              onClick={isNativePlatform() ? handleNativeCamera : () => cameraInputRef.current?.click()}
             >
               <Camera className="mr-2 h-4 w-4" />
               Tomar foto

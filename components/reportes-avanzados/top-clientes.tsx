@@ -101,43 +101,43 @@ export function TopClientes() {
   return (
     <div className="space-y-6">
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-3 gap-3">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Clientes Activos</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium">Clientes Activos</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground hidden sm:block" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{data.estadisticas.clientesActivos}</div>
-            <p className="text-xs text-muted-foreground">
-              de {data.estadisticas.totalClientes} registrados
+          <CardContent className="p-3 sm:p-6 pt-0">
+            <div className="text-base sm:text-2xl font-bold">{data.estadisticas.clientesActivos}</div>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">
+              de {data.estadisticas.totalClientes}
             </p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Promedio por Cliente</CardTitle>
-            <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium">Prom. Órdenes</CardTitle>
+            <ShoppingCart className="h-4 w-4 text-muted-foreground hidden sm:block" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
+          <CardContent className="p-3 sm:p-6 pt-0">
+            <div className="text-base sm:text-2xl font-bold">
               {data.estadisticas.promedioOrdenesCliente.toFixed(1)}
             </div>
-            <p className="text-xs text-muted-foreground">órdenes por cliente</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">por cliente</p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Gasto Promedio</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium">Gasto Prom.</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground hidden sm:block" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
+          <CardContent className="p-3 sm:p-6 pt-0">
+            <div className="text-base sm:text-2xl font-bold truncate">
               {formatCurrency(data.estadisticas.promedioGastoCliente)}
             </div>
-            <p className="text-xs text-muted-foreground">por cliente</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground">por cliente</p>
           </CardContent>
         </Card>
       </div>
@@ -170,17 +170,18 @@ export function TopClientes() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="h-[250px]">
+            <div className="h-[220px] sm:h-[250px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                   <XAxis
                     type="number"
+                    fontSize={12}
                     tickFormatter={(value) =>
                       ordenarPor === "monto" ? `$${(value / 1000).toFixed(0)}k` : value.toString()
                     }
                   />
-                  <YAxis dataKey="nombre" type="category" width={120} />
+                  <YAxis dataKey="nombre" type="category" width={80} fontSize={11} />
                   <Tooltip
                     formatter={(value: number) =>
                       ordenarPor === "monto" ? formatCurrency(value) : `${value} órdenes`
@@ -215,11 +216,11 @@ export function TopClientes() {
               {data.clientes.map((cliente, index) => (
                 <div
                   key={cliente.clienteId}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border rounded-lg gap-3"
+                  className="p-3 sm:p-4 border rounded-lg space-y-2"
                 >
                   <div className="flex items-center gap-3">
                     <div
-                      className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                      className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-sm font-bold shrink-0 ${
                         index < 3
                           ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-500"
                           : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
@@ -227,9 +228,9 @@ export function TopClientes() {
                     >
                       {index + 1}
                     </div>
-                    <div>
-                      <p className="font-medium">{cliente.nombre}</p>
-                      <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-sm truncate">{cliente.nombre}</p>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
                         {cliente.telefono && (
                           <span className="flex items-center gap-1">
                             <Phone className="h-3 w-3" />
@@ -237,24 +238,24 @@ export function TopClientes() {
                           </span>
                         )}
                         {cliente.email && (
-                          <span className="flex items-center gap-1">
-                            <Mail className="h-3 w-3" />
-                            {cliente.email}
+                          <span className="flex items-center gap-1 truncate">
+                            <Mail className="h-3 w-3 shrink-0" />
+                            <span className="truncate">{cliente.email}</span>
                           </span>
                         )}
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-3">
-                    <Badge variant="secondary">
+                  <div className="flex flex-wrap items-center gap-2 pl-10 sm:pl-11">
+                    <Badge variant="secondary" className="text-[10px] sm:text-xs">
                       {cliente.totalOrdenes} {cliente.totalOrdenes === 1 ? "orden" : "órdenes"}
                     </Badge>
-                    <Badge variant="default" className="bg-green-500">
+                    <Badge variant="default" className="bg-green-500 text-[10px] sm:text-xs">
                       {formatCurrency(cliente.totalGastado)}
                     </Badge>
                     {cliente.ultimaVisita && (
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-[10px] sm:text-xs text-muted-foreground">
                         Última: {formatDate(cliente.ultimaVisita)}
                       </span>
                     )}

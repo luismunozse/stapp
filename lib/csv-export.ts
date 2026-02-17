@@ -217,9 +217,29 @@ export const GARANTIAS_COLUMNS: CSVColumn<any>[] = [
 ]
 
 /**
- * Descarga un archivo CSV en el navegador (solo cliente)
+ * Descarga un archivo CSV en el navegador o filesystem nativo
  */
-export function downloadCSV(csvContent: string, filename: string): void {
+export async function downloadCSV(csvContent: string, filename: string): Promise<void> {
+  // En Capacitor nativo, guardar al filesystem del dispositivo
+  const { Capacitor } = await import("@capacitor/core")
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const { Filesystem, Directory, Encoding } = await import("@capacitor/filesystem")
+      await Filesystem.writeFile({
+        path: filename,
+        data: "\ufeff" + csvContent,
+        directory: Directory.Documents,
+        encoding: Encoding.UTF8,
+      })
+      alert(`Archivo guardado en Documentos: ${filename}`)
+    } catch (error) {
+      console.error("Error guardando archivo nativo:", error)
+      alert("Error al guardar el archivo")
+    }
+    return
+  }
+
+  // En web, descargar normalmente
   const blob = new Blob(["\ufeff" + csvContent], {
     type: "text/csv;charset=utf-8;",
   })

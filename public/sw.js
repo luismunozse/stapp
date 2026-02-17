@@ -1,7 +1,7 @@
 // Service Worker para PWA - Optimizado para móviles
-const CACHE_NAME = 'stapp-v6'
+const CACHE_NAME = 'stapp-v7'
 const API_CACHE_NAME = 'stapp-api-v1'
-const STATIC_CACHE_NAME = 'stapp-static-v2'
+const STATIC_CACHE_NAME = 'stapp-static-v3'
 
 // Assets estáticos para cachear inmediatamente
 const STATIC_ASSETS = [

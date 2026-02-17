@@ -117,10 +117,30 @@ function extractSubdomain(hostname: string): string | null {
 export async function middleware(request: NextRequest) {
   const hostname = request.headers.get("host") || ""
   const pathname = request.nextUrl.pathname
+  const origin = request.headers.get("origin") || ""
   const subdomain = extractSubdomain(hostname)
 
   // Headers para pasar contexto
   const requestHeaders = new Headers(request.headers)
+
+  // CORS para Capacitor (app nativa)
+  const capacitorOrigins = ["capacitor://localhost", "http://localhost"]
+  if (capacitorOrigins.includes(origin)) {
+    const response = NextResponse.next({
+      request: { headers: requestHeaders },
+    })
+    response.headers.set("Access-Control-Allow-Origin", origin)
+    response.headers.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+    response.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+    response.headers.set("Access-Control-Allow-Credentials", "true")
+
+    if (request.method === "OPTIONS") {
+      return new NextResponse(null, {
+        status: 200,
+        headers: response.headers,
+      })
+    }
+  }
 
   // ==========================================
   // CASO 1: Dominio principal (sin subdominio)

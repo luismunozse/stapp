@@ -108,19 +108,19 @@ export function NotificationSettings({ allowEdit = true }: NotificationSettingsP
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Bell className="h-5 w-5" />
+      <CardHeader className="p-4 sm:p-6">
+        <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+          <Bell className="h-4 w-4 sm:h-5 sm:w-5" />
           Notificaciones
         </CardTitle>
-        <CardDescription>
-          Configura como y cuando se envian notificaciones a los clientes
+        <CardDescription className="text-xs sm:text-sm">
+          Configura como y cuando se envian notificaciones
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="p-4 sm:p-6 pt-0 space-y-4 sm:space-y-6">
         {message && (
           <div
-            className={`px-4 py-3 rounded text-sm ${
+            className={`px-3 sm:px-4 py-2 sm:py-3 rounded text-xs sm:text-sm ${
               message.type === "success"
                 ? "bg-green-50 dark:bg-green-950/50 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400"
                 : "bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400"
@@ -130,18 +130,17 @@ export function NotificationSettings({ allowEdit = true }: NotificationSettingsP
           </div>
         )}
 
-        <div className="flex items-center justify-between p-4 border rounded-lg">
-          <div className="flex items-start gap-3">
-            <Mail className="h-5 w-5 text-blue-600 mt-0.5" />
-            <div>
-              <Label className="text-base">Notificaciones por Email</Label>
-              <p className="text-sm text-muted-foreground">
-                Enviar emails automaticos al cambiar estado, definir
-                presupuesto, crear garantia, etc.
+        <div className="flex items-center justify-between p-3 sm:p-4 border rounded-lg gap-3">
+          <div className="flex items-start gap-2 sm:gap-3 min-w-0">
+            <Mail className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 mt-0.5 shrink-0" />
+            <div className="min-w-0">
+              <Label className="text-sm sm:text-base">Email</Label>
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                Emails al cambiar estado, presupuesto, garantia, etc.
               </p>
             </div>
           </div>
-          <label className={`relative inline-flex items-center ${allowEdit ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}>
+          <label className={`relative inline-flex items-center shrink-0 ${allowEdit ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}>
             <input
               type="checkbox"
               checked={config.notificacionesEmail}
@@ -155,18 +154,17 @@ export function NotificationSettings({ allowEdit = true }: NotificationSettingsP
           </label>
         </div>
 
-        <div className="flex items-center justify-between p-4 border rounded-lg">
-          <div className="flex items-start gap-3">
-            <WhatsAppIcon className="h-5 w-5 text-green-600 mt-0.5" />
-            <div>
-              <Label className="text-base">Boton WhatsApp</Label>
-              <p className="text-sm text-muted-foreground">
-                Mostrar boton de WhatsApp con plantillas de mensajes en las
-                ordenes
+        <div className="flex items-center justify-between p-3 sm:p-4 border rounded-lg gap-3">
+          <div className="flex items-start gap-2 sm:gap-3 min-w-0">
+            <WhatsAppIcon className="h-4 w-4 sm:h-5 sm:w-5 text-green-600 mt-0.5 shrink-0" />
+            <div className="min-w-0">
+              <Label className="text-sm sm:text-base">WhatsApp</Label>
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                Boton con plantillas de mensajes en ordenes
               </p>
             </div>
           </div>
-          <label className={`relative inline-flex items-center ${allowEdit ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}>
+          <label className={`relative inline-flex items-center shrink-0 ${allowEdit ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}>
             <input
               type="checkbox"
               checked={config.notificacionesWhatsapp}
@@ -183,11 +181,10 @@ export function NotificationSettings({ allowEdit = true }: NotificationSettingsP
           </label>
         </div>
 
-        <div className="p-4 border rounded-lg">
-          <Label className="text-base">Dias para recordatorio de retiro</Label>
-          <p className="text-sm text-muted-foreground mb-3">
-            Enviar recordatorio automatico si el cliente no retira su
-            dispositivo despues de X dias
+        <div className="p-3 sm:p-4 border rounded-lg">
+          <Label className="text-sm sm:text-base">Recordatorio de retiro</Label>
+          <p className="text-xs sm:text-sm text-muted-foreground mb-3">
+            Recordatorio si el cliente no retira su dispositivo
           </p>
           <div className="flex items-center gap-2">
             <Input
@@ -202,9 +199,9 @@ export function NotificationSettings({ allowEdit = true }: NotificationSettingsP
                 })
               }
               disabled={!allowEdit}
-              className="w-24"
+              className="w-20 sm:w-24"
             />
-            <span className="text-sm text-muted-foreground">dias</span>
+            <span className="text-xs sm:text-sm text-muted-foreground">dias</span>
           </div>
         </div>
 

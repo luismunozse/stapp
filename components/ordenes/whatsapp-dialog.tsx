@@ -47,15 +47,35 @@ export function WhatsAppDialog({ context, onClose }: WhatsAppDialogProps) {
     }
   }
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(customMessage)
+  const handleCopy = async () => {
+    try {
+      const { Capacitor } = await import("@capacitor/core")
+      if (Capacitor.isNativePlatform()) {
+        const { Clipboard } = await import("@capacitor/clipboard")
+        await Clipboard.write({ string: customMessage })
+      } else {
+        await navigator.clipboard.writeText(customMessage)
+      }
+    } catch {
+      await navigator.clipboard.writeText(customMessage)
+    }
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const handleSend = () => {
+  const handleSend = async () => {
     const url = generateWhatsAppUrl(context.cliente.telefono, customMessage)
-    window.open(url, "_blank")
+    try {
+      const { Capacitor } = await import("@capacitor/core")
+      if (Capacitor.isNativePlatform()) {
+        const { Browser } = await import("@capacitor/browser")
+        await Browser.open({ url })
+      } else {
+        window.open(url, "_blank")
+      }
+    } catch {
+      window.open(url, "_blank")
+    }
   }
 
   if (!isOpen) {

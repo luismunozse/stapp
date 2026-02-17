@@ -46,7 +46,9 @@
       "Bash(test:*)",
       "Bash(npx vitest run:*)",
       "Bash(npx next build:*)",
-      "Bash(node scripts/generate-icons.mjs:*)"
+      "Bash(node scripts/generate-icons.mjs:*)",
+      "Bash(npx cap add:*)",
+      "Bash(npx cap sync:*)"
     ]
   }
 }
