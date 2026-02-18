@@ -72,14 +72,6 @@ export async function POST(request: Request) {
     const body = await request.json()
     const data = inventarioSchema.parse(body)
 
-    // Resolver tipo_dispositivo_id desde la tabla tipos_dispositivo
-    const { data: tipoDisp } = await supabaseAdmin
-      .from("tipos_dispositivo")
-      .select("id")
-      .eq("organization_id", organizationId!)
-      .eq("codigo", data.tipoDispositivo)
-      .single()
-
     const { data: inventario, error: dbError } = await supabaseAdmin
       .from("inventario")
       .insert({
@@ -88,7 +80,6 @@ export async function POST(request: Request) {
         descripcion: data.descripcion || null,
         categoria: data.categoria,
         tipo_dispositivo: data.tipoDispositivo,
-        tipo_dispositivo_id: tipoDisp?.id || null,
         stock: data.stock,
         precio_compra: data.precioCompra,
         precio_venta: data.precioVenta,

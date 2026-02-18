@@ -3,7 +3,7 @@
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { OrderStatusBadge } from "@/components/ui/badge"
-import { Eye, Trash2, Calendar, DollarSign, Smartphone } from "lucide-react"
+import { Eye, Trash2, Calendar, Smartphone } from "lucide-react"
 import Link from "next/link"
 import { useCurrency } from "@/contexts/currency-context"
 import type { OrdenServicio } from "@/types"
@@ -52,8 +52,7 @@ export function OrdenMobileCard({ orden, onDelete, deleting, onClick }: OrdenMob
               {formatDate(orden.fechaIngreso)}
             </div>
             {orden.presupuesto && (
-              <div className="flex items-center gap-1 font-medium text-foreground">
-                <DollarSign className="h-3 w-3" />
+              <div className="font-medium text-foreground">
                 {formatPrice(orden.presupuesto)}
               </div>
             )}

@@ -85,14 +85,6 @@ export async function PUT(
     if (data.categoria !== undefined) updateData.categoria = data.categoria
     if (data.tipoDispositivo !== undefined) {
       updateData.tipo_dispositivo = data.tipoDispositivo
-      // Resolver tipo_dispositivo_id
-      const { data: tipoDisp } = await supabaseAdmin
-        .from("tipos_dispositivo")
-        .select("id")
-        .eq("organization_id", organizationId!)
-        .eq("codigo", data.tipoDispositivo)
-        .single()
-      updateData.tipo_dispositivo_id = tipoDisp?.id || null
     }
     if (data.stock !== undefined) updateData.stock = data.stock
     if (data.precioCompra !== undefined) updateData.precio_compra = data.precioCompra
