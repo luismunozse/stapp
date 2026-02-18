@@ -38,11 +38,7 @@ export async function GET(request: Request) {
       throw dbError
     }
 
-    return NextResponse.json(clientes, {
-      headers: {
-        "Cache-Control": "private, max-age=30, stale-while-revalidate=60",
-      },
-    })
+    return NextResponse.json(clientes)
   } catch (error) {
     console.error("Error fetching clientes:", error)
     return NextResponse.json(

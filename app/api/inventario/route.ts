@@ -50,11 +50,7 @@ export async function GET(request: Request) {
       throw dbError
     }
 
-    return NextResponse.json(inventario?.map(formatInventario), {
-      headers: {
-        "Cache-Control": "private, max-age=30, stale-while-revalidate=60",
-      },
-    })
+    return NextResponse.json(inventario?.map(formatInventario))
   } catch (error) {
     console.error("Error fetching inventario:", error)
     return NextResponse.json(

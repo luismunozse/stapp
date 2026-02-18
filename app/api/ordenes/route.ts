@@ -146,10 +146,6 @@ export async function GET(request: Request) {
       page,
       limit,
       totalPages: Math.ceil((count || 0) / limit),
-    }, {
-      headers: {
-        "Cache-Control": "private, max-age=15, stale-while-revalidate=30",
-      },
     })
   } catch (error) {
     console.error("Error fetching ordenes:", error)
