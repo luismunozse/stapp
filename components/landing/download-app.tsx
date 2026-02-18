@@ -60,6 +60,14 @@ function PhoneCarousel() {
   const [direction, setDirection] = useState(1)
   const [hasImages, setHasImages] = useState(true)
 
+  // Precargar todas las imágenes al montar
+  useEffect(() => {
+    screenshots.forEach((s) => {
+      const img = new window.Image()
+      img.src = s.src
+    })
+  }, [])
+
   const next = useCallback(() => {
     setDirection(1)
     setCurrent((prev) => (prev + 1) % screenshots.length)
@@ -119,6 +127,7 @@ function PhoneCarousel() {
                       fill
                       className="object-cover object-top"
                       sizes="280px"
+                      priority={current === 0}
                       onError={() => setHasImages(false)}
                     />
                   ) : (
