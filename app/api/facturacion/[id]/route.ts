@@ -28,7 +28,7 @@ export async function GET(
           organization_id,
           clientes (*)
         ),
-        pagos (*)
+        pagos_parciales (*)
       `)
       .eq("id", id)
       .eq("ordenes_servicio.organization_id", organizationId!)
@@ -49,6 +49,7 @@ export async function GET(
       subtotal: factura.subtotal,
       iva: factura.iva,
       total: factura.total,
+      montoAbonado: factura.monto_abonado,
       estadoPago: factura.estado_pago,
       createdAt: factura.created_at,
       orden: {
@@ -57,13 +58,13 @@ export async function GET(
         dispositivo: factura.ordenes_servicio.dispositivo,
         cliente: factura.ordenes_servicio.clientes,
       },
-      pagos: factura.pagos?.map((p: any) => ({
+      pagos: factura.pagos_parciales?.map((p: any) => ({
         id: p.id,
         monto: p.monto,
         metodoPago: p.metodo_pago,
-        referencia: p.referencia,
+        referencia: p.numero_referencia,
         fecha: p.fecha,
-        notas: p.notas,
+        notas: p.observaciones,
         cuotas: p.cuotas,
         recargoPorcentaje: p.recargo_porcentaje,
         montoOriginal: p.monto_original,
@@ -136,7 +137,7 @@ export async function PUT(
           dispositivo,
           clientes (*)
         ),
-        pagos (*)
+        pagos_parciales (*)
       `)
       .single()
 
@@ -152,6 +153,7 @@ export async function PUT(
       subtotal: factura.subtotal,
       iva: factura.iva,
       total: factura.total,
+      montoAbonado: factura.monto_abonado,
       estadoPago: factura.estado_pago,
       orden: {
         id: factura.ordenes_servicio.id,
@@ -159,13 +161,13 @@ export async function PUT(
         dispositivo: factura.ordenes_servicio.dispositivo,
         cliente: factura.ordenes_servicio.clientes,
       },
-      pagos: factura.pagos?.map((p: any) => ({
+      pagos: factura.pagos_parciales?.map((p: any) => ({
         id: p.id,
         monto: p.monto,
         metodoPago: p.metodo_pago,
-        referencia: p.referencia,
+        referencia: p.numero_referencia,
         fecha: p.fecha,
-        notas: p.notas,
+        notas: p.observaciones,
         cuotas: p.cuotas,
         recargoPorcentaje: p.recargo_porcentaje,
         montoOriginal: p.monto_original,

@@ -41,6 +41,8 @@ export const STORAGE_BUCKETS = {
   LOGOS: "logos",
   FIRMAS: "firmas",
   CSV_IMPORTS: "csv-imports",
+  APK_RELEASES: "apk-releases",
+  SOPORTE_ATTACHMENTS: "soporte-attachments",
 } as const
 
 // Helper para obtener URL pública de un archivo

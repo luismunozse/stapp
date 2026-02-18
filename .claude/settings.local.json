@@ -51,7 +51,17 @@
       "Bash(npx cap sync:*)",
       "Bash(gradlew assembleDebug:*)",
       "Bash(./gradlew.bat assembleDebug:*)",
-      "Bash(npx @capacitor/assets generate:*)"
+      "Bash(npx @capacitor/assets generate:*)",
+      "Bash(npx cap run:*)",
+      "Bash(adb shell pm clear:*)",
+      "Bash(\"C:/Users/LUIS/AppData/Local/Android/Sdk/platform-tools/adb\" shell pm clear ar.com.stapp.app)",
+      "Bash(./gradlew assembleDebug:*)",
+      "Bash(npx next lint:*)",
+      "Bash(npx eslint:*)",
+      "Bash(node scripts/upload-apk.mjs:*)",
+      "Bash(node node_modules/.bin/next build)",
+      "Bash(npx:*)",
+      "Bash(echo:*)"
     ]
   }
 }

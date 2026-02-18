@@ -34,7 +34,7 @@ const ventaEditSchema = z.object({
   clienteTelefono: z.string().optional(),
   items: z.array(itemSchema).min(1, "Agrega al menos un producto"),
   descuento: z.number().min(0).default(0),
-  metodoPago: z.enum(["EFECTIVO", "TRANSFERENCIA", "TARJETA"]),
+  metodoPago: z.enum(["EFECTIVO", "TRANSFERENCIA", "TARJETA", "TARJETA_DEBITO", "TARJETA_CREDITO", "MERCADOPAGO", "OTRO"]),
   observaciones: z.string().optional(),
 })
 
@@ -115,7 +115,7 @@ export function VentaEditForm({ open, onOpenChange, venta, onSuccess }: VentaEdi
         diasGarantia: item.diasGarantia,
       })),
       descuento: venta.descuento,
-      metodoPago: venta.metodoPago as "EFECTIVO" | "TRANSFERENCIA" | "TARJETA",
+      metodoPago: venta.metodoPago as VentaEditFormData["metodoPago"],
       observaciones: venta.observaciones || "",
     },
   })
@@ -152,7 +152,7 @@ export function VentaEditForm({ open, onOpenChange, venta, onSuccess }: VentaEdi
           diasGarantia: item.diasGarantia,
         })),
         descuento: venta.descuento,
-        metodoPago: venta.metodoPago as "EFECTIVO" | "TRANSFERENCIA" | "TARJETA",
+        metodoPago: venta.metodoPago as VentaEditFormData["metodoPago"],
         observaciones: venta.observaciones || "",
       })
     }
@@ -453,6 +453,10 @@ export function VentaEditForm({ open, onOpenChange, venta, onSuccess }: VentaEdi
                   <option value="EFECTIVO">Efectivo</option>
                   <option value="TRANSFERENCIA">Transferencia</option>
                   <option value="TARJETA">Tarjeta</option>
+                  <option value="TARJETA_DEBITO">Tarjeta Débito</option>
+                  <option value="TARJETA_CREDITO">Tarjeta Crédito</option>
+                  <option value="MERCADOPAGO">MercadoPago</option>
+                  <option value="OTRO">Otro</option>
                 </Select>
               </div>
               <div className="space-y-2">

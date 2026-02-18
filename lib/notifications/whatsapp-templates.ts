@@ -226,6 +226,10 @@ const metodoPagoLabels: Record<MetodoPagoVenta, string> = {
   EFECTIVO: "efectivo",
   TRANSFERENCIA: "transferencia",
   TARJETA: "tarjeta",
+  TARJETA_DEBITO: "tarjeta de débito",
+  TARJETA_CREDITO: "tarjeta de crédito",
+  MERCADOPAGO: "MercadoPago",
+  OTRO: "otro medio",
 }
 
 function getBaseUrl(ctx: NotificationContext): string {

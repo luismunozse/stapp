@@ -22,6 +22,7 @@ import {
   MoreHorizontal,
   TrendingUp,
   ShoppingCart,
+  Headset,
 } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import { cn } from "@/lib/utils"
@@ -40,6 +41,7 @@ const navItems = [
   { href: "/inventario", label: "Inventario", icon: Package },
   { href: "/facturacion", label: "Facturación", icon: FileText },
   { href: "/reportes", label: "Reportes", icon: BarChart3 },
+  { href: "/soporte", label: "Soporte", icon: Headset },
 ]
 
 // Items principales para el bottom nav (los 4 más usados)

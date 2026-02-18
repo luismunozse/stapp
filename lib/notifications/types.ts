@@ -19,7 +19,7 @@ export type EstadoOrden =
   | "SIN_REPARACION"
 
 export type EstadoVenta = "COMPLETADA" | "ANULADA"
-export type MetodoPagoVenta = "EFECTIVO" | "TRANSFERENCIA" | "TARJETA"
+export type MetodoPagoVenta = "EFECTIVO" | "TRANSFERENCIA" | "TARJETA" | "TARJETA_DEBITO" | "TARJETA_CREDITO" | "MERCADOPAGO" | "OTRO"
 
 export interface NotificationContext {
   organizationId: string

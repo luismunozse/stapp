@@ -9,7 +9,7 @@ const inventarioSchema = z.object({
   nombre: z.string().min(1, "El nombre es requerido"),
   descripcion: z.string().optional(),
   categoria: z.string().min(1, "La categoría es requerida"),
-  tipoDispositivo: z.enum(["CELULAR", "COMPUTADORA", "TABLET", "CONSOLA", "SMARTWATCH", "ACCESORIOS", "TODOS"]),
+  tipoDispositivo: z.string().min(1, "El tipo de dispositivo es requerido"),
   stock: z.number().int().min(0),
   precioCompra: z.number().min(0),
   precioVenta: z.number().min(0),
@@ -72,6 +72,14 @@ export async function POST(request: Request) {
     const body = await request.json()
     const data = inventarioSchema.parse(body)
 
+    // Resolver tipo_dispositivo_id desde la tabla tipos_dispositivo
+    const { data: tipoDisp } = await supabaseAdmin
+      .from("tipos_dispositivo")
+      .select("id")
+      .eq("organization_id", organizationId!)
+      .eq("codigo", data.tipoDispositivo)
+      .single()
+
     const { data: inventario, error: dbError } = await supabaseAdmin
       .from("inventario")
       .insert({
@@ -80,6 +88,7 @@ export async function POST(request: Request) {
         descripcion: data.descripcion || null,
         categoria: data.categoria,
         tipo_dispositivo: data.tipoDispositivo,
+        tipo_dispositivo_id: tipoDisp?.id || null,
         stock: data.stock,
         precio_compra: data.precioCompra,
         precio_venta: data.precioVenta,

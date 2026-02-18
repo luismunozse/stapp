@@ -72,7 +72,7 @@ export type CategoriaChecklist =
 
 export type MetodoPago = "EFECTIVO" | "TRANSFERENCIA" | "TARJETA_DEBITO" | "TARJETA_CREDITO" | "MERCADOPAGO" | "OTRO"
 
-export type MetodoPagoVenta = "EFECTIVO" | "TRANSFERENCIA" | "TARJETA"
+export type MetodoPagoVenta = "EFECTIVO" | "TRANSFERENCIA" | "TARJETA" | "TARJETA_DEBITO" | "TARJETA_CREDITO" | "MERCADOPAGO" | "OTRO"
 
 export type EstadoVenta = "COMPLETADA" | "ANULADA"
 

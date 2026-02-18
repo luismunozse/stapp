@@ -9,7 +9,7 @@ const inventarioSchema = z.object({
   nombre: z.string().min(1).optional(),
   descripcion: z.string().optional(),
   categoria: z.string().min(1).optional(),
-  tipoDispositivo: z.enum(["CELULAR", "COMPUTADORA", "TABLET", "CONSOLA", "SMARTWATCH", "TODOS"]).optional(),
+  tipoDispositivo: z.string().min(1).optional(),
   stock: z.number().int().min(0).optional(),
   precioCompra: z.number().min(0).optional(),
   precioVenta: z.number().min(0).optional(),
@@ -83,7 +83,17 @@ export async function PUT(
     if (data.nombre !== undefined) updateData.nombre = data.nombre
     if (data.descripcion !== undefined) updateData.descripcion = data.descripcion
     if (data.categoria !== undefined) updateData.categoria = data.categoria
-    if (data.tipoDispositivo !== undefined) updateData.tipo_dispositivo = data.tipoDispositivo
+    if (data.tipoDispositivo !== undefined) {
+      updateData.tipo_dispositivo = data.tipoDispositivo
+      // Resolver tipo_dispositivo_id
+      const { data: tipoDisp } = await supabaseAdmin
+        .from("tipos_dispositivo")
+        .select("id")
+        .eq("organization_id", organizationId!)
+        .eq("codigo", data.tipoDispositivo)
+        .single()
+      updateData.tipo_dispositivo_id = tipoDisp?.id || null
+    }
     if (data.stock !== undefined) updateData.stock = data.stock
     if (data.precioCompra !== undefined) updateData.precio_compra = data.precioCompra
     if (data.precioVenta !== undefined) updateData.precio_venta = data.precioVenta

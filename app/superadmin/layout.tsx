@@ -21,7 +21,7 @@ export default async function SuperadminLayout({
     <div className="min-h-screen bg-muted/30 dark:bg-background">
       <SkipLinks />
       <NavbarSuperadmin userEmail={session.user?.email || ""} />
-      <main id="main-content" className="lg:pl-64 pt-14 lg:pt-0">
+      <main id="main-content" className="lg:pl-64 pt-[calc(3.5rem+env(safe-area-inset-top,0px))] lg:pt-0">
         <div className="p-4 lg:p-8">{children}</div>
       </main>
     </div>

@@ -23,14 +23,7 @@ const fotoSchema = z.object({
 const ordenSchema = z.object({
   clienteId: z.string().min(1, "El cliente es requerido"),
   dispositivo: z.string().min(1, "El dispositivo es requerido"),
-  tipoDispositivo: z.enum([
-    "CELULAR",
-    "COMPUTADORA",
-    "TABLET",
-    "CONSOLA",
-    "SMARTWATCH",
-    "TODOS",
-  ]),
+  tipoDispositivo: z.string().min(1, "El tipo de dispositivo es requerido"),
   marca: z.string().optional(),
   color: z.string().optional(),
   imei: z.string().optional(),
@@ -192,6 +185,14 @@ export async function POST(request: Request) {
     const estadoInicial = data.presupuestoAceptado ? "EN_REPARACION" : "RECIBIDO"
     const costoFinal = data.presupuestoAceptado && data.presupuesto ? data.presupuesto : null
 
+    // Resolver tipo_dispositivo_id desde la tabla tipos_dispositivo
+    const { data: tipoDisp } = await supabaseAdmin
+      .from("tipos_dispositivo")
+      .select("id")
+      .eq("organization_id", organizationId!)
+      .eq("codigo", data.tipoDispositivo)
+      .single()
+
     const { data: orden, error: dbError } = await supabaseAdmin
       .from("ordenes_servicio")
       .insert({
@@ -201,6 +202,7 @@ export async function POST(request: Request) {
         organization_id: organizationId!,
         dispositivo: data.dispositivo,
         tipo_dispositivo: data.tipoDispositivo,
+        tipo_dispositivo_id: tipoDisp?.id || null,
         marca: data.marca || null,
         color: data.color || null,
         imei: data.imei || null,

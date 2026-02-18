@@ -6,6 +6,7 @@ import { Hero } from "@/components/landing/hero"
 import { Features } from "@/components/landing/features"
 import { PricingSection } from "@/components/landing/pricing-section"
 import { FAQ } from "@/components/landing/faq"
+import { DownloadApp } from "@/components/landing/download-app"
 import { Footer } from "@/components/landing/footer"
 import { ChatbotButton } from "@/components/chatbot/chatbot-button"
 import { SkipLinks } from "@/components/shared/skip-links"
@@ -31,6 +32,7 @@ export default async function Home() {
         {/* <ProductShowcase /> */}
         <Features />
         <PricingSection />
+        <DownloadApp />
         <FAQ />
         <Footer />
         {/* Chatbot flotante */}

@@ -54,7 +54,9 @@ export default async function DashboardLayout({
       <main
         id="main-content"
         className={`lg:pl-64 pb-[calc(4rem+env(safe-area-inset-bottom,0px))] lg:pb-0 ${
-          showTrialBanner ? "pt-[calc(3.5rem+2.5rem)] lg:pt-10" : "pt-14 lg:pt-0"
+          showTrialBanner
+            ? "pt-[calc(3.5rem+2.5rem+env(safe-area-inset-top,0px))] lg:pt-10"
+            : "pt-[calc(3.5rem+env(safe-area-inset-top,0px))] lg:pt-0"
         }`}
       >
         <div className="p-4 lg:p-8">{children}</div>

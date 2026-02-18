@@ -137,7 +137,7 @@ export interface Importacion {
 // VENTAS
 // ========================================
 
-export type MetodoPagoVenta = "EFECTIVO" | "TRANSFERENCIA" | "TARJETA"
+export type MetodoPagoVenta = "EFECTIVO" | "TRANSFERENCIA" | "TARJETA" | "TARJETA_DEBITO" | "TARJETA_CREDITO" | "MERCADOPAGO" | "OTRO"
 export type EstadoVenta = "COMPLETADA" | "ANULADA"
 export type EstadoGarantiaVenta = "ACTIVA" | "VENCIDA" | "RECLAMADA"
 
@@ -185,5 +185,51 @@ export interface GarantiaVentaCompleta {
   fechaInicio: Date
   fechaVencimiento: Date
   estado: EstadoGarantiaVenta
+}
+
+// ========================================
+// SOPORTE
+// ========================================
+
+export type TipoTicket = "BUG" | "SUGERENCIA" | "PREGUNTA"
+export type PrioridadTicket = "BAJA" | "MEDIA" | "ALTA"
+export type EstadoTicket = "ABIERTO" | "EN_PROCESO" | "RESUELTO" | "CERRADO"
+
+export interface SupportTicket {
+  id: string
+  organizationId: string
+  userId: string
+  tipo: TipoTicket
+  prioridad: PrioridadTicket
+  asunto: string
+  descripcion: string
+  estado: EstadoTicket
+  createdAt: string
+  updatedAt: string
+  usuario?: { nombre: string; email: string }
+  organizacion?: { nombre: string; slug: string }
+  mensajes?: SupportTicketMessage[]
+  adjuntos?: SupportTicketAttachment[]
+  totalMensajes?: number
+}
+
+export interface SupportTicketMessage {
+  id: string
+  ticketId: string
+  autorTipo: "USUARIO" | "SUPERADMIN"
+  autorId: string
+  autorNombre: string
+  contenido: string
+  createdAt: string
+  adjuntos?: SupportTicketAttachment[]
+}
+
+export interface SupportTicketAttachment {
+  id: string
+  ticketId: string
+  messageId?: string | null
+  url: string
+  nombreArchivo?: string | null
+  createdAt: string
 }
 
