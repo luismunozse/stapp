@@ -85,9 +85,9 @@ function PhoneCarousel() {
   }, [next])
 
   const variants = {
-    enter: (dir: number) => ({ x: dir > 0 ? 80 : -80, opacity: 0 }),
-    center: { x: 0, opacity: 1 },
-    exit: (dir: number) => ({ x: dir > 0 ? -80 : 80, opacity: 0 }),
+    enter: { opacity: 0 },
+    center: { opacity: 1 },
+    exit: { opacity: 0 },
   }
 
   return (
@@ -109,15 +109,14 @@ function PhoneCarousel() {
 
             {/* Screenshot area */}
             <div className="relative aspect-[9/17] bg-muted/30 overflow-hidden">
-              <AnimatePresence mode="wait" custom={direction}>
+              <AnimatePresence>
                 <motion.div
                   key={current}
-                  custom={direction}
                   variants={variants}
                   initial="enter"
                   animate="center"
                   exit="exit"
-                  transition={{ duration: 0.3, ease: "easeInOut" }}
+                  transition={{ duration: 0.4, ease: "easeInOut" }}
                   className="absolute inset-0"
                 >
                   {hasImages ? (
