@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/card"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { Eye, EyeOff, Shield, AlertTriangle } from "lucide-react"
+import Image from "next/image"
 
 function LoginForm() {
   const router = useRouter()
@@ -70,12 +71,24 @@ function LoginForm() {
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1 pb-2">
           <div className="flex justify-center py-4">
-            <div className="p-4 bg-red-100 dark:bg-red-950 rounded-full">
-              <Shield className="h-12 w-12 text-red-600" />
-            </div>
+            <Image
+              src="/logo.png"
+              alt="STApp"
+              width={64}
+              height={64}
+              className="dark:hidden"
+            />
+            <Image
+              src="/logo-white.png"
+              alt="STApp"
+              width={64}
+              height={64}
+              className="hidden dark:block"
+            />
           </div>
-          <CardTitle className="text-center text-2xl text-red-600">
-            SUPERADMIN
+          <CardTitle className="text-center text-2xl">
+            <span className="text-primary">STApp</span>{" "}
+            <span className="text-muted-foreground font-normal text-lg">Superadmin</span>
           </CardTitle>
           <CardDescription className="text-center">
             Panel de administración del sistema
@@ -138,7 +151,7 @@ function LoginForm() {
             </div>
             <Button
               type="submit"
-              className="w-full bg-red-600 hover:bg-red-700"
+              className="w-full"
               disabled={loading}
             >
               {loading ? "Verificando..." : "Acceder al Panel"}
