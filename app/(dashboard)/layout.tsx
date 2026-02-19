@@ -2,6 +2,7 @@ import { Navbar } from "@/components/layout/navbar"
 import { TrialBanner } from "@/components/subscription/trial-banner"
 import { PolicyChangeModal } from "@/components/subscription/policy-change-modal"
 import { SkipLinks } from "@/components/shared/skip-links"
+import { GuidedTour } from "@/components/guided-tour"
 import { auth } from "@/lib/auth"
 import { hasValidAccess, getTrialInfo } from "@/lib/subscriptions"
 import { redirect } from "next/navigation"
@@ -65,6 +66,8 @@ export default async function DashboardLayout({
       {showTrialBanner && (
         <PolicyChangeModal daysRemaining={trialInfo.daysRemaining} />
       )}
+      {/* Tour guiado - se muestra automáticamente la primera vez */}
+      <GuidedTour />
     </div>
   )
 }
