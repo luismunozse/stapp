@@ -31,6 +31,9 @@ export async function GET(
           logo_url,
           moneda,
           zona_horaria
+        ),
+        users:entregado_por_user_id (
+          nombre
         )
       `)
       .eq("public_token", token)
@@ -45,6 +48,7 @@ export async function GET(
 
     const cliente = orden.clientes as any
     const org = orden.organizations as any
+    const entregadoPorUser = orden.users as any
 
     // Preparar datos para el PDF
     const pdfData: OrdenPDFData = {
@@ -71,10 +75,16 @@ export async function GET(
       telefonoEmpresa: org?.telefono,
       direccionEmpresa: org?.direccion,
       logoUrl: org?.logo_url,
-      firmaClienteRecepcion: orden.firma_cliente_recepcion,
-      firmaClienteRecepcionMime: orden.firma_cliente_recepcion_mime,
       moneda: org?.moneda || "ARS",
       zonaHoraria: org?.zona_horaria || "America/Argentina/Buenos_Aires",
+      estado: orden.estado,
+      fechaEntrega: orden.fecha_entrega ? new Date(orden.fecha_entrega) : null,
+      firmaClienteEntrega: orden.firma_cliente_entrega,
+      firmaClienteEntregaMime: orden.firma_cliente_entrega_mime,
+      firmaEncargadoEntrega: orden.firma_encargado_entrega,
+      firmaEncargadoEntregaMime: orden.firma_encargado_entrega_mime,
+      entregadoPor: entregadoPorUser?.nombre || null,
+      notasEntrega: orden.notas_entrega,
     }
 
     // Generar PDF
@@ -85,8 +95,6 @@ export async function GET(
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `inline; filename="orden-${orden.numero_orden}.pdf"`,
-        // Permitir caché por 1 hora
-        "Cache-Control": "public, max-age=3600",
       },
     })
   } catch (error) {

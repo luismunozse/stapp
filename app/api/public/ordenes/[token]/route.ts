@@ -84,10 +84,6 @@ export async function GET(
         direccion: org?.direccion || null,
         logoUrl: org?.logo_url || null,
       },
-    }, {
-      headers: {
-        "Cache-Control": "public, max-age=60, stale-while-revalidate=120",
-      },
     })
   } catch (error) {
     console.error("Error fetching public order:", error)

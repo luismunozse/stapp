@@ -52,6 +52,9 @@ export async function GET(
         repuestos_orden (
           *,
           inventario (*)
+        ),
+        organizations:organization_id (
+          nombre_empresa
         )
       `)
       .eq("id", id)
@@ -73,7 +76,11 @@ export async function GET(
       )
     }
 
-    return NextResponse.json(formatOrden(orden))
+    const formatted = formatOrden(orden)
+    return NextResponse.json({
+      ...formatted,
+      organizationName: (orden as any).organizations?.nombre_empresa || null,
+    })
   } catch (error) {
     console.error("Error fetching orden:", error)
     return NextResponse.json(

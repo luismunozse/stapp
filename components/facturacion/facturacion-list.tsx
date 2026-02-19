@@ -41,7 +41,7 @@ export function FacturacionList() {
       const params = new URLSearchParams()
       if (estadoPago) params.append("estadoPago", estadoPago)
 
-      const res = await fetch(`/api/facturacion?${params.toString()}`)
+      const res = await fetch(`/api/facturacion?${params.toString()}`, { cache: "no-store" })
       const data = await res.json()
       setFacturas(data)
     } catch (error) {

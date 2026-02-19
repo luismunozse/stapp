@@ -78,7 +78,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
       if (categoria) params.append("categoria", categoria)
       if (tipoDispositivo) params.append("tipoDispositivo", tipoDispositivo)
 
-      const res = await fetch(`/api/inventario?${params.toString()}`)
+      const res = await fetch(`/api/inventario?${params.toString()}`, { cache: "no-store" })
       const data = await res.json()
       setItems(data)
     } catch (error) {

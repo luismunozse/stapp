@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import Image from "next/image"
 import { formatDateValue } from "@/lib/timezone"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -94,9 +94,9 @@ export function SeguimientoContent({ token }: { token: string }) {
   const formatDate = (dateStr: string | null | undefined) =>
     formatDateValue(dateStr, data?.zonaHoraria)
 
-  useEffect(() => {
+  const fetchData = useCallback(() => {
     const controller = new AbortController()
-    fetch(`/api/public/ordenes/${token}`, { signal: controller.signal })
+    fetch(`/api/public/ordenes/${token}`, { signal: controller.signal, cache: "no-store" })
       .then((res) => {
         if (!res.ok) throw new Error("Not found")
         return res.json()
@@ -104,8 +104,15 @@ export function SeguimientoContent({ token }: { token: string }) {
       .then(setData)
       .catch(() => { if (!controller.signal.aborted) setError(true) })
       .finally(() => { if (!controller.signal.aborted) setLoading(false) })
-    return () => controller.abort()
+    return controller
   }, [token])
+
+  // Fetch inicial + auto-refresh cada 30 segundos
+  useEffect(() => {
+    const controller = fetchData()
+    const interval = setInterval(() => { fetchData() }, 30000)
+    return () => { controller.abort(); clearInterval(interval) }
+  }, [fetchData])
 
   if (loading) {
     return (

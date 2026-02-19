@@ -315,6 +315,13 @@ export async function POST(request: Request) {
       .eq("id", venta.id)
       .single()
 
+    // Obtener nombre de la organización para el mensaje de WhatsApp
+    const { data: org } = await supabaseAdmin
+      .from("organizations")
+      .select("nombre_empresa")
+      .eq("id", organizationId!)
+      .single()
+
     // Formatear respuesta
     const response = {
       id: ventaCompleta.id,
@@ -322,6 +329,7 @@ export async function POST(request: Request) {
       clienteId: ventaCompleta.cliente_id,
       clienteNombre: ventaCompleta.cliente_nombre,
       clienteTelefono: ventaCompleta.cliente_telefono,
+      organizationName: org?.nombre_empresa || null,
       cliente: ventaCompleta.clientes,
       vendedor: ventaCompleta.users,
       items: ventaCompleta.items_venta?.map((item: any) => ({

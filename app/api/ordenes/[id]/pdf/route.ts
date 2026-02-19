@@ -28,6 +28,9 @@ export async function GET(
           logo_url,
           moneda,
           zona_horaria
+        ),
+        users:entregado_por_user_id (
+          nombre
         )
       `)
       .eq("id", id)
@@ -51,6 +54,7 @@ export async function GET(
 
     const cliente = orden.clientes as any
     const org = orden.organizations as any
+    const entregadoPorUser = orden.users as any
 
     // Helper to ensure we only pass primitive values
     const safeString = (val: unknown): string | null => {
@@ -94,10 +98,16 @@ export async function GET(
       telefonoEmpresa: safeString(org?.telefono) || undefined,
       direccionEmpresa: safeString(org?.direccion) || undefined,
       logoUrl: safeString(org?.logo_url),
-      firmaClienteRecepcion: safeString(orden.firma_cliente_recepcion),
-      firmaClienteRecepcionMime: safeString(orden.firma_cliente_recepcion_mime),
       moneda: safeString(org?.moneda) || "ARS",
       zonaHoraria: safeString(org?.zona_horaria) || "America/Argentina/Buenos_Aires",
+      estado: safeString(orden.estado) || undefined,
+      fechaEntrega: orden.fecha_entrega ? new Date(orden.fecha_entrega) : null,
+      firmaClienteEntrega: safeString(orden.firma_cliente_entrega),
+      firmaClienteEntregaMime: safeString(orden.firma_cliente_entrega_mime),
+      firmaEncargadoEntrega: safeString(orden.firma_encargado_entrega),
+      firmaEncargadoEntregaMime: safeString(orden.firma_encargado_entrega_mime),
+      entregadoPor: safeString(entregadoPorUser?.nombre),
+      notasEntrega: safeString(orden.notas_entrega),
     }
 
     // Generar PDF

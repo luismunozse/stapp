@@ -41,7 +41,7 @@ export function VendedoresList() {
 
   const fetchVendedores = async () => {
     try {
-      const res = await fetch("/api/vendedores")
+      const res = await fetch("/api/vendedores", { cache: "no-store" })
       const data = await res.json()
       setVendedores(data)
     } catch (error) {

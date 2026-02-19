@@ -126,7 +126,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
 
   const fetchTecnicos = async () => {
     try {
-      const res = await fetch("/api/tecnicos")
+      const res = await fetch("/api/tecnicos", { cache: "no-store" })
       const data = await res.json()
       setTecnicos(data)
     } catch (error) {
@@ -136,7 +136,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
 
   const fetchInventario = async () => {
     try {
-      const res = await fetch("/api/inventario")
+      const res = await fetch("/api/inventario", { cache: "no-store" })
       const data = await res.json()
       setInventario(data)
     } catch (error) {
@@ -450,7 +450,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           <WhatsAppDialog
             context={{
               organizationId: "",
-              organizationName: "",
+              organizationName: (orden as any).organizationName || "",
               orden: {
                 id: orden.id,
                 numeroOrden: orden.numeroOrden,
@@ -591,17 +591,6 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                 </div>
               )}
 
-              {/* Firma de recepcion */}
-              {orden.firmaClienteRecepcion && (
-                <div className="mt-4 pt-4 border-t">
-                  <div className="text-sm font-medium text-muted-foreground mb-2">Firma del cliente (recepcion)</div>
-                  <img
-                    src={`data:${orden.firmaClienteRecepcionMime || "image/png"};base64,${orden.firmaClienteRecepcion}`}
-                    alt="Firma del cliente"
-                    className="max-w-[200px] border rounded bg-white p-2"
-                  />
-                </div>
-              )}
             </CardContent>
           </Card>
 

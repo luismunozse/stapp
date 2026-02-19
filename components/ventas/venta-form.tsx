@@ -189,7 +189,7 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
 
     const fetchClientes = async () => {
       try {
-        const res = await fetch("/api/clientes", { signal: controller.signal })
+        const res = await fetch("/api/clientes", { signal: controller.signal, cache: "no-store" })
         const data = await res.json()
         if (Array.isArray(data)) setClientes(data)
       } catch (error) {
@@ -199,7 +199,7 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
 
     const fetchInventario = async () => {
       try {
-        const res = await fetch("/api/inventario", { signal: controller.signal })
+        const res = await fetch("/api/inventario", { signal: controller.signal, cache: "no-store" })
         const data = await res.json()
         if (Array.isArray(data)) setInventario(data.filter((item: Inventario) => item.stock > 0))
       } catch (error) {
@@ -315,6 +315,7 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
         total: ventaData.total,
         metodoPago: ventaData.metodoPago,
         garantias: ventaData.garantias,
+        organizationName: ventaData.organizationName || undefined,
       }
 
       reset()

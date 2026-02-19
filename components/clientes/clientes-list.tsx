@@ -50,7 +50,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
       params.append("sortBy", sortKey)
       params.append("sortOrder", sortDirection)
 
-      const res = await fetch(`/api/clientes?${params.toString()}`)
+      const res = await fetch(`/api/clientes?${params.toString()}`, { cache: "no-store" })
       const data = await res.json()
 
       if (Array.isArray(data)) {

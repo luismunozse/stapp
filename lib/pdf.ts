@@ -765,8 +765,15 @@ interface OrdenPDFData {
   logoUrl?: string | null
   moneda?: string
   zonaHoraria?: string
-  firmaClienteRecepcion?: string | null
-  firmaClienteRecepcionMime?: string | null
+  // Datos de entrega (si la orden fue entregada)
+  estado?: string
+  fechaEntrega?: Date | null
+  firmaClienteEntrega?: string | null
+  firmaClienteEntregaMime?: string | null
+  firmaEncargadoEntrega?: string | null
+  firmaEncargadoEntregaMime?: string | null
+  entregadoPor?: string | null
+  notasEntrega?: string | null
 }
 
 const tipoDispositivoLabels: Record<string, string> = {
@@ -1376,28 +1383,9 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   page.drawRectangle({ x: margin, y: firmaY + 5, width: halfWidth, height: 18, color: rgb(0.95, 0.95, 0.95) })
   page.drawText("FIRMA CLIENTE", { x: margin + 12, y: firmaY + 10, size: 8, font: helveticaBold, color: grayColor })
 
-  // Incrustar firma digital si existe
-  if (data.firmaClienteRecepcion) {
-    try {
-      const firmaBytes = Uint8Array.from(atob(data.firmaClienteRecepcion), c => c.charCodeAt(0))
-      const firmaImage = await pdfDoc.embedPng(firmaBytes)
-      const firmaDims = firmaImage.scale(1)
-      const firmaScale = Math.min((halfWidth - 40) / firmaDims.width, 45 / firmaDims.height)
-      page.drawImage(firmaImage, {
-        x: margin + (halfWidth - firmaDims.width * firmaScale) / 2,
-        y: firmaY - 50,
-        width: firmaDims.width * firmaScale,
-        height: firmaDims.height * firmaScale,
-      })
-    } catch (e) {
-      console.error("Error embedding reception signature:", e)
-      page.drawLine({ start: { x: margin + 20, y: firmaY - 15 }, end: { x: margin + halfWidth - 20, y: firmaY - 15 }, thickness: 1, color: grayColor })
-    }
-  } else {
-    page.drawLine({ start: { x: margin + 20, y: firmaY - 15 }, end: { x: margin + halfWidth - 20, y: firmaY - 15 }, thickness: 1, color: grayColor })
-    page.drawText("Aclaracion: _________________________", { x: margin + 15, y: firmaY - 32, size: 7, font: helvetica, color: grayColor })
-    page.drawText("DNI: _________________________", { x: margin + 15, y: firmaY - 45, size: 7, font: helvetica, color: grayColor })
-  }
+  page.drawLine({ start: { x: margin + 20, y: firmaY - 15 }, end: { x: margin + halfWidth - 20, y: firmaY - 15 }, thickness: 1, color: grayColor })
+  page.drawText("Aclaracion: _________________________", { x: margin + 15, y: firmaY - 32, size: 7, font: helvetica, color: grayColor })
+  page.drawText("DNI: _________________________", { x: margin + 15, y: firmaY - 45, size: 7, font: helvetica, color: grayColor })
 
   // Firma Tecnico
   page.drawRectangle({ x: cardX2, y: firmaY - 55, width: halfWidth, height: 70, color: bgGray, borderColor: lightGray, borderWidth: 1 })
@@ -1412,6 +1400,111 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
 
   // === BARRA INFERIOR ===
   page.drawRectangle({ x: 0, y: 0, width, height: 8, color: primaryColor })
+
+  // === SECCION DE ENTREGA (segunda pagina, solo si fue entregado) ===
+  if (data.estado === "ENTREGADO" && data.firmaClienteEntrega) {
+    const page2 = pdfDoc.addPage([width, height])
+    let ey = height - margin
+
+    // Barra superior
+    page2.drawRectangle({ x: 0, y: height - 8, width, height: 8, color: primaryColor })
+    ey -= 10
+
+    // Titulo
+    page2.drawText("COMPROBANTE DE ENTREGA", { x: margin, y: ey, size: 14, font: helveticaBold, color: primaryColor })
+    page2.drawText(`Orden #${numeroOrden}`, { x: width - margin - 80, y: ey, size: 10, font: helveticaBold, color: grayColor })
+    ey -= 25
+
+    // Linea separadora
+    page2.drawLine({ start: { x: margin, y: ey }, end: { x: width - margin, y: ey }, thickness: 1, color: primaryColor })
+    ey -= 20
+
+    // Info de entrega
+    page2.drawText("Fecha de entrega:", { x: margin, y: ey, size: 9, font: helveticaBold, color: textColor })
+    page2.drawText(data.fechaEntrega ? formatDatePDF(data.fechaEntrega) : "-", { x: margin + 110, y: ey, size: 9, font: helvetica, color: textColor })
+    ey -= 16
+
+    page2.drawText("Dispositivo:", { x: margin, y: ey, size: 9, font: helveticaBold, color: textColor })
+    page2.drawText(safe(data.dispositivo), { x: margin + 110, y: ey, size: 9, font: helvetica, color: textColor })
+    ey -= 16
+
+    page2.drawText("Cliente:", { x: margin, y: ey, size: 9, font: helveticaBold, color: textColor })
+    page2.drawText(safe(data.cliente.nombre), { x: margin + 110, y: ey, size: 9, font: helvetica, color: textColor })
+    ey -= 16
+
+    if (data.entregadoPor) {
+      page2.drawText("Entregado por:", { x: margin, y: ey, size: 9, font: helveticaBold, color: textColor })
+      page2.drawText(safe(data.entregadoPor), { x: margin + 110, y: ey, size: 9, font: helvetica, color: textColor })
+      ey -= 16
+    }
+
+    if (data.notasEntrega) {
+      ey -= 5
+      page2.drawText("Notas de entrega:", { x: margin, y: ey, size: 9, font: helveticaBold, color: textColor })
+      ey -= 14
+      page2.drawText(safe(data.notasEntrega).substring(0, 200), { x: margin, y: ey, size: 9, font: helvetica, color: textColor })
+      ey -= 16
+    }
+
+    ey -= 15
+
+    // Firmas de entrega
+    const entregaHalfWidth = (width - 2 * margin - 20) / 2
+    const entregaCardX2 = margin + entregaHalfWidth + 20
+
+    // Firma Cliente Entrega
+    page2.drawRectangle({ x: margin, y: ey - 85, width: entregaHalfWidth, height: 100, color: bgGray, borderColor: lightGray, borderWidth: 1 })
+    page2.drawRectangle({ x: margin, y: ey + 5, width: entregaHalfWidth, height: 18, color: rgb(0.95, 0.95, 0.95) })
+    page2.drawText("CLIENTE (quien recibe)", { x: margin + 12, y: ey + 10, size: 8, font: helveticaBold, color: grayColor })
+
+    try {
+      const firmaClienteEntregaBytes = Uint8Array.from(atob(data.firmaClienteEntrega), c => c.charCodeAt(0))
+      const firmaClienteEntregaImg = await pdfDoc.embedPng(firmaClienteEntregaBytes)
+      const ceDims = firmaClienteEntregaImg.scale(1)
+      const ceScale = Math.min((entregaHalfWidth - 40) / ceDims.width, 55 / ceDims.height)
+      page2.drawImage(firmaClienteEntregaImg, {
+        x: margin + (entregaHalfWidth - ceDims.width * ceScale) / 2,
+        y: ey - 70,
+        width: ceDims.width * ceScale,
+        height: ceDims.height * ceScale,
+      })
+    } catch (e) {
+      console.error("Error embedding client delivery signature:", e)
+    }
+
+    page2.drawLine({ start: { x: margin + 20, y: ey - 55 }, end: { x: margin + entregaHalfWidth - 20, y: ey - 55 }, thickness: 1, color: grayColor })
+    page2.drawText(safe(data.cliente.nombre).substring(0, 25), { x: margin + 30, y: ey - 70, size: 8, font: helvetica, color: textColor })
+
+    // Firma Encargado Entrega
+    page2.drawRectangle({ x: entregaCardX2, y: ey - 85, width: entregaHalfWidth, height: 100, color: bgGray, borderColor: lightGray, borderWidth: 1 })
+    page2.drawRectangle({ x: entregaCardX2, y: ey + 5, width: entregaHalfWidth, height: 18, color: rgb(0.95, 0.95, 0.95) })
+    page2.drawText("ENCARGADO (quien entrega)", { x: entregaCardX2 + 12, y: ey + 10, size: 8, font: helveticaBold, color: grayColor })
+
+    if (data.firmaEncargadoEntrega) {
+      try {
+        const firmaEncargadoBytes = Uint8Array.from(atob(data.firmaEncargadoEntrega), c => c.charCodeAt(0))
+        const firmaEncargadoImg = await pdfDoc.embedPng(firmaEncargadoBytes)
+        const eeDims = firmaEncargadoImg.scale(1)
+        const eeScale = Math.min((entregaHalfWidth - 40) / eeDims.width, 55 / eeDims.height)
+        page2.drawImage(firmaEncargadoImg, {
+          x: entregaCardX2 + (entregaHalfWidth - eeDims.width * eeScale) / 2,
+          y: ey - 70,
+          width: eeDims.width * eeScale,
+          height: eeDims.height * eeScale,
+        })
+      } catch (e) {
+        console.error("Error embedding employee delivery signature:", e)
+      }
+    }
+
+    page2.drawLine({ start: { x: entregaCardX2 + 20, y: ey - 55 }, end: { x: entregaCardX2 + entregaHalfWidth - 20, y: ey - 55 }, thickness: 1, color: grayColor })
+    page2.drawText(safe(data.entregadoPor).substring(0, 25), { x: entregaCardX2 + 30, y: ey - 70, size: 8, font: helvetica, color: textColor })
+
+    // Footer pagina 2
+    page2.drawText(`Orden #${numeroOrden} - Comprobante de Entrega`, { x: margin, y: 25, size: 8, font: helveticaBold, color: primaryColor })
+    page2.drawText(`Impreso: ${fechaImpresion}`, { x: width - margin - 100, y: 25, size: 7, font: helvetica, color: grayColor })
+    page2.drawRectangle({ x: 0, y: 0, width, height: 8, color: primaryColor })
+  }
 
   const pdfBytes = await pdfDoc.save()
   return Buffer.from(pdfBytes)

@@ -44,7 +44,7 @@ export function TecnicosList() {
 
   const fetchTecnicos = async () => {
     try {
-      const res = await fetch("/api/tecnicos")
+      const res = await fetch("/api/tecnicos", { cache: "no-store" })
       const data = await res.json()
       setTecnicos(data)
     } catch (error) {
