@@ -14,8 +14,8 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
-import { Eye, EyeOff, Shield, AlertTriangle } from "lucide-react"
-import Image from "next/image"
+import { Eye, EyeOff, AlertTriangle } from "lucide-react"
+import { STAppLogo } from "@/components/shared/stapp-logo"
 
 function LoginForm() {
   const router = useRouter()
@@ -71,20 +71,7 @@ function LoginForm() {
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1 pb-2">
           <div className="flex justify-center py-4">
-            <Image
-              src="/logo.png"
-              alt="STApp"
-              width={64}
-              height={64}
-              className="dark:hidden"
-            />
-            <Image
-              src="/logo-white.png"
-              alt="STApp"
-              width={64}
-              height={64}
-              className="hidden dark:block"
-            />
+            <STAppLogo size="lg" showText={false} />
           </div>
           <CardTitle className="text-center text-2xl">
             <span className="text-primary">STApp</span>{" "}
