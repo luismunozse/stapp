@@ -1,3 +1,5 @@
+import Script from "next/script"
+
 const siteUrl = "https://stapp.com.ar"
 
 // Organization Schema
@@ -26,7 +28,8 @@ export function OrganizationJsonLd() {
   }
 
   return (
-    <script
+    <Script
+      id="jsonld-organization"
       type="application/ld+json"
       dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
     />
@@ -65,7 +68,8 @@ export function SoftwareApplicationJsonLd() {
   }
 
   return (
-    <script
+    <Script
+      id="jsonld-software-application"
       type="application/ld+json"
       dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
     />
@@ -88,7 +92,8 @@ export function WebSiteJsonLd() {
   }
 
   return (
-    <script
+    <Script
+      id="jsonld-website"
       type="application/ld+json"
       dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
     />
@@ -116,7 +121,8 @@ export function FAQPageJsonLd({ faqs }: { faqs: FAQItem[] }) {
   }
 
   return (
-    <script
+    <Script
+      id="jsonld-faq"
       type="application/ld+json"
       dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
     />
@@ -148,7 +154,8 @@ export function LocalBusinessJsonLd() {
   }
 
   return (
-    <script
+    <Script
+      id="jsonld-local-business"
       type="application/ld+json"
       dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
     />
@@ -174,7 +181,8 @@ export function BreadcrumbJsonLd({ items }: { items: BreadcrumbItem[] }) {
   }
 
   return (
-    <script
+    <Script
+      id="jsonld-breadcrumb"
       type="application/ld+json"
       dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
     />

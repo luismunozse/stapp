@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Image from "next/image"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -88,14 +89,16 @@ export function CotizacionPublica({ token }: { token: string }) {
     formatDateValue(dateStr, data?.zonaHoraria)
 
   useEffect(() => {
-    fetch(`/api/public/cotizaciones/${token}`)
+    const controller = new AbortController()
+    fetch(`/api/public/cotizaciones/${token}`, { signal: controller.signal })
       .then((res) => {
         if (!res.ok) throw new Error("Not found")
         return res.json()
       })
       .then(setData)
-      .catch(() => setError(true))
-      .finally(() => setLoading(false))
+      .catch(() => { if (!controller.signal.aborted) setError(true) })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false) })
+    return () => controller.abort()
   }, [token])
 
   const handleApprove = async () => {
@@ -170,10 +173,13 @@ export function CotizacionPublica({ token }: { token: string }) {
       {/* Header con branding */}
       <div className="text-center space-y-2">
         {data.organizacion.logoUrl ? (
-          <img
+          <Image
             src={data.organizacion.logoUrl}
             alt={data.organizacion.nombre || ""}
-            className="h-12 mx-auto rounded-lg"
+            width={192}
+            height={48}
+            className="h-12 w-auto mx-auto rounded-lg"
+            unoptimized
           />
         ) : null}
         <h1 className="text-xl font-bold">
@@ -346,10 +352,13 @@ export function CotizacionPublica({ token }: { token: string }) {
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="border rounded-lg p-3 bg-white">
-              <img
+              <Image
                 src={`data:${data.firmaMime};base64,${data.firmaAprobacion}`}
                 alt="Firma de aprobacion"
-                className="max-h-24 mx-auto"
+                width={200}
+                height={96}
+                className="max-h-24 w-auto mx-auto"
+                unoptimized
               />
             </div>
             {data.fechaAprobacion && (

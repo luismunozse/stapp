@@ -159,7 +159,10 @@ export function TicketList() {
                 return (
                   <div
                     key={ticket.id}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => router.push(`/soporte/${ticket.id}`)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); router.push(`/soporte/${ticket.id}`); } }}
                     className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-accent/50 transition-colors"
                   >
                     <div className={`p-2 rounded-lg ${tipo?.color || ""}`}>

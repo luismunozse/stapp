@@ -17,7 +17,7 @@ import {
   Zap,
 } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { motion } from "@/components/animations/motion"
+import { m, LazyMotion, domAnimation } from "@/components/animations/motion"
 
 const categories = [
   {
@@ -132,90 +132,92 @@ const categories = [
 
 export function Features() {
   return (
-    <section id="features" className="py-12 sm:py-16 bg-muted/30">
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <motion.div
-          className="text-center max-w-3xl mx-auto mb-10"
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-100px" }}
-          transition={{ duration: 0.6 }}
-        >
-          <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
-            Todo lo que necesitas en un solo lugar
-          </h2>
-          <p className="text-lg text-muted-foreground">
-            12 herramientas poderosas diseñadas para que tu taller funcione como reloj.
-          </p>
-        </motion.div>
+    <LazyMotion features={domAnimation}>
+      <section id="features" className="py-12 sm:py-16 bg-muted/30">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Header */}
+          <m.div
+            className="text-center max-w-3xl mx-auto mb-10"
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-100px" }}
+            transition={{ duration: 0.6 }}
+          >
+            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
+              Todo lo que necesitas en un solo lugar
+            </h2>
+            <p className="text-lg text-muted-foreground">
+              12 herramientas poderosas diseñadas para que tu taller funcione como reloj.
+            </p>
+          </m.div>
 
-        {/* Tabs */}
-        <Tabs defaultValue="servicio" className="w-full">
-          <div className="flex justify-center mb-10 px-2">
-            <TabsList className="inline-flex h-auto p-1 sm:p-1.5 bg-muted/80 backdrop-blur-sm rounded-xl sm:rounded-2xl border shadow-sm gap-1 sm:gap-2">
-              {categories.map((category) => (
-                <TabsTrigger
-                  key={category.id}
-                  value={category.id}
-                  className="inline-flex items-center gap-1.5 sm:gap-2 py-2 px-3 sm:py-3 sm:px-5 text-xs sm:text-sm font-medium rounded-lg sm:rounded-xl transition-all duration-200 data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground data-[state=inactive]:hover:bg-background/50 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md"
-                >
-                  <category.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                  <span>{category.name.split(" ")[0]}</span>
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </div>
-
-          {categories.map((category) => (
-            <TabsContent key={category.id} value={category.id}>
-              {/* Category description */}
-              <p className="text-center text-muted-foreground mb-8">
-                {category.description}
-              </p>
-
-              {/* Features grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                {category.features.map((feature, index) => (
-                  <motion.div
-                    key={feature.name}
-                    className="bg-card rounded-xl p-6 shadow-sm border hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 group h-full transition-colors"
-                    initial={{ opacity: 0, y: 30 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true, margin: "-50px" }}
-                    transition={{ duration: 0.5, delay: index * 0.1 }}
-                    whileHover={{
-                      y: -8,
-                      boxShadow: "0 20px 40px -15px rgba(0,0,0,0.15)",
-                    }}
+          {/* Tabs */}
+          <Tabs defaultValue="servicio" className="w-full">
+            <div className="flex justify-center mb-10 px-2">
+              <TabsList className="inline-flex h-auto p-1 sm:p-1.5 bg-muted/80 backdrop-blur-sm rounded-xl sm:rounded-2xl border shadow-sm gap-1 sm:gap-2">
+                {categories.map((category) => (
+                  <TabsTrigger
+                    key={category.id}
+                    value={category.id}
+                    className="inline-flex items-center gap-1.5 sm:gap-2 py-2 px-3 sm:py-3 sm:px-5 text-xs sm:text-sm font-medium rounded-lg sm:rounded-xl transition-all duration-200 data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground data-[state=inactive]:hover:bg-background/50 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md"
                   >
-                    <motion.div
-                      className={`${feature.color} w-12 h-12 rounded-xl flex items-center justify-center mb-4`}
+                    <category.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    <span>{category.name.split(" ")[0]}</span>
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </div>
+
+            {categories.map((category) => (
+              <TabsContent key={category.id} value={category.id}>
+                {/* Category description */}
+                <p className="text-center text-muted-foreground mb-8">
+                  {category.description}
+                </p>
+
+                {/* Features grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                  {category.features.map((feature, index) => (
+                    <m.div
+                      key={feature.name}
+                      className="bg-card rounded-xl p-6 shadow-sm border hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 group h-full transition-colors"
+                      initial={{ opacity: 0, y: 30 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true, margin: "-50px" }}
+                      transition={{ duration: 0.5, delay: index * 0.1 }}
                       whileHover={{
-                        scale: 1.15,
-                        rotate: [0, -5, 5, 0],
-                      }}
-                      transition={{
-                        type: "spring",
-                        stiffness: 400,
-                        damping: 17
+                        y: -8,
+                        boxShadow: "0 20px 40px -15px rgba(0,0,0,0.15)",
                       }}
                     >
-                      <feature.icon className="w-6 h-6 text-white" />
-                    </motion.div>
-                    <h3 className="text-lg font-semibold text-foreground mb-2">
-                      {feature.name}
-                    </h3>
-                    <p className="text-muted-foreground text-sm leading-relaxed">
-                      {feature.description}
-                    </p>
-                  </motion.div>
-                ))}
-              </div>
-            </TabsContent>
-          ))}
-        </Tabs>
-      </div>
-    </section>
+                      <m.div
+                        className={`${feature.color} w-12 h-12 rounded-xl flex items-center justify-center mb-4`}
+                        whileHover={{
+                          scale: 1.15,
+                          rotate: [0, -5, 5, 0],
+                        }}
+                        transition={{
+                          type: "spring",
+                          stiffness: 400,
+                          damping: 17
+                        }}
+                      >
+                        <feature.icon className="w-6 h-6 text-white" />
+                      </m.div>
+                      <h3 className="text-lg font-semibold text-foreground mb-2">
+                        {feature.name}
+                      </h3>
+                      <p className="text-muted-foreground text-sm leading-relaxed">
+                        {feature.description}
+                      </p>
+                    </m.div>
+                  ))}
+                </div>
+              </TabsContent>
+            ))}
+          </Tabs>
+        </div>
+      </section>
+    </LazyMotion>
   )
 }

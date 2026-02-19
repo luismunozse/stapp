@@ -395,8 +395,8 @@ export function ImportModal({ entityType, onClose, onSuccess }: ImportModalProps
                 <div className="space-y-2">
                   <Label>Detalles</Label>
                   <div className="border rounded-lg max-h-64 overflow-y-auto">
-                    {results.errorDetails.map((err, idx) => (
-                      <div key={idx} className="p-3 border-b last:border-0 text-sm">
+                    {results.errorDetails.map((err) => (
+                      <div key={`error-${err.row}`} className="p-3 border-b last:border-0 text-sm">
                         <p className="text-red-600 font-medium">
                           Fila {err.row}: {err.error}
                         </p>
@@ -405,8 +405,8 @@ export function ImportModal({ entityType, onClose, onSuccess }: ImportModalProps
                         </p>
                       </div>
                     ))}
-                    {results.skippedDetails.map((skip, idx) => (
-                      <div key={idx} className="p-3 border-b last:border-0 text-sm">
+                    {results.skippedDetails.map((skip) => (
+                      <div key={`skip-${skip.row}`} className="p-3 border-b last:border-0 text-sm">
                         <p className="text-yellow-600 font-medium">
                           Fila {skip.row}: {skip.reason}
                         </p>

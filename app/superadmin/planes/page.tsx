@@ -227,8 +227,8 @@ export default function PlanesPage() {
                 <div className="space-y-2">
                   <div className="text-sm font-medium">Características:</div>
                   <div className="space-y-1">
-                    {plan.features.slice(0, 3).map((feature, idx) => (
-                      <div key={idx} className="flex items-center gap-2 text-sm">
+                    {plan.features.slice(0, 3).map((feature) => (
+                      <div key={feature} className="flex items-center gap-2 text-sm">
                         <Check className="h-3.5 w-3.5 text-green-600" />
                         <span className="text-muted-foreground">{feature}</span>
                       </div>

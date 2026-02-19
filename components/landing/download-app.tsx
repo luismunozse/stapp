@@ -15,7 +15,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react"
-import { motion, AnimatePresence } from "framer-motion"
+import { LazyMotion, domAnimation, m, AnimatePresence } from "framer-motion"
 import { cn } from "@/lib/utils"
 
 interface ApkInfo {
@@ -110,7 +110,7 @@ function PhoneCarousel() {
             {/* Screenshot area */}
             <div className="relative aspect-[9/17] bg-muted/30 overflow-hidden">
               <AnimatePresence>
-                <motion.div
+                <m.div
                   key={current}
                   variants={variants}
                   initial="enter"
@@ -137,7 +137,7 @@ function PhoneCarousel() {
                       </p>
                     </div>
                   )}
-                </motion.div>
+                </m.div>
               </AnimatePresence>
             </div>
 
@@ -203,13 +203,12 @@ export function DownloadApp() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch("/api/download/apk-info")
+    const controller = new AbortController()
+    fetch("/api/download/apk-info", { signal: controller.signal })
       .then((res) => res.json())
-      .then((data) => {
-        setApkInfo(data)
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
+      .then((data) => { setApkInfo(data); setLoading(false) })
+      .catch(() => { if (!controller.signal.aborted) setLoading(false) })
+    return () => controller.abort()
   }, [])
 
   const formatDate = (dateStr: string) => {
@@ -221,103 +220,105 @@ export function DownloadApp() {
   }
 
   return (
-    <section id="download" className="py-16 sm:py-20 relative overflow-hidden">
-      {/* Background */}
-      <div className="absolute inset-0 bg-gradient-to-b from-background via-muted/30 to-background" />
+    <LazyMotion features={domAnimation}>
+      <section id="download" className="py-16 sm:py-20 relative overflow-hidden">
+        {/* Background */}
+        <div className="absolute inset-0 bg-gradient-to-b from-background via-muted/30 to-background" />
 
-      <div className="container relative mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-center">
-          {/* Left: Phone with real screenshots */}
-          <motion.div
-            className="flex justify-center lg:justify-end order-2 lg:order-1"
-            initial={{ opacity: 0, x: -30 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-          >
-            <PhoneCarousel />
-          </motion.div>
+        <div className="container relative mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-center">
+            {/* Left: Phone with real screenshots */}
+            <m.div
+              className="flex justify-center lg:justify-end order-2 lg:order-1"
+              initial={{ opacity: 0, x: -30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6 }}
+            >
+              <PhoneCarousel />
+            </m.div>
 
-          {/* Right: Content */}
-          <motion.div
-            className="text-center lg:text-left order-1 lg:order-2"
-            initial={{ opacity: 0, x: 30 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-          >
-            <Badge variant="secondary" className="mb-4 px-3 py-1 text-sm">
-              <Smartphone className="w-3.5 h-3.5 mr-1.5" />
-              App Android
-            </Badge>
+            {/* Right: Content */}
+            <m.div
+              className="text-center lg:text-left order-1 lg:order-2"
+              initial={{ opacity: 0, x: 30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6 }}
+            >
+              <Badge variant="secondary" className="mb-4 px-3 py-1 text-sm">
+                <Smartphone className="w-3.5 h-3.5 mr-1.5" />
+                App Android
+              </Badge>
 
-            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-foreground tracking-tight mb-4">
-              Descargá la app en tu{" "}
-              <span className="text-primary">celular</span>
-            </h2>
+              <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-foreground tracking-tight mb-4">
+                Descargá la app en tu{" "}
+                <span className="text-primary">celular</span>
+              </h2>
 
-            <p className="text-base sm:text-lg text-muted-foreground mb-6 max-w-lg mx-auto lg:mx-0">
-              Accedé a STApp directamente desde tu dispositivo Android. Gestioná tu
-              taller desde cualquier lugar con la experiencia nativa.
-            </p>
+              <p className="text-base sm:text-lg text-muted-foreground mb-6 max-w-lg mx-auto lg:mx-0">
+                Accedé a STApp directamente desde tu dispositivo Android. Gestioná tu
+                taller desde cualquier lugar con la experiencia nativa.
+              </p>
 
-            {/* Feature list */}
-            <div className="space-y-3 mb-8">
-              {features.map((feature) => (
-                <div key={feature.title} className="flex items-start gap-3 text-left">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <feature.icon className="w-4 h-4 text-primary" />
+              {/* Feature list */}
+              <div className="space-y-3 mb-8">
+                {features.map((feature) => (
+                  <div key={feature.title} className="flex items-start gap-3 text-left">
+                    <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <feature.icon className="w-4 h-4 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{feature.title}</p>
+                      <p className="text-sm text-muted-foreground">{feature.description}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">{feature.title}</p>
-                    <p className="text-sm text-muted-foreground">{feature.description}</p>
+                ))}
+              </div>
+
+              {/* Download button */}
+              {loading ? (
+                <div className="flex items-center justify-center lg:justify-start gap-2">
+                  <div className="animate-pulse bg-muted rounded-lg h-12 w-48" />
+                </div>
+              ) : apkInfo.available ? (
+                <div className="space-y-3">
+                  <div className="flex flex-col sm:flex-row items-center gap-3 justify-center lg:justify-start">
+                    <a href="/api/download/apk">
+                      <Button size="lg" className="text-base px-6 py-5 shadow-lg hover:shadow-xl transition-all group">
+                        <Download className="mr-2 w-5 h-5 group-hover:animate-bounce" />
+                        Descargar APK
+                      </Button>
+                    </a>
+                    {apkInfo.fileSizeMB && (
+                      <span className="text-sm text-muted-foreground">
+                        {apkInfo.fileSizeMB}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 justify-center lg:justify-start text-xs text-muted-foreground">
+                    <CheckCircle className="w-3.5 h-3.5 text-green-500" />
+                    {apkInfo.version && <span>v{apkInfo.version}</span>}
+                    {apkInfo.buildDate && (
+                      <span>
+                        {apkInfo.version && " \u00B7 "}
+                        Actualizado el {formatDate(apkInfo.buildDate)}
+                      </span>
+                    )}
                   </div>
                 </div>
-              ))}
-            </div>
-
-            {/* Download button */}
-            {loading ? (
-              <div className="flex items-center justify-center lg:justify-start gap-2">
-                <div className="animate-pulse bg-muted rounded-lg h-12 w-48" />
-              </div>
-            ) : apkInfo.available ? (
-              <div className="space-y-3">
-                <div className="flex flex-col sm:flex-row items-center gap-3 justify-center lg:justify-start">
-                  <a href="/api/download/apk">
-                    <Button size="lg" className="text-base px-6 py-5 shadow-lg hover:shadow-xl transition-all group">
-                      <Download className="mr-2 w-5 h-5 group-hover:animate-bounce" />
-                      Descargar APK
-                    </Button>
-                  </a>
-                  {apkInfo.fileSizeMB && (
-                    <span className="text-sm text-muted-foreground">
-                      {apkInfo.fileSizeMB}
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 justify-center lg:justify-start text-xs text-muted-foreground">
-                  <CheckCircle className="w-3.5 h-3.5 text-green-500" />
-                  {apkInfo.version && <span>v{apkInfo.version}</span>}
-                  {apkInfo.buildDate && (
-                    <span>
-                      {apkInfo.version && " \u00B7 "}
-                      Actualizado el {formatDate(apkInfo.buildDate)}
-                    </span>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <Card className="p-4 bg-muted/50 max-w-sm mx-auto lg:mx-0">
-                <p className="text-sm text-muted-foreground text-center lg:text-left">
-                  La app para Android estará disponible pronto. Mientras tanto, podés usar
-                  STApp desde el navegador de tu celular.
-                </p>
-              </Card>
-            )}
-          </motion.div>
+              ) : (
+                <Card className="p-4 bg-muted/50 max-w-sm mx-auto lg:mx-0">
+                  <p className="text-sm text-muted-foreground text-center lg:text-left">
+                    La app para Android estará disponible pronto. Mientras tanto, podés usar
+                    STApp desde el navegador de tu celular.
+                  </p>
+                </Card>
+              )}
+            </m.div>
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+    </LazyMotion>
   )
 }

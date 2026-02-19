@@ -37,13 +37,15 @@ const ENTITY_LABELS: Record<ExportEntity, string> = {
   garantias: "garantías",
 }
 
+const EMPTY_FILTERS: Record<string, string> = {}
+
 /**
  * Botón de exportación a CSV
  * Muestra UpgradeModal si el usuario no es Premium
  */
 export function ExportButton({
   entity,
-  filters = {},
+  filters = EMPTY_FILTERS,
   label,
   variant = "outline",
   size = "default",

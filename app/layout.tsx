@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next"
 import { Inter } from "next/font/google"
 import { headers } from "next/headers"
+import Script from "next/script"
 import "./globals.css"
 import { PWAInstaller } from "@/components/pwa/pwa-installer"
 import { PWARecovery } from "@/components/pwa/pwa-recovery"
@@ -169,14 +170,11 @@ export default async function RootLayout({
         <meta name="HandheldFriendly" content="true" />
         <meta name="MobileOptimized" content="width" />
 
-        {/* Preconnect para recursos externos */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-
-        {/* DNS prefetch para APIs */}
-        <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
-
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <Script
+          id="theme-script"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{ __html: themeScript }}
+        />
 
         {/* Schema Markup JSON-LD */}
         <OrganizationJsonLd />

@@ -166,9 +166,9 @@ export function AuditTimeline({ auditLogs }: AuditTimelineProps) {
                     <div className="space-y-2">
                       <div className="text-sm font-medium">Cambios:</div>
                       <div className="space-y-1.5">
-                        {changes.map((change, idx) => (
+                        {changes.map((change) => (
                           <div
-                            key={idx}
+                            key={change.field}
                             className="text-sm bg-muted p-2 rounded"
                           >
                             <span className="font-medium">

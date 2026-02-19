@@ -330,7 +330,7 @@ export default function LogsPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setPage(page - 1)}
+                    onClick={() => setPage(prev => prev - 1)}
                     disabled={page === 1}
                   >
                     Anterior
@@ -338,7 +338,7 @@ export default function LogsPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setPage(page + 1)}
+                    onClick={() => setPage(prev => prev + 1)}
                     disabled={page * 50 >= total}
                   >
                     Siguiente

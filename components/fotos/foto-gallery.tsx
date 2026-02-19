@@ -203,8 +203,11 @@ export function FotoGallery({ ordenId }: FotoGalleryProps) {
                       {fotosDelTipo.map((foto) => (
                         <div
                           key={foto.id}
+                          role="button"
+                          tabIndex={0}
                           className="relative group aspect-square bg-muted rounded-lg overflow-hidden cursor-pointer border hover:border-primary transition-colors"
                           onClick={() => openViewer(foto.id)}
+                          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openViewer(foto.id); } }}
                         >
                           {foto.url ? (
                             <img

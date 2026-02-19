@@ -37,10 +37,11 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!session?.user?.organizationId) return
+    const controller = new AbortController()
 
     const fetchConfig = async () => {
       try {
-        const res = await fetch("/api/configuracion")
+        const res = await fetch("/api/configuracion", { signal: controller.signal })
         if (res.ok) {
           const data = await res.json()
           if (data.moneda && data.moneda in CURRENCIES) {
@@ -51,11 +52,14 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
           }
         }
       } catch (error) {
-        console.error("Error fetching config:", error)
+        if (!controller.signal.aborted) {
+          console.error("Error fetching config:", error)
+        }
       }
     }
 
     fetchConfig()
+    return () => controller.abort()
   }, [session?.user?.organizationId])
 
   const formatPrice = useCallback(

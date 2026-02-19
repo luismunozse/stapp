@@ -99,7 +99,7 @@ export function WhatsNewModal({ lastSeenVersion }: WhatsNewModalProps) {
                   const config = changeTypeConfig[change.type]
                   const Icon = config.icon
                   return (
-                    <li key={i} className="flex items-start gap-2.5 text-sm">
+                    <li key={change.description} className="flex items-start gap-2.5 text-sm">
                       <Icon
                         className={`h-4 w-4 mt-0.5 shrink-0 ${config.color}`}
                       />

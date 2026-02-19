@@ -200,7 +200,7 @@ export function TicketCreateDialog({ onClose, onSuccess }: TicketCreateDialogPro
             {imagenes.length > 0 && (
               <div className="flex gap-2 flex-wrap">
                 {imagenes.map((img, i) => (
-                  <div key={i} className="relative group">
+                  <div key={img.preview} className="relative group">
                     <img
                       src={img.preview}
                       alt={`Adjunto ${i + 1}`}

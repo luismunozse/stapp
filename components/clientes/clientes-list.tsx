@@ -187,7 +187,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
       header: "",
       className: "w-auto sm:w-[100px]",
       render: (cliente) => (
-        <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+        <div role="group" className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
           <Button
             variant="ghost"
             size="icon"
@@ -307,7 +307,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
         {loading ? (
           <div className="space-y-3">
             {[...Array(3)].map((_, i) => (
-              <Card key={i}>
+              <Card key={`skeleton-${i}`}>
                 <CardContent className="p-4">
                   <div className="h-4 bg-muted animate-pulse rounded w-1/3 mb-3" />
                   <div className="h-3 bg-muted animate-pulse rounded w-2/3 mb-2" />

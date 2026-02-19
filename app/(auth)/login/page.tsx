@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from "react"
 import { signIn, signOut } from "next-auth/react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -252,10 +253,13 @@ function LoginForm() {
         <CardHeader className="space-y-1 pb-2">
           <div className="flex justify-center py-4">
             {tenantInfo?.logoUrl ? (
-              <img
+              <Image
                 src={tenantInfo.logoUrl}
                 alt={tenantInfo.nombre}
+                width={192}
+                height={64}
                 className="h-16 w-auto object-contain"
+                unoptimized
               />
             ) : (
               <BusinessLogo size="xl" showText={false} />

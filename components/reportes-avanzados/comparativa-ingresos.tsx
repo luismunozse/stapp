@@ -64,7 +64,7 @@ export function ComparativaIngresos() {
     return (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {[...Array(4)].map((_, i) => (
-          <Card key={i}>
+          <Card key={`skeleton-${i}`}>
             <CardHeader className="pb-2">
               <Skeleton className="h-4 w-24" />
             </CardHeader>
@@ -184,8 +184,8 @@ export function ComparativaIngresos() {
                   labelFormatter={(label) => `Mes: ${label}`}
                 />
                 <Bar dataKey="total" radius={[0, 4, 4, 0]}>
-                  {chartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                  {chartData.map((entry) => (
+                    <Cell key={`cell-${entry.name}`} fill={entry.fill} />
                   ))}
                 </Bar>
               </BarChart>

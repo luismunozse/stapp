@@ -291,12 +291,12 @@ export function VentasList() {
         <div className="rounded-lg border bg-card p-4">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div>
-              <label className="mb-1.5 block text-sm font-medium">Estado</label>
+              <label htmlFor="venta-filter-estado" className="mb-1.5 block text-sm font-medium">Estado</label>
               <Select
                 value={estado || "all"}
                 onValueChange={(value) => setEstado(value === "all" ? "" : value)}
               >
-                <SelectTrigger>
+                <SelectTrigger id="venta-filter-estado">
                   <SelectValue placeholder="Todos" />
                 </SelectTrigger>
                 <SelectContent>
@@ -310,15 +310,17 @@ export function VentasList() {
               </Select>
             </div>
             <div>
-              <label className="mb-1.5 block text-sm font-medium">Desde</label>
+              <label htmlFor="venta-filter-desde" className="mb-1.5 block text-sm font-medium">Desde</label>
               <DatePicker
+                id="venta-filter-desde"
                 value={fechaDesde}
                 onChange={(date) => setFechaDesde(date || "")}
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-sm font-medium">Hasta</label>
+              <label htmlFor="venta-filter-hasta" className="mb-1.5 block text-sm font-medium">Hasta</label>
               <DatePicker
+                id="venta-filter-hasta"
                 value={fechaHasta}
                 onChange={(date) => setFechaHasta(date || "")}
               />
@@ -359,7 +361,7 @@ export function VentasList() {
         {loading ? (
           <div className="space-y-3">
             {[...Array(3)].map((_, i) => (
-              <Card key={i}>
+              <Card key={`skeleton-${i}`}>
                 <CardContent className="p-4">
                   <div className="h-4 bg-muted animate-pulse rounded w-1/3 mb-3" />
                   <div className="h-3 bg-muted animate-pulse rounded w-2/3 mb-2" />

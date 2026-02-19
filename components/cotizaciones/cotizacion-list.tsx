@@ -300,8 +300,8 @@ export function CotizacionList({ ordenId, clienteEmail }: CotizacionListProps) {
                   <div className="text-sm">
                     <div className="font-medium mb-1">Items:</div>
                     <ul className="list-disc list-inside text-muted-foreground">
-                      {cotizacion.items.slice(0, 3).map((item, i) => (
-                        <li key={i}>
+                      {cotizacion.items.slice(0, 3).map((item) => (
+                        <li key={item.descripcion}>
                           {item.descripcion} x{item.cantidad} - {formatPrice(item.subtotal)}
                         </li>
                       ))}

@@ -88,8 +88,8 @@ export const OrdenesPorTecnicoChart = memo(function OrdenesPorTecnicoChart({ dat
               itemStyle={{ color: "hsl(var(--card-foreground))" }}
             />
             <Bar dataKey="ordenes" name="ordenes" radius={[0, 4, 4, 0]}>
-              {sortedData.map((_, index) => (
-                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+              {sortedData.map((entry, index) => (
+                <Cell key={`cell-${entry.nombre}`} fill={COLORS[index % COLORS.length]} />
               ))}
             </Bar>
           </BarChart>

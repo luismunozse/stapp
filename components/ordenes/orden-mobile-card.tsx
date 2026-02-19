@@ -60,7 +60,7 @@ export function OrdenMobileCard({ orden, onDelete, deleting, onClick }: OrdenMob
         </div>
 
         {/* Actions */}
-        <div className="flex items-center justify-end gap-1 mt-3 pt-2 border-t" onClick={(e) => e.stopPropagation()}>
+        <div role="group" className="flex items-center justify-end gap-1 mt-3 pt-2 border-t" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
           <Link href={`/ordenes/${orden.id}`}>
             <Button variant="ghost" size="sm" className="h-8 text-xs">
               <Eye className="h-3.5 w-3.5 mr-1" />

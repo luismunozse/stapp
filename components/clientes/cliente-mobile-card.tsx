@@ -32,7 +32,7 @@ export function ClienteMobileCard({ cliente, onEdit, onDelete, deleting }: Clien
               )}
             </div>
           </div>
-          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          <div role="group" className="flex items-center gap-1" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
             <Button
               variant="ghost"
               size="icon"

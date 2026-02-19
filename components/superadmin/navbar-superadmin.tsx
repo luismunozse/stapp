@@ -49,11 +49,6 @@ export function NavbarSuperadmin({ userEmail }: NavbarSuperadminProps) {
   useFocusTrap(menuRef, mobileMenuOpen)
   useEscapeKey(() => setMobileMenuOpen(false), mobileMenuOpen)
 
-  // Cerrar menú cuando cambia la ruta
-  useEffect(() => {
-    setMobileMenuOpen(false)
-  }, [pathname])
-
   // Prevenir scroll cuando el menú está abierto
   useEffect(() => {
     if (mobileMenuOpen) {
@@ -77,13 +72,13 @@ export function NavbarSuperadmin({ userEmail }: NavbarSuperadminProps) {
       <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 lg:border-r border-sidebar-border bg-sidebar">
         <div className="flex flex-col flex-1 min-h-0">
           {/* Header con logo STApp + SUPERADMIN */}
-          <div className="flex flex-col items-center justify-center h-24 px-6 border-b border-sidebar-border bg-gradient-to-br from-red-950/20 to-red-900/10">
+          <div className="flex flex-col items-center justify-center h-24 px-6 border-b border-sidebar-border">
             <div className="mb-2">
               <STAppLogo size="md" />
             </div>
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-600/20 border border-red-500/30">
-              <Shield className="h-3.5 w-3.5 text-red-400" />
-              <span className="text-[11px] font-bold text-red-400 uppercase tracking-widest">
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/15 border border-primary/30">
+              <Shield className="h-3.5 w-3.5 text-primary" />
+              <span className="text-[11px] font-bold text-primary uppercase tracking-widest">
                 SuperAdmin
               </span>
             </div>
@@ -102,7 +97,7 @@ export function NavbarSuperadmin({ userEmail }: NavbarSuperadminProps) {
                   className={cn(
                     "flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors",
                     isActive
-                      ? "bg-red-600 text-white"
+                      ? "bg-primary text-primary-foreground"
                       : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                   )}
                 >
@@ -136,7 +131,7 @@ export function NavbarSuperadmin({ userEmail }: NavbarSuperadminProps) {
         <div className="flex items-center justify-between h-14 px-4">
           <div className="flex items-center gap-2">
             <STAppLogo size="sm" />
-            <span className="text-[10px] font-bold text-red-500 uppercase tracking-wider">
+            <span className="text-[10px] font-bold text-primary uppercase tracking-wider">
               SuperAdmin
             </span>
           </div>
@@ -193,7 +188,7 @@ export function NavbarSuperadmin({ userEmail }: NavbarSuperadminProps) {
                   className={cn(
                     "flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-colors",
                     isActive
-                      ? "bg-red-600 text-white"
+                      ? "bg-primary text-primary-foreground"
                       : "text-foreground hover:bg-accent hover:text-accent-foreground"
                   )}
                 >

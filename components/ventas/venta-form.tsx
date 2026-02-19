@@ -182,36 +182,34 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
   )
   const total = subtotal - watchDescuento
 
-  // Cargar clientes
+  // Cargar clientes e inventario
   useEffect(() => {
+    if (!open) return
+    const controller = new AbortController()
+
     const fetchClientes = async () => {
       try {
-        const res = await fetch("/api/clientes")
+        const res = await fetch("/api/clientes", { signal: controller.signal })
         const data = await res.json()
-        if (Array.isArray(data)) {
-          setClientes(data)
-        }
+        if (Array.isArray(data)) setClientes(data)
       } catch (error) {
-        console.error("Error fetching clientes:", error)
+        if (!controller.signal.aborted) console.error("Error fetching clientes:", error)
       }
     }
-    if (open) fetchClientes()
-  }, [open])
 
-  // Cargar inventario
-  useEffect(() => {
     const fetchInventario = async () => {
       try {
-        const res = await fetch("/api/inventario")
+        const res = await fetch("/api/inventario", { signal: controller.signal })
         const data = await res.json()
-        if (Array.isArray(data)) {
-          setInventario(data.filter((item: Inventario) => item.stock > 0))
-        }
+        if (Array.isArray(data)) setInventario(data.filter((item: Inventario) => item.stock > 0))
       } catch (error) {
-        console.error("Error fetching inventario:", error)
+        if (!controller.signal.aborted) console.error("Error fetching inventario:", error)
       }
     }
-    if (open) fetchInventario()
+
+    fetchClientes()
+    fetchInventario()
+    return () => controller.abort()
   }, [open])
 
   const filteredClientes = clientes.filter(

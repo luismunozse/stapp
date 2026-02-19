@@ -46,8 +46,9 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled }: ItemRowPr
         </div>
         <div className="grid grid-cols-3 gap-2">
           <div>
-            <label className="text-xs text-muted-foreground">Cantidad</label>
+            <label htmlFor={`item-cantidad-${index}`} className="text-xs text-muted-foreground">Cantidad</label>
             <Input
+              id={`item-cantidad-${index}`}
               type="number"
               min="1"
               placeholder="Cant."
@@ -57,8 +58,9 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled }: ItemRowPr
             />
           </div>
           <div>
-            <label className="text-xs text-muted-foreground">Precio</label>
+            <label htmlFor={`item-precio-${index}`} className="text-xs text-muted-foreground">Precio</label>
             <Input
+              id={`item-precio-${index}`}
               type="number"
               min="0"
               step="0.01"
@@ -69,7 +71,7 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled }: ItemRowPr
             />
           </div>
           <div>
-            <label className="text-xs text-muted-foreground">Subtotal</label>
+            <span className="text-xs text-muted-foreground">Subtotal</span>
             <div className="h-10 flex items-center justify-end font-medium">
               {formatPrice(subtotal)}
             </div>

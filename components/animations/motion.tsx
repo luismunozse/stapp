@@ -1,6 +1,6 @@
 "use client"
 
-import { motion, useInView, useScroll, useTransform, Variants } from "framer-motion"
+import { LazyMotion, domAnimation, m, useInView, useScroll, useTransform, type Variants } from "framer-motion"
 import { useRef, ReactNode } from "react"
 
 // ========================================
@@ -112,16 +112,18 @@ export function FadeInUp({
   const isInView = useInView(ref, { once, amount })
 
   return (
-    <motion.div
-      ref={ref}
-      initial="hidden"
-      animate={isInView ? "visible" : "hidden"}
-      variants={fadeInUp}
-      transition={{ delay }}
-      className={className}
-    >
-      {children}
-    </motion.div>
+    <LazyMotion features={domAnimation}>
+      <m.div
+        ref={ref}
+        initial="hidden"
+        animate={isInView ? "visible" : "hidden"}
+        variants={fadeInUp}
+        transition={{ delay }}
+        className={className}
+      >
+        {children}
+      </m.div>
+    </LazyMotion>
   )
 }
 
@@ -137,16 +139,18 @@ export function FadeInDown({
   const isInView = useInView(ref, { once, amount })
 
   return (
-    <motion.div
-      ref={ref}
-      initial="hidden"
-      animate={isInView ? "visible" : "hidden"}
-      variants={fadeInDown}
-      transition={{ delay }}
-      className={className}
-    >
-      {children}
-    </motion.div>
+    <LazyMotion features={domAnimation}>
+      <m.div
+        ref={ref}
+        initial="hidden"
+        animate={isInView ? "visible" : "hidden"}
+        variants={fadeInDown}
+        transition={{ delay }}
+        className={className}
+      >
+        {children}
+      </m.div>
+    </LazyMotion>
   )
 }
 
@@ -162,16 +166,18 @@ export function FadeInLeft({
   const isInView = useInView(ref, { once, amount })
 
   return (
-    <motion.div
-      ref={ref}
-      initial="hidden"
-      animate={isInView ? "visible" : "hidden"}
-      variants={fadeInLeft}
-      transition={{ delay }}
-      className={className}
-    >
-      {children}
-    </motion.div>
+    <LazyMotion features={domAnimation}>
+      <m.div
+        ref={ref}
+        initial="hidden"
+        animate={isInView ? "visible" : "hidden"}
+        variants={fadeInLeft}
+        transition={{ delay }}
+        className={className}
+      >
+        {children}
+      </m.div>
+    </LazyMotion>
   )
 }
 
@@ -187,16 +193,18 @@ export function FadeInRight({
   const isInView = useInView(ref, { once, amount })
 
   return (
-    <motion.div
-      ref={ref}
-      initial="hidden"
-      animate={isInView ? "visible" : "hidden"}
-      variants={fadeInRight}
-      transition={{ delay }}
-      className={className}
-    >
-      {children}
-    </motion.div>
+    <LazyMotion features={domAnimation}>
+      <m.div
+        ref={ref}
+        initial="hidden"
+        animate={isInView ? "visible" : "hidden"}
+        variants={fadeInRight}
+        transition={{ delay }}
+        className={className}
+      >
+        {children}
+      </m.div>
+    </LazyMotion>
   )
 }
 
@@ -212,16 +220,18 @@ export function ScaleIn({
   const isInView = useInView(ref, { once, amount })
 
   return (
-    <motion.div
-      ref={ref}
-      initial="hidden"
-      animate={isInView ? "visible" : "hidden"}
-      variants={scaleIn}
-      transition={{ delay }}
-      className={className}
-    >
-      {children}
-    </motion.div>
+    <LazyMotion features={domAnimation}>
+      <m.div
+        ref={ref}
+        initial="hidden"
+        animate={isInView ? "visible" : "hidden"}
+        variants={scaleIn}
+        transition={{ delay }}
+        className={className}
+      >
+        {children}
+      </m.div>
+    </LazyMotion>
   )
 }
 
@@ -237,16 +247,18 @@ export function BounceIn({
   const isInView = useInView(ref, { once, amount })
 
   return (
-    <motion.div
-      ref={ref}
-      initial="hidden"
-      animate={isInView ? "visible" : "hidden"}
-      variants={bounceIn}
-      transition={{ delay }}
-      className={className}
-    >
-      {children}
-    </motion.div>
+    <LazyMotion features={domAnimation}>
+      <m.div
+        ref={ref}
+        initial="hidden"
+        animate={isInView ? "visible" : "hidden"}
+        variants={bounceIn}
+        transition={{ delay }}
+        className={className}
+      >
+        {children}
+      </m.div>
+    </LazyMotion>
   )
 }
 
@@ -262,15 +274,17 @@ export function StaggerContainer({
   const isInView = useInView(ref, { once, amount })
 
   return (
-    <motion.div
-      ref={ref}
-      initial="hidden"
-      animate={isInView ? "visible" : "hidden"}
-      variants={fast ? staggerContainerFast : staggerContainer}
-      className={className}
-    >
-      {children}
-    </motion.div>
+    <LazyMotion features={domAnimation}>
+      <m.div
+        ref={ref}
+        initial="hidden"
+        animate={isInView ? "visible" : "hidden"}
+        variants={fast ? staggerContainerFast : staggerContainer}
+        className={className}
+      >
+        {children}
+      </m.div>
+    </LazyMotion>
   )
 }
 
@@ -281,9 +295,9 @@ export function StaggerItem({
   variants = fadeInUp
 }: { children: ReactNode; className?: string; variants?: Variants }) {
   return (
-    <motion.div variants={variants} className={className}>
+    <m.div variants={variants} className={className}>
       {children}
-    </motion.div>
+    </m.div>
   )
 }
 
@@ -306,9 +320,11 @@ export function ParallaxY({
   const y = useTransform(scrollYProgress, [0, 1], [offset, -offset])
 
   return (
-    <motion.div ref={ref} style={{ y }} className={className}>
-      {children}
-    </motion.div>
+    <LazyMotion features={domAnimation}>
+      <m.div ref={ref} style={{ y }} className={className}>
+        {children}
+      </m.div>
+    </LazyMotion>
   )
 }
 
@@ -327,9 +343,11 @@ export function ParallaxScale({
   const scale = useTransform(scrollYProgress, [0, 0.5, 1], [scaleRange[0], 1, scaleRange[1]])
 
   return (
-    <motion.div ref={ref} style={{ scale }} className={className}>
-      {children}
-    </motion.div>
+    <LazyMotion features={domAnimation}>
+      <m.div ref={ref} style={{ scale }} className={className}>
+        {children}
+      </m.div>
+    </LazyMotion>
   )
 }
 
@@ -341,19 +359,21 @@ export function FloatingElement({
   yOffset = 10
 }: { children: ReactNode; className?: string; duration?: number; yOffset?: number }) {
   return (
-    <motion.div
-      animate={{
-        y: [-yOffset, yOffset, -yOffset],
-      }}
-      transition={{
-        duration,
-        repeat: Infinity,
-        ease: "easeInOut"
-      }}
-      className={className}
-    >
-      {children}
-    </motion.div>
+    <LazyMotion features={domAnimation}>
+      <m.div
+        animate={{
+          y: [-yOffset, yOffset, -yOffset],
+        }}
+        transition={{
+          duration,
+          repeat: Infinity,
+          ease: "easeInOut"
+        }}
+        className={className}
+      >
+        {children}
+      </m.div>
+    </LazyMotion>
   )
 }
 
@@ -372,9 +392,11 @@ export function RotateOnScroll({
   const rotate = useTransform(scrollYProgress, [0, 1], rotateRange)
 
   return (
-    <motion.div ref={ref} style={{ rotate }} className={className}>
-      {children}
-    </motion.div>
+    <LazyMotion features={domAnimation}>
+      <m.div ref={ref} style={{ rotate }} className={className}>
+        {children}
+      </m.div>
+    </LazyMotion>
   )
 }
 
@@ -388,15 +410,17 @@ export function HoverLift({
   className = ""
 }: { children: ReactNode; className?: string }) {
   return (
-    <motion.div
-      whileHover={{
-        y: -8,
-        transition: { duration: 0.3, ease: "easeOut" }
-      }}
-      className={className}
-    >
-      {children}
-    </motion.div>
+    <LazyMotion features={domAnimation}>
+      <m.div
+        whileHover={{
+          y: -8,
+          transition: { duration: 0.3, ease: "easeOut" }
+        }}
+        className={className}
+      >
+        {children}
+      </m.div>
+    </LazyMotion>
   )
 }
 
@@ -407,15 +431,17 @@ export function HoverScale({
   scale = 1.05
 }: { children: ReactNode; className?: string; scale?: number }) {
   return (
-    <motion.div
-      whileHover={{
-        scale,
-        transition: { duration: 0.3, ease: "easeOut" }
-      }}
-      className={className}
-    >
-      {children}
-    </motion.div>
+    <LazyMotion features={domAnimation}>
+      <m.div
+        whileHover={{
+          scale,
+          transition: { duration: 0.3, ease: "easeOut" }
+        }}
+        className={className}
+      >
+        {children}
+      </m.div>
+    </LazyMotion>
   )
 }
 
@@ -426,15 +452,17 @@ export function AnimatedButton({
   onClick
 }: { children: ReactNode; className?: string; onClick?: () => void }) {
   return (
-    <motion.button
-      whileHover={{ scale: 1.05 }}
-      whileTap={{ scale: 0.95 }}
-      transition={{ type: "spring", stiffness: 400, damping: 17 }}
-      className={className}
-      onClick={onClick}
-    >
-      {children}
-    </motion.button>
+    <LazyMotion features={domAnimation}>
+      <m.button
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+        transition={{ type: "spring", stiffness: 400, damping: 17 }}
+        className={className}
+        onClick={onClick}
+      >
+        {children}
+      </m.button>
+    </LazyMotion>
   )
 }
 
@@ -454,23 +482,25 @@ export function TextReveal({
   const words = text.split(" ")
 
   return (
-    <motion.span ref={ref} className={className}>
-      {words.map((word, i) => (
-        <motion.span
-          key={i}
-          initial={{ opacity: 0, y: 20 }}
-          animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
-          transition={{
-            duration: 0.4,
-            delay: delay + i * 0.1,
-            ease: [0.25, 0.4, 0.25, 1]
-          }}
-          style={{ display: "inline-block", marginRight: "0.25em" }}
-        >
-          {word}
-        </motion.span>
-      ))}
-    </motion.span>
+    <LazyMotion features={domAnimation}>
+      <m.span ref={ref} className={className}>
+        {words.map((word, i) => (
+          <m.span
+            key={`${word}-${i}`}
+            initial={{ opacity: 0, y: 20 }}
+            animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
+            transition={{
+              duration: 0.4,
+              delay: delay + i * 0.1,
+              ease: [0.25, 0.4, 0.25, 1]
+            }}
+            style={{ display: "inline-block", marginRight: "0.25em" }}
+          >
+            {word}
+          </m.span>
+        ))}
+      </m.span>
+    </LazyMotion>
   )
 }
 
@@ -485,26 +515,28 @@ export function AnimatedCounter({
   const isInView = useInView(ref, { once: true, amount: 0.5 })
 
   return (
-    <motion.span
-      ref={ref}
-      initial={{ opacity: 0 }}
-      animate={isInView ? { opacity: 1 } : { opacity: 0 }}
-      className={className}
-    >
-      <motion.span
-        initial={{ opacity: 1 }}
-        animate={isInView ? { opacity: 1 } : { opacity: 1 }}
+    <LazyMotion features={domAnimation}>
+      <m.span
+        ref={ref}
+        initial={{ opacity: 0 }}
+        animate={isInView ? { opacity: 1 } : { opacity: 0 }}
+        className={className}
       >
-        {isInView ? (
-          <motion.span
-            initial={{ opacity: 1 }}
-            animate={{ opacity: 1 }}
-          >
-            <CounterValue from={from} to={to} duration={duration} />
-          </motion.span>
-        ) : from}
-      </motion.span>
-    </motion.span>
+        <m.span
+          initial={{ opacity: 1 }}
+          animate={isInView ? { opacity: 1 } : { opacity: 1 }}
+        >
+          {isInView ? (
+            <m.span
+              initial={{ opacity: 1 }}
+              animate={{ opacity: 1 }}
+            >
+              <CounterValue from={from} to={to} duration={duration} />
+            </m.span>
+          ) : from}
+        </m.span>
+      </m.span>
+    </LazyMotion>
   )
 }
 
@@ -512,12 +544,12 @@ function CounterValue({ from, to, duration }: { from: number; to: number; durati
   const nodeRef = useRef<HTMLSpanElement>(null)
 
   return (
-    <motion.span
+    <m.span
       ref={nodeRef}
       initial={{ opacity: 1 }}
       animate={{ opacity: 1 }}
     >
-      <motion.span
+      <m.span
         animate={{ opacity: 1 }}
         transition={{ duration }}
         onUpdate={() => {
@@ -525,10 +557,10 @@ function CounterValue({ from, to, duration }: { from: number; to: number; durati
         }}
       >
         {to}
-      </motion.span>
-    </motion.span>
+      </m.span>
+    </m.span>
   )
 }
 
-// Re-export motion for custom use
-export { motion, useInView, useScroll, useTransform }
+// Re-export m (lightweight motion) and hooks for custom use
+export { m, useInView, useScroll, useTransform, LazyMotion, domAnimation }

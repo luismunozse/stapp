@@ -42,7 +42,7 @@ export function FeaturesEditor({ features, onChange, disabled }: FeaturesEditorP
       <div className="space-y-2">
         {features.map((feature, index) => (
           <div
-            key={index}
+            key={`feature-${index}`}
             className="flex items-center gap-2 p-2 bg-muted rounded-lg"
           >
             <span className="flex-1 text-sm">{feature}</span>

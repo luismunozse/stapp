@@ -64,11 +64,6 @@ export function Navbar() {
   useFocusTrap(menuRef, mobileMenuOpen)
   useEscapeKey(() => setMobileMenuOpen(false), mobileMenuOpen)
 
-  // Cerrar menú cuando cambia la ruta
-  useEffect(() => {
-    setMobileMenuOpen(false)
-  }, [pathname])
-
   // Prevenir scroll cuando el menú está abierto
   useEffect(() => {
     if (mobileMenuOpen) {

@@ -32,7 +32,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { motion, AnimatePresence } from "framer-motion"
+import { LazyMotion, domAnimation, m, AnimatePresence } from "framer-motion"
 
 const modules = [
   { id: "ordenes", name: "Órdenes", icon: ClipboardList },
@@ -145,9 +145,9 @@ const floatingIcons: {
 function FloatingIconsBackground() {
   return (
     <>
-      {floatingIcons.map((item, index) => (
-        <motion.div
-          key={index}
+      {floatingIcons.map((item) => (
+        <m.div
+          key={item.position}
           className={cn(
             "hidden md:block absolute text-primary",
             item.position,
@@ -163,7 +163,7 @@ function FloatingIconsBackground() {
           }}
         >
           <item.Icon className="w-full h-full" />
-        </motion.div>
+        </m.div>
       ))}
     </>
   )
@@ -317,8 +317,8 @@ function DashboardMockup({ isDesktop }: { isDesktop: boolean }) {
         <div className="bg-card rounded p-1 shadow-sm border">
           <p className="text-[6px] text-muted-foreground mb-0.5">Ingresos</p>
           <div className="flex items-end gap-[2px] h-14">
-            {[40, 65, 45, 80, 55, 75, 90].map((h, i) => (
-              <div key={i} className="flex-1 bg-primary/70 rounded-t" style={{ height: `${h}%` }} />
+            {[40, 65, 45, 80, 55, 75, 90].map((h) => (
+              <div key={h} className="flex-1 bg-primary/70 rounded-t" style={{ height: `${h}%` }} />
             ))}
           </div>
         </div>
@@ -345,9 +345,9 @@ function DashboardMockup({ isDesktop }: { isDesktop: boolean }) {
           <TrendingUp className="w-3 h-3 text-green-500" />
         </div>
         <div className="h-16 flex items-end gap-1">
-          {[40, 65, 45, 80, 55, 75, 90].map((height, index) => (
+          {[40, 65, 45, 80, 55, 75, 90].map((height) => (
             <div
-              key={index}
+              key={height}
               className="flex-1 bg-gradient-to-t from-primary to-primary/50 rounded-t"
               style={{ height: `${height}%` }}
             />
@@ -534,7 +534,7 @@ function MockupSlider() {
 
       {/* Mockup container */}
       <AnimatePresence mode="wait">
-        <motion.div
+        <m.div
           key={activeModule}
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -554,7 +554,7 @@ function MockupSlider() {
               {renderMockupContent()}
             </BrowserFrame>
           </div>
-        </motion.div>
+        </m.div>
       </AnimatePresence>
 
       {/* Progress dots */}
@@ -589,124 +589,126 @@ export function Hero() {
   ]
 
   return (
-    <section className="relative pt-24 pb-8 sm:pt-28 sm:pb-12 lg:pt-32 lg:pb-16 overflow-hidden">
-      {/* Background gradient */}
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-background dark:via-background dark:to-background" />
+    <LazyMotion features={domAnimation}>
+      <section className="relative pt-24 pb-8 sm:pt-28 sm:pb-12 lg:pt-32 lg:pb-16 overflow-hidden">
+        {/* Background gradient */}
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-background dark:via-background dark:to-background" />
 
-      {/* Grid pattern overlay */}
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:24px_24px]" />
+        {/* Grid pattern overlay */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:24px_24px]" />
 
-      {/* Floating tech icons background */}
-      <FloatingIconsBackground />
+        {/* Floating tech icons background */}
+        <FloatingIconsBackground />
 
-      <div className="container relative mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-center">
-          {/* Left column - Text content */}
-          <div className="text-center lg:text-left">
-            {/* Badge */}
-            <motion.div
-              className="inline-block mb-4"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
+        <div className="container relative mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-center">
+            {/* Left column - Text content */}
+            <div className="text-center lg:text-left">
+              {/* Badge */}
+              <m.div
+                className="inline-block mb-4"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+              >
+                <Badge variant="secondary" className="px-3 py-1 text-sm font-medium">
+                  <Star className="w-3.5 h-3.5 mr-1.5 text-yellow-500" />
+                  +500 talleres confían en nosotros
+                </Badge>
+              </m.div>
+
+              {/* Headline */}
+              <m.h1
+                className="text-3xl sm:text-4xl lg:text-5xl font-bold text-foreground tracking-tight mb-4"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.1 }}
+              >
+                Gestiona tu taller{" "}
+                <span className="text-primary">como un profesional</span>
+              </m.h1>
+
+              {/* Subheadline */}
+              <m.p
+                className="text-base sm:text-lg text-muted-foreground mb-6 max-w-lg mx-auto lg:mx-0"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.2 }}
+              >
+                El sistema todo-en-uno para talleres de reparación. Órdenes, inventario,
+                clientes y pagos en una sola plataforma.
+              </m.p>
+
+              {/* Benefits */}
+              <m.div
+                className="flex flex-wrap justify-center lg:justify-start gap-x-4 gap-y-2 mb-6"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.3 }}
+              >
+                {benefits.map((benefit) => (
+                  <div key={benefit} className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <CheckCircle className="w-4 h-4 text-green-500" />
+                    {benefit}
+                  </div>
+                ))}
+              </m.div>
+
+              {/* CTAs */}
+              <m.div
+                className="flex flex-row items-center gap-3 justify-center lg:justify-start"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.4 }}
+              >
+                <Link href="/registro">
+                  <m.div
+                    whileHover={{ scale: 1.05, y: -2 }}
+                    whileTap={{ scale: 0.98 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 17 }}
+                  >
+                    <Button size="lg" className="text-sm sm:text-base px-4 sm:px-6 py-4 sm:py-5 shadow-lg hover:shadow-xl transition-all group">
+                      Comenzar Gratis
+                      <ArrowRight className="ml-1.5 sm:ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                    </Button>
+                  </m.div>
+                </Link>
+                <a href="#features">
+                  <m.div
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.98 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 17 }}
+                  >
+                    <Button size="lg" variant="outline" className="text-sm sm:text-base px-4 sm:px-6 py-4 sm:py-5">
+                      Ver más
+                    </Button>
+                  </m.div>
+                </a>
+              </m.div>
+
+              {/* Trust indicators */}
+              <m.p
+                className="text-xs text-muted-foreground mt-4"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.5, delay: 0.5 }}
+              >
+                Sin tarjeta de crédito • Configuración en 2 min • Soporte incluido
+              </m.p>
+            </div>
+
+            {/* Right column - Interactive Mockup Slider */}
+            <m.div
+              className="relative"
+              initial={{ opacity: 0, x: 30 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.6, delay: 0.3 }}
             >
-              <Badge variant="secondary" className="px-3 py-1 text-sm font-medium">
-                <Star className="w-3.5 h-3.5 mr-1.5 text-yellow-500" />
-                +500 talleres confían en nosotros
-              </Badge>
-            </motion.div>
-
-            {/* Headline */}
-            <motion.h1
-              className="text-3xl sm:text-4xl lg:text-5xl font-bold text-foreground tracking-tight mb-4"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.1 }}
-            >
-              Gestiona tu taller{" "}
-              <span className="text-primary">como un profesional</span>
-            </motion.h1>
-
-            {/* Subheadline */}
-            <motion.p
-              className="text-base sm:text-lg text-muted-foreground mb-6 max-w-lg mx-auto lg:mx-0"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-            >
-              El sistema todo-en-uno para talleres de reparación. Órdenes, inventario,
-              clientes y pagos en una sola plataforma.
-            </motion.p>
-
-            {/* Benefits */}
-            <motion.div
-              className="flex flex-wrap justify-center lg:justify-start gap-x-4 gap-y-2 mb-6"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.3 }}
-            >
-              {benefits.map((benefit) => (
-                <div key={benefit} className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                  <CheckCircle className="w-4 h-4 text-green-500" />
-                  {benefit}
-                </div>
-              ))}
-            </motion.div>
-
-            {/* CTAs */}
-            <motion.div
-              className="flex flex-row items-center gap-3 justify-center lg:justify-start"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.4 }}
-            >
-              <Link href="/registro">
-                <motion.div
-                  whileHover={{ scale: 1.05, y: -2 }}
-                  whileTap={{ scale: 0.98 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 17 }}
-                >
-                  <Button size="lg" className="text-sm sm:text-base px-4 sm:px-6 py-4 sm:py-5 shadow-lg hover:shadow-xl transition-all group">
-                    Comenzar Gratis
-                    <ArrowRight className="ml-1.5 sm:ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                  </Button>
-                </motion.div>
-              </Link>
-              <a href="#features">
-                <motion.div
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.98 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 17 }}
-                >
-                  <Button size="lg" variant="outline" className="text-sm sm:text-base px-4 sm:px-6 py-4 sm:py-5">
-                    Ver más
-                  </Button>
-                </motion.div>
-              </a>
-            </motion.div>
-
-            {/* Trust indicators */}
-            <motion.p
-              className="text-xs text-muted-foreground mt-4"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.5, delay: 0.5 }}
-            >
-              Sin tarjeta de crédito • Configuración en 2 min • Soporte incluido
-            </motion.p>
+              <MockupSlider />
+            </m.div>
           </div>
-
-          {/* Right column - Interactive Mockup Slider */}
-          <motion.div
-            className="relative"
-            initial={{ opacity: 0, x: 30 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-          >
-            <MockupSlider />
-          </motion.div>
         </div>
-      </div>
-    </section>
+      </section>
+    </LazyMotion>
   )
 }

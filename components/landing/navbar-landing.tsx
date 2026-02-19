@@ -21,11 +21,12 @@ export function NavbarLanding() {
 
   // Verificar sesión del lado del cliente para permitir caching de la landing
   useEffect(() => {
-    fetch("/api/auth/session")
+    const controller = new AbortController()
+    fetch("/api/auth/session", { signal: controller.signal })
       .then(res => res.json())
-      .then(data => setIsLoggedIn(!!data?.user))
-      .catch(() => setIsLoggedIn(false))
-      .finally(() => setIsChecking(false))
+      .then(data => { setIsLoggedIn(!!data?.user); setIsChecking(false) })
+      .catch(() => { if (!controller.signal.aborted) { setIsLoggedIn(false); setIsChecking(false) } })
+    return () => controller.abort()
   }, [])
 
   const navigation = [

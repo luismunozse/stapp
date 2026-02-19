@@ -94,10 +94,14 @@ export function CookieConsent() {
     <>
       {/* Overlay */}
       <div
+        role="button"
+        tabIndex={0}
+        aria-label="Cerrar"
         className={`fixed inset-0 bg-black/20 backdrop-blur-sm z-40 transition-opacity duration-300 ${
           isVisible ? "opacity-100" : "opacity-0"
         }`}
         onClick={handleReject}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleReject(); } }}
       />
 
       {/* Banner */}

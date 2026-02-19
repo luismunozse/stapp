@@ -59,6 +59,8 @@ export interface DataTableProps<T> {
   onSelectionChange?: (keys: string[]) => void
 }
 
+const EMPTY_KEYS: string[] = []
+
 export function DataTable<T>({
   data,
   columns,
@@ -72,7 +74,7 @@ export function DataTable<T>({
   onRowClick,
   rowClassName,
   selectable,
-  selectedKeys = [],
+  selectedKeys = EMPTY_KEYS,
   onSelectionChange,
 }: DataTableProps<T>) {
   const handleSort = (key: string) => {

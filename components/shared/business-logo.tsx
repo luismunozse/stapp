@@ -37,16 +37,12 @@ export function BusinessLogo({
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch("/api/logo")
+    const controller = new AbortController()
+    fetch("/api/logo", { signal: controller.signal })
       .then(res => res.json())
-      .then(data => {
-        setLogoData(data)
-        setLoading(false)
-      })
-      .catch(() => {
-        setLogoData({ hasLogo: false, nombreEmpresa: "STApp" })
-        setLoading(false)
-      })
+      .then(data => { setLogoData(data); setLoading(false) })
+      .catch(() => { if (!controller.signal.aborted) { setLogoData({ hasLogo: false, nombreEmpresa: "STApp" }); setLoading(false) } })
+    return () => controller.abort()
   }, [])
 
   const { width, height, text } = sizeMap[size]

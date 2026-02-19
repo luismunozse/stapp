@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import { CurrentPlan } from "@/components/billing/current-plan"
 import { UsageStats } from "@/components/billing/usage-stats"
@@ -31,7 +31,7 @@ interface Payment {
   paid_at: string
 }
 
-export default function BillingPage() {
+function BillingContent() {
   const searchParams = useSearchParams()
   const { confirm, showError } = useModal()
   const [loading, setLoading] = useState(true)
@@ -180,5 +180,19 @@ export default function BillingPage() {
         onClose={() => setUpgradeModalOpen(false)}
       />
     </div>
+  )
+}
+
+export default function BillingPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      }
+    >
+      <BillingContent />
+    </Suspense>
   )
 }

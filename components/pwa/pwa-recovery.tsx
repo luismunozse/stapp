@@ -65,9 +65,6 @@ export function PWARecovery() {
 
     if (distance > 0 && window.scrollY === 0) {
       setPullDistance(Math.min(distance, PULL_THRESHOLD + 50))
-      if (distance > 10) {
-        e.preventDefault()
-      }
     }
   }, [touchStart])
 
@@ -83,8 +80,8 @@ export function PWARecovery() {
     if (!isPWA) return
 
     document.addEventListener("touchstart", handleTouchStart, { passive: true })
-    document.addEventListener("touchmove", handleTouchMove, { passive: false })
-    document.addEventListener("touchend", handleTouchEnd)
+    document.addEventListener("touchmove", handleTouchMove, { passive: true })
+    document.addEventListener("touchend", handleTouchEnd, { passive: true })
 
     return () => {
       document.removeEventListener("touchstart", handleTouchStart)

@@ -140,7 +140,7 @@ export function CotizacionForm({
           {/* Items */}
           {items.map((item, index) => (
             <ItemRow
-              key={index}
+              key={`item-${index}`}
               item={item}
               index={index}
               onUpdate={updateItem}

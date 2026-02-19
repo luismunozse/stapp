@@ -230,7 +230,7 @@ export function OrdenesList() {
       header: "",
       className: "w-auto sm:w-[100px]",
       render: (orden) => (
-        <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+        <div role="group" className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
           <Link href={`/ordenes/${orden.id}`}>
             <Button variant="ghost" size="icon" className="h-8 w-8">
               <Eye className="h-4 w-4" />
@@ -393,7 +393,7 @@ export function OrdenesList() {
         {isLoading ? (
           <div className="space-y-3">
             {[...Array(3)].map((_, i) => (
-              <Card key={i}>
+              <Card key={`skeleton-${i}`}>
                 <CardContent className="p-4">
                   <div className="h-4 bg-muted animate-pulse rounded w-1/3 mb-3" />
                   <div className="h-3 bg-muted animate-pulse rounded w-2/3 mb-2" />

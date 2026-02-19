@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Image from "next/image"
 import { formatDateValue } from "@/lib/timezone"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -94,14 +95,16 @@ export function SeguimientoContent({ token }: { token: string }) {
     formatDateValue(dateStr, data?.zonaHoraria)
 
   useEffect(() => {
-    fetch(`/api/public/ordenes/${token}`)
+    const controller = new AbortController()
+    fetch(`/api/public/ordenes/${token}`, { signal: controller.signal })
       .then((res) => {
         if (!res.ok) throw new Error("Not found")
         return res.json()
       })
       .then(setData)
-      .catch(() => setError(true))
-      .finally(() => setLoading(false))
+      .catch(() => { if (!controller.signal.aborted) setError(true) })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false) })
+    return () => controller.abort()
   }, [token])
 
   if (loading) {
@@ -139,10 +142,13 @@ export function SeguimientoContent({ token }: { token: string }) {
       {/* Header con branding */}
       <div className="text-center space-y-2">
         {data.organizacion.logoUrl ? (
-          <img
+          <Image
             src={data.organizacion.logoUrl}
             alt={data.organizacion.nombre}
-            className="h-12 mx-auto rounded-lg"
+            width={192}
+            height={48}
+            className="h-12 w-auto mx-auto rounded-lg"
+            unoptimized
           />
         ) : null}
         <h1 className="text-xl font-bold">

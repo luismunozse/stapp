@@ -138,8 +138,8 @@ export function CurrentPlan({ subscription, onUpgrade, onManage, onCancel }: Cur
         <div>
           <h4 className="font-medium text-sm mb-2 sm:mb-3">Incluido en tu plan:</h4>
           <ul className="space-y-1.5 sm:space-y-2">
-            {subscription.features.map((feature, index) => (
-              <li key={index} className="flex items-center gap-2 text-xs sm:text-sm">
+            {subscription.features.map((feature) => (
+              <li key={feature} className="flex items-center gap-2 text-xs sm:text-sm">
                 <span className="h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
                 {feature}
               </li>
