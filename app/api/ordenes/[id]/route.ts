@@ -54,7 +54,8 @@ export async function GET(
           inventario (*)
         ),
         organizations:organization_id (
-          nombre_empresa
+          nombre,
+          nombre_mostrar
         )
       `)
       .eq("id", id)
@@ -79,7 +80,7 @@ export async function GET(
     const formatted = formatOrden(orden)
     return NextResponse.json({
       ...formatted,
-      organizationName: (orden as any).organizations?.nombre_empresa || null,
+      organizationName: (orden as any).organizations?.nombre_mostrar || (orden as any).organizations?.nombre || null,
     })
   } catch (error) {
     console.error("Error fetching orden:", error)

@@ -61,7 +61,8 @@
       "Bash(node scripts/upload-apk.mjs:*)",
       "Bash(node node_modules/.bin/next build)",
       "Bash(npx:*)",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "Bash(node scripts/test-query.mjs:*)"
     ]
   }
 }
