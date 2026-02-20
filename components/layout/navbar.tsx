@@ -31,6 +31,7 @@ import { BusinessLogo } from "@/components/shared/business-logo"
 import { useFocusTrap } from "@/hooks/use-focus-trap"
 import { useEscapeKey } from "@/hooks/use-escape-key"
 import { isNativePlatform } from "@/lib/capacitor"
+import { ApkDownloadBanner } from "@/components/shared/apk-download-banner"
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -139,6 +140,7 @@ export function Navbar() {
               )
             })}
           </nav>
+          <ApkDownloadBanner variant="sidebar" />
           <div className="p-4 border-t border-sidebar-border space-y-2">
             <ThemeToggle variant="dropdown" />
             <Button
