@@ -1,15 +1,15 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Link from "next/link"
 import { Smartphone, X, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
 import { isNativePlatform } from "@/lib/capacitor"
 
 const DISMISS_KEY = "apk-banner-dismissed"
 const DISMISS_DURATION_DAYS = 7
 
-const APK_DOWNLOAD_URL = "https://stapp.com.ar/descargar/android"
+const APK_DOWNLOAD_URL = "/descargar/android"
 
 interface ApkDownloadBannerProps {
   variant: "sidebar" | "top"
@@ -63,7 +63,7 @@ export function ApkDownloadBanner({ variant }: ApkDownloadBannerProps) {
             <p className="text-[11px] text-muted-foreground leading-snug">
               Llevá tu taller en el bolsillo
             </p>
-            <a href={APK_DOWNLOAD_URL} target="_blank" rel="noopener noreferrer">
+            <Link href={APK_DOWNLOAD_URL}>
               <Button
                 size="sm"
                 className="h-7 text-xs bg-green-600 hover:bg-green-700 text-white"
@@ -71,7 +71,7 @@ export function ApkDownloadBanner({ variant }: ApkDownloadBannerProps) {
                 <Download className="h-3 w-3 mr-1" />
                 Descargar APK
               </Button>
-            </a>
+            </Link>
           </div>
         </div>
       </div>
@@ -84,7 +84,7 @@ export function ApkDownloadBanner({ variant }: ApkDownloadBannerProps) {
       <div className="px-4 py-2 text-sm font-medium rounded-full shadow-lg flex items-center gap-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white">
         <Smartphone className="h-4 w-4 shrink-0" />
         <span className="text-xs">Descargá la app para Android</span>
-        <a href={APK_DOWNLOAD_URL} target="_blank" rel="noopener noreferrer">
+        <Link href={APK_DOWNLOAD_URL}>
           <Button
             size="sm"
             variant="outline"
@@ -93,7 +93,7 @@ export function ApkDownloadBanner({ variant }: ApkDownloadBannerProps) {
             <Download className="h-3 w-3 mr-1" />
             Descargar
           </Button>
-        </a>
+        </Link>
         <button
           onClick={handleDismiss}
           className="ml-1 p-1 rounded-full hover:bg-white/20 transition-colors"
