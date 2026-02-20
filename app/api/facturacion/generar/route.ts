@@ -31,6 +31,7 @@ export async function POST(request: Request) {
         estado,
         costo_final,
         presupuesto,
+        sena,
         organization_id,
         numero_orden,
         dispositivo,
@@ -83,6 +84,11 @@ export async function POST(request: Request) {
     const iva = 0
     const total = subtotal
 
+    // Considerar seña como monto ya abonado
+    const sena = typeof orden.sena === "number" ? orden.sena : 0
+    const montoAbonado = sena
+    const estadoPago = montoAbonado >= total ? "PAGADO" : montoAbonado > 0 ? "PAGADO_PARCIAL" : "PENDIENTE"
+
     // Obtener número de factura atómico
     const numeroFactura = await getNextInvoiceNumber(organizationId!)
 
@@ -95,13 +101,26 @@ export async function POST(request: Request) {
         subtotal,
         iva,
         total,
-        estado_pago: "PENDIENTE",
+        monto_abonado: montoAbonado,
+        estado_pago: estadoPago,
       })
       .select()
       .single()
 
     if (createError) {
       throw createError
+    }
+
+    // Si hay seña, registrarla como pago parcial en el historial
+    if (sena > 0) {
+      await supabaseAdmin
+        .from("pagos_parciales")
+        .insert({
+          factura_id: factura.id,
+          monto: sena,
+          metodo_pago: "EFECTIVO",
+          observaciones: "Seña abonada al momento del ingreso",
+        })
     }
 
     return NextResponse.json({

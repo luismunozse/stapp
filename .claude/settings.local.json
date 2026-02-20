@@ -62,7 +62,8 @@
       "Bash(node node_modules/.bin/next build)",
       "Bash(npx:*)",
       "Bash(echo:*)",
-      "Bash(node scripts/test-query.mjs:*)"
+      "Bash(node scripts/test-query.mjs:*)",
+      "Bash(node scripts/apply-migration.mjs:*)"
     ]
   }
 }

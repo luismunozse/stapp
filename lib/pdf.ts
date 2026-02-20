@@ -1372,28 +1372,6 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     termY -= 12
   })
 
-  // === SECCION DE FIRMAS ===
-  const firmaY = terminosStartY - terminosBoxHeight - 45
-
-  // Línea separadora
-  page.drawLine({ start: { x: margin, y: firmaY + 30 }, end: { x: width - margin, y: firmaY + 30 }, thickness: 1, color: lightGray })
-
-  // Firma Cliente
-  page.drawRectangle({ x: margin, y: firmaY - 55, width: halfWidth, height: 70, color: bgGray, borderColor: lightGray, borderWidth: 1 })
-  page.drawRectangle({ x: margin, y: firmaY + 5, width: halfWidth, height: 18, color: rgb(0.95, 0.95, 0.95) })
-  page.drawText("FIRMA CLIENTE", { x: margin + 12, y: firmaY + 10, size: 8, font: helveticaBold, color: grayColor })
-
-  page.drawLine({ start: { x: margin + 20, y: firmaY - 15 }, end: { x: margin + halfWidth - 20, y: firmaY - 15 }, thickness: 1, color: grayColor })
-  page.drawText("Aclaracion: _________________________", { x: margin + 15, y: firmaY - 32, size: 7, font: helvetica, color: grayColor })
-  page.drawText("DNI: _________________________", { x: margin + 15, y: firmaY - 45, size: 7, font: helvetica, color: grayColor })
-
-  // Firma Tecnico
-  page.drawRectangle({ x: cardX2, y: firmaY - 55, width: halfWidth, height: 70, color: bgGray, borderColor: lightGray, borderWidth: 1 })
-  page.drawRectangle({ x: cardX2, y: firmaY + 5, width: halfWidth, height: 18, color: rgb(0.95, 0.95, 0.95) })
-  page.drawText("FIRMA TECNICO", { x: cardX2 + 12, y: firmaY + 10, size: 8, font: helveticaBold, color: grayColor })
-  page.drawLine({ start: { x: cardX2 + 20, y: firmaY - 15 }, end: { x: cardX2 + halfWidth - 20, y: firmaY - 15 }, thickness: 1, color: grayColor })
-  page.drawText("Aclaracion: _________________________", { x: cardX2 + 15, y: firmaY - 32, size: 7, font: helvetica, color: grayColor })
-
   // === FOOTER ===
   page.drawText(`Orden #${numeroOrden}`, { x: margin, y: 25, size: 8, font: helveticaBold, color: primaryColor })
   page.drawText(`Impreso: ${fechaImpresion}`, { x: width - margin - 100, y: 25, size: 7, font: helvetica, color: grayColor })
