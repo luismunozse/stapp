@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.0.0"
+export const APP_VERSION = "1.1.0"
 
 export type ChangeType = "feature" | "improvement" | "fix"
 
@@ -20,6 +20,33 @@ export interface ChangelogVersion {
  * y actualizar APP_VERSION arriba.
  */
 export const CHANGELOG: ChangelogVersion[] = [
+  {
+    version: "1.1.0",
+    date: "2026-02-19",
+    title: "Ver factura en PDF, app Android y más",
+    changes: [
+      {
+        type: "feature",
+        description:
+          "Ver y descargar facturas en PDF directamente desde la sección de facturación",
+      },
+      {
+        type: "feature",
+        description:
+          "App nativa disponible para Android (APK). Próximamente en iOS",
+      },
+      {
+        type: "improvement",
+        description:
+          "Sección de soporte mejorada para facilitar la comunicación entre usuarios y administradores",
+      },
+      {
+        type: "improvement",
+        description:
+          "Mejoras generales en la sección de facturación",
+      },
+    ],
+  },
   {
     version: "1.0.0",
     date: "2026-02-16",
