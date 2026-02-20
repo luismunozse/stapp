@@ -14,6 +14,7 @@ import {
   ChevronUp,
   Trash2,
   Ban,
+  Eye,
 } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { PagoForm } from "./pago-form"
@@ -165,7 +166,17 @@ export function FacturacionList() {
                         Orden {factura.orden.codigoOrden || `#${factura.orden.numeroOrden}`} - {factura.orden.cliente.nombre}
                       </div>
                     </div>
-                    <PaymentStatusBadge status={factura.estadoPago} showIcon />
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => window.open(`/api/facturacion/${factura.id}/pdf`, "_blank")}
+                      >
+                        <Eye className="mr-2 h-4 w-4" />
+                        Ver Factura
+                      </Button>
+                      <PaymentStatusBadge status={factura.estadoPago} showIcon />
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
