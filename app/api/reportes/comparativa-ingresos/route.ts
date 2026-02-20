@@ -1,26 +1,15 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
-import { isPremium } from "@/lib/subscriptions"
 import { supabaseAdmin } from "@/lib/supabase"
 
 /**
  * GET /api/reportes/comparativa-ingresos
  * Compara ingresos del mes actual vs mes anterior
- * Solo usuarios Premium
  */
 export async function GET() {
   try {
     const { error, organizationId } = await requireAuth()
     if (error) return error
-
-    // Verificar Premium
-    const premium = await isPremium(organizationId!)
-    if (!premium) {
-      return NextResponse.json(
-        { error: "Requiere plan Premium", code: "PREMIUM_REQUIRED" },
-        { status: 403 }
-      )
-    }
 
     const now = new Date()
     const primerDiaMesActual = new Date(now.getFullYear(), now.getMonth(), 1)

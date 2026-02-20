@@ -67,7 +67,10 @@ export function AnalisisInventario() {
     try {
       setLoading(true)
       const response = await fetch("/api/reportes/analisis-inventario")
-      if (!response.ok) throw new Error("Error al cargar datos")
+      if (!response.ok) {
+        const errData = await response.json().catch(() => null)
+        throw new Error(errData?.error || "Error al cargar datos")
+      }
       const result = await response.json()
       setData(result)
     } catch (err) {

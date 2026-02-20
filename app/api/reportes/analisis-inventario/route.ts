@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
-import { isPremium } from "@/lib/subscriptions"
 import { supabaseAdmin } from "@/lib/supabase"
 
 interface ItemInventario {
@@ -23,21 +22,11 @@ interface CategoriaResumen {
 /**
  * GET /api/reportes/analisis-inventario
  * Análisis del inventario: stock crítico, valor total, por categoría
- * Solo usuarios Premium
  */
 export async function GET() {
   try {
     const { error, organizationId } = await requireAuth()
     if (error) return error
-
-    // Verificar Premium
-    const premium = await isPremium(organizationId!)
-    if (!premium) {
-      return NextResponse.json(
-        { error: "Requiere plan Premium", code: "PREMIUM_REQUIRED" },
-        { status: 403 }
-      )
-    }
 
     // Obtener todo el inventario
     const { data: inventario, error: inventarioError } = await supabaseAdmin

@@ -53,7 +53,10 @@ export function PerformanceTecnicos() {
     try {
       setLoading(true)
       const response = await fetch("/api/reportes/performance-tecnicos")
-      if (!response.ok) throw new Error("Error al cargar datos")
+      if (!response.ok) {
+        const errData = await response.json().catch(() => null)
+        throw new Error(errData?.error || "Error al cargar datos")
+      }
       const result = await response.json()
       setData(result)
     } catch (err) {

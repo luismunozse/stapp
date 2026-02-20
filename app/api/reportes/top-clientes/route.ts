@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
-import { isPremium } from "@/lib/subscriptions"
 import { supabaseAdmin } from "@/lib/supabase"
 
 interface ClienteTop {
@@ -22,15 +21,6 @@ export async function GET(request: NextRequest) {
   try {
     const { error, organizationId } = await requireAuth()
     if (error) return error
-
-    // Verificar Premium
-    const premium = await isPremium(organizationId!)
-    if (!premium) {
-      return NextResponse.json(
-        { error: "Requiere plan Premium", code: "PREMIUM_REQUIRED" },
-        { status: 403 }
-      )
-    }
 
     const searchParams = request.nextUrl.searchParams
     const tipo = searchParams.get("tipo") || "ordenes" // 'ordenes' | 'monto'
