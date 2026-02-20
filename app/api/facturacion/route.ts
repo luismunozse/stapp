@@ -71,7 +71,9 @@ export async function GET(request: Request) {
       ),
     }))
 
-    return NextResponse.json(facturasFormatted)
+    return NextResponse.json(facturasFormatted, {
+      headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
+    })
   } catch (error) {
     console.error("Error fetching facturas:", error)
     return NextResponse.json(

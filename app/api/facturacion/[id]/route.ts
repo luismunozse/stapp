@@ -71,6 +71,8 @@ export async function GET(
       })).sort((a: any, b: any) =>
         new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
       ),
+    }, {
+      headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
     })
   } catch (error) {
     console.error("Error fetching factura:", error)

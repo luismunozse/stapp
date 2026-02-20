@@ -1793,6 +1793,9 @@ interface GarantiaVentaPDFData {
   logoUrl?: string | null
   moneda?: string
   zonaHoraria?: string
+  firmaEncargado?: string | null
+  firmaEncargadoMime?: string | null
+  nombreEncargado?: string | null
 }
 
 export async function generateGarantiaVentaPDF(data: GarantiaVentaPDFData): Promise<Buffer> {
@@ -1955,54 +1958,56 @@ export async function generateGarantiaVentaPDF(data: GarantiaVentaPDFData): Prom
   }
 
   // === TITULO PRINCIPAL ===
-  let y = height - 155
+  let y = height - 150
 
   const titleText = "CERTIFICADO DE GARANTIA"
-  const titleWidth = helveticaBold.widthOfTextAtSize(titleText, 24)
+  const titleWidth = helveticaBold.widthOfTextAtSize(titleText, 22)
   page.drawText(titleText, {
     x: (width - titleWidth) / 2,
     y,
-    size: 24,
+    size: 22,
     font: helveticaBold,
     color: primaryDark,
   })
 
-  y -= 25
+  y -= 20
 
   // Línea decorativa dorada debajo del título
-  const lineWidth = 180
+  const lineWidth = 160
   page.drawRectangle({
     x: (width - lineWidth) / 2,
     y,
     width: lineWidth,
-    height: 3,
+    height: 2.5,
     color: accentGold,
   })
 
-  y -= 30
+  y -= 25
 
   // === NUMERO DE GARANTIA (badge destacado) ===
   const garantiaText = `N° ${numeroGarantia}`
-  const garantiaTextWidth = helveticaBold.widthOfTextAtSize(garantiaText, 14)
-  const garantiaBadgeWidth = garantiaTextWidth + 40
-  const garantiaBadgeHeight = 28
+  const garantiaTextWidth = helveticaBold.widthOfTextAtSize(garantiaText, 13)
+  const garantiaBadgeWidth = garantiaTextWidth + 36
+  const garantiaBadgeHeight = 26
 
   page.drawRectangle({
     x: (width - garantiaBadgeWidth) / 2,
-    y: y - 5,
+    y: y - 4,
     width: garantiaBadgeWidth,
     height: garantiaBadgeHeight,
-    color: primaryLight,
+    color: primaryColor,
+    borderColor: primaryDark,
+    borderWidth: 1,
   })
   page.drawText(garantiaText, {
     x: (width - garantiaTextWidth) / 2,
     y: y + 3,
-    size: 14,
+    size: 13,
     font: helveticaBold,
     color: white,
   })
 
-  y -= 50
+  y -= 45
 
   // === INFORMACIÓN DE LA EMPRESA ===
   page.drawText(empresaNombre.toUpperCase(), {
@@ -2198,10 +2203,41 @@ export async function generateGarantiaVentaPDF(data: GarantiaVentaPDFData): Prom
     y -= 12
   }
 
-  // === FIRMA ===
-  y -= 15
+  // === FIRMA DEL ENCARGADO ===
+  y -= 10
+
+  // Embed signature image if available
+  if (data.firmaEncargado) {
+    try {
+      const sigBytes = Buffer.from(data.firmaEncargado, "base64")
+      const sigUint8 = new Uint8Array(sigBytes)
+      let sigImage
+      const sigMime = data.firmaEncargadoMime || "image/png"
+      if (sigMime.includes("png")) {
+        sigImage = await pdfDoc.embedPng(sigUint8)
+      } else {
+        sigImage = await pdfDoc.embedJpg(sigUint8)
+      }
+      if (sigImage) {
+        const sigDims = sigImage.scale(1)
+        const maxSigH = 50
+        const maxSigW = 150
+        const sigScale = Math.min(maxSigH / sigDims.height, maxSigW / sigDims.width)
+        const sigW = sigDims.width * sigScale
+        const sigH = sigDims.height * sigScale
+        const sigX = width - margin - 90 - sigW / 2
+        page.drawImage(sigImage, { x: sigX, y: y - sigH + 5, width: sigW, height: sigH })
+        y -= sigH
+      }
+    } catch (sigError) {
+      console.error("Error embedding signature:", sigError)
+    }
+  }
+
   page.drawLine({ start: { x: width - margin - 180, y }, end: { x: width - margin, y }, thickness: 1, color: textColor })
-  page.drawText("Firma y Sello", { x: width - margin - 120, y: y - 12, size: 9, font: helvetica, color: grayColor })
+  const firmaLabel = data.nombreEncargado ? `Firma - ${data.nombreEncargado}` : "Firma"
+  const firmaLabelWidth = helvetica.widthOfTextAtSize(firmaLabel, 9)
+  page.drawText(firmaLabel, { x: width - margin - 90 - firmaLabelWidth / 2, y: y - 12, size: 9, font: helvetica, color: grayColor })
 
   // === FOOTER ===
   page.drawRectangle({

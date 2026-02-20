@@ -36,58 +36,55 @@ export async function GET(request: NextRequest) {
     const tipo = searchParams.get("tipo") || "ordenes" // 'ordenes' | 'monto'
     const limite = parseInt(searchParams.get("limite") || "10")
 
-    // Obtener clientes con sus órdenes y facturas
+    // Query 1: Get all clientes
     const { data: clientes, error: clientesError } = await supabaseAdmin
       .from("clientes")
-      .select(
-        `
-        id,
-        nombre,
-        telefono,
-        email,
-        ordenes:ordenes_servicio(
-          id,
-          fecha_ingreso,
-          facturas(total, estado_pago)
-        )
-      `
-      )
+      .select("id, nombre, telefono, email")
       .eq("organization_id", organizationId!)
 
     if (clientesError) throw clientesError
 
-    // Procesar datos
+    // Query 2: Get ordenes with facturas (separate queries to avoid nested embed issues)
+    const { data: ordenes, error: ordenesError } = await supabaseAdmin
+      .from("ordenes_servicio")
+      .select("id, cliente_id, fecha_ingreso, facturas(total, estado_pago)")
+      .eq("organization_id", organizationId!)
+
+    if (ordenesError) throw ordenesError
+
+    // Aggregate by client
+    const metricsMap = new Map<string, { totalOrdenes: number; totalGastado: number; ultimaVisita: string | null }>()
+
+    for (const orden of ordenes || []) {
+      if (!orden.cliente_id) continue
+      const m = metricsMap.get(orden.cliente_id) || { totalOrdenes: 0, totalGastado: 0, ultimaVisita: null }
+      m.totalOrdenes++
+
+      const facturas = (orden as any).facturas || []
+      for (const f of facturas) {
+        if (f.estado_pago === "PAGADO") {
+          m.totalGastado += f.total || 0
+        }
+      }
+
+      if (orden.fecha_ingreso && (!m.ultimaVisita || orden.fecha_ingreso > m.ultimaVisita)) {
+        m.ultimaVisita = orden.fecha_ingreso
+      }
+
+      metricsMap.set(orden.cliente_id, m)
+    }
+
+    // Build final list
     const clientesConMetricas: ClienteTop[] = (clientes || []).map((cliente) => {
-      const ordenes = cliente.ordenes || []
-      const totalOrdenes = ordenes.length
-
-      // Calcular total gastado (solo facturas pagadas)
-      let totalGastado = 0
-      ordenes.forEach((orden: any) => {
-        const facturas = orden.facturas || []
-        facturas.forEach((factura: any) => {
-          if (factura.estado_pago === "PAGADO") {
-            totalGastado += factura.total || 0
-          }
-        })
-      })
-
-      // Última visita (orden más reciente)
-      const fechasIngreso = ordenes
-        .map((o: any) => o.fecha_ingreso)
-        .filter(Boolean)
-        .sort()
-        .reverse()
-      const ultimaVisita = fechasIngreso[0] || null
-
+      const m = metricsMap.get(cliente.id) || { totalOrdenes: 0, totalGastado: 0, ultimaVisita: null }
       return {
         clienteId: cliente.id,
         nombre: cliente.nombre,
         telefono: cliente.telefono,
         email: cliente.email,
-        totalOrdenes,
-        totalGastado,
-        ultimaVisita,
+        totalOrdenes: m.totalOrdenes,
+        totalGastado: m.totalGastado,
+        ultimaVisita: m.ultimaVisita,
       }
     })
 

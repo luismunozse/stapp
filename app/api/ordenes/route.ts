@@ -143,6 +143,8 @@ export async function GET(request: Request) {
       page,
       limit,
       totalPages: Math.ceil((count || 0) / limit),
+    }, {
+      headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
     })
   } catch (error) {
     console.error("Error fetching ordenes:", error)

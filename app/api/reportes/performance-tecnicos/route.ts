@@ -43,11 +43,10 @@ export async function GET() {
 
     // Obtener técnicos de la organización
     const { data: tecnicos, error: tecnicosError } = await supabaseAdmin
-      .from("usuarios")
+      .from("users")
       .select("id, nombre")
       .eq("organization_id", organizationId!)
       .eq("rol", "TECNICO")
-      .eq("activo", true)
 
     if (tecnicosError) throw tecnicosError
 

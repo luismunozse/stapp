@@ -66,6 +66,26 @@ export async function GET(
       )
     }
 
+    // Obtener firma del encargado desde la última orden entregada de esta organización
+    let firmaEncargado: string | null = null
+    let firmaEncargadoMime: string | null = null
+    let nombreEncargado: string | null = null
+
+    const { data: lastDelivered } = await supabaseAdmin
+      .from("ordenes_servicio")
+      .select("firma_encargado_entrega, firma_encargado_entrega_mime, users:entregado_por_user_id(nombre)")
+      .eq("organization_id", organizationId!)
+      .not("firma_encargado_entrega", "is", null)
+      .order("fecha_entrega", { ascending: false })
+      .limit(1)
+      .single()
+
+    if (lastDelivered?.firma_encargado_entrega) {
+      firmaEncargado = lastDelivered.firma_encargado_entrega
+      firmaEncargadoMime = lastDelivered.firma_encargado_entrega_mime || "image/png"
+      nombreEncargado = (lastDelivered.users as any)?.nombre || null
+    }
+
     // Preparar datos para el PDF
     const pdfData = {
       numeroGarantia: garantia.numero_garantia,
@@ -91,6 +111,9 @@ export async function GET(
       logoUrl: venta.organizations?.logo_url,
       moneda: venta.organizations?.moneda || "ARS",
       zonaHoraria: venta.organizations?.zona_horaria || "America/Argentina/Buenos_Aires",
+      firmaEncargado,
+      firmaEncargadoMime,
+      nombreEncargado,
     }
 
     // Generar PDF

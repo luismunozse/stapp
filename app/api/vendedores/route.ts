@@ -25,7 +25,9 @@ export async function GET() {
       throw dbError
     }
 
-    return NextResponse.json(vendedores || [])
+    return NextResponse.json(vendedores || [], {
+      headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
+    })
   } catch (error) {
     console.error("Error fetching vendedores:", error)
     return NextResponse.json(

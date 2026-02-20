@@ -81,6 +81,8 @@ export async function GET(
     return NextResponse.json({
       ...formatted,
       organizationName: (orden as any).organizations?.nombre_mostrar || (orden as any).organizations?.nombre || null,
+    }, {
+      headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
     })
   } catch (error) {
     console.error("Error fetching orden:", error)

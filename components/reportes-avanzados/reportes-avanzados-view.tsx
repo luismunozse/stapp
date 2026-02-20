@@ -27,8 +27,8 @@ function ReporteSkeleton() {
 }
 
 // Lazy load de componentes pesados con Recharts
-const ComparativaIngresos = dynamic(
-  () => import("./comparativa-ingresos").then(mod => ({ default: mod.ComparativaIngresos })),
+const ResumenIngresos = dynamic(
+  () => import("./resumen-ingresos").then(mod => ({ default: mod.ResumenIngresos })),
   { loading: () => <ReporteSkeleton />, ssr: false }
 )
 
@@ -82,7 +82,7 @@ export function ReportesAvanzadosView() {
         </TabsList>
 
         <TabsContent value="ingresos" className="mt-6">
-          <ComparativaIngresos />
+          <ResumenIngresos />
         </TabsContent>
 
         <TabsContent value="tecnicos" className="mt-6">

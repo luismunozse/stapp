@@ -47,7 +47,9 @@ export async function GET() {
       }
     })
 
-    return NextResponse.json(tecnicosConStats)
+    return NextResponse.json(tecnicosConStats, {
+      headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
+    })
   } catch (error) {
     console.error("Error fetching tecnicos:", error)
     return NextResponse.json(

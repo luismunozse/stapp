@@ -38,7 +38,9 @@ export async function GET(request: Request) {
       throw dbError
     }
 
-    return NextResponse.json(clientes)
+    return NextResponse.json(clientes, {
+      headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
+    })
   } catch (error) {
     console.error("Error fetching clientes:", error)
     return NextResponse.json(
