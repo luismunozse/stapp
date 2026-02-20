@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { Smartphone, Download, Shield, Zap, ArrowLeft, CheckCircle2, Loader2 } from "lucide-react"
+import Image from "next/image"
+import { Download, Shield, Zap, ArrowLeft, CheckCircle2, Loader2, Smartphone } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { STAppLogo } from "@/components/shared/stapp-logo"
 
 interface ApkInfo {
   available: boolean
@@ -25,9 +27,9 @@ export default function DescargarAndroidPage() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-green-50 to-white dark:from-green-950/20 dark:to-background">
+    <div className="min-h-screen bg-gradient-to-b from-primary/5 to-background">
       {/* Header */}
-      <div className="container mx-auto px-4 py-6">
+      <div className="container mx-auto px-4 py-6 flex items-center justify-between">
         <Link
           href="/landing"
           className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -35,19 +37,26 @@ export default function DescargarAndroidPage() {
           <ArrowLeft className="h-4 w-4" />
           Volver al inicio
         </Link>
+        <STAppLogo size="sm" />
       </div>
 
       {/* Hero */}
       <div className="container mx-auto px-4 pb-16">
         <div className="max-w-2xl mx-auto text-center space-y-8">
-          {/* Icon */}
-          <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-3xl bg-gradient-to-br from-green-500 to-emerald-600 shadow-lg shadow-green-500/25">
-            <Smartphone className="h-12 w-12 text-white" />
+          {/* Logo */}
+          <div className="mx-auto flex h-28 w-28 items-center justify-center rounded-3xl bg-gradient-to-br from-primary to-primary/70 shadow-lg shadow-primary/25">
+            <Image
+              src="/icon-512.svg"
+              alt="STApp"
+              width={72}
+              height={72}
+              className="drop-shadow-md"
+            />
           </div>
 
           <div className="space-y-4">
             <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-foreground">
-              STApp para Android
+              <span className="text-primary">ST</span>App para Android
             </h1>
             <p className="text-lg text-muted-foreground max-w-md mx-auto">
               Llevá tu taller en el bolsillo. Gestioná órdenes, clientes e inventario desde tu celular.
@@ -66,7 +75,7 @@ export default function DescargarAndroidPage() {
                 <a href="/api/download/apk">
                   <Button
                     size="lg"
-                    className="h-14 px-8 text-lg bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-600/25"
+                    className="h-14 px-8 text-lg shadow-lg shadow-primary/25"
                   >
                     <Download className="mr-2 h-5 w-5" />
                     Descargar APK
@@ -96,8 +105,8 @@ export default function DescargarAndroidPage() {
           {/* Features */}
           <div className="grid sm:grid-cols-3 gap-6 pt-8">
             <div className="flex flex-col items-center gap-3 p-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
-                <Zap className="h-6 w-6 text-green-600 dark:text-green-400" />
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                <Zap className="h-6 w-6 text-primary" />
               </div>
               <h3 className="font-semibold">Acceso rápido</h3>
               <p className="text-sm text-muted-foreground text-center">
@@ -105,8 +114,8 @@ export default function DescargarAndroidPage() {
               </p>
             </div>
             <div className="flex flex-col items-center gap-3 p-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
-                <Shield className="h-6 w-6 text-green-600 dark:text-green-400" />
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                <Shield className="h-6 w-6 text-primary" />
               </div>
               <h3 className="font-semibold">Segura y confiable</h3>
               <p className="text-sm text-muted-foreground text-center">
@@ -114,8 +123,8 @@ export default function DescargarAndroidPage() {
               </p>
             </div>
             <div className="flex flex-col items-center gap-3 p-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
-                <Smartphone className="h-6 w-6 text-green-600 dark:text-green-400" />
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                <Smartphone className="h-6 w-6 text-primary" />
               </div>
               <h3 className="font-semibold">Todas las funciones</h3>
               <p className="text-sm text-muted-foreground text-center">
@@ -129,25 +138,25 @@ export default function DescargarAndroidPage() {
             <h2 className="text-lg font-semibold text-center">Cómo instalar</h2>
             <ol className="space-y-3">
               <li className="flex items-start gap-3">
-                <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0 mt-0.5" />
+                <CheckCircle2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
                 <span className="text-sm text-muted-foreground">
                   Descargá el archivo APK tocando el botón de arriba
                 </span>
               </li>
               <li className="flex items-start gap-3">
-                <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0 mt-0.5" />
+                <CheckCircle2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
                 <span className="text-sm text-muted-foreground">
                   Si tu celular lo pide, habilitá la instalación desde &quot;Orígenes desconocidos&quot; en Configuración
                 </span>
               </li>
               <li className="flex items-start gap-3">
-                <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0 mt-0.5" />
+                <CheckCircle2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
                 <span className="text-sm text-muted-foreground">
                   Abrí el archivo descargado y tocá &quot;Instalar&quot;
                 </span>
               </li>
               <li className="flex items-start gap-3">
-                <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0 mt-0.5" />
+                <CheckCircle2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
                 <span className="text-sm text-muted-foreground">
                   ¡Listo! Iniciá sesión con tu cuenta de STApp
                 </span>
