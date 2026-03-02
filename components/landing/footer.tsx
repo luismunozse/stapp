@@ -11,6 +11,10 @@ export function Footer() {
       { name: "Precios", href: "#pricing" },
       { name: "FAQ", href: "#faq" },
     ],
+    soporte: [
+      { name: "Centro de ayuda", href: "/ayuda" },
+      { name: "Contacto", href: "/empresa/contacto" },
+    ],
     legal: [
       { name: "Términos de servicio", href: "/legal/terminos" },
       { name: "Política de privacidad", href: "/legal/privacidad" },
@@ -21,7 +25,7 @@ export function Footer() {
   return (
     <footer className="bg-muted dark:bg-card border-t">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
           {/* Brand */}
           <div className="lg:col-span-2">
             <Link href="/" className="flex items-center mb-6">
@@ -45,6 +49,23 @@ export function Footer() {
                   >
                     {link.name}
                   </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Soporte */}
+          <div>
+            <h3 className="text-foreground font-semibold mb-4">Soporte</h3>
+            <ul className="space-y-3">
+              {footerLinks.soporte.map((link) => (
+                <li key={link.name}>
+                  <Link
+                    href={link.href}
+                    className="text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm"
+                  >
+                    {link.name}
+                  </Link>
                 </li>
               ))}
             </ul>

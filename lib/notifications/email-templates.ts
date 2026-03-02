@@ -26,6 +26,23 @@ const contentStyle = `
   border-radius: 0 0 10px 10px;
 `
 
+const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
+
+const getHeader = (orgName: string) => `
+  <div style="${headerStyle}">
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin: 0 auto;">
+      <tr>
+        <td style="vertical-align: middle; padding-right: 10px;">
+          <img src="https://${ROOT_DOMAIN}/icon-192.png" alt="" style="height: 36px; width: 36px; border-radius: 8px;" />
+        </td>
+        <td style="vertical-align: middle;">
+          <h1 style="color: white; margin: 0; font-size: 22px; font-weight: 700;">${orgName}</h1>
+        </td>
+      </tr>
+    </table>
+  </div>
+`
+
 const estadoLabels: Record<EstadoOrden, string> = {
   RECIBIDO: "Recibido",
   EN_DIAGNOSTICO: "En diagnóstico",
@@ -70,9 +87,7 @@ export function generateCambioEstadoEmail(ctx: NotificationContext): {
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
         </head>
         <body style="${baseStyles}">
-          <div style="${headerStyle}">
-            <h1 style="color: white; margin: 0;">${ctx.organizationName}</h1>
-          </div>
+          ${getHeader(ctx.organizationName)}
           <div style="${contentStyle}">
             <h2 style="color: #1f2937; margin-top: 0;">
               Hola ${ctx.cliente.nombre},
@@ -147,9 +162,7 @@ export function generatePresupuestoEmail(ctx: NotificationContext): {
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
         </head>
         <body style="${baseStyles}">
-          <div style="${headerStyle}">
-            <h1 style="color: white; margin: 0;">${ctx.organizationName}</h1>
-          </div>
+          ${getHeader(ctx.organizationName)}
           <div style="${contentStyle}">
             <h2 style="color: #1f2937; margin-top: 0;">
               Hola ${ctx.cliente.nombre},
@@ -201,9 +214,7 @@ export function generateGarantiaEmail(ctx: NotificationContext): {
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
         </head>
         <body style="${baseStyles}">
-          <div style="${headerStyle}">
-            <h1 style="color: white; margin: 0;">${ctx.organizationName}</h1>
-          </div>
+          ${getHeader(ctx.organizationName)}
           <div style="${contentStyle}">
             <h2 style="color: #1f2937; margin-top: 0;">
               Hola ${ctx.cliente.nombre},
@@ -261,9 +272,7 @@ export function generateRecordatorioEmail(
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
         </head>
         <body style="${baseStyles}">
-          <div style="${headerStyle}">
-            <h1 style="color: white; margin: 0;">${ctx.organizationName}</h1>
-          </div>
+          ${getHeader(ctx.organizationName)}
           <div style="${contentStyle}">
             <h2 style="color: #1f2937; margin-top: 0;">
               Hola ${ctx.cliente.nombre},

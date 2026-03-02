@@ -1,5 +1,5 @@
 import Papa from 'papaparse'
-import * as XLSX from 'xlsx'
+import ExcelJS from 'exceljs'
 
 export interface ParsedRow {
   [key: string]: string | number | null
@@ -50,20 +50,33 @@ export async function parseCSV(base64Data: string): Promise<ParseResult> {
   }
 }
 
+function resolveCellValue(value: ExcelJS.CellValue): string | number | null {
+  if (value === null || value === undefined) return null
+  if (typeof value === 'number' || typeof value === 'string' || typeof value === 'boolean') {
+    return typeof value === 'boolean' ? String(value) : value
+  }
+  if (value instanceof Date) return value.toISOString()
+  if (typeof value === 'object' && 'result' in value) {
+    return resolveCellValue((value as ExcelJS.CellFormulaValue).result as ExcelJS.CellValue)
+  }
+  if (typeof value === 'object' && 'richText' in value) {
+    return (value as ExcelJS.CellRichTextValue).richText.map(rt => rt.text).join('')
+  }
+  return String(value)
+}
+
 /**
  * Parse Excel file from base64 string
  */
 export async function parseExcel(base64Data: string): Promise<ParseResult> {
   try {
-    // Decode base64 to buffer
     const buffer = Buffer.from(base64Data, 'base64')
 
-    // Read workbook
-    const workbook = XLSX.read(buffer, { type: 'buffer' })
+    const workbook = new ExcelJS.Workbook()
+    await workbook.xlsx.load(buffer)
 
-    // Get first sheet
-    const firstSheetName = workbook.SheetNames[0]
-    if (!firstSheetName) {
+    const worksheet = workbook.worksheets[0]
+    if (!worksheet) {
       return {
         data: [],
         errors: ['No sheets found in Excel file'],
@@ -71,16 +84,14 @@ export async function parseExcel(base64Data: string): Promise<ParseResult> {
       }
     }
 
-    const worksheet = workbook.Sheets[firstSheetName]
-
-    // Convert to JSON with headers
-    const jsonData = XLSX.utils.sheet_to_json<any>(worksheet, {
-      header: 1, // Get as array first
-      raw: false, // Get formatted values
-      defval: null, // Default value for empty cells
+    const allRows: (string | number | null)[][] = []
+    worksheet.eachRow((row) => {
+      // row.values is 1-based; index 0 is undefined
+      const values = (row.values as ExcelJS.CellValue[]).slice(1)
+      allRows.push(values.map(resolveCellValue))
     })
 
-    if (jsonData.length === 0) {
+    if (allRows.length === 0) {
       return {
         data: [],
         errors: ['Excel file is empty'],
@@ -88,15 +99,13 @@ export async function parseExcel(base64Data: string): Promise<ParseResult> {
       }
     }
 
-    // First row is headers
-    const headers = jsonData[0] as string[]
-    const rows = jsonData.slice(1)
+    const headers = allRows[0].map(h => String(h ?? '').trim())
+    const dataRows = allRows.slice(1)
 
-    // Convert to objects
-    const data: ParsedRow[] = rows.map((row: any) => {
+    const data: ParsedRow[] = dataRows.map((row) => {
       const obj: ParsedRow = {}
       headers.forEach((header, index) => {
-        obj[String(header).trim()] = row[index] ?? null
+        obj[header] = row[index] ?? null
       })
       return obj
     })

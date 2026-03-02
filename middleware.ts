@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getToken } from "next-auth/jwt"
+import { rateLimit, getApiRateLimit, isExemptFromRateLimit } from "@/lib/rate-limit"
 
 // Subdominio especial para el panel de superadmin
 const SUPERADMIN_SUBDOMAIN = "admin"
@@ -62,7 +63,11 @@ function isPublicPath(pathname: string): boolean {
     "/icons",
     "/seguimiento",
     "/cotizacion",
+    "/kiosco",
+    "/api/whatsapp/webhook",
     "/app-entry",
+    "/ayuda",
+    "/descargar",
   ]
   return publicPaths.some((path) => pathname.startsWith(path))
 }
@@ -124,6 +129,29 @@ export async function middleware(request: NextRequest) {
 
   // Headers para pasar contexto
   const requestHeaders = new Headers(request.headers)
+
+  // Rate limiting para rutas API
+  if (pathname.startsWith("/api/") && !isExemptFromRateLimit(pathname)) {
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown"
+    const identifier = subdomain ? `org:${subdomain}:${pathname.split("/").slice(0, 4).join("/")}` : `ip:${ip}:${pathname.split("/").slice(0, 4).join("/")}`
+    const config = getApiRateLimit(pathname)
+    const result = await rateLimit(identifier, config.max, config.windowMs)
+
+    if (!result.success) {
+      return NextResponse.json(
+        { error: "Demasiadas solicitudes. Intenta de nuevo más tarde." },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(Math.ceil((result.reset - Date.now()) / 1000)),
+            "X-RateLimit-Limit": String(result.limit),
+            "X-RateLimit-Remaining": "0",
+            "X-RateLimit-Reset": String(result.reset),
+          },
+        }
+      )
+    }
+  }
 
   // CORS para Capacitor (app nativa)
   const capacitorOrigins = ["capacitor://localhost", "http://localhost"]

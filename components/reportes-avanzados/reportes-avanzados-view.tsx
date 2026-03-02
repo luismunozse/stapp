@@ -3,9 +3,10 @@
 import { useState } from "react"
 import dynamic from "next/dynamic"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { TrendingUp, Users, Package, BarChart3 } from "lucide-react"
+import { TrendingUp, Users, Package, BarChart3, Clock, AlertTriangle, DollarSign, Boxes } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import { ExportButton } from "./export-button"
 
 // Loading skeleton para reportes
 function ReporteSkeleton() {
@@ -47,39 +48,100 @@ const AnalisisInventario = dynamic(
   { loading: () => <ReporteSkeleton />, ssr: false }
 )
 
+const TiempoReparacionChart = dynamic(
+  () => import("./tiempo-reparacion-chart").then(mod => ({ default: mod.TiempoReparacionChart })),
+  { loading: () => <ReporteSkeleton />, ssr: false }
+)
+
+const TasaRetornoChart = dynamic(
+  () => import("./tasa-retorno-chart").then(mod => ({ default: mod.TasaRetornoChart })),
+  { loading: () => <ReporteSkeleton />, ssr: false }
+)
+
+const FallasComunesChart = dynamic(
+  () => import("./fallas-comunes-chart").then(mod => ({ default: mod.FallasComunesChart })),
+  { loading: () => <ReporteSkeleton />, ssr: false }
+)
+
+const RentabilidadChart = dynamic(
+  () => import("./rentabilidad-chart").then(mod => ({ default: mod.RentabilidadChart })),
+  { loading: () => <ReporteSkeleton />, ssr: false }
+)
+
+const PrediccionRepuestosChart = dynamic(
+  () => import("./prediccion-repuestos-chart").then(mod => ({ default: mod.PrediccionRepuestosChart })),
+  { loading: () => <ReporteSkeleton />, ssr: false }
+)
+
 export function ReportesAvanzadosView() {
   const [activeTab, setActiveTab] = useState("ingresos")
+
+  // Map tab values to report types for export
+  const exportableReports: Record<string, string> = {
+    "tiempo-reparacion": "tiempo-reparacion",
+    "tasa-retorno": "tasa-retorno",
+    "fallas": "fallas-comunes",
+    "rentabilidad": "rentabilidad",
+    "prediccion": "prediccion-repuestos",
+  }
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold">Reportes</h1>
-        <p className="text-muted-foreground">
-          Analiza el rendimiento de tu taller con métricas detalladas
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Reportes</h1>
+          <p className="text-muted-foreground">
+            Analiza el rendimiento de tu taller con metricas detalladas
+          </p>
+        </div>
+        {exportableReports[activeTab] && (
+          <ExportButton reportType={exportableReports[activeTab]} />
+        )}
       </div>
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-2 lg:grid-cols-4">
-          <TabsTrigger value="ingresos" className="gap-2">
-            <TrendingUp className="h-4 w-4" />
-            <span className="hidden sm:inline">Ingresos</span>
-          </TabsTrigger>
-          <TabsTrigger value="tecnicos" className="gap-2">
-            <BarChart3 className="h-4 w-4" />
-            <span className="hidden sm:inline">Técnicos</span>
-          </TabsTrigger>
-          <TabsTrigger value="clientes" className="gap-2">
-            <Users className="h-4 w-4" />
-            <span className="hidden sm:inline">Clientes</span>
-          </TabsTrigger>
-          <TabsTrigger value="inventario" className="gap-2">
-            <Package className="h-4 w-4" />
-            <span className="hidden sm:inline">Inventario</span>
-          </TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto">
+          <TabsList className="inline-flex w-auto min-w-full lg:grid lg:grid-cols-9">
+            <TabsTrigger value="ingresos" className="gap-2">
+              <TrendingUp className="h-4 w-4" />
+              <span className="hidden sm:inline">Ingresos</span>
+            </TabsTrigger>
+            <TabsTrigger value="tecnicos" className="gap-2">
+              <BarChart3 className="h-4 w-4" />
+              <span className="hidden sm:inline">Tecnicos</span>
+            </TabsTrigger>
+            <TabsTrigger value="clientes" className="gap-2">
+              <Users className="h-4 w-4" />
+              <span className="hidden sm:inline">Clientes</span>
+            </TabsTrigger>
+            <TabsTrigger value="inventario" className="gap-2">
+              <Package className="h-4 w-4" />
+              <span className="hidden sm:inline">Inventario</span>
+            </TabsTrigger>
+            <TabsTrigger value="tiempo-reparacion" className="gap-2">
+              <Clock className="h-4 w-4" />
+              <span className="hidden sm:inline">Tiempos</span>
+            </TabsTrigger>
+            <TabsTrigger value="tasa-retorno" className="gap-2">
+              <Users className="h-4 w-4" />
+              <span className="hidden sm:inline">Retorno</span>
+            </TabsTrigger>
+            <TabsTrigger value="fallas" className="gap-2">
+              <AlertTriangle className="h-4 w-4" />
+              <span className="hidden sm:inline">Fallas</span>
+            </TabsTrigger>
+            <TabsTrigger value="rentabilidad" className="gap-2">
+              <DollarSign className="h-4 w-4" />
+              <span className="hidden sm:inline">Rentabilidad</span>
+            </TabsTrigger>
+            <TabsTrigger value="prediccion" className="gap-2">
+              <Boxes className="h-4 w-4" />
+              <span className="hidden sm:inline">Prediccion</span>
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="ingresos" className="mt-6">
           <ResumenIngresos />
@@ -95,6 +157,26 @@ export function ReportesAvanzadosView() {
 
         <TabsContent value="inventario" className="mt-6">
           <AnalisisInventario />
+        </TabsContent>
+
+        <TabsContent value="tiempo-reparacion" className="mt-6">
+          <TiempoReparacionChart />
+        </TabsContent>
+
+        <TabsContent value="tasa-retorno" className="mt-6">
+          <TasaRetornoChart />
+        </TabsContent>
+
+        <TabsContent value="fallas" className="mt-6">
+          <FallasComunesChart />
+        </TabsContent>
+
+        <TabsContent value="rentabilidad" className="mt-6">
+          <RentabilidadChart />
+        </TabsContent>
+
+        <TabsContent value="prediccion" className="mt-6">
+          <PrediccionRepuestosChart />
         </TabsContent>
       </Tabs>
     </div>

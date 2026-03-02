@@ -32,6 +32,7 @@ import { useFocusTrap } from "@/hooks/use-focus-trap"
 import { useEscapeKey } from "@/hooks/use-escape-key"
 import { isNativePlatform } from "@/lib/capacitor"
 import { ApkDownloadBanner } from "@/components/shared/apk-download-banner"
+import { GlobalSearch } from "@/components/shared/global-search"
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -172,6 +173,7 @@ export function Navbar() {
             </Link>
           </div>
           <div className="flex items-center gap-1">
+            <GlobalSearch />
             <ThemeToggle variant="icon" />
             <Button
               variant="ghost"

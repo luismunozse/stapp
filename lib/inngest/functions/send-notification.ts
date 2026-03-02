@@ -103,28 +103,88 @@ export const sendNotification = inngest.createFunction(
       results.push({ channel: "EMAIL", ...emailResult })
     }
 
-    // Paso 3: Generar URL de WhatsApp si está habilitado
+    // Paso 3: WhatsApp - enviar via API si configurado, sino generar URL
     if (orgConfig.notificaciones_whatsapp && context.cliente.telefono) {
-      const whatsappResult = await step.run("generate-whatsapp", async () => {
+      const whatsappResult = await step.run("send-whatsapp", async () => {
         try {
-          const message = generateWhatsAppMessage(tipo, context)
-          const whatsappUrl = generateWhatsAppUrl(context.cliente.telefono, message)
+          // Verificar si la org tiene WhatsApp Business configurado
+          const { data: waConfig } = await supabaseAdmin
+            .from("whatsapp_config")
+            .select("phone_number_id, access_token_encrypted, is_configured, is_verified")
+            .eq("organization_id", organizationId)
+            .single()
 
-          // Registrar en notification_logs (como pendiente porque requiere acción manual)
-          await supabaseAdmin.from("notification_logs").insert({
-            organization_id: organizationId,
-            orden_id: ordenId,
-            garantia_id: garantiaId,
-            cliente_id: clienteId,
-            tipo,
-            canal: "WHATSAPP",
-            estado: "PENDIENTE",
-            destinatario: context.cliente.telefono,
-            contenido: message,
-            metadata: JSON.stringify({ whatsappUrl }),
-          })
+          if (waConfig?.is_configured && waConfig?.is_verified && waConfig.access_token_encrypted) {
+            // Enviar via WhatsApp Business API
+            const { decrypt } = await import("@/lib/whatsapp/encryption")
+            const { sendTextMessage } = await import("@/lib/whatsapp/client")
+            const { NOTIFICATION_TEMPLATES } = await import("@/lib/whatsapp/templates")
 
-          return { success: true, whatsappUrl }
+            const accessToken = decrypt(waConfig.access_token_encrypted)
+            const template = NOTIFICATION_TEMPLATES[tipo]
+            const fallbackText = template
+              ? template.getFallbackText({
+                  ...context.orden,
+                  organizationName: context.organizationName,
+                  moneda: context.moneda,
+                  ...context.garantia,
+                })
+              : generateWhatsAppMessage(tipo, context)
+
+            const result = await sendTextMessage(
+              waConfig.phone_number_id,
+              accessToken,
+              context.cliente.telefono,
+              fallbackText
+            )
+
+            // Registrar en notification_logs
+            const logEntry = {
+              organization_id: organizationId,
+              orden_id: ordenId,
+              garantia_id: garantiaId,
+              cliente_id: clienteId,
+              tipo,
+              canal: "WHATSAPP" as const,
+              estado: result.success ? "ENVIADO" : "FALLIDO",
+              destinatario: context.cliente.telefono,
+              contenido: fallbackText,
+              metadata: JSON.stringify({ messageId: result.messageId, viaApi: true }),
+              error_message: result.error || null,
+            }
+            await supabaseAdmin.from("notification_logs").insert(logEntry)
+
+            // Registrar en whatsapp_messages para tracking
+            if (result.success) {
+              await supabaseAdmin.from("whatsapp_messages").insert({
+                organization_id: organizationId,
+                whatsapp_message_id: result.messageId,
+                phone_number: context.cliente.telefono,
+                status: "sent",
+              })
+            }
+
+            return { success: result.success, error: result.error }
+          } else {
+            // Fallback: generar URL (comportamiento original)
+            const message = generateWhatsAppMessage(tipo, context)
+            const whatsappUrl = generateWhatsAppUrl(context.cliente.telefono, message)
+
+            await supabaseAdmin.from("notification_logs").insert({
+              organization_id: organizationId,
+              orden_id: ordenId,
+              garantia_id: garantiaId,
+              cliente_id: clienteId,
+              tipo,
+              canal: "WHATSAPP",
+              estado: "PENDIENTE",
+              destinatario: context.cliente.telefono,
+              contenido: message,
+              metadata: JSON.stringify({ whatsappUrl }),
+            })
+
+            return { success: true, whatsappUrl }
+          }
         } catch (error) {
           return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
         }

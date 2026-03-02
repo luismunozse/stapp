@@ -1,15 +1,14 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Send, Copy, Check, X } from "lucide-react"
+import { Send, Copy, Check, X, Loader2, Zap } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import {
   getWhatsAppTemplates,
   generateWhatsAppUrl,
-  type WhatsAppTemplate,
 } from "@/lib/notifications/whatsapp-templates"
 import type { NotificationContext } from "@/lib/notifications/types"
 
@@ -23,11 +22,27 @@ export function WhatsAppDialog({ context, onClose }: WhatsAppDialogProps) {
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
   const [customMessage, setCustomMessage] = useState("")
   const [copied, setCopied] = useState(false)
+  const [hasWaApi, setHasWaApi] = useState(false)
+  const [sendingApi, setSendingApi] = useState(false)
+  const [apiResult, setApiResult] = useState<{ success: boolean; message: string } | null>(null)
 
   const templates = getWhatsAppTemplates(context)
 
+  // Check if WA Business API is configured
+  useEffect(() => {
+    fetch("/api/whatsapp/config")
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (data?.isConfigured && data?.isVerified) {
+          setHasWaApi(true)
+        }
+      })
+      .catch(() => {})
+  }, [])
+
   const handleOpen = () => {
     setIsOpen(true)
+    setApiResult(null)
     // Seleccionar primera plantilla por defecto
     if (templates.length > 0 && !selectedTemplate) {
       handleSelectTemplate(templates[0].id)
@@ -36,6 +51,7 @@ export function WhatsAppDialog({ context, onClose }: WhatsAppDialogProps) {
 
   const handleClose = () => {
     setIsOpen(false)
+    setApiResult(null)
     onClose?.()
   }
 
@@ -75,6 +91,32 @@ export function WhatsAppDialog({ context, onClose }: WhatsAppDialogProps) {
       }
     } catch {
       window.open(url, "_blank")
+    }
+  }
+
+  const handleSendViaApi = async () => {
+    if (!customMessage.trim()) return
+    setSendingApi(true)
+    setApiResult(null)
+
+    try {
+      const res = await fetch("/api/whatsapp/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phoneNumber: context.cliente.telefono }),
+      })
+
+      const data = await res.json()
+
+      if (data.success) {
+        setApiResult({ success: true, message: "Mensaje enviado via WhatsApp Business API" })
+      } else {
+        setApiResult({ success: false, message: data.error || "Error al enviar" })
+      }
+    } catch {
+      setApiResult({ success: false, message: "Error de conexion" })
+    } finally {
+      setSendingApi(false)
     }
   }
 
@@ -131,6 +173,18 @@ export function WhatsAppDialog({ context, onClose }: WhatsAppDialogProps) {
           />
         </div>
 
+        {apiResult && (
+          <div
+            className={`p-3 rounded-lg text-sm ${
+              apiResult.success
+                ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400"
+                : "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400"
+            }`}
+          >
+            {apiResult.message}
+          </div>
+        )}
+
         <div className="flex gap-2">
           <Button variant="outline" onClick={handleCopy} className="flex-1">
             {copied ? (
@@ -145,14 +199,30 @@ export function WhatsAppDialog({ context, onClose }: WhatsAppDialogProps) {
               </>
             )}
           </Button>
-          <Button
-            onClick={handleSend}
-            className="flex-1 bg-green-600 hover:bg-green-700"
-            disabled={!customMessage.trim()}
-          >
-            <Send className="mr-2 h-4 w-4" />
-            Abrir WhatsApp
-          </Button>
+
+          {hasWaApi ? (
+            <Button
+              onClick={handleSendViaApi}
+              className="flex-1 bg-green-600 hover:bg-green-700"
+              disabled={!customMessage.trim() || sendingApi}
+            >
+              {sendingApi ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Zap className="mr-2 h-4 w-4" />
+              )}
+              Enviar directo
+            </Button>
+          ) : (
+            <Button
+              onClick={handleSend}
+              className="flex-1 bg-green-600 hover:bg-green-700"
+              disabled={!customMessage.trim()}
+            >
+              <Send className="mr-2 h-4 w-4" />
+              Abrir WhatsApp
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>

@@ -5,15 +5,6 @@ const ENVIALOSIMPLE_API_URL = "https://backend.envialosimple.email/api/v1/mail/s
 const EMAIL_FROM = process.env.EMAIL_FROM || "noreply@stapp.com.ar"
 
 // ============================================
-// ICONOS SVG
-// ============================================
-const ICONS = {
-  shield: `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>`,
-  lock: `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`,
-  document: `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><line x1="10" x2="8" y1="9" y2="9"/></svg>`,
-}
-
-// ============================================
 // ESTILOS BASE
 // ============================================
 const getEmailStyles = () => `
@@ -76,7 +67,16 @@ const getBaseTemplate = (options: {
                 <!-- Header con logo -->
                 <tr>
                   <td style="background: ${headerGradient}; padding: 32px 40px; text-align: center; border-radius: 16px 16px 0 0;">
-                    <img src="https://${rootDomain}/logo-white.png" alt="STApp" style="height: 45px; max-width: 160px;" />
+                    <table role="presentation" cellpadding="0" cellspacing="0" style="margin: 0 auto;">
+                      <tr>
+                        <td style="vertical-align: middle; padding-right: 10px;">
+                          <img src="https://${rootDomain}/icon-192.png" alt="" style="height: 36px; width: 36px; border-radius: 8px;" />
+                        </td>
+                        <td style="vertical-align: middle;">
+                          <span style="color: #ffffff; font-size: 24px; font-weight: 700; letter-spacing: -0.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">STApp</span>
+                        </td>
+                      </tr>
+                    </table>
                   </td>
                 </tr>
 
@@ -139,31 +139,6 @@ const getInfoCard = (content: string, bgColor = "#f9fafb") => `
 
 const getDivider = () => `
   <hr class="divider" style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0;">
-`
-
-const getIconHeader = (icon: string, title: string) => `
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-    <tr>
-      <td align="center" style="padding-bottom: 24px;">
-        <div style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); width: 80px; height: 80px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;">
-          <table role="presentation" cellpadding="0" cellspacing="0">
-            <tr>
-              <td style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); width: 80px; height: 80px; border-radius: 50%; text-align: center; vertical-align: middle;">
-                ${icon}
-              </td>
-            </tr>
-          </table>
-        </div>
-      </td>
-    </tr>
-    <tr>
-      <td align="center">
-        <h1 class="text-heading" style="color: #1f2937; font-size: 24px; font-weight: 700; margin: 0 0 8px 0;">
-          ${title}
-        </h1>
-      </td>
-    </tr>
-  </table>
 `
 
 // ============================================
@@ -242,7 +217,20 @@ export async function sendVerificationEmail({
   const verifyUrl = `https://${slug}.${rootDomain}/verificar-email?token=${token}`
 
   const content = `
-    ${getIconHeader(ICONS.shield, "¡Bienvenido a STApp!")}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td align="center" style="padding-bottom: 24px;">
+          <img src="https://${rootDomain}/icon-192.png" alt="STApp" style="width: 80px; height: 80px;" />
+        </td>
+      </tr>
+      <tr>
+        <td align="center">
+          <h1 class="text-heading" style="color: #1f2937; font-size: 24px; font-weight: 700; margin: 0 0 8px 0;">
+            ¡Bienvenido a STApp!
+          </h1>
+        </td>
+      </tr>
+    </table>
 
     <p class="text-body" style="color: #4b5563; font-size: 16px; text-align: center; margin: 16px 0 0 0;">
       Hola <strong>${nombre}</strong>, gracias por registrarte.
@@ -310,10 +298,27 @@ export async function sendPasswordResetEmail({
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
   const resetUrl = `https://${slug}.${rootDomain}/reset-password/${token}`
 
-  const lockIconAmber = ICONS.lock.replace('stroke="#f59e0b"', 'stroke="#f59e0b"')
-
   const content = `
-    ${getIconHeader(lockIconAmber, "Restablecer contraseña")}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td align="center" style="padding-bottom: 24px;">
+          <table role="presentation" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); width: 80px; height: 80px; border-radius: 50%; text-align: center; vertical-align: middle; font-size: 36px;">
+                &#128274;
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+      <tr>
+        <td align="center">
+          <h1 class="text-heading" style="color: #1f2937; font-size: 24px; font-weight: 700; margin: 0 0 8px 0;">
+            Restablecer contraseña
+          </h1>
+        </td>
+      </tr>
+    </table>
 
     <p class="text-body" style="color: #4b5563; font-size: 16px; text-align: center; margin: 16px 0 0 0;">
       Hola <strong>${nombre}</strong>,
@@ -406,7 +411,26 @@ export async function sendCotizacionEmail({
     : "Sin fecha de vencimiento especificada"
 
   const content = `
-    ${getIconHeader(ICONS.document, "Nueva Cotización")}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td align="center" style="padding-bottom: 24px;">
+          <table role="presentation" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); width: 80px; height: 80px; border-radius: 50%; text-align: center; vertical-align: middle; font-size: 36px;">
+                &#128196;
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+      <tr>
+        <td align="center">
+          <h1 class="text-heading" style="color: #1f2937; font-size: 24px; font-weight: 700; margin: 0 0 8px 0;">
+            Nueva Cotización
+          </h1>
+        </td>
+      </tr>
+    </table>
 
     <p class="text-body" style="color: #4b5563; font-size: 16px; text-align: center; margin: 16px 0 0 0;">
       Hola <strong>${nombreCliente}</strong>,

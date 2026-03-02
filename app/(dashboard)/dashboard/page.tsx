@@ -139,13 +139,18 @@ export default async function DashboardPage() {
     .single()
   const lastSeenVersion: string | null = userData?.last_seen_version ?? null
 
-  // Obtener moneda de la organización
+  // Obtener moneda de la organización y estado de onboarding
   const { data: orgData } = await supabaseAdmin
     .from("organizations")
-    .select("moneda, zona_horaria")
+    .select("moneda, zona_horaria, onboarding_completed")
     .eq("id", organizationId)
     .single()
   const moneda = (orgData?.moneda || "ARS") as CurrencyCode
+
+  // Redirect a onboarding si no fue completado (solo para admins)
+  if (orgData && orgData.onboarding_completed === false && session.user?.role === "ADMIN") {
+    redirect("/onboarding")
+  }
 
   // Obtener datos del dashboard con caché (2 minutos)
   const {

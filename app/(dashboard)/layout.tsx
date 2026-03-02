@@ -3,9 +3,11 @@ import { TrialBanner } from "@/components/subscription/trial-banner"
 import { PolicyChangeModal } from "@/components/subscription/policy-change-modal"
 import { SkipLinks } from "@/components/shared/skip-links"
 import { ApkDownloadBanner } from "@/components/shared/apk-download-banner"
+import { SampleDataBannerWrapper } from "@/components/onboarding/sample-data-banner-wrapper"
 import { GuidedTour } from "@/components/guided-tour"
 import { auth } from "@/lib/auth"
 import { hasValidAccess, getTrialInfo } from "@/lib/subscriptions"
+import { supabaseAdmin } from "@/lib/supabase"
 import { redirect } from "next/navigation"
 import { unstable_cache } from "next/cache"
 
@@ -43,6 +45,14 @@ export default async function DashboardLayout({
     redirect(`/suscripcion-requerida?reason=${accessResult.reason || "trial_expired"}`)
   }
 
+  // Verificar si tiene datos de ejemplo
+  const { data: orgData } = await supabaseAdmin
+    .from("organizations")
+    .select("has_sample_data, onboarding_completed")
+    .eq("id", organizationId)
+    .single()
+
+  const hasSampleData = orgData?.has_sample_data || false
   const showTrialBanner = trialInfo.isInTrial && !trialInfo.isPaid
 
   return (
@@ -53,8 +63,10 @@ export default async function DashboardLayout({
       {showTrialBanner && (
         <TrialBanner daysRemaining={trialInfo.daysRemaining} />
       )}
+      {/* Banner de datos de ejemplo */}
+      {hasSampleData && <SampleDataBannerWrapper />}
       {/* Banner de descarga APK para móvil (no se muestra en app nativa) */}
-      {!showTrialBanner && <ApkDownloadBanner variant="top" />}
+      {!showTrialBanner && !hasSampleData && <ApkDownloadBanner variant="top" />}
       <main
         id="main-content"
         className={`lg:pl-64 pb-[calc(4rem+env(safe-area-inset-bottom,0px))] lg:pb-0 ${

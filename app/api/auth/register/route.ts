@@ -158,7 +158,14 @@ export async function POST(request: NextRequest) {
 
     if (countersError) {
       console.error("Error creating counters:", countersError)
-      // No hacemos rollback completo, los contadores se crearán cuando se necesiten
+    }
+
+    // Crear progreso de onboarding
+    const { error: onboardingError } = await supabaseAdmin
+      .from("onboarding_progress")
+      .insert({ organization_id: newOrg.id })
+    if (onboardingError) {
+      console.error("Error creating onboarding progress:", onboardingError)
     }
 
     // Crear template de checklist por defecto

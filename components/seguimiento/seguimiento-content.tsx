@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import dynamic from "next/dynamic"
 import Image from "next/image"
 import { formatDateValue } from "@/lib/timezone"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -22,6 +23,35 @@ import {
   AlertCircle,
   XCircle,
 } from "lucide-react"
+
+// Lazy load enhanced components (Premium)
+const VisualTimeline = dynamic(
+  () => import("./visual-timeline").then((mod) => ({ default: mod.VisualTimeline })),
+  { loading: () => <TimelineSkeleton />, ssr: false }
+)
+
+const PhotoGallery = dynamic(
+  () => import("./photo-gallery").then((mod) => ({ default: mod.PhotoGallery })),
+  { loading: () => <div className="py-4 text-center text-muted-foreground">Cargando fotos...</div>, ssr: false }
+)
+
+const BudgetApproval = dynamic(
+  () => import("./budget-approval").then((mod) => ({ default: mod.BudgetApproval })),
+  { loading: () => null, ssr: false }
+)
+
+const WarrantyInfo = dynamic(
+  () => import("./warranty-info").then((mod) => ({ default: mod.WarrantyInfo })),
+  { loading: () => null, ssr: false }
+)
+
+function TimelineSkeleton() {
+  return (
+    <div className="py-4 text-center text-muted-foreground">
+      <Loader2 className="h-6 w-6 animate-spin mx-auto" />
+    </div>
+  )
+}
 
 const estadoLabels: Record<string, string> = {
   RECIBIDO: "Recibido",
@@ -77,6 +107,9 @@ interface TrackingData {
   fechaEntrega?: string
   publicToken?: string
   zonaHoraria?: string
+  presupuesto?: number
+  moneda?: string
+  presupuestoAprobadoPortal?: boolean
   cliente: { nombre: string }
   organizacion: {
     nombre: string
@@ -86,13 +119,39 @@ interface TrackingData {
   }
 }
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export function SeguimientoContent({ token }: { token: string }) {
   const [data, setData] = useState<TrackingData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
 
+  // Enhanced data (Premium features)
+  const [timelineEvents, setTimelineEvents] = useState<any[] | null>(null)
+  const [photosData, setPhotosData] = useState<any | null>(null)
+  const [warrantyData, setWarrantyData] = useState<any | null>(null)
+
   const formatDate = (dateStr: string | null | undefined) =>
     formatDateValue(dateStr, data?.zonaHoraria)
+
+  const fetchEnhancedData = useCallback((t: string) => {
+    // Timeline
+    fetch(`/api/public/ordenes/${t}/timeline`)
+      .then((res) => res.ok ? res.json() : null)
+      .then((d) => { if (d) setTimelineEvents(d) })
+      .catch(() => {})
+
+    // Photos
+    fetch(`/api/public/ordenes/${t}/photos`)
+      .then((res) => res.ok ? res.json() : null)
+      .then((d) => { if (d) setPhotosData(d) })
+      .catch(() => {})
+
+    // Warranty
+    fetch(`/api/public/ordenes/${t}/warranty`)
+      .then((res) => res.ok ? res.json() : null)
+      .then((d) => { if (d && d.garantia) setWarrantyData(d.garantia) })
+      .catch(() => {})
+  }, [])
 
   const fetchData = useCallback(() => {
     const controller = new AbortController()
@@ -101,11 +160,14 @@ export function SeguimientoContent({ token }: { token: string }) {
         if (!res.ok) throw new Error("Not found")
         return res.json()
       })
-      .then(setData)
+      .then((d) => {
+        setData(d)
+        fetchEnhancedData(token)
+      })
       .catch(() => { if (!controller.signal.aborted) setError(true) })
       .finally(() => { if (!controller.signal.aborted) setLoading(false) })
     return controller
-  }, [token])
+  }, [token, fetchEnhancedData])
 
   // Fetch inicial + auto-refresh cada 30 segundos
   useEffect(() => {
@@ -143,6 +205,7 @@ export function SeguimientoContent({ token }: { token: string }) {
   const isTerminal = data.estado === "CANCELADO" || data.estado === "SIN_REPARACION"
   const isCompleted = data.estado === "ENTREGADO"
   const currentIndex = estadoFlow.indexOf(data.estado)
+  const showBudgetApproval = data.estado === "PRESUPUESTADO" && data.presupuesto && !data.presupuestoAprobadoPortal
 
   return (
     <div className="space-y-6">
@@ -204,80 +267,97 @@ export function SeguimientoContent({ token }: { token: string }) {
         </CardContent>
       </Card>
 
-      {/* Timeline de estados */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Estado de la orden</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isTerminal ? (
-            <div className="flex items-center gap-3 p-4 rounded-lg bg-destructive/10">
-              <XCircle className="h-8 w-8 text-destructive flex-shrink-0" />
-              <div>
-                <p className="font-medium text-destructive">
-                  {estadoLabels[data.estado]}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {data.estado === "CANCELADO"
-                    ? "La orden fue cancelada."
-                    : "El equipo no pudo ser reparado."}
-                </p>
+      {/* Enhanced Visual Timeline (Premium) or basic timeline */}
+      {timelineEvents && timelineEvents.length > 0 ? (
+        <VisualTimeline events={timelineEvents} timezone={data.zonaHoraria} />
+      ) : (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">Estado de la orden</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isTerminal ? (
+              <div className="flex items-center gap-3 p-4 rounded-lg bg-destructive/10">
+                <XCircle className="h-8 w-8 text-destructive flex-shrink-0" />
+                <div>
+                  <p className="font-medium text-destructive">
+                    {estadoLabels[data.estado]}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {data.estado === "CANCELADO"
+                      ? "La orden fue cancelada."
+                      : "El equipo no pudo ser reparado."}
+                  </p>
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="space-y-0">
-              {estadoFlow.map((estado, index) => {
-                const isPast = index < currentIndex
-                const isCurrent = index === currentIndex
-                const isFuture = index > currentIndex
+            ) : (
+              <div className="space-y-0">
+                {estadoFlow.map((estado, index) => {
+                  const isPast = index < currentIndex
+                  const isCurrent = index === currentIndex
 
-                return (
-                  <div key={estado} className="flex gap-3">
-                    {/* Linea vertical + circulo */}
-                    <div className="flex flex-col items-center">
-                      {isPast ? (
-                        <CheckCircle2 className="h-6 w-6 text-green-500 flex-shrink-0" />
-                      ) : isCurrent ? (
-                        <div className="h-6 w-6 rounded-full border-[3px] border-primary bg-primary/20 flex-shrink-0 animate-pulse" />
-                      ) : (
-                        <Circle className="h-6 w-6 text-muted-foreground/30 flex-shrink-0" />
-                      )}
-                      {index < estadoFlow.length - 1 && (
-                        <div
-                          className={`w-0.5 h-8 ${
+                  return (
+                    <div key={estado} className="flex gap-3">
+                      <div className="flex flex-col items-center">
+                        {isPast ? (
+                          <CheckCircle2 className="h-6 w-6 text-green-500 flex-shrink-0" />
+                        ) : isCurrent ? (
+                          <div className="h-6 w-6 rounded-full border-[3px] border-primary bg-primary/20 flex-shrink-0 animate-pulse" />
+                        ) : (
+                          <Circle className="h-6 w-6 text-muted-foreground/30 flex-shrink-0" />
+                        )}
+                        {index < estadoFlow.length - 1 && (
+                          <div
+                            className={`w-0.5 h-8 ${
+                              isPast
+                                ? "bg-green-500"
+                                : "bg-muted-foreground/20"
+                            }`}
+                          />
+                        )}
+                      </div>
+                      <div className="pb-8">
+                        <p
+                          className={`text-sm font-medium ${
                             isPast
-                              ? "bg-green-500"
-                              : "bg-muted-foreground/20"
+                              ? "text-green-600 dark:text-green-400"
+                              : isCurrent
+                                ? "text-primary font-semibold"
+                                : "text-muted-foreground/50"
                           }`}
-                        />
-                      )}
-                    </div>
-                    {/* Label */}
-                    <div className="pb-8">
-                      <p
-                        className={`text-sm font-medium ${
-                          isPast
-                            ? "text-green-600 dark:text-green-400"
-                            : isCurrent
-                              ? "text-primary font-semibold"
-                              : "text-muted-foreground/50"
-                        }`}
-                      >
-                        {estadoLabels[estado]}
-                      </p>
-                      {isCurrent && (
-                        <p className="text-xs text-primary mt-0.5">
-                          Estado actual
+                        >
+                          {estadoLabels[estado]}
                         </p>
-                      )}
+                        {isCurrent && (
+                          <p className="text-xs text-primary mt-0.5">
+                            Estado actual
+                          </p>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                  )
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Budget Approval (Premium - when order is PRESUPUESTADO) */}
+      {showBudgetApproval && (
+        <BudgetApproval
+          token={token}
+          presupuesto={data.presupuesto!}
+          moneda={data.moneda}
+          dispositivo={data.dispositivo}
+          onApproved={() => { fetchData() }}
+        />
+      )}
+
+      {/* Photo Gallery (Premium) */}
+      {photosData && (
+        <PhotoGallery photos={photosData} />
+      )}
 
       {/* Fechas */}
       <Card>
@@ -362,6 +442,11 @@ export function SeguimientoContent({ token }: { token: string }) {
           )}
         </CardContent>
       </Card>
+
+      {/* Warranty Info (Premium - when order is completed) */}
+      {warrantyData && (data.estado === "REPARADO" || data.estado === "ENTREGADO") && (
+        <WarrantyInfo garantia={warrantyData} />
+      )}
 
       {/* Contacto */}
       {(data.organizacion.telefono || data.organizacion.direccion) && (

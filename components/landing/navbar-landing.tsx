@@ -33,6 +33,7 @@ export function NavbarLanding() {
     { name: "Características", href: "#features" },
     { name: "Precios", href: "#pricing" },
     { name: "FAQ", href: "#faq" },
+    { name: "Ayuda", href: "/ayuda" },
   ]
 
   return (

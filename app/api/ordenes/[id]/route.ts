@@ -170,6 +170,53 @@ export async function PUT(
       throw updateError
     }
 
+    // Registrar evento en orden_eventos para timeline público (fire-and-forget)
+    if (data.estado && data.estado !== orden.estado) {
+      void (async () => {
+        try {
+          await supabaseAdmin.from("orden_eventos").insert({
+            orden_id: id,
+            organization_id: organizationId!,
+            tipo: "CAMBIO_ESTADO",
+            estado_anterior: orden.estado,
+            estado_nuevo: data.estado,
+            descripcion: `Estado cambiado de ${orden.estado} a ${data.estado}`,
+            created_by: userId,
+          })
+        } catch (err) { console.error("Error inserting orden_evento:", err) }
+      })()
+    }
+
+    if (data.presupuesto !== undefined && data.presupuesto !== null && data.presupuesto !== orden.presupuesto) {
+      void (async () => {
+        try {
+          await supabaseAdmin.from("orden_eventos").insert({
+            orden_id: id,
+            organization_id: organizationId!,
+            tipo: "PRESUPUESTO_DEFINIDO",
+            descripcion: `Presupuesto definido: $${data.presupuesto!.toLocaleString()}`,
+            metadata: { presupuesto: data.presupuesto },
+            created_by: userId,
+          })
+        } catch (err) { console.error("Error inserting orden_evento:", err) }
+      })()
+    }
+
+    if (data.diagnostico !== undefined && data.diagnostico !== orden.diagnostico) {
+      void (async () => {
+        try {
+          await supabaseAdmin.from("orden_eventos").insert({
+            orden_id: id,
+            organization_id: organizationId!,
+            tipo: "NOTA",
+            descripcion: `Diagnostico actualizado`,
+            metadata: { diagnostico: data.diagnostico },
+            created_by: userId,
+          })
+        } catch (err) { console.error("Error inserting orden_evento:", err) }
+      })()
+    }
+
     // Auditoría
     const audit = createAuditLogger(organizationId!, userId!, request)
     const changes = diffObjects(orden, updatedOrden)

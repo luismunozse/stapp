@@ -63,7 +63,10 @@
       "Bash(npx:*)",
       "Bash(echo:*)",
       "Bash(node scripts/test-query.mjs:*)",
-      "Bash(node scripts/apply-migration.mjs:*)"
+      "Bash(node scripts/apply-migration.mjs:*)",
+      "Bash(npm audit:*)",
+      "Bash(npm cache clean --force)",
+      "Bash(xargs -I {} sh -c 'echo \"\"=== {} ===\"\" && wc -l {}')"
     ]
   }
 }

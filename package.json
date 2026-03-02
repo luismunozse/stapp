@@ -46,6 +46,7 @@
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
     "driver.js": "^1.4.0",
+    "exceljs": "^4.4.0",
     "framer-motion": "^12.30.0",
     "html2canvas": "^1.4.1",
     "inngest": "^3.48.1",
@@ -69,7 +70,6 @@
     "swr": "^2.3.8",
     "tailwind-merge": "^2.5.4",
     "uuid": "^11.1.0",
-    "xlsx": "^0.18.5",
     "zod": "^3.23.8"
   },
   "devDependencies": {
