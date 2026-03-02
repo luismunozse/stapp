@@ -73,7 +73,7 @@ export async function parseExcel(base64Data: string): Promise<ParseResult> {
     const buffer = Buffer.from(base64Data, 'base64')
 
     const workbook = new ExcelJS.Workbook()
-    await workbook.xlsx.load(buffer)
+    await workbook.xlsx.load(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength))
 
     const worksheet = workbook.worksheets[0]
     if (!worksheet) {
