@@ -94,16 +94,24 @@ export async function GET(request: Request) {
 
       const clienteIds = clientesMatch?.map(c => c.id) || []
 
-      // Búsqueda en múltiples campos incluyendo clientes
-      if (clienteIds.length > 0) {
-        query = query.or(
-          `dispositivo.ilike.%${search}%,numero_orden::text.ilike.%${search}%,codigo_orden.ilike.%${search}%,marca.ilike.%${search}%,cliente_id.in.(${clienteIds.join(",")})`
-        )
-      } else {
-        query = query.or(
-          `dispositivo.ilike.%${search}%,numero_orden::text.ilike.%${search}%,codigo_orden.ilike.%${search}%,marca.ilike.%${search}%`
-        )
+      // Construir filtros de búsqueda (sin ::text que no es válido en PostgREST)
+      const filters = [
+        `dispositivo.ilike.%${search}%`,
+        `codigo_orden.ilike.%${search}%`,
+        `marca.ilike.%${search}%`,
+      ]
+
+      // Si el search es numérico, buscar por numero_orden exacto
+      const searchNum = parseInt(search, 10)
+      if (!isNaN(searchNum)) {
+        filters.push(`numero_orden.eq.${searchNum}`)
       }
+
+      if (clienteIds.length > 0) {
+        filters.push(`cliente_id.in.(${clienteIds.join(",")})`)
+      }
+
+      query = query.or(filters.join(","))
     }
 
     // Aplicar paginación

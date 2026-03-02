@@ -87,11 +87,16 @@ export function VentasList() {
       if (estado) params.append("estado", estado)
       if (fechaDesde) params.append("fechaDesde", fechaDesde)
       if (fechaHasta) params.append("fechaHasta", fechaHasta)
+      params.append("page", page.toString())
+      params.append("limit", pageSize.toString())
 
       const res = await fetch(`/api/ventas?${params.toString()}`)
       const data = await res.json()
 
-      if (Array.isArray(data)) {
+      if (data.data) {
+        setVentas(data.data)
+        setTotal(data.total || 0)
+      } else if (Array.isArray(data)) {
         setVentas(data)
         setTotal(data.length)
       }
@@ -265,10 +270,10 @@ export function VentasList() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Buscar por cliente, número de venta..."
+            placeholder="Buscar por cliente, teléfono, nro de venta..."
             className="pl-9"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(1) }}
           />
         </div>
         <Button

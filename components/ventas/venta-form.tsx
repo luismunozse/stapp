@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -13,7 +13,6 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { useModal } from "@/contexts/modal-context"
 import { Plus, Trash2, Package, Search, Loader2, Banknote, ArrowRightLeft, CreditCard, Wallet, MoreHorizontal } from "lucide-react"
@@ -121,10 +120,27 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [inventario, setInventario] = useState<Inventario[]>([])
   const [searchCliente, setSearchCliente] = useState("")
-  const [searchInventario, setSearchInventario] = useState("")
+  const [searchInventario, setSearchInventario] = useState<Record<number, string>>({})
+  const [activeInvDropdown, setActiveInvDropdown] = useState<number | null>(null)
+  const invDropdownRef = useRef<HTMLDivElement>(null)
   const [showClienteSearch, setShowClienteSearch] = useState(false)
   const [showClienteModal, setShowClienteModal] = useState(false)
   const [clienteLoading, setClienteLoading] = useState(false)
+  const clienteDropdownRef = useRef<HTMLDivElement>(null)
+
+  // Cerrar dropdowns al hacer click afuera
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (showClienteSearch && clienteDropdownRef.current && !clienteDropdownRef.current.contains(e.target as Node)) {
+        setShowClienteSearch(false)
+      }
+      if (activeInvDropdown !== null && invDropdownRef.current && !invDropdownRef.current.contains(e.target as Node)) {
+        setActiveInvDropdown(null)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [showClienteSearch, activeInvDropdown])
 
   const {
     register,
@@ -189,9 +205,10 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
 
     const fetchClientes = async () => {
       try {
-        const res = await fetch("/api/clientes", { signal: controller.signal, cache: "no-store" })
+        const res = await fetch("/api/clientes?limit=100", { signal: controller.signal, cache: "no-store" })
         const data = await res.json()
-        if (Array.isArray(data)) setClientes(data)
+        const items = data.data ?? (Array.isArray(data) ? data : [])
+        setClientes(items)
       } catch (error) {
         if (!controller.signal.aborted) console.error("Error fetching clientes:", error)
       }
@@ -199,9 +216,10 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
 
     const fetchInventario = async () => {
       try {
-        const res = await fetch("/api/inventario", { signal: controller.signal, cache: "no-store" })
+        const res = await fetch("/api/inventario?limit=100", { signal: controller.signal, cache: "no-store" })
         const data = await res.json()
-        if (Array.isArray(data)) setInventario(data.filter((item: Inventario) => item.stock > 0))
+        const items = data.data ?? (Array.isArray(data) ? data : [])
+        setInventario(items.filter((item: Inventario) => item.stock > 0))
       } catch (error) {
         if (!controller.signal.aborted) console.error("Error fetching inventario:", error)
       }
@@ -212,17 +230,24 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
     return () => controller.abort()
   }, [open])
 
-  const filteredClientes = clientes.filter(
-    (c) =>
-      c.nombre.toLowerCase().includes(searchCliente.toLowerCase()) ||
-      c.telefono.includes(searchCliente)
-  )
+  const searchClienteQuery = searchCliente.toLowerCase().trim()
+  const filteredClientes = searchClienteQuery
+    ? clientes.filter(
+        (c) =>
+          c.nombre.toLowerCase().includes(searchClienteQuery) ||
+          c.telefono.includes(searchClienteQuery)
+      )
+    : clientes
 
-  const filteredInventario = inventario.filter(
-    (inv) =>
-      inv.nombre.toLowerCase().includes(searchInventario.toLowerCase()) ||
-      inv.codigo.toLowerCase().includes(searchInventario.toLowerCase())
-  )
+  const getFilteredInventario = (index: number) => {
+    const query = (searchInventario[index] || "").toLowerCase().trim()
+    if (!query) return inventario
+    return inventario.filter(
+      (inv) =>
+        inv.nombre.toLowerCase().includes(query) ||
+        inv.codigo.toLowerCase().includes(query)
+    )
+  }
 
   const selectCliente = (cliente: Cliente) => {
     setValue("clienteId", cliente.id)
@@ -236,6 +261,12 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
     setValue(`items.${index}.inventarioId`, inv.id)
     setValue(`items.${index}.descripcion`, inv.nombre)
     setValue(`items.${index}.precioUnitario`, inv.precioVenta)
+    setSearchInventario((prev) => {
+      const next = { ...prev }
+      delete next[index]
+      return next
+    })
+    setActiveInvDropdown(null)
   }
 
   const handleCreateCliente = async (data: ClienteFormData) => {
@@ -345,57 +376,40 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
               <div className="space-y-2">
                 <Label>Nombre del Cliente *</Label>
                 <div className="flex gap-2">
-                  <div className="relative flex-1">
+                  <div className="relative flex-1" ref={clienteDropdownRef}>
+                    <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                     <Input
-                      {...register("clienteNombre")}
-                      placeholder="Nombre del cliente"
+                      placeholder="Buscar cliente por nombre o teléfono..."
+                      className="pl-8"
+                      value={searchCliente || watch("clienteNombre")}
+                      onChange={(e) => {
+                        setSearchCliente(e.target.value)
+                        setValue("clienteNombre", e.target.value)
+                        setValue("clienteId", null)
+                        setShowClienteSearch(true)
+                      }}
                       onFocus={() => setShowClienteSearch(true)}
                     />
-                  {showClienteSearch && (
-                    <div className="absolute z-10 mt-1 w-full rounded-md border bg-background shadow-lg">
-                      <div className="p-2">
-                        <div className="relative">
-                          <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                          <Input
-                            placeholder="Buscar cliente..."
-                            className="pl-8"
-                            value={searchCliente}
-                            onChange={(e) => setSearchCliente(e.target.value)}
-                            autoFocus
-                          />
+                    {showClienteSearch && filteredClientes.length > 0 && (
+                      <div className="absolute z-10 mt-1 w-full rounded-md border bg-background shadow-lg">
+                        <div className="max-h-48 overflow-y-auto">
+                          {filteredClientes.slice(0, 8).map((cliente) => (
+                            <button
+                              key={cliente.id}
+                              type="button"
+                              className="w-full px-4 py-2 text-left hover:bg-muted"
+                              onClick={() => {
+                                selectCliente(cliente)
+                                setSearchCliente("")
+                              }}
+                            >
+                              <div className="font-medium">{cliente.nombre}</div>
+                              <div className="text-xs text-muted-foreground">{cliente.telefono}</div>
+                            </button>
+                          ))}
                         </div>
                       </div>
-                      <div className="max-h-48 overflow-y-auto">
-                        {filteredClientes.slice(0, 5).map((cliente) => (
-                          <button
-                            key={cliente.id}
-                            type="button"
-                            className="w-full px-4 py-2 text-left hover:bg-muted"
-                            onClick={() => selectCliente(cliente)}
-                          >
-                            <div className="font-medium">{cliente.nombre}</div>
-                            <div className="text-xs text-muted-foreground">{cliente.telefono}</div>
-                          </button>
-                        ))}
-                        {filteredClientes.length === 0 && (
-                          <div className="px-4 py-2 text-sm text-muted-foreground">
-                            No se encontraron clientes
-                          </div>
-                        )}
-                      </div>
-                      <div className="border-t p-2">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="w-full"
-                          onClick={() => setShowClienteSearch(false)}
-                        >
-                          Cerrar
-                        </Button>
-                      </div>
-                    </div>
-                  )}
+                    )}
                   </div>
                   <Button
                     type="button"
@@ -436,65 +450,61 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
             <div className="space-y-3">
               {fields.map((field, index) => (
                 <div key={field.id} className="grid gap-3 rounded-lg bg-muted/50 p-3 sm:grid-cols-12">
-                  {/* Descripción */}
-                  <div className="sm:col-span-3">
-                    <Label className="text-xs">Descripción</Label>
+                  {/* Producto (búsqueda unificada) */}
+                  <div className="sm:col-span-5" ref={activeInvDropdown === index ? invDropdownRef : undefined}>
+                    <Label className="text-xs">Producto</Label>
                     <div className="relative">
+                      <Package className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                       <Input
-                        {...register(`items.${index}.descripcion`)}
-                        placeholder="Producto"
+                        className="pl-7"
+                        placeholder="Buscar en stock o escribir..."
+                        value={searchInventario[index] ?? watchItems[index]?.descripcion ?? ""}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          setSearchInventario((prev) => ({ ...prev, [index]: val }))
+                          setValue(`items.${index}.descripcion`, val)
+                          setValue(`items.${index}.inventarioId`, null)
+                          setActiveInvDropdown(index)
+                        }}
+                        onFocus={() => setActiveInvDropdown(index)}
                       />
-                      {searchInventario && (
+                      {watchItems[index]?.inventarioId && (
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded">
+                          Stock
+                        </span>
+                      )}
+                      {activeInvDropdown === index && (
                         <div className="absolute z-10 mt-1 w-full rounded-md border bg-background shadow-lg">
-                          <div className="max-h-32 overflow-y-auto">
-                            {filteredInventario.slice(0, 5).map((inv) => (
-                              <button
-                                key={inv.id}
-                                type="button"
-                                className="w-full px-3 py-2 text-left text-sm hover:bg-muted"
-                                onClick={() => {
-                                  selectInventarioItem(index, inv)
-                                  setSearchInventario("")
-                                }}
-                              >
-                                <div className="flex justify-between">
-                                  <span>{inv.nombre}</span>
-                                  <span className="text-muted-foreground">Stock: {inv.stock}</span>
-                                </div>
-                              </button>
-                            ))}
+                          <div className="max-h-40 overflow-y-auto">
+                            {getFilteredInventario(index).length > 0 ? (
+                              getFilteredInventario(index).slice(0, 8).map((inv) => (
+                                <button
+                                  key={inv.id}
+                                  type="button"
+                                  className="w-full px-3 py-2 text-left text-sm hover:bg-muted"
+                                  onClick={() => selectInventarioItem(index, inv)}
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <span className="font-medium">{inv.nombre}</span>
+                                      <span className="ml-2 text-xs text-muted-foreground">{inv.codigo}</span>
+                                    </div>
+                                    <div className="flex items-center gap-3 text-xs">
+                                      <span className="text-muted-foreground">Stock: {inv.stock}</span>
+                                      <span className="font-medium">{formatPrice(inv.precioVenta)}</span>
+                                    </div>
+                                  </div>
+                                </button>
+                              ))
+                            ) : searchInventario[index] ? (
+                              <div className="px-3 py-2 text-sm text-muted-foreground">
+                                Sin resultados — se agregará como producto manual
+                              </div>
+                            ) : null}
                           </div>
                         </div>
                       )}
                     </div>
-                  </div>
-
-                  {/* Inventario selector */}
-                  <div className="sm:col-span-2">
-                    <Label className="text-xs">Del Stock</Label>
-                    <Select
-                      value={watchItems[index]?.inventarioId || "manual"}
-                      onValueChange={(value) => {
-                        const inv = inventario.find((i) => i.id === value)
-                        if (inv) {
-                          selectInventarioItem(index, inv)
-                        } else {
-                          setValue(`items.${index}.inventarioId`, null)
-                        }
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Manual" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="manual">Manual</SelectItem>
-                        {inventario.map((inv) => (
-                          <SelectItem key={inv.id} value={inv.id}>
-                            {inv.codigo} ({inv.stock})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
                   </div>
 
                   {/* Cantidad */}

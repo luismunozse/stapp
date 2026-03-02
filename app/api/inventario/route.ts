@@ -25,15 +25,37 @@ export async function GET(request: Request) {
     const search = searchParams.get("search") || ""
     const categoria = searchParams.get("categoria") || ""
     const tipoDispositivo = searchParams.get("tipoDispositivo") || ""
+    const bajoStock = searchParams.get("bajoStock") === "true"
+
+    // Paginación
+    const page = parseInt(searchParams.get("page") || "1")
+    const limit = Math.min(parseInt(searchParams.get("limit") || "20"), 100)
+    const offset = (page - 1) * limit
+
+    // Sorting
+    const sortByParam = searchParams.get("sortBy") || "nombre"
+    const sortMap: Record<string, string> = {
+      nombre: "nombre",
+      codigo: "codigo",
+      stock: "stock",
+      precioVenta: "precio_venta",
+      precioCompra: "precio_compra",
+      categoria: "categoria",
+      createdAt: "created_at",
+    }
+    const sortBy = sortMap[sortByParam] || "nombre"
+    const sortOrder = searchParams.get("sortOrder") === "desc" ? false : true
 
     let query = supabaseAdmin
       .from("inventario")
-      .select("id, codigo, nombre, descripcion, categoria, tipo_dispositivo, stock, precio_compra, precio_venta, proveedor, created_at")
+      .select("id, codigo, nombre, descripcion, categoria, tipo_dispositivo, stock, precio_compra, precio_venta, proveedor, created_at", { count: "exact" })
       .eq("organization_id", organizationId!)
-      .order("nombre", { ascending: true })
+      .order(sortBy, { ascending: sortOrder })
 
     if (search) {
-      query = query.or(`nombre.ilike.%${search}%,codigo.ilike.%${search}%`)
+      query = query.or(
+        `nombre.ilike.%${search}%,codigo.ilike.%${search}%,descripcion.ilike.%${search}%,proveedor.ilike.%${search}%`
+      )
     }
 
     if (categoria) {
@@ -44,13 +66,26 @@ export async function GET(request: Request) {
       query = query.eq("tipo_dispositivo", tipoDispositivo)
     }
 
-    const { data: inventario, error: dbError } = await query
+    if (bajoStock) {
+      query = query.lt("stock", 5)
+    }
+
+    // Aplicar paginación
+    query = query.range(offset, offset + limit - 1)
+
+    const { data: inventario, error: dbError, count } = await query
 
     if (dbError) {
       throw dbError
     }
 
-    return NextResponse.json(inventario?.map(formatInventario), {
+    return NextResponse.json({
+      data: inventario?.map(formatInventario),
+      total: count || 0,
+      page,
+      limit,
+      totalPages: Math.ceil((count || 0) / limit),
+    }, {
       headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
     })
   } catch (error) {

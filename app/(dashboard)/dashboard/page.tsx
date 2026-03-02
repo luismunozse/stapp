@@ -147,9 +147,22 @@ export default async function DashboardPage() {
     .single()
   const moneda = (orgData?.moneda || "ARS") as CurrencyCode
 
-  // Redirect a onboarding si no fue completado (solo para admins)
+  // Redirect a onboarding si no fue completado (solo para admins con < 5 órdenes)
   if (orgData && orgData.onboarding_completed === false && session.user?.role === "ADMIN") {
-    redirect("/onboarding")
+    const { count: orderCount } = await supabaseAdmin
+      .from("ordenes_servicio")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", organizationId)
+
+    if ((orderCount ?? 0) < 5) {
+      redirect("/onboarding")
+    } else {
+      // Si ya tienen 5+ órdenes, marcar onboarding como completado automáticamente
+      await supabaseAdmin
+        .from("organizations")
+        .update({ onboarding_completed: true })
+        .eq("id", organizationId)
+    }
   }
 
   // Obtener datos del dashboard con caché (2 minutos)

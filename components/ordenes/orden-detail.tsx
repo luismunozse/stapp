@@ -136,9 +136,10 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
 
   const fetchInventario = async () => {
     try {
-      const res = await fetch("/api/inventario", { cache: "no-store" })
+      const res = await fetch("/api/inventario?limit=100", { cache: "no-store" })
       const data = await res.json()
-      setInventario(data)
+      const items = data.data ?? (Array.isArray(data) ? data : [])
+      setInventario(items)
     } catch (error) {
       console.error("Error fetching inventario:", error)
     }

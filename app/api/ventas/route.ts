@@ -38,6 +38,22 @@ export async function GET(request: Request) {
     const fechaDesde = searchParams.get("fechaDesde") || ""
     const fechaHasta = searchParams.get("fechaHasta") || ""
 
+    // Paginación
+    const page = parseInt(searchParams.get("page") || "1")
+    const limit = Math.min(parseInt(searchParams.get("limit") || "20"), 100)
+    const offset = (page - 1) * limit
+
+    // Sorting
+    const sortByParam = searchParams.get("sortBy") || "createdAt"
+    const sortMap: Record<string, string> = {
+      createdAt: "created_at",
+      numeroVenta: "numero_venta",
+      clienteNombre: "cliente_nombre",
+      total: "total",
+    }
+    const sortBy = sortMap[sortByParam] || "created_at"
+    const sortOrder = searchParams.get("sortOrder") === "asc"
+
     let query = supabaseAdmin
       .from("ventas")
       .select(`
@@ -53,9 +69,9 @@ export async function GET(request: Request) {
         ),
         garantias_venta (*),
         pagos_venta (*)
-      `)
+      `, { count: "exact" })
       .eq("organization_id", organizationId!)
-      .order("created_at", { ascending: false })
+      .order(sortBy, { ascending: sortOrder })
 
     // Vendedores solo ven sus ventas
     if (role === "VENDEDOR") {
@@ -75,12 +91,25 @@ export async function GET(request: Request) {
     }
 
     if (search) {
-      query = query.or(
-        `cliente_nombre.ilike.%${search}%,numero_venta::text.ilike.%${search}%,cliente_telefono.ilike.%${search}%`
-      )
+      const filters = [
+        `cliente_nombre.ilike.%${search}%`,
+        `cliente_telefono.ilike.%${search}%`,
+        `observaciones.ilike.%${search}%`,
+      ]
+
+      // Si es numérico, buscar por numero_venta exacto
+      const searchNum = parseInt(search, 10)
+      if (!isNaN(searchNum)) {
+        filters.push(`numero_venta.eq.${searchNum}`)
+      }
+
+      query = query.or(filters.join(","))
     }
 
-    const { data: ventas, error: dbError } = await query
+    // Aplicar paginación
+    query = query.range(offset, offset + limit - 1)
+
+    const { data: ventas, error: dbError, count } = await query
 
     if (dbError) {
       throw dbError
@@ -139,7 +168,13 @@ export async function GET(request: Request) {
       ) || [],
     }))
 
-    return NextResponse.json(ventasFormatted)
+    return NextResponse.json({
+      data: ventasFormatted,
+      total: count || 0,
+      page,
+      limit,
+      totalPages: Math.ceil((count || 0) / limit),
+    })
   } catch (error) {
     console.error("Error fetching ventas:", error)
     return NextResponse.json(

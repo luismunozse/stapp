@@ -20,25 +20,50 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const search = searchParams.get("search") || ""
 
+    // Paginación
+    const page = parseInt(searchParams.get("page") || "1")
+    const limit = Math.min(parseInt(searchParams.get("limit") || "20"), 100)
+    const offset = (page - 1) * limit
+
+    // Sorting
+    const sortByParam = searchParams.get("sortBy") || "createdAt"
+    const sortMap: Record<string, string> = {
+      createdAt: "created_at",
+      nombre: "nombre",
+      telefono: "telefono",
+      email: "email",
+    }
+    const sortBy = sortMap[sortByParam] || "created_at"
+    const sortOrder = searchParams.get("sortOrder") === "asc"
+
     let query = supabaseAdmin
       .from("clientes")
-      .select("id, nombre, telefono, email, direccion, dni, created_at")
+      .select("id, nombre, telefono, email, direccion, dni, created_at", { count: "exact" })
       .eq("organization_id", organizationId!)
-      .order("created_at", { ascending: false })
+      .order(sortBy, { ascending: sortOrder })
 
     if (search) {
       query = query.or(
-        `nombre.ilike.%${search}%,telefono.ilike.%${search}%,dni.ilike.%${search}%`
+        `nombre.ilike.%${search}%,telefono.ilike.%${search}%,dni.ilike.%${search}%,email.ilike.%${search}%`
       )
     }
 
-    const { data: clientes, error: dbError } = await query
+    // Aplicar paginación
+    query = query.range(offset, offset + limit - 1)
+
+    const { data: clientes, error: dbError, count } = await query
 
     if (dbError) {
       throw dbError
     }
 
-    return NextResponse.json(clientes, {
+    return NextResponse.json({
+      data: clientes,
+      total: count || 0,
+      page,
+      limit,
+      totalPages: Math.ceil((count || 0) / limit),
+    }, {
       headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
     })
   } catch (error) {

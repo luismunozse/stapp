@@ -334,10 +334,11 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
 
   const fetchClientes = async () => {
     try {
-      const res = await fetch("/api/clientes", { cache: "no-store" })
+      const res = await fetch("/api/clientes?limit=100", { cache: "no-store" })
       const data = await res.json()
-      setClientes(data)
-      return data
+      const items = data.data ?? (Array.isArray(data) ? data : [])
+      setClientes(items)
+      return items
     } catch (error) {
       console.error("Error fetching clientes:", error)
       return []

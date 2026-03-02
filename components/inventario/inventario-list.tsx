@@ -1,11 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { DataTablePagination } from "@/components/ui/data-table"
 import {
   Plus,
   Search,
@@ -55,16 +56,35 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   const [items, setItems] = useState<Inventario[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
   const [categoria, setCategoria] = useState("")
   const [tipoDispositivo, setTipoDispositivo] = useState<TipoDispositivo | "">("")
+  const [bajoStock, setBajoStock] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [editingItem, setEditingItem] = useState<Inventario | null>(null)
 
+  // Pagination
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
+  const [total, setTotal] = useState(0)
+
   const categoriasDisponibles = categoriasPorTipo[tipoDispositivo]
+
+  const handleSearchChange = useCallback((value: string) => {
+    setSearch(value)
+    setPage(1)
+  }, [])
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300)
+    return () => clearTimeout(timer)
+  }, [search])
 
   const handleTipoChange = (nuevoTipo: TipoDispositivo | "") => {
     setTipoDispositivo(nuevoTipo)
+    setPage(1)
     const nuevasCategorias = categoriasPorTipo[nuevoTipo]
     if (categoria && !nuevasCategorias.includes(categoria)) {
       setCategoria("")
@@ -72,15 +92,26 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   }
 
   const fetchItems = async () => {
+    setLoading(true)
     try {
       const params = new URLSearchParams()
-      if (search) params.append("search", search)
+      if (debouncedSearch) params.append("search", debouncedSearch)
       if (categoria) params.append("categoria", categoria)
       if (tipoDispositivo) params.append("tipoDispositivo", tipoDispositivo)
+      if (bajoStock) params.append("bajoStock", "true")
+      params.append("page", page.toString())
+      params.append("limit", pageSize.toString())
 
       const res = await fetch(`/api/inventario?${params.toString()}`, { cache: "no-store" })
       const data = await res.json()
-      setItems(data)
+
+      if (data.data) {
+        setItems(data.data)
+        setTotal(data.total || 0)
+      } else if (Array.isArray(data)) {
+        setItems(data)
+        setTotal(data.length)
+      }
     } catch (error) {
       console.error("Error fetching inventario:", error)
     } finally {
@@ -90,7 +121,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
 
   useEffect(() => {
     fetchItems()
-  }, [search, categoria, tipoDispositivo])
+  }, [debouncedSearch, categoria, tipoDispositivo, bajoStock, page, pageSize])
 
   const handleDelete = async (id: string) => {
     const confirmed = await confirm({
@@ -120,9 +151,9 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
           <div className="relative sm:col-span-2 lg:col-span-2">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
-              placeholder="Buscar por nombre o código..."
+              placeholder="Buscar por nombre, código, descripción o proveedor..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               className="pl-10"
             />
           </div>
@@ -163,11 +194,21 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
           </Select>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button
+            variant={bajoStock ? "default" : "outline"}
+            size="sm"
+            className="gap-1.5"
+            onClick={() => { setBajoStock(!bajoStock); setPage(1) }}
+          >
+            <AlertCircle className="h-4 w-4" />
+            Bajo Stock
+          </Button>
           <ExportButton
             entity="inventario"
             filters={{
               ...(categoria && { categoria }),
               ...(tipoDispositivo && { tipo_dispositivo: tipoDispositivo }),
+              ...(bajoStock && { bajo_stock: "true" }),
             }}
             variant="outline"
           />
@@ -220,76 +261,93 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {items.map((item) => (
-            <Card key={item.id}>
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <CardTitle className="text-lg">{item.nombre}</CardTitle>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {item.codigo}
-                    </p>
+        <>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {items.map((item) => (
+              <Card key={item.id}>
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <CardTitle className="text-lg">{item.nombre}</CardTitle>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {item.codigo}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          setEditingItem(item)
+                          setShowForm(true)
+                        }}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDelete(item.id)}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
                   </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
                   <div className="flex gap-2">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        setEditingItem(item)
-                        setShowForm(true)
-                      }}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDelete(item.id)}
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+                    <Badge variant="outline">
+                      {tiposDispositivo.find((t) => t.codigo === item.tipoDispositivo)?.nombre || item.tipoDispositivo}
+                    </Badge>
+                    <Badge variant="secondary">{item.categoria}</Badge>
                   </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex gap-2">
-                  <Badge variant="outline">
-                    {tiposDispositivo.find((t) => t.codigo === item.tipoDispositivo)?.nombre || item.tipoDispositivo}
-                  </Badge>
-                  <Badge variant="secondary">{item.categoria}</Badge>
-                </div>
-                {item.descripcion && (
-                  <p className="text-sm text-muted-foreground">
-                    {item.descripcion}
-                  </p>
-                )}
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-sm text-muted-foreground">Stock</div>
-                    <div className="flex items-center gap-2">
-                      <Package className="h-4 w-4" />
-                      <span className={`font-bold ${item.stock < 5 ? "text-destructive" : ""}`}>
-                        {item.stock}
-                      </span>
-                      {item.stock < 5 && (
-                        <AlertCircle className="h-4 w-4 text-destructive" />
-                      )}
+                  {item.descripcion && (
+                    <p className="text-sm text-muted-foreground">
+                      {item.descripcion}
+                    </p>
+                  )}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-sm text-muted-foreground">Stock</div>
+                      <div className="flex items-center gap-2">
+                        <Package className="h-4 w-4" />
+                        <span className={`font-bold ${item.stock < 5 ? "text-destructive" : ""}`}>
+                          {item.stock}
+                        </span>
+                        {item.stock < 5 && (
+                          <AlertCircle className="h-4 w-4 text-destructive" />
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm text-muted-foreground">
+                        Precio Venta
+                      </div>
+                      <div className="font-bold">
+                        {formatPrice(item.precioVenta)}
+                      </div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-sm text-muted-foreground">
-                      Precio Venta
-                    </div>
-                    <div className="font-bold">
-                      {formatPrice(item.precioVenta)}
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          {total > pageSize && (
+            <div className="mt-4">
+              <DataTablePagination
+                page={page}
+                pageSize={pageSize}
+                total={total}
+                dataLength={items.length}
+                onPageChange={setPage}
+                onPageSizeChange={(size) => {
+                  setPageSize(size)
+                  setPage(1)
+                }}
+              />
+            </div>
+          )}
+        </>
       )}
     </div>
   )
