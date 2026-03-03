@@ -42,6 +42,9 @@ const itemSchema = z.object({
   cantidad: z.number().min(1, "Mínimo 1"),
   precioUnitario: z.number().min(0, "Precio inválido"),
   diasGarantia: z.number().min(0).default(0),
+  descuento: z.number().min(0).default(0),
+  tipoDescuento: z.enum(["MONTO", "PORCENTAJE"]).default("MONTO"),
+  porcentajeDescuento: z.number().min(0).max(100).default(0),
 })
 
 const METODOS_PAGO = [
@@ -61,6 +64,8 @@ const ventaSchema = z.object({
   clienteTelefono: z.string().optional(),
   items: z.array(itemSchema).min(1, "Agrega al menos un producto"),
   descuento: z.number().min(0).default(0),
+  tipoDescuento: z.enum(["MONTO", "PORCENTAJE"]).default("MONTO"),
+  porcentajeDescuento: z.number().min(0).max(100).default(0),
   metodoPago: z.enum(["EFECTIVO", "TRANSFERENCIA", "TARJETA", "TARJETA_DEBITO", "TARJETA_CREDITO", "MERCADOPAGO", "OTRO"]),
   observaciones: z.string().optional(),
   cuotas: z.number().int().min(1).nullable().optional(),
@@ -118,7 +123,8 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
   const { formatPrice } = useCurrency()
   const [loading, setLoading] = useState(false)
   const [clientes, setClientes] = useState<Cliente[]>([])
-  const [inventario, setInventario] = useState<Inventario[]>([])
+  const [invResults, setInvResults] = useState<Record<number, Inventario[]>>({})
+  const [invLoading, setInvLoading] = useState<Record<number, boolean>>({})
   const [searchCliente, setSearchCliente] = useState("")
   const [searchInventario, setSearchInventario] = useState<Record<number, string>>({})
   const [activeInvDropdown, setActiveInvDropdown] = useState<number | null>(null)
@@ -156,8 +162,10 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
       clienteId: null,
       clienteNombre: "",
       clienteTelefono: "",
-      items: [{ inventarioId: null, descripcion: "", cantidad: 1, precioUnitario: 0, diasGarantia: 0 }],
+      items: [{ inventarioId: null, descripcion: "", cantidad: 1, precioUnitario: 0, diasGarantia: 0, descuento: 0, tipoDescuento: "MONTO" as const, porcentajeDescuento: 0 }],
       descuento: 0,
+      tipoDescuento: "MONTO" as const,
+      porcentajeDescuento: 0,
       metodoPago: "EFECTIVO",
       observaciones: "",
       cuotas: null,
@@ -184,6 +192,8 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
 
   const watchItems = watch("items")
   const watchDescuento = watch("descuento") || 0
+  const watchTipoDescuento = watch("tipoDescuento")
+  const watchPorcentajeDescuento = watch("porcentajeDescuento") || 0
   const watchMetodoPago = watch("metodoPago")
   const watchCuotas = watch("cuotas")
   const watchRecargo = watch("recargoPorcentaje")
@@ -196,9 +206,12 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
     (sum, item) => sum + (item.cantidad || 0) * (item.precioUnitario || 0),
     0
   )
-  const total = subtotal - watchDescuento
+  const descuentoMonto = watchTipoDescuento === "PORCENTAJE"
+    ? subtotal * (watchPorcentajeDescuento / 100)
+    : watchDescuento
+  const total = subtotal - descuentoMonto
 
-  // Cargar clientes e inventario
+  // Cargar clientes
   useEffect(() => {
     if (!open) return
     const controller = new AbortController()
@@ -214,21 +227,32 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
       }
     }
 
-    const fetchInventario = async () => {
-      try {
-        const res = await fetch("/api/inventario?limit=100", { signal: controller.signal, cache: "no-store" })
-        const data = await res.json()
-        const items = data.data ?? (Array.isArray(data) ? data : [])
-        setInventario(items.filter((item: Inventario) => item.stock > 0))
-      } catch (error) {
-        if (!controller.signal.aborted) console.error("Error fetching inventario:", error)
-      }
-    }
-
     fetchClientes()
-    fetchInventario()
     return () => controller.abort()
   }, [open])
+
+  // Debounced server-side inventory search per item row
+  useEffect(() => {
+    if (activeInvDropdown === null) return
+    const index = activeInvDropdown
+    const query = searchInventario[index] || ""
+
+    const timer = setTimeout(async () => {
+      if (!query.trim() && !open) return
+      setInvLoading((prev) => ({ ...prev, [index]: true }))
+      try {
+        const params = new URLSearchParams({ q: query, limit: "10" })
+        const res = await fetch(`/api/inventario/search?${params}`, { cache: "no-store" })
+        const data = await res.json()
+        setInvResults((prev) => ({ ...prev, [index]: Array.isArray(data) ? data : [] }))
+      } catch {
+        setInvResults((prev) => ({ ...prev, [index]: [] }))
+      } finally {
+        setInvLoading((prev) => ({ ...prev, [index]: false }))
+      }
+    }, 250)
+    return () => clearTimeout(timer)
+  }, [searchInventario, activeInvDropdown, open])
 
   const searchClienteQuery = searchCliente.toLowerCase().trim()
   const filteredClientes = searchClienteQuery
@@ -239,14 +263,8 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
       )
     : clientes
 
-  const getFilteredInventario = (index: number) => {
-    const query = (searchInventario[index] || "").toLowerCase().trim()
-    if (!query) return inventario
-    return inventario.filter(
-      (inv) =>
-        inv.nombre.toLowerCase().includes(query) ||
-        inv.codigo.toLowerCase().includes(query)
-    )
+  const getFilteredInventario = (index: number): Inventario[] => {
+    return invResults[index] || []
   }
 
   const selectCliente = (cliente: Cliente) => {
@@ -440,7 +458,7 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => append({ inventarioId: null, descripcion: "", cantidad: 1, precioUnitario: 0, diasGarantia: 0 })}
+                onClick={() => append({ inventarioId: null, descripcion: "", cantidad: 1, precioUnitario: 0, diasGarantia: 0, descuento: 0, tipoDescuento: "MONTO", porcentajeDescuento: 0 })}
               >
                 <Plus className="mr-1 h-4 w-4" />
                 Agregar
@@ -476,8 +494,13 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
                       {activeInvDropdown === index && (
                         <div className="absolute z-10 mt-1 w-full rounded-md border bg-background shadow-lg">
                           <div className="max-h-40 overflow-y-auto">
-                            {getFilteredInventario(index).length > 0 ? (
-                              getFilteredInventario(index).slice(0, 8).map((inv) => (
+                            {invLoading[index] ? (
+                              <div className="px-3 py-2 text-sm text-muted-foreground flex items-center gap-2">
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                Buscando...
+                              </div>
+                            ) : getFilteredInventario(index).length > 0 ? (
+                              getFilteredInventario(index).map((inv) => (
                                 <button
                                   key={inv.id}
                                   type="button"
@@ -644,12 +667,57 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
 
               <div className="space-y-2">
                 <Label>Descuento</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  {...register("descuento", { valueAsNumber: true })}
-                />
+                <div className="flex gap-2">
+                  <div className="flex rounded-md border overflow-hidden">
+                    <button
+                      type="button"
+                      className={cn(
+                        "px-2.5 py-1.5 text-xs font-medium transition-colors",
+                        watchTipoDescuento === "MONTO"
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-background text-muted-foreground hover:bg-muted"
+                      )}
+                      onClick={() => {
+                        setValue("tipoDescuento", "MONTO")
+                        setValue("porcentajeDescuento", 0)
+                      }}
+                    >
+                      $
+                    </button>
+                    <button
+                      type="button"
+                      className={cn(
+                        "px-2.5 py-1.5 text-xs font-medium transition-colors",
+                        watchTipoDescuento === "PORCENTAJE"
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-background text-muted-foreground hover:bg-muted"
+                      )}
+                      onClick={() => {
+                        setValue("tipoDescuento", "PORCENTAJE")
+                        setValue("descuento", 0)
+                      }}
+                    >
+                      %
+                    </button>
+                  </div>
+                  {watchTipoDescuento === "PORCENTAJE" ? (
+                    <Input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      placeholder="0%"
+                      {...register("porcentajeDescuento", { valueAsNumber: true })}
+                    />
+                  ) : (
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      {...register("descuento", { valueAsNumber: true })}
+                    />
+                  )}
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -669,10 +737,12 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
                   <span>Subtotal:</span>
                   <span>{formatPrice(subtotal)}</span>
                 </div>
-                {watchDescuento > 0 && (
+                {descuentoMonto > 0 && (
                   <div className="flex justify-between text-sm text-destructive">
-                    <span>Descuento:</span>
-                    <span>-{formatPrice(watchDescuento)}</span>
+                    <span>
+                      Descuento{watchTipoDescuento === "PORCENTAJE" ? ` (${watchPorcentajeDescuento}%)` : ""}:
+                    </span>
+                    <span>-{formatPrice(descuentoMonto)}</span>
                   </div>
                 )}
                 <div className="flex justify-between border-t pt-2 text-lg font-bold">

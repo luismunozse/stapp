@@ -197,6 +197,41 @@ export const INVENTARIO_COLUMNS: CSVColumn<any>[] = [
   { key: "proveedor", header: "Proveedor" },
 ]
 
+export const MOVIMIENTOS_COLUMNS: CSVColumn<any>[] = [
+  {
+    key: "created_at",
+    header: "Fecha",
+    transform: (v) => formatDateCSV(v),
+  },
+  { key: "inventario.nombre", header: "Producto" },
+  { key: "inventario.codigo", header: "Código" },
+  { key: "tipo", header: "Tipo" },
+  { key: "cantidad", header: "Cantidad" },
+  { key: "stock_anterior", header: "Stock Anterior" },
+  { key: "stock_posterior", header: "Stock Posterior" },
+  { key: "referencia_tipo", header: "Referencia" },
+  { key: "observaciones", header: "Observaciones" },
+  { key: "usuario.nombre", header: "Usuario" },
+]
+
+export const DEVOLUCIONES_COLUMNS: CSVColumn<any>[] = [
+  { key: "numero_devolucion", header: "Nro. Devolución" },
+  {
+    key: "created_at",
+    header: "Fecha",
+    transform: (v) => formatDateCSV(v),
+  },
+  { key: "tipo", header: "Tipo" },
+  { key: "motivo", header: "Motivo" },
+  {
+    key: "monto_devolucion",
+    header: "Monto",
+    transform: (v) => formatCurrencyCSV(v),
+  },
+  { key: "estado", header: "Estado" },
+  { key: "observaciones", header: "Observaciones" },
+]
+
 export const GARANTIAS_COLUMNS: CSVColumn<any>[] = [
   { key: "orden.numero_orden", header: "Número Orden" },
   { key: "orden.cliente.nombre", header: "Cliente" },

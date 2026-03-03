@@ -137,6 +137,7 @@ export interface Importacion {
 export type MetodoPagoVenta = "EFECTIVO" | "TRANSFERENCIA" | "TARJETA" | "TARJETA_DEBITO" | "TARJETA_CREDITO" | "MERCADOPAGO" | "OTRO"
 export type EstadoVenta = "COMPLETADA" | "ANULADA"
 export type EstadoGarantiaVenta = "ACTIVA" | "VENCIDA" | "RECLAMADA"
+export type TipoDescuento = "MONTO" | "PORCENTAJE"
 
 export interface ItemVentaInput {
   inventarioId?: string | null
@@ -144,6 +145,9 @@ export interface ItemVentaInput {
   cantidad: number
   precioUnitario: number
   diasGarantia: number
+  descuento?: number
+  tipoDescuento?: TipoDescuento
+  porcentajeDescuento?: number
 }
 
 export interface Venta {
@@ -153,35 +157,113 @@ export interface Venta {
   clienteNombre: string
   clienteTelefono?: string | null
   vendedor: User
+  vendedorId?: string
   items: ItemVentaConDetalles[]
   subtotal: number
   descuento: number
+  tipoDescuento?: TipoDescuento
+  porcentajeDescuento?: number
   total: number
+  montoAbonado?: number
+  estadoPago?: EstadoPago
   metodoPago: MetodoPagoVenta
   estado: EstadoVenta
   observaciones?: string | null
   garantias: GarantiaVentaCompleta[]
+  pagos?: PagoVenta[]
+  devoluciones?: DevolucionVenta[]
   createdAt: Date
 }
 
 export interface ItemVentaConDetalles {
   id: string
+  inventarioId?: string | null
   inventario?: Inventario | null
   descripcion: string
   cantidad: number
   precioUnitario: number
   subtotal: number
   diasGarantia: number
+  descuento?: number
+  tipoDescuento?: TipoDescuento
+  porcentajeDescuento?: number
 }
 
 export interface GarantiaVentaCompleta {
   id: string
   numeroGarantia: string
   item: ItemVentaConDetalles
+  itemVentaId?: string
   diasValidez: number
   fechaInicio: Date
   fechaVencimiento: Date
   estado: EstadoGarantiaVenta
+}
+
+export interface PagoVenta {
+  id: string
+  ventaId?: string
+  monto: number
+  metodoPago: MetodoPagoVenta
+  referencia?: string | null
+  fecha: string
+  observaciones?: string | null
+  cuotas?: number | null
+  recargoPorcentaje?: number | null
+  montoOriginal?: number | null
+}
+
+// ========================================
+// MOVIMIENTOS INVENTARIO
+// ========================================
+
+export type TipoMovimientoInventario = "ENTRADA" | "SALIDA" | "AJUSTE" | "VENTA" | "DEVOLUCION" | "ANULACION"
+
+export interface MovimientoInventario {
+  id: string
+  inventarioId: string
+  tipo: TipoMovimientoInventario
+  cantidad: number
+  stockAnterior: number
+  stockPosterior: number
+  referenciaId?: string | null
+  referenciaTipo?: string | null
+  observaciones?: string | null
+  usuarioId?: string | null
+  usuario?: { id: string; nombre: string } | null
+  createdAt: string
+}
+
+// ========================================
+// DEVOLUCIONES
+// ========================================
+
+export type EstadoDevolucion = "PENDIENTE" | "COMPLETADA" | "RECHAZADA"
+export type TipoDevolucion = "TOTAL" | "PARCIAL"
+
+export interface DevolucionVenta {
+  id: string
+  ventaId: string
+  numeroDevolucion: string
+  motivo: string
+  tipo: TipoDevolucion
+  montoDevolucion: number
+  estado: EstadoDevolucion
+  observaciones?: string | null
+  procesadoPor?: string | null
+  items: ItemDevolucion[]
+  createdAt: string
+}
+
+export interface ItemDevolucion {
+  id: string
+  devolucionId: string
+  itemVentaId: string
+  inventarioId?: string | null
+  cantidad: number
+  precioUnitario: number
+  subtotal: number
+  restaurarStock: boolean
 }
 
 // ========================================

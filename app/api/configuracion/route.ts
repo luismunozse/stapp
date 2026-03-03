@@ -21,7 +21,8 @@ export async function GET() {
         telefono,
         direccion,
         moneda,
-        zona_horaria
+        zona_horaria,
+        umbral_stock_bajo
       `)
       .eq("id", organizationId!)
       .single()
@@ -43,6 +44,7 @@ export async function GET() {
       direccion: organization.direccion,
       moneda: organization.moneda || "ARS",
       zonaHoraria: organization.zona_horaria || "America/Argentina/Buenos_Aires",
+      umbralStockBajo: organization.umbral_stock_bajo ?? 5,
     })
   } catch (error) {
     console.error("Error fetching config:", error)
@@ -57,7 +59,7 @@ export async function PUT(request: Request) {
     if (error) return error
 
     const body = await request.json()
-    const { logoData, logoMime, nombreEmpresa, telefono, direccion, moneda, zonaHoraria } = body
+    const { logoData, logoMime, nombreEmpresa, telefono, direccion, moneda, zonaHoraria, umbralStockBajo } = body
 
     const updateData: Record<string, any> = {}
 
@@ -121,12 +123,19 @@ export async function PUT(request: Request) {
       }
     }
 
+    if (umbralStockBajo !== undefined) {
+      const val = parseInt(umbralStockBajo)
+      if (!isNaN(val) && val >= 0) {
+        updateData.umbral_stock_bajo = val
+      }
+    }
+
     // Solo actualizar si hay cambios
     if (Object.keys(updateData).length === 0) {
       // Retornar estado actual
       const { data: org } = await supabaseAdmin
         .from("organizations")
-        .select("id, logo_url, nombre_mostrar, telefono, direccion, moneda, zona_horaria")
+        .select("id, logo_url, nombre_mostrar, telefono, direccion, moneda, zona_horaria, umbral_stock_bajo")
         .eq("id", organizationId!)
         .single()
 
@@ -138,6 +147,7 @@ export async function PUT(request: Request) {
         direccion: org?.direccion,
         moneda: org?.moneda || "ARS",
         zonaHoraria: org?.zona_horaria || "America/Argentina/Buenos_Aires",
+        umbralStockBajo: org?.umbral_stock_bajo ?? 5,
       })
     }
 
@@ -145,7 +155,7 @@ export async function PUT(request: Request) {
       .from("organizations")
       .update(updateData)
       .eq("id", organizationId!)
-      .select("id, logo_url, logo_path, nombre_mostrar, telefono, direccion, moneda, zona_horaria")
+      .select("id, logo_url, logo_path, nombre_mostrar, telefono, direccion, moneda, zona_horaria, umbral_stock_bajo")
       .single()
 
     if (dbError) {
@@ -160,6 +170,7 @@ export async function PUT(request: Request) {
       direccion: organization.direccion,
       moneda: organization.moneda || "ARS",
       zonaHoraria: organization.zona_horaria || "America/Argentina/Buenos_Aires",
+      umbralStockBajo: organization.umbral_stock_bajo ?? 5,
     })
   } catch (error) {
     console.error("Error updating config:", error)

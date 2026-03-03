@@ -67,7 +67,13 @@ export async function GET(request: Request) {
     }
 
     if (bajoStock) {
-      query = query.lt("stock", 5)
+      const { data: org } = await supabaseAdmin
+        .from("organizations")
+        .select("umbral_stock_bajo")
+        .eq("id", organizationId!)
+        .single()
+      const threshold = org?.umbral_stock_bajo ?? 5
+      query = query.lt("stock", threshold)
     }
 
     // Aplicar paginación

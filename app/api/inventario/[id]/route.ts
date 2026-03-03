@@ -55,7 +55,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, userId } = await requireAuth()
     if (error) return error
 
     const { id } = await params
@@ -65,7 +65,7 @@ export async function PUT(
     // Verificar que el item pertenece a la organización
     const { data: existingItem, error: fetchError } = await supabaseAdmin
       .from("inventario")
-      .select("id")
+      .select("id, stock")
       .eq("id", id)
       .eq("organization_id", organizationId!)
       .single()
@@ -100,6 +100,19 @@ export async function PUT(
 
     if (updateError) {
       throw updateError
+    }
+
+    if (data.stock !== undefined && data.stock !== existingItem.stock) {
+      await supabaseAdmin.from('movimientos_inventario').insert({
+        inventario_id: id,
+        tipo: 'AJUSTE',
+        cantidad: data.stock - existingItem.stock,
+        stock_anterior: existingItem.stock,
+        stock_posterior: data.stock,
+        referencia_tipo: 'AJUSTE_MANUAL',
+        usuario_id: userId,
+        organization_id: organizationId,
+      })
     }
 
     return NextResponse.json(formatInventario(item))

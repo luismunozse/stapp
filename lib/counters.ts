@@ -179,6 +179,22 @@ export async function getNextWarrantySaleNumber(organizationId: string): Promise
 }
 
 /**
+ * Obtener el siguiente número de devolución
+ * Formato: DEV-000001
+ */
+export async function getNextReturnNumber(organizationId: string): Promise<string> {
+  const { data, error } = await supabaseAdmin.rpc("get_next_return_number", {
+    org_id: organizationId,
+  })
+
+  if (error) {
+    throw new Error(`Error getting next return number: ${error.message}`)
+  }
+
+  return data as string
+}
+
+/**
  * Sincronizar contadores basándose en los datos existentes
  * Útil para migración de datos o recuperación
  */

@@ -170,20 +170,13 @@ export function VentaEditForm({ open, onOpenChange, venta, onSuccess }: VentaEdi
     }
   }
 
-  const fetchInventario = async () => {
+  const fetchInventario = async (query = "") => {
     try {
-      const res = await fetch("/api/inventario?limit=100")
+      const params = new URLSearchParams({ q: query, limit: "20" })
+      const res = await fetch(`/api/inventario/search?${params}`)
       if (res.ok) {
         const data = await res.json()
-        setInventario(
-          data.items?.map((item: any) => ({
-            id: item.id,
-            codigo: item.codigo,
-            nombre: item.nombre,
-            stock: item.stock,
-            precioVenta: item.precioVenta,
-          })) || []
-        )
+        setInventario(Array.isArray(data) ? data : [])
       }
     } catch (error) {
       console.error("Error fetching inventario:", error)

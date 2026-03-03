@@ -2912,4 +2912,191 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   return Buffer.from(pdfBytes)
 }
 
-export type { CotizacionPDFData, CotizacionItem, OrdenPDFData, VentaPDFData, VentaItem, GarantiaVentaPDFData, ComprobanteEntregaPDFData, FacturaPDFData, FacturaPago }
+// ========================================
+// PDF DEVOLUCION (NOTA DE CREDITO)
+// ========================================
+
+interface DevolucionPDFData {
+  numeroDevolucion: string
+  fecha: Date | string
+  ventaNumero: number
+  motivo: string
+  tipo: string
+  observaciones?: string | null
+  items: Array<{
+    descripcion: string
+    cantidad: number
+    precioUnitario: number
+    subtotal: number
+  }>
+  montoDevolucion: number
+  cliente: {
+    nombre: string
+    telefono?: string | null
+  }
+  nombreEmpresa?: string
+  telefonoEmpresa?: string | null
+  direccionEmpresa?: string | null
+  logoUrl?: string | null
+  moneda?: string
+  zonaHoraria?: string
+}
+
+export async function generateDevolucionPDF(data: DevolucionPDFData): Promise<Buffer> {
+  const safe = (val: unknown): string => {
+    if (val === null || val === undefined) return ""
+    if (typeof val === "string") return val
+    if (typeof val === "number") return String(val)
+    return ""
+  }
+
+  const formatDatePDF = (date: Date | string | null | undefined): string => {
+    return formatDateValue(date, data.zonaHoraria || DEFAULT_TIMEZONE)
+  }
+
+  const formatCurrencyPDF = (amount: number | null | undefined): string => {
+    return formatCurrencyValue(amount, (data.moneda as CurrencyCode) || DEFAULT_CURRENCY)
+  }
+
+  const pdfDoc = await PDFLib.create()
+  const page = pdfDoc.addPage([595, 842])
+  const { width, height } = page.getSize()
+  const margin = 40
+
+  const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica)
+  const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
+
+  const primaryColor = rgb(0.388, 0.400, 0.945)
+  const primaryDark = rgb(0.118, 0.106, 0.294)
+  const textColor = rgb(0.118, 0.161, 0.231)
+  const grayColor = rgb(0.396, 0.455, 0.525)
+  const redColor = rgb(0.863, 0.196, 0.184)
+  const lightBg = rgb(0.969, 0.973, 0.984)
+
+  let y = height - 8
+
+  // Accent bar
+  page.drawRectangle({ x: 0, y: height - 8, width, height: 8, color: primaryColor })
+  y -= 40
+
+  // Header
+  const empresaNombre = safe(data.nombreEmpresa) || "Servicio Técnico"
+  page.drawText(empresaNombre, { x: margin, y, size: 18, font: helveticaBold, color: primaryDark })
+
+  const telefonoEmpresa = safe(data.telefonoEmpresa)
+  const direccionEmpresa = safe(data.direccionEmpresa)
+  if (telefonoEmpresa) {
+    y -= 14
+    page.drawText(telefonoEmpresa, { x: margin, y, size: 9, font: helvetica, color: grayColor })
+  }
+  if (direccionEmpresa) {
+    y -= 12
+    page.drawText(direccionEmpresa, { x: margin, y, size: 9, font: helvetica, color: grayColor })
+  }
+
+  // Badge
+  const badgeW = 160
+  const badgeH = 28
+  const badgeX = width - margin - badgeW
+  const badgeY = height - 48
+  page.drawRectangle({ x: badgeX, y: badgeY, width: badgeW, height: badgeH, color: redColor })
+  page.drawText("NOTA DE CRÉDITO", { x: badgeX + 20, y: badgeY + 9, size: 11, font: helveticaBold, color: rgb(1, 1, 1) })
+
+  page.drawText(data.numeroDevolucion, { x: badgeX, y: badgeY - 16, size: 10, font: helveticaBold, color: textColor })
+  page.drawText(`Fecha: ${formatDatePDF(data.fecha)}`, { x: badgeX, y: badgeY - 30, size: 9, font: helvetica, color: grayColor })
+
+  y -= 30
+
+  // Separator
+  page.drawRectangle({ x: margin, y, width: width - margin * 2, height: 1, color: lightBg })
+  y -= 25
+
+  // Info section
+  const col1X = margin
+  const col2X = width / 2 + 20
+
+  page.drawText("CLIENTE", { x: col1X, y, size: 8, font: helveticaBold, color: grayColor })
+  page.drawText("REFERENCIA", { x: col2X, y, size: 8, font: helveticaBold, color: grayColor })
+  y -= 14
+
+  const clienteNombre = safe(data.cliente?.nombre) || "Consumidor Final"
+  page.drawText(clienteNombre, { x: col1X, y, size: 10, font: helveticaBold, color: textColor })
+  page.drawText(`Venta V${String(data.ventaNumero).padStart(4, "0")}`, { x: col2X, y, size: 10, font: helveticaBold, color: textColor })
+  y -= 13
+
+  if (data.cliente?.telefono) {
+    page.drawText(safe(data.cliente.telefono), { x: col1X, y, size: 9, font: helvetica, color: grayColor })
+  }
+  page.drawText(`Tipo: ${data.tipo}`, { x: col2X, y, size: 9, font: helvetica, color: grayColor })
+  y -= 13
+  page.drawText(`Motivo: ${data.motivo}`, { x: col2X, y, size: 9, font: helvetica, color: grayColor })
+
+  y -= 25
+
+  // Items table header
+  const tableW = width - margin * 2
+  page.drawRectangle({ x: margin, y: y - 2, width: tableW, height: 22, color: primaryColor })
+
+  const colWidths = [tableW * 0.5, tableW * 0.15, tableW * 0.15, tableW * 0.2]
+  const colX = [margin + 8, margin + colWidths[0], margin + colWidths[0] + colWidths[1], margin + colWidths[0] + colWidths[1] + colWidths[2]]
+
+  page.drawText("Producto", { x: colX[0], y: y + 4, size: 9, font: helveticaBold, color: rgb(1, 1, 1) })
+  page.drawText("Cant.", { x: colX[1] + 10, y: y + 4, size: 9, font: helveticaBold, color: rgb(1, 1, 1) })
+  page.drawText("Precio", { x: colX[2] + 5, y: y + 4, size: 9, font: helveticaBold, color: rgb(1, 1, 1) })
+  page.drawText("Subtotal", { x: colX[3] + 5, y: y + 4, size: 9, font: helveticaBold, color: rgb(1, 1, 1) })
+
+  y -= 24
+
+  // Items rows
+  for (let i = 0; i < data.items.length; i++) {
+    const item = data.items[i]
+    if (i % 2 === 0) {
+      page.drawRectangle({ x: margin, y: y - 4, width: tableW, height: 20, color: lightBg })
+    }
+
+    const desc = safe(item.descripcion).substring(0, 45)
+    page.drawText(desc, { x: colX[0], y: y + 2, size: 9, font: helvetica, color: textColor })
+    page.drawText(String(item.cantidad), { x: colX[1] + 15, y: y + 2, size: 9, font: helvetica, color: textColor })
+    page.drawText(formatCurrencyPDF(item.precioUnitario), { x: colX[2] + 5, y: y + 2, size: 9, font: helvetica, color: textColor })
+    page.drawText(formatCurrencyPDF(item.subtotal), { x: colX[3] + 5, y: y + 2, size: 9, font: helveticaBold, color: textColor })
+
+    y -= 20
+  }
+
+  y -= 10
+
+  // Total
+  const totalBoxW = 200
+  const totalBoxX = width - margin - totalBoxW
+  page.drawRectangle({ x: totalBoxX, y: y - 5, width: totalBoxW, height: 30, color: rgb(0.95, 0.92, 0.92) })
+  page.drawText("TOTAL DEVOLUCIÓN:", { x: totalBoxX + 10, y: y + 5, size: 10, font: helveticaBold, color: redColor })
+  const totalText = formatCurrencyPDF(data.montoDevolucion)
+  const totalTextW = helveticaBold.widthOfTextAtSize(totalText, 12)
+  page.drawText(totalText, { x: totalBoxX + totalBoxW - totalTextW - 10, y: y + 3, size: 12, font: helveticaBold, color: redColor })
+
+  y -= 30
+
+  // Observaciones
+  if (data.observaciones) {
+    y -= 15
+    page.drawText("Observaciones:", { x: margin, y, size: 9, font: helveticaBold, color: grayColor })
+    y -= 13
+    page.drawText(safe(data.observaciones).substring(0, 120), { x: margin, y, size: 9, font: helvetica, color: textColor })
+  }
+
+  // Footer
+  const footerY = 40
+  page.drawRectangle({ x: margin, y: footerY + 10, width: width - margin * 2, height: 1, color: lightBg })
+  page.drawText("Este documento es una nota de crédito válida.", { x: margin, y: footerY - 5, size: 8, font: helvetica, color: grayColor })
+
+  const fechaImpresion = formatDateTimeValue(new Date(), data.zonaHoraria || DEFAULT_TIMEZONE)
+  page.drawText(`Impreso: ${fechaImpresion}`, { x: width - margin - 110, y: footerY - 5, size: 7, font: helvetica, color: grayColor })
+
+  // Bottom bar
+  page.drawRectangle({ x: 0, y: 0, width, height: 8, color: redColor })
+
+  const pdfBytes = await pdfDoc.save()
+  return Buffer.from(pdfBytes)
+}
+
+export type { CotizacionPDFData, CotizacionItem, OrdenPDFData, VentaPDFData, VentaItem, GarantiaVentaPDFData, ComprobanteEntregaPDFData, FacturaPDFData, FacturaPago, DevolucionPDFData }

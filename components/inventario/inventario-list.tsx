@@ -15,8 +15,10 @@ import {
   AlertCircle,
   Package,
   Upload,
+  History,
 } from "lucide-react"
 import { InventarioForm } from "./inventario-form"
+import { MovimientosHistorial } from "./movimientos-historial"
 import { ImportModal } from "@/components/import/import-modal"
 import { ExportButton } from "@/components/export/export-button"
 import { useCurrency } from "@/contexts/currency-context"
@@ -63,11 +65,23 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   const [showForm, setShowForm] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [editingItem, setEditingItem] = useState<Inventario | null>(null)
+  const [movimientosItem, setMovimientosItem] = useState<{ id: string; nombre: string } | null>(null)
 
   // Pagination
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [total, setTotal] = useState(0)
+  const [umbralStockBajo, setUmbralStockBajo] = useState(5)
+
+  // Fetch configurable stock threshold
+  useEffect(() => {
+    fetch("/api/configuracion", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.umbralStockBajo != null) setUmbralStockBajo(data.umbralStockBajo)
+      })
+      .catch(() => {})
+  }, [])
 
   const categoriasDisponibles = categoriasPorTipo[tipoDispositivo]
 
@@ -252,6 +266,15 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
         />
       )}
 
+      {movimientosItem && (
+        <MovimientosHistorial
+          open={!!movimientosItem}
+          onOpenChange={(open) => { if (!open) setMovimientosItem(null) }}
+          inventarioId={movimientosItem.id}
+          inventarioNombre={movimientosItem.nombre}
+        />
+      )}
+
       {loading ? (
         <div className="text-center py-8">Cargando...</div>
       ) : items.length === 0 ? (
@@ -311,22 +334,40 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                       <div className="text-sm text-muted-foreground">Stock</div>
                       <div className="flex items-center gap-2">
                         <Package className="h-4 w-4" />
-                        <span className={`font-bold ${item.stock < 5 ? "text-destructive" : ""}`}>
+                        <span className={`font-bold ${item.stock < umbralStockBajo ? "text-destructive" : ""}`}>
                           {item.stock}
                         </span>
-                        {item.stock < 5 && (
+                        {item.stock < umbralStockBajo && (
                           <AlertCircle className="h-4 w-4 text-destructive" />
                         )}
                       </div>
                     </div>
                     <div className="text-right">
                       <div className="text-sm text-muted-foreground">
-                        Precio Venta
+                        Compra / Venta
                       </div>
-                      <div className="font-bold">
-                        {formatPrice(item.precioVenta)}
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm text-muted-foreground">{formatPrice(item.precioCompra)}</span>
+                        <span className="text-muted-foreground">/</span>
+                        <span className="font-bold">{formatPrice(item.precioVenta)}</span>
                       </div>
+                      {item.precioVenta > item.precioCompra && (
+                        <div className="text-xs text-green-600">
+                          Margen: {formatPrice(item.precioVenta - item.precioCompra)}
+                        </div>
+                      )}
                     </div>
+                  </div>
+                  <div className="flex justify-end pt-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs text-muted-foreground"
+                      onClick={() => setMovimientosItem({ id: item.id, nombre: item.nombre })}
+                    >
+                      <History className="mr-1 h-3 w-3" />
+                      Movimientos
+                    </Button>
                   </div>
                 </CardContent>
               </Card>

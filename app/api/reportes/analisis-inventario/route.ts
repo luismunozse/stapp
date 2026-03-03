@@ -46,9 +46,16 @@ export async function GET() {
       precioVenta: item.precio_venta,
     }))
 
-    // Items con stock crítico (< 5)
+    const { data: orgConfig } = await supabaseAdmin
+      .from("organizations")
+      .select("umbral_stock_bajo")
+      .eq("id", organizationId!)
+      .single()
+    const threshold = orgConfig?.umbral_stock_bajo ?? 5
+
+    // Items con stock crítico (< threshold)
     const stockCritico = items
-      .filter((item) => item.stock < 5)
+      .filter((item) => item.stock < threshold)
       .sort((a, b) => a.stock - b.stock)
       .slice(0, 20)
 
@@ -95,6 +102,32 @@ export async function GET() {
       .sort((a, b) => b.valorEnStock - a.valorEnStock)
       .slice(0, 10)
 
+    // Top productos vendidos (últimos 30 días)
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
+    const { data: topVendidos } = await supabaseAdmin
+      .from("movimientos_inventario")
+      .select("inventario_id, cantidad, inventario:inventario_id (id, nombre, codigo)")
+      .eq("organization_id", organizationId!)
+      .eq("tipo", "VENTA")
+      .gte("created_at", thirtyDaysAgo.toISOString())
+
+    const ventasPorProducto: Record<string, { nombre: string; codigo: string; totalVendido: number }> = {}
+    for (const mov of topVendidos || []) {
+      const inv = mov.inventario as any
+      if (!inv) continue
+      const key = mov.inventario_id
+      if (!ventasPorProducto[key]) {
+        ventasPorProducto[key] = { nombre: inv.nombre, codigo: inv.codigo, totalVendido: 0 }
+      }
+      ventasPorProducto[key].totalVendido += mov.cantidad
+    }
+
+    const masVendidos = Object.values(ventasPorProducto)
+      .sort((a, b) => b.totalVendido - a.totalVendido)
+      .slice(0, 10)
+
     // Resumen general
     const resumen = {
       totalItems: items.length,
@@ -113,6 +146,7 @@ export async function GET() {
       sinStock: sinStock.slice(0, 10),
       porCategoria,
       masValiosos,
+      masVendidos,
     })
   } catch (error) {
     console.error("Error en análisis de inventario:", error)

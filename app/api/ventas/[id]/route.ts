@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger } from "@/lib/audit"
+import { formatVenta } from "@/lib/db-utils"
 
 export async function GET(
   request: Request,
@@ -21,7 +22,8 @@ export async function GET(
         users:vendedor_id (id, nombre, email),
         items_venta (*, inventario (*)),
         garantias_venta (*),
-        pagos_venta (*)
+        pagos_venta (*),
+        devoluciones_venta (*, items_devolucion(*))
       `)
       .eq("id", id)
       .eq("organization_id", organizationId!)
@@ -43,61 +45,7 @@ export async function GET(
       throw dbError
     }
 
-    // Formatear respuesta
-    const response = {
-      id: venta.id,
-      numeroVenta: venta.numero_venta,
-      clienteId: venta.cliente_id,
-      clienteNombre: venta.cliente_nombre,
-      clienteTelefono: venta.cliente_telefono,
-      cliente: venta.clientes,
-      vendedor: venta.users,
-      vendedorId: venta.vendedor_id,
-      items: venta.items_venta?.map((item: any) => ({
-        id: item.id,
-        inventarioId: item.inventario_id,
-        inventario: item.inventario,
-        descripcion: item.descripcion,
-        cantidad: item.cantidad,
-        precioUnitario: item.precio_unitario,
-        subtotal: item.subtotal,
-        diasGarantia: item.dias_garantia,
-      })) || [],
-      garantias: venta.garantias_venta?.map((g: any) => ({
-        id: g.id,
-        numeroGarantia: g.numero_garantia,
-        itemVentaId: g.item_venta_id,
-        diasValidez: g.dias_validez,
-        fechaInicio: g.fecha_inicio,
-        fechaVencimiento: g.fecha_vencimiento,
-        estado: g.estado,
-      })) || [],
-      subtotal: parseFloat(venta.subtotal),
-      descuento: parseFloat(venta.descuento),
-      total: parseFloat(venta.total),
-      montoAbonado: parseFloat(venta.monto_abonado || "0"),
-      estadoPago: venta.estado_pago || "PAGADO",
-      metodoPago: venta.metodo_pago,
-      estado: venta.estado,
-      observaciones: venta.observaciones,
-      createdAt: venta.created_at,
-      updatedAt: venta.updated_at,
-      pagos: venta.pagos_venta?.map((p: any) => ({
-        id: p.id,
-        monto: parseFloat(p.monto),
-        metodoPago: p.metodo_pago,
-        referencia: p.numero_referencia,
-        fecha: p.fecha,
-        observaciones: p.observaciones,
-        cuotas: p.cuotas,
-        recargoPorcentaje: p.recargo_porcentaje ? parseFloat(p.recargo_porcentaje) : null,
-        montoOriginal: p.monto_original ? parseFloat(p.monto_original) : null,
-      })).sort((a: any, b: any) =>
-        new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
-      ) || [],
-    }
-
-    return NextResponse.json(response)
+    return NextResponse.json(formatVenta(venta))
   } catch (error) {
     console.error("Error fetching venta:", error)
     return NextResponse.json(
@@ -151,13 +99,11 @@ export async function PUT(
         )
       }
 
-      // Anular venta (el trigger restaurará el stock)
-      const { data: ventaActualizada, error: updateError } = await supabaseAdmin
+      // Anular venta (el trigger restaurará el stock y registrará movimientos)
+      const { error: updateError } = await supabaseAdmin
         .from("ventas")
         .update({ estado: "ANULADA" })
         .eq("id", id)
-        .select()
-        .single()
 
       if (updateError) {
         throw updateError
@@ -167,11 +113,22 @@ export async function PUT(
       const audit = createAuditLogger(organizationId!, userId!, request)
       await audit.update("ventas", id, { estado: "ANULADA" }, { estado: venta.estado })
 
-      return NextResponse.json({
-        ...ventaActualizada,
-        numeroVenta: ventaActualizada.numero_venta,
-        estado: ventaActualizada.estado,
-      })
+      // Obtener venta actualizada con relaciones para respuesta
+      const { data: ventaActualizada } = await supabaseAdmin
+        .from("ventas")
+        .select(`
+          *,
+          clientes (*),
+          users:vendedor_id (id, nombre),
+          items_venta (*, inventario (*)),
+          garantias_venta (*),
+          pagos_venta (*),
+          devoluciones_venta (*, items_devolucion(*))
+        `)
+        .eq("id", id)
+        .single()
+
+      return NextResponse.json(formatVenta(ventaActualizada))
     }
 
     // CASO 2: Editar venta
@@ -191,118 +148,69 @@ export async function PUT(
         )
       }
 
-      const { clienteId, clienteNombre, clienteTelefono, items, descuento, metodoPago, observaciones } = body
+      const {
+        clienteId,
+        clienteNombre,
+        clienteTelefono,
+        items,
+        descuento,
+        tipoDescuento,
+        porcentajeDescuento,
+        metodoPago,
+        observaciones,
+      } = body
 
       // Calcular nuevos totales
       const subtotal = items.reduce(
         (sum: number, item: any) => sum + item.cantidad * item.precioUnitario,
         0
       )
-      const total = subtotal - (descuento || 0)
 
-      // 1. Restaurar stock de items anteriores
-      for (const oldItem of venta.items_venta || []) {
-        if (oldItem.inventario_id) {
-          await supabaseAdmin.rpc("increment_stock", {
-            p_inventario_id: oldItem.inventario_id,
-            p_cantidad: oldItem.cantidad,
-          })
-        }
+      let descuentoMonto = descuento || 0
+      if (tipoDescuento === "PORCENTAJE") {
+        descuentoMonto = subtotal * ((porcentajeDescuento || 0) / 100)
+      }
+      const total = subtotal - descuentoMonto
+
+      // Preparar items para la función atómica
+      const pItems = items.map((item: any) => ({
+        inventarioId: item.inventarioId || null,
+        descripcion: item.descripcion,
+        cantidad: item.cantidad,
+        precioUnitario: item.precioUnitario,
+        diasGarantia: item.diasGarantia || 0,
+        descuento: item.descuento || 0,
+        tipoDescuento: item.tipoDescuento || "MONTO",
+        porcentajeDescuento: item.porcentajeDescuento || 0,
+      }))
+
+      // Editar venta atómicamente
+      const { error: rpcError } = await supabaseAdmin.rpc("editar_venta_atomica", {
+        p_org_id: organizationId!,
+        p_user_id: userId!,
+        p_venta_id: id,
+        p_cliente_id: clienteId || null,
+        p_cliente_nombre: clienteNombre,
+        p_cliente_telefono: clienteTelefono || null,
+        p_subtotal: subtotal,
+        p_descuento: descuentoMonto,
+        p_tipo_descuento: tipoDescuento || "MONTO",
+        p_porcentaje_descuento: porcentajeDescuento || 0,
+        p_total: total,
+        p_metodo_pago: metodoPago,
+        p_observaciones: observaciones || null,
+        p_items: JSON.stringify(pItems),
+      })
+
+      if (rpcError) {
+        console.error("Error en editar_venta_atomica:", rpcError)
+        return NextResponse.json(
+          { error: rpcError.message || "Error al editar venta" },
+          { status: 400 }
+        )
       }
 
-      // 2. Eliminar items anteriores
-      await supabaseAdmin
-        .from("items_venta")
-        .delete()
-        .eq("venta_id", id)
-
-      // 3. Eliminar garantías anteriores
-      await supabaseAdmin
-        .from("garantias_venta")
-        .delete()
-        .eq("venta_id", id)
-
-      // 4. Actualizar venta
-      const { error: updateError } = await supabaseAdmin
-        .from("ventas")
-        .update({
-          cliente_id: clienteId || null,
-          cliente_nombre: clienteNombre,
-          cliente_telefono: clienteTelefono || null,
-          subtotal,
-          descuento: descuento || 0,
-          total,
-          metodo_pago: metodoPago,
-          observaciones: observaciones || null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", id)
-
-      if (updateError) {
-        throw updateError
-      }
-
-      // 5. Crear nuevos items y descontar stock
-      for (const item of items) {
-        const itemSubtotal = item.cantidad * item.precioUnitario
-
-        const { data: newItem, error: itemError } = await supabaseAdmin
-          .from("items_venta")
-          .insert({
-            venta_id: id,
-            inventario_id: item.inventarioId || null,
-            descripcion: item.descripcion,
-            cantidad: item.cantidad,
-            precio_unitario: item.precioUnitario,
-            subtotal: itemSubtotal,
-            dias_garantia: item.diasGarantia || 0,
-          })
-          .select()
-          .single()
-
-        if (itemError) {
-          throw itemError
-        }
-
-        // Descontar stock
-        if (item.inventarioId) {
-          await supabaseAdmin.rpc("decrement_stock", {
-            p_inventario_id: item.inventarioId,
-            p_cantidad: item.cantidad,
-          })
-        }
-
-        // Crear garantía si tiene días
-        if (item.diasGarantia > 0) {
-          const fechaInicio = new Date()
-          const fechaVencimiento = new Date()
-          fechaVencimiento.setDate(fechaVencimiento.getDate() + item.diasGarantia)
-
-          // Obtener el último número de garantía
-          const { data: lastGarantia } = await supabaseAdmin
-            .from("garantias_venta")
-            .select("numero_garantia")
-            .eq("organization_id", organizationId!)
-            .order("numero_garantia", { ascending: false })
-            .limit(1)
-            .single()
-
-          const nuevoNumeroGarantia = (lastGarantia?.numero_garantia || 0) + 1
-
-          await supabaseAdmin.from("garantias_venta").insert({
-            organization_id: organizationId,
-            venta_id: id,
-            item_venta_id: newItem.id,
-            numero_garantia: nuevoNumeroGarantia,
-            dias_validez: item.diasGarantia,
-            fecha_inicio: fechaInicio.toISOString(),
-            fecha_vencimiento: fechaVencimiento.toISOString(),
-            estado: "ACTIVA",
-          })
-        }
-      }
-
-      // 6. Registrar en auditoría
+      // Registrar en auditoría
       const audit = createAuditLogger(organizationId!, userId!, request)
       await audit.update("ventas", id, {
         cliente_nombre: clienteNombre,
@@ -314,7 +222,22 @@ export async function PUT(
         items_count: venta.items_venta?.length || 0,
       })
 
-      return NextResponse.json({ success: true })
+      // Obtener venta actualizada con relaciones para respuesta
+      const { data: ventaActualizada } = await supabaseAdmin
+        .from("ventas")
+        .select(`
+          *,
+          clientes (*),
+          users:vendedor_id (id, nombre),
+          items_venta (*, inventario (*)),
+          garantias_venta (*),
+          pagos_venta (*),
+          devoluciones_venta (*, items_devolucion(*))
+        `)
+        .eq("id", id)
+        .single()
+
+      return NextResponse.json(formatVenta(ventaActualizada))
     }
 
     return NextResponse.json(

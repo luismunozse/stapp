@@ -150,6 +150,133 @@ export function formatInventario(item: any) {
   }
 }
 
+export function formatVenta(venta: any) {
+  if (!venta) return null
+
+  return {
+    id: venta.id,
+    numeroVenta: venta.numero_venta,
+    clienteId: venta.cliente_id,
+    clienteNombre: venta.cliente_nombre,
+    clienteTelefono: venta.cliente_telefono,
+    vendedorId: venta.vendedor_id,
+    subtotal: parseFloat(venta.subtotal),
+    descuento: parseFloat(venta.descuento),
+    tipoDescuento: venta.tipo_descuento || "MONTO",
+    porcentajeDescuento: venta.porcentaje_descuento ? parseFloat(venta.porcentaje_descuento) : 0,
+    total: parseFloat(venta.total),
+    montoAbonado: parseFloat(venta.monto_abonado || "0"),
+    estadoPago: venta.estado_pago || "PAGADO",
+    metodoPago: venta.metodo_pago,
+    estado: venta.estado,
+    observaciones: venta.observaciones,
+    createdAt: venta.created_at,
+    updatedAt: venta.updated_at,
+    // Relaciones
+    cliente: venta.clientes ? formatCliente(venta.clientes) : undefined,
+    vendedor: venta.users ? { id: venta.users.id, nombre: venta.users.nombre } : undefined,
+    items: venta.items_venta?.map(formatItemVenta) || [],
+    garantias: venta.garantias_venta?.map(formatGarantiaVenta) || [],
+    pagos: venta.pagos_venta?.map(formatPagoVenta)?.sort(
+      (a: any, b: any) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
+    ) || [],
+    devoluciones: venta.devoluciones_venta?.map(formatDevolucion) || [],
+  }
+}
+
+export function formatItemVenta(item: any) {
+  if (!item) return null
+
+  return {
+    id: item.id,
+    inventarioId: item.inventario_id,
+    inventario: item.inventario ? formatInventario(item.inventario) : undefined,
+    descripcion: item.descripcion,
+    cantidad: item.cantidad,
+    precioUnitario: parseFloat(item.precio_unitario),
+    subtotal: parseFloat(item.subtotal),
+    diasGarantia: item.dias_garantia,
+    descuento: item.descuento ? parseFloat(item.descuento) : 0,
+    tipoDescuento: item.tipo_descuento || "MONTO",
+    porcentajeDescuento: item.porcentaje_descuento ? parseFloat(item.porcentaje_descuento) : 0,
+  }
+}
+
+export function formatGarantiaVenta(g: any) {
+  if (!g) return null
+
+  return {
+    id: g.id,
+    numeroGarantia: g.numero_garantia,
+    itemVentaId: g.item_venta_id,
+    diasValidez: g.dias_validez,
+    fechaInicio: g.fecha_inicio,
+    fechaVencimiento: g.fecha_vencimiento,
+    estado: g.estado,
+  }
+}
+
+export function formatPagoVenta(p: any) {
+  if (!p) return null
+
+  return {
+    id: p.id,
+    monto: parseFloat(p.monto),
+    metodoPago: p.metodo_pago,
+    referencia: p.numero_referencia,
+    fecha: p.fecha,
+    observaciones: p.observaciones,
+    cuotas: p.cuotas,
+    recargoPorcentaje: p.recargo_porcentaje ? parseFloat(p.recargo_porcentaje) : null,
+    montoOriginal: p.monto_original ? parseFloat(p.monto_original) : null,
+  }
+}
+
+export function formatMovimiento(m: any) {
+  if (!m) return null
+
+  return {
+    id: m.id,
+    inventarioId: m.inventario_id,
+    tipo: m.tipo,
+    cantidad: m.cantidad,
+    stockAnterior: m.stock_anterior,
+    stockPosterior: m.stock_posterior,
+    referenciaId: m.referencia_id,
+    referenciaTipo: m.referencia_tipo,
+    observaciones: m.observaciones,
+    usuarioId: m.usuario_id,
+    usuario: m.users ? { id: m.users.id, nombre: m.users.nombre } : undefined,
+    createdAt: m.created_at,
+  }
+}
+
+export function formatDevolucion(d: any) {
+  if (!d) return null
+
+  return {
+    id: d.id,
+    ventaId: d.venta_id,
+    numeroDevolucion: d.numero_devolucion,
+    motivo: d.motivo,
+    tipo: d.tipo,
+    montoDevolucion: parseFloat(d.monto_devolucion),
+    estado: d.estado,
+    observaciones: d.observaciones,
+    procesadoPor: d.procesado_por,
+    createdAt: d.created_at,
+    items: d.items_devolucion?.map((item: any) => ({
+      id: item.id,
+      itemVentaId: item.item_venta_id,
+      inventarioId: item.inventario_id,
+      cantidad: item.cantidad,
+      precioUnitario: parseFloat(item.precio_unitario),
+      subtotal: parseFloat(item.subtotal),
+      restaurarStock: item.restaurar_stock,
+    })) || [],
+  }
+}
+
 export function formatUser(user: any) {
   if (!user) return null
 

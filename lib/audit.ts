@@ -15,6 +15,8 @@ export type AuditEntity =
   | "users"
   | "checklist_templates"
   | "ventas"
+  | "devoluciones_venta"
+  | "movimientos_inventario"
 
 interface AuditLogParams {
   organizationId: string

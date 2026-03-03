@@ -27,10 +27,12 @@ import {
   ArrowRightLeft,
   Wallet,
   MoreHorizontal,
+  RotateCcw,
 } from "lucide-react"
 import Link from "next/link"
 import { WhatsAppDialog } from "@/components/ordenes/whatsapp-dialog"
 import { VentaEditForm } from "@/components/ventas/venta-edit-form"
+import { DevolucionForm } from "@/components/ventas/devolucion-form"
 import { PagosHistorial } from "@/components/facturacion/pagos-historial"
 import { VentaPagoForm } from "@/components/ventas/venta-pago-form"
 import type { MetodoPagoVenta } from "@/lib/notifications/types"
@@ -68,6 +70,28 @@ interface Pago {
   montoOriginal?: number | null
 }
 
+interface DevolucionItem {
+  id: string
+  itemVentaId: string
+  inventarioId: string | null
+  cantidad: number
+  precioUnitario: number
+  subtotal: number
+  restaurarStock: boolean
+}
+
+interface Devolucion {
+  id: string
+  numeroDevolucion: string
+  motivo: string
+  tipo: string
+  montoDevolucion: number
+  estado: string
+  observaciones: string | null
+  items: DevolucionItem[]
+  createdAt: string
+}
+
 interface VentaDetail {
   id: string
   numeroVenta: number
@@ -87,6 +111,7 @@ interface VentaDetail {
   observaciones: string | null
   createdAt: string
   pagos: Pago[]
+  devoluciones?: Devolucion[]
 }
 
 const metodoPagoLabels: Record<string, string> = {
@@ -118,6 +143,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
   const [loading, setLoading] = useState(true)
   const [anulando, setAnulando] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
+  const [showDevolucionModal, setShowDevolucionModal] = useState(false)
   const [showPagoForm, setShowPagoForm] = useState(false)
   const [expandedPagos, setExpandedPagos] = useState(false)
 
@@ -291,6 +317,13 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
               Editar
             </Button>
             <Button
+              variant="outline"
+              onClick={() => setShowDevolucionModal(true)}
+            >
+              <RotateCcw className="mr-2 h-4 w-4" />
+              Devolución
+            </Button>
+            <Button
               variant="destructive"
               onClick={handleAnular}
               disabled={anulando}
@@ -328,6 +361,26 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
           onSuccess={() => {
             fetchVenta()
           }}
+        />
+      )}
+
+      {/* Modal de devolución */}
+      {venta && (
+        <DevolucionForm
+          open={showDevolucionModal}
+          onOpenChange={setShowDevolucionModal}
+          venta={{
+            id: venta.id,
+            numeroVenta: venta.numeroVenta,
+            items: venta.items.map(item => ({
+              id: item.id,
+              inventarioId: item.inventarioId,
+              descripcion: item.descripcion,
+              cantidad: item.cantidad,
+              precioUnitario: item.precioUnitario,
+            })),
+          }}
+          onSuccess={() => fetchVenta()}
         />
       )}
 
@@ -702,6 +755,69 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                   </div>
                 )
               })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Devoluciones */}
+      {venta.devoluciones && venta.devoluciones.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <RotateCcw className="h-5 w-5" />
+              Devoluciones ({venta.devoluciones.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {venta.devoluciones.map((dev) => (
+                <div
+                  key={dev.id}
+                  className="rounded-lg border p-4 space-y-2"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-sm font-medium">{dev.numeroDevolucion}</span>
+                      <Badge variant={dev.tipo === "TOTAL" ? "destructive" : "secondary"}>
+                        {dev.tipo}
+                      </Badge>
+                      <Badge variant={dev.estado === "COMPLETADA" ? "success" : "outline"}>
+                        {dev.estado}
+                      </Badge>
+                    </div>
+                    <div className="font-bold text-destructive">
+                      -{formatPrice(dev.montoDevolucion)}
+                    </div>
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    <span className="font-medium">Motivo:</span> {dev.motivo}
+                  </div>
+                  {dev.observaciones && (
+                    <div className="text-sm text-muted-foreground">
+                      {dev.observaciones}
+                    </div>
+                  )}
+                  <div className="text-xs text-muted-foreground">
+                    {formatDate(dev.createdAt)} — {dev.items.length} item(s) devueltos
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        window.open(
+                          `/api/ventas/${ventaId}/devolucion/${dev.id}/pdf`,
+                          "_blank"
+                        )
+                      }
+                    >
+                      <Download className="mr-1 h-3 w-3" />
+                      Nota de crédito
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>

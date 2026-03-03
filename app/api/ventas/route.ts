@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
-import { getNextSaleNumber, getNextWarrantySaleNumber } from "@/lib/counters"
 import { createAuditLogger } from "@/lib/audit"
+import { formatVenta } from "@/lib/db-utils"
 import { z } from "zod"
 
 const itemSchema = z.object({
@@ -11,6 +11,9 @@ const itemSchema = z.object({
   cantidad: z.number().int().positive("La cantidad debe ser mayor a 0"),
   precioUnitario: z.number().positive("El precio debe ser mayor a 0"),
   diasGarantia: z.number().int().min(0).default(0),
+  descuento: z.number().min(0).default(0),
+  tipoDescuento: z.enum(["MONTO", "PORCENTAJE"]).default("MONTO"),
+  porcentajeDescuento: z.number().min(0).max(100).default(0),
 })
 
 const ventaSchema = z.object({
@@ -19,6 +22,8 @@ const ventaSchema = z.object({
   clienteTelefono: z.string().optional(),
   items: z.array(itemSchema).min(1, "Debe agregar al menos un item"),
   descuento: z.number().min(0).default(0),
+  tipoDescuento: z.enum(["MONTO", "PORCENTAJE"]).default("MONTO"),
+  porcentajeDescuento: z.number().min(0).max(100).default(0),
   metodoPago: z.enum(["EFECTIVO", "TRANSFERENCIA", "TARJETA", "TARJETA_DEBITO", "TARJETA_CREDITO", "MERCADOPAGO", "OTRO"]),
   observaciones: z.string().optional(),
   cuotas: z.number().int().min(1).nullable().optional(),
@@ -68,7 +73,8 @@ export async function GET(request: Request) {
           inventario (*)
         ),
         garantias_venta (*),
-        pagos_venta (*)
+        pagos_venta (*),
+        devoluciones_venta (*, items_devolucion(*))
       `, { count: "exact" })
       .eq("organization_id", organizationId!)
       .order(sortBy, { ascending: sortOrder })
@@ -116,57 +122,7 @@ export async function GET(request: Request) {
     }
 
     // Transformar datos para el frontend
-    const ventasFormatted = ventas?.map(venta => ({
-      id: venta.id,
-      numeroVenta: venta.numero_venta,
-      clienteId: venta.cliente_id,
-      clienteNombre: venta.cliente_nombre,
-      clienteTelefono: venta.cliente_telefono,
-      cliente: venta.clientes,
-      vendedor: venta.users,
-      vendedorId: venta.vendedor_id,
-      items: venta.items_venta?.map((item: any) => ({
-        id: item.id,
-        inventarioId: item.inventario_id,
-        inventario: item.inventario,
-        descripcion: item.descripcion,
-        cantidad: item.cantidad,
-        precioUnitario: item.precio_unitario,
-        subtotal: item.subtotal,
-        diasGarantia: item.dias_garantia,
-      })) || [],
-      garantias: venta.garantias_venta?.map((g: any) => ({
-        id: g.id,
-        numeroGarantia: g.numero_garantia,
-        itemVentaId: g.item_venta_id,
-        diasValidez: g.dias_validez,
-        fechaInicio: g.fecha_inicio,
-        fechaVencimiento: g.fecha_vencimiento,
-        estado: g.estado,
-      })) || [],
-      subtotal: parseFloat(venta.subtotal),
-      descuento: parseFloat(venta.descuento),
-      total: parseFloat(venta.total),
-      montoAbonado: parseFloat(venta.monto_abonado || "0"),
-      estadoPago: venta.estado_pago || "PAGADO",
-      metodoPago: venta.metodo_pago,
-      estado: venta.estado,
-      observaciones: venta.observaciones,
-      createdAt: venta.created_at,
-      pagos: venta.pagos_venta?.map((p: any) => ({
-        id: p.id,
-        monto: parseFloat(p.monto),
-        metodoPago: p.metodo_pago,
-        referencia: p.numero_referencia,
-        fecha: p.fecha,
-        observaciones: p.observaciones,
-        cuotas: p.cuotas,
-        recargoPorcentaje: p.recargo_porcentaje ? parseFloat(p.recargo_porcentaje) : null,
-        montoOriginal: p.monto_original ? parseFloat(p.monto_original) : null,
-      })).sort((a: any, b: any) =>
-        new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
-      ) || [],
-    }))
+    const ventasFormatted = ventas?.map(formatVenta) || []
 
     return NextResponse.json({
       data: ventasFormatted,
@@ -200,142 +156,61 @@ export async function POST(request: Request) {
     const body = await request.json()
     const data = ventaSchema.parse(body)
 
-    // Validar stock disponible para items del inventario
-    for (const item of data.items) {
-      if (item.inventarioId) {
-        const { data: inv, error: invError } = await supabaseAdmin
-          .from("inventario")
-          .select("stock, nombre")
-          .eq("id", item.inventarioId)
-          .eq("organization_id", organizationId!)
-          .single()
-
-        if (invError || !inv) {
-          return NextResponse.json(
-            { error: `Producto no encontrado: ${item.descripcion}` },
-            { status: 400 }
-          )
-        }
-
-        if (inv.stock < item.cantidad) {
-          return NextResponse.json(
-            { error: `Stock insuficiente para "${inv.nombre}". Disponible: ${inv.stock}` },
-            { status: 400 }
-          )
-        }
-      }
-    }
-
-    // Obtener siguiente número de venta
-    const { numero: numeroVenta } = await getNextSaleNumber(organizationId!)
-
     // Calcular totales
     const subtotal = data.items.reduce(
       (sum, item) => sum + item.cantidad * item.precioUnitario,
       0
     )
-    const total = subtotal - data.descuento
 
-    // Crear venta (marcada como pagada por defecto)
-    const { data: venta, error: dbError } = await supabaseAdmin
-      .from("ventas")
-      .insert({
-        numero_venta: numeroVenta,
-        cliente_id: data.clienteId || null,
-        cliente_nombre: data.clienteNombre,
-        cliente_telefono: data.clienteTelefono || null,
-        vendedor_id: userId!,
-        subtotal,
-        descuento: data.descuento,
-        total,
-        metodo_pago: data.metodoPago,
-        monto_abonado: total,
-        estado_pago: "PAGADO",
-        observaciones: data.observaciones || null,
-        organization_id: organizationId!,
-      })
-      .select()
-      .single()
-
-    if (dbError) {
-      throw dbError
+    let descuentoMonto = data.descuento
+    if (data.tipoDescuento === "PORCENTAJE") {
+      descuentoMonto = subtotal * (data.porcentajeDescuento / 100)
     }
+    const total = subtotal - descuentoMonto
 
-    // Registrar pago automático por el total
-    await supabaseAdmin
-      .from("pagos_venta")
-      .insert({
-        venta_id: venta.id,
-        monto: total,
-        metodo_pago: data.metodoPago,
-        numero_referencia: data.numeroReferencia || null,
-        cuotas: data.cuotas || null,
-        recargo_porcentaje: data.recargoPorcentaje || null,
-        monto_original: data.montoOriginal || null,
-      })
-
-    // Insertar items de venta
-    const itemsToInsert = data.items.map(item => ({
-      venta_id: venta.id,
-      inventario_id: item.inventarioId || null,
+    // Preparar items para la función atómica
+    const pItems = data.items.map(item => ({
+      inventarioId: item.inventarioId || null,
       descripcion: item.descripcion,
       cantidad: item.cantidad,
-      precio_unitario: item.precioUnitario,
-      subtotal: item.cantidad * item.precioUnitario,
-      dias_garantia: item.diasGarantia,
+      precioUnitario: item.precioUnitario,
+      diasGarantia: item.diasGarantia,
+      descuento: item.descuento,
+      tipoDescuento: item.tipoDescuento,
+      porcentajeDescuento: item.porcentajeDescuento,
     }))
 
-    const { data: itemsInserted, error: itemsError } = await supabaseAdmin
-      .from("items_venta")
-      .insert(itemsToInsert)
-      .select()
-
-    if (itemsError) {
-      // Rollback: eliminar venta
-      await supabaseAdmin.from("ventas").delete().eq("id", venta.id)
-      throw itemsError
-    }
-
-    // Crear garantías para items con días > 0
-    const garantiasToCreate = []
-    for (const item of itemsInserted || []) {
-      if (item.dias_garantia > 0) {
-        const numeroGarantia = await getNextWarrantySaleNumber(organizationId!)
-        const fechaInicio = new Date()
-        const fechaVencimiento = new Date()
-        fechaVencimiento.setDate(fechaVencimiento.getDate() + item.dias_garantia)
-
-        garantiasToCreate.push({
-          venta_id: venta.id,
-          item_venta_id: item.id,
-          numero_garantia: numeroGarantia,
-          dias_validez: item.dias_garantia,
-          fecha_inicio: fechaInicio.toISOString(),
-          fecha_vencimiento: fechaVencimiento.toISOString(),
-          organization_id: organizationId!,
-        })
-      }
-    }
-
-    if (garantiasToCreate.length > 0) {
-      const { error: garantiasError } = await supabaseAdmin
-        .from("garantias_venta")
-        .insert(garantiasToCreate)
-
-      if (garantiasError) {
-        console.error("Error creating garantias:", garantiasError)
-        // No hacemos rollback, la venta ya se creó
-      }
-    }
-
-    // Registrar en auditoría
-    const audit = createAuditLogger(organizationId!, userId!, request)
-    await audit.create("ventas", venta.id, {
-      numero_venta: venta.numero_venta,
-      total: venta.total,
-      items: data.items.length,
-      garantias: garantiasToCreate.length,
+    // Crear venta atómicamente
+    const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc("crear_venta_atomica", {
+      p_org_id: organizationId!,
+      p_vendedor_id: userId!,
+      p_cliente_id: data.clienteId || null,
+      p_cliente_nombre: data.clienteNombre,
+      p_cliente_telefono: data.clienteTelefono || null,
+      p_subtotal: subtotal,
+      p_descuento: descuentoMonto,
+      p_tipo_descuento: data.tipoDescuento,
+      p_porcentaje_descuento: data.porcentajeDescuento,
+      p_total: total,
+      p_metodo_pago: data.metodoPago,
+      p_observaciones: data.observaciones || null,
+      p_numero_referencia: data.numeroReferencia || null,
+      p_cuotas: data.cuotas || null,
+      p_recargo_porcentaje: data.recargoPorcentaje || null,
+      p_monto_original: data.montoOriginal || null,
+      p_items: JSON.stringify(pItems),
     })
+
+    if (rpcError) {
+      // Los errores de RAISE EXCEPTION vienen en error.message
+      console.error("Error en crear_venta_atomica:", rpcError)
+      return NextResponse.json(
+        { error: rpcError.message || "Error al crear venta" },
+        { status: 400 }
+      )
+    }
+
+    const ventaId = rpcResult?.ventaId || rpcResult
 
     // Obtener venta completa con relaciones
     const { data: ventaCompleta } = await supabaseAdmin
@@ -345,10 +220,20 @@ export async function POST(request: Request) {
         clientes (*),
         users:vendedor_id (id, nombre),
         items_venta (*, inventario (*)),
-        garantias_venta (*)
+        garantias_venta (*),
+        pagos_venta (*),
+        devoluciones_venta (*, items_devolucion(*))
       `)
-      .eq("id", venta.id)
+      .eq("id", ventaId)
       .single()
+
+    // Registrar en auditoría
+    const audit = createAuditLogger(organizationId!, userId!, request)
+    await audit.create("ventas", ventaId, {
+      numero_venta: ventaCompleta?.numero_venta,
+      total: ventaCompleta?.total,
+      items: data.items.length,
+    })
 
     // Obtener nombre de la organización para el mensaje de WhatsApp
     const { data: org } = await supabaseAdmin
@@ -359,40 +244,8 @@ export async function POST(request: Request) {
 
     // Formatear respuesta
     const response = {
-      id: ventaCompleta.id,
-      numeroVenta: ventaCompleta.numero_venta,
-      clienteId: ventaCompleta.cliente_id,
-      clienteNombre: ventaCompleta.cliente_nombre,
-      clienteTelefono: ventaCompleta.cliente_telefono,
+      ...formatVenta(ventaCompleta),
       organizationName: org?.nombre_mostrar || org?.nombre || null,
-      cliente: ventaCompleta.clientes,
-      vendedor: ventaCompleta.users,
-      items: ventaCompleta.items_venta?.map((item: any) => ({
-        id: item.id,
-        inventarioId: item.inventario_id,
-        inventario: item.inventario,
-        descripcion: item.descripcion,
-        cantidad: item.cantidad,
-        precioUnitario: item.precio_unitario,
-        subtotal: item.subtotal,
-        diasGarantia: item.dias_garantia,
-      })) || [],
-      garantias: ventaCompleta.garantias_venta?.map((g: any) => ({
-        id: g.id,
-        numeroGarantia: g.numero_garantia,
-        itemVentaId: g.item_venta_id,
-        diasValidez: g.dias_validez,
-        fechaInicio: g.fecha_inicio,
-        fechaVencimiento: g.fecha_vencimiento,
-        estado: g.estado,
-      })) || [],
-      subtotal: parseFloat(ventaCompleta.subtotal),
-      descuento: parseFloat(ventaCompleta.descuento),
-      total: parseFloat(ventaCompleta.total),
-      metodoPago: ventaCompleta.metodo_pago,
-      estado: ventaCompleta.estado,
-      observaciones: ventaCompleta.observaciones,
-      createdAt: ventaCompleta.created_at,
     }
 
     return NextResponse.json(response, { status: 201 })

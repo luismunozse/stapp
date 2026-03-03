@@ -40,16 +40,18 @@ describe("GET /api/clientes", () => {
       { id: "c2", nombre: "Maria Lopez", telefono: "0987654321", email: null, direccion: "Av. 123", dni: "12345678", created_at: "2024-01-02" },
     ]
 
-    const chain = createChainMock(mockClientes)
+    const chain = createChainMock(mockClientes, null, 2)
     mockSupabaseFrom({ clientes: chain })
 
     const response = await GET(createGetRequest("http://localhost:3000/api/clientes"))
     const { status, body } = await parseResponse(response)
 
     expect(status).toBe(200)
-    expect(body).toHaveLength(2)
-    expect(body[0].nombre).toBe("Juan Perez")
-    expect(body[1].nombre).toBe("Maria Lopez")
+    expect(body.data).toHaveLength(2)
+    expect(body.data[0].nombre).toBe("Juan Perez")
+    expect(body.data[1].nombre).toBe("Maria Lopez")
+    expect(body.total).toBe(2)
+    expect(body.page).toBe(1)
   })
 
   it("applies search filter when provided", async () => {

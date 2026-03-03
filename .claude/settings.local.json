@@ -66,7 +66,8 @@
       "Bash(node scripts/apply-migration.mjs:*)",
       "Bash(npm audit:*)",
       "Bash(npm cache clean --force)",
-      "Bash(xargs -I {} sh -c 'echo \"\"=== {} ===\"\" && wc -l {}')"
+      "Bash(xargs -I {} sh -c 'echo \"\"=== {} ===\"\" && wc -l {}')",
+      "Bash(npm run test)"
     ]
   }
 }
