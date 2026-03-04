@@ -199,7 +199,7 @@ export async function PUT(
         p_total: total,
         p_metodo_pago: metodoPago,
         p_observaciones: observaciones || null,
-        p_items: JSON.stringify(pItems),
+        p_items: pItems,
       })
 
       if (rpcError) {

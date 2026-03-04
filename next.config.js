@@ -1,8 +1,11 @@
+const { withSentryConfig } = require('@sentry/nextjs')
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
   serverExternalPackages: ['@react-pdf/renderer'],
   images: {
+    formats: ['image/avif', 'image/webp'],
     remotePatterns: [
       {
         protocol: 'https',
@@ -15,7 +18,7 @@ const nextConfig = {
       },
     ],
   },
-  // PWA
+  // PWA + SEO headers
   async headers() {
     return [
       {
@@ -27,9 +30,35 @@ const nextConfig = {
           },
         ],
       },
+      {
+        source: '/opensearch.xml',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'application/opensearchdescription+xml',
+          },
+        ],
+      },
     ]
   },
 }
 
-module.exports = nextConfig
+module.exports = withSentryConfig(nextConfig, {
+  org: process.env.SENTRY_ORG || "stapp-d4",
+  project: process.env.SENTRY_PROJECT || "javascript-nextjs",
+  authToken: process.env.SENTRY_AUTH_TOKEN,
 
+  silent: !process.env.CI,
+  hideSourceMaps: true,
+  telemetry: false,
+  disableLogger: true,
+  widenClientFileUpload: true,
+  tunnelRoute: "/monitoring",
+
+  webpack: {
+    automaticVercelMonitors: true,
+    treeshake: {
+      removeDebugLogging: true,
+    },
+  },
+})

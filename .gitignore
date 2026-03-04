@@ -40,3 +40,6 @@ next-env.d.ts
 /ios/
 
 nul
+
+# Sentry Config File
+.env.sentry-build-plugin

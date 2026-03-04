@@ -1,19 +1,37 @@
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, Users, Target, Award, Heart } from "lucide-react"
+import { BreadcrumbJsonLd } from "@/components/seo/json-ld"
 
 export const metadata = {
-  title: "Sobre Nosotros - STApp",
-  description: "Conoce más sobre STApp y nuestro equipo dedicado a transformar la gestión de talleres de reparación.",
+  title: "Sobre Nosotros - Equipo detr\u00e1s del Software de Servicio T\u00e9cnico",
+  description:
+    "Conoce al equipo de STApp dedicado a transformar la gesti\u00f3n de talleres de reparaci\u00f3n de celulares en Latinoam\u00e9rica. Nuestra misi\u00f3n, valores e historia.",
+  keywords: [
+    "sobre STApp",
+    "equipo STApp",
+    "software argentino servicio t\u00e9cnico",
+    "empresa software reparaciones",
+  ],
+  alternates: {
+    canonical: "https://stapp.com.ar/empresa/sobre-nosotros",
+  },
 }
 
 export default function SobreNosotrosPage() {
   return (
+    <>
+      <BreadcrumbJsonLd
+        items={[
+          { name: "Inicio", url: "https://stapp.com.ar" },
+          { name: "Sobre Nosotros", url: "https://stapp.com.ar/empresa/sobre-nosotros" },
+        ]}
+      />
     <div className="min-h-screen bg-gradient-to-b from-muted/50 to-background">
       {/* Header */}
       <header className="border-b bg-card">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <Link href="/landing">
+          <Link href="/">
             <Button variant="ghost" className="gap-2">
               <ArrowLeft className="h-4 w-4" />
               Volver al inicio
@@ -158,5 +176,6 @@ export default function SobreNosotrosPage() {
         </div>
       </footer>
     </div>
+    </>
   )
 }

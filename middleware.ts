@@ -65,6 +65,7 @@ function isPublicPath(pathname: string): boolean {
     "/cotizacion",
     "/kiosco",
     "/api/whatsapp/webhook",
+    "/api/health",
     "/app-entry",
     "/ayuda",
     "/descargar",

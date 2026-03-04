@@ -9,17 +9,22 @@ import { Check } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { m, LazyMotion, domAnimation } from "@/components/animations/motion"
 
-const features = [
-  "Órdenes ilimitadas",
-  "Técnicos ilimitados",
-  "Vendedores ilimitados",
-  "Clientes ilimitados",
-  "Reportes avanzados",
-  "5GB almacenamiento",
-  "Soporte prioritario",
-  "Notificaciones WhatsApp",
-  "Logo personalizado",
-  "Exportación de datos",
+interface PricingFeature {
+  text: string
+  highlight?: string
+}
+
+const features: PricingFeature[] = [
+  { text: "Órdenes ilimitadas" },
+  { text: "Técnicos ilimitados" },
+  { text: "Vendedores ilimitados" },
+  { text: "Clientes ilimitados" },
+  { text: "Reportes avanzados" },
+  { text: "5GB almacenamiento" },
+  { text: "Soporte prioritario" },
+  { text: "Notificaciones WhatsApp" },
+  { text: "Tu logo en presupuestos y órdenes", highlight: "Tu marca" },
+  { text: "Exportación de datos" },
 ]
 
 const prices = {
@@ -192,13 +197,21 @@ export function PricingSection() {
                 <ul className="grid grid-cols-2 gap-3">
                   {features.map((feature) => (
                     <m.li
-                      key={feature}
-                      className="flex items-center gap-2 text-sm list-none"
+                      key={feature.text}
+                      className={cn(
+                        "flex items-center gap-2 text-sm list-none",
+                        feature.highlight && "col-span-2 bg-primary/5 rounded-lg px-3 py-2 border border-primary/10"
+                      )}
                       whileHover={{ x: 3 }}
                       transition={{ type: "spring", stiffness: 400, damping: 17 }}
                     >
                       <Check className="w-4 h-4 flex-shrink-0 text-green-500" />
-                      <span>{feature}</span>
+                      <span>{feature.text}</span>
+                      {feature.highlight && (
+                        <span className="text-[10px] font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full ml-auto">
+                          {feature.highlight}
+                        </span>
+                      )}
                     </m.li>
                   ))}
                 </ul>
@@ -219,7 +232,7 @@ export function PricingSection() {
               <span>Pagos seguros con</span>
               <Image
                 src="/Mercado_Pago.svg.png"
-                alt="MercadoPago"
+                alt="MercadoPago - Pagos seguros para suscripci\u00f3n de software de servicio t\u00e9cnico"
                 width={100}
                 height={28}
                 className="inline-block"

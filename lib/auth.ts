@@ -94,6 +94,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         password: { label: "Contraseña", type: "password" },
         rememberMe: { label: "Recordarme", type: "text" },
         pwaRefreshToken: { label: "PWA Refresh Token", type: "text" },
+        totpCode: { label: "Codigo 2FA", type: "text" },
+        skip2FA: { label: "Skip 2FA check", type: "text" },
       },
       authorize: async (credentials) => {
         // Modo 1: Autenticación con refresh token (para PWA)
@@ -186,6 +188,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         if (!isPasswordValid) {
           return null
+        }
+
+        // Verificar si tiene 2FA activado
+        if (user.totp_enabled && credentials.skip2FA !== "true") {
+          // Lanzar error especial para que el frontend muestre el paso de 2FA
+          throw new Error(`REQUIRES_2FA:${user.id}`)
         }
 
         // Pasar rememberMe al token

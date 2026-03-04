@@ -14,6 +14,7 @@ import { Eye, EyeOff, CheckCircle } from "lucide-react"
 import { BusinessLogo } from "@/components/shared/business-logo"
 import { savePWATokens } from "@/components/auth/session-refresher"
 import { isNativePlatform } from "@/lib/capacitor"
+import { TwoFactorVerify } from "@/components/auth/two-factor-verify"
 
 interface TenantInfo {
   nombre: string
@@ -59,6 +60,10 @@ function LoginForm() {
   const [showResendOption, setShowResendOption] = useState(false)
   const [resendLoading, setResendLoading] = useState(false)
   const [resendSuccess, setResendSuccess] = useState(false)
+
+  // Estado para 2FA
+  const [requires2FA, setRequires2FA] = useState(false)
+  const [pending2FAUserId, setPending2FAUserId] = useState<string | null>(null)
 
   // Estado para tenant/subdominio
   const [tenantSlug, setTenantSlug] = useState<string | null>(null)
@@ -165,6 +170,67 @@ function LoginForm() {
     }
   }
 
+  // Callback cuando 2FA es verificado exitosamente
+  const handle2FAVerified = async () => {
+    setLoading(true)
+    setRequires2FA(false)
+    setPending2FAUserId(null)
+
+    try {
+      // Re-intentar login con skip2FA para completar la sesion
+      const result = await signIn("credentials", {
+        email,
+        password,
+        rememberMe: rememberMe.toString(),
+        skip2FA: "true",
+        redirect: false,
+      })
+
+      if (result?.error) {
+        setError("Error al completar la sesion")
+        setLoading(false)
+        return
+      }
+
+      // Continuar con la logica normal post-login
+      if (tenantSlug) {
+        const verifyRes = await fetch("/api/auth/verify-tenant", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ slug: tenantSlug }),
+        })
+
+        if (!verifyRes.ok) {
+          await signOut({ redirect: false })
+          setError("No tienes acceso a esta organizacion")
+          setLoading(false)
+          return
+        }
+
+        await saveRefreshTokenForPWA()
+        window.location.href = "/dashboard"
+      } else {
+        const orgRes = await fetch("/api/auth/user-organization", {
+          credentials: "include",
+        })
+
+        if (orgRes.ok) {
+          const { organization } = await orgRes.json()
+          await signOut({ redirect: false })
+          const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
+          const targetUrl = `https://${organization.slug}.${rootDomain}/login?email=${encodeURIComponent(email)}`
+          window.location.href = targetUrl
+        } else {
+          setError("No se pudo obtener la organizacion")
+          setLoading(false)
+        }
+      }
+    } catch {
+      setError("Error al iniciar sesion")
+      setLoading(false)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
@@ -179,7 +245,14 @@ function LoginForm() {
       })
 
       if (result?.error) {
-        if (result.error.includes("EMAIL_NOT_VERIFIED")) {
+        if (result.error.includes("REQUIRES_2FA")) {
+          // Extraer userId del error
+          const userId = result.error.split("REQUIRES_2FA:")[1]
+          setPending2FAUserId(userId)
+          setRequires2FA(true)
+          setLoading(false)
+          return
+        } else if (result.error.includes("EMAIL_NOT_VERIFIED")) {
           setError("Tu email no ha sido verificado. Revisa tu bandeja de entrada.")
           setShowResendOption(true)
         } else {
@@ -240,6 +313,26 @@ function LoginForm() {
       // Asegurar que loading se desactive si no hay redirección externa
       setTimeout(() => setLoading(false), 5000)
     }
+  }
+
+  // Mostrar pantalla de verificacion 2FA
+  if (requires2FA && pending2FAUserId) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-muted/30 dark:bg-background px-4">
+        <div className="absolute top-4 right-4">
+          <ThemeToggle variant="icon" />
+        </div>
+        <TwoFactorVerify
+          userId={pending2FAUserId}
+          onVerified={handle2FAVerified}
+          onCancel={() => {
+            setRequires2FA(false)
+            setPending2FAUserId(null)
+            setError("")
+          }}
+        />
+      </div>
+    )
   }
 
   return (

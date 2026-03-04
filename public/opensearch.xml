@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/">
+  <ShortName>STApp</ShortName>
+  <Description>Buscar en STApp - Software de Gesti&#243;n para Servicio T&#233;cnico</Description>
+  <Tags>servicio t&#233;cnico reparaci&#243;n celulares software gesti&#243;n taller</Tags>
+  <Contact>soporte@stapp.com</Contact>
+  <Url type="text/html" template="https://stapp.com.ar/ayuda?q={searchTerms}"/>
+  <Image width="16" height="16" type="image/x-icon">https://stapp.com.ar/favicon.ico</Image>
+  <InputEncoding>UTF-8</InputEncoding>
+  <OutputEncoding>UTF-8</OutputEncoding>
+  <Language>es-ar</Language>
+</OpenSearchDescription>

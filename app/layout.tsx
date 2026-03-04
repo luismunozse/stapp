@@ -12,6 +12,7 @@ import {
   SoftwareApplicationJsonLd,
   WebSiteJsonLd,
 } from "@/components/seo/json-ld"
+import { GoogleAnalytics } from "@/components/seo/google-analytics"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -73,10 +74,10 @@ export const metadata: Metadata = {
     description: "Sistema de gestión para servicio técnico de dispositivos electrónicos. Administra órdenes de trabajo, clientes, inventario y facturación.",
     images: [
       {
-        url: "/og-image.png",
+        url: "/api/og",
         width: 1200,
         height: 630,
-        alt: "STApp - Gestión de Servicio Técnico",
+        alt: "STApp - Software de Gestión para Servicio Técnico y Reparación de Celulares",
       },
     ],
   },
@@ -85,7 +86,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "STApp - Gestión de Servicio Técnico",
     description: "Sistema de gestión para servicio técnico de dispositivos electrónicos. Administra órdenes, clientes e inventario.",
-    images: ["/og-image.png"],
+    images: ["/api/og"],
     creator: "@stapp_ar",
   },
   // Robots
@@ -100,11 +101,16 @@ export const metadata: Metadata = {
       "max-snippet": -1,
     },
   },
-  // Alternates
+  // Alternates con hreflang para pa\u00edses hispanohablantes
   alternates: {
     canonical: siteUrl,
+    languages: {
+      "es-AR": siteUrl,
+      "es": siteUrl,
+      "x-default": siteUrl,
+    },
   },
-  // Verification (agregar IDs cuando estén disponibles)
+  // Verification (agregar IDs cuando est\u00e9n disponibles)
   // verification: {
   //   google: "google-site-verification-id",
   // },
@@ -154,6 +160,20 @@ export default async function RootLayout({
         {/* Manifest solo en subdominios de tenant (PWA instalable) */}
         {isTenant && <link rel="manifest" href="/manifest.json" />}
 
+        {/* Open Search Description */}
+        <link
+          rel="search"
+          type="application/opensearchdescription+xml"
+          title="STApp"
+          href="/opensearch.xml"
+        />
+
+        {/* Preload de recursos cr\u00edticos */}
+        <link rel="preconnect" href="https://images.unsplash.com" />
+        <link rel="dns-prefetch" href="https://images.unsplash.com" />
+        <link rel="preconnect" href="https://www.googletagmanager.com" />
+        <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
+
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="STApp" />
@@ -180,6 +200,9 @@ export default async function RootLayout({
         <OrganizationJsonLd />
         <SoftwareApplicationJsonLd />
         <WebSiteJsonLd />
+
+        {/* Google Analytics */}
+        <GoogleAnalytics />
       </head>
       <body className={inter.className}>
         <Providers>

@@ -50,7 +50,7 @@ const categories = [
       {
         name: "Firma Digital",
         description:
-          "Capturá la firma del cliente en la entrega desde cualquier dispositivo. Conformidad digital que respalda cada trabajo completado.",
+          "Capturá la firma del cliente al momento de la entrega. Ante cualquier reclamo, tenés el respaldo.",
         icon: PenLine,
         color: "bg-emerald-500",
       },
@@ -65,28 +65,28 @@ const categories = [
       {
         name: "Gestión de Clientes",
         description:
-          "Toda la información de tus clientes en un solo lugar. Historial completo de reparaciones, contactos y notas importantes.",
+          "Cuando un cliente vuelve, ya sabés todo: qué trajo, qué le hiciste y cuánto pagó. Sin buscar en papeles.",
         icon: Users,
         color: "bg-orange-500",
       },
       {
         name: "Control de Inventario",
         description:
-          "Nunca te quedes sin stock. Alertas automáticas cuando un repuesto está por agotarse, control de costos y gestión de proveedores.",
+          "Nunca te quedes sin stock. Recibí alertas antes de que se agote un repuesto y controlá tus costos en tiempo real.",
         icon: Package,
         color: "bg-green-500",
       },
       {
         name: "Control de Cobros",
         description:
-          "De la orden al cobro en un click. Genera comprobantes internos, registra pagos parciales y controlá tus cuentas por cobrar.",
+          "De la orden al cobro en un click. Registrá pagos parciales, generá comprobantes y sabé exactamente quién te debe y cuánto.",
         icon: Receipt,
         color: "bg-purple-500",
       },
       {
         name: "Sistema de Garantías",
         description:
-          "Gestioná garantías sin dolores de cabeza. Alertas de vencimiento, registro de reclamos y trazabilidad completa de cada caso.",
+          "Sabé en todo momento qué garantías están vigentes, cuáles vencen pronto y qué reclamos tenés pendientes. Sin perder nada.",
         icon: ShieldCheck,
         color: "bg-red-500",
       },
@@ -101,28 +101,28 @@ const categories = [
       {
         name: "Gestión de Equipo",
         description:
-          "Administrá técnicos y vendedores. Asigná reparaciones, visualizá la carga de trabajo y medí el rendimiento de cada uno.",
+          "Asigná reparaciones a cada técnico, sabé quién tiene demasiado trabajo y medí quién rinde más.",
         icon: Wrench,
         color: "bg-rose-500",
       },
       {
         name: "Notificaciones por WhatsApp",
         description:
-          "Mantené a tus clientes informados con plantillas de WhatsApp listas para enviar con un click. Mensajes profesionales en segundos.",
+          "Avisale al cliente cuando su equipo está listo con un mensaje de WhatsApp, sin escribir nada desde cero.",
         icon: Bell,
         color: "bg-yellow-500",
       },
       {
         name: "Reportes y Métricas",
         description:
-          "Tomá decisiones basadas en datos. Dashboard con ingresos, tiempos de reparación, rendimiento del equipo y tendencias.",
+          "¿Tu taller está creciendo o perdiendo plata? Los reportes te lo dicen en un vistazo: ingresos, tiempos, rendimiento del equipo.",
         icon: BarChart3,
         color: "bg-cyan-500",
       },
       {
         name: "App Móvil (PWA)",
         description:
-          "Tu taller en el bolsillo. Instalá la app en tu celular y gestioná todo desde cualquier lugar, incluso sin conexión.",
+          "¿Usás iPhone o no querés instalar nada? Accedé igual desde cualquier dispositivo, incluso sin conexión.",
         icon: Smartphone,
         color: "bg-pink-500",
       },
@@ -144,10 +144,12 @@ export function Features() {
             transition={{ duration: 0.6 }}
           >
             <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
-              Todo lo que necesitas en un solo lugar
+              Menos caos, más reparaciones
             </h2>
             <p className="text-lg text-muted-foreground">
-              12 herramientas poderosas diseñadas para que tu taller funcione como reloj.
+              Todo lo que pasa en tu taller, en una sola pantalla. Fotos por
+              etapa, firma digital, WhatsApp integrado y control de garantías
+              — pensado para talleres de reparación, no adaptado de otro rubro.
             </p>
           </m.div>
 

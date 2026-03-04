@@ -613,7 +613,7 @@ export function Hero() {
               >
                 <Badge variant="secondary" className="px-3 py-1 text-sm font-medium">
                   <Star className="w-3.5 h-3.5 mr-1.5 text-yellow-500" />
-                  +500 talleres confían en nosotros
+                  30 días gratis, sin tarjeta de crédito
                 </Badge>
               </m.div>
 
@@ -624,8 +624,8 @@ export function Hero() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.1 }}
               >
-                Gestiona tu taller{" "}
-                <span className="text-primary">como un profesional</span>
+                Nunca más pierdas una{" "}
+                <span className="text-primary">reparación entre papeles</span>
               </m.h1>
 
               {/* Subheadline */}
@@ -635,8 +635,9 @@ export function Hero() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.2 }}
               >
-                El sistema todo-en-uno para talleres de reparación. Órdenes, inventario,
-                clientes y pagos en una sola plataforma.
+                STApp te da el control total de tu taller: sabés dónde está cada
+                equipo, qué le falta al cliente y cuánto cobraste, todo desde el
+                celular.
               </m.p>
 
               {/* Benefits */}

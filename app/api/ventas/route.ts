@@ -198,7 +198,7 @@ export async function POST(request: Request) {
       p_cuotas: data.cuotas || null,
       p_recargo_porcentaje: data.recargoPorcentaje || null,
       p_monto_original: data.montoOriginal || null,
-      p_items: JSON.stringify(pItems),
+      p_items: pItems,
     })
 
     if (rpcError) {

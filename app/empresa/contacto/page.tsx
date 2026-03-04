@@ -94,7 +94,7 @@ export default function ContactoPage() {
       {/* Header */}
       <header className="border-b bg-card">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <Link href="/landing">
+          <Link href="/">
             <Button variant="ghost" className="gap-2">
               <ArrowLeft className="h-4 w-4" />
               Volver al inicio
@@ -320,7 +320,7 @@ export default function ContactoPage() {
                   </p>
                   <div className="space-y-2">
                     <Button variant="outline" className="w-full" asChild>
-                      <Link href="/landing#faq">Ver FAQ</Link>
+                      <Link href="/#faq">Ver FAQ</Link>
                     </Button>
                     <Button className="w-full" asChild>
                       <Link href="/registro">Probar gratis</Link>

@@ -46,9 +46,9 @@ export function SoftwareApplicationJsonLd() {
     operatingSystem: "Web",
     offers: {
       "@type": "Offer",
-      price: "14900",
+      price: "19999",
       priceCurrency: "ARS",
-      priceValidUntil: "2025-12-31",
+      priceValidUntil: "2026-12-31",
     },
     aggregateRating: {
       "@type": "AggregateRating",

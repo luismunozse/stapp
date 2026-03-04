@@ -1,10 +1,11 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, type FormEvent } from "react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
 import {
   Download,
   Smartphone,
@@ -14,6 +15,9 @@ import {
   CheckCircle,
   ChevronLeft,
   ChevronRight,
+  Apple,
+  Loader2,
+  Mail,
 } from "lucide-react"
 import { LazyMotion, domAnimation, m, AnimatePresence } from "framer-motion"
 import { cn } from "@/lib/utils"
@@ -31,10 +35,10 @@ interface ApkInfo {
  * Tamaño recomendado: 1080x1920 (o cualquier ratio 9:16)
  */
 const screenshots = [
-  { src: "/screenshots/dashboard.png", label: "Dashboard" },
-  { src: "/screenshots/ordenes.png", label: "Órdenes" },
-  { src: "/screenshots/clientes.png", label: "Clientes" },
-  { src: "/screenshots/inventario.png", label: "Inventario" },
+  { src: "/screenshots/dashboard.png", label: "Dashboard", alt: "Panel de control STApp - M\u00e9tricas y estad\u00edsticas del taller de reparaci\u00f3n en tiempo real" },
+  { src: "/screenshots/ordenes.png", label: "\u00d3rdenes", alt: "Gesti\u00f3n de \u00f3rdenes de trabajo - Sistema de seguimiento de reparaciones de celulares" },
+  { src: "/screenshots/clientes.png", label: "Clientes", alt: "Base de datos de clientes - Historial de reparaciones y datos de contacto" },
+  { src: "/screenshots/inventario.png", label: "Inventario", alt: "Control de inventario de repuestos - Stock de pantallas, bater\u00edas y componentes" },
 ]
 
 const features = [
@@ -122,7 +126,7 @@ function PhoneCarousel() {
                   {hasImages ? (
                     <Image
                       src={screenshots[current].src}
-                      alt={screenshots[current].label}
+                      alt={screenshots[current].alt}
                       fill
                       className="object-cover object-top"
                       sizes="280px"
@@ -198,6 +202,90 @@ function PhoneCarousel() {
   )
 }
 
+function IosWaitlist() {
+  const [email, setEmail] = useState("")
+  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle")
+  const [errorMsg, setErrorMsg] = useState("")
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    setStatus("loading")
+    setErrorMsg("")
+
+    try {
+      const res = await fetch("/api/waitlist/ios", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || "Error al registrar")
+      }
+
+      setStatus("success")
+      setEmail("")
+    } catch (err) {
+      setStatus("error")
+      setErrorMsg(err instanceof Error ? err.message : "Error al registrar")
+    }
+  }
+
+  return (
+    <m.div
+      className="mt-12 max-w-md mx-auto"
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.5 }}
+    >
+      <Card className="p-6 border-dashed">
+        <div className="flex items-center gap-2 mb-3">
+          <Apple className="w-5 h-5 text-foreground" />
+          <h3 className="font-semibold text-foreground">¿Usás iPhone?</h3>
+        </div>
+        <p className="text-sm text-muted-foreground mb-4">
+          La app para iOS está en camino. Dejá tu email y te avisamos cuando esté lista.
+        </p>
+
+        {status === "success" ? (
+          <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+            <CheckCircle className="w-4 h-4" />
+            <span>¡Listo! Te avisaremos cuando esté disponible.</span>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="flex gap-2">
+            <Input
+              type="email"
+              placeholder="tu@email.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              disabled={status === "loading"}
+              className="flex-1"
+            />
+            <Button type="submit" size="sm" disabled={status === "loading"}>
+              {status === "loading" ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <>
+                  <Mail className="w-4 h-4 mr-1.5" />
+                  Avisarme
+                </>
+              )}
+            </Button>
+          </form>
+        )}
+
+        {status === "error" && (
+          <p className="text-sm text-destructive mt-2">{errorMsg}</p>
+        )}
+      </Card>
+    </m.div>
+  )
+}
+
 export function DownloadApp() {
   const [apkInfo, setApkInfo] = useState<ApkInfo>({ available: false })
   const [loading, setLoading] = useState(true)
@@ -257,8 +345,8 @@ export function DownloadApp() {
               </h2>
 
               <p className="text-base sm:text-lg text-muted-foreground mb-6 max-w-lg mx-auto lg:mx-0">
-                Accedé a STApp directamente desde tu dispositivo Android. Gestioná tu
-                taller desde cualquier lugar con la experiencia nativa.
+                Instalá la app nativa en tu Android. Abrila directo desde el
+                inicio, sin pasar por el navegador.
               </p>
 
               {/* Feature list */}
@@ -317,6 +405,8 @@ export function DownloadApp() {
               )}
             </m.div>
           </div>
+
+          <IosWaitlist />
         </div>
       </section>
     </LazyMotion>

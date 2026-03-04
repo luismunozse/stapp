@@ -67,7 +67,9 @@
       "Bash(npm audit:*)",
       "Bash(npm cache clean --force)",
       "Bash(xargs -I {} sh -c 'echo \"\"=== {} ===\"\" && wc -l {}')",
-      "Bash(npm run test)"
+      "Bash(npm run test)",
+      "Bash(sed 's/CREATE TABLE//')",
+      "Read(//c/Users/PC/OneDrive/Escritorio/stapp/**)"
     ]
   }
 }

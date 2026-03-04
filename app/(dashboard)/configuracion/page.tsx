@@ -4,8 +4,10 @@ import { ConfiguracionForm } from "@/components/configuracion/configuracion-form
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { CookieSettings } from "@/components/cookie-settings"
 import Link from "next/link"
-import { ClipboardCheck, ChevronRight, CreditCard, FileSpreadsheet, Smartphone, Monitor, MessageCircle } from "lucide-react"
+import { ClipboardCheck, ChevronRight, CreditCard, FileSpreadsheet, Smartphone, Monitor, MessageCircle, Shield } from "lucide-react"
 import { canEditConfiguration } from "@/lib/auth-utils"
+import { SecuritySettings } from "@/components/configuracion/security-settings"
+import { supabaseAdmin } from "@/lib/supabase"
 
 export default async function ConfiguracionPage() {
   const session = await auth()
@@ -19,6 +21,15 @@ export default async function ConfiguracionPage() {
   }
 
   const allowEdit = await canEditConfiguration()
+
+  // Obtener estado de 2FA del usuario
+  const { data: userData } = await supabaseAdmin
+    .from("users")
+    .select("totp_enabled")
+    .eq("id", session.user.id)
+    .single()
+
+  const totpEnabled = userData?.totp_enabled || false
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -143,6 +154,9 @@ export default async function ConfiguracionPage() {
           </Card>
         </Link>
       </div>
+
+      {/* Seguridad - 2FA */}
+      <SecuritySettings totpEnabled={totpEnabled} />
 
       {!allowEdit && (
         <div className="bg-yellow-50 dark:bg-yellow-950/50 border border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-300 px-4 py-3 rounded-lg">

@@ -3,62 +3,18 @@
 import { useState } from "react"
 import { ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { LazyMotion, domAnimation, m, AnimatePresence } from "framer-motion"
+import { LazyMotion, domAnimation, m } from "framer-motion"
 
-const faqs = [
-  {
-    question: "¿Necesito instalar algo en mi computadora?",
-    answer:
-      "No, STApp es una aplicación web que funciona directamente en tu navegador desde cualquier dispositivo. Solo necesitas conexión a internet. Además, podés descargar la app nativa para Android (APK), instalarla como PWA en cualquier dispositivo, y próximamente estará disponible también en iOS.",
-  },
-  {
-    question: "¿Puedo probar antes de pagar?",
-    answer:
-      "¡Por supuesto! Tienes 30 días gratis con acceso completo a todas las funciones, sin necesidad de tarjeta de crédito. Si no te convence, simplemente no hacés nada y la prueba finaliza sin ningún cargo.",
-  },
-  {
-    question: "¿Qué métodos de pago aceptan?",
-    answer:
-      "Aceptamos tarjetas de crédito, débito, efectivo y otros medios de pago a través de MercadoPago. Podés elegir entre plan mensual o anual (con descuento). Los pagos se procesan de forma segura.",
-  },
-  {
-    question: "¿Puedo cancelar mi suscripción en cualquier momento?",
-    answer:
-      "Sí, podés cancelar cuando quieras sin penalidades ni cargos ocultos. Mantendrás el acceso a todas las funciones hasta el final del período ya facturado.",
-  },
-  {
-    question: "¿Puedo importar y exportar mis datos?",
-    answer:
-      "Sí, podés importar clientes e inventario desde archivos Excel o CSV con plantillas descargables y validación automática. También podés exportar tus datos en cualquier momento. Tus datos son tuyos siempre.",
-  },
-  {
-    question: "¿Mis datos están seguros?",
-    answer:
-      "Absolutamente. Usamos encriptación HTTPS/TLS, controles de acceso estrictos, monitoreo continuo y copias de seguridad periódicas. Tu información y la de tus clientes está protegida en todo momento.",
-  },
-  {
-    question: "¿Cómo funcionan las notificaciones por WhatsApp?",
-    answer:
-      "STApp incluye plantillas listas para enviar actualizaciones a tus clientes por WhatsApp: aviso de equipo listo, presupuestos, seguimiento de reparación y más. Todo con un solo clic desde la orden de servicio.",
-  },
-  {
-    question: "¿Puedo gestionar varios técnicos y vendedores?",
-    answer:
-      "Sí, podés agregar técnicos y vendedores ilimitados. Asigná reparaciones, visualizá la carga de trabajo de cada uno y seguí el rendimiento del equipo con métricas en tiempo real.",
-  },
-  {
-    question: "¿Cómo puedo obtener soporte si tengo un problema?",
-    answer:
-      "Tenés varias opciones: nuestro asistente virtual Santi disponible dentro de la app, el sistema de tickets de soporte para reportar errores o hacer consultas, y también podés contactarnos directamente. Brindamos soporte prioritario a todos los usuarios.",
-  },
-  {
-    question: "¿Pueden agregar funciones que necesito?",
-    answer:
-      "¡Claro! Estamos en constante mejora basándonos en el feedback de nuestros usuarios. Podés enviar sugerencias desde el sistema de soporte dentro de la app y muchas funciones nuevas nacen de las ideas de nuestros clientes.",
-  },
-]
+interface FAQItem {
+  question: string
+  answer: string
+}
 
-export function FAQ() {
+interface FAQProps {
+  faqs: FAQItem[]
+}
+
+export function FAQ({ faqs }: FAQProps) {
   const [openIndex, setOpenIndex] = useState<number | null>(0)
 
   return (
@@ -77,8 +33,7 @@ export function FAQ() {
               Preguntas frecuentes
             </h2>
             <p className="text-lg text-muted-foreground">
-              ¿Tienes dudas? Aquí encontrarás las respuestas a las preguntas más
-              comunes.
+              Todo lo que querés saber antes de empezar.
             </p>
           </m.div>
 
@@ -117,27 +72,27 @@ export function FAQ() {
                   </m.div>
                 </m.button>
 
-                <AnimatePresence initial={false}>
-                  {openIndex === index && (
-                    <m.div
-                      id={`faq-answer-${index}`}
-                      role="region"
-                      aria-labelledby={`faq-question-${index}`}
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: "auto", opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{
-                        height: { duration: 0.3, ease: [0.25, 0.4, 0.25, 1] },
-                        opacity: { duration: 0.2 }
-                      }}
-                      className="overflow-hidden"
-                    >
-                      <p className="text-muted-foreground pb-5">
-                        {faq.answer}
-                      </p>
-                    </m.div>
-                  )}
-                </AnimatePresence>
+                {/* Always rendered in DOM for SEO - animated with height */}
+                <m.div
+                  id={`faq-answer-${index}`}
+                  role="region"
+                  aria-labelledby={`faq-question-${index}`}
+                  aria-hidden={openIndex !== index}
+                  initial={false}
+                  animate={{
+                    height: openIndex === index ? "auto" : 0,
+                    opacity: openIndex === index ? 1 : 0,
+                  }}
+                  transition={{
+                    height: { duration: 0.3, ease: [0.25, 0.4, 0.25, 1] },
+                    opacity: { duration: 0.2 },
+                  }}
+                  className="overflow-hidden"
+                >
+                  <p className="text-muted-foreground pb-5">
+                    {faq.answer}
+                  </p>
+                </m.div>
               </m.div>
             ))}
           </div>
