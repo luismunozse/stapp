@@ -120,7 +120,11 @@ export async function POST(request: Request) {
           { status: 400 }
         )
       }
-      throw dbError
+      console.error("DB Error creating tipo dispositivo:", dbError)
+      return NextResponse.json(
+        { error: `Error de base de datos: ${dbError.message}` },
+        { status: 500 }
+      )
     }
 
     return NextResponse.json(formatTipoDispositivo(tipo), { status: 201 })
@@ -132,8 +136,9 @@ export async function POST(request: Request) {
       )
     }
     console.error("Error creating tipo dispositivo:", error)
+    const message = error instanceof Error ? error.message : "Error desconocido"
     return NextResponse.json(
-      { error: "Error al crear tipo de dispositivo" },
+      { error: `Error al crear tipo de dispositivo: ${message}` },
       { status: 500 }
     )
   }
