@@ -107,15 +107,12 @@ export function TiposDispositivoEditor() {
   }
 
   const handleDelete = async (tipo: TipoDispositivoCustom) => {
-    if (tipo.esBase) {
-      alert("Los tipos base no se pueden eliminar, solo desactivar")
-      return
-    }
-
     const confirmed = await confirm({
-      title: "Eliminar Tipo",
-      description: `¿Eliminar el tipo "${tipo.nombre}"?`,
-      confirmText: "Eliminar",
+      title: tipo.esBase ? "Desactivar Tipo" : "Eliminar Tipo",
+      description: tipo.esBase
+        ? `¿Desactivar el tipo "${tipo.nombre}"? Podrás reactivarlo después.`
+        : `¿Eliminar el tipo "${tipo.nombre}"?`,
+      confirmText: tipo.esBase ? "Desactivar" : "Eliminar",
       cancelText: "Cancelar",
       variant: "danger",
     })
@@ -341,16 +338,15 @@ export function TiposDispositivoEditor() {
                           <PowerOff className="h-4 w-4 text-muted-foreground" />
                         )}
                       </Button>
-                      {!tipo.esBase && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDelete(tipo)}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDelete(tipo)}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        title={tipo.esBase ? "Desactivar tipo" : "Eliminar tipo"}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
                 ))}
