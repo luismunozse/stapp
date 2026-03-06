@@ -19,9 +19,7 @@ const inventarioRowSchema = z.object({
   nombre: z.string().min(1, 'El nombre es requerido'),
   descripcion: z.string().optional().or(z.null()).or(z.literal('')),
   categoria: z.string().min(1, 'La categoría es requerida'),
-  tipoDispositivo: z.enum(['CELULAR', 'COMPUTADORA', 'TABLET', 'CONSOLA', 'SMARTWATCH', 'TODOS'], {
-    errorMap: () => ({ message: 'Tipo de dispositivo inválido. Debe ser: CELULAR, COMPUTADORA, TABLET, CONSOLA, SMARTWATCH o TODOS' })
-  }),
+  tipoDispositivo: z.string().min(1, 'El tipo de dispositivo es requerido'),
   stock: z.union([
     z.number().int().min(0, 'El stock debe ser mayor o igual a 0'),
     z.string().transform((val) => {

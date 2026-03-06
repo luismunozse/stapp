@@ -21,6 +21,7 @@ import { X, Plus, Camera, Upload, Trash2, Loader2, Lock, Grid3X3 } from "lucide-
 import { PatternLock } from "@/components/ui/pattern-lock"
 import { OrdenCreadaModal } from "./orden-creada-modal"
 import { compressImage } from "@/lib/image-compression"
+import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
 import type { Cliente } from "@/types"
 
 interface FotoPreview {
@@ -94,6 +95,16 @@ const ACCESORIOS_POR_TIPO: Record<string, { id: string; label: string }[]> = {
   ],
 }
 
+// Accesorios genéricos para tipos de dispositivo personalizados
+const ACCESORIOS_GENERICOS = [
+  { id: "cable_poder", label: "Cable de poder" },
+  { id: "cargador", label: "Cargador/Fuente" },
+  { id: "cable_datos", label: "Cable de datos" },
+  { id: "control_remoto", label: "Control remoto" },
+  { id: "manual", label: "Manual" },
+  { id: "caja_original", label: "Caja original" },
+]
+
 // Problemas comunes por tipo de dispositivo
 const PROBLEMAS_COMUNES: Record<string, string[]> = {
   CELULAR: [
@@ -158,6 +169,18 @@ const PROBLEMAS_COMUNES: Record<string, string[]> = {
   ],
 }
 
+// Problemas genéricos para tipos de dispositivo personalizados
+const PROBLEMAS_GENERICOS = [
+  "No enciende",
+  "No funciona correctamente",
+  "Hace ruido extraño",
+  "Se apaga solo",
+  "Error en pantalla/display",
+  "No conecta a red/WiFi",
+  "Mantenimiento preventivo",
+  "Revisión general",
+]
+
 // Marcas comunes por tipo de dispositivo
 const MARCAS_POR_TIPO: Record<string, string[]> = {
   CELULAR: ["Apple", "Samsung", "Xiaomi", "Motorola", "Huawei", "LG", "Sony", "OnePlus", "Oppo", "Realme"],
@@ -192,13 +215,10 @@ const MODELOS_CONSOLA = [
 const ordenSchema = z.object({
   clienteId: z.string().min(1, "El cliente es requerido"),
   dispositivo: z.string().min(1, "El dispositivo es requerido"),
-  tipoDispositivo: z.enum(["CELULAR", "COMPUTADORA", "TABLET", "CONSOLA", "SMARTWATCH"]),
+  tipoDispositivo: z.string().min(1, "El tipo de dispositivo es requerido"),
   marca: z.string().optional(),
   color: z.string().optional(),
-  imei: z.string()
-    .regex(/^(\d{15})?$/, "El IMEI debe tener exactamente 15 dígitos")
-    .optional()
-    .or(z.literal("")),
+  imei: z.string().optional().or(z.literal("")),
   problemaReportado: z.string().min(1, "El problema es requerido"),
   accesorios: z.string().optional(),
   codigoAccesoDispositivo: z.string().optional(),
@@ -255,6 +275,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
   const [comprimiendo, setComprimiendo] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
+  const { tipos: tiposDispositivo, loading: tiposLoading } = useTiposDispositivo()
 
   const {
     register,
@@ -290,17 +311,20 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
   const tipoDispositivo = watch("tipoDispositivo")
 
   // Obtener accesorios según tipo de dispositivo
-  const accesoriosDisponibles = ACCESORIOS_POR_TIPO[tipoDispositivo] || ACCESORIOS_POR_TIPO.CELULAR
+  const accesoriosDisponibles = ACCESORIOS_POR_TIPO[tipoDispositivo] || ACCESORIOS_GENERICOS
 
   // Obtener problemas comunes según tipo
-  const problemasComunes = PROBLEMAS_COMUNES[tipoDispositivo] || []
+  const problemasComunes = PROBLEMAS_COMUNES[tipoDispositivo] || PROBLEMAS_GENERICOS
 
   // Obtener marcas según tipo
   const marcasDisponibles = MARCAS_POR_TIPO[tipoDispositivo] || []
 
+  // Determinar si es un tipo base conocido
+  const esTipoBase = ["CELULAR", "COMPUTADORA", "TABLET", "CONSOLA", "SMARTWATCH"].includes(tipoDispositivo)
+
   // Limpiar campos específicos cuando cambia el tipo
   const handleTipoChange = (nuevoTipo: string) => {
-    setValue("tipoDispositivo", nuevoTipo as OrdenFormData["tipoDispositivo"])
+    setValue("tipoDispositivo", nuevoTipo)
     // Limpiar accesorios seleccionados al cambiar tipo
     setAccesoriosSeleccionados([])
     // Limpiar campos específicos
@@ -602,29 +626,40 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
           {/* Tipo de dispositivo con selector visual */}
           <div>
             <Label>Tipo de Dispositivo *</Label>
-            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mt-2">
-              {[
-                { value: "CELULAR", label: "Celular", icon: "📱" },
-                { value: "COMPUTADORA", label: "PC", icon: "💻" },
-                { value: "TABLET", label: "Tablet", icon: "📟" },
-                { value: "CONSOLA", label: "Consola", icon: "🎮" },
-                { value: "SMARTWATCH", label: "Watch", icon: "⌚" },
-              ].map((tipo) => (
-                <button
-                  key={tipo.value}
-                  type="button"
-                  onClick={() => handleTipoChange(tipo.value)}
-                  className={`flex flex-col items-center justify-center p-3 border rounded-lg transition-all ${
-                    tipoDispositivo === tipo.value
-                      ? "bg-primary text-primary-foreground border-primary shadow-md scale-105"
-                      : "hover:bg-muted hover:border-primary/50"
-                  }`}
-                >
-                  <span className="text-2xl mb-1">{tipo.icon}</span>
-                  <span className="text-xs font-medium">{tipo.label}</span>
-                </button>
-              ))}
-            </div>
+            {tiposLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className={`grid gap-2 mt-2 ${
+                tiposDispositivo.length <= 5
+                  ? "grid-cols-3 sm:grid-cols-5"
+                  : tiposDispositivo.length <= 8
+                  ? "grid-cols-3 sm:grid-cols-4"
+                  : "grid-cols-3 sm:grid-cols-4 lg:grid-cols-5"
+              }`}>
+                {tiposDispositivo.map((tipo) => (
+                  <button
+                    key={tipo.codigo}
+                    type="button"
+                    onClick={() => handleTipoChange(tipo.codigo)}
+                    className={`flex flex-col items-center justify-center p-3 border rounded-lg transition-all ${
+                      tipoDispositivo === tipo.codigo
+                        ? "bg-primary text-primary-foreground border-primary shadow-md scale-105"
+                        : "hover:bg-muted hover:border-primary/50"
+                    }`}
+                  >
+                    <span className="text-2xl mb-1">{tipo.icono || "🔧"}</span>
+                    <span className="text-xs font-medium truncate w-full text-center">{tipo.nombre}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {errors.tipoDispositivo && (
+              <p className="text-sm text-destructive mt-1">
+                {errors.tipoDispositivo.message}
+              </p>
+            )}
           </div>
 
           {/* Dispositivo - Para consolas mostrar selector de modelos */}
@@ -664,6 +699,10 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
                       ? "Ej: HP Pavilion 15, Dell Inspiron 3000"
                       : tipoDispositivo === "CELULAR"
                       ? "Ej: iPhone 12 Pro Max, Samsung S21"
+                      : tipoDispositivo === "TABLET"
+                      ? "Ej: iPad Pro 12.9, Galaxy Tab S7"
+                      : !esTipoBase
+                      ? "Modelo o descripción del equipo"
                       : "Ej: iPad Pro 12.9, Galaxy Tab S7"
                   }
                 />
@@ -837,7 +876,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
             </div>
           )}
 
-          {/* Color e IMEI solo para dispositivos que no son consolas */}
+          {/* Color e IMEI/Serial */}
           {tipoDispositivo !== "CONSOLA" && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
@@ -850,12 +889,12 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
               </div>
               {tipoDispositivo !== "COMPUTADORA" && (
                 <div>
-                  <Label htmlFor="imei">IMEI/Serial</Label>
+                  <Label htmlFor="imei">{esTipoBase ? "IMEI/Serial" : "Número de Serie"}</Label>
                   <Input
                     id="imei"
                     {...register("imei")}
-                    placeholder="123456789012345"
-                    maxLength={15}
+                    placeholder={esTipoBase ? "123456789012345" : "S/N del equipo"}
+                    maxLength={esTipoBase ? 15 : undefined}
                   />
                   {errors.imei && (
                     <p className="text-sm text-destructive mt-1">
@@ -896,13 +935,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
             <Textarea
               id="problemaReportado"
               {...register("problemaReportado")}
-              placeholder={
-                tipoDispositivo === "COMPUTADORA"
-                  ? "Describa el problema... Ej: La PC no enciende, pantalla azul al iniciar Windows, muy lenta"
-                  : tipoDispositivo === "CONSOLA"
-                  ? "Describa el problema... Ej: No lee discos, se apaga sola, el control no sincroniza"
-                  : "Describa el problema..."
-              }
+              placeholder="Describa el problema del equipo..."
               rows={3}
             />
             {errors.problemaReportado && (

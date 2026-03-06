@@ -27,7 +27,7 @@ export type EstadoOrden =
   | "CANCELADO"
   | "SIN_REPARACION"
 
-export type TipoDispositivo =
+export type TipoDispositivoBase =
   | "CELULAR"
   | "COMPUTADORA"
   | "TABLET"
@@ -35,6 +35,9 @@ export type TipoDispositivo =
   | "SMARTWATCH"
   | "ACCESORIOS"
   | "TODOS"
+
+// Acepta tipos base y tipos personalizados (cualquier string)
+export type TipoDispositivo = TipoDispositivoBase | (string & {})
 
 export type EstadoPago = "PENDIENTE" | "PAGADO_PARCIAL" | "PAGADO" | "ANULADA"
 

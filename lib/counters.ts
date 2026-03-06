@@ -29,12 +29,26 @@ export async function getNextOrderNumber(organizationId: string): Promise<number
 /**
  * Obtener el siguiente número de orden formateado con prefijo por tipo de dispositivo
  * Formato: CEL001, PC001, TAB001, CONS001, SW001
+ * Para tipos personalizados, busca el prefijo en la tabla tipos_dispositivo
  */
 export async function getNextOrderNumberByType(
   organizationId: string,
   tipoDispositivo: string
 ): Promise<{ codigo: string; numero: number }> {
-  const prefix = DEVICE_TYPE_PREFIXES[tipoDispositivo] || "ORD"
+  let prefix = DEVICE_TYPE_PREFIXES[tipoDispositivo]
+
+  // Si no es un tipo base, buscar el prefijo en la tabla de tipos personalizados
+  if (!prefix) {
+    const { data: tipoCustom } = await supabaseAdmin
+      .from("tipos_dispositivo")
+      .select("prefijo_orden")
+      .eq("organization_id", organizationId)
+      .eq("codigo", tipoDispositivo)
+      .eq("activo", true)
+      .single()
+
+    prefix = tipoCustom?.prefijo_orden || "ORD"
+  }
 
   // Buscar el último número de orden de TODA la organización (sin filtrar por tipo)
   // porque el unique constraint es (organization_id, numero_orden)

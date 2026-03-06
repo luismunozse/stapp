@@ -36,7 +36,7 @@ const todasLasCategorias = [
   "Otros",
 ]
 
-const categoriasPorTipo: Record<TipoDispositivo | "", string[]> = {
+const categoriasPorTipo: Record<string, string[]> = {
   "": todasLasCategorias,
   "CELULAR": ["Baterías", "Pantallas", "Carcasas", "Memoria", "Otros"],
   "COMPUTADORA": todasLasCategorias,
@@ -83,7 +83,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
       .catch(() => {})
   }, [])
 
-  const categoriasDisponibles = categoriasPorTipo[tipoDispositivo]
+  const categoriasDisponibles = categoriasPorTipo[tipoDispositivo] || todasLasCategorias
 
   const handleSearchChange = useCallback((value: string) => {
     setSearch(value)
@@ -99,7 +99,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   const handleTipoChange = (nuevoTipo: TipoDispositivo | "") => {
     setTipoDispositivo(nuevoTipo)
     setPage(1)
-    const nuevasCategorias = categoriasPorTipo[nuevoTipo]
+    const nuevasCategorias = categoriasPorTipo[nuevoTipo] || todasLasCategorias
     if (categoria && !nuevasCategorias.includes(categoria)) {
       setCategoria("")
     }

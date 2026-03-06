@@ -1,5 +1,7 @@
 export type Rol = "ADMIN" | "TECNICO" | "VENDEDOR"
-export type TipoDispositivo = "CELULAR" | "COMPUTADORA" | "TABLET" | "CONSOLA" | "SMARTWATCH" | "ACCESORIOS" | "TODOS"
+export type TipoDispositivoBase = "CELULAR" | "COMPUTADORA" | "TABLET" | "CONSOLA" | "SMARTWATCH" | "ACCESORIOS" | "TODOS"
+// Acepta tipos base y tipos personalizados (cualquier string)
+export type TipoDispositivo = TipoDispositivoBase | (string & {})
 
 export interface TipoDispositivoCustom {
   id: string
