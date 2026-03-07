@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useMemo } from "react"
+import { useState, useCallback, useMemo, useRef, useEffect } from "react"
 import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -66,12 +66,15 @@ export function OrdenesList() {
   const [pageSize, setPageSize] = useState(20)
 
   // Debounce search
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const handleSearchChange = useCallback((value: string) => {
     setSearch(value)
     setPage(1)
-    // Debounce de 300ms antes de actualizar la búsqueda
-    const timer = setTimeout(() => setDebouncedSearch(value), 300)
-    return () => clearTimeout(timer)
+    if (debounceTimer.current) clearTimeout(debounceTimer.current)
+    debounceTimer.current = setTimeout(() => setDebouncedSearch(value), 300)
+  }, [])
+  useEffect(() => {
+    return () => { if (debounceTimer.current) clearTimeout(debounceTimer.current) }
   }, [])
 
   // Construir URL con parámetros para SWR

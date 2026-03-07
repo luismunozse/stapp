@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import { getSuperadminSession } from "@/lib/superadmin-auth"
 import { NavbarSuperadmin } from "@/components/superadmin/navbar-superadmin"
 import { SkipLinks } from "@/components/shared/skip-links"
+import { Toaster } from "sonner"
 
 // Forzar renderizado dinámico para verificar auth en cada navegación
 export const dynamic = "force-dynamic"
@@ -24,6 +25,7 @@ export default async function SuperadminLayout({
       <main id="main-content" className="lg:pl-64 pt-[calc(3.5rem+env(safe-area-inset-top,0px))] lg:pt-0">
         <div className="p-4 lg:p-8">{children}</div>
       </main>
+      <Toaster richColors position="top-right" />
     </div>
   )
 }

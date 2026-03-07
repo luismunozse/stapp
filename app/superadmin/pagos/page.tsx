@@ -118,7 +118,7 @@ export default function PagosPage() {
             size="sm"
             variant="ghost"
             onClick={() =>
-              router.push(`/organizaciones/${payment.organization_id}`)
+              router.push(`/superadmin/organizaciones/${payment.organization_id}`)
             }
             title="Ver organización"
           >

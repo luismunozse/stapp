@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin, STORAGE_BUCKETS } from "@/lib/supabase"
 import { inngest } from "@/lib/inngest/client"
+import { z } from "zod"
+import { getOrderByPublicToken } from "@/lib/public-token"
+
+const approveSchema = z.object({
+  firma: z.string().max(2 * 1024 * 1024, "La firma excede el tamaño máximo").optional(),
+})
 
 export async function POST(
   request: Request,
@@ -9,23 +15,16 @@ export async function POST(
   try {
     const { token } = await params
     const body = await request.json()
-    const { firma } = body // Base64 signature image
+    const { firma } = approveSchema.parse(body)
 
     // Obtener orden
-    const { data: orden } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .select(`
+    const { orden, error } = await getOrderByPublicToken(token, `
         id, estado, presupuesto, organization_id, cliente_id,
         numero_orden, dispositivo,
         clientes (id, nombre, email, telefono),
         organizations (nombre, nombre_mostrar)
       `)
-      .eq("public_token", token)
-      .single()
-
-    if (!orden) {
-      return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
-    }
+    if (error) return error
 
     // Solo se puede aprobar si está en estado PRESUPUESTADO
     if (orden.estado !== "PRESUPUESTADO") {
@@ -82,11 +81,11 @@ export async function POST(
       metadata: { aprobadoDesdePortal: true },
     })
 
-    // Enviar notificación al taller
+    // Enviar notificación al taller (fire-and-forget)
     const org = orden.organizations as unknown as Record<string, unknown>
     const cliente = orden.clientes as unknown as Record<string, unknown>
 
-    await inngest.send({
+    inngest.send({
       name: "notification/send",
       data: {
         organizationId: orden.organization_id,
@@ -111,13 +110,19 @@ export async function POST(
           },
         },
       },
-    })
+    }).catch(err => console.error("Error sending notification:", err))
 
     return NextResponse.json({
       message: "Presupuesto aprobado exitosamente",
       estado: "APROBADO",
     })
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: error.errors[0].message },
+        { status: 400 }
+      )
+    }
     console.error("Error approving budget:", error)
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }

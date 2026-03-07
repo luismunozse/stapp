@@ -30,6 +30,7 @@ export async function getNextOrderNumber(organizationId: string): Promise<number
  * Obtener el siguiente número de orden formateado con prefijo por tipo de dispositivo
  * Formato: CEL001, PC001, TAB001, CONS001, SW001
  * Para tipos personalizados, busca el prefijo en la tabla tipos_dispositivo
+ * Usa RPC atómica para evitar race conditions en generación concurrente
  */
 export async function getNextOrderNumberByType(
   organizationId: string,
@@ -50,24 +51,8 @@ export async function getNextOrderNumberByType(
     prefix = tipoCustom?.prefijo_orden || "ORD"
   }
 
-  // Buscar el último número de orden de TODA la organización (sin filtrar por tipo)
-  // porque el unique constraint es (organization_id, numero_orden)
-  const { data: lastOrder, error: searchError } = await supabaseAdmin
-    .from("ordenes_servicio")
-    .select("numero_orden")
-    .eq("organization_id", organizationId)
-    .order("numero_orden", { ascending: false })
-    .limit(1)
-    .single()
-
-  let nextNumber = 1
-
-  if (!searchError && lastOrder) {
-    nextNumber = (lastOrder.numero_orden as number) + 1
-  } else if (searchError && searchError.code !== "PGRST116") {
-    // PGRST116 = no rows found, que es válido para el primer registro
-    throw new Error(`Error getting last order number: ${searchError.message}`)
-  }
+  // Usar RPC atómica para obtener el siguiente número (evita race conditions)
+  const nextNumber = await getNextOrderNumber(organizationId)
 
   // Formatear el código con padding de 3 dígitos (expandible si supera 999)
   const paddedNumber = nextNumber.toString().padStart(3, "0")

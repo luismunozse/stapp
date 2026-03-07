@@ -6,6 +6,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, Package } from "lucide-react"
 import { PlanForm } from "../_components/plan-form"
+import { toast } from "sonner"
 import type { PlanWithUsage } from "@/types/superadmin"
 
 export default function EditPlanPage() {
@@ -24,7 +25,7 @@ export default function EditPlanPage() {
     try {
       const res = await fetch(`/api/superadmin/plans/${planId}`)
       if (!res.ok) {
-        alert("Error al cargar el plan")
+        toast.error("Error al cargar el plan")
         router.push("/superadmin/planes")
         return
       }

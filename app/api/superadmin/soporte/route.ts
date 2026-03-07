@@ -11,7 +11,22 @@ export async function GET(request: Request) {
     const estado = searchParams.get("estado") || ""
     const prioridad = searchParams.get("prioridad") || ""
     const search = searchParams.get("search") || ""
+    const page = parseInt(searchParams.get("page") || "1")
+    const limit = parseInt(searchParams.get("limit") || "20")
+    const offset = (page - 1) * limit
 
+    // Count query
+    let countQuery = supabaseAdmin
+      .from("support_tickets")
+      .select("id", { count: "exact", head: true })
+
+    if (estado) countQuery = countQuery.eq("estado", estado)
+    if (prioridad) countQuery = countQuery.eq("prioridad", prioridad)
+    if (search) countQuery = countQuery.ilike("asunto", `%${search}%`)
+
+    const { count } = await countQuery
+
+    // Data query
     let query = supabaseAdmin
       .from("support_tickets")
       .select(`
@@ -21,6 +36,7 @@ export async function GET(request: Request) {
         support_ticket_messages (id)
       `)
       .order("updated_at", { ascending: false })
+      .range(offset, offset + limit - 1)
 
     if (estado) {
       query = query.eq("estado", estado)
@@ -51,7 +67,7 @@ export async function GET(request: Request) {
       totalMensajes: t.support_ticket_messages?.length || 0,
     })) || []
 
-    return NextResponse.json(formatted)
+    return NextResponse.json({ tickets: formatted, total: count || 0 })
   } catch (error) {
     console.error("Error fetching support tickets:", error)
     return NextResponse.json(

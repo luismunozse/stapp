@@ -47,12 +47,13 @@ export function formatOrden(orden: any) {
   return {
     id: orden.id,
     numeroOrden: orden.numero_orden,
+    codigoOrden: orden.codigo_orden,
     clienteId: orden.cliente_id,
     tecnicoId: orden.tecnico_id,
     organizationId: orden.organization_id,
     dispositivo: orden.dispositivo,
     tipoDispositivo: orden.tipo_dispositivo,
-    // Nuevos campos de dispositivo
+    // Campos de dispositivo
     marca: orden.marca,
     color: orden.color,
     imei: orden.imei,

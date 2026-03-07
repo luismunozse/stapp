@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { supabaseAdmin } from "@/lib/supabase"
+import { getOrderByPublicToken } from "@/lib/public-token"
 
 export async function GET(
   request: Request,
@@ -8,16 +8,7 @@ export async function GET(
   try {
     const { token } = await params
 
-    if (!token || token.length !== 32) {
-      return NextResponse.json(
-        { error: "Token invalido" },
-        { status: 400 }
-      )
-    }
-
-    const { data: orden, error: dbError } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .select(`
+    const { orden, error } = await getOrderByPublicToken(token, `
         id,
         numero_orden,
         codigo_orden,
@@ -46,15 +37,7 @@ export async function GET(
           zona_horaria
         )
       `)
-      .eq("public_token", token)
-      .single()
-
-    if (dbError || !orden) {
-      return NextResponse.json(
-        { error: "Orden no encontrada" },
-        { status: 404 }
-      )
-    }
+    if (error) return error
 
     const org = orden.organizations as any
     const cliente = orden.clientes as any

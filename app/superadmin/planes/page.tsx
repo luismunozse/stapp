@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { redirect } from "next/navigation"
 import Link from "next/link"
+import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -47,15 +48,15 @@ export default function PlanesPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        alert(data.error || "Error al cambiar estado del plan")
+        toast.error(data.error || "Error al cambiar estado del plan")
         return
       }
 
-      alert(data.message)
+      toast.success(data.message)
       fetchPlans()
     } catch (error) {
       console.error("Error:", error)
-      alert("Error al cambiar estado del plan")
+      toast.error("Error al cambiar estado del plan")
     }
   }
 

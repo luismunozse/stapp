@@ -1,4 +1,6 @@
 import { Navbar } from "@/components/layout/navbar"
+import { SidebarProvider } from "@/components/layout/sidebar-context"
+import { SidebarMain } from "@/components/layout/sidebar-main"
 import { TrialBanner } from "@/components/subscription/trial-banner"
 import { PolicyChangeModal } from "@/components/subscription/policy-change-modal"
 import { SkipLinks } from "@/components/shared/skip-links"
@@ -56,33 +58,34 @@ export default async function DashboardLayout({
   const showTrialBanner = trialInfo.isInTrial && !trialInfo.isPaid
 
   return (
-    <div className="min-h-screen bg-muted/30 dark:bg-background">
-      <SkipLinks />
-      <Navbar />
-      {/* Banner de trial si está en período de prueba */}
-      {showTrialBanner && (
-        <TrialBanner daysRemaining={trialInfo.daysRemaining} />
-      )}
-      {/* Banner de datos de ejemplo */}
-      {hasSampleData && <SampleDataBannerWrapper />}
-      {/* Banner de descarga APK para móvil (no se muestra en app nativa) */}
-      {!showTrialBanner && !hasSampleData && <ApkDownloadBanner variant="top" />}
-      <main
-        id="main-content"
-        className={`lg:pl-64 pb-[calc(4rem+env(safe-area-inset-bottom,0px))] lg:pb-0 ${
-          showTrialBanner
-            ? "pt-[calc(3.5rem+2.5rem+env(safe-area-inset-top,0px))] lg:pt-10"
-            : "pt-[calc(3.5rem+env(safe-area-inset-top,0px))] lg:pt-0"
-        }`}
-      >
-        <div className="p-4 lg:p-8">{children}</div>
-      </main>
-      {/* Modal de cambio de políticas - se muestra una sola vez */}
-      {showTrialBanner && (
-        <PolicyChangeModal daysRemaining={trialInfo.daysRemaining} />
-      )}
-      {/* Tour guiado - se muestra automáticamente la primera vez */}
-      <GuidedTour />
-    </div>
+    <SidebarProvider>
+      <div className="min-h-screen bg-muted/30 dark:bg-background">
+        <SkipLinks />
+        <Navbar />
+        {/* Banner de trial si está en período de prueba */}
+        {showTrialBanner && (
+          <TrialBanner daysRemaining={trialInfo.daysRemaining} />
+        )}
+        {/* Banner de datos de ejemplo */}
+        {hasSampleData && <SampleDataBannerWrapper />}
+        {/* Banner de descarga APK para móvil (no se muestra en app nativa) */}
+        {!showTrialBanner && !hasSampleData && <ApkDownloadBanner variant="top" />}
+        <SidebarMain
+          className={
+            showTrialBanner
+              ? "pt-[calc(3.5rem+2.5rem+env(safe-area-inset-top,0px))] lg:pt-10"
+              : "pt-[calc(3.5rem+env(safe-area-inset-top,0px))] lg:pt-0"
+          }
+        >
+          {children}
+        </SidebarMain>
+        {/* Modal de cambio de políticas - se muestra una sola vez */}
+        {showTrialBanner && (
+          <PolicyChangeModal daysRemaining={trialInfo.daysRemaining} />
+        )}
+        {/* Tour guiado - se muestra automáticamente la primera vez */}
+        <GuidedTour />
+      </div>
+    </SidebarProvider>
   )
 }

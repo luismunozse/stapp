@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -92,16 +93,16 @@ export function PlanForm({ mode, planId, initialData }: PlanFormProps) {
       const data = await res.json()
 
       if (!res.ok) {
-        alert(data.error || "Error al guardar el plan")
+        toast.error(data.error || "Error al guardar el plan")
         return
       }
 
-      alert(data.message)
+      toast.success(data.message)
       router.push("/superadmin/planes")
       router.refresh()
     } catch (error) {
       console.error("Error:", error)
-      alert("Error al guardar el plan")
+      toast.error("Error al guardar el plan")
     } finally {
       setLoading(false)
     }

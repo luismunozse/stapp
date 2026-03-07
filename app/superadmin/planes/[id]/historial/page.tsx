@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, History, Package } from "lucide-react"
@@ -26,7 +27,7 @@ export default function PlanHistorialPage() {
     try {
       const res = await fetch(`/api/superadmin/plans/${planId}/audit`)
       if (!res.ok) {
-        alert("Error al cargar el historial")
+        toast.error("Error al cargar el historial")
         router.push("/superadmin/planes")
         return
       }

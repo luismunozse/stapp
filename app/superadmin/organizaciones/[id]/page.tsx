@@ -3,6 +3,7 @@
 import { useState, useEffect, use } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -164,7 +165,7 @@ export default function OrganizacionDetallePage({ params }: PageProps) {
       }, 2000)
     } catch (error: any) {
       console.error("Error:", error)
-      alert(error.message || "Error al renovar suscripción")
+      toast.error(error.message || "Error al renovar suscripción")
     } finally {
       setRenewLoading(false)
     }

@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Button } from "@/components/ui/button"
 import {
   Bug,
   Lightbulb,
@@ -20,6 +21,8 @@ import {
   Loader2,
   Headset,
   Building2,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react"
 
 interface TicketItem {
@@ -69,45 +72,36 @@ export function TicketsListSuperadmin() {
   const [filtroEstado, setFiltroEstado] = useState("")
   const [filtroPrioridad, setFiltroPrioridad] = useState("")
   const [search, setSearch] = useState("")
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
+  const pageSize = 20
 
   const fetchTickets = useCallback(async () => {
     try {
       setLoading(true)
       const params = new URLSearchParams()
+      params.append("page", page.toString())
+      params.append("limit", pageSize.toString())
       if (filtroEstado) params.append("estado", filtroEstado)
       if (filtroPrioridad) params.append("prioridad", filtroPrioridad)
       if (search) params.append("search", search)
 
-      const res = await fetch(`/api/superadmin/soporte?${params}`, {
-        headers: {
-          "x-superadmin-panel": "true",
-          "x-superadmin-email": document.cookie
-            .split("; ")
-            .find(c => c.startsWith("superadmin-email="))
-            ?.split("=")[1] || "",
-        },
-      })
+      const res = await fetch(`/api/superadmin/soporte?${params}`)
       if (res.ok) {
-        setTickets(await res.json())
+        const data = await res.json()
+        setTickets(data.tickets || [])
+        setTotal(data.total || 0)
       }
     } catch (err) {
       console.error("Error:", err)
     } finally {
       setLoading(false)
     }
-  }, [filtroEstado, filtroPrioridad, search])
+  }, [filtroEstado, filtroPrioridad, search, page])
 
   const fetchStats = useCallback(async () => {
     try {
-      const res = await fetch("/api/superadmin/soporte/stats", {
-        headers: {
-          "x-superadmin-panel": "true",
-          "x-superadmin-email": document.cookie
-            .split("; ")
-            .find(c => c.startsWith("superadmin-email="))
-            ?.split("=")[1] || "",
-        },
-      })
+      const res = await fetch("/api/superadmin/soporte/stats")
       if (res.ok) {
         setStats(await res.json())
       }
@@ -170,7 +164,7 @@ export function TicketsListSuperadmin() {
                 className="pl-9"
               />
             </div>
-            <Select value={filtroEstado} onValueChange={setFiltroEstado}>
+            <Select value={filtroEstado || "all"} onValueChange={(v) => { setFiltroEstado(v === "all" ? "" : v); setPage(1) }}>
               <SelectTrigger className="w-full sm:w-[160px]">
                 <SelectValue placeholder="Estado" />
               </SelectTrigger>
@@ -182,7 +176,7 @@ export function TicketsListSuperadmin() {
                 <SelectItem value="CERRADO">Cerrado</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={filtroPrioridad} onValueChange={setFiltroPrioridad}>
+            <Select value={filtroPrioridad || "all"} onValueChange={(v) => { setFiltroPrioridad(v === "all" ? "" : v); setPage(1) }}>
               <SelectTrigger className="w-full sm:w-[140px]">
                 <SelectValue placeholder="Prioridad" />
               </SelectTrigger>
@@ -258,6 +252,36 @@ export function TicketsListSuperadmin() {
                   </div>
                 )
               })}
+            </div>
+          )}
+
+          {/* Pagination */}
+          {total > pageSize && (
+            <div className="flex items-center justify-between pt-4 border-t mt-4">
+              <p className="text-sm text-muted-foreground">
+                {Math.min((page - 1) * pageSize + 1, total)}-{Math.min(page * pageSize, total)} de {total} tickets
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(p => p - 1)}
+                  disabled={page <= 1}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  Página {page} de {Math.ceil(total / pageSize)}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(p => p + 1)}
+                  disabled={page >= Math.ceil(total / pageSize)}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>

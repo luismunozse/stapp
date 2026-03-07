@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
-import { supabaseAdmin } from "@/lib/supabase"
 import { generateOrdenPDF, OrdenPDFData } from "@/lib/pdf"
+import { getOrderByPublicToken } from "@/lib/public-token"
 
 export async function GET(
   request: Request,
@@ -9,17 +9,7 @@ export async function GET(
   try {
     const { token } = await params
 
-    if (!token || token.length !== 32) {
-      return NextResponse.json(
-        { error: "Token inválido" },
-        { status: 400 }
-      )
-    }
-
-    // Buscar orden por token público
-    const { data: orden, error: dbError } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .select(`
+    const { orden, error } = await getOrderByPublicToken(token, `
         *,
         clientes (*),
         organizations (
@@ -36,15 +26,7 @@ export async function GET(
           nombre
         )
       `)
-      .eq("public_token", token)
-      .single()
-
-    if (dbError || !orden) {
-      return NextResponse.json(
-        { error: "Orden no encontrada" },
-        { status: 404 }
-      )
-    }
+    if (error) return error
 
     const cliente = orden.clientes as any
     const org = orden.organizations as any

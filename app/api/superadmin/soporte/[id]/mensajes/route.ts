@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sendSupportReplyEmail } from "@/lib/email"
 import { z } from "zod"
 
 const mensajeSchema = z.object({
@@ -19,10 +20,14 @@ export async function POST(
     const body = await request.json()
     const data = mensajeSchema.parse(body)
 
-    // Verificar que el ticket existe
+    // Verificar que el ticket existe y obtener datos del usuario
     const { data: ticket, error: fetchError } = await supabaseAdmin
       .from("support_tickets")
-      .select("id, estado")
+      .select(`
+        id, estado, asunto,
+        users:user_id (nombre, email),
+        organizations:organization_id (slug)
+      `)
       .eq("id", id)
       .single()
 
@@ -58,6 +63,22 @@ export async function POST(
         .from("support_tickets")
         .update({ estado: "EN_PROCESO" })
         .eq("id", id)
+    }
+
+    // Notificar al usuario por email (sin bloquear la respuesta)
+    const user = ticket.users as unknown as { nombre: string; email: string } | null
+    const org = ticket.organizations as unknown as { slug: string } | null
+    if (user?.email) {
+      sendSupportReplyEmail({
+        email: user.email,
+        nombreUsuario: user.nombre || "Usuario",
+        asuntoTicket: ticket.asunto,
+        contenidoRespuesta: data.contenido,
+        ticketId: id,
+        slug: org?.slug || "",
+      }).catch((err) => {
+        console.error("Error enviando email de respuesta de soporte:", err)
+      })
     }
 
     return NextResponse.json({

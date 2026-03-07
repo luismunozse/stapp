@@ -6,6 +6,7 @@ import { getNextOrderNumberByType } from "@/lib/counters"
 import { createAuditLogger } from "@/lib/audit"
 import { uploadOrderPhoto, base64ToBuffer } from "@/lib/storage"
 import { enforcePlanLimit } from "@/lib/plan-limits"
+import { formatOrden } from "@/lib/db-utils"
 import { z } from "zod"
 
 // Generar token público único
@@ -54,8 +55,22 @@ export async function GET(request: Request) {
     const limit = Math.min(parseInt(searchParams.get("limit") || "20"), 100) // Max 100
     const offset = (page - 1) * limit
 
-    // Sorting
-    const sortBy = searchParams.get("sortBy") || "fecha_ingreso"
+    // Fechas
+    const fechaDesde = searchParams.get("fechaDesde") || ""
+    const fechaHasta = searchParams.get("fechaHasta") || ""
+
+    // Sorting (whitelist de columnas permitidas)
+    const allowedSortColumns: Record<string, string> = {
+      fechaIngreso: "fecha_ingreso",
+      fecha_ingreso: "fecha_ingreso",
+      numeroOrden: "numero_orden",
+      numero_orden: "numero_orden",
+      estado: "estado",
+      dispositivo: "dispositivo",
+      presupuesto: "presupuesto",
+    }
+    const rawSortBy = searchParams.get("sortBy") || "fecha_ingreso"
+    const sortBy = allowedSortColumns[rawSortBy] || "fecha_ingreso"
     const sortOrder = searchParams.get("sortOrder") === "asc" ? true : false
 
     let query = supabaseAdmin
@@ -69,7 +84,7 @@ export async function GET(request: Request) {
         )
       `, { count: "exact" })
       .eq("organization_id", organizationId!)
-      .order(sortBy === "fechaIngreso" ? "fecha_ingreso" : sortBy, { ascending: sortOrder })
+      .order(sortBy, { ascending: sortOrder })
 
     // Técnicos solo ven sus órdenes asignadas
     if (role === "TECNICO") {
@@ -82,6 +97,14 @@ export async function GET(request: Request) {
 
     if (tecnicoId) {
       query = query.eq("tecnico_id", tecnicoId)
+    }
+
+    if (fechaDesde) {
+      query = query.gte("fecha_ingreso", `${fechaDesde}T00:00:00`)
+    }
+
+    if (fechaHasta) {
+      query = query.lte("fecha_ingreso", `${fechaHasta}T23:59:59`)
     }
 
     if (search) {
@@ -123,26 +146,8 @@ export async function GET(request: Request) {
       throw dbError
     }
 
-    // Transformar datos para mantener compatibilidad con el frontend
-    const ordenesFormatted = ordenes?.map(orden => ({
-      ...orden,
-      cliente: orden.clientes,
-      tecnico: orden.users,
-      // Convertir snake_case a camelCase para compatibilidad
-      numeroOrden: orden.numero_orden,
-      codigoOrden: orden.codigo_orden,
-      clienteId: orden.cliente_id,
-      tecnicoId: orden.tecnico_id,
-      organizationId: orden.organization_id,
-      tipoDispositivo: orden.tipo_dispositivo,
-      problemaReportado: orden.problema_reportado,
-      costoFinal: orden.costo_final,
-      fechaIngreso: orden.fecha_ingreso,
-      fechaPrometida: orden.fecha_prometida,
-      fechaCompletado: orden.fecha_completado,
-      // Nuevos campos
-      codigoAccesoDispositivo: orden.password_dispositivo,
-    }))
+    // Transformar datos usando formatOrden unificado
+    const ordenesFormatted = ordenes?.map(formatOrden)
 
     // Retornar con información de paginación y cache headers
     return NextResponse.json({

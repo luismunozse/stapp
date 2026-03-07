@@ -8,7 +8,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, userId, role } = await requireAuth()
     if (error) return error
 
     const { id } = await params
@@ -27,6 +27,11 @@ export async function GET(
 
     if (fetchError || !orden) {
       return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
+    }
+
+    // Técnicos solo pueden ver comprobantes de sus órdenes asignadas
+    if (role === "TECNICO" && orden.tecnico_id !== userId) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 403 })
     }
 
     // Verificar que la orden fue entregada

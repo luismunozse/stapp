@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -135,7 +135,7 @@ export default function OrganizacionesPage() {
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => router.push(`/organizaciones/${org.id}`)}
+            onClick={() => router.push(`/superadmin/organizaciones/${org.id}`)}
             title="Ver detalle"
           >
             <Eye className="h-4 w-4" />
@@ -228,7 +228,7 @@ export default function OrganizacionesPage() {
             keyExtractor={(org) => org.id}
             loading={loading}
             emptyMessage="No se encontraron organizaciones"
-            onRowClick={(org) => router.push(`/organizaciones/${org.id}`)}
+            onRowClick={(org) => router.push(`/superadmin/organizaciones/${org.id}`)}
             pagination={{
               page,
               pageSize: 20,

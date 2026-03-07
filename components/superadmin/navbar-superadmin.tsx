@@ -17,8 +17,8 @@ import {
   Menu,
   X,
   Package,
-  BarChart3,
   Headset,
+  Smartphone,
 } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import { cn } from "@/lib/utils"
@@ -31,8 +31,8 @@ const navItems = [
   { href: "/superadmin/suscripciones", label: "Suscripciones", icon: CreditCard },
   { href: "/superadmin/pagos", label: "Pagos", icon: Receipt },
   { href: "/superadmin/planes", label: "Planes", icon: Package },
-  { href: "/superadmin/reportes", label: "Reportes", icon: BarChart3 },
   { href: "/superadmin/soporte", label: "Soporte", icon: Headset },
+  { href: "/superadmin/waitlist", label: "Waitlist iOS", icon: Smartphone },
   { href: "/superadmin/logs", label: "Auditoría", icon: FileText },
 ]
 

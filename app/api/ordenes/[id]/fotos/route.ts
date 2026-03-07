@@ -22,6 +22,19 @@ export async function GET(
     if (error) return error
 
     const { id: ordenId } = await params
+
+    // Verificar que la orden pertenece a la organización
+    const { data: ordenCheck } = await supabaseAdmin
+      .from("ordenes_servicio")
+      .select("id")
+      .eq("id", ordenId)
+      .eq("organization_id", organizationId!)
+      .single()
+
+    if (!ordenCheck) {
+      return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
+    }
+
     const { searchParams } = new URL(request.url)
     const tipo = searchParams.get("tipo")
 

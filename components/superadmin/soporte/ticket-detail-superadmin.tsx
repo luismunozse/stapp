@@ -62,18 +62,6 @@ const prioridadConfig: Record<string, { label: string; color: string }> = {
   ALTA: { label: "Alta", color: "bg-red-100 text-red-700" },
 }
 
-function getSuperadminHeaders(): Record<string, string> {
-  const email = document.cookie
-    .split("; ")
-    .find(c => c.startsWith("superadmin-email="))
-    ?.split("=")[1] || ""
-  return {
-    "x-superadmin-panel": "true",
-    "x-superadmin-email": email,
-    "Content-Type": "application/json",
-  }
-}
-
 export function TicketDetailSuperadmin({ ticketId }: { ticketId: string }) {
   const router = useRouter()
   const [ticket, setTicket] = useState<TicketData | null>(null)
@@ -85,9 +73,7 @@ export function TicketDetailSuperadmin({ ticketId }: { ticketId: string }) {
 
   const fetchTicket = async () => {
     try {
-      const res = await fetch(`/api/superadmin/soporte/${ticketId}`, {
-        headers: getSuperadminHeaders(),
-      })
+      const res = await fetch(`/api/superadmin/soporte/${ticketId}`)
       if (res.ok) {
         setTicket(await res.json())
       }
@@ -112,7 +98,7 @@ export function TicketDetailSuperadmin({ ticketId }: { ticketId: string }) {
     try {
       const res = await fetch(`/api/superadmin/soporte/${ticketId}/mensajes`, {
         method: "POST",
-        headers: getSuperadminHeaders(),
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ contenido: newMessage }),
       })
       if (res.ok) {
@@ -131,7 +117,7 @@ export function TicketDetailSuperadmin({ ticketId }: { ticketId: string }) {
     try {
       const res = await fetch(`/api/superadmin/soporte/${ticketId}`, {
         method: "PATCH",
-        headers: getSuperadminHeaders(),
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ estado: newEstado }),
       })
       if (res.ok) {

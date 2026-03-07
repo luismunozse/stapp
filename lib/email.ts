@@ -379,6 +379,102 @@ export async function sendPasswordResetEmail({
   })
 }
 
+// ============================================
+// RESPUESTA DE SOPORTE
+// ============================================
+interface SendSupportReplyEmailParams {
+  email: string
+  nombreUsuario: string
+  asuntoTicket: string
+  contenidoRespuesta: string
+  ticketId: string
+  slug: string
+}
+
+export async function sendSupportReplyEmail({
+  email,
+  nombreUsuario,
+  asuntoTicket,
+  contenidoRespuesta,
+  ticketId,
+  slug,
+}: SendSupportReplyEmailParams) {
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
+  const ticketUrl = `https://${slug}.${rootDomain}/soporte/${ticketId}`
+
+  const escapedContent = contenidoRespuesta
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\n/g, "<br>")
+
+  const content = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td align="center" style="padding-bottom: 24px;">
+          <table role="presentation" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); width: 80px; height: 80px; border-radius: 50%; text-align: center; vertical-align: middle; font-size: 36px;">
+                &#128172;
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+      <tr>
+        <td align="center">
+          <h1 class="text-heading" style="color: #1f2937; font-size: 24px; font-weight: 700; margin: 0 0 8px 0;">
+            Nueva respuesta en tu ticket
+          </h1>
+        </td>
+      </tr>
+    </table>
+
+    <p class="text-body" style="color: #4b5563; font-size: 16px; text-align: center; margin: 16px 0 0 0;">
+      Hola <strong>${nombreUsuario}</strong>,
+    </p>
+
+    <p class="text-body" style="color: #4b5563; font-size: 16px; text-align: center; margin: 8px 0 0 0;">
+      El equipo de soporte respondió a tu ticket: <strong>${asuntoTicket}</strong>
+    </p>
+
+    ${getInfoCard(`
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td>
+            <p class="text-muted" style="color: #6b7280; font-size: 12px; margin: 0 0 8px 0; text-transform: uppercase; letter-spacing: 1px;">
+              Respuesta del soporte
+            </p>
+            <p class="text-body" style="color: #374151; font-size: 15px; margin: 0; line-height: 1.6;">
+              ${escapedContent}
+            </p>
+          </td>
+        </tr>
+      </table>
+    `)}
+
+    ${getButton(ticketUrl, "Ver ticket completo")}
+
+    ${getDivider()}
+
+    <p class="text-muted" style="color: #9ca3af; font-size: 13px; text-align: center; margin: 0;">
+      Puedes responder directamente desde la plataforma haciendo clic en el botón de arriba.
+    </p>
+  `
+
+  return sendEmail({
+    to: email,
+    subject: `Respuesta a tu ticket: ${asuntoTicket} - STApp`,
+    html: getBaseTemplate({
+      preheader: `${nombreUsuario}, el equipo de soporte respondió a tu ticket`,
+      headerGradient: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)",
+      content,
+      rootDomain,
+      footerText: "Recibiste este correo porque tienes un ticket de soporte abierto en STApp.",
+    }),
+  })
+}
+
 interface SendCotizacionEmailParams {
   email: string
   nombreCliente: string

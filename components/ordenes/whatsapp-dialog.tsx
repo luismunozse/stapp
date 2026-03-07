@@ -100,10 +100,10 @@ export function WhatsAppDialog({ context, onClose }: WhatsAppDialogProps) {
     setApiResult(null)
 
     try {
-      const res = await fetch("/api/whatsapp/test", {
+      const res = await fetch("/api/whatsapp/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phoneNumber: context.cliente.telefono }),
+        body: JSON.stringify({ phoneNumber: context.cliente.telefono, message: customMessage }),
       })
 
       const data = await res.json()

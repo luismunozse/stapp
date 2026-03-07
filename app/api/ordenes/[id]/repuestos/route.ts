@@ -49,35 +49,36 @@ export async function POST(
     }
 
     if (data.tipo === "inventario") {
-      // Repuesto desde inventario
-      const { data: item, error: itemError } = await supabaseAdmin
+      // Verificar que el item pertenece a la organización
+      const { data: itemCheck } = await supabaseAdmin
         .from("inventario")
-        .select("id, stock, precio_venta")
+        .select("id")
         .eq("id", data.inventarioId)
         .eq("organization_id", organizationId!)
         .single()
 
-      if (itemError || !item) {
+      if (!itemCheck) {
         return NextResponse.json({ error: "Item no encontrado" }, { status: 404 })
       }
 
-      if (item.stock < data.cantidad) {
-        return NextResponse.json({ error: "Stock insuficiente" }, { status: 400 })
+      // Usar función atómica para insertar repuesto y decrementar stock
+      const { data: result, error: rpcError } = await supabaseAdmin.rpc(
+        "add_repuesto_inventario",
+        {
+          p_orden_id: ordenId,
+          p_inventario_id: data.inventarioId,
+          p_cantidad: data.cantidad,
+        }
+      )
+
+      if (rpcError) throw rpcError
+
+      if (result?.error) {
+        return NextResponse.json(
+          { error: result.error },
+          { status: result.error === "Stock insuficiente" ? 400 : 404 }
+        )
       }
-
-      // Crear relación repuesto-orden
-      await supabaseAdmin.from("repuestos_orden").insert({
-        orden_id: ordenId,
-        inventario_id: data.inventarioId,
-        cantidad: data.cantidad,
-        precio_unitario: item.precio_venta,
-      })
-
-      // Actualizar stock
-      await supabaseAdmin
-        .from("inventario")
-        .update({ stock: item.stock - data.cantidad })
-        .eq("id", data.inventarioId)
     } else {
       // Repuesto manual (sin inventario)
       await supabaseAdmin.from("repuestos_orden").insert({
@@ -143,23 +144,16 @@ export async function DELETE(
       return NextResponse.json({ error: "Repuesto no encontrado" }, { status: 404 })
     }
 
-    // Eliminar repuesto
-    await supabaseAdmin.from("repuestos_orden").delete().eq("id", repuestoId)
+    // Usar función atómica para eliminar repuesto y restaurar stock
+    const { data: result, error: rpcError } = await supabaseAdmin.rpc(
+      "remove_repuesto_inventario",
+      { p_repuesto_id: repuestoId }
+    )
 
-    // Devolver stock solo si era de inventario
-    if (repuesto.inventario_id) {
-      const { data: item } = await supabaseAdmin
-        .from("inventario")
-        .select("stock")
-        .eq("id", repuesto.inventario_id)
-        .single()
+    if (rpcError) throw rpcError
 
-      if (item) {
-        await supabaseAdmin
-          .from("inventario")
-          .update({ stock: item.stock + repuesto.cantidad })
-          .eq("id", repuesto.inventario_id)
-      }
+    if (result?.error) {
+      return NextResponse.json({ error: result.error }, { status: 404 })
     }
 
     return NextResponse.json({ success: true })

@@ -24,6 +24,8 @@ import {
   ShoppingCart,
   Headset,
   HelpCircle,
+  PanelLeft,
+  ChevronsLeft,
 } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import { cn } from "@/lib/utils"
@@ -33,6 +35,8 @@ import { useEscapeKey } from "@/hooks/use-escape-key"
 import { isNativePlatform } from "@/lib/capacitor"
 import { ApkDownloadBanner } from "@/components/shared/apk-download-banner"
 import { GlobalSearch } from "@/components/shared/global-search"
+import { useSidebar } from "@/components/layout/sidebar-context"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -61,6 +65,7 @@ export function Navbar() {
   const { data: session } = useSession()
   const isAdmin = session?.user?.role === "ADMIN"
   const menuRef = useRef<HTMLDivElement>(null)
+  const { collapsed, toggle } = useSidebar()
 
   // Hooks de accesibilidad para menú móvil
   useFocusTrap(menuRef, mobileMenuOpen)
@@ -112,54 +117,162 @@ export function Navbar() {
   return (
     <>
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 lg:border-r border-sidebar-border bg-sidebar">
+      <aside
+        className={cn(
+          "hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:border-r border-sidebar-border bg-sidebar transition-all duration-300 ease-in-out z-30",
+          collapsed ? "lg:w-14" : "lg:w-64"
+        )}
+      >
         <div className="flex flex-col flex-1 min-h-0">
-          <div className="flex flex-col gap-2 px-6 py-4 border-b border-sidebar-border">
-            <Link href="/dashboard" className="hover:opacity-80 transition-opacity">
-              <BusinessLogo size="sm" showText={true} textClassName="text-xl" />
+          {/* Header con logo y botón toggle */}
+          <div className={cn(
+            "flex items-center border-b border-sidebar-border transition-all duration-300",
+            collapsed ? "justify-center px-2 py-4" : "justify-between px-6 py-4"
+          )}>
+            <Link href="/dashboard" className="hover:opacity-80 transition-opacity overflow-hidden">
+              <BusinessLogo size="sm" showText={!collapsed} textClassName="text-xl" />
             </Link>
+            {!collapsed && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-sidebar-foreground hover:bg-sidebar-accent shrink-0"
+                onClick={toggle}
+                aria-label="Colapsar sidebar"
+                title="Colapsar sidebar (Ctrl+B)"
+              >
+                <ChevronsLeft className="h-4 w-4" />
+              </Button>
+            )}
           </div>
-          <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto scrollbar-thin">
-            {allNavItems.map((item) => {
-              const Icon = item.icon
-              const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
-              return (
-                <Link
-                  key={item.href}
-                  id={`nav-${item.href.replace("/", "")}`}
-                  href={item.href}
-                  className={cn(
-                    "flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors",
-                    isActive
-                      ? "bg-primary text-primary-foreground"
-                      : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                  )}
+
+          {/* Botón para expandir cuando está colapsado */}
+          {collapsed && (
+            <div className="flex justify-center py-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-sidebar-foreground hover:bg-sidebar-accent"
+                onClick={toggle}
+                aria-label="Expandir sidebar"
+                title="Expandir sidebar (Ctrl+B)"
+              >
+                <PanelLeft className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+
+          {/* Navigation */}
+          <TooltipProvider delayDuration={0}>
+            <nav className={cn(
+              "flex-1 py-4 space-y-1 overflow-y-auto scrollbar-thin transition-all duration-300",
+              collapsed ? "px-2" : "px-3"
+            )}>
+              {allNavItems.map((item) => {
+                const Icon = item.icon
+                const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
+
+                const linkContent = (
+                  <Link
+                    key={item.href}
+                    id={`nav-${item.href.replace("/", "")}`}
+                    href={item.href}
+                    className={cn(
+                      "flex items-center text-sm font-medium rounded-lg transition-colors",
+                      collapsed ? "justify-center px-2 py-2" : "px-3 py-2",
+                      isActive
+                        ? "bg-primary text-primary-foreground"
+                        : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    )}
+                  >
+                    <Icon className={cn("h-5 w-5 shrink-0", !collapsed && "mr-3")} />
+                    {!collapsed && (
+                      <span className="truncate">{item.label}</span>
+                    )}
+                  </Link>
+                )
+
+                if (collapsed) {
+                  return (
+                    <Tooltip key={item.href}>
+                      <TooltipTrigger asChild>
+                        {linkContent}
+                      </TooltipTrigger>
+                      <TooltipContent side="right" sideOffset={8}>
+                        {item.label}
+                      </TooltipContent>
+                    </Tooltip>
+                  )
+                }
+
+                return linkContent
+              })}
+            </nav>
+          </TooltipProvider>
+
+          {!collapsed && <ApkDownloadBanner variant="sidebar" />}
+
+          {/* Footer */}
+          <div className={cn(
+            "border-t border-sidebar-border transition-all duration-300",
+            collapsed ? "p-2 space-y-1" : "p-4 space-y-2"
+          )}>
+            {collapsed ? (
+              <TooltipProvider delayDuration={0}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div><ThemeToggle variant="icon" /></div>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">Cambiar tema</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="w-full text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                      onClick={() => window.dispatchEvent(new Event("start-tour"))}
+                    >
+                      <HelpCircle className="h-5 w-5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">Tour guiado</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="w-full text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                      onClick={handleLogout}
+                    >
+                      <LogOut className="h-5 w-5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">Cerrar Sesion</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ) : (
+              <>
+                <ThemeToggle variant="dropdown" />
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  onClick={() => window.dispatchEvent(new Event("start-tour"))}
                 >
-                  <Icon className="mr-3 h-5 w-5" />
-                  {item.label}
-                </Link>
-              )
-            })}
-          </nav>
-          <ApkDownloadBanner variant="sidebar" />
-          <div className="p-4 border-t border-sidebar-border space-y-2">
-            <ThemeToggle variant="dropdown" />
-            <Button
-              variant="ghost"
-              className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              onClick={() => window.dispatchEvent(new Event("start-tour"))}
-            >
-              <HelpCircle className="mr-3 h-5 w-5" />
-              Tour guiado
-            </Button>
-            <Button
-              variant="ghost"
-              className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              onClick={handleLogout}
-            >
-              <LogOut className="mr-3 h-5 w-5" />
-              Cerrar Sesión
-            </Button>
+                  <HelpCircle className="mr-3 h-5 w-5" />
+                  Tour guiado
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  onClick={handleLogout}
+                >
+                  <LogOut className="mr-3 h-5 w-5" />
+                  Cerrar Sesion
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </aside>
