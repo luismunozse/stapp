@@ -649,7 +649,6 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
                         : "hover:bg-muted hover:border-primary/50"
                     }`}
                   >
-                    <span className="text-2xl mb-1">{tipo.icono || "🔧"}</span>
                     <span className="text-xs font-medium truncate w-full text-center">{tipo.nombre}</span>
                   </button>
                 ))}
