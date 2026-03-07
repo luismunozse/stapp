@@ -1096,8 +1096,8 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
             )}
           </div>
 
-          {/* Password del dispositivo */}
-          <div>
+          {/* Password del dispositivo - solo para teléfonos, tablets y computadoras */}
+          {["CELULAR", "TABLET", "COMPUTADORA"].includes(tipoDispositivo) && <div>
             <Label>Contraseña/Patrón del Dispositivo</Label>
             <div className="flex gap-1 mt-2 mb-3">
               <Button
@@ -1142,7 +1142,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
             <p className="text-xs text-muted-foreground mt-2">
               Solo si es necesario para realizar pruebas
             </p>
-          </div>
+          </div>}
 
           {/* Fotos de ingreso */}
           <div>
