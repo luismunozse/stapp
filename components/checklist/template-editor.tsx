@@ -18,6 +18,7 @@ import {
   ChevronUp,
 } from "lucide-react"
 import { useModal } from "@/contexts/modal-context"
+import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
 
 interface TemplateItem {
   id: string
@@ -34,6 +35,8 @@ interface Template {
   nombre: string
   activo: boolean
   items: TemplateItem[]
+  tipoDispositivoId?: string | null
+  tipoDispositivo?: { id: string; nombre: string; codigo: string } | null
   _count?: { checklists: number }
 }
 
@@ -52,6 +55,7 @@ const tipoOptions = [
 
 export function TemplateEditor() {
   const { confirm } = useModal()
+  const { tipos: tiposDispositivo } = useTiposDispositivo()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [templates, setTemplates] = useState<Template[]>([])
@@ -63,6 +67,7 @@ export function TemplateEditor() {
   const [newItemRequerido, setNewItemRequerido] = useState(false)
   const [showNewTemplateForm, setShowNewTemplateForm] = useState(false)
   const [newTemplateName, setNewTemplateName] = useState("")
+  const [newTemplateDeviceType, setNewTemplateDeviceType] = useState<string>("")
   const [creatingTemplate, setCreatingTemplate] = useState(false)
 
   const fetchTemplates = async () => {
@@ -94,7 +99,10 @@ export function TemplateEditor() {
       const res = await fetch("/api/checklist-templates", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nombre: newTemplateName }),
+        body: JSON.stringify({
+          nombre: newTemplateName,
+          tipoDispositivoId: newTemplateDeviceType && newTemplateDeviceType !== "all" ? newTemplateDeviceType : null,
+        }),
       })
 
       if (!res.ok) {
@@ -104,10 +112,22 @@ export function TemplateEditor() {
       }
 
       const template = await res.json()
-      setTemplates((prev) => [template, ...prev])
-      setSelectedTemplate(template)
+      // Add device type info for display
+      const effectiveDeviceType = newTemplateDeviceType && newTemplateDeviceType !== "all" ? newTemplateDeviceType : null
+      const tipoInfo = effectiveDeviceType
+        ? tiposDispositivo.find(t => t.id === effectiveDeviceType)
+        : null
+      const enriched = {
+        ...template,
+        items: [],
+        tipoDispositivoId: effectiveDeviceType,
+        tipoDispositivo: tipoInfo ? { id: tipoInfo.id, nombre: tipoInfo.nombre, codigo: tipoInfo.codigo } : null,
+      }
+      setTemplates((prev) => [enriched, ...prev])
+      setSelectedTemplate(enriched)
       setShowNewTemplateForm(false)
       setNewTemplateName("")
+      setNewTemplateDeviceType("")
     } catch (error) {
       console.error("Error:", error)
       alert("Error al crear template")
@@ -302,28 +322,46 @@ export function TemplateEditor() {
           {showNewTemplateForm && (
             <form
               onSubmit={handleCreateTemplate}
-              className="flex gap-2 mb-4 p-3 bg-muted rounded-lg"
+              className="flex flex-col gap-3 mb-4 p-3 bg-muted rounded-lg"
             >
-              <Input
-                placeholder="Nombre del template..."
-                value={newTemplateName}
-                onChange={(e) => setNewTemplateName(e.target.value)}
-                disabled={creatingTemplate}
-              />
-              <Button type="submit" disabled={creatingTemplate}>
-                {creatingTemplate ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  "Crear"
-                )}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setShowNewTemplateForm(false)}
-              >
-                Cancelar
-              </Button>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Nombre del template..."
+                  value={newTemplateName}
+                  onChange={(e) => setNewTemplateName(e.target.value)}
+                  disabled={creatingTemplate}
+                  className="flex-1"
+                />
+                <Select value={newTemplateDeviceType} onValueChange={setNewTemplateDeviceType}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="Todos los tipos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">General (todos los tipos)</SelectItem>
+                    {tiposDispositivo.map((tipo) => (
+                      <SelectItem key={tipo.id} value={tipo.id}>
+                        {tipo.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex gap-2">
+                <Button type="submit" disabled={creatingTemplate || !newTemplateName.trim()}>
+                  {creatingTemplate ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    "Crear"
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => { setShowNewTemplateForm(false); setNewTemplateDeviceType("") }}
+                >
+                  Cancelar
+                </Button>
+              </div>
             </form>
           )}
 
@@ -341,10 +379,21 @@ export function TemplateEditor() {
                   }
                   size="sm"
                   onClick={() => setSelectedTemplate(template)}
+                  className="flex items-center gap-1"
                 >
                   {template.nombre}
+                  {template.tipoDispositivo && (
+                    <Badge className="ml-1 text-xs" variant="secondary">
+                      {template.tipoDispositivo.nombre}
+                    </Badge>
+                  )}
+                  {!template.tipoDispositivoId && (
+                    <Badge className="ml-1 text-xs" variant="outline">
+                      General
+                    </Badge>
+                  )}
                   {template.activo && (
-                    <Badge className="ml-2 bg-green-100 text-green-800" variant="outline">
+                    <Badge className="ml-1 bg-green-100 text-green-800" variant="outline">
                       Activo
                     </Badge>
                   )}

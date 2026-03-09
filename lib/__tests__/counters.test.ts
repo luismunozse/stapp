@@ -2,18 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { supabaseAdmin } from '@/lib/supabase'
 
 describe('DEVICE_TYPE_PREFIXES mapping', () => {
-  it('mapea CELULAR a CEL', async () => {
-    // Testeamos el formato indirectamente a través de getNextOrderNumberByType
-    // El mapeo es: CELULAR -> CEL, COMPUTADORA -> PC, TABLET -> TAB, etc.
-    const mockChain = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: null, error: { code: 'PGRST116', message: 'No rows' } }),
-    }
-    vi.mocked(supabaseAdmin.from).mockReturnValue(mockChain as any)
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: 1, error: null } as any)
+  })
 
+  it('mapea CELULAR a CEL', async () => {
     const { getNextOrderNumberByType } = await import('../counters')
     const result = await getNextOrderNumberByType('org-1', 'CELULAR')
     expect(result.codigo).toBe('CEL001')
@@ -21,72 +15,47 @@ describe('DEVICE_TYPE_PREFIXES mapping', () => {
   })
 
   it('mapea COMPUTADORA a PC', async () => {
-    const mockChain = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: null, error: { code: 'PGRST116', message: 'No rows' } }),
-    }
-    vi.mocked(supabaseAdmin.from).mockReturnValue(mockChain as any)
-
     const { getNextOrderNumberByType } = await import('../counters')
     const result = await getNextOrderNumberByType('org-1', 'COMPUTADORA')
     expect(result.codigo).toBe('PC001')
   })
 
   it('mapea TABLET a TAB', async () => {
-    const mockChain = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: null, error: { code: 'PGRST116', message: 'No rows' } }),
-    }
-    vi.mocked(supabaseAdmin.from).mockReturnValue(mockChain as any)
-
     const { getNextOrderNumberByType } = await import('../counters')
     const result = await getNextOrderNumberByType('org-1', 'TABLET')
     expect(result.codigo).toBe('TAB001')
   })
 
   it('mapea CONSOLA a CONS', async () => {
-    const mockChain = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: null, error: { code: 'PGRST116', message: 'No rows' } }),
-    }
-    vi.mocked(supabaseAdmin.from).mockReturnValue(mockChain as any)
-
     const { getNextOrderNumberByType } = await import('../counters')
     const result = await getNextOrderNumberByType('org-1', 'CONSOLA')
     expect(result.codigo).toBe('CONS001')
   })
 
   it('mapea SMARTWATCH a SW', async () => {
-    const mockChain = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: null, error: { code: 'PGRST116', message: 'No rows' } }),
-    }
-    vi.mocked(supabaseAdmin.from).mockReturnValue(mockChain as any)
-
     const { getNextOrderNumberByType } = await import('../counters')
     const result = await getNextOrderNumberByType('org-1', 'SMARTWATCH')
     expect(result.codigo).toBe('SW001')
   })
 
-  it('usa ORD como fallback para tipo desconocido', async () => {
+  it('busca prefijo personalizado para tipo desconocido', async () => {
     const mockChain = {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: null, error: { code: 'PGRST116', message: 'No rows' } }),
+      single: vi.fn().mockResolvedValue({ data: { prefijo_orden: 'IMP' }, error: null }),
+    }
+    vi.mocked(supabaseAdmin.from).mockReturnValue(mockChain as any)
+
+    const { getNextOrderNumberByType } = await import('../counters')
+    const result = await getNextOrderNumberByType('org-1', 'IMPRESORA')
+    expect(result.codigo).toBe('IMP001')
+  })
+
+  it('usa ORD como fallback cuando tipo personalizado no tiene prefijo', async () => {
+    const mockChain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: null, error: { code: 'PGRST116' } }),
     }
     vi.mocked(supabaseAdmin.from).mockReturnValue(mockChain as any)
 
@@ -101,31 +70,18 @@ describe('getNextOrderNumberByType - secuencia numérica', () => {
     vi.clearAllMocks()
   })
 
-  it('incrementa número basado en última orden existente', async () => {
-    const mockChain = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: { numero_orden: 42 }, error: null }),
-    }
-    vi.mocked(supabaseAdmin.from).mockReturnValue(mockChain as any)
+  it('usa RPC atómica para obtener número', async () => {
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: 43, error: null } as any)
 
     const { getNextOrderNumberByType } = await import('../counters')
     const result = await getNextOrderNumberByType('org-1', 'CELULAR')
     expect(result.codigo).toBe('CEL043')
     expect(result.numero).toBe(43)
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith('get_next_order_number', { org_id: 'org-1' })
   })
 
   it('formatea números con padding de 3 dígitos', async () => {
-    const mockChain = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: { numero_orden: 8 }, error: null }),
-    }
-    vi.mocked(supabaseAdmin.from).mockReturnValue(mockChain as any)
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: 9, error: null } as any)
 
     const { getNextOrderNumberByType } = await import('../counters')
     const result = await getNextOrderNumberByType('org-1', 'CELULAR')
@@ -133,14 +89,7 @@ describe('getNextOrderNumberByType - secuencia numérica', () => {
   })
 
   it('maneja números mayores a 999', async () => {
-    const mockChain = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: { numero_orden: 999 }, error: null }),
-    }
-    vi.mocked(supabaseAdmin.from).mockReturnValue(mockChain as any)
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: 1000, error: null } as any)
 
     const { getNextOrderNumberByType } = await import('../counters')
     const result = await getNextOrderNumberByType('org-1', 'CELULAR')
@@ -148,18 +97,11 @@ describe('getNextOrderNumberByType - secuencia numérica', () => {
     expect(result.numero).toBe(1000)
   })
 
-  it('lanza error en fallo de DB que no sea "no rows"', async () => {
-    const mockChain = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: null, error: { code: 'INTERNAL', message: 'DB error' } }),
-    }
-    vi.mocked(supabaseAdmin.from).mockReturnValue(mockChain as any)
+  it('propaga error de RPC', async () => {
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: null, error: { message: 'DB error' } } as any)
 
     const { getNextOrderNumberByType } = await import('../counters')
-    await expect(getNextOrderNumberByType('org-1', 'CELULAR')).rejects.toThrow('Error getting last order number')
+    await expect(getNextOrderNumberByType('org-1', 'CELULAR')).rejects.toThrow('Error getting next order number')
   })
 })
 
@@ -174,6 +116,7 @@ describe('getNextOrderNumber', () => {
     const { getNextOrderNumber } = await import('../counters')
     const result = await getNextOrderNumber('org-1')
     expect(result).toBe(5)
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith('get_next_order_number', { org_id: 'org-1' })
   })
 
   it('lanza error cuando RPC falla', async () => {

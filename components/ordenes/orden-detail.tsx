@@ -466,12 +466,21 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                     )}
                     {orden.codigoAccesoDispositivo && (
                       <div className="text-sm">
-                        <span className="text-muted-foreground">Contraseña: </span>
-                        {orden.codigoAccesoDispositivo.startsWith("Patrón:") ? (
+                        <span className="text-muted-foreground">Contrasena: </span>
+                        {orden.codigoAccesoDispositivo.startsWith("Patron:") ? (
                           <PatternDisplay value={orden.codigoAccesoDispositivo} size={80} />
                         ) : (
                           <code className="bg-muted px-1.5 py-0.5 rounded text-xs">{orden.codigoAccesoDispositivo}</code>
                         )}
+                      </div>
+                    )}
+                    {orden.metadata && Object.keys(orden.metadata).length > 0 && (
+                      <div className="flex flex-wrap gap-2 text-sm mt-1">
+                        {Object.entries(orden.metadata).map(([key, val]) => (
+                          <span key={key} className="px-2 py-0.5 bg-muted rounded">
+                            {key}: {String(val)}
+                          </span>
+                        ))}
                       </div>
                     )}
                   </div>

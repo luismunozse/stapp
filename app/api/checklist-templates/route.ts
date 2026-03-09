@@ -6,19 +6,29 @@ import { z } from "zod"
 const templateSchema = z.object({
   nombre: z.string().min(1, "El nombre es requerido"),
   activo: z.boolean().optional().default(true),
+  tipoDispositivoId: z.string().optional().nullable(),
 })
 
 // GET - Obtener todos los templates de la organización
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const { error, organizationId } = await requireAdmin()
     if (error) return error
 
-    const { data: templates, error: dbError } = await supabaseAdmin
+    const { searchParams } = new URL(request.url)
+    const tipoDispositivoId = searchParams.get("tipoDispositivoId")
+
+    let query = supabaseAdmin
       .from("checklist_templates")
-      .select(`*, checklist_template_items (*)`)
+      .select(`*, checklist_template_items (*), tipos_dispositivo (id, nombre, codigo)`)
       .eq("organization_id", organizationId!)
       .order("created_at", { ascending: false })
+
+    if (tipoDispositivoId) {
+      query = query.eq("tipo_dispositivo_id", tipoDispositivoId)
+    }
+
+    const { data: templates, error: dbError } = await query
 
     if (dbError) throw dbError
 
@@ -26,6 +36,8 @@ export async function GET() {
     const mappedTemplates = templates?.map(t => ({
       ...t,
       items: t.checklist_template_items || [],
+      tipoDispositivo: t.tipos_dispositivo || null,
+      tipoDispositivoId: t.tipo_dispositivo_id || null,
     })) || []
 
     return NextResponse.json(mappedTemplates)
@@ -47,27 +59,13 @@ export async function POST(request: Request) {
     const body = await request.json()
     const data = templateSchema.parse(body)
 
-    // Verificar si ya existe un template con ese nombre
-    const { data: existing } = await supabaseAdmin
-      .from("checklist_templates")
-      .select("id")
-      .eq("organization_id", organizationId!)
-      .eq("nombre", data.nombre)
-      .single()
-
-    if (existing) {
-      return NextResponse.json(
-        { error: "Ya existe un template con ese nombre" },
-        { status: 400 }
-      )
-    }
-
     const { data: template, error: createError } = await supabaseAdmin
       .from("checklist_templates")
       .insert({
         nombre: data.nombre,
         activo: data.activo,
         organization_id: organizationId!,
+        tipo_dispositivo_id: data.tipoDispositivoId || null,
       })
       .select()
       .single()

@@ -82,6 +82,7 @@ export function formatOrden(orden: any) {
     cotizaciones: orden.cotizaciones,
     garantia: orden.garantias,
     checklist: orden.checklist_recepcion,
+    metadata: orden.metadata || {},
   }
 }
 

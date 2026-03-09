@@ -32,7 +32,7 @@ export async function GET(
     // Verificar que la orden existe y pertenece a la organización
     const { data: orden, error: ordenError } = await supabaseAdmin
       .from("ordenes_servicio")
-      .select("id")
+      .select("id, tipo_dispositivo_id")
       .eq("id", ordenId)
       .eq("organization_id", organizationId!)
       .single()
@@ -55,14 +55,51 @@ export async function GET(
       .single()
 
     if (!checklist) {
-      // Si no hay checklist, devolver el template activo para poder crearlo
-      const { data: template } = await supabaseAdmin
-        .from("checklist_templates")
-        .select(`*, checklist_template_items (*)`)
-        .eq("organization_id", organizationId!)
-        .eq("activo", true)
-        .order("orden", { referencedTable: "checklist_template_items", ascending: true })
-        .single()
+      // Si no hay checklist, buscar template por tipo de dispositivo primero
+      let template = null
+
+      if (orden.tipo_dispositivo_id) {
+        const { data: deviceTemplate } = await supabaseAdmin
+          .from("checklist_templates")
+          .select(`*, checklist_template_items (*)`)
+          .eq("organization_id", organizationId!)
+          .eq("activo", true)
+          .eq("tipo_dispositivo_id", orden.tipo_dispositivo_id)
+          .order("orden", { referencedTable: "checklist_template_items", ascending: true })
+          .limit(1)
+          .single()
+
+        template = deviceTemplate
+      }
+
+      // Fallback: template generico (sin tipo de dispositivo)
+      if (!template) {
+        const { data: genericTemplate } = await supabaseAdmin
+          .from("checklist_templates")
+          .select(`*, checklist_template_items (*)`)
+          .eq("organization_id", organizationId!)
+          .eq("activo", true)
+          .is("tipo_dispositivo_id", null)
+          .order("orden", { referencedTable: "checklist_template_items", ascending: true })
+          .limit(1)
+          .single()
+
+        template = genericTemplate
+      }
+
+      // Last fallback: any active template
+      if (!template) {
+        const { data: anyTemplate } = await supabaseAdmin
+          .from("checklist_templates")
+          .select(`*, checklist_template_items (*)`)
+          .eq("organization_id", organizationId!)
+          .eq("activo", true)
+          .order("orden", { referencedTable: "checklist_template_items", ascending: true })
+          .limit(1)
+          .single()
+
+        template = anyTemplate
+      }
 
       return NextResponse.json({ checklist: null, template })
     }

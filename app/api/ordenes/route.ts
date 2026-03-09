@@ -38,6 +38,7 @@ const ordenSchema = z.object({
   // Nuevos campos para presupuesto aceptado
   presupuestoAceptado: z.boolean().optional(),
   sena: z.number().optional(),
+  metadata: z.record(z.any()).optional(),
 })
 
 export async function GET(request: Request) {
@@ -218,6 +219,7 @@ export async function POST(request: Request) {
         estado: estadoInicial,
         costo_final: costoFinal,
         sena: data.sena || 0,
+        metadata: data.metadata || {},
       })
       .select(`
         *,

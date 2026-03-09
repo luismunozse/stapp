@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -22,13 +22,38 @@ import { PatternLock } from "@/components/ui/pattern-lock"
 import { OrdenCreadaModal } from "./orden-creada-modal"
 import { compressImage } from "@/lib/image-compression"
 import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
-import type { Cliente } from "@/types"
+import type { Cliente, TipoDispositivoConfig, CampoExtra } from "@/types"
 
 interface FotoPreview {
   id: string
   preview: string
   file?: File
   descripcion: string
+}
+
+// Fallback config for types without config in DB
+const FALLBACK_CONFIG: TipoDispositivoConfig = {
+  campos: {
+    imei: { visible: true, label: "Numero de Serie", placeholder: "S/N del equipo" },
+    password: { visible: false },
+    color: { visible: true },
+    marca: { visible: true },
+  },
+  camposExtra: [],
+  accesorios: [
+    { id: "cable_poder", label: "Cable de poder" },
+    { id: "cargador", label: "Cargador/Fuente" },
+    { id: "cable_datos", label: "Cable de datos" },
+    { id: "control_remoto", label: "Control remoto" },
+    { id: "manual", label: "Manual" },
+    { id: "caja_original", label: "Caja original" },
+  ],
+  problemasComunes: [
+    "No enciende", "No funciona correctamente", "Hace ruido extrano",
+    "Se apaga solo", "Error en pantalla/display", "No conecta a red/WiFi",
+    "Mantenimiento preventivo", "Revision general",
+  ],
+  marcas: [],
 }
 
 const clienteSchema = z.object({
@@ -46,172 +71,6 @@ const clienteSchema = z.object({
     .or(z.literal("")),
 })
 
-// Accesorios comunes por tipo de dispositivo
-const ACCESORIOS_POR_TIPO: Record<string, { id: string; label: string }[]> = {
-  CELULAR: [
-    { id: "cargador", label: "Cargador" },
-    { id: "cable", label: "Cable USB" },
-    { id: "funda", label: "Funda/Case" },
-    { id: "vidrio", label: "Vidrio templado" },
-    { id: "auriculares", label: "Auriculares" },
-    { id: "sim", label: "Chip SIM" },
-    { id: "memoria", label: "Tarjeta memoria" },
-  ],
-  COMPUTADORA: [
-    { id: "cargador_notebook", label: "Cargador/Fuente" },
-    { id: "mouse", label: "Mouse" },
-    { id: "teclado", label: "Teclado" },
-    { id: "bolso", label: "Bolso/Mochila" },
-    { id: "disco_externo", label: "Disco externo" },
-    { id: "pendrive", label: "Pendrive" },
-    { id: "monitor", label: "Monitor" },
-    { id: "cables_video", label: "Cables video" },
-  ],
-  TABLET: [
-    { id: "cargador", label: "Cargador" },
-    { id: "cable", label: "Cable USB" },
-    { id: "funda", label: "Funda/Case" },
-    { id: "teclado_bt", label: "Teclado Bluetooth" },
-    { id: "stylus", label: "Stylus/Lápiz" },
-    { id: "memoria", label: "Tarjeta memoria" },
-  ],
-  CONSOLA: [
-    { id: "fuente", label: "Fuente de poder" },
-    { id: "cable_hdmi", label: "Cable HDMI" },
-    { id: "control1", label: "Control 1" },
-    { id: "control2", label: "Control 2" },
-    { id: "control3", label: "Control 3" },
-    { id: "control4", label: "Control 4" },
-    { id: "auriculares", label: "Auriculares/Headset" },
-    { id: "base_carga", label: "Base de carga" },
-    { id: "disco_externo", label: "Disco externo" },
-    { id: "juegos", label: "Juegos físicos" },
-  ],
-  SMARTWATCH: [
-    { id: "cargador", label: "Cargador" },
-    { id: "cable", label: "Cable USB" },
-    { id: "malla", label: "Malla/Correa" },
-    { id: "caja", label: "Caja original" },
-  ],
-}
-
-// Accesorios genéricos para tipos de dispositivo personalizados
-const ACCESORIOS_GENERICOS = [
-  { id: "cable_poder", label: "Cable de poder" },
-  { id: "cargador", label: "Cargador/Fuente" },
-  { id: "cable_datos", label: "Cable de datos" },
-  { id: "control_remoto", label: "Control remoto" },
-  { id: "manual", label: "Manual" },
-  { id: "caja_original", label: "Caja original" },
-]
-
-// Problemas comunes por tipo de dispositivo
-const PROBLEMAS_COMUNES: Record<string, string[]> = {
-  CELULAR: [
-    "No enciende",
-    "Pantalla rota",
-    "No carga",
-    "Batería se agota rápido",
-    "Touch no funciona",
-    "No reconoce SIM",
-    "Cámara no funciona",
-    "Altavoz no funciona",
-    "Micrófono no funciona",
-    "WiFi no conecta",
-  ],
-  COMPUTADORA: [
-    "No enciende",
-    "Pantalla azul (BSOD)",
-    "Muy lenta / Se congela",
-    "No carga batería (notebook)",
-    "Teclado no funciona",
-    "No detecta WiFi",
-    "Disco lleno / Sin espacio",
-    "Virus / Malware",
-    "No inicia Windows",
-    "Pantalla rota (notebook)",
-    "Se apaga sola / Sobrecalienta",
-    "No reconoce USB",
-    "Sin audio",
-    "Actualización fallida",
-    "Formateo y reinstalación",
-  ],
-  TABLET: [
-    "No enciende",
-    "Pantalla rota",
-    "No carga",
-    "Batería se agota rápido",
-    "Touch no responde",
-    "Muy lenta",
-    "No conecta WiFi",
-  ],
-  CONSOLA: [
-    "No enciende",
-    "No lee discos",
-    "Se apaga sola / Sobrecalienta",
-    "No conecta a internet",
-    "Control no sincroniza",
-    "Sin imagen HDMI",
-    "Error de sistema",
-    "Hace ruido extraño",
-    "Puerto HDMI dañado",
-    "Actualización fallida",
-    "Luz parpadeante",
-    "Expulsa discos sola",
-    "Drift en control (joystick)",
-  ],
-  SMARTWATCH: [
-    "No enciende",
-    "No carga",
-    "Pantalla rota",
-    "No sincroniza",
-    "Batería dura poco",
-  ],
-}
-
-// Problemas genéricos para tipos de dispositivo personalizados
-const PROBLEMAS_GENERICOS = [
-  "No enciende",
-  "No funciona correctamente",
-  "Hace ruido extraño",
-  "Se apaga solo",
-  "Error en pantalla/display",
-  "No conecta a red/WiFi",
-  "Mantenimiento preventivo",
-  "Revisión general",
-]
-
-// Marcas comunes por tipo de dispositivo
-const MARCAS_POR_TIPO: Record<string, string[]> = {
-  CELULAR: ["Apple", "Samsung", "Xiaomi", "Motorola", "Huawei", "LG", "Sony", "OnePlus", "Oppo", "Realme"],
-  COMPUTADORA: ["HP", "Dell", "Lenovo", "Asus", "Acer", "Apple", "MSI", "Toshiba", "Samsung", "Armada/Genérica"],
-  TABLET: ["Apple", "Samsung", "Huawei", "Lenovo", "Amazon", "Xiaomi"],
-  CONSOLA: ["Sony PlayStation", "Microsoft Xbox", "Nintendo"],
-  SMARTWATCH: ["Apple", "Samsung", "Huawei", "Xiaomi", "Amazfit", "Garmin", "Fitbit"],
-}
-
-// Modelos de consolas comunes
-const MODELOS_CONSOLA = [
-  "PlayStation 5",
-  "PlayStation 5 Digital",
-  "PlayStation 4 Pro",
-  "PlayStation 4 Slim",
-  "PlayStation 4",
-  "PlayStation 3",
-  "Xbox Series X",
-  "Xbox Series S",
-  "Xbox One X",
-  "Xbox One S",
-  "Xbox One",
-  "Xbox 360",
-  "Nintendo Switch",
-  "Nintendo Switch OLED",
-  "Nintendo Switch Lite",
-  "Nintendo Wii U",
-  "Nintendo Wii",
-  "Nintendo 3DS",
-]
-
 const ordenSchema = z.object({
   clienteId: z.string().min(1, "El cliente es requerido"),
   dispositivo: z.string().min(1, "El dispositivo es requerido"),
@@ -225,15 +84,6 @@ const ordenSchema = z.object({
   presupuesto: z.union([z.number().positive(), z.nan(), z.undefined()]).optional(),
   fechaPrometida: z.string().optional(),
   observaciones: z.string().optional(),
-  // Campos específicos para PC
-  tipoPc: z.enum(["DESKTOP", "NOTEBOOK", "ALL_IN_ONE"]).optional(),
-  procesador: z.string().optional(),
-  ram: z.string().optional(),
-  almacenamiento: z.string().optional(),
-  sistemaOperativo: z.string().optional(),
-  // Campos específicos para Consola
-  modeloConsola: z.string().optional(),
-  cantidadControles: z.number().min(0).max(4).optional(),
 })
 
 type OrdenFormData = z.infer<typeof ordenSchema>
@@ -273,6 +123,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
   const [presupuestoAceptado, setPresupuestoAceptado] = useState(false)
   const [sena, setSena] = useState<number | undefined>(undefined)
   const [comprimiendo, setComprimiendo] = useState(false)
+  const [camposExtraValues, setCamposExtraValues] = useState<Record<string, any>>({})
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const { tipos: tiposDispositivo, loading: tiposLoading } = useTiposDispositivo()
@@ -296,51 +147,63 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
       accesorios: "",
       codigoAccesoDispositivo: "",
       fechaPrometida: "",
-      // Campos PC
-      tipoPc: undefined,
-      procesador: "",
-      ram: "",
-      almacenamiento: "",
-      sistemaOperativo: "",
-      // Campos Consola
-      modeloConsola: "",
-      cantidadControles: undefined,
     },
   })
 
   const tipoDispositivo = watch("tipoDispositivo")
 
-  // Obtener accesorios según tipo de dispositivo
-  const accesoriosDisponibles = ACCESORIOS_POR_TIPO[tipoDispositivo] || ACCESORIOS_GENERICOS
+  // Get the selected tipo object and its config
+  const tipoSeleccionado = useMemo(
+    () => tiposDispositivo.find((t) => t.codigo === tipoDispositivo),
+    [tiposDispositivo, tipoDispositivo]
+  )
+  const config: TipoDispositivoConfig = tipoSeleccionado?.config && Object.keys(tipoSeleccionado.config).length > 0
+    ? tipoSeleccionado.config
+    : FALLBACK_CONFIG
 
-  // Obtener problemas comunes según tipo
-  const problemasComunes = PROBLEMAS_COMUNES[tipoDispositivo] || PROBLEMAS_GENERICOS
+  // Derived from config
+  const accesoriosDisponibles = config.accesorios || FALLBACK_CONFIG.accesorios!
+  const problemasComunes = config.problemasComunes || FALLBACK_CONFIG.problemasComunes!
+  const marcasDisponibles = config.marcas || []
+  const camposExtra = config.camposExtra || []
+  const showImei = config.campos?.imei?.visible !== false
+  const showPassword = config.campos?.password?.visible !== false
+  const showColor = config.campos?.color?.visible !== false
+  const showMarca = config.campos?.marca?.visible !== false
+  const imeiLabel = config.campos?.imei?.label || "Numero de Serie"
+  const imeiPlaceholder = config.campos?.imei?.placeholder || "S/N del equipo"
+  const imeiMaxLength = config.campos?.imei?.maxLength
 
-  // Obtener marcas según tipo
-  const marcasDisponibles = MARCAS_POR_TIPO[tipoDispositivo] || []
+  // Handle campo extra changes with autoMarca and usarComoDispositivo support
+  const handleCampoExtraChange = (campo: CampoExtra, value: any) => {
+    setCamposExtraValues((prev) => ({ ...prev, [campo.key]: value }))
 
-  // Determinar si es un tipo base conocido
-  const esTipoBase = ["CELULAR", "COMPUTADORA", "TABLET", "CONSOLA", "SMARTWATCH"].includes(tipoDispositivo)
+    // If this field replaces the device name
+    if (campo.usarComoDispositivo && typeof value === "string") {
+      setValue("dispositivo", value)
+    }
 
-  // Limpiar campos específicos cuando cambia el tipo
+    // Auto-fill brand based on keywords in value
+    if (campo.autoMarca && typeof value === "string") {
+      for (const [keyword, brand] of Object.entries(campo.autoMarca)) {
+        if (value.includes(keyword)) {
+          setValue("marca", brand)
+          break
+        }
+      }
+    }
+  }
+
+  // Clear fields when device type changes
   const handleTipoChange = (nuevoTipo: string) => {
     setValue("tipoDispositivo", nuevoTipo)
-    // Limpiar accesorios seleccionados al cambiar tipo
     setAccesoriosSeleccionados([])
-    // Limpiar campos específicos
-    if (nuevoTipo !== "COMPUTADORA") {
-      setValue("tipoPc", undefined)
-      setValue("procesador", "")
-      setValue("ram", "")
-      setValue("almacenamiento", "")
-      setValue("sistemaOperativo", "")
-    }
-    if (nuevoTipo !== "CONSOLA") {
-      setValue("modeloConsola", "")
-      setValue("cantidadControles", undefined)
-    }
-    // Si es consola, limpiar dispositivo para seleccionar modelo
-    if (nuevoTipo === "CONSOLA") {
+    setCamposExtraValues({})
+    // If new type has a usarComoDispositivo field, clear dispositivo so it gets set by the field
+    const nuevoTipoObj = tiposDispositivo.find((t) => t.codigo === nuevoTipo)
+    const nuevoConfig = nuevoTipoObj?.config
+    const hasUsarComoDispositivo = nuevoConfig?.camposExtra?.some((c) => c.usarComoDispositivo)
+    if (hasUsarComoDispositivo) {
       setValue("dispositivo", "")
     }
   }
@@ -373,15 +236,13 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
     fetchClientes()
   }, [])
 
-  // Manejar selección de fotos
+  // Manejar seleccion de fotos
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (!files || files.length === 0) return
 
-    // Copiar archivos ANTES de resetear el input (FileList se invalida al resetear)
     const fileArray = Array.from(files)
 
-    // Reset input después de copiar
     if (fileInputRef.current) fileInputRef.current.value = ""
     if (cameraInputRef.current) cameraInputRef.current.value = ""
 
@@ -389,7 +250,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
 
     const processFile = async (file: File): Promise<FotoPreview | null> => {
       if (!file.type.startsWith("image/")) {
-        alert("Por favor selecciona imágenes válidas")
+        alert("Por favor selecciona imagenes validas")
         return null
       }
 
@@ -468,11 +329,9 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
 
       const nuevoCliente = await res.json()
 
-      // Agregar el nuevo cliente a la lista inmediatamente y seleccionarlo
       setClientes(prev => [...prev, nuevoCliente])
       setValue("clienteId", nuevoCliente.id)
 
-      // Cerrar modal y resetear formulario
       setShowClienteModal(false)
       clienteForm.reset()
     } catch (error) {
@@ -483,16 +342,108 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
     }
   }
 
+  // Render a dynamic extra field based on its config
+  const renderCampoExtra = (campo: CampoExtra) => {
+    const value = camposExtraValues[campo.key] ?? ""
+
+    switch (campo.tipo) {
+      case "text":
+        return (
+          <div key={campo.key}>
+            <Label className="text-xs">{campo.label}</Label>
+            <Input
+              value={value}
+              onChange={(e) => handleCampoExtraChange(campo, e.target.value)}
+              placeholder={campo.placeholder || ""}
+              className="h-9"
+            />
+          </div>
+        )
+
+      case "select":
+        return (
+          <div key={campo.key}>
+            <Label className="text-xs">{campo.label}</Label>
+            <Select
+              value={value || ""}
+              onValueChange={(v) => handleCampoExtraChange(campo, v)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Seleccionar..." />
+              </SelectTrigger>
+              <SelectContent>
+                {(campo.opciones || []).map((op) => (
+                  <SelectItem key={op} value={op}>{op}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )
+
+      case "buttons":
+        return (
+          <div key={campo.key}>
+            <Label className="text-xs">{campo.label}</Label>
+            <div className="flex flex-wrap gap-1 mt-1">
+              {(campo.opciones || []).map((op) => (
+                <button
+                  key={op}
+                  type="button"
+                  onClick={() => handleCampoExtraChange(campo, op)}
+                  className={`px-2 py-1 text-xs rounded border transition-colors ${
+                    value === op
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "hover:bg-muted"
+                  }`}
+                >
+                  {op}
+                </button>
+              ))}
+            </div>
+          </div>
+        )
+
+      case "counter":
+        return (
+          <div key={campo.key}>
+            <Label className="text-xs">{campo.label}</Label>
+            <div className="flex gap-1 mt-1">
+              {Array.from(
+                { length: (campo.max ?? 4) - (campo.min ?? 0) + 1 },
+                (_, i) => (campo.min ?? 0) + i
+              ).map((num) => (
+                <button
+                  key={num}
+                  type="button"
+                  onClick={() => handleCampoExtraChange(campo, num)}
+                  className={`w-10 h-10 rounded border font-medium transition-colors ${
+                    value === num
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "hover:bg-muted"
+                  }`}
+                >
+                  {num}
+                </button>
+              ))}
+            </div>
+          </div>
+        )
+
+      default:
+        return null
+    }
+  }
+
   const onSubmit = async (data: OrdenFormData) => {
     setLoading(true)
     try {
-      // Construir lista de accesorios
+      // Build accessories labels
       const accesoriosLabels = accesoriosSeleccionados.map((id) => {
         const acc = accesoriosDisponibles.find((a) => a.id === id)
         return acc ? acc.label : id
       })
 
-      // Preparar fotos para enviar
+      // Prepare photos
       const fotosData = fotos.map((foto) => {
         const base64Match = foto.preview.match(/^data:(image\/[a-z]+);base64,(.+)$/)
         return {
@@ -503,28 +454,13 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
         }
       })
 
-      // Construir información adicional para observaciones (PC/Consola)
-      let infoAdicional = ""
-      if (data.tipoDispositivo === "COMPUTADORA") {
-        const infoPc = []
-        if (data.tipoPc) infoPc.push(`Tipo: ${data.tipoPc}`)
-        if (data.procesador) infoPc.push(`Procesador: ${data.procesador}`)
-        if (data.ram) infoPc.push(`RAM: ${data.ram}`)
-        if (data.almacenamiento) infoPc.push(`Almacenamiento: ${data.almacenamiento}`)
-        if (data.sistemaOperativo) infoPc.push(`SO: ${data.sistemaOperativo}`)
-        if (infoPc.length > 0) {
-          infoAdicional = `[INFO PC: ${infoPc.join(" | ")}]`
-        }
-      } else if (data.tipoDispositivo === "CONSOLA") {
-        const infoConsola = []
-        if (data.cantidadControles !== undefined) infoConsola.push(`Controles: ${data.cantidadControles}`)
-        if (infoConsola.length > 0) {
-          infoAdicional = `[INFO CONSOLA: ${infoConsola.join(" | ")}]`
+      // Build metadata from camposExtra values (non-empty only)
+      const metadata: Record<string, any> = {}
+      for (const [key, val] of Object.entries(camposExtraValues)) {
+        if (val !== "" && val !== undefined && val !== null) {
+          metadata[key] = val
         }
       }
-
-      // Combinar observaciones con info adicional
-      const observacionesFinal = [data.observaciones, infoAdicional].filter(Boolean).join("\n")
 
       const res = await fetch("/api/ordenes", {
         method: "POST",
@@ -537,7 +473,8 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
           fotos: fotosData.length > 0 ? fotosData : undefined,
           presupuestoAceptado: presupuestoAceptado,
           sena: presupuestoAceptado && sena ? sena : undefined,
-          observaciones: observacionesFinal || undefined,
+          observaciones: data.observaciones || undefined,
+          metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
         }),
       })
 
@@ -549,10 +486,8 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
 
       const nuevaOrden = await res.json()
 
-      // Obtener datos del cliente seleccionado
       const clienteSeleccionado = clientes.find(c => c.id === data.clienteId)
 
-      // Preparar datos para el modal
       setOrdenCreada({
         id: nuevaOrden.id,
         numeroOrden: nuevaOrden.numeroOrden,
@@ -575,6 +510,9 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
       setLoading(false)
     }
   }
+
+  // Check if the selected type has a campo extra with usarComoDispositivo
+  const campoDispositivo = camposExtra.find((c) => c.usarComoDispositivo)
 
   return (
     <Card>
@@ -661,31 +599,23 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
             )}
           </div>
 
-          {/* Dispositivo - Para consolas mostrar selector de modelos */}
+          {/* Dispositivo - Use select if a campoExtra has usarComoDispositivo, otherwise text input */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="dispositivo">
-                {tipoDispositivo === "CONSOLA" ? "Modelo de Consola *" : "Dispositivo *"}
+                {campoDispositivo ? campoDispositivo.label + " *" : "Dispositivo *"}
               </Label>
-              {tipoDispositivo === "CONSOLA" ? (
+              {campoDispositivo ? (
                 <Select
                   value={watch("dispositivo") || ""}
-                  onValueChange={(value) => {
-                    setValue("dispositivo", value)
-                    // Auto-completar marca según modelo
-                    if (value.includes("PlayStation")) setValue("marca", "Sony PlayStation")
-                    else if (value.includes("Xbox")) setValue("marca", "Microsoft Xbox")
-                    else if (value.includes("Nintendo") || value.includes("Switch") || value.includes("Wii")) setValue("marca", "Nintendo")
-                  }}
+                  onValueChange={(value) => handleCampoExtraChange(campoDispositivo, value)}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar modelo..." />
+                    <SelectValue placeholder="Seleccionar..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {MODELOS_CONSOLA.map((modelo) => (
-                      <SelectItem key={modelo} value={modelo}>
-                        {modelo}
-                      </SelectItem>
+                    {(campoDispositivo.opciones || []).map((op) => (
+                      <SelectItem key={op} value={op}>{op}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -693,17 +623,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
                 <Input
                   id="dispositivo"
                   {...register("dispositivo")}
-                  placeholder={
-                    tipoDispositivo === "COMPUTADORA"
-                      ? "Ej: HP Pavilion 15, Dell Inspiron 3000"
-                      : tipoDispositivo === "CELULAR"
-                      ? "Ej: iPhone 12 Pro Max, Samsung S21"
-                      : tipoDispositivo === "TABLET"
-                      ? "Ej: iPad Pro 12.9, Galaxy Tab S7"
-                      : !esTipoBase
-                      ? "Modelo o descripción del equipo"
-                      : "Ej: iPad Pro 12.9, Galaxy Tab S7"
-                  }
+                  placeholder="Modelo o descripcion del equipo"
                 />
               )}
               {errors.dispositivo && (
@@ -713,187 +633,77 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
               )}
             </div>
 
-            {/* Marca con selección rápida */}
-            <div>
-              <Label htmlFor="marca">Marca</Label>
-              <div className="space-y-2">
-                <Input
-                  id="marca"
-                  {...register("marca")}
-                  placeholder="Ej: Apple, Samsung"
-                />
-                {marcasDisponibles.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {marcasDisponibles.slice(0, 5).map((m) => (
-                      <button
-                        key={m}
-                        type="button"
-                        onClick={() => setValue("marca", m)}
-                        className={`px-2 py-0.5 text-xs rounded border transition-colors ${
-                          watch("marca") === m
-                            ? "bg-primary text-primary-foreground border-primary"
-                            : "hover:bg-muted"
-                        }`}
-                      >
-                        {m}
-                      </button>
-                    ))}
-                  </div>
-                )}
+            {/* Marca with quick select */}
+            {showMarca && (
+              <div>
+                <Label htmlFor="marca">Marca</Label>
+                <div className="space-y-2">
+                  <Input
+                    id="marca"
+                    {...register("marca")}
+                    placeholder="Ej: Apple, Samsung"
+                  />
+                  {marcasDisponibles.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {marcasDisponibles.slice(0, 5).map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => setValue("marca", m)}
+                          className={`px-2 py-0.5 text-xs rounded border transition-colors ${
+                            watch("marca") === m
+                              ? "bg-primary text-primary-foreground border-primary"
+                              : "hover:bg-muted"
+                          }`}
+                        >
+                          {m}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
-          {/* Campos específicos para COMPUTADORA */}
-          {tipoDispositivo === "COMPUTADORA" && (
-            <div className="border rounded-lg p-4 bg-blue-50/30 dark:bg-blue-950/20 space-y-4">
+          {/* Dynamic extra fields from config */}
+          {camposExtra.filter((c) => !c.usarComoDispositivo).length > 0 && (
+            <div className={`border rounded-lg p-4 space-y-4 ${
+              config.infoSectionColor === "blue" ? "bg-blue-50/30 dark:bg-blue-950/20" :
+              config.infoSectionColor === "purple" ? "bg-purple-50/30 dark:bg-purple-950/20" :
+              "bg-muted/30"
+            }`}>
               <h4 className="font-medium text-sm flex items-center gap-2">
-                💻 Información del Equipo
+                {config.infoSectionIcon && <span>{config.infoSectionIcon}</span>}
+                {config.infoSectionTitle || "Informacion Adicional"}
               </h4>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div>
-                  <Label className="text-xs">Tipo de PC</Label>
-                  <Select
-                    value={watch("tipoPc") || ""}
-                    onValueChange={(value) => setValue("tipoPc", value ? value as "DESKTOP" | "NOTEBOOK" | "ALL_IN_ONE" : undefined)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="NOTEBOOK">Notebook</SelectItem>
-                      <SelectItem value="DESKTOP">Desktop</SelectItem>
-                      <SelectItem value="ALL_IN_ONE">All-in-One</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-xs">Procesador</Label>
-                  <Input
-                    {...register("procesador")}
-                    placeholder="i5, Ryzen 5..."
-                    className="h-9"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">RAM</Label>
-                  <Select
-                    value={watch("ram") || ""}
-                    onValueChange={(value) => setValue("ram", value || undefined)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="2GB">2 GB</SelectItem>
-                      <SelectItem value="4GB">4 GB</SelectItem>
-                      <SelectItem value="8GB">8 GB</SelectItem>
-                      <SelectItem value="16GB">16 GB</SelectItem>
-                      <SelectItem value="32GB">32 GB</SelectItem>
-                      <SelectItem value="No sabe">No sabe</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-xs">Almacenamiento</Label>
-                  <Select
-                    value={watch("almacenamiento") || ""}
-                    onValueChange={(value) => setValue("almacenamiento", value || undefined)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="HDD 500GB">HDD 500GB</SelectItem>
-                      <SelectItem value="HDD 1TB">HDD 1TB</SelectItem>
-                      <SelectItem value="SSD 128GB">SSD 128GB</SelectItem>
-                      <SelectItem value="SSD 256GB">SSD 256GB</SelectItem>
-                      <SelectItem value="SSD 512GB">SSD 512GB</SelectItem>
-                      <SelectItem value="SSD 1TB">SSD 1TB</SelectItem>
-                      <SelectItem value="No sabe">No sabe</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div>
-                <Label className="text-xs">Sistema Operativo</Label>
-                <div className="flex flex-wrap gap-1 mt-1">
-                  {["Windows 11", "Windows 10", "Windows 7", "Linux", "macOS", "No inicia"].map((so) => (
-                    <button
-                      key={so}
-                      type="button"
-                      onClick={() => setValue("sistemaOperativo", so)}
-                      className={`px-2 py-1 text-xs rounded border transition-colors ${
-                        watch("sistemaOperativo") === so
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "hover:bg-muted"
-                      }`}
-                    >
-                      {so}
-                    </button>
-                  ))}
-                </div>
+                {camposExtra.filter((c) => !c.usarComoDispositivo).map(renderCampoExtra)}
               </div>
             </div>
           )}
 
-          {/* Campos específicos para CONSOLA */}
-          {tipoDispositivo === "CONSOLA" && (
-            <div className="border rounded-lg p-4 bg-purple-50/30 dark:bg-purple-950/20 space-y-4">
-              <h4 className="font-medium text-sm flex items-center gap-2">
-                🎮 Información de la Consola
-              </h4>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">Cantidad de Controles</Label>
-                  <div className="flex gap-1 mt-1">
-                    {[0, 1, 2, 3, 4].map((num) => (
-                      <button
-                        key={num}
-                        type="button"
-                        onClick={() => setValue("cantidadControles", num)}
-                        className={`w-10 h-10 rounded border font-medium transition-colors ${
-                          watch("cantidadControles") === num
-                            ? "bg-primary text-primary-foreground border-primary"
-                            : "hover:bg-muted"
-                        }`}
-                      >
-                        {num}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-xs">Número de Serie</Label>
-                  <Input
-                    {...register("imei")}
-                    placeholder="S/N de la consola"
-                    className="h-9"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Color e IMEI/Serial */}
-          {tipoDispositivo !== "CONSOLA" && (
+          {/* Color and IMEI/Serial - driven by config visibility */}
+          {(showColor || showImei) && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="color">Color</Label>
-                <Input
-                  id="color"
-                  {...register("color")}
-                  placeholder="Ej: Negro, Azul"
-                />
-              </div>
-              {tipoDispositivo !== "COMPUTADORA" && (
+              {showColor && (
                 <div>
-                  <Label htmlFor="imei">{esTipoBase ? "IMEI/Serial" : "Número de Serie"}</Label>
+                  <Label htmlFor="color">Color</Label>
+                  <Input
+                    id="color"
+                    {...register("color")}
+                    placeholder="Ej: Negro, Azul"
+                  />
+                </div>
+              )}
+              {showImei && (
+                <div>
+                  <Label htmlFor="imei">{imeiLabel}</Label>
                   <Input
                     id="imei"
                     {...register("imei")}
-                    placeholder={esTipoBase ? "123456789012345" : "S/N del equipo"}
-                    maxLength={esTipoBase ? 15 : undefined}
+                    placeholder={imeiPlaceholder}
+                    maxLength={imeiMaxLength}
                   />
                   {errors.imei && (
                     <p className="text-sm text-destructive mt-1">
@@ -905,7 +715,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
             </div>
           )}
 
-          {/* Problema reportado con selección rápida */}
+          {/* Problema reportado con seleccion rapida */}
           <div>
             <Label htmlFor="problemaReportado">Problema Reportado *</Label>
             {problemasComunes.length > 0 && (
@@ -986,14 +796,14 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
                     Presupuesto aceptado al momento
                   </span>
                   <p className="text-xs text-muted-foreground">
-                    El cliente acepta el precio y deja el equipo para reparación
+                    El cliente acepta el precio y deja el equipo para reparacion
                   </p>
                 </div>
               </label>
 
               {presupuestoAceptado && (
                 <div className="mt-4 pl-7">
-                  <Label htmlFor="sena">Seña / Adelanto (Opcional)</Label>
+                  <Label htmlFor="sena">Sena / Adelanto (Opcional)</Label>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-muted-foreground">$</span>
                     <Input
@@ -1016,7 +826,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
             </div>
           )}
 
-          {/* Accesorios recibidos - dinámicos según tipo */}
+          {/* Accesorios recibidos - dynamic from config */}
           <div>
             <Label>Accesorios Recibidos</Label>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
@@ -1096,9 +906,9 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
             )}
           </div>
 
-          {/* Password del dispositivo - solo para teléfonos, tablets y computadoras */}
-          {["CELULAR", "TABLET", "COMPUTADORA"].includes(tipoDispositivo) && <div>
-            <Label>Contraseña/Patrón del Dispositivo</Label>
+          {/* Password - driven by config visibility */}
+          {showPassword && <div>
+            <Label>Contrasena/Patron del Dispositivo</Label>
             <div className="flex gap-1 mt-2 mb-3">
               <Button
                 type="button"
@@ -1111,7 +921,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
                 className="flex-1"
               >
                 <Lock className="h-4 w-4 mr-2" />
-                PIN / Contraseña
+                PIN / Contrasena
               </Button>
               <Button
                 type="button"
@@ -1124,14 +934,14 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
                 className="flex-1"
               >
                 <Grid3X3 className="h-4 w-4 mr-2" />
-                Patrón
+                Patron
               </Button>
             </div>
             {passwordType === "text" ? (
               <Input
                 id="codigoAccesoDispositivo"
                 {...register("codigoAccesoDispositivo")}
-                placeholder="PIN o contraseña para pruebas"
+                placeholder="PIN o contrasena para pruebas"
               />
             ) : (
               <PatternLock
@@ -1148,7 +958,6 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
           <div>
             <Label>Fotos del Equipo (Ingreso)</Label>
             <div className="mt-2 space-y-3">
-              {/* Botones para agregar fotos */}
               <div className="flex gap-2">
                 <input
                   ref={fileInputRef}
@@ -1188,15 +997,13 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
                 </Button>
               </div>
 
-              {/* Indicador de compresión */}
               {comprimiendo && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Comprimiendo imágenes...
+                  Comprimiendo imagenes...
                 </div>
               )}
 
-              {/* Preview de fotos */}
               {fotos.length > 0 && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {fotos.map((foto) => (
@@ -1216,7 +1023,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
                       <Input
                         value={foto.descripcion}
                         onChange={(e) => updateFotoDescripcion(foto.id, e.target.value)}
-                        placeholder="Descripción..."
+                        placeholder="Descripcion..."
                         className="mt-1 text-xs h-7"
                       />
                     </div>
@@ -1275,7 +1082,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
             </div>
 
             <div>
-              <Label htmlFor="cliente-telefono">Teléfono *</Label>
+              <Label htmlFor="cliente-telefono">Telefono *</Label>
               <Input
                 id="cliente-telefono"
                 {...clienteForm.register("telefono")}
@@ -1320,11 +1127,11 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
             </div>
 
             <div>
-              <Label htmlFor="cliente-direccion">Dirección</Label>
+              <Label htmlFor="cliente-direccion">Direccion</Label>
               <Input
                 id="cliente-direccion"
                 {...clienteForm.register("direccion")}
-                placeholder="Dirección completa"
+                placeholder="Direccion completa"
               />
             </div>
 
@@ -1360,4 +1167,3 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
     </Card>
   )
 }
-

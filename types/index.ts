@@ -3,6 +3,46 @@ export type TipoDispositivoBase = "CELULAR" | "COMPUTADORA" | "TABLET" | "CONSOL
 // Acepta tipos base y tipos personalizados (cualquier string)
 export type TipoDispositivo = TipoDispositivoBase | (string & {})
 
+export interface CampoConfig {
+  visible: boolean
+  label?: string
+  placeholder?: string
+  maxLength?: number
+}
+
+export interface CampoExtra {
+  key: string
+  label: string
+  tipo: "text" | "select" | "buttons" | "counter"
+  placeholder?: string
+  opciones?: string[]
+  min?: number
+  max?: number
+  usarComoDispositivo?: boolean
+  autoMarca?: Record<string, string>
+}
+
+export interface AccesorioConfig {
+  id: string
+  label: string
+}
+
+export interface TipoDispositivoConfig {
+  campos?: {
+    imei?: CampoConfig
+    password?: CampoConfig
+    color?: CampoConfig
+    marca?: CampoConfig
+  }
+  camposExtra?: CampoExtra[]
+  accesorios?: AccesorioConfig[]
+  problemasComunes?: string[]
+  marcas?: string[]
+  infoSectionTitle?: string
+  infoSectionIcon?: string
+  infoSectionColor?: string
+}
+
 export interface TipoDispositivoCustom {
   id: string
   codigo: string
@@ -12,6 +52,7 @@ export interface TipoDispositivoCustom {
   activo: boolean
   esBase: boolean
   orden: number
+  config?: TipoDispositivoConfig
 }
 export type EstadoOrden =
   | "RECIBIDO"           // Equipo recién ingresado
@@ -69,6 +110,7 @@ export interface OrdenServicio {
   fechaCompletado?: Date | null
   observaciones?: string | null
   diagnostico?: string | null
+  metadata?: Record<string, any>
   cliente?: Cliente
   tecnico?: User | null
   // Campos de entrega

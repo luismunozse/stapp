@@ -6,6 +6,7 @@ import { z } from "zod"
 const updateTemplateSchema = z.object({
   nombre: z.string().min(1, "El nombre es requerido").optional(),
   activo: z.boolean().optional(),
+  tipoDispositivoId: z.string().optional().nullable(),
 })
 
 // GET - Obtener un template específico
@@ -82,9 +83,14 @@ export async function PUT(
       }
     }
 
+    const updateData: Record<string, any> = {}
+    if (data.nombre !== undefined) updateData.nombre = data.nombre
+    if (data.activo !== undefined) updateData.activo = data.activo
+    if (data.tipoDispositivoId !== undefined) updateData.tipo_dispositivo_id = data.tipoDispositivoId
+
     const { data: template, error: updateError } = await supabaseAdmin
       .from("checklist_templates")
-      .update(data)
+      .update(updateData)
       .eq("id", id)
       .select(`*, checklist_template_items (*)`)
       .single()

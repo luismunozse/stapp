@@ -19,7 +19,32 @@ const tipoDispositivoSchema = z.object({
     .max(10, "El prefijo no puede tener más de 10 caracteres")
     .regex(/^[A-Z0-9]+$/, "El prefijo solo puede contener letras mayúsculas y números"),
   icono: z.string().optional(),
+  config: z.any().optional(),
 })
+
+const DEFAULT_CONFIG = {
+  campos: {
+    imei: { visible: true, label: "Número de Serie", placeholder: "S/N del equipo" },
+    password: { visible: false },
+    color: { visible: true },
+    marca: { visible: true },
+  },
+  camposExtra: [],
+  accesorios: [
+    { id: "cable_poder", label: "Cable de poder" },
+    { id: "cargador", label: "Cargador/Fuente" },
+    { id: "cable_datos", label: "Cable de datos" },
+    { id: "control_remoto", label: "Control remoto" },
+    { id: "manual", label: "Manual" },
+    { id: "caja_original", label: "Caja original" },
+  ],
+  problemasComunes: [
+    "No enciende", "No funciona correctamente", "Hace ruido extraño",
+    "Se apaga solo", "Error en pantalla/display", "No conecta a red/WiFi",
+    "Mantenimiento preventivo", "Revisión general",
+  ],
+  marcas: [],
+}
 
 function formatTipoDispositivo(tipo: any) {
   return {
@@ -31,6 +56,7 @@ function formatTipoDispositivo(tipo: any) {
     activo: tipo.activo,
     esBase: tipo.es_base,
     orden: tipo.orden,
+    config: tipo.config || {},
   }
 }
 
@@ -109,6 +135,7 @@ export async function POST(request: Request) {
         icono: data.icono || null,
         es_base: false,
         orden: nuevoOrden,
+        config: data.config || DEFAULT_CONFIG,
       })
       .select()
       .single()

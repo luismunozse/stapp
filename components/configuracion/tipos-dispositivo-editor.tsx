@@ -15,9 +15,11 @@ import {
   ChevronUp,
   Power,
   PowerOff,
+  Settings,
 } from "lucide-react"
 import { useModal } from "@/contexts/modal-context"
-import type { TipoDispositivoCustom } from "@/types"
+import { TipoConfigEditor } from "@/components/configuracion/tipo-config-editor"
+import type { TipoDispositivoCustom, TipoDispositivoConfig } from "@/types"
 
 export function TiposDispositivoEditor() {
   const { confirm } = useModal()
@@ -25,6 +27,7 @@ export function TiposDispositivoEditor() {
   const [saving, setSaving] = useState(false)
   const [tipos, setTipos] = useState<TipoDispositivoCustom[]>([])
   const [showForm, setShowForm] = useState(false)
+  const [editingConfigId, setEditingConfigId] = useState<string | null>(null)
 
   // Form state
   const [codigo, setCodigo] = useState("")
@@ -176,6 +179,25 @@ export function TiposDispositivoEditor() {
     }
   }
 
+  const handleSaveConfig = async (tipoId: string, config: TipoDispositivoConfig) => {
+    const res = await fetch(`/api/tipos-dispositivo/${tipoId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ config }),
+    })
+
+    if (!res.ok) {
+      const error = await res.json()
+      alert(error.error || "Error al guardar configuracion")
+      throw new Error("Save failed")
+    }
+
+    setTipos((prev) =>
+      prev.map((t) => (t.id === tipoId ? { ...t, config } : t))
+    )
+    setEditingConfigId(null)
+  }
+
   if (loading) {
     return (
       <Card>
@@ -279,8 +301,8 @@ export function TiposDispositivoEditor() {
               {tipos
                 .sort((a, b) => a.orden - b.orden)
                 .map((tipo, index) => (
+                  <div key={tipo.id} className="space-y-2">
                   <div
-                    key={tipo.id}
                     className={`flex items-center gap-2 p-3 border rounded-lg ${
                       tipo.activo ? "bg-background" : "bg-muted/50 opacity-60"
                     }`}
@@ -329,6 +351,15 @@ export function TiposDispositivoEditor() {
                       <Button
                         variant="ghost"
                         size="icon"
+                        onClick={() => setEditingConfigId(editingConfigId === tipo.id ? null : tipo.id)}
+                        title="Configurar campos, accesorios, marcas..."
+                        className={editingConfigId === tipo.id ? "bg-primary/10" : ""}
+                      >
+                        <Settings className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         onClick={() => handleToggleActivo(tipo)}
                         title={tipo.activo ? "Desactivar" : "Activar"}
                       >
@@ -349,6 +380,16 @@ export function TiposDispositivoEditor() {
                       </Button>
                     </div>
                   </div>
+                  {editingConfigId === tipo.id && (
+                    <TipoConfigEditor
+                      tipoId={tipo.id}
+                      tipoNombre={tipo.nombre}
+                      config={tipo.config || {}}
+                      onSave={(config) => handleSaveConfig(tipo.id, config)}
+                      onClose={() => setEditingConfigId(null)}
+                    />
+                  )}
+                </div>
                 ))}
             </div>
           )}

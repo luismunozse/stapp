@@ -14,6 +14,7 @@ const updateSchema = z.object({
   icono: z.string().optional().nullable(),
   activo: z.boolean().optional(),
   orden: z.number().int().min(0).optional(),
+  config: z.any().optional(),
 })
 
 function formatTipoDispositivo(tipo: any) {
@@ -26,6 +27,7 @@ function formatTipoDispositivo(tipo: any) {
     activo: tipo.activo,
     esBase: tipo.es_base,
     orden: tipo.orden,
+    config: tipo.config || {},
   }
 }
 
@@ -104,6 +106,7 @@ export async function PUT(
     if (data.icono !== undefined) updateData.icono = data.icono
     if (data.activo !== undefined) updateData.activo = data.activo
     if (data.orden !== undefined) updateData.orden = data.orden
+    if (data.config !== undefined) updateData.config = data.config
 
     const { data: tipo, error: dbError } = await supabaseAdmin
       .from("tipos_dispositivo")
