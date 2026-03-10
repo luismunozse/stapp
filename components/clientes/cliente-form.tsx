@@ -8,13 +8,14 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { X } from "lucide-react"
-import type { Cliente } from "@/types"
+import { X, User, Building2 } from "lucide-react"
+import type { Cliente, TipoCliente } from "@/types"
 
 const clienteSchema = z.object({
+  tipoCliente: z.enum(["INDIVIDUAL", "EMPRESA"]).default("INDIVIDUAL"),
   nombre: z.string()
     .min(1, "El nombre es requerido")
-    .regex(/^[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s]+$/, "El nombre solo debe contener letras"),
+    .regex(/^[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s.]+$/, "El nombre solo debe contener letras"),
   telefono: z.string()
     .min(1, "El teléfono es requerido")
     .regex(/^\d{10}$/, "El teléfono debe tener exactamente 10 dígitos"),
@@ -22,6 +23,11 @@ const clienteSchema = z.object({
   direccion: z.string().optional(),
   dni: z.string()
     .regex(/^(\d{7,8})?$/, "El DNI debe tener 7 u 8 dígitos")
+    .optional()
+    .or(z.literal("")),
+  razonSocial: z.string().optional(),
+  cuit: z.string()
+    .regex(/^(\d{2}-?\d{8}-?\d{1})?$/, "CUIT inválido (formato: XX-XXXXXXXX-X)")
     .optional()
     .or(z.literal("")),
 })
@@ -41,33 +47,46 @@ export function ClienteForm({ cliente, onClose, onSuccess }: ClienteFormProps) {
     handleSubmit,
     formState: { errors },
     reset,
+    watch,
+    setValue,
   } = useForm<ClienteFormData>({
     resolver: zodResolver(clienteSchema),
     defaultValues: cliente
       ? {
+          tipoCliente: cliente.tipoCliente || "INDIVIDUAL",
           nombre: cliente.nombre,
           telefono: cliente.telefono,
           email: cliente.email || "",
           direccion: cliente.direccion || "",
           dni: cliente.dni || "",
+          razonSocial: cliente.razonSocial || "",
+          cuit: cliente.cuit || "",
         }
       : {
+          tipoCliente: "INDIVIDUAL",
           nombre: "",
           telefono: "",
           email: "",
           direccion: "",
           dni: "",
+          razonSocial: "",
+          cuit: "",
         },
   })
+
+  const tipoCliente = watch("tipoCliente")
 
   useEffect(() => {
     if (cliente) {
       reset({
+        tipoCliente: cliente.tipoCliente || "INDIVIDUAL",
         nombre: cliente.nombre,
         telefono: cliente.telefono,
         email: cliente.email || "",
         direccion: cliente.direccion || "",
         dni: cliente.dni || "",
+        razonSocial: cliente.razonSocial || "",
+        cuit: cliente.cuit || "",
       })
     }
   }, [cliente, reset])
@@ -78,10 +97,16 @@ export function ClienteForm({ cliente, onClose, onSuccess }: ClienteFormProps) {
       const url = cliente ? `/api/clientes/${cliente.id}` : "/api/clientes"
       const method = cliente ? "PUT" : "POST"
 
+      const payload: any = { ...data }
+      if (data.tipoCliente === "INDIVIDUAL") {
+        payload.razonSocial = ""
+        payload.cuit = ""
+      }
+
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify(payload),
       })
 
       if (!res.ok) {
@@ -111,12 +136,45 @@ export function ClienteForm({ cliente, onClose, onSuccess }: ClienteFormProps) {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {/* Tipo de cliente */}
           <div>
-            <Label htmlFor="nombre">Nombre *</Label>
+            <Label>Tipo de cliente</Label>
+            <div className="grid grid-cols-2 gap-2 mt-1.5">
+              <button
+                type="button"
+                onClick={() => setValue("tipoCliente", "INDIVIDUAL")}
+                className={`flex items-center gap-2 px-3 py-2.5 rounded-md border text-sm font-medium transition-colors ${
+                  tipoCliente === "INDIVIDUAL"
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-input bg-background hover:bg-accent"
+                }`}
+              >
+                <User className="h-4 w-4" />
+                Individual
+              </button>
+              <button
+                type="button"
+                onClick={() => setValue("tipoCliente", "EMPRESA")}
+                className={`flex items-center gap-2 px-3 py-2.5 rounded-md border text-sm font-medium transition-colors ${
+                  tipoCliente === "EMPRESA"
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-input bg-background hover:bg-accent"
+                }`}
+              >
+                <Building2 className="h-4 w-4" />
+                Empresa
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <Label htmlFor="nombre">
+              {tipoCliente === "EMPRESA" ? "Nombre de contacto *" : "Nombre *"}
+            </Label>
             <Input
               id="nombre"
               {...register("nombre")}
-              placeholder="Nombre completo"
+              placeholder={tipoCliente === "EMPRESA" ? "Nombre del contacto" : "Nombre completo"}
             />
             {errors.nombre && (
               <p className="text-sm text-destructive mt-1">
@@ -124,6 +182,35 @@ export function ClienteForm({ cliente, onClose, onSuccess }: ClienteFormProps) {
               </p>
             )}
           </div>
+
+          {/* Campos de empresa */}
+          {tipoCliente === "EMPRESA" && (
+            <>
+              <div>
+                <Label htmlFor="razonSocial">Razón Social</Label>
+                <Input
+                  id="razonSocial"
+                  {...register("razonSocial")}
+                  placeholder="Razón social de la empresa"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="cuit">CUIT</Label>
+                <Input
+                  id="cuit"
+                  {...register("cuit")}
+                  placeholder="XX-XXXXXXXX-X"
+                  maxLength={13}
+                />
+                {errors.cuit && (
+                  <p className="text-sm text-destructive mt-1">
+                    {errors.cuit.message}
+                  </p>
+                )}
+              </div>
+            </>
+          )}
 
           <div>
             <Label htmlFor="telefono">Teléfono *</Label>
@@ -156,7 +243,9 @@ export function ClienteForm({ cliente, onClose, onSuccess }: ClienteFormProps) {
           </div>
 
           <div>
-            <Label htmlFor="dni">DNI</Label>
+            <Label htmlFor="dni">
+              {tipoCliente === "EMPRESA" ? "DNI del contacto" : "DNI"}
+            </Label>
             <Input
               id="dni"
               {...register("dni")}
@@ -192,4 +281,3 @@ export function ClienteForm({ cliente, onClose, onSuccess }: ClienteFormProps) {
     </Card>
   )
 }
-
