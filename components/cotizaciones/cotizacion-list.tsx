@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
+import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -62,29 +63,18 @@ const estadoConfig: Record<string, { label: string; icon: typeof Clock; color: s
 
 export function CotizacionList({ ordenId, clienteEmail }: CotizacionListProps) {
   const { formatPrice, formatDate } = useCurrency()
-  const [cotizaciones, setCotizaciones] = useState<Cotizacion[]>([])
-  const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingCotizacion, setEditingCotizacion] = useState<Cotizacion | null>(null)
   const [sendingId, setSendingId] = useState<string | null>(null)
   const [approvingCotizacion, setApprovingCotizacion] = useState<Cotizacion | null>(null)
   const { confirm, showError, showSuccess, showWarning } = useModal()
 
-  const fetchCotizaciones = async () => {
-    try {
-      const res = await fetch(`/api/cotizaciones?ordenId=${ordenId}`)
-      const data = await res.json()
-      setCotizaciones(data)
-    } catch (error) {
-      console.error("Error fetching cotizaciones:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchCotizaciones()
-  }, [ordenId])
+  const fetcher = (url: string) => fetch(url).then(res => res.json())
+  const { data: cotizaciones = [], isLoading: loading, mutate } = useSWR<Cotizacion[]>(
+    `/api/cotizaciones?ordenId=${ordenId}`,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 5000 }
+  )
 
   const handleSend = async (cotizacionId: string) => {
     if (!clienteEmail) {
@@ -115,7 +105,7 @@ export function CotizacionList({ ordenId, clienteEmail }: CotizacionListProps) {
       }
 
       await showSuccess("Cotización enviada exitosamente")
-      fetchCotizaciones()
+      mutate()
     } catch (error) {
       console.error("Error:", error)
       await showError("Error al enviar cotización")
@@ -146,7 +136,7 @@ export function CotizacionList({ ordenId, clienteEmail }: CotizacionListProps) {
         return
       }
 
-      fetchCotizaciones()
+      mutate()
     } catch (error) {
       console.error("Error:", error)
       await showError("Error al eliminar cotización")
@@ -167,7 +157,7 @@ export function CotizacionList({ ordenId, clienteEmail }: CotizacionListProps) {
         return
       }
 
-      fetchCotizaciones()
+      mutate()
     } catch (error) {
       console.error("Error:", error)
     }
@@ -233,7 +223,7 @@ export function CotizacionList({ ordenId, clienteEmail }: CotizacionListProps) {
           onClose={() => setShowForm(false)}
           onSuccess={() => {
             setShowForm(false)
-            fetchCotizaciones()
+            mutate()
           }}
         />
       )}
@@ -250,7 +240,7 @@ export function CotizacionList({ ordenId, clienteEmail }: CotizacionListProps) {
           onClose={() => setEditingCotizacion(null)}
           onSuccess={() => {
             setEditingCotizacion(null)
-            fetchCotizaciones()
+            mutate()
           }}
         />
       )}
@@ -424,7 +414,7 @@ export function CotizacionList({ ordenId, clienteEmail }: CotizacionListProps) {
         <CotizacionApprovalDialog
           open={!!approvingCotizacion}
           onClose={() => setApprovingCotizacion(null)}
-          onSuccess={fetchCotizaciones}
+          onSuccess={() => mutate()}
           cotizacion={approvingCotizacion}
         />
       )}

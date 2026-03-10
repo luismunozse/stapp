@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
+import useSWR from "swr"
 import Link from "next/link"
 import { useSession } from "next-auth/react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -32,27 +33,15 @@ export function TecnicosList() {
   const isAdmin = session?.user?.role === "ADMIN"
   const { confirm, showError, showWarning } = useModal()
 
-  const [tecnicos, setTecnicos] = useState<Tecnico[]>([])
-  const [loading, setLoading] = useState(true)
   const [formOpen, setFormOpen] = useState(false)
   const [editingTecnico, setEditingTecnico] = useState<Tecnico | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
-  useEffect(() => {
-    fetchTecnicos()
-  }, [])
-
-  const fetchTecnicos = async () => {
-    try {
-      const res = await fetch("/api/tecnicos", { cache: "no-store" })
-      const data = await res.json()
-      setTecnicos(data)
-    } catch (error) {
-      console.error("Error fetching tecnicos:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
+  const fetcher = (url: string) => fetch(url).then(res => res.json())
+  const { data: tecnicos = [], isLoading: loading, mutate } = useSWR<Tecnico[]>(
+    "/api/tecnicos", fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 5000 }
+  )
 
   const handleEdit = (tecnico: Tecnico, e: React.MouseEvent) => {
     e.preventDefault()
@@ -84,7 +73,7 @@ export function TecnicosList() {
     try {
       const res = await fetch(`/api/tecnicos/${id}`, { method: "DELETE" })
       if (res.ok) {
-        fetchTecnicos()
+        mutate()
       } else {
         const data = await res.json()
         await showError(data.error || "Error al eliminar")
@@ -98,7 +87,7 @@ export function TecnicosList() {
   }
 
   const handleFormSuccess = () => {
-    fetchTecnicos()
+    mutate()
     setEditingTecnico(null)
   }
 

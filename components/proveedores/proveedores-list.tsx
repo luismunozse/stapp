@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
+import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -33,27 +34,15 @@ interface Proveedor {
 }
 
 export function ProveedoresList() {
-  const [proveedores, setProveedores] = useState<Proveedor[]>([])
-  const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingProveedor, setEditingProveedor] = useState<Proveedor | null>(null)
   const { confirm } = useModal()
 
-  const fetchProveedores = async () => {
-    try {
-      const res = await fetch("/api/proveedores")
-      const data = await res.json()
-      setProveedores(data)
-    } catch (error) {
-      console.error("Error fetching proveedores:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchProveedores()
-  }, [])
+  const fetcher = (url: string) => fetch(url).then(res => res.json())
+  const { data: proveedores = [], isLoading: loading, mutate } = useSWR<Proveedor[]>(
+    "/api/proveedores", fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 5000 }
+  )
 
   const handleDelete = async (id: string) => {
     const confirmed = await confirm({
@@ -67,7 +56,7 @@ export function ProveedoresList() {
     try {
       const res = await fetch(`/api/proveedores/${id}`, { method: "DELETE" })
       if (res.ok) {
-        fetchProveedores()
+        mutate()
       }
     } catch (error) {
       console.error("Error deleting proveedor:", error)
@@ -97,7 +86,7 @@ export function ProveedoresList() {
           onSuccess={() => {
             setShowForm(false)
             setEditingProveedor(null)
-            fetchProveedores()
+            mutate()
           }}
         />
       )}

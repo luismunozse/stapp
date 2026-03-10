@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState, useMemo, useRef, useEffect, useCallback } from "react"
+import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -21,42 +22,36 @@ const ESTADOS_LEAD = [
 
 export function LeadsList() {
   const { formatDate } = useCurrency()
-  const [leads, setLeads] = useState<Lead[]>([])
-  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
   const [estadoFilter, setEstadoFilter] = useState("TODOS")
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
-  const [total, setTotal] = useState(0)
 
+  // Debounce search
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const handleSearchChange = useCallback((value: string) => {
+    setSearch(value)
+    if (debounceTimer.current) clearTimeout(debounceTimer.current)
+    debounceTimer.current = setTimeout(() => setDebouncedSearch(value), 300)
+  }, [])
   useEffect(() => {
-    fetchLeads()
-  }, [estadoFilter])
+    return () => { if (debounceTimer.current) clearTimeout(debounceTimer.current) }
+  }, [])
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchLeads()
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [search])
+  const fetcher = (url: string) => fetch(url).then(res => res.json())
+  const apiUrl = useMemo(() => {
+    const params = new URLSearchParams()
+    if (estadoFilter !== "TODOS") params.append("estado", estadoFilter)
+    if (debouncedSearch) params.append("search", debouncedSearch)
+    return `/api/leads?${params}`
+  }, [estadoFilter, debouncedSearch])
 
-  const fetchLeads = async () => {
-    setLoading(true)
-    try {
-      const params = new URLSearchParams()
-      if (estadoFilter !== "TODOS") params.append("estado", estadoFilter)
-      if (search) params.append("search", search)
+  const { data, isLoading: loading, mutate } = useSWR(apiUrl, fetcher, {
+    revalidateOnFocus: false, dedupingInterval: 5000,
+  })
 
-      const response = await fetch(`/api/leads?${params}`)
-      const data = await response.json()
-
-      setLeads(data.leads || [])
-      setTotal(data.total || 0)
-    } catch (error) {
-      console.error("Error fetching leads:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
+  const leads: Lead[] = data?.leads || []
+  const total = data?.total || 0
 
   const getEstadoBadge = (estado: string) => {
     const estadoInfo = ESTADOS_LEAD.find((e) => e.value === estado)
@@ -76,7 +71,7 @@ export function LeadsList() {
           <Input
             placeholder="Buscar por nombre, email, teléfono..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             className="pl-10"
           />
         </div>
@@ -207,7 +202,7 @@ export function LeadsList() {
           lead={selectedLead}
           isOpen={!!selectedLead}
           onClose={() => setSelectedLead(null)}
-          onUpdate={fetchLeads}
+          onUpdate={() => mutate()}
         />
       )}
     </div>

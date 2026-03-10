@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useMemo, useCallback, useRef, useEffect } from "react"
+import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -25,6 +26,8 @@ import { ExportButton } from "@/components/export/export-button"
 import { VentaMobileCard } from "./venta-mobile-card"
 import { Card, CardContent } from "@/components/ui/card"
 import { useCurrency } from "@/contexts/currency-context"
+
+const fetcher = (url: string) => fetch(url).then(res => res.json())
 
 interface VentaListItem {
   id: string
@@ -60,8 +63,6 @@ const metodoPagoLabels: Record<string, string> = {
 export function VentasList() {
   const router = useRouter()
   const { formatPrice, formatDate } = useCurrency()
-  const [ventas, setVentas] = useState<VentaListItem[]>([])
-  const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [ventaCreada, setVentaCreada] = useState<VentaCreadaData | null>(null)
   const [showVentaCreadaModal, setShowVentaCreadaModal] = useState(false)
@@ -69,6 +70,7 @@ export function VentasList() {
 
   // Filters
   const [search, setSearch] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
   const [estado, setEstado] = useState<string>("")
   const [fechaDesde, setFechaDesde] = useState("")
   const [fechaHasta, setFechaHasta] = useState("")
@@ -77,45 +79,45 @@ export function VentasList() {
   // Pagination
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
-  const [total, setTotal] = useState(0)
 
-  const fetchVentas = async () => {
-    setLoading(true)
-    try {
-      const params = new URLSearchParams()
-      if (search) params.append("search", search)
-      if (estado) params.append("estado", estado)
-      if (fechaDesde) params.append("fechaDesde", fechaDesde)
-      if (fechaHasta) params.append("fechaHasta", fechaHasta)
-      params.append("page", page.toString())
-      params.append("limit", pageSize.toString())
-
-      const res = await fetch(`/api/ventas?${params.toString()}`)
-      const data = await res.json()
-
-      if (data.data) {
-        setVentas(data.data)
-        setTotal(data.total || 0)
-      } else if (Array.isArray(data)) {
-        setVentas(data)
-        setTotal(data.length)
-      }
-    } catch (error) {
-      console.error("Error fetching ventas:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
+  // Debounce search
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const handleSearchChange = useCallback((value: string) => {
+    setSearch(value)
+    setPage(1)
+    if (debounceTimer.current) clearTimeout(debounceTimer.current)
+    debounceTimer.current = setTimeout(() => setDebouncedSearch(value), 300)
+  }, [])
   useEffect(() => {
-    const debounce = setTimeout(() => {
-      fetchVentas()
-    }, 300)
-    return () => clearTimeout(debounce)
-  }, [search, estado, fechaDesde, fechaHasta, page, pageSize])
+    return () => { if (debounceTimer.current) clearTimeout(debounceTimer.current) }
+  }, [])
+
+  // Build API URL for SWR
+  const apiUrl = useMemo(() => {
+    const params = new URLSearchParams()
+    if (debouncedSearch) params.append("search", debouncedSearch)
+    if (estado) params.append("estado", estado)
+    if (fechaDesde) params.append("fechaDesde", fechaDesde)
+    if (fechaHasta) params.append("fechaHasta", fechaHasta)
+    params.append("page", page.toString())
+    params.append("limit", pageSize.toString())
+    return `/api/ventas?${params.toString()}`
+  }, [debouncedSearch, estado, fechaDesde, fechaHasta, page, pageSize])
+
+  // SWR for fetching with cache
+  const { data, isLoading, mutate } = useSWR(apiUrl, fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 5000,
+    keepPreviousData: true,
+  })
+
+  // Extract data from response
+  const ventas: VentaListItem[] = data?.data || (Array.isArray(data) ? data : [])
+  const total = data?.total || (Array.isArray(data) ? data.length : 0)
 
   const clearFilters = () => {
     setSearch("")
+    setDebouncedSearch("")
     setEstado("")
     setFechaDesde("")
     setFechaHasta("")
@@ -273,7 +275,7 @@ export function VentasList() {
             placeholder="Buscar por cliente, teléfono, nro de venta..."
             className="pl-9"
             value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+            onChange={(e) => handleSearchChange(e.target.value)}
           />
         </div>
         <Button
@@ -347,7 +349,7 @@ export function VentasList() {
         <DataTable
           data={ventas}
           columns={columns}
-          loading={loading}
+          loading={isLoading}
           emptyMessage="No hay ventas registradas"
           keyExtractor={(venta) => venta.id}
           onRowClick={(venta) => router.push(`/ventas/${venta.id}`)}
@@ -363,7 +365,7 @@ export function VentasList() {
 
       {/* Mobile: Cards */}
       <div className="sm:hidden">
-        {loading ? (
+        {isLoading ? (
           <div className="space-y-3">
             {[...Array(3)].map((_, i) => (
               <Card key={`skeleton-${i}`}>
@@ -416,7 +418,7 @@ export function VentasList() {
           setShowForm(false)
           setVentaCreada(venta)
           setShowVentaCreadaModal(true)
-          fetchVentas()
+          mutate()
         }}
       />
 

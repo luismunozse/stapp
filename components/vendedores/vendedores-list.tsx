@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
+import useSWR from "swr"
 import Link from "next/link"
 import { useSession } from "next-auth/react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -29,27 +30,15 @@ export function VendedoresList() {
   const isAdmin = session?.user?.role === "ADMIN"
   const { confirm, showError } = useModal()
 
-  const [vendedores, setVendedores] = useState<Vendedor[]>([])
-  const [loading, setLoading] = useState(true)
   const [formOpen, setFormOpen] = useState(false)
   const [editingVendedor, setEditingVendedor] = useState<Vendedor | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
-  useEffect(() => {
-    fetchVendedores()
-  }, [])
-
-  const fetchVendedores = async () => {
-    try {
-      const res = await fetch("/api/vendedores", { cache: "no-store" })
-      const data = await res.json()
-      setVendedores(data)
-    } catch (error) {
-      console.error("Error fetching vendedores:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
+  const fetcher = (url: string) => fetch(url).then(res => res.json())
+  const { data: vendedores = [], isLoading: loading, mutate } = useSWR<Vendedor[]>(
+    "/api/vendedores", fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 5000 }
+  )
 
   const handleEdit = (vendedor: Vendedor, e: React.MouseEvent) => {
     e.preventDefault()
@@ -76,7 +65,7 @@ export function VendedoresList() {
     try {
       const res = await fetch(`/api/vendedores/${id}`, { method: "DELETE" })
       if (res.ok) {
-        fetchVendedores()
+        mutate()
       } else {
         const data = await res.json()
         await showError(data.error || "Error al eliminar")
@@ -90,7 +79,7 @@ export function VendedoresList() {
   }
 
   const handleFormSuccess = () => {
-    fetchVendedores()
+    mutate()
     setEditingVendedor(null)
   }
 

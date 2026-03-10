@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useMemo } from "react"
+import useSWR from "swr"
 import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -27,8 +28,6 @@ export function FacturacionList() {
   const isAdmin = session?.user?.role === "ADMIN"
   const { formatPrice, formatDate } = useCurrency()
 
-  const [facturas, setFacturas] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
   const [estadoPago, setEstadoPago] = useState<EstadoPagoType>("")
   const [showPagoForm, setShowPagoForm] = useState<string | null>(null)
   const [expandedFactura, setExpandedFactura] = useState<string | null>(null)
@@ -37,24 +36,17 @@ export function FacturacionList() {
   const [selectedFactura, setSelectedFactura] = useState<any>(null)
   const [actionLoading, setActionLoading] = useState(false)
 
-  const fetchFacturas = async () => {
-    try {
-      const params = new URLSearchParams()
-      if (estadoPago) params.append("estadoPago", estadoPago)
-
-      const res = await fetch(`/api/facturacion?${params.toString()}`, { cache: "no-store" })
-      const data = await res.json()
-      setFacturas(data)
-    } catch (error) {
-      console.error("Error fetching facturas:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchFacturas()
+  const fetcher = (url: string) => fetch(url).then(res => res.json())
+  const apiUrl = useMemo(() => {
+    const params = new URLSearchParams()
+    if (estadoPago) params.append("estadoPago", estadoPago)
+    return `/api/facturacion?${params.toString()}`
   }, [estadoPago])
+
+  const { data: facturas = [], isLoading: loading, mutate } = useSWR<any[]>(
+    apiUrl, fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 5000 }
+  )
 
   const toggleExpanded = (facturaId: string) => {
     setExpandedFactura(expandedFactura === facturaId ? null : facturaId)
@@ -83,7 +75,7 @@ export function FacturacionList() {
       }
       setDeleteDialogOpen(false)
       setSelectedFactura(null)
-      fetchFacturas()
+      mutate()
     } catch (error) {
       console.error("Error deleting factura:", error)
       alert(error instanceof Error ? error.message : "Error al eliminar factura")
@@ -107,7 +99,7 @@ export function FacturacionList() {
       }
       setVoidDialogOpen(false)
       setSelectedFactura(null)
-      fetchFacturas()
+      mutate()
     } catch (error) {
       console.error("Error voiding factura:", error)
       alert(error instanceof Error ? error.message : "Error al anular factura")
@@ -234,7 +226,7 @@ export function FacturacionList() {
                       onClose={() => setShowPagoForm(null)}
                       onSuccess={() => {
                         setShowPagoForm(null)
-                        fetchFacturas()
+                        mutate()
                       }}
                     />
                   )}

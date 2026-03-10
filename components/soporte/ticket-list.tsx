@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useMemo } from "react"
+import useSWR from "swr"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -60,32 +61,21 @@ const prioridadConfig: Record<string, { label: string; color: string }> = {
 
 export function TicketList() {
   const router = useRouter()
-  const [tickets, setTickets] = useState<TicketListItem[]>([])
-  const [loading, setLoading] = useState(true)
   const [filtroEstado, setFiltroEstado] = useState("")
   const [search, setSearch] = useState("")
   const [showCreate, setShowCreate] = useState(false)
 
-  const fetchTickets = useCallback(async () => {
-    try {
-      setLoading(true)
-      const params = new URLSearchParams()
-      if (filtroEstado) params.append("estado", filtroEstado)
-      const res = await fetch(`/api/soporte?${params}`)
-      if (res.ok) {
-        const data = await res.json()
-        setTickets(data)
-      }
-    } catch (err) {
-      console.error("Error fetching tickets:", err)
-    } finally {
-      setLoading(false)
-    }
+  const fetcher = (url: string) => fetch(url).then(res => res.ok ? res.json() : [])
+  const apiUrl = useMemo(() => {
+    const params = new URLSearchParams()
+    if (filtroEstado) params.append("estado", filtroEstado)
+    return `/api/soporte?${params}`
   }, [filtroEstado])
 
-  useEffect(() => {
-    fetchTickets()
-  }, [fetchTickets])
+  const { data: tickets = [], isLoading: loading, mutate } = useSWR<TicketListItem[]>(
+    apiUrl, fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 5000 }
+  )
 
   const filteredTickets = search
     ? tickets.filter(t => t.asunto.toLowerCase().includes(search.toLowerCase()))
@@ -206,7 +196,7 @@ export function TicketList() {
           onClose={() => setShowCreate(false)}
           onSuccess={() => {
             setShowCreate(false)
-            fetchTickets()
+            mutate()
           }}
         />
       )}

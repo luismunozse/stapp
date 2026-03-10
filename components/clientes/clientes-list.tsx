@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useMemo, useCallback, useRef, useEffect } from "react"
+import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DataTable, DataTablePagination, type Column } from "@/components/ui/data-table"
@@ -14,6 +15,8 @@ import type { Cliente } from "@/types"
 import { useModal } from "@/contexts/modal-context"
 import { useCurrency } from "@/contexts/currency-context"
 
+const fetcher = (url: string) => fetch(url).then(res => res.json())
+
 interface ClientesListProps {
   allowImport?: boolean
 }
@@ -21,8 +24,6 @@ interface ClientesListProps {
 export function ClientesList({ allowImport = true }: ClientesListProps) {
   const { confirm, showError } = useModal()
   const { formatDate } = useCurrency()
-  const [clientes, setClientes] = useState<Cliente[]>([])
-  const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null)
@@ -30,6 +31,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
 
   // Filters
   const [search, setSearch] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
 
   // Sorting
   const [sortKey, setSortKey] = useState<string>("createdAt")
@@ -38,41 +40,40 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
   // Pagination
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
-  const [total, setTotal] = useState(0)
 
-  const fetchClientes = async () => {
-    setLoading(true)
-    try {
-      const params = new URLSearchParams()
-      if (search) params.append("search", search)
-      params.append("page", page.toString())
-      params.append("limit", pageSize.toString())
-      params.append("sortBy", sortKey)
-      params.append("sortOrder", sortDirection)
-
-      const res = await fetch(`/api/clientes?${params.toString()}`, { cache: "no-store" })
-      const data = await res.json()
-
-      if (Array.isArray(data)) {
-        setClientes(data)
-        setTotal(data.length)
-      } else if (data.data) {
-        setClientes(data.data)
-        setTotal(data.total || data.data.length)
-      }
-    } catch (error) {
-      console.error("Error fetching clientes:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
+  // Debounce search
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const handleSearchChange = useCallback((value: string) => {
+    setSearch(value)
+    setPage(1)
+    if (debounceTimer.current) clearTimeout(debounceTimer.current)
+    debounceTimer.current = setTimeout(() => setDebouncedSearch(value), 300)
+  }, [])
   useEffect(() => {
-    const debounce = setTimeout(() => {
-      fetchClientes()
-    }, 300)
-    return () => clearTimeout(debounce)
-  }, [search, page, pageSize, sortKey, sortDirection])
+    return () => { if (debounceTimer.current) clearTimeout(debounceTimer.current) }
+  }, [])
+
+  // Build API URL for SWR
+  const apiUrl = useMemo(() => {
+    const params = new URLSearchParams()
+    if (debouncedSearch) params.append("search", debouncedSearch)
+    params.append("page", page.toString())
+    params.append("limit", pageSize.toString())
+    params.append("sortBy", sortKey)
+    params.append("sortOrder", sortDirection)
+    return `/api/clientes?${params.toString()}`
+  }, [debouncedSearch, page, pageSize, sortKey, sortDirection])
+
+  // SWR for fetching with cache
+  const { data, isLoading, mutate } = useSWR(apiUrl, fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 5000,
+    keepPreviousData: true,
+  })
+
+  // Extract data from response
+  const clientes: Cliente[] = data?.data || (Array.isArray(data) ? data : [])
+  const total = data?.total || (Array.isArray(data) ? data.length : 0)
 
   const handleSort = (key: string) => {
     if (sortKey === key) {
@@ -109,7 +110,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
         await showError(error.error || "Error al eliminar el cliente")
         return
       }
-      fetchClientes()
+      mutate()
     } catch (error) {
       console.error("Error deleting cliente:", error)
       await showError("Error al eliminar el cliente")
@@ -236,10 +237,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
             <Input
               placeholder="Buscar por nombre, teléfono o DNI..."
               value={search}
-              onChange={(e) => {
-                setSearch(e.target.value)
-                setPage(1)
-              }}
+              onChange={(e) => handleSearchChange(e.target.value)}
               className="pl-10 w-full sm:max-w-sm"
             />
           </div>
@@ -277,7 +275,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
           onSuccess={() => {
             setShowForm(false)
             setEditingCliente(null)
-            fetchClientes()
+            mutate()
           }}
         />
       )}
@@ -289,7 +287,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
           onClose={() => setShowImport(false)}
           onSuccess={() => {
             setShowImport(false)
-            fetchClientes()
+            mutate()
           }}
         />
       )}
@@ -300,7 +298,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
           data={clientes}
           columns={columns}
           keyExtractor={(cliente) => cliente.id}
-          loading={loading}
+          loading={isLoading}
           emptyMessage="No hay clientes registrados"
           sortKey={sortKey}
           sortDirection={sortDirection}
@@ -320,7 +318,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
 
       {/* Mobile: Cards */}
       <div className="sm:hidden">
-        {loading ? (
+        {isLoading ? (
           <div className="space-y-3">
             {[...Array(3)].map((_, i) => (
               <Card key={`skeleton-${i}`}>

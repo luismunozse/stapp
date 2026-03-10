@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
+import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -25,6 +26,8 @@ import { useCurrency } from "@/contexts/currency-context"
 import type { Inventario, TipoDispositivo, TipoDispositivoCustom } from "@/types"
 import { useModal } from "@/contexts/modal-context"
 import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
+
+const fetcher = (url: string) => fetch(url).then(res => res.json())
 
 const todasLasCategorias = [
   "Baterías",
@@ -55,8 +58,6 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   const { confirm } = useModal()
   const { formatPrice } = useCurrency()
   const { tipos: tiposDispositivo, loading: tiposLoading } = useTiposDispositivo()
-  const [items, setItems] = useState<Inventario[]>([])
-  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
   const [categoria, setCategoria] = useState("")
@@ -70,7 +71,6 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   // Pagination
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
-  const [total, setTotal] = useState(0)
   const [umbralStockBajo, setUmbralStockBajo] = useState(5)
 
   // Fetch configurable stock threshold
@@ -105,37 +105,28 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
     }
   }
 
-  const fetchItems = async () => {
-    setLoading(true)
-    try {
-      const params = new URLSearchParams()
-      if (debouncedSearch) params.append("search", debouncedSearch)
-      if (categoria) params.append("categoria", categoria)
-      if (tipoDispositivo) params.append("tipoDispositivo", tipoDispositivo)
-      if (bajoStock) params.append("bajoStock", "true")
-      params.append("page", page.toString())
-      params.append("limit", pageSize.toString())
-
-      const res = await fetch(`/api/inventario?${params.toString()}`, { cache: "no-store" })
-      const data = await res.json()
-
-      if (data.data) {
-        setItems(data.data)
-        setTotal(data.total || 0)
-      } else if (Array.isArray(data)) {
-        setItems(data)
-        setTotal(data.length)
-      }
-    } catch (error) {
-      console.error("Error fetching inventario:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchItems()
+  // Build API URL for SWR
+  const apiUrl = useMemo(() => {
+    const params = new URLSearchParams()
+    if (debouncedSearch) params.append("search", debouncedSearch)
+    if (categoria) params.append("categoria", categoria)
+    if (tipoDispositivo) params.append("tipoDispositivo", tipoDispositivo)
+    if (bajoStock) params.append("bajoStock", "true")
+    params.append("page", page.toString())
+    params.append("limit", pageSize.toString())
+    return `/api/inventario?${params.toString()}`
   }, [debouncedSearch, categoria, tipoDispositivo, bajoStock, page, pageSize])
+
+  // SWR for fetching with cache
+  const { data, isLoading, mutate } = useSWR(apiUrl, fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 5000,
+    keepPreviousData: true,
+  })
+
+  // Extract data from response
+  const items: Inventario[] = data?.data || (Array.isArray(data) ? data : [])
+  const total = data?.total || (Array.isArray(data) ? data.length : 0)
 
   const handleDelete = async (id: string) => {
     const confirmed = await confirm({
@@ -151,7 +142,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
     try {
       const res = await fetch(`/api/inventario/${id}`, { method: "DELETE" })
       if (res.ok) {
-        fetchItems()
+        mutate()
       }
     } catch (error) {
       console.error("Error deleting item:", error)
@@ -250,7 +241,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
           onSuccess={() => {
             setShowForm(false)
             setEditingItem(null)
-            fetchItems()
+            mutate()
           }}
         />
       )}
@@ -261,7 +252,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
           onClose={() => setShowImport(false)}
           onSuccess={() => {
             setShowImport(false)
-            fetchItems()
+            mutate()
           }}
         />
       )}
@@ -275,7 +266,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
         />
       )}
 
-      {loading ? (
+      {isLoading ? (
         <div className="text-center py-8">Cargando...</div>
       ) : items.length === 0 ? (
         <Card>
@@ -414,4 +405,3 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
     </div>
   )
 }
-
