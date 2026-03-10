@@ -44,7 +44,11 @@ interface Cotizacion {
   fechaAprobacion: string | null
   clienteNombre?: string | null
   clienteEmail?: string | null
+  clienteId?: string | null
+  ordenId?: string | null
   ordenNumero?: number | null
+  sectorId?: string | null
+  terminos?: string | null
   descuentoGlobalTipo?: string | null
   descuentoGlobalValor?: number | null
   ivaPorcentaje?: number | null
@@ -247,16 +251,18 @@ export default function CotizacionesPage() {
 
       {editingCotizacion && (
         <CotizacionForm
-          ordenId={editingCotizacion.ordenNumero ? undefined : undefined}
+          ordenId={editingCotizacion.ordenId || undefined}
           initialData={{
             id: editingCotizacion.id,
             items: editingCotizacion.items,
             notas: editingCotizacion.notas,
             fechaVencimiento: editingCotizacion.fechaVencimiento,
-            terminos: editingCotizacion.items.length > 0 ? undefined : undefined,
+            terminos: editingCotizacion.terminos || undefined,
             descuentoGlobalTipo: editingCotizacion.descuentoGlobalTipo || undefined,
             descuentoGlobalValor: editingCotizacion.descuentoGlobalValor || undefined,
             ivaPorcentaje: editingCotizacion.ivaPorcentaje || undefined,
+            clienteId: editingCotizacion.clienteId || undefined,
+            sectorId: editingCotizacion.sectorId || undefined,
           }}
           onClose={() => setEditingCotizacion(null)}
           onSuccess={() => {
