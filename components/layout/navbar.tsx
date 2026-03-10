@@ -36,6 +36,7 @@ import { useEscapeKey } from "@/hooks/use-escape-key"
 import { isNativePlatform } from "@/lib/capacitor"
 import { ApkDownloadBanner } from "@/components/shared/apk-download-banner"
 import { GlobalSearch } from "@/components/shared/global-search"
+import { NotificationBell } from "@/components/notifications/notification-bell"
 import { useSidebar } from "@/components/layout/sidebar-context"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
@@ -223,6 +224,12 @@ export function Navbar() {
               <TooltipProvider delayDuration={0}>
                 <Tooltip>
                   <TooltipTrigger asChild>
+                    <div><NotificationBell collapsed /></div>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">Notificaciones</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
                     <div><ThemeToggle variant="icon" /></div>
                   </TooltipTrigger>
                   <TooltipContent side="right">Cambiar tema</TooltipContent>
@@ -256,6 +263,7 @@ export function Navbar() {
               </TooltipProvider>
             ) : (
               <>
+                <NotificationBell />
                 <ThemeToggle variant="dropdown" />
                 <Button
                   variant="ghost"
@@ -289,6 +297,7 @@ export function Navbar() {
           </div>
           <div className="flex items-center gap-1">
             <GlobalSearch />
+            <NotificationBell />
             <ThemeToggle variant="icon" />
             <Button
               variant="ghost"

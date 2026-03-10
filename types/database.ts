@@ -340,6 +340,21 @@ export interface AuditLog {
   created_at: string
 }
 
+export interface UserNotification {
+  id: string
+  organization_id: string
+  user_id: string
+  title: string
+  body: string
+  type: string
+  icon: string | null
+  action_url: string | null
+  orden_id: string | null
+  cliente_id: string | null
+  read_at: string | null
+  created_at: string
+}
+
 // ========================================
 // DATABASE INTERFACE
 // ========================================
@@ -490,6 +505,14 @@ export interface Database {
           created_at?: string
         }
         Update: Partial<Omit<AuditLog, "id">>
+      }
+      user_notifications: {
+        Row: UserNotification
+        Insert: Omit<UserNotification, "id" | "created_at"> & {
+          id?: string
+          created_at?: string
+        }
+        Update: Partial<Omit<UserNotification, "id">>
       }
       leads: {
         Row: Lead

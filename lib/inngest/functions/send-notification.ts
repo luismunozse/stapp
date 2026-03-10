@@ -193,9 +193,112 @@ export const sendNotification = inngest.createFunction(
       results.push({ channel: "WHATSAPP", ...whatsappResult })
     }
 
-    return { success: true, results }
+    // Paso 4: Crear notificaciones in-app para usuarios de la organización
+    const inAppResult = await step.run("create-in-app-notifications", async () => {
+      try {
+        const { data: users } = await supabaseAdmin
+          .from("users")
+          .select("id, rol")
+          .eq("organization_id", organizationId)
+
+        if (!users || users.length === 0) return { created: 0 }
+
+        const targetUsers = users.filter((u) => {
+          if (u.rol === "ADMIN") return true
+          if (u.rol === "VENDEDOR" && ["CAMBIO_ESTADO", "PRESUPUESTO_DEFINIDO"].includes(tipo)) return true
+          if (u.rol === "TECNICO" && tipo === "CAMBIO_ESTADO") return true
+          return false
+        })
+
+        if (targetUsers.length === 0) return { created: 0 }
+
+        const { title, body, icon } = generateInAppContent(tipo, context)
+        const actionUrl = ordenId ? `/ordenes/${ordenId}` : null
+
+        const notifications = targetUsers.map((user) => ({
+          organization_id: organizationId,
+          user_id: user.id,
+          title,
+          body,
+          type: tipo,
+          icon,
+          action_url: actionUrl,
+          orden_id: ordenId || null,
+          cliente_id: clienteId || null,
+        }))
+
+        const { error: insertError } = await supabaseAdmin
+          .from("user_notifications")
+          .insert(notifications)
+
+        if (insertError) {
+          console.error("Error creating in-app notifications:", insertError)
+          return { created: 0, error: insertError.message }
+        }
+
+        return { created: notifications.length }
+      } catch (error) {
+        console.error("Error in in-app notifications step:", error)
+        return { created: 0, error: error instanceof Error ? error.message : "Unknown" }
+      }
+    })
+
+    return { success: true, results, inApp: inAppResult }
   }
 )
+
+/**
+ * Generar contenido para notificaciones in-app
+ */
+function generateInAppContent(
+  tipo: string,
+  context: {
+    organizationName: string
+    cliente: { nombre: string }
+    orden?: {
+      numeroOrden: number
+      dispositivo: string
+      estado: string
+      presupuesto?: number | null
+    }
+    garantia?: {
+      diasValidez: number
+    }
+  }
+): { title: string; body: string; icon: string } {
+  switch (tipo) {
+    case "CAMBIO_ESTADO":
+      return {
+        title: `Orden #${context.orden?.numeroOrden} - ${formatEstado(context.orden?.estado || "")}`,
+        body: `${context.cliente.nombre} - ${context.orden?.dispositivo}`,
+        icon: "clipboard-list",
+      }
+    case "PRESUPUESTO_DEFINIDO":
+      return {
+        title: `Presupuesto definido - Orden #${context.orden?.numeroOrden}`,
+        body: `${context.cliente.nombre} - $${context.orden?.presupuesto?.toLocaleString() || "0"}`,
+        icon: "receipt",
+      }
+    case "GARANTIA_CREADA":
+      return {
+        title: `Garantia creada - Orden #${context.orden?.numeroOrden}`,
+        body: `${context.cliente.nombre} - ${context.garantia?.diasValidez} dias`,
+        icon: "shield",
+      }
+    case "RECORDATORIO_RETIRO":
+      return {
+        title: `Recordatorio de retiro - Orden #${context.orden?.numeroOrden}`,
+        body: `${context.cliente.nombre} - ${context.orden?.dispositivo}`,
+        icon: "clock",
+      }
+    default:
+      return {
+        title: `Nueva notificacion`,
+        body: `${context.cliente.nombre}`,
+        icon: "bell",
+      }
+  }
+}
 
 /**
  * Generar contenido de email según el tipo de notificación

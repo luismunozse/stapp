@@ -1,326 +1,10 @@
-import React from "react"
-import {
-  Document,
-  Page,
-  Text,
-  View,
-  Image,
-  StyleSheet,
-  renderToBuffer,
-} from "@react-pdf/renderer"
 import { PDFDocument as PDFLib, rgb, StandardFonts } from "pdf-lib"
 import { formatCurrencyValue, type CurrencyCode, DEFAULT_CURRENCY } from "@/lib/currency"
 import { formatDateValue, formatDateTimeValue, DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 // ========================================
-// ESTILOS MODERNOS PARA COTIZACION
+// COTIZACION PDF (pdf-lib)
 // ========================================
-const styles = StyleSheet.create({
-  page: {
-    padding: 0,
-    fontSize: 10,
-    fontFamily: "Helvetica",
-    backgroundColor: "#ffffff",
-  },
-  // Barra de acento superior
-  accentBar: {
-    height: 8,
-    backgroundColor: "#6366f1",
-  },
-  // Container principal con padding
-  container: {
-    padding: 40,
-    paddingTop: 30,
-  },
-  // Header moderno
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 25,
-  },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  logo: {
-    width: 60,
-    height: 60,
-    marginRight: 15,
-  },
-  companyDetails: {
-    flex: 1,
-  },
-  companyName: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#1e1b4b",
-    marginBottom: 3,
-  },
-  companyInfo: {
-    fontSize: 9,
-    color: "#64748b",
-    marginBottom: 1,
-  },
-  headerRight: {
-    alignItems: "flex-end",
-  },
-  docBadge: {
-    backgroundColor: "#6366f1",
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 6,
-    marginBottom: 8,
-  },
-  docBadgeText: {
-    color: "#ffffff",
-    fontSize: 11,
-    fontWeight: "bold",
-  },
-  docNumber: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#1e1b4b",
-  },
-  docDate: {
-    fontSize: 9,
-    color: "#64748b",
-    marginTop: 4,
-  },
-  // Cards/Secciones
-  card: {
-    backgroundColor: "#f8fafc",
-    borderRadius: 8,
-    padding: 15,
-    marginBottom: 15,
-  },
-  cardTitle: {
-    fontSize: 10,
-    fontWeight: "bold",
-    color: "#6366f1",
-    marginBottom: 10,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  cardRow: {
-    flexDirection: "row",
-    marginBottom: 5,
-  },
-  cardLabel: {
-    width: 80,
-    fontSize: 9,
-    color: "#64748b",
-  },
-  cardValue: {
-    flex: 1,
-    fontSize: 10,
-    color: "#1e293b",
-  },
-  // Grid de 2 columnas
-  twoColGrid: {
-    flexDirection: "row",
-    gap: 15,
-    marginBottom: 15,
-  },
-  gridCol: {
-    flex: 1,
-    backgroundColor: "#f8fafc",
-    borderRadius: 8,
-    padding: 15,
-  },
-  // Tabla moderna
-  tableSection: {
-    marginBottom: 20,
-  },
-  tableSectionTitle: {
-    fontSize: 11,
-    fontWeight: "bold",
-    color: "#1e1b4b",
-    marginBottom: 12,
-  },
-  table: {
-    borderRadius: 8,
-    overflow: "hidden",
-  },
-  tableHeader: {
-    flexDirection: "row",
-    backgroundColor: "#6366f1",
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-  },
-  tableHeaderText: {
-    color: "#ffffff",
-    fontSize: 9,
-    fontWeight: "bold",
-  },
-  tableRow: {
-    flexDirection: "row",
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e2e8f0",
-    backgroundColor: "#ffffff",
-  },
-  tableRowAlt: {
-    flexDirection: "row",
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e2e8f0",
-    backgroundColor: "#f8fafc",
-  },
-  colDescription: {
-    flex: 3,
-    fontSize: 9,
-  },
-  colQuantity: {
-    flex: 1,
-    textAlign: "center",
-    fontSize: 9,
-  },
-  colPrice: {
-    flex: 1.2,
-    textAlign: "right",
-    fontSize: 9,
-  },
-  colSubtotal: {
-    flex: 1.2,
-    textAlign: "right",
-    fontSize: 9,
-    fontWeight: "bold",
-  },
-  // Totales
-  totalsContainer: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    marginTop: 15,
-  },
-  totalsBox: {
-    width: 220,
-    backgroundColor: "#f8fafc",
-    borderRadius: 8,
-    padding: 15,
-  },
-  totalRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 6,
-  },
-  totalLabel: {
-    fontSize: 9,
-    color: "#64748b",
-  },
-  totalValue: {
-    fontSize: 10,
-    color: "#1e293b",
-  },
-  grandTotalRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 8,
-    paddingTop: 10,
-    borderTopWidth: 2,
-    borderTopColor: "#6366f1",
-  },
-  grandTotalLabel: {
-    fontSize: 12,
-    fontWeight: "bold",
-    color: "#1e1b4b",
-  },
-  grandTotalValue: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#6366f1",
-  },
-  // Validez
-  validityBanner: {
-    backgroundColor: "#fef3c7",
-    borderRadius: 6,
-    padding: 12,
-    marginTop: 15,
-    borderLeftWidth: 4,
-    borderLeftColor: "#f59e0b",
-  },
-  validityText: {
-    fontSize: 9,
-    color: "#92400e",
-    textAlign: "center",
-  },
-  // Notas
-  notesCard: {
-    backgroundColor: "#f1f5f9",
-    borderRadius: 8,
-    padding: 15,
-    marginTop: 15,
-  },
-  notesTitle: {
-    fontSize: 9,
-    fontWeight: "bold",
-    color: "#475569",
-    marginBottom: 6,
-  },
-  notesText: {
-    fontSize: 9,
-    color: "#64748b",
-    lineHeight: 1.4,
-  },
-  // Firma
-  signatureSection: {
-    marginTop: 25,
-    paddingTop: 20,
-  },
-  signatureContainer: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-  },
-  signatureBox: {
-    width: 180,
-    alignItems: "center",
-  },
-  signatureImage: {
-    maxWidth: 120,
-    maxHeight: 50,
-    marginBottom: 5,
-  },
-  signatureLine: {
-    width: "100%",
-    borderTopWidth: 1,
-    borderTopColor: "#94a3b8",
-    marginTop: 5,
-  },
-  signatureLabel: {
-    fontSize: 8,
-    color: "#64748b",
-    marginTop: 5,
-  },
-  signatureDate: {
-    fontSize: 7,
-    color: "#94a3b8",
-    marginTop: 2,
-  },
-  // Footer
-  footer: {
-    position: "absolute",
-    bottom: 20,
-    left: 40,
-    right: 40,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: "#e2e8f0",
-  },
-  footerText: {
-    fontSize: 8,
-    color: "#94a3b8",
-  },
-  footerBrand: {
-    fontSize: 8,
-    color: "#6366f1",
-    fontWeight: "bold",
-  },
-})
 
 interface CotizacionItem {
   descripcion: string
@@ -365,72 +49,41 @@ interface CotizacionPDFData {
   logoUrl?: string | null
   moneda?: string
   zonaHoraria?: string
-  // Firma de aprobacion
   firmaAprobacion?: string | null
   firmaMime?: string | null
   fechaAprobacion?: Date | null
 }
 
-const formatCurrency = (amount: number | string | null | undefined, currency?: string) => {
-  return formatCurrencyValue(amount, (currency as CurrencyCode) || DEFAULT_CURRENCY)
-}
-
-const formatDate = (date: Date | string | number | null | undefined, timezone?: string) => {
-  if (!date) return ""
-  const parsed = new Date(date)
-  if (Number.isNaN(parsed.getTime())) return ""
-
-  return formatDateValue(parsed, timezone || DEFAULT_TIMEZONE)
-}
-
-// Ensure we never pass objects/React nodes into <Text>, which triggers React error #31
-const toText = (val: unknown): string => {
-  if (val === null || val === undefined || val === false) return ""
-  if (React.isValidElement(val)) return ""
-  if (Array.isArray(val)) {
-    return val.map(v => toText(v)).join(", ")
+export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Buffer> {
+  const safe = (val: unknown): string => {
+    if (val === null || val === undefined) return ""
+    if (typeof val === "string") return val
+    if (typeof val === "number") return String(val)
+    return ""
   }
-  if (typeof val === "object") {
-    if (val instanceof Date) return formatDate(val)
-    if ("$$typeof" in val) return ""
-    try { return JSON.stringify(val) } catch { return String(val) }
+  const fmtDate = (d: Date | string | null | undefined): string => {
+    if (!d) return ""
+    const parsed = new Date(d as string | number)
+    if (Number.isNaN(parsed.getTime())) return ""
+    return formatDateValue(parsed, data.zonaHoraria || DEFAULT_TIMEZONE)
   }
-  if (typeof val === "symbol") return val.toString()
-  return String(val)
-}
+  const fmtCurrency = (amount: number | string | null | undefined): string => {
+    return formatCurrencyValue(amount, (data.moneda as CurrencyCode) || DEFAULT_CURRENCY)
+  }
 
-// Safe createElement that filters out null/undefined/false children
-// @react-pdf/renderer v4's yoga reconciler can choke on null children
-const el = (
-  type: any,
-  props: any,
-  ...children: any[]
-): React.ReactElement => {
-  const filtered = children.flat(Infinity).filter(
-    (c): c is React.ReactNode => c !== null && c !== undefined && c !== false
-  )
-  return React.createElement(type, props, ...filtered)
-}
-
-const CotizacionDocument = ({ data }: { data: CotizacionPDFData }) => {
-  const companyName = toText(data.nombreEmpresa) || "Servicio Tecnico"
-  const telefonoEmpresa = toText(data.telefonoEmpresa)
-  const direccionEmpresa = toText(data.direccionEmpresa)
-  const logoUrl = toText(data.logoUrl)
-  const cotizacionNumber = toText(data.numeroCotizacion)
-  const cotizacionDate = formatDate(data.fecha, data.zonaHoraria)
-  const clienteNombre = toText(data.cliente.nombre)
-  const clienteTelefono = toText(data.cliente.telefono)
-  const clienteEmail = toText(data.cliente.email)
-  const clienteDireccion = toText(data.cliente.direccion)
-  const ordenNumero = data.orden ? toText(data.orden.numeroOrden) : ""
-  const dispositivo = data.orden ? toText(data.orden.dispositivo) : ""
-  const problemaReportado = data.orden ? toText(data.orden.problemaReportado) : ""
-  const notas = toText(data.notas)
-  const terminos = toText(data.terminos)
-  const fechaVencimiento = formatDate(data.fechaVencimiento, data.zonaHoraria)
-  // Discount calculations for display - ensure numeric types (Supabase returns DECIMAL as string)
-  const descGlobalTipo = String(data.descuentoGlobalTipo || "porcentaje")
+  const empresaNombre = safe(data.nombreEmpresa) || "Servicio Tecnico"
+  const telefonoEmpresa = safe(data.telefonoEmpresa)
+  const direccionEmpresa = safe(data.direccionEmpresa)
+  const cotizacionNumber = safe(data.numeroCotizacion)
+  const cotizacionDate = fmtDate(data.fecha)
+  const clienteNombre = safe(data.cliente.nombre)
+  const clienteTelefono = safe(data.cliente.telefono)
+  const clienteEmail = safe(data.cliente.email)
+  const clienteDireccion = safe(data.cliente.direccion)
+  const notas = safe(data.notas)
+  const terminos = safe(data.terminos)
+  const fechaVencimiento = fmtDate(data.fechaVencimiento)
+  const descGlobalTipo = safe(data.descuentoGlobalTipo) || "porcentaje"
   const descGlobalValor = Number(data.descuentoGlobalValor) || 0
   const subtotalNum = Number(data.subtotal) || 0
   const ivaNum = Number(data.iva) || 0
@@ -442,382 +95,271 @@ const CotizacionDocument = ({ data }: { data: CotizacionPDFData }) => {
       : subtotalNum * (descGlobalValor / 100)
   }
   const ivaPct = Number(data.ivaPorcentaje) || 0
-  const firmaAprobacion = toText(data.firmaAprobacion)
-  const firmaMime = toText(data.firmaMime)
-  const fechaAprobacion = formatDate(data.fechaAprobacion, data.zonaHoraria)
+  const firmaAprobacion = safe(data.firmaAprobacion)
+  const firmaMime = safe(data.firmaMime)
+  const fechaAprobacion = fmtDate(data.fechaAprobacion)
 
-  // Build items rows
-  const itemRows = (Array.isArray(data.items) ? data.items : []).map((item, index) => {
-    const unitPrice = Number(item.precioUnitario || item.precio_unitario) || 0
-    const unidad = String(item.unidad || "Unidad")
-    const cantLabel = `${String(item.cantidad || 0)} ${unidad !== "Unidad" ? unidad : ""}`.trim()
-    const itemSubtotal = Number(item.subtotal) || 0
-    return el(View, { key: String(index), style: index % 2 === 0 ? styles.tableRow : styles.tableRowAlt },
-      el(Text, { style: styles.colDescription }, toText(item.descripcion)),
-      el(Text, { style: styles.colQuantity }, cantLabel),
-      el(Text, { style: styles.colPrice }, formatCurrency(unitPrice, data.moneda)),
-      el(Text, { style: styles.colSubtotal }, formatCurrency(itemSubtotal, data.moneda))
-    )
-  })
+  const pdfDoc = await PDFLib.create()
+  const page = pdfDoc.addPage([595, 842]) // A4
+  const { width, height } = page.getSize()
+  const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica)
+  const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
 
-  // Build totals rows array (no nulls)
-  const totalsRows: React.ReactElement[] = [
-    el(View, { key: "sub", style: styles.totalRow },
-      el(Text, { style: styles.totalLabel }, "Subtotal"),
-      el(Text, { style: styles.totalValue }, formatCurrency(subtotalNum, data.moneda))
-    ),
-  ]
-  if (descGlobalAmount > 0) {
-    totalsRows.push(
-      el(View, { key: "desc", style: styles.totalRow },
-        el(Text, { style: styles.totalLabel }, descGlobalTipo === "porcentaje" ? `Descuento (${String(descGlobalValor)}%)` : "Descuento"),
-        el(Text, { style: [styles.totalValue, { color: "#16a34a" }] }, `-${formatCurrency(descGlobalAmount, data.moneda)}`)
-      )
-    )
-  }
-  if (ivaPct > 0) {
-    totalsRows.push(
-      el(View, { key: "iva", style: styles.totalRow },
-        el(Text, { style: styles.totalLabel }, `IVA (${String(ivaPct)}%)`),
-        el(Text, { style: styles.totalValue }, formatCurrency(ivaNum, data.moneda))
-      )
-    )
-  }
-  totalsRows.push(
-    el(View, { key: "total", style: styles.grandTotalRow },
-      el(Text, { style: styles.grandTotalLabel }, "TOTAL"),
-      el(Text, { style: styles.grandTotalValue }, formatCurrency(totalNum, data.moneda))
-    )
-  )
+  // Colors
+  const accent = rgb(0.388, 0.400, 0.945) // #6366f1
+  const dark = rgb(0.118, 0.106, 0.294)   // #1e1b4b
+  const textDark = rgb(0.118, 0.161, 0.231) // #1e293b
+  const textMuted = rgb(0.392, 0.455, 0.545) // #64748b
+  const border = rgb(0.886, 0.910, 0.941) // #e2e8f0
+  const bgLight = rgb(0.973, 0.980, 0.988) // #f8fafc
+  const white = rgb(1, 1, 1)
+  const green = rgb(0.086, 0.627, 0.322) // #16a34a
+  const warnBg = rgb(0.996, 0.953, 0.780) // #fef3c7
+  const warnBorder = rgb(0.961, 0.620, 0.043) // #f59e0b
+  const warnText = rgb(0.573, 0.251, 0.055) // #92400e
+  const notesBg = rgb(0.945, 0.961, 0.976) // #f1f5f9
+  const notesText = rgb(0.278, 0.333, 0.412) // #475569
 
-  // Build optional sections array
-  const optionalSections: React.ReactElement[] = []
+  const contentWidth = width - 80 // 40px padding each side
 
-  if (fechaVencimiento) {
-    optionalSections.push(
-      el(View, { key: "validez", style: styles.validityBanner },
-        el(Text, { style: styles.validityText }, `Cotizacion valida hasta el ${fechaVencimiento}`)
-      )
-    )
-  }
-  if (notas) {
-    optionalSections.push(
-      el(View, { key: "notas", style: styles.notesCard },
-        el(Text, { style: styles.notesTitle }, "Observaciones"),
-        el(Text, { style: styles.notesText }, notas)
-      )
-    )
-  }
-  if (terminos) {
-    optionalSections.push(
-      el(View, { key: "terminos", style: styles.notesCard },
-        el(Text, { style: styles.notesTitle }, "Terminos y Condiciones"),
-        el(Text, { style: styles.notesText }, terminos)
-      )
-    )
-  }
-  if (firmaAprobacion && firmaMime) {
-    optionalSections.push(
-      el(View, { key: "firma", style: styles.signatureSection },
-        el(View, { style: styles.signatureContainer },
-          el(View, { style: styles.signatureBox },
-            el(Image, { style: styles.signatureImage, src: `data:${firmaMime};base64,${firmaAprobacion}` }),
-            el(View, { style: styles.signatureLine }),
-            el(Text, { style: styles.signatureLabel }, "Firma del Cliente"),
-            fechaAprobacion ? el(Text, { style: styles.signatureDate }, `Aprobado: ${fechaAprobacion}`) : null
-          )
-        )
-      )
-    )
+  // Accent bar at top
+  page.drawRectangle({ x: 0, y: height - 8, width, height: 8, color: accent })
+
+  let cursor = height - 40 - 15
+  let logoOffset = 0
+
+  // Logo
+  if (data.logoUrl) {
+    try {
+      const res = await fetch(data.logoUrl)
+      if (res.ok) {
+        const buf = await res.arrayBuffer()
+        const bytes = new Uint8Array(buf)
+        const ct = res.headers.get("content-type") || ""
+        let img
+        if (ct.includes("png") || data.logoUrl.toLowerCase().includes(".png"))
+          img = await pdfDoc.embedPng(bytes)
+        else if (ct.includes("jpeg") || ct.includes("jpg") || data.logoUrl.toLowerCase().includes(".jpg") || data.logoUrl.toLowerCase().includes(".jpeg"))
+          img = await pdfDoc.embedJpg(bytes)
+        if (img) {
+          const s = img.scale(1)
+          const ratio = Math.min(60 / s.height, 60 / s.width)
+          const w = s.width * ratio
+          const h = s.height * ratio
+          page.drawImage(img, { x: 40, y: cursor - h + 5, width: w, height: h })
+          logoOffset = w + 15
+        }
+      }
+    } catch { /* ignore logo errors */ }
   }
 
-  // Build cliente card rows
-  const clienteRows: React.ReactElement[] = [
-    el(View, { key: "cn", style: styles.cardRow },
-      el(Text, { style: styles.cardLabel }, "Nombre"),
-      el(Text, { style: styles.cardValue }, clienteNombre)
-    ),
-    el(View, { key: "ct", style: styles.cardRow },
-      el(Text, { style: styles.cardLabel }, "Telefono"),
-      el(Text, { style: styles.cardValue }, clienteTelefono)
-    ),
-  ]
-  if (clienteEmail) {
-    clienteRows.push(
-      el(View, { key: "ce", style: styles.cardRow },
-        el(Text, { style: styles.cardLabel }, "Email"),
-        el(Text, { style: styles.cardValue }, clienteEmail)
-      )
-    )
-  }
-  if (clienteDireccion) {
-    clienteRows.push(
-      el(View, { key: "cd", style: styles.cardRow },
-        el(Text, { style: styles.cardLabel }, "Direccion"),
-        el(Text, { style: styles.cardValue }, clienteDireccion)
-      )
-    )
-  }
-
-  // Build grid columns
-  const gridCols: React.ReactElement[] = [
-    el(View, { key: "cliente", style: styles.gridCol },
-      el(Text, { style: styles.cardTitle }, "Cliente"),
-      ...clienteRows
-    ),
-  ]
-  if (data.orden) {
-    gridCols.push(
-      el(View, { key: "orden", style: styles.gridCol },
-        el(Text, { style: styles.cardTitle }, `Orden #${ordenNumero}`),
-        el(View, { style: styles.cardRow },
-          el(Text, { style: styles.cardLabel }, "Equipo"),
-          el(Text, { style: styles.cardValue }, dispositivo)
-        ),
-        el(View, { style: styles.cardRow },
-          el(Text, { style: styles.cardLabel }, "Problema"),
-          el(Text, { style: styles.cardValue }, problemaReportado)
-        )
-      )
-    )
-  }
-
-  // Build header left children
-  const headerLeftChildren: React.ReactElement[] = []
-  if (logoUrl) {
-    headerLeftChildren.push(el(Image, { key: "logo", style: styles.logo, src: logoUrl }))
-  }
-  const companyInfoChildren: React.ReactElement[] = [
-    el(Text, { key: "name", style: styles.companyName }, companyName),
-  ]
+  // Company name and info
+  page.drawText(empresaNombre, { x: 40 + logoOffset, y: cursor, size: 20, font: helveticaBold, color: dark })
+  cursor -= 14
   if (telefonoEmpresa) {
-    companyInfoChildren.push(el(Text, { key: "tel", style: styles.companyInfo }, `Tel: ${telefonoEmpresa}`))
+    page.drawText(`Tel: ${telefonoEmpresa}`, { x: 40 + logoOffset, y: cursor, size: 9, font: helvetica, color: textMuted })
+    cursor -= 11
   }
   if (direccionEmpresa) {
-    companyInfoChildren.push(el(Text, { key: "dir", style: styles.companyInfo }, direccionEmpresa))
+    page.drawText(direccionEmpresa, { x: 40 + logoOffset, y: cursor, size: 9, font: helvetica, color: textMuted })
+    cursor -= 11
   }
-  headerLeftChildren.push(el(View, { key: "details", style: styles.companyDetails }, ...companyInfoChildren))
 
-  return el(Document, null,
-    el(Page, { size: "A4", style: styles.page },
-      // Barra de acento
-      el(View, { style: styles.accentBar }),
-      // Container principal
-      el(View, { style: styles.container },
-        // Header
-        el(View, { style: styles.header },
-          el(View, { style: styles.headerLeft }, ...headerLeftChildren),
-          el(View, { style: styles.headerRight },
-            el(View, { style: styles.docBadge },
-              el(Text, { style: styles.docBadgeText }, "COTIZACION")
-            ),
-            el(Text, { style: styles.docNumber }, cotizacionNumber),
-            el(Text, { style: styles.docDate }, cotizacionDate)
-          )
-        ),
-        // Grid cliente/orden
-        el(View, { style: styles.twoColGrid }, ...gridCols),
-        // Tabla items
-        el(View, { style: styles.tableSection },
-          el(Text, { style: styles.tableSectionTitle }, "Detalle de Servicios"),
-          el(View, { style: styles.table },
-            el(View, { style: styles.tableHeader },
-              el(Text, { style: [styles.colDescription, styles.tableHeaderText] }, "Descripcion"),
-              el(Text, { style: [styles.colQuantity, styles.tableHeaderText] }, "Cant."),
-              el(Text, { style: [styles.colPrice, styles.tableHeaderText] }, "P. Unit."),
-              el(Text, { style: [styles.colSubtotal, styles.tableHeaderText] }, "Subtotal")
-            ),
-            ...itemRows
-          )
-        ),
-        // Totales
-        el(View, { style: styles.totalsContainer },
-          el(View, { style: styles.totalsBox }, ...totalsRows)
-        ),
-        // Secciones opcionales
-        ...optionalSections
-      ),
-      // Footer
-      el(View, { style: styles.footer },
-        el(Text, { style: styles.footerText },
-          firmaAprobacion ? "Documento aprobado por el cliente" : "Gracias por su confianza"
-        ),
-        el(Text, { style: styles.footerBrand }, companyName)
-      )
-    )
-  )
-}
+  // COTIZACION badge (right side)
+  const badgeText = "COTIZACION"
+  const badgeW = helveticaBold.widthOfTextAtSize(badgeText, 11) + 32
+  page.drawRectangle({ x: width - 40 - badgeW, y: height - 40 - 25, width: badgeW, height: 24, color: accent })
+  page.drawText(badgeText, { x: width - 40 - badgeW + 16, y: height - 40 - 19, size: 11, font: helveticaBold, color: white })
 
-export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Buffer> {
-  const buffer = await renderToBuffer(
-    React.createElement(CotizacionDocument, { data }) as React.ReactElement
+  // Cotizacion number (right)
+  const numW = helveticaBold.widthOfTextAtSize(cotizacionNumber, 16)
+  page.drawText(cotizacionNumber, { x: width - 40 - numW, y: height - 40 - 50, size: 16, font: helveticaBold, color: dark })
+  page.drawText(cotizacionDate, { x: width - 40 - 100, y: height - 40 - 65, size: 9, font: helvetica, color: textMuted })
+
+  cursor = height - 40 - 90
+  const colW = (contentWidth - 10) / 2
+
+  // Cliente card
+  page.drawRectangle({ x: 40, y: cursor - 85, width: colW, height: 85, color: bgLight, borderColor: border, borderWidth: 1 })
+  page.drawRectangle({ x: 40, y: cursor - 85, width: 4, height: 85, color: accent })
+  page.drawText("CLIENTE", { x: 54, y: cursor - 14, size: 10, font: helveticaBold, color: accent })
+  page.drawText("Nombre:", { x: 54, y: cursor - 32, size: 9, font: helvetica, color: textMuted })
+  page.drawText(clienteNombre.substring(0, 30), { x: 104, y: cursor - 32, size: 10, font: helveticaBold, color: textDark })
+  page.drawText("Telefono:", { x: 54, y: cursor - 47, size: 9, font: helvetica, color: textMuted })
+  page.drawText(clienteTelefono, { x: 104, y: cursor - 47, size: 9, font: helvetica, color: textDark })
+  let clienteY = cursor - 62
+  if (clienteEmail) {
+    page.drawText("Email:", { x: 54, y: clienteY, size: 9, font: helvetica, color: textMuted })
+    page.drawText(clienteEmail.substring(0, 25), { x: 104, y: clienteY, size: 9, font: helvetica, color: textDark })
+    clienteY -= 15
+  }
+  if (clienteDireccion) {
+    page.drawText("Dir:", { x: 54, y: clienteY, size: 9, font: helvetica, color: textMuted })
+    page.drawText(clienteDireccion.substring(0, 28), { x: 104, y: clienteY, size: 9, font: helvetica, color: textDark })
+  }
+
+  // Orden card (only if linked)
+  if (data.orden) {
+    const ox = 40 + colW + 10
+    page.drawRectangle({ x: ox, y: cursor - 85, width: colW, height: 85, color: bgLight, borderColor: border, borderWidth: 1 })
+    page.drawRectangle({ x: ox, y: cursor - 85, width: 4, height: 85, color: accent })
+    page.drawText(`ORDEN #${safe(data.orden.numeroOrden)}`, { x: ox + 14, y: cursor - 14, size: 10, font: helveticaBold, color: accent })
+    page.drawText("Equipo:", { x: ox + 14, y: cursor - 32, size: 9, font: helvetica, color: textMuted })
+    page.drawText(safe(data.orden.dispositivo).substring(0, 25), { x: ox + 60, y: cursor - 32, size: 9, font: helvetica, color: textDark })
+    page.drawText("Problema:", { x: ox + 14, y: cursor - 47, size: 9, font: helvetica, color: textMuted })
+    page.drawText(safe(data.orden.problemaReportado).substring(0, 40), { x: ox + 68, y: cursor - 47, size: 9, font: helvetica, color: textDark })
+  }
+
+  cursor -= 100
+
+  // Items table
+  page.drawText("DETALLE DE SERVICIOS", { x: 40, y: cursor, size: 11, font: helveticaBold, color: dark })
+  cursor -= 5
+  page.drawLine({ start: { x: 40, y: cursor }, end: { x: width - 40, y: cursor }, thickness: 1, color: border })
+  cursor -= 20
+
+  // Table header
+  page.drawRectangle({ x: 40, y: cursor - 5, width: contentWidth, height: 22, color: accent })
+  page.drawText("Descripcion", { x: 50, y: cursor, size: 9, font: helveticaBold, color: white })
+  page.drawText("Cant.", { x: 310, y: cursor, size: 9, font: helveticaBold, color: white })
+  page.drawText("P. Unit.", { x: 380, y: cursor, size: 9, font: helveticaBold, color: white })
+  page.drawText("Subtotal", { x: 470, y: cursor, size: 9, font: helveticaBold, color: white })
+  cursor -= 25
+
+  // Table rows
+  const items = Array.isArray(data.items) ? data.items : []
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]
+    const unitPrice = Number(item.precioUnitario || item.precio_unitario) || 0
+    const unidad = safe(item.unidad) || "Unidad"
+    const cantLabel = `${String(item.cantidad || 0)} ${unidad !== "Unidad" ? unidad : ""}`.trim()
+    const itemSubtotal = Number(item.subtotal) || 0
+
+    if (i % 2 === 1) {
+      page.drawRectangle({ x: 40, y: cursor - 5, width: contentWidth, height: 18, color: bgLight })
+    }
+    page.drawText(safe(item.descripcion).substring(0, 40), { x: 50, y: cursor, size: 9, font: helvetica, color: textDark })
+    page.drawText(cantLabel, { x: 310, y: cursor, size: 9, font: helvetica, color: textDark })
+    page.drawText(fmtCurrency(unitPrice), { x: 380, y: cursor, size: 9, font: helvetica, color: textDark })
+    page.drawText(fmtCurrency(itemSubtotal), { x: 470, y: cursor, size: 9, font: helveticaBold, color: textDark })
+    cursor -= 18
+    page.drawLine({ start: { x: 40, y: cursor + 5 }, end: { x: width - 40, y: cursor + 5 }, thickness: 0.5, color: border })
+
+    if (cursor < 150) break // prevent overflow
+  }
+
+  cursor -= 15
+
+  // Totals box
+  const totalsX = width - 40 - 220
+  page.drawRectangle({ x: totalsX, y: cursor - 80, width: 220, height: 80, color: bgLight, borderColor: border, borderWidth: 1 })
+
+  let totY = cursor - 15
+  page.drawText("Subtotal", { x: totalsX + 15, y: totY, size: 9, font: helvetica, color: textMuted })
+  page.drawText(fmtCurrency(subtotalNum), { x: totalsX + 140, y: totY, size: 10, font: helvetica, color: textDark })
+  totY -= 15
+
+  if (descGlobalAmount > 0) {
+    const descLabel = descGlobalTipo === "porcentaje" ? `Descuento (${String(descGlobalValor)}%)` : "Descuento"
+    page.drawText(descLabel, { x: totalsX + 15, y: totY, size: 9, font: helvetica, color: textMuted })
+    page.drawText(`-${fmtCurrency(descGlobalAmount)}`, { x: totalsX + 140, y: totY, size: 10, font: helvetica, color: green })
+    totY -= 15
+  }
+
+  if (ivaPct > 0) {
+    page.drawText(`IVA (${String(ivaPct)}%)`, { x: totalsX + 15, y: totY, size: 9, font: helvetica, color: textMuted })
+    page.drawText(fmtCurrency(ivaNum), { x: totalsX + 140, y: totY, size: 10, font: helvetica, color: textDark })
+    totY -= 15
+  }
+
+  page.drawLine({ start: { x: totalsX + 15, y: totY + 8 }, end: { x: totalsX + 205, y: totY + 8 }, thickness: 2, color: accent })
+  page.drawText("TOTAL", { x: totalsX + 15, y: totY - 5, size: 12, font: helveticaBold, color: dark })
+  page.drawText(fmtCurrency(totalNum), { x: totalsX + 120, y: totY - 5, size: 14, font: helveticaBold, color: accent })
+
+  cursor -= 95
+
+  // Validity banner
+  if (fechaVencimiento) {
+    page.drawRectangle({ x: 40, y: cursor - 25, width: contentWidth, height: 28, color: warnBg, borderColor: warnBorder, borderWidth: 1 })
+    page.drawRectangle({ x: 40, y: cursor - 25, width: 4, height: 28, color: warnBorder })
+    const validText = `Cotizacion valida hasta el ${fechaVencimiento}`
+    const validW = helvetica.widthOfTextAtSize(validText, 9)
+    page.drawText(validText, { x: 40 + (contentWidth - validW) / 2, y: cursor - 15, size: 9, font: helvetica, color: warnText })
+    cursor -= 35
+  }
+
+  // Notas
+  if (notas) {
+    page.drawRectangle({ x: 40, y: cursor - 45, width: contentWidth, height: 45, color: notesBg, borderColor: border, borderWidth: 1 })
+    page.drawText("OBSERVACIONES", { x: 52, y: cursor - 14, size: 9, font: helveticaBold, color: notesText })
+    page.drawText(notas.substring(0, 90), { x: 52, y: cursor - 30, size: 9, font: helvetica, color: textMuted })
+    cursor -= 55
+  }
+
+  // Terminos
+  if (terminos) {
+    const lines: string[] = []
+    let line = ""
+    for (const word of terminos.split(" ")) {
+      if (helvetica.widthOfTextAtSize(line + " " + word, 8) < contentWidth - 24) {
+        line += (line ? " " : "") + word
+      } else {
+        lines.push(line)
+        line = word
+      }
+    }
+    if (line) lines.push(line)
+    const boxH = Math.max(35, lines.length * 12 + 22)
+    page.drawRectangle({ x: 40, y: cursor - boxH, width: contentWidth, height: boxH, color: notesBg, borderColor: border, borderWidth: 1 })
+    page.drawText("TERMINOS Y CONDICIONES", { x: 52, y: cursor - 14, size: 9, font: helveticaBold, color: notesText })
+    let lineY = cursor - 28
+    for (const l of lines.slice(0, 6)) {
+      page.drawText(l, { x: 52, y: lineY, size: 8, font: helvetica, color: textMuted })
+      lineY -= 12
+    }
+    cursor -= boxH + 10
+  }
+
+  // Firma (if approved)
+  if (firmaAprobacion && firmaMime) {
+    try {
+      const sigBytes = Uint8Array.from(atob(firmaAprobacion), c => c.charCodeAt(0))
+      const sigImg = firmaMime.includes("png")
+        ? await pdfDoc.embedPng(sigBytes)
+        : await pdfDoc.embedJpg(sigBytes)
+      const ss = sigImg.scale(1)
+      const ratio = Math.min(120 / ss.width, 50 / ss.height)
+      const sigW = ss.width * ratio
+      const sigH = ss.height * ratio
+      page.drawImage(sigImg, { x: width - 40 - 90 - sigW / 2, y: cursor - sigH, width: sigW, height: sigH })
+      cursor -= sigH + 5
+    } catch { /* ignore sig errors */ }
+    page.drawLine({ start: { x: width - 40 - 180, y: cursor }, end: { x: width - 40, y: cursor }, thickness: 1, color: textMuted })
+    page.drawText("Firma del Cliente", { x: width - 40 - 130, y: cursor - 12, size: 8, font: helvetica, color: textMuted })
+    if (fechaAprobacion) {
+      page.drawText(`Aprobado: ${fechaAprobacion}`, { x: width - 40 - 130, y: cursor - 22, size: 7, font: helvetica, color: textMuted })
+    }
+  }
+
+  // Footer
+  page.drawLine({ start: { x: 40, y: 40 }, end: { x: width - 40, y: 40 }, thickness: 1, color: border })
+  page.drawText(
+    firmaAprobacion ? "Documento aprobado por el cliente" : "Gracias por su confianza",
+    { x: 40, y: 28, size: 8, font: helvetica, color: textMuted }
   )
-  return Buffer.from(buffer)
+  const brandW = helveticaBold.widthOfTextAtSize(empresaNombre, 8)
+  page.drawText(empresaNombre, { x: width - 40 - brandW, y: 28, size: 8, font: helveticaBold, color: accent })
+
+  // Accent bar at bottom
+  page.drawRectangle({ x: 0, y: 0, width, height: 8, color: accent })
+
+  const pdfBytes = await pdfDoc.save()
+  return Buffer.from(pdfBytes)
 }
 
 // ========================================
 // COMPROBANTE DE ORDEN DE SERVICIO
 // ========================================
-
-const ordenStyles = StyleSheet.create({
-  page: {
-    padding: 30,
-    fontSize: 10,
-    fontFamily: "Helvetica",
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 20,
-    paddingBottom: 15,
-    borderBottomWidth: 2,
-    borderBottomColor: "#3b82f6",
-  },
-  headerLeft: {
-    flex: 1,
-  },
-  headerRight: {
-    alignItems: "flex-end",
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#1f2937",
-  },
-  subtitle: {
-    fontSize: 10,
-    color: "#6b7280",
-    marginTop: 2,
-  },
-  ordenNumber: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#3b82f6",
-  },
-  ordenDate: {
-    fontSize: 9,
-    color: "#6b7280",
-    marginTop: 4,
-  },
-  section: {
-    marginBottom: 15,
-  },
-  sectionTitle: {
-    fontSize: 11,
-    fontWeight: "bold",
-    color: "#374151",
-    marginBottom: 6,
-    paddingBottom: 3,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
-  },
-  row: {
-    flexDirection: "row",
-    marginBottom: 3,
-  },
-  label: {
-    width: 110,
-    color: "#6b7280",
-    fontSize: 9,
-  },
-  value: {
-    flex: 1,
-    color: "#1f2937",
-    fontSize: 9,
-  },
-  highlight: {
-    backgroundColor: "#f3f4f6",
-    padding: 10,
-    borderRadius: 4,
-    marginTop: 5,
-  },
-  highlightText: {
-    fontSize: 9,
-    color: "#374151",
-  },
-  accesoriosBox: {
-    backgroundColor: "#fef3c7",
-    padding: 10,
-    borderRadius: 4,
-    marginTop: 10,
-  },
-  accesoriosTitle: {
-    fontSize: 9,
-    fontWeight: "bold",
-    color: "#92400e",
-    marginBottom: 4,
-  },
-  accesoriosText: {
-    fontSize: 9,
-    color: "#78350f",
-  },
-  footer: {
-    position: "absolute",
-    bottom: 30,
-    left: 30,
-    right: 30,
-  },
-  footerTop: {
-    borderTopWidth: 1,
-    borderTopColor: "#e5e7eb",
-    paddingTop: 10,
-    marginBottom: 10,
-  },
-  footerText: {
-    fontSize: 8,
-    color: "#6b7280",
-    textAlign: "center",
-    marginBottom: 3,
-  },
-  footerTextBold: {
-    fontSize: 8,
-    color: "#6b7280",
-    textAlign: "center",
-    marginBottom: 3,
-    fontWeight: "bold",
-  },
-  signatureLine: {
-    marginTop: 30,
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  signatureBox: {
-    width: "45%",
-    alignItems: "center",
-  },
-  signatureDash: {
-    width: "100%",
-    borderTopWidth: 1,
-    borderTopColor: "#374151",
-    marginBottom: 4,
-  },
-  signatureLabel: {
-    fontSize: 8,
-    color: "#6b7280",
-  },
-  qrSection: {
-    marginTop: 15,
-    padding: 10,
-    backgroundColor: "#f0f9ff",
-    borderRadius: 4,
-    alignItems: "center",
-  },
-  qrText: {
-    fontSize: 8,
-    color: "#0369a1",
-    textAlign: "center",
-  },
-  logo: {
-    width: 60,
-    height: 60,
-    marginRight: 10,
-    objectFit: "contain",
-  },
-  headerWithLogo: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-})
 
 interface OrdenPDFData {
   numeroOrden: number
@@ -845,7 +387,6 @@ interface OrdenPDFData {
   logoUrl?: string | null
   moneda?: string
   zonaHoraria?: string
-  // Datos de entrega (si la orden fue entregada)
   estado?: string
   fechaEntrega?: Date | null
   firmaClienteEntrega?: string | null
@@ -855,218 +396,6 @@ interface OrdenPDFData {
   entregadoPor?: string | null
   notasEntrega?: string | null
   sector?: string | null
-}
-
-const tipoDispositivoLabels: Record<string, string> = {
-  CELULAR: "Celular",
-  COMPUTADORA: "Computadora",
-  TABLET: "Tablet",
-  CONSOLA: "Consola",
-  SMARTWATCH: "Smartwatch",
-}
-
-const OrdenDocument = ({ data }: { data: OrdenPDFData }) => {
-  // Ensure all values are primitives, never objects
-  const empresaNombre = toText(data.nombreEmpresa) || "Servicio Tecnico"
-  const numeroOrden = toText(data.numeroOrden)
-  const fechaIngreso = formatDate(data.fechaIngreso, data.zonaHoraria)
-  const fechaPrometida = formatDate(data.fechaPrometida, data.zonaHoraria)
-
-  // Safely extract cliente data with fallbacks
-  const cliente = data.cliente || { nombre: "", telefono: "", email: null, direccion: null }
-  const clienteNombre = toText(cliente.nombre) || "Sin nombre"
-  const clienteTelefono = toText(cliente.telefono) || "Sin teléfono"
-  const clienteEmail = toText(cliente.email)
-  const clienteDireccion = toText(cliente.direccion)
-  const tipoDispositivo = toText(tipoDispositivoLabels[data.tipoDispositivo] || data.tipoDispositivo)
-  const dispositivo = toText(data.dispositivo)
-  const marca = toText(data.marca)
-  const color = toText(data.color)
-  const imei = toText(data.imei)
-  const problemaReportado = toText(data.problemaReportado)
-  const accesorios = toText(data.accesorios)
-  const codigoAccesoDispositivo = toText(data.codigoAccesoDispositivo)
-  const presupuesto =
-    data.presupuesto !== null && data.presupuesto !== undefined
-      ? formatCurrency(data.presupuesto, data.moneda)
-      : ""
-  const observaciones = toText(data.observaciones)
-  const telefonoEmpresa = toText(data.telefonoEmpresa)
-  const direccionEmpresa = toText(data.direccionEmpresa)
-
-  // Construir documento de forma mas simple sin spread operators
-  return React.createElement(
-    Document,
-    null,
-    React.createElement(
-      Page,
-      { size: "A4", style: ordenStyles.page },
-      // Header
-      React.createElement(
-        View,
-        { style: ordenStyles.header },
-        React.createElement(
-          View,
-          { style: ordenStyles.headerLeft },
-          React.createElement(Text, { style: ordenStyles.title }, empresaNombre),
-          telefonoEmpresa ? React.createElement(Text, { style: ordenStyles.subtitle }, "Tel: " + telefonoEmpresa) : null,
-          direccionEmpresa ? React.createElement(Text, { style: ordenStyles.subtitle }, direccionEmpresa) : null
-        ),
-        React.createElement(
-          View,
-          { style: ordenStyles.headerRight },
-          React.createElement(Text, { style: ordenStyles.ordenNumber }, "#" + numeroOrden),
-          React.createElement(Text, { style: ordenStyles.ordenDate }, "Fecha: " + fechaIngreso),
-          fechaPrometida ? React.createElement(Text, { style: ordenStyles.ordenDate }, "Entrega est.: " + fechaPrometida) : null
-        )
-      ),
-      // Titulo
-      React.createElement(
-        View,
-        { style: { marginBottom: 15, alignItems: "center" } },
-        React.createElement(Text, { style: { fontSize: 14, fontWeight: "bold", color: "#1f2937" } }, "COMPROBANTE DE RECEPCION")
-      ),
-      // Datos del Cliente
-      React.createElement(
-        View,
-        { style: ordenStyles.section },
-        React.createElement(Text, { style: ordenStyles.sectionTitle }, "DATOS DEL CLIENTE"),
-        React.createElement(
-          View,
-          { style: ordenStyles.row },
-          React.createElement(Text, { style: ordenStyles.label }, "Nombre:"),
-          React.createElement(Text, { style: ordenStyles.value }, clienteNombre)
-        ),
-        React.createElement(
-          View,
-          { style: ordenStyles.row },
-          React.createElement(Text, { style: ordenStyles.label }, "Telefono:"),
-          React.createElement(Text, { style: ordenStyles.value }, clienteTelefono)
-        ),
-        clienteEmail ? React.createElement(
-          View,
-          { style: ordenStyles.row },
-          React.createElement(Text, { style: ordenStyles.label }, "Email:"),
-          React.createElement(Text, { style: ordenStyles.value }, clienteEmail)
-        ) : null,
-        clienteDireccion ? React.createElement(
-          View,
-          { style: ordenStyles.row },
-          React.createElement(Text, { style: ordenStyles.label }, "Direccion:"),
-          React.createElement(Text, { style: ordenStyles.value }, clienteDireccion)
-        ) : null
-      ),
-      // Datos del Dispositivo
-      React.createElement(
-        View,
-        { style: ordenStyles.section },
-        React.createElement(Text, { style: ordenStyles.sectionTitle }, "DATOS DEL DISPOSITIVO"),
-        React.createElement(
-          View,
-          { style: ordenStyles.row },
-          React.createElement(Text, { style: ordenStyles.label }, "Tipo:"),
-          React.createElement(Text, { style: ordenStyles.value }, tipoDispositivo)
-        ),
-        React.createElement(
-          View,
-          { style: ordenStyles.row },
-          React.createElement(Text, { style: ordenStyles.label }, "Dispositivo:"),
-          React.createElement(Text, { style: ordenStyles.value }, dispositivo)
-        ),
-        marca ? React.createElement(
-          View,
-          { style: ordenStyles.row },
-          React.createElement(Text, { style: ordenStyles.label }, "Marca:"),
-          React.createElement(Text, { style: ordenStyles.value }, marca)
-        ) : null,
-        color ? React.createElement(
-          View,
-          { style: ordenStyles.row },
-          React.createElement(Text, { style: ordenStyles.label }, "Color:"),
-          React.createElement(Text, { style: ordenStyles.value }, color)
-        ) : null,
-        imei ? React.createElement(
-          View,
-          { style: ordenStyles.row },
-          React.createElement(Text, { style: ordenStyles.label }, "IMEI/Serie:"),
-          React.createElement(Text, { style: ordenStyles.value }, imei)
-        ) : null
-      ),
-      // Problema Reportado
-      React.createElement(
-        View,
-        { style: ordenStyles.section },
-        React.createElement(Text, { style: ordenStyles.sectionTitle }, "PROBLEMA REPORTADO"),
-        React.createElement(
-          View,
-          { style: ordenStyles.highlight },
-          React.createElement(Text, { style: ordenStyles.highlightText }, problemaReportado)
-        )
-      ),
-      // Accesorios (si hay)
-      accesorios ? React.createElement(
-        View,
-        { style: ordenStyles.accesoriosBox },
-        React.createElement(Text, { style: ordenStyles.accesoriosTitle }, "ACCESORIOS ENTREGADOS:"),
-        React.createElement(Text, { style: ordenStyles.accesoriosText }, accesorios)
-      ) : null,
-      // Contrasena/PIN (si hay, sin SVG por ahora para simplificar)
-      codigoAccesoDispositivo ? React.createElement(
-        View,
-        { style: ordenStyles.section },
-        React.createElement(Text, { style: ordenStyles.sectionTitle }, "CONTRASENA/PIN"),
-        React.createElement(
-          View,
-          { style: { backgroundColor: "#f3f4f6", padding: 8, borderRadius: 4 } },
-          React.createElement(Text, { style: { fontSize: 12, fontFamily: "Courier" } }, codigoAccesoDispositivo)
-        )
-      ) : null,
-      // Presupuesto (si hay)
-      presupuesto ? React.createElement(
-        View,
-        { style: ordenStyles.section },
-        React.createElement(Text, { style: ordenStyles.sectionTitle }, "PRESUPUESTO ESTIMADO"),
-        React.createElement(Text, { style: { fontSize: 14, fontWeight: "bold", color: "#3b82f6" } }, presupuesto),
-        React.createElement(Text, { style: { fontSize: 8, color: "#6b7280", marginTop: 2 } }, "* El presupuesto final puede variar segun el diagnostico")
-      ) : null,
-      // Observaciones (si hay)
-      observaciones ? React.createElement(
-        View,
-        { style: ordenStyles.section },
-        React.createElement(Text, { style: ordenStyles.sectionTitle }, "OBSERVACIONES"),
-        React.createElement(Text, { style: ordenStyles.highlightText }, observaciones)
-      ) : null,
-      // Lineas de firma
-      React.createElement(
-        View,
-        { style: ordenStyles.signatureLine },
-        React.createElement(
-          View,
-          { style: ordenStyles.signatureBox },
-          React.createElement(View, { style: ordenStyles.signatureDash }),
-          React.createElement(Text, { style: ordenStyles.signatureLabel }, "Firma del Cliente")
-        ),
-        React.createElement(
-          View,
-          { style: ordenStyles.signatureBox },
-          React.createElement(View, { style: ordenStyles.signatureDash }),
-          React.createElement(Text, { style: ordenStyles.signatureLabel }, "Firma del Tecnico")
-        )
-      ),
-      // Footer
-      React.createElement(
-        View,
-        { style: ordenStyles.footer },
-        React.createElement(
-          View,
-          { style: ordenStyles.footerTop },
-          React.createElement(Text, { style: ordenStyles.footerText }, "Conserve este comprobante para retirar su equipo."),
-          React.createElement(Text, { style: ordenStyles.footerText }, "Al firmar, el cliente acepta los terminos y condiciones del servicio."),
-          React.createElement(Text, { style: ordenStyles.footerTextBold }, "Orden #" + numeroOrden + " - " + empresaNombre)
-        )
-      )
-    )
-  )
 }
 
 export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {

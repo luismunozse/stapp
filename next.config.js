@@ -3,7 +3,7 @@ const { withSentryConfig } = require('@sentry/nextjs')
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  serverExternalPackages: ['@react-pdf/renderer'],
+  serverExternalPackages: [],
   images: {
     formats: ['image/avif', 'image/webp'],
     remotePatterns: [
