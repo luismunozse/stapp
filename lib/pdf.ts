@@ -391,20 +391,25 @@ const toText = (val: unknown): string => {
     return val.map(v => toText(v)).join(", ")
   }
   if (typeof val === "object") {
-    // Check for Date objects
-    if (val instanceof Date) {
-      return formatDate(val)
-    }
-    // Check for objects with $$typeof (React elements that slip through)
+    if (val instanceof Date) return formatDate(val)
     if ("$$typeof" in val) return ""
-    try {
-      return JSON.stringify(val)
-    } catch {
-      return String(val)
-    }
+    try { return JSON.stringify(val) } catch { return String(val) }
   }
   if (typeof val === "symbol") return val.toString()
   return String(val)
+}
+
+// Safe createElement that filters out null/undefined/false children
+// @react-pdf/renderer v4's yoga reconciler can choke on null children
+const el = (
+  type: any,
+  props: any,
+  ...children: any[]
+): React.ReactElement => {
+  const filtered = children.flat(Infinity).filter(
+    (c): c is React.ReactNode => c !== null && c !== undefined && c !== false
+  )
+  return React.createElement(type, props, ...filtered)
 }
 
 const CotizacionDocument = ({ data }: { data: CotizacionPDFData }) => {
@@ -441,196 +446,209 @@ const CotizacionDocument = ({ data }: { data: CotizacionPDFData }) => {
   const firmaMime = toText(data.firmaMime)
   const fechaAprobacion = formatDate(data.fechaAprobacion, data.zonaHoraria)
 
-  return React.createElement(Document, null,
-    React.createElement(Page, { size: "A4", style: styles.page },
-      // Barra de acento superior
-      React.createElement(View, { style: styles.accentBar }),
+  // Build items rows
+  const itemRows = (Array.isArray(data.items) ? data.items : []).map((item, index) => {
+    const unitPrice = Number(item.precioUnitario || item.precio_unitario) || 0
+    const unidad = String(item.unidad || "Unidad")
+    const cantLabel = `${String(item.cantidad || 0)} ${unidad !== "Unidad" ? unidad : ""}`.trim()
+    const itemSubtotal = Number(item.subtotal) || 0
+    return el(View, { key: String(index), style: index % 2 === 0 ? styles.tableRow : styles.tableRowAlt },
+      el(Text, { style: styles.colDescription }, toText(item.descripcion)),
+      el(Text, { style: styles.colQuantity }, cantLabel),
+      el(Text, { style: styles.colPrice }, formatCurrency(unitPrice, data.moneda)),
+      el(Text, { style: styles.colSubtotal }, formatCurrency(itemSubtotal, data.moneda))
+    )
+  })
 
+  // Build totals rows array (no nulls)
+  const totalsRows: React.ReactElement[] = [
+    el(View, { key: "sub", style: styles.totalRow },
+      el(Text, { style: styles.totalLabel }, "Subtotal"),
+      el(Text, { style: styles.totalValue }, formatCurrency(subtotalNum, data.moneda))
+    ),
+  ]
+  if (descGlobalAmount > 0) {
+    totalsRows.push(
+      el(View, { key: "desc", style: styles.totalRow },
+        el(Text, { style: styles.totalLabel }, descGlobalTipo === "porcentaje" ? `Descuento (${String(descGlobalValor)}%)` : "Descuento"),
+        el(Text, { style: [styles.totalValue, { color: "#16a34a" }] }, `-${formatCurrency(descGlobalAmount, data.moneda)}`)
+      )
+    )
+  }
+  if (ivaPct > 0) {
+    totalsRows.push(
+      el(View, { key: "iva", style: styles.totalRow },
+        el(Text, { style: styles.totalLabel }, `IVA (${String(ivaPct)}%)`),
+        el(Text, { style: styles.totalValue }, formatCurrency(ivaNum, data.moneda))
+      )
+    )
+  }
+  totalsRows.push(
+    el(View, { key: "total", style: styles.grandTotalRow },
+      el(Text, { style: styles.grandTotalLabel }, "TOTAL"),
+      el(Text, { style: styles.grandTotalValue }, formatCurrency(totalNum, data.moneda))
+    )
+  )
+
+  // Build optional sections array
+  const optionalSections: React.ReactElement[] = []
+
+  if (fechaVencimiento) {
+    optionalSections.push(
+      el(View, { key: "validez", style: styles.validityBanner },
+        el(Text, { style: styles.validityText }, `Cotizacion valida hasta el ${fechaVencimiento}`)
+      )
+    )
+  }
+  if (notas) {
+    optionalSections.push(
+      el(View, { key: "notas", style: styles.notesCard },
+        el(Text, { style: styles.notesTitle }, "Observaciones"),
+        el(Text, { style: styles.notesText }, notas)
+      )
+    )
+  }
+  if (terminos) {
+    optionalSections.push(
+      el(View, { key: "terminos", style: styles.notesCard },
+        el(Text, { style: styles.notesTitle }, "Terminos y Condiciones"),
+        el(Text, { style: styles.notesText }, terminos)
+      )
+    )
+  }
+  if (firmaAprobacion && firmaMime) {
+    optionalSections.push(
+      el(View, { key: "firma", style: styles.signatureSection },
+        el(View, { style: styles.signatureContainer },
+          el(View, { style: styles.signatureBox },
+            el(Image, { style: styles.signatureImage, src: `data:${firmaMime};base64,${firmaAprobacion}` }),
+            el(View, { style: styles.signatureLine }),
+            el(Text, { style: styles.signatureLabel }, "Firma del Cliente"),
+            fechaAprobacion ? el(Text, { style: styles.signatureDate }, `Aprobado: ${fechaAprobacion}`) : null
+          )
+        )
+      )
+    )
+  }
+
+  // Build cliente card rows
+  const clienteRows: React.ReactElement[] = [
+    el(View, { key: "cn", style: styles.cardRow },
+      el(Text, { style: styles.cardLabel }, "Nombre"),
+      el(Text, { style: styles.cardValue }, clienteNombre)
+    ),
+    el(View, { key: "ct", style: styles.cardRow },
+      el(Text, { style: styles.cardLabel }, "Telefono"),
+      el(Text, { style: styles.cardValue }, clienteTelefono)
+    ),
+  ]
+  if (clienteEmail) {
+    clienteRows.push(
+      el(View, { key: "ce", style: styles.cardRow },
+        el(Text, { style: styles.cardLabel }, "Email"),
+        el(Text, { style: styles.cardValue }, clienteEmail)
+      )
+    )
+  }
+  if (clienteDireccion) {
+    clienteRows.push(
+      el(View, { key: "cd", style: styles.cardRow },
+        el(Text, { style: styles.cardLabel }, "Direccion"),
+        el(Text, { style: styles.cardValue }, clienteDireccion)
+      )
+    )
+  }
+
+  // Build grid columns
+  const gridCols: React.ReactElement[] = [
+    el(View, { key: "cliente", style: styles.gridCol },
+      el(Text, { style: styles.cardTitle }, "Cliente"),
+      ...clienteRows
+    ),
+  ]
+  if (data.orden) {
+    gridCols.push(
+      el(View, { key: "orden", style: styles.gridCol },
+        el(Text, { style: styles.cardTitle }, `Orden #${ordenNumero}`),
+        el(View, { style: styles.cardRow },
+          el(Text, { style: styles.cardLabel }, "Equipo"),
+          el(Text, { style: styles.cardValue }, dispositivo)
+        ),
+        el(View, { style: styles.cardRow },
+          el(Text, { style: styles.cardLabel }, "Problema"),
+          el(Text, { style: styles.cardValue }, problemaReportado)
+        )
+      )
+    )
+  }
+
+  // Build header left children
+  const headerLeftChildren: React.ReactElement[] = []
+  if (logoUrl) {
+    headerLeftChildren.push(el(Image, { key: "logo", style: styles.logo, src: logoUrl }))
+  }
+  const companyInfoChildren: React.ReactElement[] = [
+    el(Text, { key: "name", style: styles.companyName }, companyName),
+  ]
+  if (telefonoEmpresa) {
+    companyInfoChildren.push(el(Text, { key: "tel", style: styles.companyInfo }, `Tel: ${telefonoEmpresa}`))
+  }
+  if (direccionEmpresa) {
+    companyInfoChildren.push(el(Text, { key: "dir", style: styles.companyInfo }, direccionEmpresa))
+  }
+  headerLeftChildren.push(el(View, { key: "details", style: styles.companyDetails }, ...companyInfoChildren))
+
+  return el(Document, null,
+    el(Page, { size: "A4", style: styles.page },
+      // Barra de acento
+      el(View, { style: styles.accentBar }),
       // Container principal
-      React.createElement(View, { style: styles.container },
-        // Header moderno
-        React.createElement(View, { style: styles.header },
-          React.createElement(View, { style: styles.headerLeft },
-            logoUrl ? React.createElement(Image, { style: styles.logo, src: logoUrl }) : null,
-            React.createElement(View, { style: styles.companyDetails },
-              React.createElement(Text, { style: styles.companyName }, companyName),
-              telefonoEmpresa ? React.createElement(Text, { style: styles.companyInfo }, `Tel: ${telefonoEmpresa}`) : null,
-              direccionEmpresa ? React.createElement(Text, { style: styles.companyInfo }, direccionEmpresa) : null
-            )
-          ),
-          React.createElement(View, { style: styles.headerRight },
-            React.createElement(View, { style: styles.docBadge },
-              React.createElement(Text, { style: styles.docBadgeText }, "COTIZACION")
+      el(View, { style: styles.container },
+        // Header
+        el(View, { style: styles.header },
+          el(View, { style: styles.headerLeft }, ...headerLeftChildren),
+          el(View, { style: styles.headerRight },
+            el(View, { style: styles.docBadge },
+              el(Text, { style: styles.docBadgeText }, "COTIZACION")
             ),
-            React.createElement(Text, { style: styles.docNumber }, cotizacionNumber),
-            React.createElement(Text, { style: styles.docDate }, cotizacionDate)
+            el(Text, { style: styles.docNumber }, cotizacionNumber),
+            el(Text, { style: styles.docDate }, cotizacionDate)
           )
         ),
-
-        // Grid de 2 columnas: Cliente y Orden
-        React.createElement(View, { style: styles.twoColGrid },
-          // Cliente Card
-          React.createElement(View, { style: styles.gridCol },
-            React.createElement(Text, { style: styles.cardTitle }, "Cliente"),
-            React.createElement(View, { style: styles.cardRow },
-              React.createElement(Text, { style: styles.cardLabel }, "Nombre"),
-              React.createElement(Text, { style: styles.cardValue }, clienteNombre)
+        // Grid cliente/orden
+        el(View, { style: styles.twoColGrid }, ...gridCols),
+        // Tabla items
+        el(View, { style: styles.tableSection },
+          el(Text, { style: styles.tableSectionTitle }, "Detalle de Servicios"),
+          el(View, { style: styles.table },
+            el(View, { style: styles.tableHeader },
+              el(Text, { style: [styles.colDescription, styles.tableHeaderText] }, "Descripcion"),
+              el(Text, { style: [styles.colQuantity, styles.tableHeaderText] }, "Cant."),
+              el(Text, { style: [styles.colPrice, styles.tableHeaderText] }, "P. Unit."),
+              el(Text, { style: [styles.colSubtotal, styles.tableHeaderText] }, "Subtotal")
             ),
-            React.createElement(View, { style: styles.cardRow },
-              React.createElement(Text, { style: styles.cardLabel }, "Telefono"),
-              React.createElement(Text, { style: styles.cardValue }, clienteTelefono)
-            ),
-            clienteEmail ? React.createElement(View, { style: styles.cardRow },
-              React.createElement(Text, { style: styles.cardLabel }, "Email"),
-              React.createElement(Text, { style: styles.cardValue }, clienteEmail)
-            ) : null,
-            clienteDireccion ? React.createElement(View, { style: styles.cardRow },
-              React.createElement(Text, { style: styles.cardLabel }, "Direccion"),
-              React.createElement(Text, { style: styles.cardValue }, clienteDireccion)
-            ) : null
-          ),
-          // Orden Card (only if linked to an order)
-          data.orden ? React.createElement(View, { style: styles.gridCol },
-            React.createElement(Text, { style: styles.cardTitle }, `Orden #${ordenNumero}`),
-            React.createElement(View, { style: styles.cardRow },
-              React.createElement(Text, { style: styles.cardLabel }, "Equipo"),
-              React.createElement(Text, { style: styles.cardValue }, dispositivo)
-            ),
-            React.createElement(View, { style: styles.cardRow },
-              React.createElement(Text, { style: styles.cardLabel }, "Problema"),
-              React.createElement(Text, { style: styles.cardValue }, problemaReportado)
-            )
-          ) : null
-        ),
-
-        // Tabla de items
-        React.createElement(View, { style: styles.tableSection },
-          React.createElement(Text, { style: styles.tableSectionTitle }, "Detalle de Servicios"),
-          React.createElement(View, { style: styles.table },
-            React.createElement(View, { style: styles.tableHeader },
-              React.createElement(Text, { style: [styles.colDescription, styles.tableHeaderText] }, "Descripcion"),
-              React.createElement(Text, { style: [styles.colQuantity, styles.tableHeaderText] }, "Cant."),
-              React.createElement(Text, { style: [styles.colPrice, styles.tableHeaderText] }, "P. Unit."),
-              React.createElement(Text, { style: [styles.colSubtotal, styles.tableHeaderText] }, "Subtotal")
-            ),
-            ...(Array.isArray(data.items) ? data.items : []).map((item, index) => {
-              const unitPrice = Number(item.precioUnitario || item.precio_unitario) || 0
-              const unidad = String(item.unidad || "Unidad")
-              const cantLabel = `${String(item.cantidad || 0)} ${unidad !== "Unidad" ? unidad : ""}`.trim()
-              const itemSubtotal = Number(item.subtotal) || 0
-              return React.createElement(View, { key: index, style: index % 2 === 0 ? styles.tableRow : styles.tableRowAlt },
-                React.createElement(Text, { style: styles.colDescription }, toText(item.descripcion)),
-                React.createElement(Text, { style: styles.colQuantity }, cantLabel),
-                React.createElement(Text, { style: styles.colPrice }, formatCurrency(unitPrice, data.moneda)),
-                React.createElement(Text, { style: styles.colSubtotal }, formatCurrency(itemSubtotal, data.moneda))
-              )
-            })
+            ...itemRows
           )
         ),
-
-        // Totales with discount/IVA breakdown
-        React.createElement(View, { style: styles.totalsContainer },
-          React.createElement(View, { style: styles.totalsBox },
-            React.createElement(View, { style: styles.totalRow },
-              React.createElement(Text, { style: styles.totalLabel }, "Subtotal"),
-              React.createElement(Text, { style: styles.totalValue }, formatCurrency(subtotalNum, data.moneda))
-            ),
-            descGlobalAmount > 0 ? React.createElement(View, { style: styles.totalRow },
-              React.createElement(Text, { style: styles.totalLabel }, descGlobalTipo === "porcentaje" ? `Descuento (${String(descGlobalValor)}%)` : "Descuento"),
-              React.createElement(Text, { style: [styles.totalValue, { color: "#16a34a" }] }, `-${formatCurrency(descGlobalAmount, data.moneda)}`)
-            ) : null,
-            ivaPct > 0 ? React.createElement(View, { style: styles.totalRow },
-              React.createElement(Text, { style: styles.totalLabel }, `IVA (${String(ivaPct)}%)`),
-              React.createElement(Text, { style: styles.totalValue }, formatCurrency(ivaNum, data.moneda))
-            ) : null,
-            React.createElement(View, { style: styles.grandTotalRow },
-              React.createElement(Text, { style: styles.grandTotalLabel }, "TOTAL"),
-              React.createElement(Text, { style: styles.grandTotalValue }, formatCurrency(totalNum, data.moneda))
-            )
-          )
+        // Totales
+        el(View, { style: styles.totalsContainer },
+          el(View, { style: styles.totalsBox }, ...totalsRows)
         ),
-
-        // Validez
-        fechaVencimiento
-          ? React.createElement(View, { style: styles.validityBanner },
-              React.createElement(Text, { style: styles.validityText },
-                `Cotizacion valida hasta el ${fechaVencimiento}`
-              )
-            )
-          : null,
-
-        // Notas
-        notas
-          ? React.createElement(View, { style: styles.notesCard },
-              React.createElement(Text, { style: styles.notesTitle }, "Observaciones"),
-              React.createElement(Text, { style: styles.notesText }, notas)
-            )
-          : null,
-
-        // Terminos y Condiciones
-        terminos
-          ? React.createElement(View, { style: styles.notesCard },
-              React.createElement(Text, { style: styles.notesTitle }, "Terminos y Condiciones"),
-              React.createElement(Text, { style: styles.notesText }, terminos)
-            )
-          : null,
-
-        // Firma (si esta aprobada)
-        firmaAprobacion && firmaMime
-          ? React.createElement(View, { style: styles.signatureSection },
-              React.createElement(View, { style: styles.signatureContainer },
-                React.createElement(View, { style: styles.signatureBox },
-                  React.createElement(Image, {
-                    style: styles.signatureImage,
-                    src: `data:${firmaMime};base64,${firmaAprobacion}`,
-                  }),
-                  React.createElement(View, { style: styles.signatureLine }),
-                  React.createElement(Text, { style: styles.signatureLabel }, "Firma del Cliente"),
-                  fechaAprobacion ? React.createElement(Text, { style: styles.signatureDate },
-                    `Aprobado: ${fechaAprobacion}`
-                  ) : null
-                )
-              )
-            )
-          : null
+        // Secciones opcionales
+        ...optionalSections
       ),
-
       // Footer
-      React.createElement(View, { style: styles.footer },
-        React.createElement(Text, { style: styles.footerText },
-          firmaAprobacion
-            ? "Documento aprobado por el cliente"
-            : "Gracias por su confianza"
+      el(View, { style: styles.footer },
+        el(Text, { style: styles.footerText },
+          firmaAprobacion ? "Documento aprobado por el cliente" : "Gracias por su confianza"
         ),
-        React.createElement(Text, { style: styles.footerBrand }, companyName)
+        el(Text, { style: styles.footerBrand }, companyName)
       )
     )
   )
 }
 
 export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Buffer> {
-  // Debug: log all data types to find the React element
-  const debugTypes: Record<string, string> = {}
-  for (const [key, val] of Object.entries(data)) {
-    if (val && typeof val === "object" && !Array.isArray(val) && !(val instanceof Date)) {
-      if ("$$typeof" in (val as any)) {
-        debugTypes[key] = `REACT_ELEMENT: ${JSON.stringify(Object.keys(val as any))}`
-      } else {
-        debugTypes[key] = `object:${JSON.stringify(Object.keys(val as any))}`
-      }
-    } else {
-      debugTypes[key] = `${typeof val}:${String(val).slice(0, 50)}`
-    }
-  }
-  console.log("[PDF DEBUG] data types:", JSON.stringify(debugTypes, null, 2))
-  if (Array.isArray(data.items) && data.items[0]) {
-    const item0: Record<string, string> = {}
-    for (const [k, v] of Object.entries(data.items[0])) {
-      item0[k] = `${typeof v}:${String(v).slice(0, 50)}`
-    }
-    console.log("[PDF DEBUG] items[0] types:", JSON.stringify(item0, null, 2))
-  }
-
   const buffer = await renderToBuffer(
     React.createElement(CotizacionDocument, { data }) as React.ReactElement
   )

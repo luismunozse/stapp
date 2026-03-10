@@ -141,6 +141,8 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
   const [selectedSectorId, setSelectedSectorId] = useState<string>("")
   const [sectoresCliente, setSectoresCliente] = useState<Array<{ id: string; nombre: string }>>([])
   const [nuevoClienteTipo, setNuevoClienteTipo] = useState<"INDIVIDUAL" | "EMPRESA">("INDIVIDUAL")
+  const [nuevoSectorNombre, setNuevoSectorNombre] = useState("")
+  const [crearSectorLoading, setCrearSectorLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const { tipos: tiposDispositivo, loading: tiposLoading } = useTiposDispositivo()
@@ -496,6 +498,31 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
     }
   }
 
+  const handleCrearSector = async () => {
+    if (!nuevoSectorNombre.trim() || !clienteId) return
+    setCrearSectorLoading(true)
+    try {
+      const res = await fetch(`/api/clientes/${clienteId}/sectores`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nombre: nuevoSectorNombre.trim() }),
+      })
+      if (res.ok) {
+        const sector = await res.json()
+        setSectoresCliente((prev) => [...prev, sector])
+        setSelectedSectorId(sector.id)
+        setNuevoSectorNombre("")
+      } else {
+        const err = await res.json()
+        alert(err.error || "Error al crear sector")
+      }
+    } catch (e) {
+      console.error("Error creating sector:", e)
+    } finally {
+      setCrearSectorLoading(false)
+    }
+  }
+
   const onSubmit = async (data: OrdenFormData) => {
     setLoading(true)
     try {
@@ -625,22 +652,49 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
           </div>
 
           {/* Sector selector for empresa clients */}
-          {clienteSeleccionadoObj?.tipoCliente === "EMPRESA" && sectoresCliente.length > 0 && (
+          {clienteSeleccionadoObj?.tipoCliente === "EMPRESA" && (
             <div>
-              <Label>Sector</Label>
-              <Select
-                value={selectedSectorId}
-                onValueChange={setSelectedSectorId}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar sector..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {sectoresCliente.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>{s.nombre}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Sector / Area</Label>
+              {sectoresCliente.length > 0 ? (
+                <Select
+                  value={selectedSectorId}
+                  onValueChange={setSelectedSectorId}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar sector..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sectoresCliente.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>{s.nombre}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <p className="text-sm text-muted-foreground py-1">No hay sectores creados</p>
+              )}
+              <div className="flex gap-2 mt-2">
+                <Input
+                  value={nuevoSectorNombre}
+                  onChange={(e) => setNuevoSectorNombre(e.target.value)}
+                  placeholder="Nuevo sector (ej: Contaduria, Transito)"
+                  className="flex-1"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault()
+                      handleCrearSector()
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  disabled={!nuevoSectorNombre.trim() || crearSectorLoading}
+                  onClick={handleCrearSector}
+                >
+                  {crearSectorLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                </Button>
+              </div>
               {clienteSeleccionadoObj.razonSocial && (
                 <p className="text-xs text-muted-foreground mt-1">
                   Empresa: {clienteSeleccionadoObj.razonSocial}
