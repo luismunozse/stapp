@@ -56,6 +56,9 @@ interface CotizacionData {
     telefono: string | null
     email: string | null
   }
+  sector?: {
+    nombre: string
+  } | null
   organizacion: {
     nombre: string | null
     telefono: string | null
@@ -256,6 +259,9 @@ export function CotizacionPublica({ token }: { token: string }) {
             <div className="pt-2 border-t">
               <p className="text-muted-foreground">Cliente</p>
               <p className="font-medium">{data.cliente.nombre}</p>
+              {data.sector?.nombre && (
+                <p className="text-sm text-muted-foreground">Sector: {data.sector.nombre}</p>
+              )}
             </div>
           )}
         </CardContent>

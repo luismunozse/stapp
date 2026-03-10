@@ -13,6 +13,7 @@ import {
   Clock,
   Package,
   AlertTriangle,
+  Megaphone,
 } from "lucide-react"
 
 function getNotificationIcon(type: string) {
@@ -31,6 +32,8 @@ function getNotificationIcon(type: string) {
       return <Package className="h-4 w-4 text-red-500" />
     case "NUEVO_RECLAMO":
       return <AlertTriangle className="h-4 w-4 text-yellow-500" />
+    case "BROADCAST":
+      return <Megaphone className="h-4 w-4 text-primary" />
     default:
       return <Bell className="h-4 w-4 text-muted-foreground" />
   }

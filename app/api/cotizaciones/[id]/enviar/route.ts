@@ -29,6 +29,7 @@ export async function POST(
           organizations (id, nombre_mostrar, telefono, direccion, logo_url, moneda, zona_horaria)
         ),
         clientes (*),
+        sectores_cliente (id, nombre),
         items_cotizacion (*)
       `)
       .eq("id", id)
@@ -69,6 +70,9 @@ export async function POST(
         email: cliente.email,
         direccion: cliente.direccion,
       },
+      sector: cotizacion.sectores_cliente ? {
+        nombre: cotizacion.sectores_cliente.nombre,
+      } : undefined,
       orden: orden ? {
         numeroOrden: orden.numero_orden,
         dispositivo: orden.dispositivo,

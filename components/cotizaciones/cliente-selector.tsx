@@ -12,6 +12,8 @@ interface Cliente {
   nombre: string
   email?: string | null
   telefono?: string | null
+  tipoCliente?: string | null
+  razonSocial?: string | null
 }
 
 interface ClienteSelectorProps {

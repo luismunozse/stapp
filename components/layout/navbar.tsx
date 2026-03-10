@@ -224,12 +224,6 @@ export function Navbar() {
               <TooltipProvider delayDuration={0}>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <div><NotificationBell collapsed /></div>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">Notificaciones</TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
                     <div><ThemeToggle variant="icon" /></div>
                   </TooltipTrigger>
                   <TooltipContent side="right">Cambiar tema</TooltipContent>
@@ -263,7 +257,6 @@ export function Navbar() {
               </TooltipProvider>
             ) : (
               <>
-                <NotificationBell />
                 <ThemeToggle variant="dropdown" />
                 <Button
                   variant="ghost"
@@ -286,6 +279,14 @@ export function Navbar() {
           </div>
         </div>
       </aside>
+
+      {/* Desktop Top-Right Bar */}
+      <div className={cn(
+        "hidden lg:flex items-center gap-2 fixed top-3 right-4 z-40"
+      )}>
+        <GlobalSearch />
+        <NotificationBell />
+      </div>
 
       {/* Mobile Header */}
       <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border safe-area-inset-top">

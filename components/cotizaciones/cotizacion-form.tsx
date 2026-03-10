@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { X, Plus, FileText, Calculator, Percent, DollarSign } from "lucide-react"
+import { X, Plus, FileText, Calculator, Percent, DollarSign, Loader2 } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { ItemRow, calcItemNeto } from "./item-row"
 import { ClienteSelector } from "./cliente-selector"
@@ -42,6 +42,7 @@ interface CotizacionFormProps {
     descuentoGlobalValor?: number
     ivaPorcentaje?: number
     clienteId?: string | null
+    sectorId?: string | null
   }
 }
 
@@ -65,6 +66,11 @@ export function CotizacionForm({
   const [descuentoGlobalValor, setDescuentoGlobalValor] = useState(initialData?.descuentoGlobalValor || 0)
   const [ivaPorcentaje, setIvaPorcentaje] = useState(initialData?.ivaPorcentaje ?? 0)
   const [clienteId, setClienteId] = useState<string | null>(initialData?.clienteId || null)
+  const [clienteObj, setClienteObj] = useState<{ tipoCliente?: string | null; razonSocial?: string | null } | null>(null)
+  const [selectedSectorId, setSelectedSectorId] = useState<string>(initialData?.sectorId || "")
+  const [sectoresCliente, setSectoresCliente] = useState<Array<{ id: string; nombre: string }>>([])
+  const [nuevoSectorNombre, setNuevoSectorNombre] = useState("")
+  const [crearSectorLoading, setCrearSectorLoading] = useState(false)
   const [configLoaded, setConfigLoaded] = useState(false)
 
   const isEditing = !!initialData
@@ -93,6 +99,53 @@ export function CotizacionForm({
     }
     fetchConfig()
   }, [isEditing, configLoaded, fechaVencimiento])
+
+  const esClienteEmpresa = clienteObj?.tipoCliente === "EMPRESA" || !!clienteObj?.razonSocial
+
+  // Fetch sectors when client changes (empresa only)
+  useEffect(() => {
+    setSelectedSectorId("")
+    setSectoresCliente([])
+    if (!clienteId || !esClienteEmpresa) return
+
+    const fetchSectores = async () => {
+      try {
+        const res = await fetch(`/api/clientes/${clienteId}/sectores`)
+        if (res.ok) {
+          const data = await res.json()
+          setSectoresCliente(data)
+        }
+      } catch {
+        // ignore
+      }
+    }
+    fetchSectores()
+  }, [clienteId, esClienteEmpresa])
+
+  const handleCrearSector = async () => {
+    if (!nuevoSectorNombre.trim() || !clienteId) return
+    setCrearSectorLoading(true)
+    try {
+      const res = await fetch(`/api/clientes/${clienteId}/sectores`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nombre: nuevoSectorNombre.trim() }),
+      })
+      if (res.ok) {
+        const sector = await res.json()
+        setSectoresCliente((prev) => [...prev, sector])
+        setSelectedSectorId(sector.id)
+        setNuevoSectorNombre("")
+      } else {
+        const err = await res.json()
+        alert(err.error || "Error al crear sector")
+      }
+    } catch {
+      // ignore
+    } finally {
+      setCrearSectorLoading(false)
+    }
+  }
 
   const updateItem = (index: number, field: string, value: string | number) => {
     const newItems = [...items]
@@ -175,6 +228,7 @@ export function CotizacionForm({
 
       if (ordenId) payload.ordenId = ordenId
       if (isStandalone && clienteId) payload.clienteId = clienteId
+      if (selectedSectorId) payload.sectorId = selectedSectorId
 
       const res = await fetch(url, {
         method,
@@ -212,13 +266,65 @@ export function CotizacionForm({
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Cliente selector for standalone */}
-          {isStandalone && (
-            <ClienteSelector
-              value={clienteId}
-              onChange={(id) => setClienteId(id)}
-              disabled={loading}
-            />
+          {/* Cliente selector for standalone (only when creating, not editing) */}
+          {isStandalone && !isEditing && (
+            <>
+              <ClienteSelector
+                value={clienteId}
+                onChange={(id, cliente) => {
+                  setClienteId(id)
+                  setClienteObj(cliente ? { tipoCliente: cliente.tipoCliente, razonSocial: cliente.razonSocial } : null)
+                }}
+                disabled={loading}
+              />
+
+              {/* Sector selector for empresa clients */}
+              {esClienteEmpresa && (
+                <div>
+                  <Label>Sector / Área</Label>
+                  {sectoresCliente.length > 0 ? (
+                    <Select
+                      value={selectedSectorId}
+                      onValueChange={setSelectedSectorId}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar sector (opcional)..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {sectoresCliente.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>{s.nombre}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="text-sm text-muted-foreground py-1">No hay sectores creados</p>
+                  )}
+                  <div className="flex gap-2 mt-2">
+                    <Input
+                      value={nuevoSectorNombre}
+                      onChange={(e) => setNuevoSectorNombre(e.target.value)}
+                      placeholder="Nuevo sector (ej: Contaduría, Tránsito)"
+                      className="flex-1"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault()
+                          handleCrearSector()
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      disabled={!nuevoSectorNombre.trim() || crearSectorLoading}
+                      onClick={handleCrearSector}
+                    >
+                      {crearSectorLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           {/* Items Header - Hidden on mobile */}

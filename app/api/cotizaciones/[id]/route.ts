@@ -22,6 +22,7 @@ const updateCotizacionSchema = z.object({
   descuentoGlobalTipo: z.enum(["porcentaje", "fijo"]).optional(),
   descuentoGlobalValor: z.number().min(0).optional(),
   ivaPorcentaje: z.number().min(0).max(100).optional(),
+  sectorId: z.string().nullable().optional(),
 })
 
 function calcItemNeto(item: { cantidad: number; precioUnitario: number; descuentoTipo?: string; descuentoValor?: number }) {
@@ -35,10 +36,12 @@ function calcItemNeto(item: { cantidad: number; precioUnitario: number; descuent
 function formatCotizacion(c: any) {
   const orden = c.ordenes_servicio
   const cliente = c.clientes || orden?.clientes
+  const sector = c.sectores_cliente
   return {
     id: c.id,
     ordenId: c.orden_id,
     clienteId: c.cliente_id,
+    sectorId: c.sector_id,
     numeroCotizacion: c.numero_cotizacion,
     estado: c.estado,
     fechaVencimiento: c.fecha_vencimiento,
@@ -66,6 +69,10 @@ function formatCotizacion(c: any) {
       nombre: cliente.nombre,
       email: cliente.email,
       telefono: cliente.telefono,
+    } : null,
+    sector: sector ? {
+      id: sector.id,
+      nombre: sector.nombre,
     } : null,
     items: c.items_cotizacion?.map((i: any) => ({
       id: i.id,
@@ -100,6 +107,7 @@ export async function GET(
           clientes (*)
         ),
         clientes (*),
+        sectores_cliente (id, nombre),
         items_cotizacion (*)
       `)
       .eq("id", id)
@@ -190,6 +198,7 @@ export async function PUT(
     if (data.descuentoGlobalTipo !== undefined) updateData.descuento_global_tipo = data.descuentoGlobalTipo
     if (data.descuentoGlobalValor !== undefined) updateData.descuento_global_valor = data.descuentoGlobalValor
     if (data.ivaPorcentaje !== undefined) updateData.iva_porcentaje = data.ivaPorcentaje
+    if (data.sectorId !== undefined) updateData.sector_id = data.sectorId
 
     // If updating items, recalculate totals with discounts/IVA
     if (data.items) {
@@ -260,6 +269,7 @@ export async function PUT(
           clientes (*)
         ),
         clientes (*),
+        sectores_cliente (id, nombre),
         items_cotizacion (*)
       `)
       .eq("id", id)

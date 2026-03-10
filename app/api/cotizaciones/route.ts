@@ -17,6 +17,7 @@ const itemSchema = z.object({
 const cotizacionSchema = z.object({
   ordenId: z.string().optional(),
   clienteId: z.string().optional(),
+  sectorId: z.string().optional(),
   items: z.array(itemSchema).min(1, "Debe tener al menos un item"),
   notas: z.string().optional(),
   fechaVencimiento: z.string().optional(),
@@ -37,10 +38,12 @@ function calcItemNeto(item: { cantidad: number; precioUnitario: number; descuent
 function formatCotizacion(c: any) {
   const orden = c.ordenes_servicio
   const cliente = c.clientes || orden?.clientes
+  const sector = c.sectores_cliente
   return {
     id: c.id,
     ordenId: c.orden_id,
     clienteId: c.cliente_id,
+    sectorId: c.sector_id,
     numeroCotizacion: c.numero_cotizacion,
     estado: c.estado,
     fechaVencimiento: c.fecha_vencimiento,
@@ -71,6 +74,10 @@ function formatCotizacion(c: any) {
       nombre: cliente.nombre,
       email: cliente.email,
       telefono: cliente.telefono,
+    } : null,
+    sector: sector ? {
+      id: sector.id,
+      nombre: sector.nombre,
     } : null,
     items: c.items_cotizacion?.map((i: any) => ({
       id: i.id,
@@ -105,6 +112,7 @@ export async function GET(request: Request) {
             id, numero_orden, dispositivo, organization_id,
             clientes (*)
           ),
+          sectores_cliente (id, nombre),
           items_cotizacion (*)
         `)
         .eq("orden_id", ordenId)
@@ -129,6 +137,7 @@ export async function GET(request: Request) {
           clientes (*)
         ),
         clientes (*),
+        sectores_cliente (id, nombre),
         items_cotizacion (*)
       `)
       .eq("organization_id", organizationId!)
@@ -266,6 +275,7 @@ export async function POST(request: Request) {
       .insert({
         orden_id: data.ordenId || null,
         cliente_id: clienteIdForInsert,
+        sector_id: data.sectorId || null,
         organization_id: organizationId,
         numero_cotizacion: numeroCotizacion,
         public_token: publicToken,
@@ -319,6 +329,7 @@ export async function POST(request: Request) {
           clientes (*)
         ),
         clientes (*),
+        sectores_cliente (id, nombre),
         items_cotizacion (*)
       `)
       .eq("id", cotizacion.id)

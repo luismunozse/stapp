@@ -19,6 +19,7 @@ import {
   Package,
   Headset,
   Smartphone,
+  Megaphone,
 } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import { cn } from "@/lib/utils"
@@ -34,6 +35,7 @@ const navItems = [
   { href: "/superadmin/pagos", label: "Pagos", icon: Receipt },
   { href: "/superadmin/planes", label: "Planes", icon: Package },
   { href: "/superadmin/soporte", label: "Soporte", icon: Headset },
+  { href: "/superadmin/broadcast", label: "Broadcast", icon: Megaphone },
   { href: "/superadmin/waitlist", label: "Waitlist iOS", icon: Smartphone },
   { href: "/superadmin/logs", label: "Auditoría", icon: FileText },
 ]

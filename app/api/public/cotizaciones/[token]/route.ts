@@ -49,6 +49,7 @@ export async function GET(
           )
         ),
         clientes (nombre, telefono, email),
+        sectores_cliente (id, nombre),
         items_cotizacion (
           id, descripcion, cantidad, precio_unitario, subtotal,
           unidad, descuento_tipo, descuento_valor
@@ -108,6 +109,9 @@ export async function GET(
         telefono: cliente?.telefono || null,
         email: cliente?.email || null,
       },
+      sector: (cotizacion as any).sectores_cliente ? {
+        nombre: (cotizacion as any).sectores_cliente.nombre,
+      } : null,
       moneda: org?.moneda || "ARS",
       zonaHoraria: org?.zona_horaria || "America/Argentina/Buenos_Aires",
       organizacion: {

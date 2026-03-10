@@ -29,6 +29,9 @@ interface CotizacionPDFData {
     email?: string | null
     direccion?: string | null
   }
+  sector?: {
+    nombre: string
+  } | null
   orden?: {
     numeroOrden: number
     dispositivo: string
@@ -80,6 +83,7 @@ export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Bu
   const clienteTelefono = safe(data.cliente.telefono)
   const clienteEmail = safe(data.cliente.email)
   const clienteDireccion = safe(data.cliente.direccion)
+  const sectorNombre = data.sector ? safe(data.sector.nombre) : ""
   const notas = safe(data.notas)
   const terminos = safe(data.terminos)
   const fechaVencimiento = fmtDate(data.fechaVencimiento)
@@ -179,9 +183,11 @@ export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Bu
   cursor = height - 40 - 90
   const colW = (contentWidth - 10) / 2
 
-  // Cliente card
-  page.drawRectangle({ x: 40, y: cursor - 85, width: colW, height: 85, color: bgLight, borderColor: border, borderWidth: 1 })
-  page.drawRectangle({ x: 40, y: cursor - 85, width: 4, height: 85, color: accent })
+  // Cliente card - dynamic height based on optional fields
+  const clienteExtraLines = (clienteEmail ? 1 : 0) + (clienteDireccion ? 1 : 0) + (sectorNombre ? 1 : 0)
+  const clienteCardH = 55 + clienteExtraLines * 15
+  page.drawRectangle({ x: 40, y: cursor - clienteCardH, width: colW, height: clienteCardH, color: bgLight, borderColor: border, borderWidth: 1 })
+  page.drawRectangle({ x: 40, y: cursor - clienteCardH, width: 4, height: clienteCardH, color: accent })
   page.drawText("CLIENTE", { x: 54, y: cursor - 14, size: 10, font: helveticaBold, color: accent })
   page.drawText("Nombre:", { x: 54, y: cursor - 32, size: 9, font: helvetica, color: textMuted })
   page.drawText(clienteNombre.substring(0, 30), { x: 104, y: cursor - 32, size: 10, font: helveticaBold, color: textDark })
@@ -196,13 +202,19 @@ export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Bu
   if (clienteDireccion) {
     page.drawText("Dir:", { x: 54, y: clienteY, size: 9, font: helvetica, color: textMuted })
     page.drawText(clienteDireccion.substring(0, 28), { x: 104, y: clienteY, size: 9, font: helvetica, color: textDark })
+    clienteY -= 15
+  }
+  if (sectorNombre) {
+    page.drawText("Sector:", { x: 54, y: clienteY, size: 9, font: helvetica, color: textMuted })
+    page.drawText(sectorNombre.substring(0, 28), { x: 104, y: clienteY, size: 10, font: helveticaBold, color: textDark })
   }
 
   // Orden card (only if linked)
   if (data.orden) {
     const ox = 40 + colW + 10
-    page.drawRectangle({ x: ox, y: cursor - 85, width: colW, height: 85, color: bgLight, borderColor: border, borderWidth: 1 })
-    page.drawRectangle({ x: ox, y: cursor - 85, width: 4, height: 85, color: accent })
+    const ordenCardH = Math.max(clienteCardH, 85)
+    page.drawRectangle({ x: ox, y: cursor - ordenCardH, width: colW, height: ordenCardH, color: bgLight, borderColor: border, borderWidth: 1 })
+    page.drawRectangle({ x: ox, y: cursor - ordenCardH, width: 4, height: ordenCardH, color: accent })
     page.drawText(`ORDEN #${safe(data.orden.numeroOrden)}`, { x: ox + 14, y: cursor - 14, size: 10, font: helveticaBold, color: accent })
     page.drawText("Equipo:", { x: ox + 14, y: cursor - 32, size: 9, font: helvetica, color: textMuted })
     page.drawText(safe(data.orden.dispositivo).substring(0, 25), { x: ox + 60, y: cursor - 32, size: 9, font: helvetica, color: textDark })
@@ -210,7 +222,7 @@ export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Bu
     page.drawText(safe(data.orden.problemaReportado).substring(0, 40), { x: ox + 68, y: cursor - 47, size: 9, font: helvetica, color: textDark })
   }
 
-  cursor -= 100
+  cursor -= clienteCardH + 15
 
   // Items table
   page.drawText("DETALLE DE SERVICIOS", { x: 40, y: cursor, size: 11, font: helveticaBold, color: dark })
