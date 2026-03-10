@@ -14,6 +14,11 @@ export function Footer() {
     soporte: [
       { name: "Centro de ayuda", href: "/ayuda" },
       { name: "Contacto", href: "/empresa/contacto" },
+      { name: "WhatsApp", href: "https://wa.me/5491100000000" },
+    ],
+    comunidad: [
+      { name: "Instagram", href: "https://instagram.com/stapp.ar" },
+      { name: "TikTok", href: "https://tiktok.com/@stapp.ar" },
     ],
     legal: [
       { name: "Términos de servicio", href: "/legal/terminos" },
@@ -25,7 +30,7 @@ export function Footer() {
   return (
     <footer className="bg-muted dark:bg-card border-t">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-8">
           {/* Brand */}
           <div className="lg:col-span-2">
             <Link href="/" className="flex items-center mb-6">
@@ -66,6 +71,25 @@ export function Footer() {
                   >
                     {link.name}
                   </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Comunidad */}
+          <div>
+            <h3 className="text-foreground font-semibold mb-4">Comunidad</h3>
+            <ul className="space-y-3">
+              {footerLinks.comunidad.map((link) => (
+                <li key={link.name}>
+                  <a
+                    href={link.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm"
+                  >
+                    {link.name}
+                  </a>
                 </li>
               ))}
             </ul>

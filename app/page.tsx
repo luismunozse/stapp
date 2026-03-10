@@ -4,8 +4,8 @@ import { auth } from "@/lib/auth"
 import { NavbarLanding } from "@/components/landing/navbar-landing"
 import { Hero } from "@/components/landing/hero"
 import { Features } from "@/components/landing/features"
-import { VideoDemo } from "@/components/landing/video-demo"
 import { PricingSection } from "@/components/landing/pricing-section"
+import { Comparison } from "@/components/landing/comparison"
 import { FAQ } from "@/components/landing/faq"
 import { DownloadApp } from "@/components/landing/download-app"
 import { Footer } from "@/components/landing/footer"
@@ -109,10 +109,10 @@ export default async function Home() {
         <NavbarLanding />
         <Hero />
         <Features />
-        <VideoDemo />
+        <Comparison />
         <PricingSection />
-        <DownloadApp />
         <FAQ faqs={faqData} />
+        <DownloadApp />
         <Footer />
         <ChatbotButton />
       </main>

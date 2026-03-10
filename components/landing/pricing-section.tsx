@@ -103,6 +103,9 @@ export function PricingSection() {
                 <p className="text-muted-foreground">
                   Todo lo que necesitas para tu taller
                 </p>
+                <p className="text-xs text-orange-600 dark:text-orange-400 font-medium mt-1">
+                  Precio de lanzamiento — no va a durar para siempre
+                </p>
               </div>
 
               {/* Billing toggle */}
@@ -132,6 +135,11 @@ export function PricingSection() {
                   </span>
                 </span>
               </div>
+
+              {/* Value anchoring */}
+              <p className="text-center text-xs text-muted-foreground mb-2">
+                Menos de $700/día para organizar todo tu taller
+              </p>
 
               {/* Price */}
               <div className="text-center mb-6">
@@ -222,7 +230,7 @@ export function PricingSection() {
           {/* Money back guarantee + MercadoPago */}
           <div className="text-center mt-10 space-y-4">
             <p className="text-sm text-muted-foreground">
-              Garantía de devolución de 30 días. Cancela cuando quieras.
+              Si no te convence en 30 días, no pagás nada. Sin preguntas, sin vueltas.
             </p>
             <m.div
               className="flex items-center justify-center gap-2 text-sm text-muted-foreground"
@@ -232,7 +240,7 @@ export function PricingSection() {
               <span>Pagos seguros con</span>
               <Image
                 src="/Mercado_Pago.svg.png"
-                alt="MercadoPago - Pagos seguros para suscripci\u00f3n de software de servicio t\u00e9cnico"
+                alt="MercadoPago - Pagos seguros para suscripción de software de servicio técnico"
                 width={100}
                 height={28}
                 className="inline-block"

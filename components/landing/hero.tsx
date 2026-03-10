@@ -635,9 +635,8 @@ export function Hero() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.2 }}
               >
-                STApp te da el control total de tu taller: sabés dónde está cada
-                equipo, qué le falta al cliente y cuánto cobraste, todo desde el
-                celular.
+                Dejá de anotar en papeles, de olvidarte qué equipo era de quién,
+                y de perseguir cobros. Organizá todo tu taller desde el celular.
               </m.p>
 
               {/* Benefits */}
@@ -681,7 +680,7 @@ export function Hero() {
                     transition={{ type: "spring", stiffness: 400, damping: 17 }}
                   >
                     <Button size="lg" variant="outline" className="text-sm sm:text-base px-4 sm:px-6 py-4 sm:py-5">
-                      Ver más
+                      Ver cómo funciona
                     </Button>
                   </m.div>
                 </a>

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DataTable, DataTablePagination, type Column } from "@/components/ui/data-table"
-import { Plus, Search, Phone, Mail, Edit, Trash2, User, Upload } from "lucide-react"
+import { Plus, Search, Phone, Mail, Edit, Trash2, User, Building2, Upload } from "lucide-react"
 import { ClienteForm } from "./cliente-form"
 import { ImportModal } from "@/components/import/import-modal"
 import { ExportButton } from "@/components/export/export-button"
@@ -125,12 +125,28 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
       sortable: true,
       render: (cliente) => (
         <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center">
-            <User className="h-4 w-4 text-primary" />
+          <div className={`h-9 w-9 rounded-full flex items-center justify-center ${
+            cliente.tipoCliente === "EMPRESA" ? "bg-amber-500/10" : "bg-primary/10"
+          }`}>
+            {cliente.tipoCliente === "EMPRESA" ? (
+              <Building2 className="h-4 w-4 text-amber-600" />
+            ) : (
+              <User className="h-4 w-4 text-primary" />
+            )}
           </div>
           <div>
-            <div className="font-medium">{cliente.nombre}</div>
-            {cliente.dni && (
+            <div className="font-medium flex items-center gap-2">
+              {cliente.nombre}
+              {cliente.tipoCliente === "EMPRESA" && (
+                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-700">
+                  Empresa
+                </span>
+              )}
+            </div>
+            {cliente.razonSocial && (
+              <div className="text-xs text-muted-foreground">{cliente.razonSocial}</div>
+            )}
+            {!cliente.razonSocial && cliente.dni && (
               <div className="text-xs text-muted-foreground">DNI: {cliente.dni}</div>
             )}
           </div>

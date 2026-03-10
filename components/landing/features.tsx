@@ -29,14 +29,14 @@ const categories = [
       {
         name: "Órdenes de Servicio",
         description:
-          "El corazón de tu taller. Gestiona cada reparación de principio a fin con estados en tiempo real, checklists personalizados y seguimiento completo.",
+          "El corazón de tu taller. Creá una orden en menos de 1 minuto con estados en tiempo real, checklists personalizados y seguimiento completo.",
         icon: ClipboardList,
         color: "bg-blue-500",
       },
       {
         name: "Presupuestos",
         description:
-          "Genera presupuestos profesionales en segundos. Enviá el PDF por WhatsApp y registrá la aprobación con firma digital.",
+          "Generá presupuestos profesionales en 30 segundos. Enviá el PDF por WhatsApp y registrá la aprobación con firma digital.",
         icon: Calculator,
         color: "bg-indigo-500",
       },
@@ -65,21 +65,21 @@ const categories = [
       {
         name: "Gestión de Clientes",
         description:
-          "Cuando un cliente vuelve, ya sabés todo: qué trajo, qué le hiciste y cuánto pagó. Sin buscar en papeles.",
+          "Cuando un cliente vuelve, en 2 clicks ya sabés todo: qué trajo, qué le hiciste y cuánto pagó. Sin buscar en papeles.",
         icon: Users,
         color: "bg-orange-500",
       },
       {
         name: "Control de Inventario",
         description:
-          "Nunca te quedes sin stock. Recibí alertas antes de que se agote un repuesto y controlá tus costos en tiempo real.",
+          "Recibí alertas antes de quedarte sin stock. Controlá costos y márgenes en tiempo real con actualizaciones automáticas.",
         icon: Package,
         color: "bg-green-500",
       },
       {
         name: "Control de Cobros",
         description:
-          "De la orden al cobro en un click. Registrá pagos parciales, generá comprobantes y sabé exactamente quién te debe y cuánto.",
+          "De la orden al cobro en un click. Pagos parciales, comprobantes automáticos y un panel claro de quién te debe y cuánto.",
         icon: Receipt,
         color: "bg-purple-500",
       },
@@ -101,21 +101,21 @@ const categories = [
       {
         name: "Gestión de Equipo",
         description:
-          "Asigná reparaciones a cada técnico, sabé quién tiene demasiado trabajo y medí quién rinde más.",
+          "Asigná reparaciones a cada técnico, equilibrá la carga de trabajo y medí el rendimiento con métricas claras.",
         icon: Wrench,
         color: "bg-rose-500",
       },
       {
         name: "Notificaciones por WhatsApp",
         description:
-          "Avisale al cliente cuando su equipo está listo con un mensaje de WhatsApp, sin escribir nada desde cero.",
+          "Avisale al cliente con un click cuando su equipo está listo. Plantillas listas para presupuestos, seguimiento y entrega.",
         icon: Bell,
         color: "bg-yellow-500",
       },
       {
         name: "Reportes y Métricas",
         description:
-          "¿Tu taller está creciendo o perdiendo plata? Los reportes te lo dicen en un vistazo: ingresos, tiempos, rendimiento del equipo.",
+          "¿Tu taller crece o pierde plata? Ingresos, tiempos promedio de reparación y rendimiento del equipo en un vistazo.",
         icon: BarChart3,
         color: "bg-cyan-500",
       },
