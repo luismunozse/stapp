@@ -854,6 +854,7 @@ interface OrdenPDFData {
   firmaEncargadoEntregaMime?: string | null
   entregadoPor?: string | null
   notasEntrega?: string | null
+  sector?: string | null
 }
 
 const tipoDispositivoLabels: Record<string, string> = {
@@ -1098,6 +1099,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const clienteTelefono = safe(cliente.telefono) || "Sin telefono"
   const clienteEmail = safe(cliente.email)
   const clienteDireccion = safe(cliente.direccion)
+  const sector = safe(data.sector)
 
   const tipoLabels: Record<string, string> = {
     CELULAR: "Celular", COMPUTADORA: "Computadora", TABLET: "Tablet",
@@ -1220,7 +1222,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   y -= 20
 
   // === GRID: CLIENTE | DISPOSITIVO ===
-  const cardHeight = 85
+  const cardHeight = sector ? 100 : 85
 
   // Card Cliente - con borde y mejor diseño
   page.drawRectangle({ x: margin, y: y - cardHeight, width: halfWidth, height: cardHeight, color: white, borderColor: lightGray, borderWidth: 1 })
@@ -1230,17 +1232,26 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   page.drawRectangle({ x: margin + 4, y: y - 20, width: halfWidth - 4, height: 20, color: bgGray })
   page.drawText("CLIENTE", { x: margin + 14, y: y - 14, size: 9, font: helveticaBold, color: primaryColor })
   // Contenido
-  page.drawText("Nombre:", { x: margin + 14, y: y - 35, size: 8, font: helvetica, color: grayColor })
-  page.drawText(clienteNombre.substring(0, 30), { x: margin + 60, y: y - 35, size: 9, font: helveticaBold, color: textColor })
-  page.drawText("Telefono:", { x: margin + 14, y: y - 50, size: 8, font: helvetica, color: grayColor })
-  page.drawText(clienteTelefono, { x: margin + 60, y: y - 50, size: 9, font: helvetica, color: textColor })
+  let clienteInfoY = y - 35
+  page.drawText("Nombre:", { x: margin + 14, y: clienteInfoY, size: 8, font: helvetica, color: grayColor })
+  page.drawText(clienteNombre.substring(0, 30), { x: margin + 60, y: clienteInfoY, size: 9, font: helveticaBold, color: textColor })
+  clienteInfoY -= 15
+  if (sector) {
+    page.drawText("Sector:", { x: margin + 14, y: clienteInfoY, size: 8, font: helvetica, color: grayColor })
+    page.drawText(sector.substring(0, 28), { x: margin + 60, y: clienteInfoY, size: 9, font: helveticaBold, color: primaryColor })
+    clienteInfoY -= 15
+  }
+  page.drawText("Telefono:", { x: margin + 14, y: clienteInfoY, size: 8, font: helvetica, color: grayColor })
+  page.drawText(clienteTelefono, { x: margin + 60, y: clienteInfoY, size: 9, font: helvetica, color: textColor })
+  clienteInfoY -= 15
   if (clienteEmail) {
-    page.drawText("Email:", { x: margin + 14, y: y - 65, size: 8, font: helvetica, color: grayColor })
-    page.drawText(clienteEmail.substring(0, 25), { x: margin + 60, y: y - 65, size: 8, font: helvetica, color: textColor })
+    page.drawText("Email:", { x: margin + 14, y: clienteInfoY, size: 8, font: helvetica, color: grayColor })
+    page.drawText(clienteEmail.substring(0, 25), { x: margin + 60, y: clienteInfoY, size: 8, font: helvetica, color: textColor })
+    clienteInfoY -= 13
   }
   if (clienteDireccion) {
-    page.drawText("Dir:", { x: margin + 14, y: y - 78, size: 8, font: helvetica, color: grayColor })
-    page.drawText(clienteDireccion.substring(0, 28), { x: margin + 60, y: y - 78, size: 8, font: helvetica, color: textColor })
+    page.drawText("Dir:", { x: margin + 14, y: clienteInfoY, size: 8, font: helvetica, color: grayColor })
+    page.drawText(clienteDireccion.substring(0, 28), { x: margin + 60, y: clienteInfoY, size: 8, font: helvetica, color: textColor })
   }
 
   // Card Dispositivo - con borde y mejor diseño

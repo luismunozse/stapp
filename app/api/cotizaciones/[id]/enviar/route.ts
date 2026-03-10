@@ -26,7 +26,7 @@ export async function POST(
         ordenes_servicio (
           id, numero_orden, dispositivo, problema_reportado, organization_id,
           clientes (*),
-          organizations (id, nombre_mostrar, moneda, zona_horaria)
+          organizations (id, nombre_mostrar, telefono, direccion, logo_url, moneda, zona_horaria)
         ),
         clientes (*),
         items_cotizacion (*)
@@ -52,7 +52,7 @@ export async function POST(
     if (!org) {
       const { data: orgData } = await supabaseAdmin
         .from("organizations")
-        .select("id, nombre_mostrar, moneda, zona_horaria")
+        .select("id, nombre_mostrar, telefono, direccion, logo_url, moneda, zona_horaria")
         .eq("id", organizationId!)
         .single()
       org = orgData
@@ -84,6 +84,9 @@ export async function POST(
       descuentoGlobalValor: cotizacion.descuento_global_valor,
       ivaPorcentaje: cotizacion.iva_porcentaje,
       nombreEmpresa: org?.nombre_mostrar || "STApp",
+      telefonoEmpresa: org?.telefono,
+      direccionEmpresa: org?.direccion,
+      logoUrl: org?.logo_url,
       firmaAprobacion: cotizacion.firma_aprobacion,
       firmaMime: cotizacion.firma_mime,
       fechaAprobacion: cotizacion.fecha_aprobacion,

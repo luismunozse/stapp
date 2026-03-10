@@ -31,6 +31,9 @@ export async function GET(
         ),
         users:entregado_por_user_id (
           nombre
+        ),
+        sectores_cliente (
+          nombre
         )
       `)
       .eq("id", id)
@@ -55,6 +58,7 @@ export async function GET(
     const cliente = orden.clientes as any
     const org = orden.organizations as any
     const entregadoPorUser = orden.users as any
+    const sectorObj = orden.sectores_cliente as any
 
     // Helper to ensure we only pass primitive values
     const safeString = (val: unknown): string | null => {
@@ -108,6 +112,7 @@ export async function GET(
       firmaEncargadoEntregaMime: safeString(orden.firma_encargado_entrega_mime),
       entregadoPor: safeString(entregadoPorUser?.nombre),
       notasEntrega: safeString(orden.notas_entrega),
+      sector: safeString(sectorObj?.nombre),
     }
 
     // Generar PDF

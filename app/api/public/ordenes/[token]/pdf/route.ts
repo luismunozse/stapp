@@ -24,6 +24,9 @@ export async function GET(
         ),
         users:entregado_por_user_id (
           nombre
+        ),
+        sectores_cliente (
+          nombre
         )
       `)
     if (error) return error
@@ -31,6 +34,7 @@ export async function GET(
     const cliente = orden.clientes as any
     const org = orden.organizations as any
     const entregadoPorUser = orden.users as any
+    const sectorObj = orden.sectores_cliente as any
 
     // Preparar datos para el PDF
     const pdfData: OrdenPDFData = {
@@ -67,6 +71,7 @@ export async function GET(
       firmaEncargadoEntregaMime: orden.firma_encargado_entrega_mime,
       entregadoPor: entregadoPorUser?.nombre || null,
       notasEntrega: orden.notas_entrega,
+      sector: sectorObj?.nombre || null,
     }
 
     // Generar PDF

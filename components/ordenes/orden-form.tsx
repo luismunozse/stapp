@@ -263,10 +263,25 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
     [clientes, clienteId]
   )
 
+  const esClienteEmpresa = clienteSeleccionadoObj?.tipoCliente === "EMPRESA" || !!clienteSeleccionadoObj?.razonSocial
+
+  // DEBUG: remover después
+  useEffect(() => {
+    if (clienteSeleccionadoObj) {
+      console.log("Cliente seleccionado:", {
+        id: clienteSeleccionadoObj.id,
+        nombre: clienteSeleccionadoObj.nombre,
+        tipoCliente: clienteSeleccionadoObj.tipoCliente,
+        razonSocial: clienteSeleccionadoObj.razonSocial,
+        esClienteEmpresa,
+      })
+    }
+  }, [clienteSeleccionadoObj, esClienteEmpresa])
+
   useEffect(() => {
     setSelectedSectorId("")
     setSectoresCliente([])
-    if (!clienteId || clienteSeleccionadoObj?.tipoCliente !== "EMPRESA") return
+    if (!clienteId || !esClienteEmpresa) return
 
     const fetchSectores = async () => {
       try {
@@ -280,7 +295,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
       }
     }
     fetchSectores()
-  }, [clienteId, clienteSeleccionadoObj?.tipoCliente])
+  }, [clienteId, esClienteEmpresa])
 
   // Manejar seleccion de fotos
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -652,7 +667,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
           </div>
 
           {/* Sector selector for empresa clients */}
-          {clienteSeleccionadoObj?.tipoCliente === "EMPRESA" && (
+          {esClienteEmpresa && (
             <div>
               <Label>Sector / Area</Label>
               {sectoresCliente.length > 0 ? (
