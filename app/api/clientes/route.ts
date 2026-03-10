@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { formatCliente } from "@/lib/db-utils"
 import { enforcePlanLimit } from "@/lib/plan-limits"
 import { z } from "zod"
 
@@ -41,7 +42,7 @@ export async function GET(request: Request) {
 
     let query = supabaseAdmin
       .from("clientes")
-      .select("id, nombre, telefono, email, direccion, dni, tipo_cliente, razon_social, cuit, created_at", { count: "exact" })
+      .select("*", { count: "exact" })
       .eq("organization_id", organizationId!)
       .order(sortBy, { ascending: sortOrder })
 
@@ -61,7 +62,7 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({
-      data: clientes,
+      data: (clientes || []).map(formatCliente),
       total: count || 0,
       page,
       limit,
@@ -117,7 +118,7 @@ export async function POST(request: Request) {
       throw dbError
     }
 
-    return NextResponse.json(cliente, { status: 201 })
+    return NextResponse.json(formatCliente(cliente), { status: 201 })
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
