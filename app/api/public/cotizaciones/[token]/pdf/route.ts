@@ -20,11 +20,12 @@ export async function GET(
       .from("cotizaciones")
       .select(`
         *,
-        ordenes_servicio!inner (
+        ordenes_servicio (
           id, numero_orden, dispositivo, problema_reportado, organization_id,
           clientes (*),
           organizations (id, nombre_mostrar, telefono, direccion, logo_url, moneda, zona_horaria)
         ),
+        clientes (*),
         items_cotizacion (*)
       `)
       .eq("public_token", token)
@@ -37,28 +38,43 @@ export async function GET(
       )
     }
 
-    const org = cotizacion.ordenes_servicio.organizations
+    const orden = cotizacion.ordenes_servicio as any
+    const cliente = orden?.clientes || cotizacion.clientes as any
+
+    let org = orden?.organizations
+    if (!org && cotizacion.organization_id) {
+      const { data: orgData } = await supabaseAdmin
+        .from("organizations")
+        .select("id, nombre_mostrar, telefono, direccion, logo_url, moneda, zona_horaria")
+        .eq("id", cotizacion.organization_id)
+        .single()
+      org = orgData
+    }
 
     const pdfBuffer = await generateCotizacionPDF({
       numeroCotizacion: cotizacion.numero_cotizacion,
       fecha: cotizacion.created_at,
       fechaVencimiento: cotizacion.fecha_vencimiento,
-      cliente: {
-        nombre: cotizacion.ordenes_servicio.clientes.nombre,
-        telefono: cotizacion.ordenes_servicio.clientes.telefono,
-        email: cotizacion.ordenes_servicio.clientes.email,
-        direccion: cotizacion.ordenes_servicio.clientes.direccion,
-      },
-      orden: {
-        numeroOrden: cotizacion.ordenes_servicio.numero_orden,
-        dispositivo: cotizacion.ordenes_servicio.dispositivo,
-        problemaReportado: cotizacion.ordenes_servicio.problema_reportado,
-      },
+      cliente: cliente ? {
+        nombre: cliente.nombre,
+        telefono: cliente.telefono,
+        email: cliente.email,
+        direccion: cliente.direccion,
+      } : { nombre: "Sin cliente", telefono: "" },
+      orden: orden ? {
+        numeroOrden: orden.numero_orden,
+        dispositivo: orden.dispositivo,
+        problemaReportado: orden.problema_reportado,
+      } : undefined,
       items: cotizacion.items_cotizacion,
       subtotal: cotizacion.subtotal,
       iva: cotizacion.iva,
       total: cotizacion.total,
       notas: cotizacion.notas,
+      terminos: cotizacion.terminos,
+      descuentoGlobalTipo: cotizacion.descuento_global_tipo,
+      descuentoGlobalValor: cotizacion.descuento_global_valor,
+      ivaPorcentaje: cotizacion.iva_porcentaje,
       nombreEmpresa: org?.nombre_mostrar || "STApp",
       telefonoEmpresa: org?.telefono,
       direccionEmpresa: org?.direccion,

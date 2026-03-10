@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
 import { Upload, Trash2, Save, ImageIcon } from "lucide-react"
 import { useModal } from "@/contexts/modal-context"
 import { NotificationSettings } from "@/components/configuracion/notification-settings"
@@ -38,6 +39,9 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
   const [direccion, setDireccion] = useState("")
   const [moneda, setMoneda] = useState("ARS")
   const [zonaHoraria, setZonaHoraria] = useState("America/Argentina/Buenos_Aires")
+  const [ivaPorcentaje, setIvaPorcentaje] = useState("0")
+  const [cotizacionValidezDias, setCotizacionValidezDias] = useState("30")
+  const [cotizacionTerminos, setCotizacionTerminos] = useState("")
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -56,6 +60,9 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
         setDireccion(data.direccion || "")
         setMoneda(data.moneda || "ARS")
         setZonaHoraria(data.zonaHoraria || "America/Argentina/Buenos_Aires")
+        setIvaPorcentaje(String(data.ivaPorcentaje ?? 0))
+        setCotizacionValidezDias(String(data.cotizacionValidezDias ?? 30))
+        setCotizacionTerminos(data.cotizacionTerminos || "")
         // Usar logoUrl si existe, o logoData para compatibilidad
         if (data.logoUrl) {
           setPreview(data.logoUrl)
@@ -109,7 +116,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
       const res = await fetch("/api/configuracion", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, moneda, zonaHoraria }),
+        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos }),
       })
 
       if (res.ok) {
@@ -335,6 +342,63 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
             </Select>
             <p className="text-xs sm:text-sm text-muted-foreground mt-1">
               Se utilizara en toda la app, PDFs y notificaciones
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="text-base sm:text-lg">Cotizaciones / Presupuestos</CardTitle>
+          <CardDescription className="text-xs sm:text-sm">
+            Valores por defecto al crear nuevas cotizaciones.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-4 sm:p-6 pt-0 space-y-4">
+          <div>
+            <Label htmlFor="ivaPorcentaje" className="text-sm">IVA (%)</Label>
+            <Select value={ivaPorcentaje} onValueChange={setIvaPorcentaje} disabled={!allowEdit}>
+              <SelectTrigger id="ivaPorcentaje">
+                <SelectValue placeholder="Seleccionar IVA" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">0% (Sin IVA)</SelectItem>
+                <SelectItem value="10.5">10.5%</SelectItem>
+                <SelectItem value="21">21%</SelectItem>
+                <SelectItem value="27">27%</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+              Se aplicará por defecto en nuevas cotizaciones
+            </p>
+          </div>
+          <div>
+            <Label htmlFor="cotizacionValidezDias" className="text-sm">Validez por defecto (días)</Label>
+            <Input
+              id="cotizacionValidezDias"
+              type="number"
+              min="1"
+              value={cotizacionValidezDias}
+              onChange={(e) => setCotizacionValidezDias(e.target.value)}
+              placeholder="30"
+              disabled={!allowEdit}
+            />
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+              Días de validez que se asignan automáticamente
+            </p>
+          </div>
+          <div>
+            <Label htmlFor="cotizacionTerminos" className="text-sm">Términos y Condiciones</Label>
+            <Textarea
+              id="cotizacionTerminos"
+              value={cotizacionTerminos}
+              onChange={(e) => setCotizacionTerminos(e.target.value)}
+              placeholder="Ej: Los precios no incluyen repuestos adicionales. Garantía de 30 días sobre mano de obra..."
+              rows={4}
+              disabled={!allowEdit}
+            />
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+              Se incluirán por defecto en nuevas cotizaciones y PDFs
             </p>
           </div>
         </CardContent>

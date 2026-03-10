@@ -9,14 +9,81 @@ const itemSchema = z.object({
   descripcion: z.string().min(1, "Descripción requerida"),
   cantidad: z.number().int().positive("Cantidad debe ser mayor a 0"),
   precioUnitario: z.number().positive("Precio debe ser mayor a 0"),
+  unidad: z.string().optional(),
+  descuentoTipo: z.enum(["porcentaje", "fijo"]).optional(),
+  descuentoValor: z.number().min(0).optional(),
 })
 
 const cotizacionSchema = z.object({
-  ordenId: z.string().min(1, "Orden requerida"),
+  ordenId: z.string().optional(),
+  clienteId: z.string().optional(),
   items: z.array(itemSchema).min(1, "Debe tener al menos un item"),
   notas: z.string().optional(),
   fechaVencimiento: z.string().optional(),
+  terminos: z.string().optional(),
+  descuentoGlobalTipo: z.enum(["porcentaje", "fijo"]).optional(),
+  descuentoGlobalValor: z.number().min(0).optional(),
+  ivaPorcentaje: z.number().min(0).max(100).optional(),
 })
+
+function calcItemNeto(item: { cantidad: number; precioUnitario: number; descuentoTipo?: string; descuentoValor?: number }) {
+  const bruto = item.cantidad * item.precioUnitario
+  const dv = item.descuentoValor || 0
+  if (dv <= 0) return bruto
+  if (item.descuentoTipo === "fijo") return Math.max(0, bruto - dv)
+  return Math.max(0, bruto * (1 - dv / 100))
+}
+
+function formatCotizacion(c: any) {
+  const orden = c.ordenes_servicio
+  const cliente = c.clientes || orden?.clientes
+  return {
+    id: c.id,
+    ordenId: c.orden_id,
+    clienteId: c.cliente_id,
+    numeroCotizacion: c.numero_cotizacion,
+    estado: c.estado,
+    fechaVencimiento: c.fecha_vencimiento,
+    notas: c.notas,
+    subtotal: c.subtotal,
+    iva: c.iva,
+    total: c.total,
+    createdAt: c.created_at,
+    publicToken: c.public_token,
+    firmaAprobacion: c.firma_aprobacion,
+    firmaMime: c.firma_mime,
+    fechaAprobacion: c.fecha_aprobacion,
+    descuentoGlobalTipo: c.descuento_global_tipo,
+    descuentoGlobalValor: c.descuento_global_valor,
+    ivaPorcentaje: c.iva_porcentaje,
+    terminos: c.terminos,
+    clienteNombre: cliente?.nombre || null,
+    clienteEmail: cliente?.email || null,
+    ordenNumero: orden?.numero_orden || null,
+    orden: orden ? {
+      id: orden.id,
+      numeroOrden: orden.numero_orden,
+      dispositivo: orden.dispositivo,
+      cliente: orden.clientes,
+    } : null,
+    cliente: cliente ? {
+      id: cliente.id,
+      nombre: cliente.nombre,
+      email: cliente.email,
+      telefono: cliente.telefono,
+    } : null,
+    items: c.items_cotizacion?.map((i: any) => ({
+      id: i.id,
+      descripcion: i.descripcion,
+      cantidad: i.cantidad,
+      precioUnitario: i.precio_unitario,
+      subtotal: i.subtotal,
+      unidad: i.unidad,
+      descuentoTipo: i.descuento_tipo,
+      descuentoValor: i.descuento_valor,
+    })),
+  }
+}
 
 export async function GET(request: Request) {
   try {
@@ -26,69 +93,65 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const ordenId = searchParams.get("ordenId")
     const estado = searchParams.get("estado")
+    const search = searchParams.get("search")
 
+    if (ordenId) {
+      // Modo legacy: filtrar por orden_id con inner join
+      let query = supabaseAdmin
+        .from("cotizaciones")
+        .select(`
+          *,
+          ordenes_servicio!inner (
+            id, numero_orden, dispositivo, organization_id,
+            clientes (*)
+          ),
+          items_cotizacion (*)
+        `)
+        .eq("orden_id", ordenId)
+        .eq("ordenes_servicio.organization_id", organizationId!)
+        .order("created_at", { ascending: false })
+
+      if (estado) query = query.eq("estado", estado)
+
+      const { data: cotizaciones, error: dbError } = await query
+      if (dbError) throw dbError
+
+      return NextResponse.json(cotizaciones?.map(formatCotizacion) || [])
+    }
+
+    // Modo standalone: filtrar por organization_id con LEFT join
     let query = supabaseAdmin
       .from("cotizaciones")
       .select(`
         *,
-        ordenes_servicio!inner (
-          id,
-          numero_orden,
-          dispositivo,
-          organization_id,
+        ordenes_servicio (
+          id, numero_orden, dispositivo, organization_id,
           clientes (*)
         ),
+        clientes (*),
         items_cotizacion (*)
       `)
-      .eq("ordenes_servicio.organization_id", organizationId!)
+      .eq("organization_id", organizationId!)
       .order("created_at", { ascending: false })
 
-    if (ordenId) {
-      query = query.eq("orden_id", ordenId)
-    }
-
-    if (estado) {
-      query = query.eq("estado", estado)
-    }
+    if (estado) query = query.eq("estado", estado)
 
     const { data: cotizaciones, error: dbError } = await query
+    if (dbError) throw dbError
 
-    if (dbError) {
-      throw dbError
+    let result = cotizaciones?.map(formatCotizacion) || []
+
+    // Search filter (client-side for now since we join multiple tables)
+    if (search) {
+      const s = search.toLowerCase()
+      result = result.filter(c =>
+        c.numeroCotizacion?.toLowerCase().includes(s) ||
+        c.cliente?.nombre?.toLowerCase().includes(s) ||
+        c.orden?.cliente?.nombre?.toLowerCase().includes(s)
+      )
     }
 
-    // Formatear respuesta
-    const cotizacionesFormatted = cotizaciones?.map(c => ({
-      id: c.id,
-      ordenId: c.orden_id,
-      numeroCotizacion: c.numero_cotizacion,
-      estado: c.estado,
-      fechaVencimiento: c.fecha_vencimiento,
-      notas: c.notas,
-      subtotal: c.subtotal,
-      iva: c.iva,
-      total: c.total,
-      createdAt: c.created_at,
-      publicToken: c.public_token,
-      firmaAprobacion: c.firma_aprobacion,
-      firmaMime: c.firma_mime,
-      fechaAprobacion: c.fecha_aprobacion,
-      orden: {
-        id: c.ordenes_servicio.id,
-        numeroOrden: c.ordenes_servicio.numero_orden,
-        dispositivo: c.ordenes_servicio.dispositivo,
-        cliente: c.ordenes_servicio.clientes,
-      },
-      items: c.items_cotizacion?.map((i: any) => ({
-        id: i.id,
-        descripcion: i.descripcion,
-        cantidad: i.cantidad,
-        precioUnitario: i.precio_unitario,
-        subtotal: i.subtotal,
-      })),
-    }))
-
-    return NextResponse.json(cotizacionesFormatted)
+    return NextResponse.json(result)
   } catch (error) {
     console.error("Error fetching cotizaciones:", error)
     return NextResponse.json(
@@ -113,46 +176,96 @@ export async function POST(request: Request) {
     const body = await request.json()
     const data = cotizacionSchema.parse(body)
 
-    // Verificar que la orden existe y pertenece a la organización
-    const { data: orden, error: ordenError } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .select("id, organization_id, clientes(*)")
-      .eq("id", data.ordenId)
-      .eq("organization_id", organizationId!)
-      .single()
-
-    if (ordenError || !orden) {
+    // Validate: must have either ordenId or clienteId
+    if (!data.ordenId && !data.clienteId) {
       return NextResponse.json(
-        { error: "Orden no encontrada" },
-        { status: 404 }
+        { error: "Se requiere una orden o un cliente" },
+        { status: 400 }
       )
     }
 
-    // Calcular totales (sin IVA)
+    let clienteIdForInsert: string | null = null
+
+    if (data.ordenId) {
+      // Verificar que la orden existe y pertenece a la organización
+      const { data: orden, error: ordenError } = await supabaseAdmin
+        .from("ordenes_servicio")
+        .select("id, organization_id, cliente_id")
+        .eq("id", data.ordenId)
+        .eq("organization_id", organizationId!)
+        .single()
+
+      if (ordenError || !orden) {
+        return NextResponse.json(
+          { error: "Orden no encontrada" },
+          { status: 404 }
+        )
+      }
+      clienteIdForInsert = orden.cliente_id
+    }
+
+    if (data.clienteId) {
+      // Verificar que el cliente pertenece a la organización
+      const { data: cliente, error: clienteError } = await supabaseAdmin
+        .from("clientes")
+        .select("id, organization_id")
+        .eq("id", data.clienteId)
+        .eq("organization_id", organizationId!)
+        .single()
+
+      if (clienteError || !cliente) {
+        return NextResponse.json(
+          { error: "Cliente no encontrado" },
+          { status: 404 }
+        )
+      }
+      clienteIdForInsert = data.clienteId
+    }
+
+    // Calculate totals with discounts and IVA
+    const ivaPct = data.ivaPorcentaje || 0
+    const descGlobalTipo = data.descuentoGlobalTipo || "porcentaje"
+    const descGlobalValor = data.descuentoGlobalValor || 0
+
     const items = data.items.map((item) => ({
       ...item,
-      subtotal: item.cantidad * item.precioUnitario,
+      subtotal: calcItemNeto(item),
     }))
-    const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0)
-    const iva = 0
-    const total = subtotal
+    const subtotalNeto = items.reduce((sum, item) => sum + item.subtotal, 0)
 
-    // Obtener número de cotización atómico
+    // Apply global discount
+    let descGlobal = 0
+    if (descGlobalValor > 0) {
+      descGlobal = descGlobalTipo === "fijo"
+        ? Math.min(descGlobalValor, subtotalNeto)
+        : subtotalNeto * (descGlobalValor / 100)
+    }
+    const subtotalGravable = subtotalNeto - descGlobal
+    const iva = subtotalGravable * (ivaPct / 100)
+    const total = subtotalGravable + iva
+
+    // Get quote number
     const numeroCotizacion = await getNextQuoteNumber(organizationId!)
 
-    // Crear cotización
+    // Create cotizacion
     const publicToken = randomBytes(16).toString("hex")
     const { data: cotizacion, error: createError } = await supabaseAdmin
       .from("cotizaciones")
       .insert({
-        orden_id: data.ordenId,
+        orden_id: data.ordenId || null,
+        cliente_id: clienteIdForInsert,
+        organization_id: organizationId,
         numero_cotizacion: numeroCotizacion,
         public_token: publicToken,
         notas: data.notas || null,
+        terminos: data.terminos || null,
         fecha_vencimiento: data.fechaVencimiento
           ? new Date(data.fechaVencimiento).toISOString()
           : null,
-        subtotal,
+        descuento_global_tipo: descGlobalTipo,
+        descuento_global_valor: descGlobalValor,
+        iva_porcentaje: ivaPct,
+        subtotal: subtotalNeto,
         iva,
         total,
       })
@@ -163,7 +276,7 @@ export async function POST(request: Request) {
       throw createError
     }
 
-    // Crear items
+    // Create items
     const { error: itemsError } = await supabaseAdmin
       .from("items_cotizacion")
       .insert(
@@ -173,54 +286,33 @@ export async function POST(request: Request) {
           cantidad: item.cantidad,
           precio_unitario: item.precioUnitario,
           subtotal: item.subtotal,
+          unidad: item.unidad || "Unidad",
+          descuento_tipo: item.descuentoTipo || "porcentaje",
+          descuento_valor: item.descuentoValor || 0,
         }))
       )
 
     if (itemsError) {
-      // Rollback: eliminar cotización
       await supabaseAdmin.from("cotizaciones").delete().eq("id", cotizacion.id)
       throw itemsError
     }
 
-    // Obtener cotización completa
+    // Get complete cotizacion
     const { data: cotizacionCompleta } = await supabaseAdmin
       .from("cotizaciones")
       .select(`
         *,
         ordenes_servicio (
-          id,
-          numero_orden,
-          dispositivo,
+          id, numero_orden, dispositivo,
           clientes (*)
         ),
+        clientes (*),
         items_cotizacion (*)
       `)
       .eq("id", cotizacion.id)
       .single()
 
-    return NextResponse.json({
-      id: cotizacionCompleta.id,
-      ordenId: cotizacionCompleta.orden_id,
-      numeroCotizacion: cotizacionCompleta.numero_cotizacion,
-      estado: cotizacionCompleta.estado,
-      publicToken: cotizacionCompleta.public_token,
-      subtotal: cotizacionCompleta.subtotal,
-      iva: cotizacionCompleta.iva,
-      total: cotizacionCompleta.total,
-      orden: {
-        id: cotizacionCompleta.ordenes_servicio.id,
-        numeroOrden: cotizacionCompleta.ordenes_servicio.numero_orden,
-        dispositivo: cotizacionCompleta.ordenes_servicio.dispositivo,
-        cliente: cotizacionCompleta.ordenes_servicio.clientes,
-      },
-      items: cotizacionCompleta.items_cotizacion?.map((i: any) => ({
-        id: i.id,
-        descripcion: i.descripcion,
-        cantidad: i.cantidad,
-        precioUnitario: i.precio_unitario,
-        subtotal: i.subtotal,
-      })),
-    }, { status: 201 })
+    return NextResponse.json(formatCotizacion(cotizacionCompleta), { status: 201 })
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

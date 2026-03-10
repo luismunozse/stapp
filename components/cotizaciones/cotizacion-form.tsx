@@ -1,24 +1,35 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { DatePicker } from "@/components/ui/date-picker"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { X, Plus, FileText, Calculator } from "lucide-react"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { X, Plus, FileText, Calculator, Percent, DollarSign } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
-import { ItemRow } from "./item-row"
+import { ItemRow, calcItemNeto } from "./item-row"
+import { ClienteSelector } from "./cliente-selector"
 
 interface CotizacionItem {
   descripcion: string
   cantidad: number
   precioUnitario: number
+  unidad?: string
+  descuentoTipo?: string
+  descuentoValor?: number
 }
 
 interface CotizacionFormProps {
-  ordenId: string
+  ordenId?: string
   onClose: () => void
   onSuccess: () => void
   initialData?: {
@@ -26,6 +37,11 @@ interface CotizacionFormProps {
     items: CotizacionItem[]
     notas?: string | null
     fechaVencimiento?: string | null
+    terminos?: string | null
+    descuentoGlobalTipo?: string
+    descuentoGlobalValor?: number
+    ivaPorcentaje?: number
+    clienteId?: string | null
   }
 }
 
@@ -38,14 +54,45 @@ export function CotizacionForm({
   const [loading, setLoading] = useState(false)
   const { formatPrice } = useCurrency()
   const [items, setItems] = useState<CotizacionItem[]>(
-    initialData?.items || [{ descripcion: "", cantidad: 1, precioUnitario: 0 }]
+    initialData?.items || [{ descripcion: "", cantidad: 1, precioUnitario: 0, unidad: "Unidad", descuentoTipo: "porcentaje", descuentoValor: 0 }]
   )
   const [notas, setNotas] = useState(initialData?.notas || "")
   const [fechaVencimiento, setFechaVencimiento] = useState(
     initialData?.fechaVencimiento?.split("T")[0] || ""
   )
+  const [terminos, setTerminos] = useState(initialData?.terminos || "")
+  const [descuentoGlobalTipo, setDescuentoGlobalTipo] = useState(initialData?.descuentoGlobalTipo || "porcentaje")
+  const [descuentoGlobalValor, setDescuentoGlobalValor] = useState(initialData?.descuentoGlobalValor || 0)
+  const [ivaPorcentaje, setIvaPorcentaje] = useState(initialData?.ivaPorcentaje ?? 0)
+  const [clienteId, setClienteId] = useState<string | null>(initialData?.clienteId || null)
+  const [configLoaded, setConfigLoaded] = useState(false)
 
   const isEditing = !!initialData
+  const isStandalone = !ordenId
+
+  // Fetch org config for defaults (only for new cotizaciones)
+  useEffect(() => {
+    if (isEditing || configLoaded) return
+    const fetchConfig = async () => {
+      try {
+        const res = await fetch("/api/configuracion")
+        if (res.ok) {
+          const data = await res.json()
+          setIvaPorcentaje(data.ivaPorcentaje ?? 0)
+          if (data.cotizacionTerminos) setTerminos(data.cotizacionTerminos)
+          if (data.cotizacionValidezDias && !fechaVencimiento) {
+            const d = new Date()
+            d.setDate(d.getDate() + (data.cotizacionValidezDias || 30))
+            setFechaVencimiento(d.toISOString().split("T")[0])
+          }
+        }
+      } catch {
+        // ignore
+      }
+      setConfigLoaded(true)
+    }
+    fetchConfig()
+  }, [isEditing, configLoaded, fechaVencimiento])
 
   const updateItem = (index: number, field: string, value: string | number) => {
     const newItems = [...items]
@@ -60,23 +107,37 @@ export function CotizacionForm({
   }
 
   const addItem = () => {
-    setItems([...items, { descripcion: "", cantidad: 1, precioUnitario: 0 }])
+    setItems([...items, { descripcion: "", cantidad: 1, precioUnitario: 0, unidad: "Unidad", descuentoTipo: "porcentaje", descuentoValor: 0 }])
   }
 
-  const total = items.reduce(
-    (sum, item) => sum + item.cantidad * item.precioUnitario,
-    0
-  )
+  // Calculations
+  const subtotalBruto = items.reduce((sum, item) => sum + item.cantidad * item.precioUnitario, 0)
+  const subtotalNeto = items.reduce((sum, item) => sum + calcItemNeto(item), 0)
+  const descuentoItems = subtotalBruto - subtotalNeto
+
+  const calcDescuentoGlobal = () => {
+    if (descuentoGlobalValor <= 0) return 0
+    if (descuentoGlobalTipo === "fijo") return Math.min(descuentoGlobalValor, subtotalNeto)
+    return subtotalNeto * (descuentoGlobalValor / 100)
+  }
+  const descuentoGlobal = calcDescuentoGlobal()
+  const subtotalGravable = subtotalNeto - descuentoGlobal
+  const ivaAmount = subtotalGravable * (ivaPorcentaje / 100)
+  const total = subtotalGravable + ivaAmount
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // Validar items
     const validItems = items.filter(
       (item) => item.descripcion && item.cantidad > 0 && item.precioUnitario > 0
     )
     if (validItems.length === 0) {
       alert("Debe agregar al menos un item válido")
+      return
+    }
+
+    if (isStandalone && !clienteId) {
+      alert("Debe seleccionar un cliente")
       return
     }
 
@@ -87,15 +148,30 @@ export function CotizacionForm({
         : "/api/cotizaciones"
       const method = isEditing ? "PUT" : "POST"
 
+      const payload: Record<string, any> = {
+        items: validItems.map(item => ({
+          descripcion: item.descripcion,
+          cantidad: item.cantidad,
+          precioUnitario: item.precioUnitario,
+          unidad: item.unidad || "Unidad",
+          descuentoTipo: item.descuentoTipo || "porcentaje",
+          descuentoValor: item.descuentoValor || 0,
+        })),
+        notas: notas || undefined,
+        fechaVencimiento: fechaVencimiento || undefined,
+        terminos: terminos || undefined,
+        descuentoGlobalTipo,
+        descuentoGlobalValor,
+        ivaPorcentaje,
+      }
+
+      if (ordenId) payload.ordenId = ordenId
+      if (isStandalone && clienteId) payload.clienteId = clienteId
+
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ordenId,
-          items: validItems,
-          notas: notas || undefined,
-          fechaVencimiento: fechaVencimiento || undefined,
-        }),
+        body: JSON.stringify(payload),
       })
 
       if (!res.ok) {
@@ -128,13 +204,24 @@ export function CotizacionForm({
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Cliente selector for standalone */}
+          {isStandalone && (
+            <ClienteSelector
+              value={clienteId}
+              onChange={(id) => setClienteId(id)}
+              disabled={loading}
+            />
+          )}
+
           {/* Items Header - Hidden on mobile */}
-          <div className="hidden sm:grid grid-cols-12 gap-2 text-sm font-medium text-muted-foreground border-b pb-2">
-            <div className="col-span-5">Descripción</div>
-            <div className="col-span-2 text-center">Cantidad</div>
-            <div className="col-span-2 text-center">Precio Unit.</div>
-            <div className="col-span-2 text-right">Subtotal</div>
-            <div className="col-span-1"></div>
+          <div className="hidden sm:grid gap-2 text-sm font-medium text-muted-foreground border-b pb-2" style={{ gridTemplateColumns: "4fr 1fr 1.5fr 1.5fr 1.5fr 2fr 0.5fr" }}>
+            <div>Descripción</div>
+            <div>Unidad</div>
+            <div className="text-center">Cantidad</div>
+            <div className="text-center">Precio Unit.</div>
+            <div className="text-center">Descuento</div>
+            <div className="text-right">Subtotal</div>
+            <div></div>
           </div>
 
           {/* Items */}
@@ -160,12 +247,87 @@ export function CotizacionForm({
             Agregar Item
           </Button>
 
-          {/* Total */}
+          {/* Descuento Global + IVA */}
+          <div className="flex flex-col sm:flex-row sm:items-end gap-3 p-3 bg-muted/50 rounded-lg">
+            <div className="flex-1">
+              <Label className="text-sm">Descuento Global</Label>
+              <div className="flex items-center gap-2 mt-1">
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="0"
+                  value={descuentoGlobalValor || ""}
+                  onChange={(e) => setDescuentoGlobalValor(parseFloat(e.target.value) || 0)}
+                  disabled={loading}
+                  className="w-32"
+                />
+                <Button
+                  type="button"
+                  variant={descuentoGlobalTipo === "fijo" ? "default" : "outline"}
+                  size="icon"
+                  className="h-10 w-10 shrink-0"
+                  onClick={() => setDescuentoGlobalTipo(descuentoGlobalTipo === "fijo" ? "porcentaje" : "fijo")}
+                  disabled={loading}
+                >
+                  {descuentoGlobalTipo === "fijo" ? <DollarSign className="h-4 w-4" /> : <Percent className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+            <div>
+              <Label className="text-sm">IVA</Label>
+              <Select
+                value={String(ivaPorcentaje)}
+                onValueChange={(v) => setIvaPorcentaje(parseFloat(v))}
+                disabled={loading}
+              >
+                <SelectTrigger className="w-32 mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">0%</SelectItem>
+                  <SelectItem value="10.5">10.5%</SelectItem>
+                  <SelectItem value="21">21%</SelectItem>
+                  <SelectItem value="27">27%</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Totales Desglose */}
           <div className="flex justify-end">
-            <div className="w-64 p-4 bg-muted rounded-lg">
-              <div className="flex justify-between">
-                <span className="font-bold">Total:</span>
-                <span className="font-bold text-lg">{formatPrice(total)}</span>
+            <div className="w-72 p-4 bg-muted rounded-lg space-y-1.5">
+              <div className="flex justify-between text-sm">
+                <span>Subtotal:</span>
+                <span>{formatPrice(subtotalBruto)}</span>
+              </div>
+              {descuentoItems > 0 && (
+                <div className="flex justify-between text-sm text-green-600">
+                  <span>Desc. items:</span>
+                  <span>-{formatPrice(descuentoItems)}</span>
+                </div>
+              )}
+              {descuentoGlobal > 0 && (
+                <div className="flex justify-between text-sm text-green-600">
+                  <span>Desc. global:</span>
+                  <span>-{formatPrice(descuentoGlobal)}</span>
+                </div>
+              )}
+              {ivaPorcentaje > 0 && (
+                <>
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <span>Subtotal gravable:</span>
+                    <span>{formatPrice(subtotalGravable)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span>IVA ({ivaPorcentaje}%):</span>
+                    <span>{formatPrice(ivaAmount)}</span>
+                  </div>
+                </>
+              )}
+              <div className="flex justify-between font-bold text-lg pt-1 border-t">
+                <span>Total:</span>
+                <span>{formatPrice(total)}</span>
               </div>
             </div>
           </div>
@@ -191,6 +353,18 @@ export function CotizacionForm({
               onChange={(e) => setNotas(e.target.value)}
               placeholder="Notas adicionales para el cliente..."
               rows={3}
+              disabled={loading}
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="terminos">Términos y Condiciones</Label>
+            <Textarea
+              id="terminos"
+              value={terminos}
+              onChange={(e) => setTerminos(e.target.value)}
+              placeholder="Términos y condiciones de la cotización..."
+              rows={4}
               disabled={loading}
             />
           </div>

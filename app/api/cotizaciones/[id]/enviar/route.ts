@@ -18,33 +18,44 @@ export async function POST(
 
     const { id } = await params
 
-    // Obtener cotización con todos los datos necesarios
+    // Obtener cotización con LEFT join (standalone support)
     const { data: cotizacion, error: fetchError } = await supabaseAdmin
       .from("cotizaciones")
       .select(`
         *,
-        ordenes_servicio!inner (
+        ordenes_servicio (
           id, numero_orden, dispositivo, problema_reportado, organization_id,
           clientes (*),
           organizations (id, nombre_mostrar, moneda, zona_horaria)
         ),
+        clientes (*),
         items_cotizacion (*)
       `)
       .eq("id", id)
+      .eq("organization_id", organizationId!)
       .single()
 
     if (fetchError || !cotizacion) {
       return NextResponse.json({ error: "Cotización no encontrada" }, { status: 404 })
     }
 
-    const ordenOrgId = cotizacion.ordenes_servicio.organization_id
-    if (ordenOrgId !== organizationId) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 403 })
-    }
+    const orden = cotizacion.ordenes_servicio
+    const cliente = orden?.clientes || cotizacion.clientes
 
     // Verificar que el cliente tenga email
-    if (!cotizacion.ordenes_servicio.clientes?.email) {
+    if (!cliente?.email) {
       return NextResponse.json({ error: "El cliente no tiene email registrado" }, { status: 400 })
+    }
+
+    // Get org info
+    let org = orden?.organizations
+    if (!org) {
+      const { data: orgData } = await supabaseAdmin
+        .from("organizations")
+        .select("id, nombre_mostrar, moneda, zona_horaria")
+        .eq("id", organizationId!)
+        .single()
+      org = orgData
     }
 
     // Generar PDF
@@ -53,40 +64,44 @@ export async function POST(
       fecha: cotizacion.created_at,
       fechaVencimiento: cotizacion.fecha_vencimiento,
       cliente: {
-        nombre: cotizacion.ordenes_servicio.clientes.nombre,
-        telefono: cotizacion.ordenes_servicio.clientes.telefono,
-        email: cotizacion.ordenes_servicio.clientes.email,
-        direccion: cotizacion.ordenes_servicio.clientes.direccion,
+        nombre: cliente.nombre,
+        telefono: cliente.telefono,
+        email: cliente.email,
+        direccion: cliente.direccion,
       },
-      orden: {
-        numeroOrden: cotizacion.ordenes_servicio.numero_orden,
-        dispositivo: cotizacion.ordenes_servicio.dispositivo,
-        problemaReportado: cotizacion.ordenes_servicio.problema_reportado,
-      },
+      orden: orden ? {
+        numeroOrden: orden.numero_orden,
+        dispositivo: orden.dispositivo,
+        problemaReportado: orden.problema_reportado,
+      } : undefined,
       items: cotizacion.items_cotizacion,
       subtotal: cotizacion.subtotal,
       iva: cotizacion.iva,
       total: cotizacion.total,
       notas: cotizacion.notas,
-      nombreEmpresa: cotizacion.ordenes_servicio.organizations?.nombre_mostrar || "STApp",
+      terminos: cotizacion.terminos,
+      descuentoGlobalTipo: cotizacion.descuento_global_tipo,
+      descuentoGlobalValor: cotizacion.descuento_global_valor,
+      ivaPorcentaje: cotizacion.iva_porcentaje,
+      nombreEmpresa: org?.nombre_mostrar || "STApp",
       firmaAprobacion: cotizacion.firma_aprobacion,
       firmaMime: cotizacion.firma_mime,
       fechaAprobacion: cotizacion.fecha_aprobacion,
-      moneda: cotizacion.ordenes_servicio.organizations?.moneda || "ARS",
-      zonaHoraria: cotizacion.ordenes_servicio.organizations?.zona_horaria || "America/Argentina/Buenos_Aires",
+      moneda: org?.moneda || "ARS",
+      zonaHoraria: org?.zona_horaria || "America/Argentina/Buenos_Aires",
     })
 
     // Enviar email
     await sendCotizacionEmail({
-      email: cotizacion.ordenes_servicio.clientes.email,
-      nombreCliente: cotizacion.ordenes_servicio.clientes.nombre,
+      email: cliente.email,
+      nombreCliente: cliente.nombre,
       numeroCotizacion: cotizacion.numero_cotizacion,
-      numeroOrden: cotizacion.ordenes_servicio.numero_orden,
+      numeroOrden: orden?.numero_orden,
       total: cotizacion.total,
       fechaVencimiento: cotizacion.fecha_vencimiento,
       pdfBuffer,
-      moneda: cotizacion.ordenes_servicio.organizations?.moneda || "ARS",
-      zonaHoraria: cotizacion.ordenes_servicio.organizations?.zona_horaria || "America/Argentina/Buenos_Aires",
+      moneda: org?.moneda || "ARS",
+      zonaHoraria: org?.zona_horaria || "America/Argentina/Buenos_Aires",
     })
 
     // Actualizar estado a ENVIADA

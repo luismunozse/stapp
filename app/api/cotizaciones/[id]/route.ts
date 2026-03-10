@@ -8,6 +8,9 @@ const itemSchema = z.object({
   descripcion: z.string().min(1, "Descripción requerida"),
   cantidad: z.number().int().positive("Cantidad debe ser mayor a 0"),
   precioUnitario: z.number().positive("Precio debe ser mayor a 0"),
+  unidad: z.string().optional(),
+  descuentoTipo: z.enum(["porcentaje", "fijo"]).optional(),
+  descuentoValor: z.number().min(0).optional(),
 })
 
 const updateCotizacionSchema = z.object({
@@ -15,7 +18,67 @@ const updateCotizacionSchema = z.object({
   notas: z.string().optional(),
   fechaVencimiento: z.string().nullable().optional(),
   items: z.array(itemSchema).optional(),
+  terminos: z.string().nullable().optional(),
+  descuentoGlobalTipo: z.enum(["porcentaje", "fijo"]).optional(),
+  descuentoGlobalValor: z.number().min(0).optional(),
+  ivaPorcentaje: z.number().min(0).max(100).optional(),
 })
+
+function calcItemNeto(item: { cantidad: number; precioUnitario: number; descuentoTipo?: string; descuentoValor?: number }) {
+  const bruto = item.cantidad * item.precioUnitario
+  const dv = item.descuentoValor || 0
+  if (dv <= 0) return bruto
+  if (item.descuentoTipo === "fijo") return Math.max(0, bruto - dv)
+  return Math.max(0, bruto * (1 - dv / 100))
+}
+
+function formatCotizacion(c: any) {
+  const orden = c.ordenes_servicio
+  const cliente = c.clientes || orden?.clientes
+  return {
+    id: c.id,
+    ordenId: c.orden_id,
+    clienteId: c.cliente_id,
+    numeroCotizacion: c.numero_cotizacion,
+    estado: c.estado,
+    fechaVencimiento: c.fecha_vencimiento,
+    notas: c.notas,
+    subtotal: c.subtotal,
+    iva: c.iva,
+    total: c.total,
+    createdAt: c.created_at,
+    publicToken: c.public_token,
+    firmaAprobacion: c.firma_aprobacion,
+    firmaMime: c.firma_mime,
+    fechaAprobacion: c.fecha_aprobacion,
+    descuentoGlobalTipo: c.descuento_global_tipo,
+    descuentoGlobalValor: c.descuento_global_valor,
+    ivaPorcentaje: c.iva_porcentaje,
+    terminos: c.terminos,
+    orden: orden ? {
+      id: orden.id,
+      numeroOrden: orden.numero_orden,
+      dispositivo: orden.dispositivo,
+      cliente: orden.clientes,
+    } : null,
+    cliente: cliente ? {
+      id: cliente.id,
+      nombre: cliente.nombre,
+      email: cliente.email,
+      telefono: cliente.telefono,
+    } : null,
+    items: c.items_cotizacion?.map((i: any) => ({
+      id: i.id,
+      descripcion: i.descripcion,
+      cantidad: i.cantidad,
+      precioUnitario: i.precio_unitario,
+      subtotal: i.subtotal,
+      unidad: i.unidad,
+      descuentoTipo: i.descuento_tipo,
+      descuentoValor: i.descuento_valor,
+    })),
+  }
+}
 
 export async function GET(
   request: Request,
@@ -27,21 +90,20 @@ export async function GET(
 
     const { id } = await params
 
+    // Try by organization_id first (supports both standalone and order-linked)
     const { data: cotizacion, error: dbError } = await supabaseAdmin
       .from("cotizaciones")
       .select(`
         *,
-        ordenes_servicio!inner (
-          id,
-          numero_orden,
-          dispositivo,
-          organization_id,
+        ordenes_servicio (
+          id, numero_orden, dispositivo, organization_id,
           clientes (*)
         ),
+        clientes (*),
         items_cotizacion (*)
       `)
       .eq("id", id)
-      .eq("ordenes_servicio.organization_id", organizationId!)
+      .eq("organization_id", organizationId!)
       .single()
 
     if (dbError || !cotizacion) {
@@ -51,35 +113,7 @@ export async function GET(
       )
     }
 
-    return NextResponse.json({
-      id: cotizacion.id,
-      ordenId: cotizacion.orden_id,
-      numeroCotizacion: cotizacion.numero_cotizacion,
-      estado: cotizacion.estado,
-      fechaVencimiento: cotizacion.fecha_vencimiento,
-      notas: cotizacion.notas,
-      subtotal: cotizacion.subtotal,
-      iva: cotizacion.iva,
-      total: cotizacion.total,
-      createdAt: cotizacion.created_at,
-      publicToken: cotizacion.public_token,
-      firmaAprobacion: cotizacion.firma_aprobacion,
-      firmaMime: cotizacion.firma_mime,
-      fechaAprobacion: cotizacion.fecha_aprobacion,
-      orden: {
-        id: cotizacion.ordenes_servicio.id,
-        numeroOrden: cotizacion.ordenes_servicio.numero_orden,
-        dispositivo: cotizacion.ordenes_servicio.dispositivo,
-        cliente: cotizacion.ordenes_servicio.clientes,
-      },
-      items: cotizacion.items_cotizacion?.map((i: any) => ({
-        id: i.id,
-        descripcion: i.descripcion,
-        cantidad: i.cantidad,
-        precioUnitario: i.precio_unitario,
-        subtotal: i.subtotal,
-      })),
-    })
+    return NextResponse.json(formatCotizacion(cotizacion))
   } catch (error) {
     console.error("Error fetching cotizacion:", error)
     return NextResponse.json(
@@ -108,25 +142,18 @@ export async function PUT(
     const body = await request.json()
     const data = updateCotizacionSchema.parse(body)
 
-    // Verificar que la cotización existe
+    // Verify cotizacion exists and belongs to org
     const { data: existing, error: fetchError } = await supabaseAdmin
       .from("cotizaciones")
-      .select("id, estado, ordenes_servicio!inner(organization_id)")
+      .select("id, estado, organization_id, iva_porcentaje, descuento_global_tipo, descuento_global_valor")
       .eq("id", id)
+      .eq("organization_id", organizationId!)
       .single()
 
     if (fetchError || !existing) {
       return NextResponse.json(
         { error: "Cotización no encontrada" },
         { status: 404 }
-      )
-    }
-
-    const ordenOrgId = (existing.ordenes_servicio as any)?.organization_id
-    if (ordenOrgId !== organizationId) {
-      return NextResponse.json(
-        { error: "No autorizado" },
-        { status: 403 }
       )
     }
 
@@ -142,32 +169,49 @@ export async function PUT(
 
     if (data.estado !== undefined) updateData.estado = data.estado
     if (data.notas !== undefined) updateData.notas = data.notas
+    if (data.terminos !== undefined) updateData.terminos = data.terminos
     if (data.fechaVencimiento !== undefined) {
       updateData.fecha_vencimiento = data.fechaVencimiento
         ? new Date(data.fechaVencimiento).toISOString()
         : null
     }
+    if (data.descuentoGlobalTipo !== undefined) updateData.descuento_global_tipo = data.descuentoGlobalTipo
+    if (data.descuentoGlobalValor !== undefined) updateData.descuento_global_valor = data.descuentoGlobalValor
+    if (data.ivaPorcentaje !== undefined) updateData.iva_porcentaje = data.ivaPorcentaje
 
-    // Si se actualizan los items, recalcular totales (sin IVA)
+    // If updating items, recalculate totals with discounts/IVA
     if (data.items) {
+      const ivaPct = data.ivaPorcentaje ?? existing.iva_porcentaje ?? 0
+      const descGlobalTipo = data.descuentoGlobalTipo ?? "porcentaje"
+      const descGlobalValor = data.descuentoGlobalValor ?? 0
+
       const items = data.items.map((item) => ({
         ...item,
-        subtotal: item.cantidad * item.precioUnitario,
+        subtotal: calcItemNeto(item),
       }))
-      const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0)
-      const total = subtotal
+      const subtotalNeto = items.reduce((sum, item) => sum + item.subtotal, 0)
 
-      updateData.subtotal = subtotal
-      updateData.iva = 0
+      let descGlobal = 0
+      if (descGlobalValor > 0) {
+        descGlobal = descGlobalTipo === "fijo"
+          ? Math.min(descGlobalValor, subtotalNeto)
+          : subtotalNeto * (descGlobalValor / 100)
+      }
+      const subtotalGravable = subtotalNeto - descGlobal
+      const iva = subtotalGravable * (ivaPct / 100)
+      const total = subtotalGravable + iva
+
+      updateData.subtotal = subtotalNeto
+      updateData.iva = iva
       updateData.total = total
 
-      // Eliminar items existentes
+      // Delete existing items
       await supabaseAdmin
         .from("items_cotizacion")
         .delete()
         .eq("cotizacion_id", id)
 
-      // Crear nuevos items
+      // Create new items
       await supabaseAdmin
         .from("items_cotizacion")
         .insert(
@@ -177,11 +221,14 @@ export async function PUT(
             cantidad: item.cantidad,
             precio_unitario: item.precioUnitario,
             subtotal: item.subtotal,
+            unidad: item.unidad || "Unidad",
+            descuento_tipo: item.descuentoTipo || "porcentaje",
+            descuento_valor: item.descuentoValor || 0,
           }))
         )
     }
 
-    // Actualizar cotización
+    // Update cotizacion
     const { error: updateError } = await supabaseAdmin
       .from("cotizaciones")
       .update(updateData)
@@ -191,44 +238,22 @@ export async function PUT(
       throw updateError
     }
 
-    // Obtener cotización actualizada
+    // Get updated cotizacion
     const { data: cotizacion } = await supabaseAdmin
       .from("cotizaciones")
       .select(`
         *,
         ordenes_servicio (
-          id,
-          numero_orden,
-          dispositivo,
+          id, numero_orden, dispositivo,
           clientes (*)
         ),
+        clientes (*),
         items_cotizacion (*)
       `)
       .eq("id", id)
       .single()
 
-    return NextResponse.json({
-      id: cotizacion.id,
-      ordenId: cotizacion.orden_id,
-      numeroCotizacion: cotizacion.numero_cotizacion,
-      estado: cotizacion.estado,
-      subtotal: cotizacion.subtotal,
-      iva: cotizacion.iva,
-      total: cotizacion.total,
-      orden: {
-        id: cotizacion.ordenes_servicio.id,
-        numeroOrden: cotizacion.ordenes_servicio.numero_orden,
-        dispositivo: cotizacion.ordenes_servicio.dispositivo,
-        cliente: cotizacion.ordenes_servicio.clientes,
-      },
-      items: cotizacion.items_cotizacion?.map((i: any) => ({
-        id: i.id,
-        descripcion: i.descripcion,
-        cantidad: i.cantidad,
-        precioUnitario: i.precio_unitario,
-        subtotal: i.subtotal,
-      })),
-    })
+    return NextResponse.json(formatCotizacion(cotizacion))
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -261,25 +286,18 @@ export async function DELETE(
 
     const { id } = await params
 
-    // Verificar cotización
+    // Verify cotizacion via organization_id
     const { data: cotizacion, error: fetchError } = await supabaseAdmin
       .from("cotizaciones")
-      .select("id, estado, ordenes_servicio!inner(organization_id)")
+      .select("id, estado, organization_id")
       .eq("id", id)
+      .eq("organization_id", organizationId!)
       .single()
 
     if (fetchError || !cotizacion) {
       return NextResponse.json(
         { error: "Cotización no encontrada" },
         { status: 404 }
-      )
-    }
-
-    const ordenOrgId = (cotizacion.ordenes_servicio as any)?.organization_id
-    if (ordenOrgId !== organizationId) {
-      return NextResponse.json(
-        { error: "No autorizado" },
-        { status: 403 }
       )
     }
 

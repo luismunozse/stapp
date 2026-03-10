@@ -13,19 +13,21 @@ export async function GET(
 
     const { id } = await params
 
-    // Obtener cotizacion con todos los datos necesarios
+    // Obtener cotizacion con LEFT join a ordenes_servicio (standalone support)
     const { data: cotizacion, error: fetchError } = await supabaseAdmin
       .from("cotizaciones")
       .select(`
         *,
-        ordenes_servicio!inner (
+        ordenes_servicio (
           id, numero_orden, dispositivo, problema_reportado, organization_id,
           clientes (*),
           organizations (id, nombre_mostrar, telefono, direccion, logo_url, moneda, zona_horaria)
         ),
+        clientes (*),
         items_cotizacion (*)
       `)
       .eq("id", id)
+      .eq("organization_id", organizationId!)
       .single()
 
     if (fetchError || !cotizacion) {
@@ -35,42 +37,51 @@ export async function GET(
       )
     }
 
-    // Verificar acceso a la organizacion
-    if (cotizacion.ordenes_servicio.organization_id !== organizationId) {
-      return NextResponse.json(
-        { error: "No autorizado" },
-        { status: 403 }
-      )
+    // Get org info from ordenes_servicio or directly
+    const orden = cotizacion.ordenes_servicio
+    let org = orden?.organizations
+
+    // If no org from order, fetch directly
+    if (!org) {
+      const { data: orgData } = await supabaseAdmin
+        .from("organizations")
+        .select("id, nombre_mostrar, telefono, direccion, logo_url, moneda, zona_horaria")
+        .eq("id", organizationId!)
+        .single()
+      org = orgData
     }
 
-    const org = cotizacion.ordenes_servicio.organizations
+    // Get client from order or standalone
+    const cliente = orden?.clientes || cotizacion.clientes
 
-    // Generar PDF con firma si existe
     const pdfBuffer = await generateCotizacionPDF({
       numeroCotizacion: cotizacion.numero_cotizacion,
       fecha: cotizacion.created_at,
       fechaVencimiento: cotizacion.fecha_vencimiento,
-      cliente: {
-        nombre: cotizacion.ordenes_servicio.clientes.nombre,
-        telefono: cotizacion.ordenes_servicio.clientes.telefono,
-        email: cotizacion.ordenes_servicio.clientes.email,
-        direccion: cotizacion.ordenes_servicio.clientes.direccion,
-      },
-      orden: {
-        numeroOrden: cotizacion.ordenes_servicio.numero_orden,
-        dispositivo: cotizacion.ordenes_servicio.dispositivo,
-        problemaReportado: cotizacion.ordenes_servicio.problema_reportado,
-      },
+      cliente: cliente ? {
+        nombre: cliente.nombre,
+        telefono: cliente.telefono,
+        email: cliente.email,
+        direccion: cliente.direccion,
+      } : { nombre: "Sin cliente", telefono: "" },
+      orden: orden ? {
+        numeroOrden: orden.numero_orden,
+        dispositivo: orden.dispositivo,
+        problemaReportado: orden.problema_reportado,
+      } : undefined,
       items: cotizacion.items_cotizacion,
       subtotal: cotizacion.subtotal,
       iva: cotizacion.iva,
       total: cotizacion.total,
       notas: cotizacion.notas,
+      terminos: cotizacion.terminos,
+      descuentoGlobalTipo: cotizacion.descuento_global_tipo,
+      descuentoGlobalValor: cotizacion.descuento_global_valor,
+      ivaPorcentaje: cotizacion.iva_porcentaje,
       nombreEmpresa: org?.nombre_mostrar || "STApp",
       telefonoEmpresa: org?.telefono,
       direccionEmpresa: org?.direccion,
       logoUrl: org?.logo_url,
-      // Incluir firma de aprobacion si existe
       firmaAprobacion: cotizacion.firma_aprobacion,
       firmaMime: cotizacion.firma_mime,
       fechaAprobacion: cotizacion.fecha_aprobacion,
@@ -78,7 +89,6 @@ export async function GET(
       zonaHoraria: org?.zona_horaria || "America/Argentina/Buenos_Aires",
     })
 
-    // Devolver PDF como descarga
     return new NextResponse(new Uint8Array(pdfBuffer), {
       headers: {
         "Content-Type": "application/pdf",

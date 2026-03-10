@@ -31,7 +31,12 @@ export async function GET(
         firma_aprobacion,
         firma_mime,
         fecha_aprobacion,
-        ordenes_servicio!inner (
+        descuento_global_tipo,
+        descuento_global_valor,
+        iva_porcentaje,
+        terminos,
+        organization_id,
+        ordenes_servicio (
           id,
           numero_orden,
           dispositivo,
@@ -40,22 +45,13 @@ export async function GET(
           problema_reportado,
           clientes (nombre, telefono, email),
           organizations (
-            id,
-            nombre,
-            nombre_mostrar,
-            telefono,
-            direccion,
-            logo_url,
-            moneda,
-            zona_horaria
+            id, nombre, nombre_mostrar, telefono, direccion, logo_url, moneda, zona_horaria
           )
         ),
+        clientes (nombre, telefono, email),
         items_cotizacion (
-          id,
-          descripcion,
-          cantidad,
-          precio_unitario,
-          subtotal
+          id, descripcion, cantidad, precio_unitario, subtotal,
+          unidad, descuento_tipo, descuento_valor
         )
       `)
       .eq("public_token", token)
@@ -69,8 +65,18 @@ export async function GET(
     }
 
     const orden = cotizacion.ordenes_servicio as any
-    const org = orden.organizations
-    const cliente = orden.clientes
+    const cliente = orden?.clientes || cotizacion.clientes as any
+
+    // Get org: from order if available, otherwise fetch directly
+    let org = orden?.organizations
+    if (!org && cotizacion.organization_id) {
+      const { data: orgData } = await supabaseAdmin
+        .from("organizations")
+        .select("id, nombre, nombre_mostrar, telefono, direccion, logo_url, moneda, zona_horaria")
+        .eq("id", cotizacion.organization_id)
+        .single()
+      org = orgData
+    }
 
     return NextResponse.json({
       id: cotizacion.id,
@@ -86,13 +92,17 @@ export async function GET(
       firmaAprobacion: cotizacion.firma_aprobacion,
       firmaMime: cotizacion.firma_mime,
       fechaAprobacion: cotizacion.fecha_aprobacion,
-      orden: {
+      descuentoGlobalTipo: cotizacion.descuento_global_tipo,
+      descuentoGlobalValor: cotizacion.descuento_global_valor,
+      ivaPorcentaje: cotizacion.iva_porcentaje,
+      terminos: cotizacion.terminos,
+      orden: orden ? {
         numeroOrden: orden.numero_orden,
         dispositivo: orden.dispositivo,
         tipoDispositivo: orden.tipo_dispositivo,
         marca: orden.marca,
         problemaReportado: orden.problema_reportado,
-      },
+      } : null,
       cliente: {
         nombre: cliente?.nombre || null,
         telefono: cliente?.telefono || null,
@@ -112,6 +122,9 @@ export async function GET(
         cantidad: i.cantidad,
         precioUnitario: i.precio_unitario,
         subtotal: i.subtotal,
+        unidad: i.unidad,
+        descuentoTipo: i.descuento_tipo,
+        descuentoValor: i.descuento_valor,
       })),
     }, {
       headers: {

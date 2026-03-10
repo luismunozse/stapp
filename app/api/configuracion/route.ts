@@ -22,7 +22,10 @@ export async function GET() {
         direccion,
         moneda,
         zona_horaria,
-        umbral_stock_bajo
+        umbral_stock_bajo,
+        iva_porcentaje,
+        cotizacion_validez_dias,
+        cotizacion_terminos
       `)
       .eq("id", organizationId!)
       .single()
@@ -45,6 +48,9 @@ export async function GET() {
       moneda: organization.moneda || "ARS",
       zonaHoraria: organization.zona_horaria || "America/Argentina/Buenos_Aires",
       umbralStockBajo: organization.umbral_stock_bajo ?? 5,
+      ivaPorcentaje: organization.iva_porcentaje ?? 0,
+      cotizacionValidezDias: organization.cotizacion_validez_dias ?? 30,
+      cotizacionTerminos: organization.cotizacion_terminos || "",
     })
   } catch (error) {
     console.error("Error fetching config:", error)
@@ -59,7 +65,7 @@ export async function PUT(request: Request) {
     if (error) return error
 
     const body = await request.json()
-    const { logoData, logoMime, nombreEmpresa, telefono, direccion, moneda, zonaHoraria, umbralStockBajo } = body
+    const { logoData, logoMime, nombreEmpresa, telefono, direccion, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos } = body
 
     const updateData: Record<string, any> = {}
 
@@ -130,12 +136,30 @@ export async function PUT(request: Request) {
       }
     }
 
+    if (ivaPorcentaje !== undefined) {
+      const val = parseFloat(ivaPorcentaje)
+      if (!isNaN(val) && val >= 0 && val <= 100) {
+        updateData.iva_porcentaje = val
+      }
+    }
+
+    if (cotizacionValidezDias !== undefined) {
+      const val = parseInt(cotizacionValidezDias)
+      if (!isNaN(val) && val >= 1) {
+        updateData.cotizacion_validez_dias = val
+      }
+    }
+
+    if (cotizacionTerminos !== undefined) {
+      updateData.cotizacion_terminos = cotizacionTerminos || null
+    }
+
     // Solo actualizar si hay cambios
     if (Object.keys(updateData).length === 0) {
       // Retornar estado actual
       const { data: org } = await supabaseAdmin
         .from("organizations")
-        .select("id, logo_url, nombre_mostrar, telefono, direccion, moneda, zona_horaria, umbral_stock_bajo")
+        .select("id, logo_url, nombre_mostrar, telefono, direccion, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos")
         .eq("id", organizationId!)
         .single()
 
@@ -148,6 +172,9 @@ export async function PUT(request: Request) {
         moneda: org?.moneda || "ARS",
         zonaHoraria: org?.zona_horaria || "America/Argentina/Buenos_Aires",
         umbralStockBajo: org?.umbral_stock_bajo ?? 5,
+        ivaPorcentaje: org?.iva_porcentaje ?? 0,
+        cotizacionValidezDias: org?.cotizacion_validez_dias ?? 30,
+        cotizacionTerminos: org?.cotizacion_terminos || "",
       })
     }
 
@@ -155,7 +182,7 @@ export async function PUT(request: Request) {
       .from("organizations")
       .update(updateData)
       .eq("id", organizationId!)
-      .select("id, logo_url, logo_path, nombre_mostrar, telefono, direccion, moneda, zona_horaria, umbral_stock_bajo")
+      .select("id, logo_url, logo_path, nombre_mostrar, telefono, direccion, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos")
       .single()
 
     if (dbError) {
@@ -171,6 +198,9 @@ export async function PUT(request: Request) {
       moneda: organization.moneda || "ARS",
       zonaHoraria: organization.zona_horaria || "America/Argentina/Buenos_Aires",
       umbralStockBajo: organization.umbral_stock_bajo ?? 5,
+      ivaPorcentaje: organization.iva_porcentaje ?? 0,
+      cotizacionValidezDias: organization.cotizacion_validez_dias ?? 30,
+      cotizacionTerminos: organization.cotizacion_terminos || "",
     })
   } catch (error) {
     console.error("Error updating config:", error)

@@ -40,13 +40,17 @@ interface CotizacionData {
   fechaAprobacion: string | null
   moneda?: string
   zonaHoraria?: string
+  descuentoGlobalTipo?: string | null
+  descuentoGlobalValor?: number | null
+  ivaPorcentaje?: number | null
+  terminos?: string | null
   orden: {
     numeroOrden: number
     dispositivo: string
     tipoDispositivo: string
     marca?: string
     problemaReportado: string
-  }
+  } | null
   cliente: {
     nombre: string | null
     telefono: string | null
@@ -64,6 +68,9 @@ interface CotizacionData {
     cantidad: number
     precioUnitario: number
     subtotal: number
+    unidad?: string
+    descuentoTipo?: string
+    descuentoValor?: number
   }[]
 }
 
@@ -167,6 +174,19 @@ export function CotizacionPublica({ token }: { token: string }) {
 
   const config = estadoConfig[data.estado] || estadoConfig.BORRADOR
   const isExpired = data.fechaVencimiento && new Date(data.fechaVencimiento) < new Date()
+  const moneda = (data.moneda as CurrencyCode) || "ARS"
+  const fmt = (v: number) => formatCurrencyValue(v, moneda)
+
+  const hasGlobalDiscount = (data.descuentoGlobalValor || 0) > 0
+  const hasIVA = (data.ivaPorcentaje || 0) > 0
+
+  // Calculate global discount amount for display
+  const itemsSubtotal = data.items.reduce((sum, i) => sum + i.subtotal, 0)
+  const globalDiscountAmount = hasGlobalDiscount
+    ? data.descuentoGlobalTipo === "porcentaje"
+      ? itemsSubtotal * ((data.descuentoGlobalValor || 0) / 100)
+      : (data.descuentoGlobalValor || 0)
+    : 0
 
   return (
     <div className="space-y-6">
@@ -241,37 +261,39 @@ export function CotizacionPublica({ token }: { token: string }) {
         </CardContent>
       </Card>
 
-      {/* Equipo */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Wrench className="h-5 w-5" />
-            Equipo
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm space-y-2">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <p className="text-muted-foreground">Dispositivo</p>
-              <p className="font-medium">{data.orden.dispositivo}</p>
-            </div>
-            {data.orden.marca && (
+      {/* Equipo - solo si hay orden vinculada */}
+      {data.orden && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Wrench className="h-5 w-5" />
+              Equipo
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm space-y-2">
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <p className="text-muted-foreground">Marca</p>
-                <p className="font-medium">{data.orden.marca}</p>
+                <p className="text-muted-foreground">Dispositivo</p>
+                <p className="font-medium">{data.orden.dispositivo}</p>
               </div>
-            )}
-          </div>
-          <div className="pt-2 border-t">
-            <p className="text-muted-foreground">Orden</p>
-            <p className="font-medium">#{data.orden.numeroOrden}</p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">Problema reportado</p>
-            <p>{data.orden.problemaReportado}</p>
-          </div>
-        </CardContent>
-      </Card>
+              {data.orden.marca && (
+                <div>
+                  <p className="text-muted-foreground">Marca</p>
+                  <p className="font-medium">{data.orden.marca}</p>
+                </div>
+              )}
+            </div>
+            <div className="pt-2 border-t">
+              <p className="text-muted-foreground">Orden</p>
+              <p className="font-medium">#{data.orden.numeroOrden}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Problema reportado</p>
+              <p>{data.orden.problemaReportado}</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Items / Detalle del presupuesto */}
       <Card>
@@ -282,34 +304,79 @@ export function CotizacionPublica({ token }: { token: string }) {
           <div className="space-y-0">
             {/* Header */}
             <div className="grid grid-cols-12 gap-2 text-xs font-medium text-muted-foreground pb-2 border-b">
-              <div className="col-span-5">Descripcion</div>
+              <div className="col-span-4">Descripcion</div>
               <div className="col-span-2 text-center">Cant.</div>
               <div className="col-span-2 text-right">P. Unit.</div>
+              <div className="col-span-1 text-center">Dto.</div>
               <div className="col-span-3 text-right">Subtotal</div>
             </div>
             {/* Items */}
-            {data.items.map((item) => (
-              <div
-                key={item.id}
-                className="grid grid-cols-12 gap-2 text-sm py-2.5 border-b last:border-b-0"
-              >
-                <div className="col-span-5">{item.descripcion}</div>
-                <div className="col-span-2 text-center">{item.cantidad}</div>
-                <div className="col-span-2 text-right">
-                  {formatCurrencyValue(item.precioUnitario, (data.moneda as CurrencyCode) || "ARS")}
+            {data.items.map((item) => {
+              const bruto = item.cantidad * item.precioUnitario
+              const hasDiscount = (item.descuentoValor || 0) > 0
+              return (
+                <div
+                  key={item.id}
+                  className="grid grid-cols-12 gap-2 text-sm py-2.5 border-b last:border-b-0"
+                >
+                  <div className="col-span-4">
+                    <div>{item.descripcion}</div>
+                    {item.unidad && item.unidad !== "Unidad" && (
+                      <div className="text-xs text-muted-foreground">{item.unidad}</div>
+                    )}
+                  </div>
+                  <div className="col-span-2 text-center">{item.cantidad}</div>
+                  <div className="col-span-2 text-right">
+                    {fmt(item.precioUnitario)}
+                  </div>
+                  <div className="col-span-1 text-center text-xs text-muted-foreground">
+                    {hasDiscount
+                      ? item.descuentoTipo === "fijo"
+                        ? `-${fmt(item.descuentoValor || 0)}`
+                        : `-${item.descuentoValor}%`
+                      : "-"}
+                  </div>
+                  <div className="col-span-3 text-right font-medium">
+                    {hasDiscount && (
+                      <span className="text-xs text-muted-foreground line-through mr-1">
+                        {fmt(bruto)}
+                      </span>
+                    )}
+                    {fmt(item.subtotal)}
+                  </div>
                 </div>
-                <div className="col-span-3 text-right font-medium">
-                  {formatCurrencyValue(item.subtotal, (data.moneda as CurrencyCode) || "ARS")}
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
 
-          {/* Total */}
-          <div className="mt-4 pt-4 border-t-2">
-            <div className="flex justify-between text-lg font-bold">
+          {/* Totales desglosados */}
+          <div className="mt-4 pt-4 border-t-2 space-y-1.5">
+            {(hasGlobalDiscount || hasIVA) && (
+              <div className="flex justify-between text-sm text-muted-foreground">
+                <span>Subtotal</span>
+                <span>{fmt(data.subtotal + (data.iva || 0) + globalDiscountAmount)}</span>
+              </div>
+            )}
+            {hasGlobalDiscount && (
+              <div className="flex justify-between text-sm text-muted-foreground">
+                <span>
+                  Descuento{" "}
+                  {data.descuentoGlobalTipo === "porcentaje"
+                    ? `(${data.descuentoGlobalValor}%)`
+                    : ""}
+                </span>
+                <span className="text-red-500">-{fmt(globalDiscountAmount)}</span>
+              </div>
+            )}
+            {hasIVA && (
+              <div className="flex justify-between text-sm text-muted-foreground">
+                <span>IVA ({data.ivaPorcentaje}%)</span>
+                <span>{fmt(data.iva)}</span>
+              </div>
+            )}
+            <div className="flex justify-between text-lg font-bold pt-1">
               <span>Total</span>
-              <span>{formatCurrencyValue(data.total, (data.moneda as CurrencyCode) || "ARS")}</span>
+              <span>{fmt(data.total)}</span>
             </div>
           </div>
         </CardContent>
@@ -321,6 +388,16 @@ export function CotizacionPublica({ token }: { token: string }) {
           <CardContent className="pt-6">
             <p className="text-sm text-muted-foreground mb-1">Notas</p>
             <p className="text-sm whitespace-pre-wrap">{data.notas}</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Terminos y Condiciones */}
+      {data.terminos && (
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm font-medium text-muted-foreground mb-1">Terminos y Condiciones</p>
+            <p className="text-sm whitespace-pre-wrap">{data.terminos}</p>
           </CardContent>
         </Card>
       )}

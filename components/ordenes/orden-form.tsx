@@ -56,7 +56,7 @@ const FALLBACK_CONFIG: TipoDispositivoConfig = {
   marcas: [],
 }
 
-const clienteSchema = z.object({
+const clienteSchemaIndividual = z.object({
   nombre: z.string()
     .min(1, "El nombre es requerido")
     .regex(/^[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s]+$/, "El nombre solo debe contener letras"),
@@ -69,6 +69,20 @@ const clienteSchema = z.object({
     .regex(/^(\d{7,8})?$/, "El DNI debe tener 7 u 8 dígitos")
     .optional()
     .or(z.literal("")),
+  razonSocial: z.string().optional(),
+  cuit: z.string().optional(),
+})
+
+const clienteSchemaEmpresa = z.object({
+  nombre: z.string().min(1, "El nombre es requerido"),
+  telefono: z.string()
+    .min(1, "El teléfono es requerido")
+    .regex(/^\d{10}$/, "El teléfono debe tener exactamente 10 dígitos"),
+  email: z.string().email("Email inválido").optional().or(z.literal("")),
+  direccion: z.string().optional(),
+  dni: z.string().optional().or(z.literal("")),
+  razonSocial: z.string().min(1, "La razón social es requerida"),
+  cuit: z.string().optional().or(z.literal("")),
 })
 
 const ordenSchema = z.object({
@@ -87,7 +101,7 @@ const ordenSchema = z.object({
 })
 
 type OrdenFormData = z.infer<typeof ordenSchema>
-type ClienteFormData = z.infer<typeof clienteSchema>
+type ClienteFormData = z.infer<typeof clienteSchemaIndividual>
 
 interface OrdenFormProps {
   onClose: () => void
@@ -126,6 +140,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
   const [camposExtraValues, setCamposExtraValues] = useState<Record<string, any>>({})
   const [selectedSectorId, setSelectedSectorId] = useState<string>("")
   const [sectoresCliente, setSectoresCliente] = useState<Array<{ id: string; nombre: string }>>([])
+  const [nuevoClienteTipo, setNuevoClienteTipo] = useState<"INDIVIDUAL" | "EMPRESA">("INDIVIDUAL")
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const { tipos: tiposDispositivo, loading: tiposLoading } = useTiposDispositivo()
@@ -211,13 +226,14 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
   }
 
   const clienteForm = useForm<ClienteFormData>({
-    resolver: zodResolver(clienteSchema),
     defaultValues: {
       nombre: "",
       telefono: "",
       email: "",
       direccion: "",
       dni: "",
+      razonSocial: "",
+      cuit: "",
     },
   })
 
@@ -341,12 +357,29 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
   }
 
   const handleCreateCliente = async (data: ClienteFormData) => {
+    // Validate with the right schema based on tipo
+    const schema = nuevoClienteTipo === "EMPRESA" ? clienteSchemaEmpresa : clienteSchemaIndividual
+    const result = schema.safeParse(data)
+    if (!result.success) {
+      // Set errors manually
+      for (const issue of result.error.issues) {
+        const field = issue.path[0] as keyof ClienteFormData
+        clienteForm.setError(field, { message: issue.message })
+      }
+      return
+    }
+
     setClienteLoading(true)
     try {
       const res = await fetch("/api/clientes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          ...result.data,
+          tipoCliente: nuevoClienteTipo,
+          razonSocial: nuevoClienteTipo === "EMPRESA" ? result.data.razonSocial : undefined,
+          cuit: nuevoClienteTipo === "EMPRESA" ? result.data.cuit : undefined,
+        }),
       })
 
       if (!res.ok) {
@@ -362,6 +395,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
 
       setShowClienteModal(false)
       clienteForm.reset()
+      setNuevoClienteTipo("INDIVIDUAL")
     } catch (error) {
       console.error("Error creating cliente:", error)
       alert("Error al crear cliente")
@@ -1122,12 +1156,43 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
             <DialogTitle>Nuevo Cliente</DialogTitle>
           </DialogHeader>
           <form onSubmit={clienteForm.handleSubmit(handleCreateCliente)} className="space-y-4">
+            {/* Tipo de cliente toggle */}
             <div>
-              <Label htmlFor="cliente-nombre">Nombre *</Label>
+              <Label>Tipo de Cliente</Label>
+              <div className="flex gap-2 mt-1">
+                <button
+                  type="button"
+                  onClick={() => { setNuevoClienteTipo("INDIVIDUAL"); clienteForm.clearErrors() }}
+                  className={`flex-1 py-2 px-3 text-sm rounded-lg border transition-colors ${
+                    nuevoClienteTipo === "INDIVIDUAL"
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "hover:bg-muted"
+                  }`}
+                >
+                  Individual
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setNuevoClienteTipo("EMPRESA"); clienteForm.clearErrors() }}
+                  className={`flex-1 py-2 px-3 text-sm rounded-lg border transition-colors ${
+                    nuevoClienteTipo === "EMPRESA"
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "hover:bg-muted"
+                  }`}
+                >
+                  Empresa
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="cliente-nombre">
+                {nuevoClienteTipo === "EMPRESA" ? "Nombre de contacto *" : "Nombre *"}
+              </Label>
               <Input
                 id="cliente-nombre"
                 {...clienteForm.register("nombre")}
-                placeholder="Nombre completo"
+                placeholder={nuevoClienteTipo === "EMPRESA" ? "Nombre del contacto principal" : "Nombre completo"}
               />
               {clienteForm.formState.errors.nombre && (
                 <p className="text-sm text-destructive mt-1">
@@ -1135,6 +1200,33 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
                 </p>
               )}
             </div>
+
+            {/* Campos empresa */}
+            {nuevoClienteTipo === "EMPRESA" && (
+              <>
+                <div>
+                  <Label htmlFor="cliente-razon-social">Razon Social *</Label>
+                  <Input
+                    id="cliente-razon-social"
+                    {...clienteForm.register("razonSocial")}
+                    placeholder="Ej: Municipalidad de Cordoba"
+                  />
+                  {clienteForm.formState.errors.razonSocial && (
+                    <p className="text-sm text-destructive mt-1">
+                      {clienteForm.formState.errors.razonSocial.message}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <Label htmlFor="cliente-cuit">CUIT</Label>
+                  <Input
+                    id="cliente-cuit"
+                    {...clienteForm.register("cuit")}
+                    placeholder="30-12345678-9"
+                  />
+                </div>
+              </>
+            )}
 
             <div>
               <Label htmlFor="cliente-telefono">Telefono *</Label>
@@ -1166,20 +1258,22 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
               )}
             </div>
 
-            <div>
-              <Label htmlFor="cliente-dni">DNI</Label>
-              <Input
-                id="cliente-dni"
-                {...clienteForm.register("dni")}
-                placeholder="12345678"
-                maxLength={8}
-              />
-              {clienteForm.formState.errors.dni && (
-                <p className="text-sm text-destructive mt-1">
-                  {clienteForm.formState.errors.dni.message}
-                </p>
-              )}
-            </div>
+            {nuevoClienteTipo === "INDIVIDUAL" && (
+              <div>
+                <Label htmlFor="cliente-dni">DNI</Label>
+                <Input
+                  id="cliente-dni"
+                  {...clienteForm.register("dni")}
+                  placeholder="12345678"
+                  maxLength={8}
+                />
+                {clienteForm.formState.errors.dni && (
+                  <p className="text-sm text-destructive mt-1">
+                    {clienteForm.formState.errors.dni.message}
+                  </p>
+                )}
+              </div>
+            )}
 
             <div>
               <Label htmlFor="cliente-direccion">Direccion</Label>
@@ -1197,6 +1291,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
                 onClick={() => {
                   setShowClienteModal(false)
                   clienteForm.reset()
+                  setNuevoClienteTipo("INDIVIDUAL")
                 }}
               >
                 Cancelar
