@@ -3,7 +3,9 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Search, User, Loader2 } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Search, User, Loader2, UserPlus } from "lucide-react"
+import { ClienteForm } from "@/components/clientes/cliente-form"
 
 interface Cliente {
   id: string
@@ -24,6 +26,7 @@ export function ClienteSelector({ value, onChange, disabled }: ClienteSelectorPr
   const [loading, setLoading] = useState(false)
   const [open, setOpen] = useState(false)
   const [selected, setSelected] = useState<Cliente | null>(null)
+  const [showCreateForm, setShowCreateForm] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -78,6 +81,26 @@ export function ClienteSelector({ value, onChange, disabled }: ClienteSelectorPr
     onChange(null, null)
   }
 
+  const handleClienteCreated = async () => {
+    setShowCreateForm(false)
+    // Re-search to find the newly created client
+    if (search.length >= 2) {
+      await doSearch(search)
+      setOpen(true)
+    }
+  }
+
+  if (showCreateForm) {
+    return (
+      <div className="space-y-2">
+        <ClienteForm
+          onClose={() => setShowCreateForm(false)}
+          onSuccess={handleClienteCreated}
+        />
+      </div>
+    )
+  }
+
   return (
     <div ref={containerRef} className="relative">
       <Label className="text-sm">Cliente</Label>
@@ -103,34 +126,64 @@ export function ClienteSelector({ value, onChange, disabled }: ClienteSelectorPr
       </div>
 
       {open && (search.length >= 2) && (
-        <div className="absolute z-50 w-full mt-1 bg-popover border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+        <div className="absolute z-50 w-full mt-1 bg-popover border rounded-lg shadow-lg max-h-60 overflow-y-auto">
           {loading ? (
             <div className="flex items-center justify-center py-4">
               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
             </div>
           ) : results.length === 0 ? (
-            <div className="py-3 px-4 text-sm text-muted-foreground">
-              No se encontraron clientes
+            <div className="py-3 px-4 space-y-2">
+              <p className="text-sm text-muted-foreground">No se encontraron clientes</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => {
+                  setOpen(false)
+                  setShowCreateForm(true)
+                }}
+              >
+                <UserPlus className="mr-2 h-4 w-4" />
+                Crear nuevo cliente
+              </Button>
             </div>
           ) : (
-            results.map((cliente) => (
-              <button
-                key={cliente.id}
-                type="button"
-                className="w-full text-left px-4 py-2 hover:bg-accent flex items-center gap-2 text-sm"
-                onClick={() => handleSelect(cliente)}
-              >
-                <User className="h-4 w-4 text-muted-foreground shrink-0" />
-                <div className="min-w-0">
-                  <p className="font-medium truncate">{cliente.nombre}</p>
-                  {(cliente.email || cliente.telefono) && (
-                    <p className="text-xs text-muted-foreground truncate">
-                      {cliente.email || cliente.telefono}
-                    </p>
-                  )}
-                </div>
-              </button>
-            ))
+            <>
+              {results.map((cliente) => (
+                <button
+                  key={cliente.id}
+                  type="button"
+                  className="w-full text-left px-4 py-2 hover:bg-accent flex items-center gap-2 text-sm"
+                  onClick={() => handleSelect(cliente)}
+                >
+                  <User className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{cliente.nombre}</p>
+                    {(cliente.email || cliente.telefono) && (
+                      <p className="text-xs text-muted-foreground truncate">
+                        {cliente.email || cliente.telefono}
+                      </p>
+                    )}
+                  </div>
+                </button>
+              ))}
+              <div className="border-t px-4 py-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="w-full text-muted-foreground"
+                  onClick={() => {
+                    setOpen(false)
+                    setShowCreateForm(true)
+                  }}
+                >
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  Crear nuevo cliente
+                </Button>
+              </div>
+            </>
           )}
         </div>
       )}

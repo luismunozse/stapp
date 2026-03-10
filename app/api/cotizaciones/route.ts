@@ -222,6 +222,18 @@ export async function POST(request: Request) {
       clienteIdForInsert = data.clienteId
     }
 
+    // Validate fecha_vencimiento is not in the past
+    if (data.fechaVencimiento) {
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      if (new Date(data.fechaVencimiento) < today) {
+        return NextResponse.json(
+          { error: "La fecha de vencimiento no puede ser anterior a hoy" },
+          { status: 400 }
+        )
+      }
+    }
+
     // Calculate totals with discounts and IVA
     const ivaPct = data.ivaPorcentaje || 0
     const descGlobalTipo = data.descuentoGlobalTipo || "porcentaje"

@@ -141,6 +141,14 @@ export function CotizacionForm({
       return
     }
 
+    if (fechaVencimiento) {
+      const today = new Date().toISOString().split("T")[0]
+      if (fechaVencimiento < today) {
+        alert("La fecha de vencimiento no puede ser anterior a hoy")
+        return
+      }
+    }
+
     setLoading(true)
     try {
       const url = isEditing
@@ -340,6 +348,7 @@ export function CotizacionForm({
                 label="Válida hasta"
                 value={fechaVencimiento}
                 onChange={setFechaVencimiento}
+                min={new Date().toISOString().split("T")[0]}
                 disabled={loading}
               />
             </div>

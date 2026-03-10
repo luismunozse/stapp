@@ -424,16 +424,19 @@ const CotizacionDocument = ({ data }: { data: CotizacionPDFData }) => {
   const notas = toText(data.notas)
   const terminos = toText(data.terminos)
   const fechaVencimiento = formatDate(data.fechaVencimiento, data.zonaHoraria)
-  // Discount calculations for display
-  const descGlobalTipo = data.descuentoGlobalTipo || "porcentaje"
-  const descGlobalValor = data.descuentoGlobalValor || 0
+  // Discount calculations for display - ensure numeric types (Supabase returns DECIMAL as string)
+  const descGlobalTipo = String(data.descuentoGlobalTipo || "porcentaje")
+  const descGlobalValor = Number(data.descuentoGlobalValor) || 0
+  const subtotalNum = Number(data.subtotal) || 0
+  const ivaNum = Number(data.iva) || 0
+  const totalNum = Number(data.total) || 0
   let descGlobalAmount = 0
   if (descGlobalValor > 0) {
     descGlobalAmount = descGlobalTipo === "fijo"
-      ? Math.min(descGlobalValor, data.subtotal)
-      : data.subtotal * (descGlobalValor / 100)
+      ? Math.min(descGlobalValor, subtotalNum)
+      : subtotalNum * (descGlobalValor / 100)
   }
-  const ivaPct = data.ivaPorcentaje || 0
+  const ivaPct = Number(data.ivaPorcentaje) || 0
   const firmaAprobacion = toText(data.firmaAprobacion)
   const firmaMime = toText(data.firmaMime)
   const fechaAprobacion = formatDate(data.fechaAprobacion, data.zonaHoraria)
@@ -510,15 +513,16 @@ const CotizacionDocument = ({ data }: { data: CotizacionPDFData }) => {
               React.createElement(Text, { style: [styles.colPrice, styles.tableHeaderText] }, "P. Unit."),
               React.createElement(Text, { style: [styles.colSubtotal, styles.tableHeaderText] }, "Subtotal")
             ),
-            ...data.items.map((item, index) => {
-              const unitPrice = item.precioUnitario || item.precio_unitario || 0
-              const unidad = item.unidad || "Unidad"
-              const cantLabel = `${toText(item.cantidad)} ${unidad !== "Unidad" ? unidad : ""}`.trim()
+            ...(Array.isArray(data.items) ? data.items : []).map((item, index) => {
+              const unitPrice = Number(item.precioUnitario || item.precio_unitario) || 0
+              const unidad = String(item.unidad || "Unidad")
+              const cantLabel = `${String(item.cantidad || 0)} ${unidad !== "Unidad" ? unidad : ""}`.trim()
+              const itemSubtotal = Number(item.subtotal) || 0
               return React.createElement(View, { key: index, style: index % 2 === 0 ? styles.tableRow : styles.tableRowAlt },
                 React.createElement(Text, { style: styles.colDescription }, toText(item.descripcion)),
                 React.createElement(Text, { style: styles.colQuantity }, cantLabel),
                 React.createElement(Text, { style: styles.colPrice }, formatCurrency(unitPrice, data.moneda)),
-                React.createElement(Text, { style: styles.colSubtotal }, formatCurrency(item.subtotal, data.moneda))
+                React.createElement(Text, { style: styles.colSubtotal }, formatCurrency(itemSubtotal, data.moneda))
               )
             })
           )
@@ -529,19 +533,19 @@ const CotizacionDocument = ({ data }: { data: CotizacionPDFData }) => {
           React.createElement(View, { style: styles.totalsBox },
             React.createElement(View, { style: styles.totalRow },
               React.createElement(Text, { style: styles.totalLabel }, "Subtotal"),
-              React.createElement(Text, { style: styles.totalValue }, formatCurrency(data.subtotal, data.moneda))
+              React.createElement(Text, { style: styles.totalValue }, formatCurrency(subtotalNum, data.moneda))
             ),
             descGlobalAmount > 0 ? React.createElement(View, { style: styles.totalRow },
-              React.createElement(Text, { style: styles.totalLabel }, descGlobalTipo === "porcentaje" ? `Descuento (${descGlobalValor}%)` : "Descuento"),
+              React.createElement(Text, { style: styles.totalLabel }, descGlobalTipo === "porcentaje" ? `Descuento (${String(descGlobalValor)}%)` : "Descuento"),
               React.createElement(Text, { style: [styles.totalValue, { color: "#16a34a" }] }, `-${formatCurrency(descGlobalAmount, data.moneda)}`)
             ) : null,
             ivaPct > 0 ? React.createElement(View, { style: styles.totalRow },
-              React.createElement(Text, { style: styles.totalLabel }, `IVA (${ivaPct}%)`),
-              React.createElement(Text, { style: styles.totalValue }, formatCurrency(data.iva, data.moneda))
+              React.createElement(Text, { style: styles.totalLabel }, `IVA (${String(ivaPct)}%)`),
+              React.createElement(Text, { style: styles.totalValue }, formatCurrency(ivaNum, data.moneda))
             ) : null,
             React.createElement(View, { style: styles.grandTotalRow },
               React.createElement(Text, { style: styles.grandTotalLabel }, "TOTAL"),
-              React.createElement(Text, { style: styles.grandTotalValue }, formatCurrency(data.total, data.moneda))
+              React.createElement(Text, { style: styles.grandTotalValue }, formatCurrency(totalNum, data.moneda))
             )
           )
         ),

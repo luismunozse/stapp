@@ -165,6 +165,18 @@ export async function PUT(
       )
     }
 
+    // Validate fecha_vencimiento is not in the past
+    if (data.fechaVencimiento) {
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      if (new Date(data.fechaVencimiento) < today) {
+        return NextResponse.json(
+          { error: "La fecha de vencimiento no puede ser anterior a hoy" },
+          { status: 400 }
+        )
+      }
+    }
+
     const updateData: Record<string, any> = {}
 
     if (data.estado !== undefined) updateData.estado = data.estado
