@@ -609,6 +609,28 @@ const CotizacionDocument = ({ data }: { data: CotizacionPDFData }) => {
 }
 
 export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Buffer> {
+  // Debug: log all data types to find the React element
+  const debugTypes: Record<string, string> = {}
+  for (const [key, val] of Object.entries(data)) {
+    if (val && typeof val === "object" && !Array.isArray(val) && !(val instanceof Date)) {
+      if ("$$typeof" in (val as any)) {
+        debugTypes[key] = `REACT_ELEMENT: ${JSON.stringify(Object.keys(val as any))}`
+      } else {
+        debugTypes[key] = `object:${JSON.stringify(Object.keys(val as any))}`
+      }
+    } else {
+      debugTypes[key] = `${typeof val}:${String(val).slice(0, 50)}`
+    }
+  }
+  console.log("[PDF DEBUG] data types:", JSON.stringify(debugTypes, null, 2))
+  if (Array.isArray(data.items) && data.items[0]) {
+    const item0: Record<string, string> = {}
+    for (const [k, v] of Object.entries(data.items[0])) {
+      item0[k] = `${typeof v}:${String(v).slice(0, 50)}`
+    }
+    console.log("[PDF DEBUG] items[0] types:", JSON.stringify(item0, null, 2))
+  }
+
   const buffer = await renderToBuffer(
     React.createElement(CotizacionDocument, { data }) as React.ReactElement
   )
