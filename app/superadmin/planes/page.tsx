@@ -1,75 +1,60 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { redirect } from "next/navigation"
+import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
-import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Package, Plus, Users, Building2, Check, X, Edit, Power, History } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
+import { useSuperadminFetch, useSuperadminMutation } from "@/hooks/use-superadmin-fetch"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import type { PlanWithUsage } from "@/types/superadmin"
 
 export default function PlanesPage() {
   const [plans, setPlans] = useState<PlanWithUsage[]>([])
-  const [loading, setLoading] = useState(true)
+  const [confirmToggle, setConfirmToggle] = useState<{
+    planId: string
+    planName: string
+    currentStatus: boolean
+  } | null>(null)
+
+  const { loading, fetchData } = useSuperadminFetch<{ plans: PlanWithUsage[] }>()
+  const { mutate, loading: toggling } = useSuperadminMutation()
+
+  const fetchPlans = useCallback(async () => {
+    const result = await fetchData("/api/superadmin/plans")
+    if (result) {
+      setPlans(result.plans || [])
+    }
+  }, [fetchData])
 
   useEffect(() => {
     fetchPlans()
-  }, [])
+  }, [fetchPlans])
 
-  const fetchPlans = async () => {
-    try {
-      const res = await fetch("/api/superadmin/plans")
-      if (!res.ok) throw new Error("Error fetching plans")
+  const handleToggle = async () => {
+    if (!confirmToggle) return
 
-      const data = await res.json()
-      setPlans(data.plans || [])
-    } catch (error) {
-      console.error("Error:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleToggle = async (planId: string, currentStatus: boolean) => {
-    if (!confirm(`¿Estás seguro de ${currentStatus ? "desactivar" : "activar"} este plan?`)) {
-      return
-    }
-
-    try {
-      const res = await fetch(`/api/superadmin/plans/${planId}/toggle`, {
+    await mutate(
+      `/api/superadmin/plans/${confirmToggle.planId}/toggle`,
+      {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ activo: !currentStatus }),
-      })
-
-      const data = await res.json()
-
-      if (!res.ok) {
-        toast.error(data.error || "Error al cambiar estado del plan")
-        return
+        body: { activo: !confirmToggle.currentStatus },
+        successMessage: confirmToggle.currentStatus
+          ? `Plan "${confirmToggle.planName}" desactivado`
+          : `Plan "${confirmToggle.planName}" activado`,
+        errorMessage: "Error al cambiar estado del plan",
+        onSuccess: () => {
+          setConfirmToggle(null)
+          fetchPlans()
+        },
       }
-
-      toast.success(data.message)
-      fetchPlans()
-    } catch (error) {
-      console.error("Error:", error)
-      toast.error("Error al cambiar estado del plan")
-    }
+    )
   }
 
   const getPlanTypeColor = (tipo: string) => {
     return tipo === "FREE" ? "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300" : "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300"
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-      </div>
-    )
   }
 
   return (
@@ -140,6 +125,30 @@ export default function PlanesPage() {
       </div>
 
       {/* Plans Grid */}
+      {loading ? (
+        <div className="grid gap-6 md:grid-cols-2">
+          {[1, 2].map((i) => (
+            <Card key={i} className="animate-pulse">
+              <CardHeader>
+                <div className="h-6 w-48 bg-muted rounded" />
+                <div className="h-4 w-32 bg-muted rounded mt-2" />
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex gap-4">
+                  <div className="h-10 w-24 bg-muted rounded" />
+                  <div className="h-10 w-24 bg-muted rounded" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {[1, 2, 3, 4].map((j) => (
+                    <div key={j} className="h-10 bg-muted rounded-lg" />
+                  ))}
+                </div>
+                <div className="h-10 bg-muted rounded mt-2" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : (
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2">
         {plans.map((plan) => (
           <Card key={plan.id} className={!plan.activo ? "opacity-60" : ""}>
@@ -259,7 +268,13 @@ export default function PlanesPage() {
                 <Button
                   variant={plan.activo ? "destructive" : "default"}
                   size="icon"
-                  onClick={() => handleToggle(plan.id, plan.activo)}
+                  onClick={() =>
+                    setConfirmToggle({
+                      planId: plan.id,
+                      planName: plan.nombre,
+                      currentStatus: plan.activo,
+                    })
+                  }
                   title={plan.activo ? "Desactivar" : "Activar"}
                 >
                   <Power className="h-4 w-4" />
@@ -269,8 +284,9 @@ export default function PlanesPage() {
           </Card>
         ))}
       </div>
+      )}
 
-      {plans.length === 0 && (
+      {!loading && plans.length === 0 && (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Package className="h-12 w-12 text-muted-foreground mb-4" />
@@ -287,6 +303,25 @@ export default function PlanesPage() {
           </CardContent>
         </Card>
       )}
+
+      <ConfirmDialog
+        open={!!confirmToggle}
+        onOpenChange={(open) => !open && setConfirmToggle(null)}
+        title={
+          confirmToggle?.currentStatus
+            ? "Desactivar plan"
+            : "Activar plan"
+        }
+        description={
+          confirmToggle?.currentStatus
+            ? `¿Estás seguro de desactivar el plan "${confirmToggle?.planName}"? Las organizaciones con este plan no se verán afectadas inmediatamente.`
+            : `¿Estás seguro de activar el plan "${confirmToggle?.planName}"?`
+        }
+        confirmText={confirmToggle?.currentStatus ? "Desactivar" : "Activar"}
+        variant={confirmToggle?.currentStatus ? "warning" : "info"}
+        loading={toggling}
+        onConfirm={handleToggle}
+      />
     </div>
   )
 }

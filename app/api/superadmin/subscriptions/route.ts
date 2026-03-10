@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
-import type { SubscriptionsListResponse } from "@/types/superadmin"
+import { parsePagination } from "@/lib/api-utils"
+import type { SubscriptionsListResponse, SubscriptionListItem } from "@/types/superadmin"
 
 export async function GET(request: Request) {
   try {
@@ -11,8 +12,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const status = searchParams.get("status") || ""
     const plan = searchParams.get("plan") || ""
-    const page = parseInt(searchParams.get("page") || "1")
-    const limit = parseInt(searchParams.get("limit") || "20")
+    const { page, limit, offset } = parsePagination(searchParams)
 
     // Query base para suscripciones
     let query = supabaseAdmin
@@ -42,7 +42,6 @@ export async function GET(request: Request) {
     }
 
     // Paginación
-    const offset = (page - 1) * limit
     query = query.range(offset, offset + limit - 1)
 
     const { data: subscriptions, error: dbError, count } = await query
@@ -99,7 +98,7 @@ export async function GET(request: Request) {
     }
 
     const response: SubscriptionsListResponse = {
-      subscriptions: result as any,
+      subscriptions: result as SubscriptionListItem[],
       total: count || 0,
       page,
       limit,

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { parsePagination } from "@/lib/api-utils"
 import type { PaymentsListResponse } from "@/types/superadmin"
 
 export async function GET(request: Request) {
@@ -12,8 +13,7 @@ export async function GET(request: Request) {
     const status = searchParams.get("status") || ""
     const dateFrom = searchParams.get("dateFrom") || ""
     const dateTo = searchParams.get("dateTo") || ""
-    const page = parseInt(searchParams.get("page") || "1")
-    const limit = parseInt(searchParams.get("limit") || "20")
+    const { page, limit, offset } = parsePagination(searchParams)
 
     // Query base para pagos
     let query = supabaseAdmin
@@ -53,10 +53,25 @@ export async function GET(request: Request) {
     }
 
     // Paginación
-    const offset = (page - 1) * limit
     query = query.range(offset, offset + limit - 1)
 
-    const { data: payments, error: dbError, count } = await query
+    // Ejecutar query de pagos y total de montos en paralelo
+    let totalAmountQuery = supabaseAdmin
+      .from("subscription_payments")
+      .select("amount")
+      .eq("status", "SUCCEEDED")
+
+    if (dateFrom) {
+      totalAmountQuery = totalAmountQuery.gte("paid_at", dateFrom)
+    }
+    if (dateTo) {
+      totalAmountQuery = totalAmountQuery.lte("paid_at", dateTo + "T23:59:59.999Z")
+    }
+
+    const [
+      { data: payments, error: dbError, count },
+      { data: amountsData },
+    ] = await Promise.all([query, totalAmountQuery])
 
     if (dbError) throw dbError
 
@@ -86,20 +101,6 @@ export async function GET(request: Request) {
       organization: orgsMap[payment.organization_id] || null,
     }))
 
-    // Calcular total de montos para el rango seleccionado
-    let totalAmountQuery = supabaseAdmin
-      .from("subscription_payments")
-      .select("amount")
-      .eq("status", "SUCCEEDED")
-
-    if (dateFrom) {
-      totalAmountQuery = totalAmountQuery.gte("paid_at", dateFrom)
-    }
-    if (dateTo) {
-      totalAmountQuery = totalAmountQuery.lte("paid_at", dateTo + "T23:59:59.999Z")
-    }
-
-    const { data: amountsData } = await totalAmountQuery
     const totalAmount =
       amountsData?.reduce((sum, p) => sum + (p.amount || 0), 0) || 0
 

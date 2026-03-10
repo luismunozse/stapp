@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { parsePagination } from "@/lib/api-utils"
 import type { AuditLogsResponse } from "@/types/superadmin"
 
 export async function GET(request: Request) {
@@ -14,8 +15,7 @@ export async function GET(request: Request) {
     const action = searchParams.get("action") || ""
     const dateFrom = searchParams.get("dateFrom") || ""
     const dateTo = searchParams.get("dateTo") || ""
-    const page = parseInt(searchParams.get("page") || "1")
-    const limit = parseInt(searchParams.get("limit") || "50")
+    const { page, limit, offset } = parsePagination(searchParams, { limit: 50 })
 
     // Query base para logs
     let query = supabaseAdmin
@@ -59,7 +59,6 @@ export async function GET(request: Request) {
     }
 
     // Paginación
-    const offset = (page - 1) * limit
     query = query.range(offset, offset + limit - 1)
 
     const { data: logs, error: dbError, count } = await query
@@ -73,35 +72,30 @@ export async function GET(request: Request) {
     let usersMap: Record<string, { nombre: string; email: string }> = {}
     let orgsMap: Record<string, { nombre: string; slug: string }> = {}
 
-    if (userIds.length > 0) {
-      const { data: users } = await supabaseAdmin
-        .from("users")
-        .select("id, nombre, email")
-        .in("id", userIds)
+    const [usersData, orgsData] = await Promise.all([
+      userIds.length > 0
+        ? supabaseAdmin.from("users").select("id, nombre, email").in("id", userIds)
+        : Promise.resolve({ data: null }),
+      orgIds.length > 0
+        ? supabaseAdmin.from("organizations").select("id, nombre, slug").in("id", orgIds)
+        : Promise.resolve({ data: null }),
+    ])
 
-      usersMap = (users || []).reduce(
-        (acc, user) => {
-          acc[user.id] = { nombre: user.nombre, email: user.email }
-          return acc
-        },
-        {} as Record<string, { nombre: string; email: string }>
-      )
-    }
+    usersMap = (usersData.data || []).reduce(
+      (acc, user) => {
+        acc[user.id] = { nombre: user.nombre, email: user.email }
+        return acc
+      },
+      {} as Record<string, { nombre: string; email: string }>
+    )
 
-    if (orgIds.length > 0) {
-      const { data: orgs } = await supabaseAdmin
-        .from("organizations")
-        .select("id, nombre, slug")
-        .in("id", orgIds)
-
-      orgsMap = (orgs || []).reduce(
-        (acc, org) => {
-          acc[org.id] = { nombre: org.nombre, slug: org.slug }
-          return acc
-        },
-        {} as Record<string, { nombre: string; slug: string }>
-      )
-    }
+    orgsMap = (orgsData.data || []).reduce(
+      (acc, org) => {
+        acc[org.id] = { nombre: org.nombre, slug: org.slug }
+        return acc
+      },
+      {} as Record<string, { nombre: string; slug: string }>
+    )
 
     // Combinar datos
     const result = (logs || []).map((log) => ({

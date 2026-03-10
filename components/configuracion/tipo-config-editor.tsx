@@ -57,6 +57,9 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
   const [problemas, setProblemas] = useState<string[]>(config.problemasComunes || [])
   const [nuevoProblema, setNuevoProblema] = useState("")
 
+  const [categoriasInventario, setCategoriasInventario] = useState<string[]>(config.categoriasInventario || [])
+  const [nuevaCategoria, setNuevaCategoria] = useState("")
+
   // Campos extra
   const [camposExtra, setCamposExtra] = useState<CampoExtra[]>(config.camposExtra || [])
 
@@ -78,6 +81,7 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
         accesorios,
         marcas,
         problemasComunes: problemas,
+        categoriasInventario: categoriasInventario.length > 0 ? categoriasInventario : undefined,
         camposExtra,
         ...(infoTitle && { infoSectionTitle: infoTitle }),
         ...(infoIcon && { infoSectionIcon: infoIcon }),
@@ -110,6 +114,13 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
     if (!nuevoProblema.trim() || problemas.includes(nuevoProblema.trim())) return
     setProblemas((prev) => [...prev, nuevoProblema.trim()])
     setNuevoProblema("")
+  }
+
+  // --- Categorias inventario helpers ---
+  const addCategoria = () => {
+    if (!nuevaCategoria.trim() || categoriasInventario.includes(nuevaCategoria.trim())) return
+    setCategoriasInventario((prev) => [...prev, nuevaCategoria.trim()])
+    setNuevaCategoria("")
   }
 
   // --- Campos extra helpers ---
@@ -504,6 +515,45 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addProblema() } }}
             />
             <Button size="sm" variant="outline" onClick={addProblema} className="h-8">
+              <Plus className="h-3 w-3" />
+            </Button>
+          </div>
+        </div>
+
+        {/* Categorias de inventario */}
+        <div>
+          <h4 className="text-sm font-medium mb-3">
+            Categorias de inventario <Badge variant="secondary" className="ml-1">{categoriasInventario.length}</Badge>
+          </h4>
+          <p className="text-xs text-muted-foreground mb-2">
+            Subcategorias de repuestos/insumos para este tipo de dispositivo (ej: Cartuchos, Toner, Fusor)
+          </p>
+          <div className="flex flex-wrap gap-1 mb-2">
+            {categoriasInventario.map((c, i) => (
+              <span
+                key={c}
+                className="inline-flex items-center gap-1 px-2 py-1 bg-muted rounded text-xs"
+              >
+                {c}
+                <button
+                  type="button"
+                  onClick={() => setCategoriasInventario((prev) => prev.filter((_, j) => j !== i))}
+                  className="text-muted-foreground hover:text-red-500"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <Input
+              value={nuevaCategoria}
+              onChange={(e) => setNuevaCategoria(e.target.value)}
+              placeholder="Nueva categoria"
+              className="h-8 text-xs flex-1"
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCategoria() } }}
+            />
+            <Button size="sm" variant="outline" onClick={addCategoria} className="h-8">
               <Plus className="h-3 w-3" />
             </Button>
           </div>

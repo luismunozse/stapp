@@ -124,6 +124,8 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
   const [sena, setSena] = useState<number | undefined>(undefined)
   const [comprimiendo, setComprimiendo] = useState(false)
   const [camposExtraValues, setCamposExtraValues] = useState<Record<string, any>>({})
+  const [selectedSectorId, setSelectedSectorId] = useState<string>("")
+  const [sectoresCliente, setSectoresCliente] = useState<Array<{ id: string; nombre: string }>>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const { tipos: tiposDispositivo, loading: tiposLoading } = useTiposDispositivo()
@@ -235,6 +237,32 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
   useEffect(() => {
     fetchClientes()
   }, [])
+
+  // Fetch sectors when client changes
+  const clienteId = watch("clienteId")
+  const clienteSeleccionadoObj = useMemo(
+    () => clientes.find((c) => c.id === clienteId),
+    [clientes, clienteId]
+  )
+
+  useEffect(() => {
+    setSelectedSectorId("")
+    setSectoresCliente([])
+    if (!clienteId || clienteSeleccionadoObj?.tipoCliente !== "EMPRESA") return
+
+    const fetchSectores = async () => {
+      try {
+        const res = await fetch(`/api/clientes/${clienteId}/sectores`)
+        if (res.ok) {
+          const data = await res.json()
+          setSectoresCliente(data)
+        }
+      } catch (error) {
+        console.error("Error fetching sectores:", error)
+      }
+    }
+    fetchSectores()
+  }, [clienteId, clienteSeleccionadoObj?.tipoCliente])
 
   // Manejar seleccion de fotos
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -475,6 +503,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
           sena: presupuestoAceptado && sena ? sena : undefined,
           observaciones: data.observaciones || undefined,
           metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+          sectorId: selectedSectorId || undefined,
         }),
       })
 
@@ -560,6 +589,32 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
               </p>
             )}
           </div>
+
+          {/* Sector selector for empresa clients */}
+          {clienteSeleccionadoObj?.tipoCliente === "EMPRESA" && sectoresCliente.length > 0 && (
+            <div>
+              <Label>Sector</Label>
+              <Select
+                value={selectedSectorId}
+                onValueChange={setSelectedSectorId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar sector..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {sectoresCliente.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>{s.nombre}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {clienteSeleccionadoObj.razonSocial && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Empresa: {clienteSeleccionadoObj.razonSocial}
+                  {clienteSeleccionadoObj.cuit && ` - CUIT: ${clienteSeleccionadoObj.cuit}`}
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Tipo de dispositivo con selector visual */}
           <div>

@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server"
+import { z } from "zod"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
-import type { OrganizationDetailResponse } from "@/types/superadmin"
+import { safeParseBody } from "@/lib/api-utils"
+import type { OrganizationDetailResponse, PaymentWithOrg } from "@/types/superadmin"
 
 export async function GET(
   request: Request,
@@ -57,7 +59,7 @@ export async function GET(
     }
 
     // Obtener pagos si hay suscripción
-    let payments: any[] = []
+    let payments: PaymentWithOrg[] = []
     if (subscriptionResult.data?.id) {
       const { data: paymentsData } = await supabaseAdmin
         .from("subscription_payments")
@@ -87,6 +89,16 @@ export async function GET(
   }
 }
 
+const updateOrgSchema = z.object({
+  nombre: z.string().min(1).optional(),
+  nombre_mostrar: z.string().nullable().optional(),
+  email: z.string().email().nullable().optional(),
+  telefono: z.string().nullable().optional(),
+  direccion: z.string().nullable().optional(),
+}).refine(data => Object.keys(data).length > 0, {
+  message: "Se requiere al menos un campo para actualizar",
+})
+
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -96,15 +108,9 @@ export async function PUT(
     if (authError) return authError
 
     const { id } = await params
-    const body = await request.json()
-
-    const updateData: Record<string, any> = {}
-    if (body.nombre !== undefined) updateData.nombre = body.nombre
-    if (body.nombre_mostrar !== undefined)
-      updateData.nombre_mostrar = body.nombre_mostrar
-    if (body.email !== undefined) updateData.email = body.email
-    if (body.telefono !== undefined) updateData.telefono = body.telefono
-    if (body.direccion !== undefined) updateData.direccion = body.direccion
+    const parsed = await safeParseBody(request, updateOrgSchema)
+    if ("error" in parsed) return parsed.error
+    const updateData = parsed.data
 
     const { data, error: dbError } = await supabaseAdmin
       .from("organizations")

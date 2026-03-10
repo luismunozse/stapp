@@ -10,6 +10,9 @@ const clienteSchema = z.object({
   email: z.string().email().optional().or(z.literal("")),
   direccion: z.string().optional(),
   dni: z.string().optional(),
+  tipoCliente: z.enum(["INDIVIDUAL", "EMPRESA"]).optional().default("INDIVIDUAL"),
+  razonSocial: z.string().optional(),
+  cuit: z.string().optional(),
 })
 
 export async function GET(request: Request) {
@@ -38,7 +41,7 @@ export async function GET(request: Request) {
 
     let query = supabaseAdmin
       .from("clientes")
-      .select("id, nombre, telefono, email, direccion, dni, created_at", { count: "exact" })
+      .select("id, nombre, telefono, email, direccion, dni, tipo_cliente, razon_social, cuit, created_at", { count: "exact" })
       .eq("organization_id", organizationId!)
       .order(sortBy, { ascending: sortOrder })
 
@@ -95,6 +98,9 @@ export async function POST(request: Request) {
         email: data.email || null,
         direccion: data.direccion || null,
         dni: data.dni || null,
+        tipo_cliente: data.tipoCliente || "INDIVIDUAL",
+        razon_social: data.razonSocial || null,
+        cuit: data.cuit || null,
         organization_id: organizationId!,
       })
       .select()

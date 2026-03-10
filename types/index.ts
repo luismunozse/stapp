@@ -41,6 +41,7 @@ export interface TipoDispositivoConfig {
   infoSectionTitle?: string
   infoSectionIcon?: string
   infoSectionColor?: string
+  categoriasInventario?: string[]
 }
 
 export interface TipoDispositivoCustom {
@@ -74,6 +75,18 @@ export interface User {
   rol: Rol
 }
 
+export type TipoCliente = "INDIVIDUAL" | "EMPRESA"
+
+export interface SectorCliente {
+  id: string
+  clienteId: string
+  nombre: string
+  contactoNombre?: string | null
+  contactoTelefono?: string | null
+  contactoEmail?: string | null
+  activo: boolean
+}
+
 export interface Cliente {
   id: string
   nombre: string
@@ -81,6 +94,10 @@ export interface Cliente {
   email?: string | null
   direccion?: string | null
   dni?: string | null
+  tipoCliente?: TipoCliente
+  razonSocial?: string | null
+  cuit?: string | null
+  sectores?: SectorCliente[]
   createdAt: Date
   updatedAt: Date
 }
@@ -111,6 +128,8 @@ export interface OrdenServicio {
   observaciones?: string | null
   diagnostico?: string | null
   metadata?: Record<string, any>
+  sectorId?: string | null
+  sector?: SectorCliente | null
   cliente?: Cliente
   tecnico?: User | null
   // Campos de entrega
@@ -148,6 +167,38 @@ export interface Factura {
   iva: number
   total: number
   estadoPago: EstadoPago
+  cotizacionId?: string | null
+  items?: ItemFactura[]
+}
+
+export type TipoItemFactura = "SERVICIO" | "REPUESTO" | "MANO_DE_OBRA" | "OTRO"
+
+export interface ItemFactura {
+  id: string
+  facturaId: string
+  cotizacionItemId?: string | null
+  descripcion: string
+  cantidad: number
+  precioUnitario: number
+  subtotal: number
+  tipo: TipoItemFactura
+}
+
+// ========================================
+// HISTORIAL DE PRECIOS
+// ========================================
+
+export interface HistorialPrecio {
+  id: string
+  inventarioId: string
+  precioCompraAnterior?: number | null
+  precioCompraNuevo?: number | null
+  precioVentaAnterior?: number | null
+  precioVentaNuevo?: number | null
+  motivo?: string | null
+  usuarioId?: string | null
+  usuario?: { id: string; nombre: string } | null
+  createdAt: string
 }
 
 export type EntityImportType = "CLIENTES" | "INVENTARIO"
@@ -216,6 +267,8 @@ export interface Venta {
   garantias: GarantiaVentaCompleta[]
   pagos?: PagoVenta[]
   devoluciones?: DevolucionVenta[]
+  descuentoAprobadoPor?: string | null
+  descuentoMotivo?: string | null
   createdAt: Date
 }
 
@@ -284,6 +337,7 @@ export interface MovimientoInventario {
 
 export type EstadoDevolucion = "PENDIENTE" | "COMPLETADA" | "RECHAZADA"
 export type TipoDevolucion = "TOTAL" | "PARCIAL"
+export type MetodoReembolso = "EFECTIVO" | "TRANSFERENCIA" | "TARJETA" | "CREDITO_TIENDA" | "OTRO"
 
 export interface DevolucionVenta {
   id: string
@@ -295,6 +349,10 @@ export interface DevolucionVenta {
   estado: EstadoDevolucion
   observaciones?: string | null
   procesadoPor?: string | null
+  metodoReembolso?: MetodoReembolso | null
+  reembolsoReferencia?: string | null
+  fechaReembolso?: string | null
+  reembolsoProcesadoPor?: string | null
   items: ItemDevolucion[]
   createdAt: string
 }

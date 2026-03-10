@@ -1,23 +1,26 @@
 import { NextResponse } from "next/server"
+import { z } from "zod"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { safeParseBody } from "@/lib/api-utils"
+
+const renewSchema = z.object({
+  organizationId: z.string().uuid("ID de organización inválido"),
+  billingPeriod: z.enum(["MONTHLY", "YEARLY"]).optional().default("MONTHLY"),
+  months: z.number().int().min(1).max(36).optional(),
+})
 
 export async function POST(request: Request) {
   try {
     const { error: authError, email } = await requireSuperadmin()
     if (authError) return authError
 
-    const body = await request.json()
-    const { organizationId, billingPeriod, months } = body
+    const parsed = await safeParseBody(request, renewSchema)
+    if ("error" in parsed) return parsed.error
 
-    if (!organizationId) {
-      return NextResponse.json(
-        { error: "organizationId es requerido" },
-        { status: 400 }
-      )
-    }
+    const { organizationId, billingPeriod, months } = parsed.data
 
-    const period: "MONTHLY" | "YEARLY" = billingPeriod || "MONTHLY"
+    const period: "MONTHLY" | "YEARLY" = billingPeriod
 
     // Obtener plan Premium
     const { data: premiumPlan, error: planError } = await supabaseAdmin

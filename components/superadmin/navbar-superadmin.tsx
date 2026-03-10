@@ -24,6 +24,8 @@ import { useState, useEffect, useRef } from "react"
 import { cn } from "@/lib/utils"
 import { useFocusTrap } from "@/hooks/use-focus-trap"
 import { useEscapeKey } from "@/hooks/use-escape-key"
+import { TicketBadge } from "@/components/superadmin/ticket-badge"
+import { GlobalSearch } from "@/components/superadmin/global-search"
 
 const navItems = [
   { href: "/superadmin/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -84,6 +86,11 @@ export function NavbarSuperadmin({ userEmail }: NavbarSuperadminProps) {
             </div>
           </div>
 
+          {/* Búsqueda global */}
+          <div className="px-3 pt-4 pb-2">
+            <GlobalSearch />
+          </div>
+
           {/* Navegación */}
           <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto scrollbar-thin">
             {navItems.map((item) => {
@@ -103,6 +110,7 @@ export function NavbarSuperadmin({ userEmail }: NavbarSuperadminProps) {
                 >
                   <Icon className="mr-3 h-5 w-5" />
                   {item.label}
+                  {item.href === "/superadmin/soporte" && <TicketBadge />}
                 </Link>
               )
             })}
@@ -194,6 +202,7 @@ export function NavbarSuperadmin({ userEmail }: NavbarSuperadminProps) {
                 >
                   <Icon className="mr-3 h-5 w-5" />
                   {item.label}
+                  {item.href === "/superadmin/soporte" && <TicketBadge />}
                 </Link>
               )
             })}

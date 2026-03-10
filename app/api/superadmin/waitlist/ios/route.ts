@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
+import { z } from "zod"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { safeParseBody } from "@/lib/api-utils"
 
 export async function GET() {
   try {
@@ -24,17 +26,20 @@ export async function GET() {
   }
 }
 
+const deleteSchema = z.object({ id: z.string().uuid("ID de waitlist inválido") })
+
 export async function DELETE(request: Request) {
   try {
     const { error } = await requireSuperadmin()
     if (error) return error
 
-    const { id } = await request.json()
+    const parsed = await safeParseBody(request, deleteSchema)
+    if ("error" in parsed) return parsed.error
 
     const { error: dbError } = await supabaseAdmin
       .from("ios_waitlist")
       .delete()
-      .eq("id", id)
+      .eq("id", parsed.data.id)
 
     if (dbError) throw dbError
 

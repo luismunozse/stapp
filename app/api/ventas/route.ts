@@ -30,6 +30,7 @@ const ventaSchema = z.object({
   recargoPorcentaje: z.number().min(0).nullable().optional(),
   montoOriginal: z.number().positive().nullable().optional(),
   numeroReferencia: z.string().optional(),
+  descuentoMotivo: z.string().optional(),
 })
 
 export async function GET(request: Request) {
@@ -211,6 +212,17 @@ export async function POST(request: Request) {
     }
 
     const ventaId = rpcResult?.ventaId || rpcResult
+
+    // Registrar aprobación de descuento si aplica
+    if (descuentoMonto > 0) {
+      await supabaseAdmin
+        .from("ventas")
+        .update({
+          descuento_aprobado_por: userId!,
+          descuento_motivo: data.descuentoMotivo || null,
+        })
+        .eq("id", ventaId)
+    }
 
     // Obtener venta completa con relaciones
     const { data: ventaCompleta } = await supabaseAdmin

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -8,51 +8,96 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DataTable, Column } from "@/components/ui/data-table"
-import { Search, Eye, Power, PowerOff, Building2 } from "lucide-react"
+import { Search, Eye, Power, PowerOff, Building2, Loader2, Download, CheckCircle, XCircle, X } from "lucide-react"
 import { formatDate } from "@/lib/utils"
+import { useSuperadminFetch, useSuperadminMutation } from "@/hooks/use-superadmin-fetch"
+import { useLastUpdated } from "@/hooks/use-last-updated"
+import { LastUpdated } from "@/components/superadmin/last-updated"
 import type { OrganizationListItem } from "@/types/superadmin"
+
+const PAGE_SIZE = 20
+
+interface OrgsResponse {
+  organizations: OrganizationListItem[]
+  total: number
+}
 
 export default function OrganizacionesPage() {
   const router = useRouter()
   const [organizations, setOrganizations] = useState<OrganizationListItem[]>([])
-  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState("")
   const [planFilter, setPlanFilter] = useState("")
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
+  const [togglingId, setTogglingId] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const { loading, fetchData } = useSuperadminFetch<OrgsResponse>()
+  const { mutate } = useSuperadminMutation()
+  const { mutate: bulkMutate, loading: bulkLoading } = useSuperadminMutation()
+  const { formattedLastUpdated, markUpdated } = useLastUpdated()
+
+  // Debounce search input
+  const handleSearchChange = (value: string) => {
+    setSearch(value)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      setDebouncedSearch(value)
+      setPage(1)
+    }, 300)
+  }
 
   const fetchOrganizations = useCallback(async () => {
-    setLoading(true)
-    try {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: "20",
-        ...(search && { search }),
-        ...(statusFilter && { status: statusFilter }),
-        ...(planFilter && { plan: planFilter }),
-      })
+    const params = new URLSearchParams({
+      page: page.toString(),
+      limit: PAGE_SIZE.toString(),
+      ...(debouncedSearch && { search: debouncedSearch }),
+      ...(statusFilter && { status: statusFilter }),
+      ...(planFilter && { plan: planFilter }),
+    })
 
-      const res = await fetch(`/api/superadmin/organizations?${params}`)
-      if (!res.ok) throw new Error("Error fetching organizations")
-
-      const data = await res.json()
-      setOrganizations(data.organizations || [])
-      setTotal(data.total || 0)
-    } catch (error) {
-      console.error("Error:", error)
-    } finally {
-      setLoading(false)
+    const result = await fetchData(`/api/superadmin/organizations?${params}`)
+    if (result) {
+      setOrganizations(result.organizations || [])
+      setTotal(result.total || 0)
+      markUpdated()
     }
-  }, [page, search, statusFilter, planFilter])
+  }, [page, debouncedSearch, statusFilter, planFilter, fetchData])
 
   useEffect(() => {
     fetchOrganizations()
   }, [fetchOrganizations])
 
   const handleSearch = () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    setDebouncedSearch(search)
     setPage(1)
-    fetchOrganizations()
+  }
+
+  const handleExportCSV = () => {
+    const csv = [
+      "nombre,slug,email,plan,estado,creada",
+      ...organizations.map((org) =>
+        [
+          `"${org.nombre}"`,
+          org.slug,
+          org.email || "-",
+          org.subscription?.plans?.nombre || "Free",
+          org.activo ? "Activa" : "Inactiva",
+          org.created_at,
+        ].join(",")
+      ),
+    ].join("\n")
+    const blob = new Blob([csv], { type: "text/csv" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `organizaciones-${new Date().toISOString().split("T")[0]}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   const handleToggleStatus = async (
@@ -60,20 +105,35 @@ export default function OrganizacionesPage() {
     org: OrganizationListItem
   ) => {
     e.stopPropagation()
-    try {
-      const res = await fetch(
-        `/api/superadmin/organizations/${org.id}/toggle-status`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ activo: !org.activo }),
-        }
-      )
-      if (!res.ok) throw new Error("Error toggling status")
-      fetchOrganizations()
-    } catch (error) {
-      console.error("Error:", error)
-    }
+    setTogglingId(org.id)
+    await mutate(
+      `/api/superadmin/organizations/${org.id}/toggle-status`,
+      {
+        method: "POST",
+        body: { activo: !org.activo },
+        successMessage: org.activo
+          ? `${org.nombre} desactivada`
+          : `${org.nombre} activada`,
+        errorMessage: "Error al cambiar el estado",
+        onSuccess: fetchOrganizations,
+      }
+    )
+    setTogglingId(null)
+  }
+
+  const handleBulkToggle = async (activo: boolean) => {
+    await bulkMutate("/api/superadmin/organizations/bulk-toggle", {
+      method: "POST",
+      body: { ids: selectedIds, activo },
+      successMessage: activo
+        ? `${selectedIds.length} organizaciones activadas`
+        : `${selectedIds.length} organizaciones desactivadas`,
+      errorMessage: "Error al cambiar estado en lote",
+      onSuccess: () => {
+        setSelectedIds([])
+        fetchOrganizations()
+      },
+    })
   }
 
   const columns: Column<OrganizationListItem>[] = [
@@ -92,6 +152,7 @@ export default function OrganizacionesPage() {
     {
       key: "email",
       header: "Email",
+      hideOnMobile: true,
       render: (org) => org.email || "-",
     },
     {
@@ -125,6 +186,7 @@ export default function OrganizacionesPage() {
     {
       key: "created_at",
       header: "Creada",
+      hideOnMobile: true,
       render: (org) => formatDate(org.created_at),
     },
     {
@@ -145,8 +207,11 @@ export default function OrganizacionesPage() {
             variant="ghost"
             onClick={(e) => handleToggleStatus(e, org)}
             title={org.activo ? "Desactivar" : "Activar"}
+            disabled={togglingId === org.id}
           >
-            {org.activo ? (
+            {togglingId === org.id ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : org.activo ? (
               <PowerOff className="h-4 w-4 text-red-500" />
             ) : (
               <Power className="h-4 w-4 text-green-500" />
@@ -159,14 +224,29 @@ export default function OrganizacionesPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold flex items-center gap-2">
-          <Building2 className="h-8 w-8" />
-          Organizaciones
-        </h1>
-        <p className="text-muted-foreground">
-          Gestiona todas las organizaciones del sistema
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            <Building2 className="h-8 w-8" />
+            Organizaciones
+          </h1>
+          <p className="text-muted-foreground">
+            Gestiona todas las organizaciones del sistema
+          </p>
+          <LastUpdated
+            formattedLastUpdated={formattedLastUpdated}
+            onRefresh={fetchOrganizations}
+            loading={loading}
+          />
+        </div>
+        <Button
+          variant="outline"
+          onClick={handleExportCSV}
+          disabled={organizations.length === 0}
+        >
+          <Download className="h-4 w-4 mr-2" />
+          Exportar CSV
+        </Button>
       </div>
 
       <Card>
@@ -176,7 +256,7 @@ export default function OrganizacionesPage() {
               <Input
                 placeholder="Buscar por nombre, slug o email..."
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => handleSearchChange(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSearch()}
                 className="max-w-sm"
               />
@@ -222,6 +302,52 @@ export default function OrganizacionesPage() {
           </div>
         </CardHeader>
         <CardContent>
+          {selectedIds.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 mb-4 p-3 rounded-lg bg-muted/50 border">
+              <span className="text-sm font-medium">
+                {selectedIds.length} seleccionados
+              </span>
+              <div className="flex flex-wrap gap-2 ml-auto">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-green-600 border-green-600 hover:bg-green-50"
+                  onClick={() => handleBulkToggle(true)}
+                  disabled={bulkLoading}
+                >
+                  {bulkLoading ? (
+                    <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                  ) : (
+                    <CheckCircle className="h-4 w-4 mr-1.5" />
+                  )}
+                  Activar seleccionados
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-red-600 border-red-600 hover:bg-red-50"
+                  onClick={() => handleBulkToggle(false)}
+                  disabled={bulkLoading}
+                >
+                  {bulkLoading ? (
+                    <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                  ) : (
+                    <XCircle className="h-4 w-4 mr-1.5" />
+                  )}
+                  Desactivar seleccionados
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setSelectedIds([])}
+                  disabled={bulkLoading}
+                >
+                  <X className="h-4 w-4 mr-1.5" />
+                  Deseleccionar
+                </Button>
+              </div>
+            </div>
+          )}
           <DataTable
             data={organizations}
             columns={columns}
@@ -229,9 +355,12 @@ export default function OrganizacionesPage() {
             loading={loading}
             emptyMessage="No se encontraron organizaciones"
             onRowClick={(org) => router.push(`/superadmin/organizaciones/${org.id}`)}
+            selectable={true}
+            selectedKeys={selectedIds}
+            onSelectionChange={setSelectedIds}
             pagination={{
               page,
-              pageSize: 20,
+              pageSize: PAGE_SIZE,
               total,
               onPageChange: setPage,
             }}

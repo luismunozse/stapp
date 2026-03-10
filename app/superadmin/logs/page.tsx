@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -9,70 +9,67 @@ import { Input } from "@/components/ui/input"
 import { DataTable, Column } from "@/components/ui/data-table"
 import { FileText, ChevronDown, ChevronUp } from "lucide-react"
 import { formatDateTime } from "@/lib/utils"
+import { useSuperadminFetch } from "@/hooks/use-superadmin-fetch"
+import { useLastUpdated } from "@/hooks/use-last-updated"
+import { LastUpdated } from "@/components/superadmin/last-updated"
 import type { AuditLogWithRelations } from "@/types/superadmin"
-import { cn } from "@/lib/utils"
+
+const ACTION_VARIANTS: Record<string, "default" | "secondary" | "destructive"> = {
+  CREATE: "default",
+  UPDATE: "secondary",
+  DELETE: "destructive",
+}
+
+const PAGE_SIZE = 50
 
 export default function LogsPage() {
-  const [logs, setLogs] = useState<AuditLogWithRelations[]>([])
-  const [loading, setLoading] = useState(true)
   const [entityFilter, setEntityFilter] = useState("")
   const [actionFilter, setActionFilter] = useState("")
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
+  const [logs, setLogs] = useState<AuditLogWithRelations[]>([])
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
 
+  const { loading, fetchData } = useSuperadminFetch<{
+    logs: AuditLogWithRelations[]
+    total: number
+  }>()
+  const { formattedLastUpdated, markUpdated } = useLastUpdated()
+
   const fetchLogs = useCallback(async () => {
-    setLoading(true)
-    try {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: "50",
-        ...(entityFilter && { entity: entityFilter }),
-        ...(actionFilter && { action: actionFilter }),
-        ...(dateFrom && { dateFrom }),
-        ...(dateTo && { dateTo }),
-      })
+    const params = new URLSearchParams({
+      page: page.toString(),
+      limit: PAGE_SIZE.toString(),
+      ...(entityFilter && { entity: entityFilter }),
+      ...(actionFilter && { action: actionFilter }),
+      ...(dateFrom && { dateFrom }),
+      ...(dateTo && { dateTo }),
+    })
 
-      const res = await fetch(`/api/superadmin/audit-logs?${params}`)
-      if (!res.ok) throw new Error("Error fetching logs")
-
-      const data = await res.json()
-      setLogs(data.logs || [])
-      setTotal(data.total || 0)
-    } catch (error) {
-      console.error("Error:", error)
-    } finally {
-      setLoading(false)
+    const result = await fetchData(`/api/superadmin/audit-logs?${params}`)
+    if (result) {
+      setLogs(result.logs || [])
+      setTotal(result.total || 0)
+      markUpdated()
     }
-  }, [page, entityFilter, actionFilter, dateFrom, dateTo])
+  }, [page, entityFilter, actionFilter, dateFrom, dateTo, fetchData])
 
   useEffect(() => {
     fetchLogs()
   }, [fetchLogs])
 
   const toggleRow = (id: string) => {
-    const newExpanded = new Set(expandedRows)
-    if (newExpanded.has(id)) {
-      newExpanded.delete(id)
-    } else {
-      newExpanded.add(id)
-    }
-    setExpandedRows(newExpanded)
-  }
-
-  const getActionVariant = (action: string) => {
-    switch (action) {
-      case "CREATE":
-        return "default"
-      case "UPDATE":
-        return "secondary"
-      case "DELETE":
-        return "destructive"
-      default:
-        return "secondary"
-    }
+    setExpandedRows((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
   }
 
   const columns: Column<AuditLogWithRelations>[] = [
@@ -86,6 +83,7 @@ export default function LogsPage() {
     {
       key: "organizations",
       header: "Organización",
+      hideOnMobile: true,
       render: (log) => (
         <div>
           <div className="font-medium text-sm">
@@ -100,6 +98,7 @@ export default function LogsPage() {
     {
       key: "users",
       header: "Usuario",
+      hideOnMobile: true,
       render: (log) =>
         log.users ? (
           <div>
@@ -114,7 +113,9 @@ export default function LogsPage() {
       key: "action",
       header: "Acción",
       render: (log) => (
-        <Badge variant={getActionVariant(log.action)}>{log.action}</Badge>
+        <Badge variant={ACTION_VARIANTS[log.action] || "secondary"}>
+          {log.action}
+        </Badge>
       ),
     },
     {
@@ -147,6 +148,8 @@ export default function LogsPage() {
     },
   ]
 
+  const hasFilters = dateFrom || dateTo || actionFilter || entityFilter
+
   return (
     <div className="space-y-6">
       <div>
@@ -157,6 +160,11 @@ export default function LogsPage() {
         <p className="text-muted-foreground">
           Registro de todas las acciones en el sistema
         </p>
+        <LastUpdated
+          formattedLastUpdated={formattedLastUpdated}
+          onRefresh={fetchLogs}
+          loading={loading}
+        />
       </div>
 
       <Card>
@@ -223,7 +231,7 @@ export default function LogsPage() {
                 className="w-[160px]"
               />
             </div>
-            {(dateFrom || dateTo || actionFilter || entityFilter) && (
+            {hasFilters && (
               <Button
                 variant="ghost"
                 onClick={() => {
@@ -240,113 +248,46 @@ export default function LogsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            <div className="rounded-lg border bg-card overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-muted/50">
-                      {columns.map((column) => (
-                        <th
-                          key={column.key}
-                          className={cn(
-                            "px-4 py-3 text-left font-medium text-muted-foreground",
-                            column.headerClassName
-                          )}
-                        >
-                          {column.header}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {loading ? (
-                      <tr>
-                        <td
-                          colSpan={columns.length}
-                          className="px-4 py-8 text-center text-muted-foreground"
-                        >
-                          <div className="flex items-center justify-center gap-2">
-                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                            Cargando...
-                          </div>
-                        </td>
-                      </tr>
-                    ) : logs.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={columns.length}
-                          className="px-4 py-8 text-center text-muted-foreground"
-                        >
-                          No se encontraron logs
-                        </td>
-                      </tr>
-                    ) : (
-                      logs.map((log) => (
-                        <>
-                          <tr
-                            key={log.id}
-                            className="border-b last:border-0 transition-colors hover:bg-muted/50"
-                          >
-                            {columns.map((column) => (
-                              <td
-                                key={column.key}
-                                className={cn("px-4 py-3", column.className)}
-                              >
-                                {column.render
-                                  ? column.render(log)
-                                  : (log as any)[column.key]}
-                              </td>
-                            ))}
-                          </tr>
-                          {expandedRows.has(log.id) && log.changes && (
-                            <tr key={`${log.id}-expanded`}>
-                              <td
-                                colSpan={columns.length}
-                                className="px-4 py-3 bg-muted/30"
-                              >
-                                <pre className="text-xs overflow-x-auto p-2 bg-muted rounded">
-                                  {JSON.stringify(log.changes, null, 2)}
-                                </pre>
-                              </td>
-                            </tr>
-                          )}
-                        </>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+          <DataTable
+            data={logs}
+            columns={columns}
+            keyExtractor={(log) => log.id}
+            loading={loading}
+            emptyMessage="No se encontraron logs"
+            pagination={{
+              page,
+              pageSize: PAGE_SIZE,
+              total,
+              onPageChange: setPage,
+            }}
+          />
 
-            {/* Pagination */}
-            {total > 0 && (
-              <div className="flex items-center justify-between">
-                <div className="text-sm text-muted-foreground">
-                  Mostrando {(page - 1) * 50 + 1} -{" "}
-                  {Math.min(page * 50, total)} de {total}
-                </div>
-                <div className="flex gap-2">
+          {/* Expanded row details */}
+          {logs
+            .filter((log) => expandedRows.has(log.id) && log.changes)
+            .map((log) => (
+              <div
+                key={`${log.id}-detail`}
+                className="mt-2 p-3 bg-muted/30 rounded-lg border"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Cambios - {log.entity} ({log.action}) -{" "}
+                    {formatDateTime(log.created_at)}
+                  </span>
                   <Button
-                    variant="outline"
                     size="sm"
-                    onClick={() => setPage(prev => prev - 1)}
-                    disabled={page === 1}
+                    variant="ghost"
+                    onClick={() => toggleRow(log.id)}
                   >
-                    Anterior
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPage(prev => prev + 1)}
-                    disabled={page * 50 >= total}
-                  >
-                    Siguiente
+                    <ChevronUp className="h-3 w-3" />
                   </Button>
                 </div>
+                <pre className="text-xs overflow-x-auto p-2 bg-muted rounded">
+                  {JSON.stringify(log.changes, null, 2)}
+                </pre>
               </div>
-            )}
-          </div>
+            ))}
         </CardContent>
       </Card>
     </div>

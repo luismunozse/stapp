@@ -5,6 +5,7 @@ import {
   transformToCamelCase,
   transformToSnakeCase,
   formatCliente,
+  formatOrden,
   formatInventario,
   formatUser,
   formatProveedor,
@@ -164,6 +165,9 @@ describe('formatCliente', () => {
       email: 'juan@test.com',
       direccion: 'Calle 123',
       dni: '12345678',
+      tipoCliente: 'INDIVIDUAL',
+      razonSocial: undefined,
+      cuit: undefined,
       organizationId: 'org-1',
       createdAt: '2024-01-01',
       updatedAt: '2024-01-02',
@@ -188,6 +192,125 @@ describe('formatCliente', () => {
     const result = formatCliente(input)
     expect(result?.nombre).toBe('Juan')
     expect(result?.email).toBeUndefined()
+    expect(result?.tipoCliente).toBe('INDIVIDUAL')
+  })
+
+  it('formatea cliente empresa con razon social y cuit', () => {
+    const input = {
+      id: '2',
+      nombre: 'Municipalidad de Cordoba',
+      telefono: '3514001234',
+      email: 'contacto@muni.gob.ar',
+      direccion: 'Av. Marcelo T. de Alvear 120',
+      dni: null,
+      tipo_cliente: 'EMPRESA',
+      razon_social: 'Municipalidad de Cordoba',
+      cuit: '30-12345678-9',
+      organization_id: 'org-1',
+      created_at: '2024-01-01',
+      updated_at: '2024-01-02',
+    }
+    const result = formatCliente(input)
+    expect(result?.tipoCliente).toBe('EMPRESA')
+    expect(result?.razonSocial).toBe('Municipalidad de Cordoba')
+    expect(result?.cuit).toBe('30-12345678-9')
+  })
+
+  it('defaults tipoCliente to INDIVIDUAL when tipo_cliente is null', () => {
+    const input = {
+      id: '3',
+      nombre: 'Cliente Viejo',
+      telefono: '123',
+      tipo_cliente: null,
+      organization_id: 'org-1',
+    }
+    const result = formatCliente(input)
+    expect(result?.tipoCliente).toBe('INDIVIDUAL')
+  })
+})
+
+describe('formatOrden', () => {
+  it('formatea orden con sector', () => {
+    const input = {
+      id: 'ord-1',
+      numero_orden: 1,
+      codigo_orden: 'CEL-001',
+      cliente_id: 'c-1',
+      tecnico_id: null,
+      organization_id: 'org-1',
+      dispositivo: 'iPhone 15',
+      tipo_dispositivo: 'CELULAR',
+      marca: 'Apple',
+      color: 'Negro',
+      imei: '123456789',
+      accesorios: 'Cargador',
+      password_dispositivo: null,
+      problema_reportado: 'No enciende',
+      estado: 'RECIBIDO',
+      presupuesto: null,
+      costo_final: null,
+      sena: 0,
+      fecha_ingreso: '2024-01-01',
+      fecha_prometida: null,
+      fecha_completado: null,
+      observaciones: null,
+      diagnostico: null,
+      metadata: { procesador: 'A16' },
+      sector_id: 's-1',
+      sectores_cliente: {
+        id: 's-1',
+        cliente_id: 'c-1',
+        nombre: 'Finanzas',
+        contacto_nombre: 'Juan',
+        contacto_telefono: '123',
+        contacto_email: 'juan@empresa.com',
+        activo: true,
+      },
+    }
+    const result = formatOrden(input)
+    expect(result?.sectorId).toBe('s-1')
+    expect(result?.sector?.nombre).toBe('Finanzas')
+    expect(result?.sector?.contactoNombre).toBe('Juan')
+    expect(result?.sector?.contactoEmail).toBe('juan@empresa.com')
+    expect(result?.metadata).toEqual({ procesador: 'A16' })
+  })
+
+  it('formatea orden sin sector', () => {
+    const input = {
+      id: 'ord-2',
+      numero_orden: 2,
+      codigo_orden: 'CEL-002',
+      cliente_id: 'c-2',
+      tecnico_id: null,
+      organization_id: 'org-1',
+      dispositivo: 'Samsung S24',
+      tipo_dispositivo: 'CELULAR',
+      marca: 'Samsung',
+      color: null,
+      imei: null,
+      accesorios: null,
+      password_dispositivo: null,
+      problema_reportado: 'Pantalla rota',
+      estado: 'RECIBIDO',
+      presupuesto: 50000,
+      costo_final: null,
+      sena: 0,
+      fecha_ingreso: '2024-01-02',
+      fecha_prometida: null,
+      fecha_completado: null,
+      observaciones: null,
+      diagnostico: null,
+      metadata: {},
+      sector_id: null,
+    }
+    const result = formatOrden(input)
+    expect(result?.sectorId).toBeNull()
+    expect(result?.sector).toBeUndefined()
+    expect(result?.metadata).toEqual({})
+  })
+
+  it('retorna null para input null', () => {
+    expect(formatOrden(null)).toBe(null)
   })
 })
 

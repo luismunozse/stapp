@@ -39,6 +39,7 @@ const ordenSchema = z.object({
   presupuestoAceptado: z.boolean().optional(),
   sena: z.number().optional(),
   metadata: z.record(z.any()).optional(),
+  sectorId: z.string().optional(),
 })
 
 export async function GET(request: Request) {
@@ -220,6 +221,7 @@ export async function POST(request: Request) {
         costo_final: costoFinal,
         sena: data.sena || 0,
         metadata: data.metadata || {},
+        sector_id: data.sectorId || null,
       })
       .select(`
         *,

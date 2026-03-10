@@ -83,6 +83,16 @@ export function formatOrden(orden: any) {
     garantia: orden.garantias,
     checklist: orden.checklist_recepcion,
     metadata: orden.metadata || {},
+    sectorId: orden.sector_id,
+    sector: orden.sectores_cliente ? {
+      id: orden.sectores_cliente.id,
+      clienteId: orden.sectores_cliente.cliente_id,
+      nombre: orden.sectores_cliente.nombre,
+      contactoNombre: orden.sectores_cliente.contacto_nombre,
+      contactoTelefono: orden.sectores_cliente.contacto_telefono,
+      contactoEmail: orden.sectores_cliente.contacto_email,
+      activo: orden.sectores_cliente.activo,
+    } : undefined,
   }
 }
 
@@ -96,6 +106,9 @@ export function formatCliente(cliente: any) {
     email: cliente.email,
     direccion: cliente.direccion,
     dni: cliente.dni,
+    tipoCliente: cliente.tipo_cliente || "INDIVIDUAL",
+    razonSocial: cliente.razon_social,
+    cuit: cliente.cuit,
     organizationId: cliente.organization_id,
     createdAt: cliente.created_at,
     updatedAt: cliente.updated_at,
@@ -172,6 +185,8 @@ export function formatVenta(venta: any) {
     metodoPago: venta.metodo_pago,
     estado: venta.estado,
     observaciones: venta.observaciones,
+    descuentoAprobadoPor: venta.descuento_aprobado_por || null,
+    descuentoMotivo: venta.descuento_motivo || null,
     createdAt: venta.created_at,
     updatedAt: venta.updated_at,
     // Relaciones
@@ -266,6 +281,10 @@ export function formatDevolucion(d: any) {
     estado: d.estado,
     observaciones: d.observaciones,
     procesadoPor: d.procesado_por,
+    metodoReembolso: d.metodo_reembolso || null,
+    reembolsoReferencia: d.reembolso_referencia || null,
+    fechaReembolso: d.fecha_reembolso || null,
+    reembolsoProcesadoPor: d.reembolso_procesado_por || null,
     createdAt: d.created_at,
     items: d.items_devolucion?.map((item: any) => ({
       id: item.id,

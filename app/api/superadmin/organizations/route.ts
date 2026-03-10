@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { parsePagination } from "@/lib/api-utils"
 import type { OrganizationsListResponse } from "@/types/superadmin"
 
 export async function GET(request: Request) {
@@ -12,8 +13,7 @@ export async function GET(request: Request) {
     const search = searchParams.get("search") || ""
     const status = searchParams.get("status") || ""
     const plan = searchParams.get("plan") || ""
-    const page = parseInt(searchParams.get("page") || "1")
-    const limit = parseInt(searchParams.get("limit") || "20")
+    const { page, limit, offset } = parsePagination(searchParams)
 
     // Query base para organizaciones
     let query = supabaseAdmin
@@ -47,7 +47,6 @@ export async function GET(request: Request) {
     }
 
     // Paginación
-    const offset = (page - 1) * limit
     query = query.range(offset, offset + limit - 1)
 
     const { data: organizations, error: dbError, count } = await query
@@ -57,44 +56,46 @@ export async function GET(request: Request) {
     // Obtener suscripciones y conteo de usuarios para cada organización
     const orgIds = organizations?.map((o) => o.id) || []
 
-    let subscriptionsMap: Record<string, any> = {}
+    let subscriptionsMap: Record<string, { id: string; status: string; plans: { id: string; nombre: string; tipo: string } | null }> = {}
     let usersCountMap: Record<string, number> = {}
 
     if (orgIds.length > 0) {
-      // Obtener suscripciones con planes
-      const { data: subscriptions } = await supabaseAdmin
-        .from("subscriptions")
-        .select(
-          `
-          id,
-          organization_id,
-          status,
-          plans (
+      // Obtener suscripciones con planes y conteo de usuarios en paralelo
+      const [{ data: subscriptions }, { data: usersCounts }] = await Promise.all([
+        supabaseAdmin
+          .from("subscriptions")
+          .select(
+            `
             id,
-            nombre,
-            tipo
+            organization_id,
+            status,
+            plans (
+              id,
+              nombre,
+              tipo
+            )
+          `
           )
-        `
-        )
-        .in("organization_id", orgIds)
+          .in("organization_id", orgIds),
+
+        supabaseAdmin
+          .from("users")
+          .select("organization_id")
+          .in("organization_id", orgIds),
+      ])
 
       subscriptionsMap = (subscriptions || []).reduce(
         (acc, sub) => {
+          const plansData = Array.isArray(sub.plans) ? sub.plans[0] : sub.plans
           acc[sub.organization_id] = {
             id: sub.id,
-            status: sub.status,
-            plans: sub.plans,
+            status: sub.status as string,
+            plans: plansData ?? null,
           }
           return acc
         },
-        {} as Record<string, any>
+        {} as typeof subscriptionsMap
       )
-
-      // Obtener conteo de usuarios por organización
-      const { data: usersCounts } = await supabaseAdmin
-        .from("users")
-        .select("organization_id")
-        .in("organization_id", orgIds)
 
       usersCountMap = (usersCounts || []).reduce(
         (acc, user) => {
@@ -124,7 +125,7 @@ export async function GET(request: Request) {
     }
 
     const response: OrganizationsListResponse = {
-      organizations: result,
+      organizations: result as OrganizationsListResponse["organizations"],
       total: count || 0,
       page,
       limit,

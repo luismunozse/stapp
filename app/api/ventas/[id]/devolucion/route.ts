@@ -18,6 +18,8 @@ const devolucionSchema = z.object({
   motivo: z.string().min(1, "El motivo es requerido"),
   observaciones: z.string().optional(),
   items: z.array(itemDevolucionSchema).min(1, "Debe incluir al menos un item"),
+  metodoReembolso: z.enum(["EFECTIVO", "TRANSFERENCIA", "TARJETA", "CREDITO_TIENDA", "OTRO"]).optional(),
+  reembolsoReferencia: z.string().optional(),
 })
 
 // GET: Get all returns for a sale
@@ -187,6 +189,10 @@ export async function POST(
         observaciones: data.observaciones || null,
         procesado_por: userId!,
         organization_id: organizationId!,
+        metodo_reembolso: data.metodoReembolso || null,
+        reembolso_referencia: data.reembolsoReferencia || null,
+        fecha_reembolso: data.metodoReembolso ? new Date().toISOString() : null,
+        reembolso_procesado_por: data.metodoReembolso ? userId! : null,
       })
       .select()
       .single()

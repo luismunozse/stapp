@@ -10,6 +10,9 @@ const clienteSchema = z.object({
   email: z.string().email().optional().or(z.literal("")),
   direccion: z.string().optional(),
   dni: z.string().optional(),
+  tipoCliente: z.enum(["INDIVIDUAL", "EMPRESA"]).optional(),
+  razonSocial: z.string().optional(),
+  cuit: z.string().optional(),
 })
 
 export async function GET(
@@ -32,6 +35,14 @@ export async function GET(
           dispositivo,
           estado,
           fecha_ingreso
+        ),
+        sectores_cliente (
+          id,
+          nombre,
+          contacto_nombre,
+          contacto_telefono,
+          contacto_email,
+          activo
         )
       `)
       .eq("id", id)
@@ -45,9 +56,20 @@ export async function GET(
       )
     }
 
-    // Formatear respuesta con órdenes
+    // Formatear respuesta con órdenes y sectores
     const clienteFormatted = {
       ...formatCliente(cliente),
+      sectores: cliente.sectores_cliente
+        ?.filter((s: any) => s.activo)
+        .map((s: any) => ({
+          id: s.id,
+          clienteId: id,
+          nombre: s.nombre,
+          contactoNombre: s.contacto_nombre,
+          contactoTelefono: s.contacto_telefono,
+          contactoEmail: s.contacto_email,
+          activo: s.activo,
+        })) || [],
       ordenes: cliente.ordenes_servicio
         ?.sort((a: any, b: any) =>
           new Date(b.fecha_ingreso).getTime() - new Date(a.fecha_ingreso).getTime()
@@ -106,6 +128,9 @@ export async function PUT(
     if (data.email !== undefined) updateData.email = data.email === "" ? null : data.email
     if (data.direccion !== undefined) updateData.direccion = data.direccion
     if (data.dni !== undefined) updateData.dni = data.dni
+    if (data.tipoCliente !== undefined) updateData.tipo_cliente = data.tipoCliente
+    if (data.razonSocial !== undefined) updateData.razon_social = data.razonSocial || null
+    if (data.cuit !== undefined) updateData.cuit = data.cuit || null
 
     const { data: cliente, error: updateError } = await supabaseAdmin
       .from("clientes")

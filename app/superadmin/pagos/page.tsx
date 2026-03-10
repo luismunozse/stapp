@@ -8,14 +8,33 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { DataTable, Column } from "@/components/ui/data-table"
-import { Receipt, Eye, ExternalLink, DollarSign } from "lucide-react"
+import { Receipt, Eye, ExternalLink, DollarSign, Download } from "lucide-react"
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils"
+import { useSuperadminFetch } from "@/hooks/use-superadmin-fetch"
+import { useLastUpdated } from "@/hooks/use-last-updated"
+import { LastUpdated } from "@/components/superadmin/last-updated"
 import type { PaymentWithOrg } from "@/types/superadmin"
+
+const PAGE_SIZE = 20
+
+function isSafeUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === "https:" || parsed.protocol === "http:"
+  } catch {
+    return false
+  }
+}
+
+interface PaymentsResponse {
+  payments: PaymentWithOrg[]
+  total: number
+  totalAmount: number
+}
 
 export default function PagosPage() {
   const router = useRouter()
   const [payments, setPayments] = useState<PaymentWithOrg[]>([])
-  const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState("")
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
@@ -23,34 +42,52 @@ export default function PagosPage() {
   const [total, setTotal] = useState(0)
   const [totalAmount, setTotalAmount] = useState(0)
 
+  const { loading, fetchData } = useSuperadminFetch<PaymentsResponse>()
+  const { formattedLastUpdated, markUpdated } = useLastUpdated()
+
   const fetchPayments = useCallback(async () => {
-    setLoading(true)
-    try {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: "20",
-        ...(statusFilter && { status: statusFilter }),
-        ...(dateFrom && { dateFrom }),
-        ...(dateTo && { dateTo }),
-      })
+    const params = new URLSearchParams({
+      page: page.toString(),
+      limit: PAGE_SIZE.toString(),
+      ...(statusFilter && { status: statusFilter }),
+      ...(dateFrom && { dateFrom }),
+      ...(dateTo && { dateTo }),
+    })
 
-      const res = await fetch(`/api/superadmin/payments?${params}`)
-      if (!res.ok) throw new Error("Error fetching payments")
-
-      const data = await res.json()
-      setPayments(data.payments || [])
-      setTotal(data.total || 0)
-      setTotalAmount(data.totalAmount || 0)
-    } catch (error) {
-      console.error("Error:", error)
-    } finally {
-      setLoading(false)
+    const result = await fetchData(`/api/superadmin/payments?${params}`)
+    if (result) {
+      setPayments(result.payments || [])
+      setTotal(result.total || 0)
+      setTotalAmount(result.totalAmount || 0)
+      markUpdated()
     }
-  }, [page, statusFilter, dateFrom, dateTo])
+  }, [page, statusFilter, dateFrom, dateTo, fetchData])
 
   useEffect(() => {
     fetchPayments()
   }, [fetchPayments])
+
+  const handleExportCSV = () => {
+    const csv = [
+      "fecha,organizacion,monto,estado,proveedor",
+      ...payments.map((p) =>
+        [
+          p.paid_at || p.created_at,
+          `"${p.organization?.nombre || "-"}"`,
+          p.amount,
+          p.status,
+          p.payment_provider || "-",
+        ].join(",")
+      ),
+    ].join("\n")
+    const blob = new Blob([csv], { type: "text/csv" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `pagos-${new Date().toISOString().split("T")[0]}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 
   const getStatusVariant = (status: string) => {
     switch (status) {
@@ -107,6 +144,7 @@ export default function PagosPage() {
     {
       key: "payment_provider",
       header: "Proveedor",
+      hideOnMobile: true,
       render: (payment) => payment.payment_provider || "-",
     },
     {
@@ -124,7 +162,7 @@ export default function PagosPage() {
           >
             <Eye className="h-4 w-4" />
           </Button>
-          {payment.receipt_url && (
+          {payment.receipt_url && isSafeUrl(payment.receipt_url) && (
             <a
               href={payment.receipt_url}
               target="_blank"
@@ -142,14 +180,29 @@ export default function PagosPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold flex items-center gap-2">
-          <Receipt className="h-8 w-8" />
-          Pagos
-        </h1>
-        <p className="text-muted-foreground">
-          Historial de pagos de todas las organizaciones
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            <Receipt className="h-8 w-8" />
+            Pagos
+          </h1>
+          <p className="text-muted-foreground">
+            Historial de pagos de todas las organizaciones
+          </p>
+          <LastUpdated
+            formattedLastUpdated={formattedLastUpdated}
+            onRefresh={fetchPayments}
+            loading={loading}
+          />
+        </div>
+        <Button
+          variant="outline"
+          onClick={handleExportCSV}
+          disabled={payments.length === 0}
+        >
+          <Download className="h-4 w-4 mr-2" />
+          Exportar CSV
+        </Button>
       </div>
 
       {/* Stats Card */}
@@ -240,7 +293,7 @@ export default function PagosPage() {
             emptyMessage="No se encontraron pagos"
             pagination={{
               page,
-              pageSize: 20,
+              pageSize: PAGE_SIZE,
               total,
               onPageChange: setPage,
             }}

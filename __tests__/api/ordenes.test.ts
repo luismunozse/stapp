@@ -86,7 +86,7 @@ describe("GET /api/ordenes", () => {
     expect(body.data).toHaveLength(1)
     expect(body.data[0].numeroOrden).toBe(1)
     expect(body.data[0].codigoOrden).toBe("CEL-001")
-    expect(body.data[0].cliente).toEqual({ id: "c1", nombre: "Juan" })
+    expect(body.data[0].cliente).toMatchObject({ id: "c1", nombre: "Juan" })
     expect(body.total).toBe(1)
     expect(body.page).toBe(1)
   })
