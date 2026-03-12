@@ -25,6 +25,7 @@ import {
 import { useSuperadminFetch, useSuperadminMutation } from "@/hooks/use-superadmin-fetch"
 import { formatDateTime } from "@/lib/utils"
 import { toast } from "sonner"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 
 interface Organization {
   id: string
@@ -57,6 +58,7 @@ export default function BroadcastPage() {
   const [history, setHistory] = useState<BroadcastHistory[]>([])
   const [sent, setSent] = useState(false)
   const [lastResult, setLastResult] = useState<string>("")
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   const { fetchData: fetchOrgs } = useSuperadminFetch<{ organizations: Organization[] }>()
   const { fetchData: fetchHistory } = useSuperadminFetch<{ broadcasts: BroadcastHistory[] }>()
@@ -79,7 +81,7 @@ export default function BroadcastPage() {
     loadData()
   }, [loadData])
 
-  const handleSend = async () => {
+  const handleSendClick = () => {
     if (!title.trim() || !message.trim()) {
       toast.error("Titulo y mensaje son requeridos")
       return
@@ -90,7 +92,13 @@ export default function BroadcastPage() {
       return
     }
 
-    const result = await mutate("/api/superadmin/broadcast", {
+    setConfirmOpen(true)
+  }
+
+  const handleConfirmSend = async () => {
+    setConfirmOpen(false)
+
+    await mutate("/api/superadmin/broadcast", {
       method: "POST",
       body: {
         title: title.trim(),
@@ -282,7 +290,7 @@ export default function BroadcastPage() {
 
               <div className="pt-2">
                 <Button
-                  onClick={handleSend}
+                  onClick={handleSendClick}
                   disabled={sending || !title.trim() || !message.trim()}
                   className="w-full"
                   size="lg"
@@ -346,6 +354,17 @@ export default function BroadcastPage() {
           </Card>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Enviar notificacion masiva"
+        description={`Se enviara "${title}" a ${target === "all" ? "todas las organizaciones activas" : `${selectedOrgs.length} organizacion(es)`}${selectedRoles.length > 0 ? ` (roles: ${selectedRoles.join(", ")})` : ""}. Esta accion no se puede deshacer.`}
+        confirmText="Enviar"
+        variant="warning"
+        loading={sending}
+        onConfirm={handleConfirmSend}
+      />
     </div>
   )
 }

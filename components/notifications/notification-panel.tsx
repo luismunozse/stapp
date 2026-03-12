@@ -1,9 +1,8 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useNotifications } from "@/hooks/use-notifications"
 import { Button } from "@/components/ui/button"
-import { CheckCheck, Bell, Loader2 } from "lucide-react"
+import { CheckCheck, Bell, Loader2, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { UserNotification } from "@/types/database"
 import {
@@ -57,59 +56,88 @@ function timeAgo(dateStr: string): string {
 function NotificationItem({
   notification,
   onRead,
+  onDismiss,
 }: {
   notification: UserNotification
   onRead: (id: string, actionUrl?: string | null) => void
+  onDismiss: (id: string) => void
 }) {
   const isUnread = !notification.read_at
 
   return (
-    <button
-      onClick={() => onRead(notification.id, notification.action_url)}
+    <div
       className={cn(
-        "w-full flex items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-accent/50",
+        "group relative w-full flex items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-accent/50",
         isUnread && "bg-accent/30"
       )}
     >
-      <div className="mt-0.5 shrink-0">
-        {getNotificationIcon(notification.type)}
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-start justify-between gap-2">
-          <p className={cn(
-            "text-sm truncate",
-            isUnread ? "font-semibold" : "font-medium text-muted-foreground"
-          )}>
-            {notification.title}
-          </p>
-          {isUnread && (
-            <span className="mt-1.5 h-2 w-2 rounded-full bg-primary shrink-0" />
-          )}
+      <button
+        onClick={() => onRead(notification.id, notification.action_url)}
+        className="flex items-start gap-3 flex-1 min-w-0"
+      >
+        <div className="mt-0.5 shrink-0">
+          {getNotificationIcon(notification.type)}
         </div>
-        <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
-          {notification.body}
-        </p>
-        <p className="text-[11px] text-muted-foreground/70 mt-1">
-          {timeAgo(notification.created_at)}
-        </p>
-      </div>
-    </button>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-2">
+            <p className={cn(
+              "text-sm truncate",
+              isUnread ? "font-semibold" : "font-medium text-muted-foreground"
+            )}>
+              {notification.title}
+            </p>
+            {isUnread && (
+              <span className="mt-1.5 h-2 w-2 rounded-full bg-primary shrink-0" />
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
+            {notification.body}
+          </p>
+          <p className="text-[11px] text-muted-foreground/70 mt-1">
+            {timeAgo(notification.created_at)}
+          </p>
+        </div>
+      </button>
+      {/* Boton dismiss */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation()
+          onDismiss(notification.id)
+        }}
+        className="absolute top-2 right-2 h-5 w-5 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-accent text-muted-foreground hover:text-foreground"
+        aria-label="Descartar notificacion"
+      >
+        <X className="h-3 w-3" />
+      </button>
+    </div>
   )
 }
 
-export function NotificationPanel() {
-  const router = useRouter()
-  const {
-    notifications,
-    unreadCount,
-    isLoading,
-    markAsRead,
-    markAllAsRead,
-  } = useNotifications()
+interface NotificationPanelProps {
+  notifications: UserNotification[]
+  unreadCount: number
+  isLoading: boolean
+  markAsRead: (id: string) => void
+  markAllAsRead: () => void
+  dismiss: (id: string) => void
+  onNavigate?: () => void
+}
 
-  const handleRead = async (id: string, actionUrl?: string | null) => {
-    await markAsRead(id)
+export function NotificationPanel({
+  notifications,
+  unreadCount,
+  isLoading,
+  markAsRead,
+  markAllAsRead,
+  dismiss,
+  onNavigate,
+}: NotificationPanelProps) {
+  const router = useRouter()
+
+  const handleRead = (id: string, actionUrl?: string | null) => {
+    markAsRead(id)
     if (actionUrl) {
+      onNavigate?.()
       router.push(actionUrl)
     }
   }
@@ -157,6 +185,7 @@ export function NotificationPanel() {
                 key={n.id}
                 notification={n}
                 onRead={handleRead}
+                onDismiss={dismiss}
               />
             ))}
           </div>

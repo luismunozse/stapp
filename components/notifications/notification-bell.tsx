@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import { Bell } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -11,29 +12,23 @@ import { useNotifications } from "@/hooks/use-notifications"
 import { NotificationPanel } from "./notification-panel"
 import { cn } from "@/lib/utils"
 
-interface NotificationBellProps {
-  collapsed?: boolean
-}
-
-export function NotificationBell({ collapsed }: NotificationBellProps) {
-  const { unreadCount } = useNotifications()
+export function NotificationBell() {
+  const [open, setOpen] = useState(false)
+  const notifications = useNotifications()
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
           variant="ghost"
           size="icon"
-          className={cn(
-            "relative",
-            collapsed && "w-full"
-          )}
-          aria-label={`Notificaciones${unreadCount > 0 ? ` (${unreadCount} sin leer)` : ""}`}
+          className="relative"
+          aria-label={`Notificaciones${notifications.unreadCount > 0 ? ` (${notifications.unreadCount} sin leer)` : ""}`}
         >
           <Bell className="h-5 w-5" />
-          {unreadCount > 0 && (
+          {notifications.unreadCount > 0 && (
             <span className="absolute -top-1 -right-1 h-4 min-w-4 px-0.5 rounded-full bg-destructive text-[10px] font-medium text-destructive-foreground flex items-center justify-center">
-              {unreadCount > 99 ? "99+" : unreadCount}
+              {notifications.unreadCount > 99 ? "99+" : notifications.unreadCount}
             </span>
           )}
         </Button>
@@ -43,7 +38,10 @@ export function NotificationBell({ collapsed }: NotificationBellProps) {
         align="end"
         sideOffset={8}
       >
-        <NotificationPanel />
+        <NotificationPanel
+          {...notifications}
+          onNavigate={() => setOpen(false)}
+        />
       </PopoverContent>
     </Popover>
   )

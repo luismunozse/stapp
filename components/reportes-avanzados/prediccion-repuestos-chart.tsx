@@ -6,11 +6,13 @@ import { Badge } from "@/components/ui/badge"
 import { Loader2 } from "lucide-react"
 
 interface PrediccionItem {
+  id: string
   nombre: string
-  stock_actual: number
-  uso_mensual_promedio: number
-  semanas_hasta_agotamiento: number | null
-  urgencia: "CRITICO" | "BAJO" | "NORMAL"
+  codigo: string
+  stockActual: number
+  usoMensualPromedio: number
+  semanasHastaAgotamiento: number | null
+  urgencia: "CRITICO" | "BAJO" | "NORMAL" | "SIN_USO"
 }
 
 export function PrediccionRepuestosChart() {
@@ -24,7 +26,7 @@ export function PrediccionRepuestosChart() {
         if (!res.ok) throw new Error()
         return res.json()
       })
-      .then(setData)
+      .then((result) => setData(result.data || []))
       .catch(() => setError(true))
       .finally(() => setLoading(false))
   }, [])
@@ -55,6 +57,8 @@ export function PrediccionRepuestosChart() {
         return <Badge variant="destructive">Critico</Badge>
       case "BAJO":
         return <Badge className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">Bajo</Badge>
+      case "SIN_USO":
+        return <Badge variant="outline">Sin uso</Badge>
       default:
         return <Badge variant="secondary">Normal</Badge>
     }
@@ -81,16 +85,16 @@ export function PrediccionRepuestosChart() {
               </tr>
             </thead>
             <tbody>
-              {data.map((item, i) => (
-                <tr key={i} className="border-b last:border-b-0">
+              {data.map((item) => (
+                <tr key={item.id} className="border-b last:border-b-0">
                   <td className="py-2.5">{item.nombre}</td>
-                  <td className="text-center py-2.5 font-mono">{item.stock_actual}</td>
+                  <td className="text-center py-2.5 font-mono">{item.stockActual}</td>
                   <td className="text-center py-2.5 font-mono">
-                    {item.uso_mensual_promedio.toFixed(1)}
+                    {item.usoMensualPromedio.toFixed(1)}
                   </td>
                   <td className="text-center py-2.5 font-mono">
-                    {item.semanas_hasta_agotamiento !== null
-                      ? item.semanas_hasta_agotamiento.toFixed(1)
+                    {item.semanasHastaAgotamiento !== null
+                      ? item.semanasHastaAgotamiento.toFixed(1)
                       : "-"}
                   </td>
                   <td className="text-center py-2.5">

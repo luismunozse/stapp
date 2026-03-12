@@ -15,9 +15,10 @@ import {
 } from "recharts"
 
 interface TiempoData {
-  tipo_dispositivo: string
-  promedio_horas: number
-  total_ordenes: number
+  tipoDispositivo: string
+  promedioHoras: number
+  promedioDias: number
+  cantidad: number
 }
 
 export function TiempoReparacionChart() {
@@ -31,7 +32,7 @@ export function TiempoReparacionChart() {
         if (!res.ok) throw new Error()
         return res.json()
       })
-      .then(setData)
+      .then((result) => setData(result.data || []))
       .catch(() => setError(true))
       .finally(() => setLoading(false))
   }, [])
@@ -57,9 +58,9 @@ export function TiempoReparacionChart() {
   }
 
   const chartData = data.map((d) => ({
-    nombre: d.tipo_dispositivo,
-    horas: Math.round(d.promedio_horas * 10) / 10,
-    ordenes: d.total_ordenes,
+    nombre: d.tipoDispositivo,
+    horas: d.promedioHoras,
+    ordenes: d.cantidad,
   }))
 
   const getColor = (horas: number) => {

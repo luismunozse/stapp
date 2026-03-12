@@ -5,6 +5,7 @@ import { ModalProvider } from "@/contexts/modal-context"
 import { ConfirmProvider } from "@/contexts/confirm-context"
 import { SessionRefresher } from "@/components/auth/session-refresher"
 import { CurrencyProvider } from "@/contexts/currency-context"
+import { PushNotificationRegistrar } from "@/components/push-notification-registrar"
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -12,7 +13,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <SessionRefresher>
         <CurrencyProvider>
           <ConfirmProvider>
-            <ModalProvider>{children}</ModalProvider>
+            <ModalProvider>
+              {children}
+              <PushNotificationRegistrar />
+            </ModalProvider>
           </ConfirmProvider>
         </CurrencyProvider>
       </SessionRefresher>

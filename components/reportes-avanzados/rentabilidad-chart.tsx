@@ -15,11 +15,12 @@ import {
 } from "recharts"
 
 interface RentabilidadData {
-  tipo_dispositivo: string
+  tipoDispositivo: string
   ingresos: number
   costos: number
+  ganancia: number
   margen: number
-  total_ordenes: number
+  cantidad: number
 }
 
 export function RentabilidadChart() {
@@ -33,7 +34,7 @@ export function RentabilidadChart() {
         if (!res.ok) throw new Error()
         return res.json()
       })
-      .then(setData)
+      .then((result) => setData(result.data || []))
       .catch(() => setError(true))
       .finally(() => setLoading(false))
   }, [])
@@ -59,11 +60,11 @@ export function RentabilidadChart() {
   }
 
   const chartData = data.map((d) => ({
-    nombre: d.tipo_dispositivo,
+    nombre: d.tipoDispositivo,
     Ingresos: Math.round(d.ingresos),
     Costos: Math.round(d.costos),
-    Margen: Math.round(d.margen),
-    ordenes: d.total_ordenes,
+    Margen: Math.round(d.ganancia),
+    ordenes: d.cantidad,
   }))
 
   return (
@@ -108,7 +109,7 @@ export function RentabilidadChart() {
           <div>
             <p className="text-muted-foreground">Margen Total</p>
             <p className="font-bold text-blue-600">
-              ${data.reduce((s, d) => s + d.margen, 0).toLocaleString()}
+              ${data.reduce((s, d) => s + d.ganancia, 0).toLocaleString()}
             </p>
           </div>
         </div>

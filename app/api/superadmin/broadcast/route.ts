@@ -7,38 +7,23 @@ export async function GET() {
   if (error) return error
 
   try {
-    // Obtener historial de broadcasts
     const { data, error: dbError } = await supabaseAdmin
-      .from("user_notifications")
-      .select("id, title, body, type, created_at")
-      .eq("type", "BROADCAST")
+      .from("broadcasts")
+      .select("id, title, body, action_url, target, filters, total_users, sent_by, created_at")
       .order("created_at", { ascending: false })
-      .limit(100)
+      .limit(50)
 
     if (dbError) {
       return NextResponse.json({ error: dbError.message }, { status: 500 })
     }
 
-    // Agrupar por título + body + timestamp cercano (mismo broadcast)
-    const broadcasts = new Map<string, { title: string; body: string; created_at: string; count: number }>()
-    for (const n of data || []) {
-      // Agrupar por titulo+body+minuto de creacion
-      const key = `${n.title}|${n.body}|${n.created_at.substring(0, 16)}`
-      const existing = broadcasts.get(key)
-      if (existing) {
-        existing.count++
-      } else {
-        broadcasts.set(key, {
-          title: n.title,
-          body: n.body,
-          created_at: n.created_at,
-          count: 1,
-        })
-      }
-    }
-
     return NextResponse.json({
-      broadcasts: Array.from(broadcasts.values()),
+      broadcasts: (data || []).map((b) => ({
+        title: b.title,
+        body: b.body,
+        created_at: b.created_at,
+        count: b.total_users,
+      })),
     })
   } catch (err) {
     console.error("Error fetching broadcasts:", err)
@@ -108,6 +93,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No hay usuarios que coincidan con los filtros" }, { status: 400 })
     }
 
+    // Crear registro de broadcast
+    const { data: broadcast, error: broadcastError } = await supabaseAdmin
+      .from("broadcasts")
+      .insert({
+        title,
+        body: message,
+        action_url: actionUrl || null,
+        target,
+        filters: roles?.length > 0 ? { roles, organizationIds: target === "specific" ? organizationIds : undefined } : null,
+        total_users: users.length,
+        sent_by: email || null,
+      })
+      .select("id")
+      .single()
+
+    if (broadcastError) {
+      console.error("Error creating broadcast record:", broadcastError)
+      return NextResponse.json({ error: broadcastError.message }, { status: 500 })
+    }
+
     // Crear notificaciones en lotes de 500
     const notifications = users.map((user) => ({
       organization_id: user.organization_id,
@@ -119,6 +124,7 @@ export async function POST(request: Request) {
       action_url: actionUrl || null,
       orden_id: null,
       cliente_id: null,
+      broadcast_id: broadcast.id,
     }))
 
     const BATCH_SIZE = 500

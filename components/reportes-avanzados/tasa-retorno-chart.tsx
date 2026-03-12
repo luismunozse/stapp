@@ -13,13 +13,14 @@ import {
 } from "recharts"
 
 interface RetornoData {
-  tasa_retorno: number
-  clientes_recurrentes: number
-  total_clientes: number
-  top_clientes: Array<{
+  tasaRetorno: number
+  clientesRecurrentes: number
+  totalClientes: number
+  topClientes: Array<{
+    id: string
     nombre: string
-    email: string
-    total_ordenes: number
+    telefono: string
+    ordenes: number
   }>
 }
 
@@ -60,8 +61,8 @@ export function TasaRetornoChart() {
   }
 
   const pieData = [
-    { name: "Recurrentes", value: data.clientes_recurrentes },
-    { name: "Unicos", value: data.total_clientes - data.clientes_recurrentes },
+    { name: "Recurrentes", value: data.clientesRecurrentes },
+    { name: "Unicos", value: data.totalClientes - data.clientesRecurrentes },
   ]
 
   const COLORS = ["#3b82f6", "#e5e7eb"]
@@ -100,37 +101,37 @@ export function TasaRetornoChart() {
             <div className="space-y-3">
               <div>
                 <p className="text-3xl font-bold text-primary">
-                  {Math.round(data.tasa_retorno)}%
+                  {Math.round(data.tasaRetorno)}%
                 </p>
                 <p className="text-sm text-muted-foreground">Tasa de retorno</p>
               </div>
               <div className="text-sm">
-                <p><strong>{data.clientes_recurrentes}</strong> clientes recurrentes</p>
-                <p><strong>{data.total_clientes}</strong> clientes totales</p>
+                <p><strong>{data.clientesRecurrentes}</strong> clientes recurrentes</p>
+                <p><strong>{data.totalClientes}</strong> clientes totales</p>
               </div>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {data.top_clientes.length > 0 && (
+      {data.topClientes.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Top Clientes Recurrentes</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {data.top_clientes.map((c, i) => (
+              {data.topClientes.map((c) => (
                 <div
-                  key={i}
+                  key={c.id}
                   className="flex items-center justify-between py-2 border-b last:border-b-0"
                 >
                   <div>
                     <p className="font-medium">{c.nombre}</p>
-                    <p className="text-sm text-muted-foreground">{c.email}</p>
+                    <p className="text-sm text-muted-foreground">{c.telefono}</p>
                   </div>
                   <span className="text-sm font-medium text-primary">
-                    {c.total_ordenes} ordenes
+                    {c.ordenes} ordenes
                   </span>
                 </div>
               ))}

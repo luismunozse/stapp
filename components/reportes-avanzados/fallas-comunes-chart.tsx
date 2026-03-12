@@ -30,7 +30,7 @@ export function FallasComunesChart() {
         if (!res.ok) throw new Error()
         return res.json()
       })
-      .then(setData)
+      .then((result) => setData(result.data || []))
       .catch(() => setError(true))
       .finally(() => setLoading(false))
   }, [])
