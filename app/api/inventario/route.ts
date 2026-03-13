@@ -111,30 +111,56 @@ export async function POST(request: Request) {
     const body = await request.json()
     const data = inventarioSchema.parse(body)
 
-    const { data: inventario, error: dbError } = await supabaseAdmin
-      .from("inventario")
-      .insert({
-        codigo: data.codigo,
-        nombre: data.nombre,
-        descripcion: data.descripcion || null,
-        categoria: data.categoria,
-        tipo_dispositivo: data.tipoDispositivo,
-        stock: data.stock,
-        precio_compra: data.precioCompra,
-        precio_venta: data.precioVenta,
-        proveedor: data.proveedor || null,
-        organization_id: organizationId!,
-      })
-      .select()
-      .single()
+    let codigo = data.codigo
+    let inventario = null
+    let retries = 3
 
-    if (dbError) {
-      if (dbError.code === "23505") {
-        return NextResponse.json(
-          { error: "Ya existe un item con ese código" },
-          { status: 400 }
-        )
+    while (retries > 0) {
+      const { data: result, error: dbError } = await supabaseAdmin
+        .from("inventario")
+        .insert({
+          codigo,
+          nombre: data.nombre,
+          descripcion: data.descripcion || null,
+          categoria: data.categoria,
+          tipo_dispositivo: data.tipoDispositivo,
+          stock: data.stock,
+          precio_compra: data.precioCompra,
+          precio_venta: data.precioVenta,
+          proveedor: data.proveedor || null,
+          organization_id: organizationId!,
+        })
+        .select()
+        .single()
+
+      if (!dbError) {
+        inventario = result
+        break
       }
+
+      if (dbError.code === "23505") {
+        // Código duplicado: generar siguiente código automáticamente
+        retries--
+        if (retries === 0) {
+          return NextResponse.json(
+            { error: "No se pudo generar un código único. Intentá de nuevo." },
+            { status: 400 }
+          )
+        }
+        const match = codigo.match(/^(.+-?)(\d+)$/)
+        if (match) {
+          const prefix = match[1]
+          const num = parseInt(match[2], 10) + 1
+          codigo = `${prefix}${num.toString().padStart(match[2].length, "0")}`
+        } else {
+          return NextResponse.json(
+            { error: "Ya existe un item con ese código" },
+            { status: 400 }
+          )
+        }
+        continue
+      }
+
       throw dbError
     }
 

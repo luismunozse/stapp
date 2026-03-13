@@ -146,8 +146,14 @@ export function InventarioForm({
       })
 
       if (!res.ok) {
-        const error = await res.json()
-        alert(error.error || "Error al guardar item")
+        const errorData = await res.json()
+        // Si es error de código duplicado en item nuevo, regenerar código y reintentar
+        if (!item && res.status === 400 && errorData.error?.includes("código")) {
+          await fetchCode(data.categoria, data.tipoDispositivo)
+          alert("El código generado ya existía. Se generó uno nuevo, intentá guardar de nuevo.")
+          return
+        }
+        alert(errorData.error || "Error al guardar item")
         return
       }
 

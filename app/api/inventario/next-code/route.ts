@@ -56,32 +56,31 @@ export async function GET(request: Request) {
     const tipoPrefijo = TIPO_PREFIJOS[tipoDispositivo] || tipoDispositivo.substring(0, 3).toUpperCase()
     const prefijo = `${catPrefijo}-${tipoPrefijo}-`
 
-    // Buscar el último código con este prefijo
+    // Buscar TODOS los códigos con este prefijo para encontrar el número más alto
     const { data: items, error: dbError } = await supabaseAdmin
       .from("inventario")
       .select("codigo")
       .eq("organization_id", organizationId!)
       .ilike("codigo", `${prefijo}%`)
-      .order("codigo", { ascending: false })
-      .limit(1)
 
     if (dbError) {
       throw dbError
     }
 
-    let nextNumber = 1
+    let maxNumber = 0
 
     if (items && items.length > 0) {
-      // Extraer el número del último código
-      const lastCode = items[0].codigo
-      const match = lastCode.match(/-(\d+)$/)
-      if (match) {
-        nextNumber = parseInt(match[1], 10) + 1
+      for (const item of items) {
+        const match = item.codigo.match(/-(\d+)$/)
+        if (match) {
+          const num = parseInt(match[1], 10)
+          if (num > maxNumber) maxNumber = num
+        }
       }
     }
 
     // Formatear con ceros a la izquierda (3 dígitos)
-    const codigo = `${prefijo}${nextNumber.toString().padStart(3, "0")}`
+    const codigo = `${prefijo}${(maxNumber + 1).toString().padStart(3, "0")}`
 
     return NextResponse.json({ codigo })
   } catch (error) {
