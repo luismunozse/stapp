@@ -16,6 +16,8 @@ import {
   Clock,
   User,
   Headset,
+  Paperclip,
+  X,
 } from "lucide-react"
 import type { SupportTicketMessage, SupportTicketAttachment } from "@/types"
 
@@ -58,6 +60,8 @@ export function TicketDetail({ ticketId }: { ticketId: string }) {
   const [loading, setLoading] = useState(true)
   const [newMessage, setNewMessage] = useState("")
   const [sending, setSending] = useState(false)
+  const [selectedImages, setSelectedImages] = useState<string[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const fetchTicket = async () => {
@@ -82,17 +86,46 @@ export function TicketDetail({ ticketId }: { ticketId: string }) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [ticket?.mensajes])
 
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files) return
+    const remaining = 3 - selectedImages.length
+    const toProcess = Array.from(files).slice(0, remaining)
+
+    toProcess.forEach((file) => {
+      if (!file.type.startsWith("image/")) return
+      if (file.size > 5 * 1024 * 1024) return // 5MB max
+      const reader = new FileReader()
+      reader.onload = () => {
+        if (typeof reader.result === "string") {
+          setSelectedImages((prev) => [...prev, reader.result as string])
+        }
+      }
+      reader.readAsDataURL(file)
+    })
+    // Reset input para poder seleccionar el mismo archivo
+    if (fileInputRef.current) fileInputRef.current.value = ""
+  }
+
+  const removeImage = (index: number) => {
+    setSelectedImages((prev) => prev.filter((_, i) => i !== index))
+  }
+
   const handleSend = async () => {
-    if (!newMessage.trim() || sending) return
+    if ((!newMessage.trim() && selectedImages.length === 0) || sending) return
     setSending(true)
     try {
       const res = await fetch(`/api/soporte/${ticketId}/mensajes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contenido: newMessage }),
+        body: JSON.stringify({
+          contenido: newMessage || "(imagen adjunta)",
+          ...(selectedImages.length > 0 && { imagenes: selectedImages }),
+        }),
       })
       if (res.ok) {
         setNewMessage("")
+        setSelectedImages([])
         await fetchTicket()
       }
     } catch (err) {
@@ -100,6 +133,29 @@ export function TicketDetail({ ticketId }: { ticketId: string }) {
     } finally {
       setSending(false)
     }
+  }
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items
+    if (!items) return
+    const remaining = 3 - selectedImages.length
+    if (remaining <= 0) return
+
+    const imageItems = Array.from(items).filter((item) => item.type.startsWith("image/"))
+    if (imageItems.length === 0) return
+
+    e.preventDefault()
+    imageItems.slice(0, remaining).forEach((item) => {
+      const file = item.getAsFile()
+      if (!file || file.size > 5 * 1024 * 1024) return
+      const reader = new FileReader()
+      reader.onload = () => {
+        if (typeof reader.result === "string") {
+          setSelectedImages((prev) => [...prev, reader.result as string])
+        }
+      }
+      reader.readAsDataURL(file)
+    })
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -235,6 +291,25 @@ export function TicketDetail({ ticketId }: { ticketId: string }) {
                     }`}
                   >
                     <p className="whitespace-pre-wrap">{msg.contenido}</p>
+                    {/* Adjuntos del mensaje */}
+                    {msg.adjuntos && msg.adjuntos.length > 0 && (
+                      <div className="flex gap-2 flex-wrap mt-2">
+                        {msg.adjuntos.map((adj) => (
+                          <a
+                            key={adj.id}
+                            href={adj.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <img
+                              src={adj.url}
+                              alt={adj.nombreArchivo || "Adjunto"}
+                              className="h-20 w-20 object-cover rounded border border-white/20 hover:opacity-80 transition-opacity"
+                            />
+                          </a>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -245,19 +320,58 @@ export function TicketDetail({ ticketId }: { ticketId: string }) {
 
         {/* Input de respuesta */}
         {!isClosed ? (
-          <div className="border-t p-3">
+          <div className="border-t p-3 space-y-2">
+            {/* Preview de imágenes seleccionadas */}
+            {selectedImages.length > 0 && (
+              <div className="flex gap-2 flex-wrap">
+                {selectedImages.map((img, i) => (
+                  <div key={i} className="relative group">
+                    <img
+                      src={img}
+                      alt={`Adjunto ${i + 1}`}
+                      className="h-16 w-16 object-cover rounded-lg border"
+                    />
+                    <button
+                      onClick={() => removeImage(i)}
+                      className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="flex gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={handleImageSelect}
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="shrink-0 self-end"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={sending || selectedImages.length >= 3}
+                title="Adjuntar imagen (máx. 3)"
+              >
+                <Paperclip className="h-4 w-4" />
+              </Button>
               <Textarea
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
                 onKeyDown={handleKeyDown}
+                onPaste={handlePaste}
                 placeholder="Escribí tu mensaje... (Enter para enviar)"
                 rows={2}
                 className="resize-none"
               />
               <Button
                 onClick={handleSend}
-                disabled={sending || !newMessage.trim()}
+                disabled={sending || (!newMessage.trim() && selectedImages.length === 0)}
                 size="icon"
                 className="shrink-0 self-end"
               >

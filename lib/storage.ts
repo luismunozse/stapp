@@ -208,6 +208,41 @@ export async function deleteLogo(orgId: string): Promise<void> {
 }
 
 /**
+ * Subir adjunto de mensaje de soporte
+ * Path: soporte-attachments/{ticketId}/{messageId}/{uuid}.{ext}
+ */
+export async function uploadSupportMessageAttachment(
+  ticketId: string,
+  messageId: string,
+  file: Buffer | Blob,
+  mime: string
+): Promise<UploadResult> {
+  const ext = getExtensionFromMime(mime)
+  const fileName = `${uuidv4()}.${ext}`
+  const path = `${ticketId}/${messageId}/${fileName}`
+
+  const { error } = await supabaseAdmin.storage
+    .from(STORAGE_BUCKETS.SOPORTE_ATTACHMENTS)
+    .upload(path, file, {
+      contentType: mime,
+      upsert: false,
+    })
+
+  if (error) {
+    throw new Error(`Error uploading support attachment: ${error.message}`)
+  }
+
+  const { data: urlData } = supabaseAdmin.storage
+    .from(STORAGE_BUCKETS.SOPORTE_ATTACHMENTS)
+    .getPublicUrl(path)
+
+  return {
+    url: urlData.publicUrl,
+    path,
+  }
+}
+
+/**
  * Obtener extensión de archivo desde MIME type
  */
 function getExtensionFromMime(mime: string): string {

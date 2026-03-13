@@ -40,24 +40,39 @@ export async function GET(
       throw dbError
     }
 
+    // Mapear adjuntos por message_id
+    const allAttachments = (ticket.support_ticket_attachments || []).map((a: Record<string, unknown>) => ({
+      id: a.id as string,
+      messageId: a.message_id as string | null,
+      url: a.url as string,
+      nombreArchivo: a.nombre_archivo as string | null,
+      createdAt: a.created_at as string,
+    }))
+
+    const attachmentsByMessage = new Map<string, typeof allAttachments>()
+    for (const att of allAttachments) {
+      if (att.messageId) {
+        const existing = attachmentsByMessage.get(att.messageId) || []
+        existing.push(att)
+        attachmentsByMessage.set(att.messageId, existing)
+      }
+    }
+
     const mensajes = (ticket.support_ticket_messages || [])
-      .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-      .map((m: any) => ({
-        id: m.id,
-        autorTipo: m.autor_tipo,
-        autorId: m.autor_id,
-        autorNombre: m.autor_nombre,
-        contenido: m.contenido,
-        createdAt: m.created_at,
+      .sort((a: Record<string, unknown>, b: Record<string, unknown>) =>
+        new Date(a.created_at as string).getTime() - new Date(b.created_at as string).getTime()
+      )
+      .map((m: Record<string, unknown>) => ({
+        id: m.id as string,
+        autorTipo: m.autor_tipo as string,
+        autorId: m.autor_id as string,
+        autorNombre: m.autor_nombre as string,
+        contenido: m.contenido as string,
+        createdAt: m.created_at as string,
+        adjuntos: attachmentsByMessage.get(m.id as string) || [],
       }))
 
-    const adjuntos = (ticket.support_ticket_attachments || []).map((a: any) => ({
-      id: a.id,
-      messageId: a.message_id,
-      url: a.url,
-      nombreArchivo: a.nombre_archivo,
-      createdAt: a.created_at,
-    }))
+    const adjuntos = allAttachments.filter((a: { messageId: string | null }) => !a.messageId)
 
     return NextResponse.json({
       id: ticket.id,

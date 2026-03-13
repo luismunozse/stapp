@@ -1,10 +1,16 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { uploadSupportMessageAttachment } from "@/lib/storage"
+import { dataUrlToBuffer } from "@/lib/storage"
 import { z } from "zod"
+
+const MAX_IMAGES = 3
+const MAX_IMAGE_SIZE_MB = 5
 
 const mensajeSchema = z.object({
   contenido: z.string().min(1, "El mensaje no puede estar vacío"),
+  imagenes: z.array(z.string()).max(MAX_IMAGES).optional(),
 })
 
 export async function POST(
@@ -60,6 +66,47 @@ export async function POST(
 
     if (msgError) throw msgError
 
+    // Subir imágenes adjuntas si las hay
+    const adjuntos: { id: string; url: string; nombreArchivo: string }[] = []
+    if (data.imagenes && data.imagenes.length > 0) {
+      for (const dataUrl of data.imagenes) {
+        try {
+          const { buffer, mime } = dataUrlToBuffer(dataUrl)
+          // Validar tamaño (MAX_IMAGE_SIZE_MB MB)
+          if (buffer.length > MAX_IMAGE_SIZE_MB * 1024 * 1024) continue
+          // Validar que sea imagen
+          if (!mime.startsWith("image/")) continue
+
+          const result = await uploadSupportMessageAttachment(id, mensaje.id, buffer, mime)
+          const ext = mime.split("/")[1] || "img"
+          const nombreArchivo = `imagen.${ext}`
+
+          const { data: attachment } = await supabaseAdmin
+            .from("support_ticket_attachments")
+            .insert({
+              ticket_id: id,
+              message_id: mensaje.id,
+              url: result.url,
+              storage_path: result.path,
+              mime,
+              nombre_archivo: nombreArchivo,
+            })
+            .select("id, url, nombre_archivo")
+            .single()
+
+          if (attachment) {
+            adjuntos.push({
+              id: attachment.id,
+              url: attachment.url,
+              nombreArchivo: attachment.nombre_archivo,
+            })
+          }
+        } catch (uploadErr) {
+          console.error("Error uploading message attachment:", uploadErr)
+        }
+      }
+    }
+
     // Si el ticket estaba RESUELTO, reabrirlo
     if (ticket.estado === "RESUELTO") {
       await supabaseAdmin
@@ -74,6 +121,7 @@ export async function POST(
       autorNombre: mensaje.autor_nombre,
       contenido: mensaje.contenido,
       createdAt: mensaje.created_at,
+      adjuntos,
     }, { status: 201 })
   } catch (error) {
     if (error instanceof z.ZodError) {
