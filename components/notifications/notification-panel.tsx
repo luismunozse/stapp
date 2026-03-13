@@ -73,7 +73,10 @@ function NotificationItem({
     >
       <button
         onClick={() => onRead(notification.id, notification.action_url)}
-        className="flex items-start gap-3 flex-1 min-w-0"
+        className={cn(
+          "flex items-start gap-3 flex-1 min-w-0",
+          notification.action_url && "cursor-pointer"
+        )}
       >
         <div className="mt-0.5 shrink-0">
           {getNotificationIcon(notification.type)}
@@ -81,7 +84,7 @@ function NotificationItem({
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <p className={cn(
-              "text-sm truncate",
+              "text-sm line-clamp-2",
               isUnread ? "font-semibold" : "font-medium text-muted-foreground"
             )}>
               {notification.title}
@@ -90,7 +93,7 @@ function NotificationItem({
               <span className="mt-1.5 h-2 w-2 rounded-full bg-primary shrink-0" />
             )}
           </div>
-          <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
+          <p className="text-xs text-muted-foreground line-clamp-3 mt-0.5">
             {notification.body}
           </p>
           <p className="text-[11px] text-muted-foreground/70 mt-1">
@@ -138,7 +141,8 @@ export function NotificationPanel({
     markAsRead(id)
     if (actionUrl) {
       onNavigate?.()
-      router.push(actionUrl)
+      // Pequeño delay para que el popover se cierre antes de navegar
+      setTimeout(() => router.push(actionUrl), 50)
     }
   }
 
