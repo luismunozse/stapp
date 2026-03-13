@@ -72,6 +72,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [umbralStockBajo, setUmbralStockBajo] = useState(5)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   // Fetch configurable stock threshold
   useEffect(() => {
@@ -114,11 +115,12 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
     if (bajoStock) params.append("bajoStock", "true")
     params.append("page", page.toString())
     params.append("limit", pageSize.toString())
+    params.append("_r", refreshKey.toString())
     return `/api/inventario?${params.toString()}`
-  }, [debouncedSearch, categoria, tipoDispositivo, bajoStock, page, pageSize])
+  }, [debouncedSearch, categoria, tipoDispositivo, bajoStock, page, pageSize, refreshKey])
 
   // SWR for fetching with cache
-  const { data, isLoading, mutate } = useSWR(apiUrl, fetcher, {
+  const { data, isLoading } = useSWR(apiUrl, fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 2000,
     keepPreviousData: true,
@@ -142,7 +144,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
     try {
       const res = await fetch(`/api/inventario/${id}`, { method: "DELETE" })
       if (res.ok) {
-        mutate()
+        setRefreshKey(k => k + 1)
       }
     } catch (error) {
       console.error("Error deleting item:", error)
@@ -241,7 +243,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
           onSuccess={() => {
             setShowForm(false)
             setEditingItem(null)
-            mutate()
+            setRefreshKey(k => k + 1)
           }}
         />
       )}
@@ -252,7 +254,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
           onClose={() => setShowImport(false)}
           onSuccess={() => {
             setShowImport(false)
-            mutate()
+            setRefreshKey(k => k + 1)
           }}
         />
       )}
