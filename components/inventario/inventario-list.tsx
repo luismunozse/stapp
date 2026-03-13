@@ -27,7 +27,7 @@ import type { Inventario, TipoDispositivo, TipoDispositivoCustom } from "@/types
 import { useModal } from "@/contexts/modal-context"
 import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
 
-const fetcher = (url: string) => fetch(url).then(res => res.json())
+const fetcher = (url: string) => fetch(url, { cache: "no-store" }).then(res => res.json())
 
 const todasLasCategorias = [
   "Baterías",
@@ -120,7 +120,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   // SWR for fetching with cache
   const { data, isLoading, mutate } = useSWR(apiUrl, fetcher, {
     revalidateOnFocus: false,
-    dedupingInterval: 5000,
+    dedupingInterval: 2000,
     keepPreviousData: true,
   })
 

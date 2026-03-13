@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ClipboardList, Users, Package, DollarSign, Shield } from "lucide-react"
+import { ClipboardList, Users, Package, DollarSign, Shield, ShoppingCart, TrendingUp } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
 import type { CurrencyCode } from "@/lib/currency"
 import { redirect } from "next/navigation"
@@ -34,6 +34,9 @@ const getDashboardData = unstable_cache(
       ordenesPorEstadoResult,
       ingresosUltimos7DiasResult,
       ordenesRecientesResult,
+      ventasHoyResult,
+      ventasMesResult,
+      garantiasVentaPorVencerResult,
       ordenesPorTecnicoResult,
     ] = await Promise.all([
       supabaseAdmin
@@ -94,6 +97,32 @@ const getDashboardData = unstable_cache(
         .eq("organization_id", organizationId)
         .order("fecha_ingreso", { ascending: false })
         .limit(5),
+      // Ventas de hoy
+      supabaseAdmin
+        .from("ventas")
+        .select("id, total")
+        .eq("organization_id", organizationId)
+        .eq("estado", "COMPLETADA")
+        .gte("created_at", new Date(new Date().setHours(0, 0, 0, 0)).toISOString()),
+
+      // Ventas del mes
+      supabaseAdmin
+        .from("ventas")
+        .select("id, total")
+        .eq("organization_id", organizationId)
+        .eq("estado", "COMPLETADA")
+        .gte("created_at", primerDiaMes.toISOString()),
+
+      // Garantías de venta por vencer (próximos 7 días)
+      supabaseAdmin
+        .from("garantias_venta")
+        .select("id, numero_garantia, fecha_vencimiento, items_venta!inner(descripcion), ventas!inner(numero_venta, cliente_nombre, organization_id)")
+        .eq("organization_id", organizationId)
+        .eq("estado", "ACTIVA")
+        .gte("fecha_vencimiento", hoy.toISOString())
+        .lte("fecha_vencimiento", enSieteDias.toISOString())
+        .order("fecha_vencimiento", { ascending: true }),
+
       supabaseAdmin
         .from("ordenes_servicio")
         .select(`
@@ -115,6 +144,9 @@ const getDashboardData = unstable_cache(
       ordenesPorEstadoResult,
       ingresosUltimos7DiasResult,
       ordenesRecientesResult,
+      ventasHoyResult,
+      ventasMesResult,
+      garantiasVentaPorVencerResult,
       ordenesPorTecnicoResult,
       hace7Dias: hace7Dias.toISOString(),
     }
@@ -176,6 +208,9 @@ export default async function DashboardPage() {
     ordenesPorEstadoResult,
     ingresosUltimos7DiasResult,
     ordenesRecientesResult,
+    ventasHoyResult,
+    ventasMesResult,
+    garantiasVentaPorVencerResult,
     ordenesPorTecnicoResult,
     hace7Dias,
   } = await getDashboardData(organizationId)
@@ -257,6 +292,15 @@ export default async function DashboardPage() {
   })
   const ordenesPorTecnico = Object.values(tecnicosMap)
 
+  // Procesar ventas
+  const ventasHoyData = ventasHoyResult.data as { total: number }[] | null
+  const ventasHoyTotal = ventasHoyData?.reduce((sum, v) => sum + (v.total || 0), 0) || 0
+  const ventasHoyCount = ventasHoyData?.length || 0
+  const ventasMesData = ventasMesResult.data as { total: number }[] | null
+  const ventasMesTotal = ventasMesData?.reduce((sum, v) => sum + (v.total || 0), 0) || 0
+  const ventasMesCount = ventasMesData?.length || 0
+  const garantiasVentaPorVencer = garantiasVentaPorVencerResult.data || []
+
   const stats = [
     {
       title: "Órdenes Totales",
@@ -290,6 +334,22 @@ export default async function DashboardPage() {
       colorClass: "text-purple-600 dark:text-purple-400",
       bgClass: "bg-purple-50 dark:bg-purple-900/30",
     },
+    {
+      title: "Ventas Hoy",
+      value: formatCurrency(ventasHoyTotal, moneda),
+      description: `${ventasHoyCount} venta${ventasHoyCount !== 1 ? "s" : ""}`,
+      icon: ShoppingCart,
+      colorClass: "text-emerald-600 dark:text-emerald-400",
+      bgClass: "bg-emerald-50 dark:bg-emerald-900/30",
+    },
+    {
+      title: "Ventas del Mes",
+      value: formatCurrency(ventasMesTotal, moneda),
+      description: `${ventasMesCount} ventas completadas`,
+      icon: TrendingUp,
+      colorClass: "text-cyan-600 dark:text-cyan-400",
+      bgClass: "bg-cyan-50 dark:bg-cyan-900/30",
+    },
   ]
 
   return (
@@ -302,7 +362,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-3">
         {stats.map((stat) => {
           const Icon = stat.icon
           return (
@@ -377,6 +437,35 @@ export default async function DashboardPage() {
                 </div>
               </div>
             )}
+            {garantiasVentaPorVencer.length > 0 && (
+              <Link href="/ventas" className="block">
+                <div className="p-3 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors">
+                  <div className="flex items-center gap-2 text-purple-700 dark:text-purple-400 font-medium">
+                    <ShoppingCart className="h-4 w-4" />
+                    {garantiasVentaPorVencer.length} garantía{garantiasVentaPorVencer.length > 1 ? "s" : ""} de venta por vencer
+                  </div>
+                  <div className="mt-2 space-y-1">
+                    {garantiasVentaPorVencer.slice(0, 3).map((g: any) => {
+                      const diasRestantes = Math.ceil(
+                        (new Date(g.fecha_vencimiento).getTime() - new Date().getTime()) /
+                          (1000 * 60 * 60 * 24)
+                      )
+                      return (
+                        <div key={g.id} className="text-sm text-purple-600 dark:text-purple-400">
+                          V{String((g.ventas as any)?.numero_venta).padStart(4, "0")} - {(g.ventas as any)?.cliente_nombre} - {(g.items_venta as any)?.descripcion}
+                          <span className="ml-1">({diasRestantes} día{diasRestantes !== 1 ? "s" : ""})</span>
+                        </div>
+                      )
+                    })}
+                    {garantiasVentaPorVencer.length > 3 && (
+                      <p className="text-xs text-purple-500">
+                        y {garantiasVentaPorVencer.length - 3} más...
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </Link>
+            )}
             {itemsBajoStock > 0 && (
               <Link href="/inventario" className="block">
                 <div className="p-3 bg-warning-50 dark:bg-warning-100/40 border border-warning/30 dark:border-warning/20 rounded-lg hover:bg-warning-100 dark:hover:bg-warning-200/40 transition-colors">
@@ -397,7 +486,7 @@ export default async function DashboardPage() {
                 </div>
               </Link>
             )}
-            {garantiasPorVencer.length === 0 && itemsBajoStock === 0 && ordenesPendientes === 0 && (
+            {garantiasPorVencer.length === 0 && garantiasVentaPorVencer.length === 0 && itemsBajoStock === 0 && ordenesPendientes === 0 && (
               <p className="text-sm text-muted-foreground">
                 No hay alertas pendientes
               </p>

@@ -45,7 +45,7 @@ export function InventarioForm({
   onClose,
   onSuccess,
 }: InventarioFormProps) {
-  const { tipos: tiposDispositivo, loading: tiposLoading } = useTiposDispositivo({ incluirTodos: true })
+  const { tipos: tiposDispositivo, loading: tiposLoading, error: tiposError, refetch: refetchTipos } = useTiposDispositivo({ incluirTodos: true })
   const [loading, setLoading] = useState(false)
   const [generatedCode, setGeneratedCode] = useState<string>("")
 
@@ -192,11 +192,11 @@ export function InventarioForm({
               <Label htmlFor="tipoDispositivo">Tipo *</Label>
               <Select
                 value={tipoDispositivo || ""}
-                onValueChange={(value) => setValue("tipoDispositivo", value)}
+                onValueChange={(value) => setValue("tipoDispositivo", value, { shouldValidate: true, shouldDirty: true })}
                 disabled={tiposLoading}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar..." />
+                  <SelectValue placeholder={tiposLoading ? "Cargando tipos..." : "Seleccionar..."} />
                 </SelectTrigger>
                 <SelectContent>
                   {tiposDispositivo.map((tipo) => (
@@ -211,13 +211,18 @@ export function InventarioForm({
                   {errors.tipoDispositivo.message}
                 </p>
               )}
+              {tiposError && (
+                <p className="text-sm text-destructive mt-1 cursor-pointer" onClick={refetchTipos}>
+                  Error al cargar tipos. Toca para reintentar.
+                </p>
+              )}
             </div>
 
             <div>
               <Label htmlFor="categoria">Categoría *</Label>
               <Select
                 value={watch("categoria") || ""}
-                onValueChange={(value) => setValue("categoria", value)}
+                onValueChange={(value) => setValue("categoria", value, { shouldValidate: true, shouldDirty: true })}
                 disabled={!tipoDispositivo}
               >
                 <SelectTrigger>

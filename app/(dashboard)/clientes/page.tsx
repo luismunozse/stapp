@@ -1,8 +1,13 @@
-import { ClientesList } from "@/components/clientes/clientes-list"
-import { canImportData } from "@/lib/auth-utils"
+"use client"
 
-export default async function ClientesPage() {
-  const allowImport = await canImportData()
+import { useState } from "react"
+import { ClientesList } from "@/components/clientes/clientes-list"
+import { ClientesSegmentacion } from "@/components/clientes/clientes-segmentacion"
+import { Button } from "@/components/ui/button"
+import { PieChart } from "lucide-react"
+
+export default function ClientesPage() {
+  const [showSegmentacion, setShowSegmentacion] = useState(false)
 
   return (
     <div className="space-y-6">
@@ -13,9 +18,15 @@ export default async function ClientesPage() {
             Gestiona tus clientes y su información
           </p>
         </div>
+        <Button variant="outline" onClick={() => setShowSegmentacion(true)} className="gap-1.5">
+          <PieChart className="h-4 w-4" />
+          Segmentación
+        </Button>
       </div>
-      <ClientesList allowImport={allowImport} />
+
+      <ClientesList />
+
+      <ClientesSegmentacion open={showSegmentacion} onOpenChange={setShowSegmentacion} />
     </div>
   )
 }
-

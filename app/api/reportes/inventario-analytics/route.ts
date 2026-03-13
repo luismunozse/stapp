@@ -1,0 +1,176 @@
+import { requireAuth } from "@/lib/auth-utils"
+import { supabaseAdmin } from "@/lib/supabase"
+import { NextResponse } from "next/server"
+
+export async function GET() {
+  const { error, organizationId } = await requireAuth()
+  if (error) return error
+
+  const now = new Date()
+  const hace90Dias = new Date(now)
+  hace90Dias.setDate(now.getDate() - 90)
+  const hace30Dias = new Date(now)
+  hace30Dias.setDate(now.getDate() - 30)
+
+  try {
+    const [
+      inventarioResult,
+      movimientosVentaResult,
+      movimientos30DiasResult,
+    ] = await Promise.all([
+      // All inventory items
+      supabaseAdmin
+        .from("inventario")
+        .select("id, codigo, nombre, categoria, tipo_dispositivo, stock, precio_compra, precio_venta, proveedor")
+        .eq("organization_id", organizationId!),
+
+      // Sale movements last 90 days
+      supabaseAdmin
+        .from("movimientos_inventario")
+        .select("inventario_id, cantidad, created_at")
+        .eq("organization_id", organizationId!)
+        .eq("tipo", "VENTA")
+        .gte("created_at", hace90Dias.toISOString()),
+
+      // Sale movements last 30 days (for trend)
+      supabaseAdmin
+        .from("movimientos_inventario")
+        .select("cantidad, created_at")
+        .eq("organization_id", organizationId!)
+        .eq("tipo", "VENTA")
+        .gte("created_at", hace30Dias.toISOString()),
+    ])
+
+    const items = inventarioResult.data || []
+    const movimientos90 = movimientosVentaResult.data || []
+    const movimientos30 = movimientos30DiasResult.data || []
+
+    // --- Valorización ---
+    let valorCosto = 0
+    let valorVenta = 0
+    let totalUnidades = 0
+    items.forEach(item => {
+      valorCosto += (item.stock || 0) * (item.precio_compra || 0)
+      valorVenta += (item.stock || 0) * (item.precio_venta || 0)
+      totalUnidades += item.stock || 0
+    })
+    const valorizacion = {
+      valorCosto,
+      valorVenta,
+      margenPotencial: valorVenta - valorCosto,
+      totalItems: items.length,
+      totalUnidades,
+    }
+
+    // --- Aggregate sales per item (90 days) ---
+    const ventasPorItem: Record<string, number> = {}
+    movimientos90.forEach((m: any) => {
+      const id = m.inventario_id
+      if (!ventasPorItem[id]) ventasPorItem[id] = 0
+      ventasPorItem[id] += Math.abs(m.cantidad || 0)
+    })
+
+    // --- Rotación ---
+    const rotacion = items
+      .filter(item => ventasPorItem[item.id])
+      .map(item => {
+        const totalVendido = ventasPorItem[item.id] || 0
+        const stock = item.stock || 1
+        const tasaRotacion = (totalVendido / stock) * 4 // annualized
+        return {
+          inventarioId: item.id,
+          nombre: item.nombre,
+          codigo: item.codigo,
+          stock: item.stock,
+          precioVenta: item.precio_venta,
+          totalVendido,
+          tasaRotacion: Math.round(tasaRotacion * 100) / 100,
+        }
+      })
+      .sort((a, b) => b.totalVendido - a.totalVendido)
+      .slice(0, 15)
+
+    // --- Sin Movimiento (dead stock) ---
+    const itemsConVenta = new Set(Object.keys(ventasPorItem))
+    const sinMovimiento = items
+      .filter(item => !itemsConVenta.has(item.id) && item.stock > 0)
+      .map(item => ({
+        id: item.id,
+        nombre: item.nombre,
+        codigo: item.codigo,
+        stock: item.stock,
+        precioCompra: item.precio_compra,
+        precioVenta: item.precio_venta,
+        capitalInmovilizado: (item.stock || 0) * (item.precio_compra || 0),
+      }))
+      .sort((a, b) => b.capitalInmovilizado - a.capitalInmovilizado)
+      .slice(0, 20)
+
+    // --- Alertas de Reorden ---
+    const diasPeriodo = 90
+    const alertasReorden = items
+      .filter(item => {
+        const vendido = ventasPorItem[item.id] || 0
+        const promedioDiario = vendido / diasPeriodo
+        const puntoReorden = promedioDiario * 14
+        return item.stock <= puntoReorden && promedioDiario > 0
+      })
+      .map(item => {
+        const vendido = ventasPorItem[item.id] || 0
+        const promedioDiario = vendido / diasPeriodo
+        const puntoReorden = Math.ceil(promedioDiario * 14)
+        const diasHastaAgotamiento = promedioDiario > 0 ? Math.round(item.stock / promedioDiario) : 999
+        const cantidadSugerida = Math.max(0, Math.ceil(puntoReorden * 2 - item.stock))
+        return {
+          id: item.id,
+          nombre: item.nombre,
+          codigo: item.codigo,
+          stock: item.stock,
+          promedioDiario: Math.round(promedioDiario * 100) / 100,
+          diasHastaAgotamiento,
+          puntoReorden,
+          cantidadSugerida,
+        }
+      })
+      .sort((a, b) => a.diasHastaAgotamiento - b.diasHastaAgotamiento)
+
+    // --- Por Categoría ---
+    const catMap: Record<string, { categoria: string; items: number; stock: number; valorCosto: number; valorVenta: number }> = {}
+    items.forEach(item => {
+      const cat = item.categoria || "Sin categoría"
+      if (!catMap[cat]) catMap[cat] = { categoria: cat, items: 0, stock: 0, valorCosto: 0, valorVenta: 0 }
+      catMap[cat].items++
+      catMap[cat].stock += item.stock || 0
+      catMap[cat].valorCosto += (item.stock || 0) * (item.precio_compra || 0)
+      catMap[cat].valorVenta += (item.stock || 0) * (item.precio_venta || 0)
+    })
+    const porCategoria = Object.values(catMap).sort((a, b) => b.valorVenta - a.valorVenta)
+
+    // --- Tendencia de Ventas (últimos 30 días) ---
+    const tendenciaMap: Record<string, number> = {}
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(now)
+      d.setDate(now.getDate() - i)
+      tendenciaMap[d.toISOString().split("T")[0]] = 0
+    }
+    movimientos30.forEach((m: any) => {
+      const key = m.created_at?.split("T")[0]
+      if (key && tendenciaMap[key] !== undefined) {
+        tendenciaMap[key] += Math.abs(m.cantidad || 0)
+      }
+    })
+    const tendenciaVentas = Object.entries(tendenciaMap).map(([fecha, unidades]) => ({ fecha, unidades }))
+
+    return NextResponse.json({
+      valorizacion,
+      rotacion,
+      sinMovimiento,
+      alertasReorden,
+      porCategoria,
+      tendenciaVentas,
+    })
+  } catch (err) {
+    console.error("Error en inventario-analytics:", err)
+    return NextResponse.json({ error: "Error interno" }, { status: 500 })
+  }
+}

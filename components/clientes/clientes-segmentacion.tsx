@@ -1,0 +1,324 @@
+"use client"
+
+import { useState } from "react"
+import useSWR from "swr"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  Star,
+  RefreshCw,
+  UserCheck,
+  Sparkles,
+  UserX,
+  AlertTriangle,
+  MessageCircle,
+  Users,
+  BarChart3,
+} from "lucide-react"
+import { useCurrency } from "@/contexts/currency-context"
+
+const fetcher = (url: string) => fetch(url).then(res => res.json())
+
+const SEGMENT_CONFIG = {
+  VIP: { label: "VIP", icon: Star, color: "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800" },
+  FRECUENTE: { label: "Frecuente", icon: RefreshCw, color: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800" },
+  REGULAR: { label: "Regular", icon: UserCheck, color: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800" },
+  NUEVO: { label: "Nuevo", icon: Sparkles, color: "bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800" },
+  INACTIVO: { label: "Inactivo", icon: UserX, color: "bg-gray-100 dark:bg-gray-800/50 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700" },
+} as const
+
+type SegmentKey = keyof typeof SEGMENT_CONFIG
+
+const TABS = [
+  { id: "top", label: "Top Clientes", icon: Star },
+  { id: "riesgo", label: "En Riesgo", icon: AlertTriangle },
+  { id: "adquisicion", label: "Adquisición", icon: Users },
+  { id: "frecuencia", label: "Frecuencia", icon: BarChart3 },
+] as const
+
+type TabId = typeof TABS[number]["id"]
+
+interface Props {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}
+
+export function ClientesSegmentacion({ open, onOpenChange }: Props) {
+  const { formatPrice, formatDate } = useCurrency()
+  const [activeTab, setActiveTab] = useState<TabId>("top")
+  const [selectedSegment, setSelectedSegment] = useState<SegmentKey | null>(null)
+
+  const { data, isLoading } = useSWR(
+    open ? "/api/reportes/clientes-analytics" : null,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 30000 }
+  )
+
+  const formatWhatsAppLink = (telefono: string) => {
+    const clean = telefono.replace(/\D/g, "")
+    return `https://wa.me/549${clean}`
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Segmentación de Clientes</DialogTitle>
+        </DialogHeader>
+
+        {isLoading ? (
+          <div className="space-y-4">
+            <div className="grid gap-3 grid-cols-2 lg:grid-cols-5">
+              {[...Array(5)].map((_, i) => (
+                <Card key={i}><CardContent className="p-3"><div className="h-12 bg-muted animate-pulse rounded" /></CardContent></Card>
+              ))}
+            </div>
+            <div className="h-48 bg-muted animate-pulse rounded" />
+          </div>
+        ) : !data || data.error ? (
+          <p className="text-sm text-muted-foreground py-8 text-center">Error al cargar datos</p>
+        ) : (
+          <div className="space-y-4">
+            {/* Segment Cards */}
+            <div className="grid gap-2 grid-cols-2 lg:grid-cols-5">
+              {(Object.entries(SEGMENT_CONFIG) as [SegmentKey, typeof SEGMENT_CONFIG[SegmentKey]][]).map(([key, config]) => {
+                const Icon = config.icon
+                const seg = data.segmentacion[key] || { count: 0, totalGastado: 0 }
+                const isSelected = selectedSegment === key
+                return (
+                  <Card
+                    key={key}
+                    className={`cursor-pointer transition-all ${config.color} ${
+                      isSelected ? "ring-2 ring-primary" : "hover:shadow-md"
+                    }`}
+                    onClick={() => setSelectedSegment(isSelected ? null : key)}
+                  >
+                    <CardContent className="p-3">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <Icon className="h-3.5 w-3.5" />
+                        <span className="text-xs font-semibold">{config.label}</span>
+                      </div>
+                      <div className="text-lg font-bold">{seg.count}</div>
+                      <div className="text-[10px] opacity-75">{formatPrice(seg.totalGastado)}</div>
+                    </CardContent>
+                  </Card>
+                )
+              })}
+            </div>
+
+            {/* Selected Segment Detail */}
+            {selectedSegment && data.segmentacion[selectedSegment]?.clientes?.length > 0 && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">
+                    Clientes {SEGMENT_CONFIG[selectedSegment].label} (Top 10)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-1.5">
+                    {data.segmentacion[selectedSegment].clientes.map((c: any, i: number) => (
+                      <div key={c.id} className="flex items-center justify-between text-sm py-1 border-b last:border-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground w-4">{i + 1}</span>
+                          <span className="font-medium">{c.nombre}</span>
+                        </div>
+                        <div className="flex items-center gap-3 text-xs">
+                          <span className="text-muted-foreground">{c.totalCompras} compras</span>
+                          <span className="font-medium">{formatPrice(c.totalGastado)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Tabs */}
+            <div className="flex gap-1 border-b pb-1">
+              {TABS.map(tab => {
+                const Icon = tab.icon
+                return (
+                  <Button
+                    key={tab.id}
+                    variant={activeTab === tab.id ? "default" : "ghost"}
+                    size="sm"
+                    className="text-xs gap-1.5"
+                    onClick={() => setActiveTab(tab.id)}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    {tab.label}
+                    {tab.id === "riesgo" && data.clientesEnRiesgo?.length > 0 && (
+                      <Badge variant="destructive" className="text-[9px] px-1 py-0 h-4 ml-1">
+                        {data.clientesEnRiesgo.length}
+                      </Badge>
+                    )}
+                  </Button>
+                )
+              })}
+            </div>
+
+            {/* Tab: Top Clientes */}
+            {activeTab === "top" && (
+              <div>
+                {data.topClientes.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">Sin datos</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left text-xs text-muted-foreground">
+                          <th className="pb-2 pr-2">#</th>
+                          <th className="pb-2 pr-2">Cliente</th>
+                          <th className="pb-2 pr-2 text-right">Compras</th>
+                          <th className="pb-2 pr-2 text-right">Total</th>
+                          <th className="pb-2 pr-2 text-right">Ticket Prom.</th>
+                          <th className="pb-2 text-right">Última Compra</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.topClientes.map((c: any, i: number) => (
+                          <tr key={c.id} className="border-b last:border-0">
+                            <td className="py-2 pr-2">
+                              <span className={`text-xs font-bold ${
+                                i === 0 ? "text-amber-500" : i === 1 ? "text-gray-400" : i === 2 ? "text-amber-700" : "text-muted-foreground"
+                              }`}>
+                                {i + 1}
+                              </span>
+                            </td>
+                            <td className="py-2 pr-2 font-medium">{c.nombre}</td>
+                            <td className="py-2 pr-2 text-right">{c.totalCompras}</td>
+                            <td className="py-2 pr-2 text-right font-medium">{formatPrice(c.totalGastado)}</td>
+                            <td className="py-2 pr-2 text-right">{formatPrice(c.ticketPromedio)}</td>
+                            <td className="py-2 text-right text-muted-foreground">
+                              <div>{formatDate(c.ultimaCompra)}</div>
+                              <div className="text-[10px]">hace {c.diasDesdeUltimaCompra} días</div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Tab: En Riesgo */}
+            {activeTab === "riesgo" && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Clientes con 2+ compras que no compran hace 60-180 días
+                </p>
+                {data.clientesEnRiesgo.length === 0 ? (
+                  <p className="text-sm text-emerald-600 py-4 text-center">No hay clientes en riesgo</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left text-xs text-muted-foreground">
+                          <th className="pb-2 pr-2">Cliente</th>
+                          <th className="pb-2 pr-2">Teléfono</th>
+                          <th className="pb-2 pr-2 text-right">Compras</th>
+                          <th className="pb-2 pr-2 text-right">Total</th>
+                          <th className="pb-2 pr-2 text-right">Días Inactivo</th>
+                          <th className="pb-2 text-center">Acción</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.clientesEnRiesgo.map((c: any) => (
+                          <tr key={c.id} className={`border-b last:border-0 ${
+                            c.diasInactivo > 120 ? "bg-destructive/5" : c.diasInactivo > 90 ? "bg-amber-50 dark:bg-amber-900/10" : ""
+                          }`}>
+                            <td className="py-2 pr-2 font-medium">{c.nombre}</td>
+                            <td className="py-2 pr-2 text-muted-foreground">{c.telefono}</td>
+                            <td className="py-2 pr-2 text-right">{c.totalCompras}</td>
+                            <td className="py-2 pr-2 text-right">{formatPrice(c.totalGastado)}</td>
+                            <td className="py-2 pr-2 text-right">
+                              <Badge variant={c.diasInactivo > 120 ? "destructive" : "secondary"} className="text-[10px]">
+                                {c.diasInactivo} días
+                              </Badge>
+                            </td>
+                            <td className="py-2 text-center">
+                              {c.telefono && (
+                                <a
+                                  href={formatWhatsAppLink(c.telefono)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-700"
+                                >
+                                  <MessageCircle className="h-3.5 w-3.5" />
+                                </a>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Tab: Adquisición */}
+            {activeTab === "adquisicion" && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-3">Nuevos clientes por mes (últimos 6 meses)</p>
+                <div className="space-y-2">
+                  {data.adquisicionMensual.map((m: any) => {
+                    const maxCount = Math.max(...data.adquisicionMensual.map((x: any) => x.count), 1)
+                    const pct = (m.count / maxCount) * 100
+                    return (
+                      <div key={m.mes} className="flex items-center gap-3">
+                        <span className="text-xs text-muted-foreground w-16">{m.mes}</span>
+                        <div className="flex-1 h-6 bg-muted rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-primary/20 rounded-full flex items-center px-2"
+                            style={{ width: `${Math.max(pct, 8)}%` }}
+                          >
+                            <span className="text-[10px] font-medium">{m.count}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Tab: Frecuencia */}
+            {activeTab === "frecuencia" && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-3">Distribución de frecuencia de compra</p>
+                <div className="space-y-2">
+                  {data.frecuenciaCompra.map((f: any) => {
+                    const maxCount = Math.max(...data.frecuenciaCompra.map((x: any) => x.count), 1)
+                    const pct = (f.count / maxCount) * 100
+                    return (
+                      <div key={f.rango} className="flex items-center gap-3">
+                        <span className="text-xs w-24">{f.rango}</span>
+                        <div className="flex-1 h-6 bg-muted rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-blue-200 dark:bg-blue-800 rounded-full flex items-center px-2"
+                            style={{ width: `${Math.max(pct, 8)}%` }}
+                          >
+                            <span className="text-[10px] font-medium">{f.count} clientes</span>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
