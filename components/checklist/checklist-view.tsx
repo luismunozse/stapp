@@ -45,6 +45,7 @@ const categoriaLabels: Record<string, string> = {
   ACCESORIOS: "Accesorios Entregados",
   FUNCIONAL: "Estado Funcional",
   OTRO: "Otros",
+  GENERAL: "General",
 }
 
 export function ChecklistView({ checklist, onEdit }: ChecklistViewProps) {

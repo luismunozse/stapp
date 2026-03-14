@@ -55,7 +55,12 @@ export function ChecklistCard({ ordenId }: ChecklistCardProps) {
         return
       }
       const data = await res.json()
-      setChecklist(data.checklist)
+      // Merge template into checklist so ChecklistView can access checklist.template
+      if (data.checklist && data.template) {
+        setChecklist({ ...data.checklist, template: data.template })
+      } else {
+        setChecklist(data.checklist)
+      }
       setTemplate(data.template)
     } catch (error) {
       console.error("Error:", error)

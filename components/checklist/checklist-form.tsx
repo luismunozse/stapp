@@ -43,6 +43,7 @@ const categoriaLabels: Record<string, string> = {
   ACCESORIOS: "Accesorios Entregados",
   FUNCIONAL: "Estado Funcional",
   OTRO: "Otros",
+  GENERAL: "General",
 }
 
 export function ChecklistForm({
@@ -84,6 +85,20 @@ export function ChecklistForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    // Validar campos requeridos
+    const missingRequired = template.items.filter((item) => {
+      if (!item.requerido) return false
+      const value = valores[item.id]
+      if (item.tipo === "BOOLEAN") return value === undefined || value === null
+      return !value
+    })
+
+    if (missingRequired.length > 0) {
+      alert(`Completá los campos requeridos: ${missingRequired.map((i) => i.label).join(", ")}`)
+      return
+    }
+
     setLoading(true)
 
     try {
