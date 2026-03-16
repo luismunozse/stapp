@@ -25,6 +25,10 @@ import {
   History,
   Receipt,
   Shield,
+  Link2,
+  Copy,
+  Check,
+  ExternalLink,
 } from "lucide-react"
 import Link from "next/link"
 import { useCurrency } from "@/contexts/currency-context"
@@ -84,8 +88,32 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const [downloadingPdf, setDownloadingPdf] = useState(false)
   const [activeTab, setActiveTab] = useState("repuestos")
   const [showEntregaDialog, setShowEntregaDialog] = useState(false)
+  const [linkCopied, setLinkCopied] = useState(false)
 
   const isAdmin = session?.user?.role === "ADMIN"
+
+  const seguimientoUrl = orden?.publicToken
+    ? `${typeof window !== "undefined" ? window.location.origin : ""}/seguimiento/${orden.publicToken}`
+    : null
+
+  const handleCopyLink = async () => {
+    if (!seguimientoUrl) return
+    try {
+      await navigator.clipboard.writeText(seguimientoUrl)
+      setLinkCopied(true)
+      setTimeout(() => setLinkCopied(false), 2000)
+    } catch {
+      // fallback
+    }
+  }
+
+  const handleShareWhatsApp = () => {
+    if (!seguimientoUrl || !orden?.cliente?.telefono) return
+    const codigoDisplay = orden.codigoOrden || `#${orden.numeroOrden}`
+    const message = `Hola ${orden.cliente.nombre}, desde acá podés seguir el estado de tu equipo (Orden ${codigoDisplay}):\n${seguimientoUrl}`
+    const phone = orden.cliente.telefono.replace(/\D/g, "")
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank")
+  }
 
   useEffect(() => {
     fetchOrden()
@@ -583,6 +611,55 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             updating={updating}
             onUpdateEstado={handleUpdateEstado}
           />
+
+          {/* Link de Seguimiento */}
+          {seguimientoUrl && (
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-3">
+                  <Link2 className="h-4 w-4" />
+                  LINK DE SEGUIMIENTO
+                </div>
+                <div className="flex items-center gap-1.5 bg-muted rounded-md px-3 py-2 text-xs break-all mb-3">
+                  <span className="flex-1 text-muted-foreground truncate">{seguimientoUrl}</span>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={handleCopyLink}
+                  >
+                    {linkCopied ? (
+                      <Check className="h-4 w-4 mr-1.5 text-green-500" />
+                    ) : (
+                      <Copy className="h-4 w-4 mr-1.5" />
+                    )}
+                    {linkCopied ? "Copiado" : "Copiar"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={handleShareWhatsApp}
+                  >
+                    <ExternalLink className="h-4 w-4 mr-1.5" />
+                    WhatsApp
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="shrink-0"
+                    asChild
+                  >
+                    <a href={seguimientoUrl} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           <OrdenTecnicoCard
             tecnicoId={orden.tecnicoId}

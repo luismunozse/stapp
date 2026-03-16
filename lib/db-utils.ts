@@ -82,6 +82,7 @@ export function formatOrden(orden: any) {
     cotizaciones: orden.cotizaciones,
     garantia: orden.garantias,
     checklist: orden.checklist_recepcion,
+    publicToken: orden.public_token || null,
     metadata: orden.metadata || {},
     sectorId: orden.sector_id,
     sector: orden.sectores_cliente ? {

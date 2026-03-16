@@ -141,6 +141,7 @@ export interface OrdenServicio {
   entregadoPorUserId?: string | null
   entregadoPor?: User | null
   notasEntrega?: string | null
+  publicToken?: string | null
 }
 
 export interface Inventario {
