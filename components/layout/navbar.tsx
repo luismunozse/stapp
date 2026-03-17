@@ -40,25 +40,28 @@ import { NotificationBell } from "@/components/notifications/notification-bell"
 import { useSidebar } from "@/components/layout/sidebar-context"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
-const navItems = [
+type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; roles?: string[] }
+
+// roles = undefined means visible to all roles
+const navItems: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/ordenes", label: "Órdenes", icon: ClipboardList },
-  { href: "/clientes", label: "Clientes", icon: Users },
-  { href: "/tecnicos", label: "Técnicos", icon: Wrench },
-  { href: "/vendedores", label: "Vendedores", icon: TrendingUp },
-  { href: "/ventas", label: "Ventas", icon: ShoppingCart },
-  { href: "/cotizaciones", label: "Cotizaciones", icon: Receipt },
+  { href: "/clientes", label: "Clientes", icon: Users, roles: ["ADMIN", "VENDEDOR"] },
+  { href: "/tecnicos", label: "Técnicos", icon: Wrench, roles: ["ADMIN"] },
+  { href: "/vendedores", label: "Vendedores", icon: TrendingUp, roles: ["ADMIN"] },
+  { href: "/ventas", label: "Ventas", icon: ShoppingCart, roles: ["ADMIN", "VENDEDOR"] },
+  { href: "/cotizaciones", label: "Cotizaciones", icon: Receipt, roles: ["ADMIN", "VENDEDOR"] },
   { href: "/inventario", label: "Inventario", icon: Package },
-  { href: "/facturacion", label: "Facturación", icon: FileText },
-  { href: "/reportes", label: "Reportes", icon: BarChart3 },
+  { href: "/facturacion", label: "Facturación", icon: FileText, roles: ["ADMIN", "VENDEDOR"] },
+  { href: "/reportes", label: "Reportes", icon: BarChart3, roles: ["ADMIN", "VENDEDOR"] },
   { href: "/soporte", label: "Soporte", icon: Headset },
 ]
 
 // Items principales para el bottom nav (los 4 más usados)
-const bottomNavItems = [
+const bottomNavItems: NavItem[] = [
   { href: "/dashboard", label: "Inicio", icon: LayoutDashboard },
   { href: "/ordenes", label: "Órdenes", icon: ClipboardList },
-  { href: "/clientes", label: "Clientes", icon: Users },
+  { href: "/clientes", label: "Clientes", icon: Users, roles: ["ADMIN", "VENDEDOR"] },
   { href: "/inventario", label: "Inventario", icon: Package },
 ]
 
@@ -66,7 +69,8 @@ export function Navbar() {
   const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const { data: session } = useSession()
-  const isAdmin = session?.user?.role === "ADMIN"
+  const userRole = session?.user?.role || ""
+  const isAdmin = userRole === "ADMIN"
   const menuRef = useRef<HTMLDivElement>(null)
   const { collapsed, toggle } = useSidebar()
 
@@ -87,9 +91,11 @@ export function Navbar() {
   }, [mobileMenuOpen])
 
   const allNavItems = [
-    ...navItems,
+    ...navItems.filter(item => !item.roles || item.roles.includes(userRole)),
+    ...(userRole === "ADMIN" || userRole === "VENDEDOR" ? [
+      { href: "/proveedores", label: "Proveedores", icon: Store }
+    ] : []),
     ...(isAdmin ? [
-      { href: "/proveedores", label: "Proveedores", icon: Store },
       { href: "/configuracion", label: "Configuración", icon: Settings }
     ] : [])
   ]
@@ -107,9 +113,11 @@ export function Navbar() {
     }
   }
 
+  const filteredBottomNavItems = bottomNavItems.filter(item => !item.roles || item.roles.includes(userRole))
+
   // Items que no están en el bottom nav (para el menú "Más")
   const moreItems = allNavItems.filter(
-    item => !bottomNavItems.some(bottomItem => bottomItem.href === item.href)
+    item => !filteredBottomNavItems.some(bottomItem => bottomItem.href === item.href)
   )
 
   // Verificar si algún item de "más" está activo
@@ -386,8 +394,8 @@ export function Navbar() {
 
       {/* Mobile Bottom Navigation - Optimizado para touch */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-t border-border safe-bottom">
-        <div className="grid grid-cols-5 h-16">
-          {bottomNavItems.map((item) => {
+        <div className={`grid h-16`} style={{ gridTemplateColumns: `repeat(${filteredBottomNavItems.length + 1}, minmax(0, 1fr))` }}>
+          {filteredBottomNavItems.map((item) => {
             const Icon = item.icon
             const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
             return (

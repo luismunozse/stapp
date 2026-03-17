@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 
 interface ItemInventario {
@@ -25,7 +25,7 @@ interface CategoriaResumen {
  */
 export async function GET() {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId } = await requireAdminOrVendedor()
     if (error) return error
 
     // Obtener todo el inventario

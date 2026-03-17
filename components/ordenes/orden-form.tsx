@@ -921,7 +921,6 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
                 step="0.01"
                 min="0"
                 {...register("presupuesto", {
-                  valueAsNumber: true,
                   setValueAs: (value) => value === "" || value === null || value === undefined ? undefined : Number(value)
                 })}
                 placeholder="0.00"

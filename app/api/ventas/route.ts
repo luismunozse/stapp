@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger } from "@/lib/audit"
 import { formatVenta } from "@/lib/db-utils"
@@ -35,7 +35,7 @@ const ventaSchema = z.object({
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId, userId, role } = await requireAuth()
+    const { error, organizationId, userId, role } = await requireAdminOrVendedor()
     if (error) return error
 
     const { searchParams } = new URL(request.url)
@@ -143,7 +143,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { error, organizationId, userId, role } = await requireAuth()
+    const { error, organizationId, userId, role } = await requireAdminOrVendedor()
     if (error) return error
 
     // Solo ADMIN o VENDEDOR pueden crear ventas

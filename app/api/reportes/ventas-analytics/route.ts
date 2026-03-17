@@ -1,9 +1,9 @@
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { NextResponse } from "next/server"
 
 export async function GET() {
-  const { error, organizationId } = await requireAuth()
+  const { error, organizationId } = await requireAdminOrVendedor()
   if (error) return error
 
   const now = new Date()

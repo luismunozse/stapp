@@ -313,6 +313,21 @@ export async function middleware(request: NextRequest) {
   requestHeaders.set("x-user-id", token.id as string)
   requestHeaders.set("x-user-role", token.role as string)
 
+  // Protección de rutas por rol
+  const userRole = token.role as string
+  const adminOnlyRoutes = ["/tecnicos", "/vendedores", "/configuracion"]
+  const adminOrVendedorRoutes = ["/clientes", "/ventas", "/cotizaciones", "/facturacion", "/reportes", "/proveedores"]
+
+  const isAdminOnly = adminOnlyRoutes.some(r => pathname === r || pathname.startsWith(r + "/"))
+  const isAdminOrVendedor = adminOrVendedorRoutes.some(r => pathname === r || pathname.startsWith(r + "/"))
+
+  if (isAdminOnly && userRole !== "ADMIN") {
+    return NextResponse.redirect(new URL("/dashboard", request.url))
+  }
+  if (isAdminOrVendedor && userRole !== "ADMIN" && userRole !== "VENDEDOR") {
+    return NextResponse.redirect(new URL("/dashboard", request.url))
+  }
+
   return NextResponse.next({
     request: { headers: requestHeaders },
   })

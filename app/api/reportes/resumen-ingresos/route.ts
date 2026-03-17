@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 
 const LABELS_DISPOSITIVO: Record<string, string> = {
@@ -13,7 +13,7 @@ const LABELS_DISPOSITIVO: Record<string, string> = {
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId } = await requireAdminOrVendedor()
     if (error) return error
 
     const { searchParams } = new URL(request.url)

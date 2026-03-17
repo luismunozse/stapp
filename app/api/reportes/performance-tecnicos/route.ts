@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
+import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 
 interface TecnicoPerformance {
@@ -27,7 +27,7 @@ const ESTADOS_EN_PROCESO = [
  */
 export async function GET() {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId } = await requireAdminOrVendedor()
     if (error) return error
 
     // Obtener técnicos de la organización

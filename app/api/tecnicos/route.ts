@@ -102,6 +102,7 @@ export async function POST(request: Request) {
         password: hashedPassword,
         rol: "TECNICO",
         organization_id: organizationId!,
+        email_verified: true,
       })
       .select("id, nombre, email")
       .single()

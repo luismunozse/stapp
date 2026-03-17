@@ -58,7 +58,7 @@ export const OrdenesPorTecnicoChart = memo(function OrdenesPorTecnicoChart({ dat
           <BarChart
             data={sortedData}
             layout="vertical"
-            margin={{ top: 5, right: 10, left: -10, bottom: 5 }}
+            margin={{ top: 5, right: 10, left: 0, bottom: 5 }}
           >
             <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} className="stroke-muted" />
             <XAxis type="number" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} />
@@ -68,9 +68,9 @@ export const OrdenesPorTecnicoChart = memo(function OrdenesPorTecnicoChart({ dat
               tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
               tickLine={false}
               axisLine={false}
-              width={80}
+              width={140}
               tickFormatter={(value) =>
-                value.length > 12 ? `${value.substring(0, 12)}...` : value
+                value.length > 20 ? `${value.substring(0, 20)}...` : value
               }
             />
             <Tooltip

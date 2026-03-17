@@ -171,10 +171,16 @@ export function TemplateEditor() {
       }
 
       const newItem = await res.json()
+      const updatedItems = [...(selectedTemplate.items || []), newItem]
       setSelectedTemplate((prev) =>
         prev
-          ? { ...prev, items: [...prev.items, newItem] }
+          ? { ...prev, items: updatedItems }
           : null
+      )
+      setTemplates((prev) =>
+        prev.map((t) =>
+          t.id === selectedTemplate.id ? { ...t, items: updatedItems } : t
+        )
       )
       setNewItemLabel("")
       setNewItemOpciones("")
@@ -210,10 +216,16 @@ export function TemplateEditor() {
         return
       }
 
+      const updatedItems = selectedTemplate.items.filter((i) => i.id !== itemId)
       setSelectedTemplate((prev) =>
         prev
-          ? { ...prev, items: prev.items.filter((i) => i.id !== itemId) }
+          ? { ...prev, items: updatedItems }
           : null
+      )
+      setTemplates((prev) =>
+        prev.map((t) =>
+          t.id === selectedTemplate.id ? { ...t, items: updatedItems } : t
+        )
       )
     } catch (error) {
       console.error("Error:", error)
@@ -240,8 +252,14 @@ export function TemplateEditor() {
       orden: i,
     }))
 
+    const updatedItems = items.map((item, i) => ({ ...item, orden: i }))
     setSelectedTemplate((prev) =>
-      prev ? { ...prev, items: items.map((item, i) => ({ ...item, orden: i })) } : null
+      prev ? { ...prev, items: updatedItems } : null
+    )
+    setTemplates((prev) =>
+      prev.map((t) =>
+        t.id === selectedTemplate.id ? { ...t, items: updatedItems } : t
+      )
     )
 
     try {
