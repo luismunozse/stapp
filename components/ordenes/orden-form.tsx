@@ -17,11 +17,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { X, Plus, Camera, Upload, Trash2, Loader2, Lock, Grid3X3 } from "lucide-react"
+import { X, Plus, Camera, Upload, Trash2, Loader2, Lock, Grid3X3, ClipboardCheck, ChevronDown, ChevronUp } from "lucide-react"
 import { PatternLock } from "@/components/ui/pattern-lock"
 import { OrdenCreadaModal } from "./orden-creada-modal"
 import { compressImage } from "@/lib/image-compression"
 import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
+import { SignaturePad } from "@/components/firma/signature-pad"
 import type { Cliente, TipoDispositivoConfig, CampoExtra } from "@/types"
 
 interface FotoPreview {
@@ -143,6 +144,12 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
   const [nuevoClienteTipo, setNuevoClienteTipo] = useState<"INDIVIDUAL" | "EMPRESA">("INDIVIDUAL")
   const [nuevoSectorNombre, setNuevoSectorNombre] = useState("")
   const [crearSectorLoading, setCrearSectorLoading] = useState(false)
+  const [checklistTemplate, setChecklistTemplate] = useState<any>(null)
+  const [checklistValores, setChecklistValores] = useState<Record<string, boolean | string | null>>({})
+  const [checklistNotas, setChecklistNotas] = useState("")
+  const [checklistFirma, setChecklistFirma] = useState<string | null>(null)
+  const [checklistFirmaMime, setChecklistFirmaMime] = useState<string | null>(null)
+  const [checklistOpen, setChecklistOpen] = useState(true)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const { tipos: tiposDispositivo, loading: tiposLoading } = useTiposDispositivo()
@@ -255,6 +262,30 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
   useEffect(() => {
     fetchClientes()
   }, [])
+
+  // Fetch checklist template when device type changes
+  useEffect(() => {
+    const fetchChecklistTemplate = async () => {
+      const tipoId = tipoSeleccionado?.id
+      try {
+        const url = tipoId
+          ? `/api/checklist-templates/by-device-type?tipoDispositivoId=${tipoId}`
+          : `/api/checklist-templates/by-device-type`
+        const res = await fetch(url)
+        if (res.ok) {
+          const data = await res.json()
+          setChecklistTemplate(data.template)
+          setChecklistValores({})
+          setChecklistNotas("")
+          setChecklistFirma(null)
+          setChecklistFirmaMime(null)
+        }
+      } catch (error) {
+        console.error("Error fetching checklist template:", error)
+      }
+    }
+    fetchChecklistTemplate()
+  }, [tipoSeleccionado?.id])
 
   // Fetch sectors when client changes
   const clienteId = watch("clienteId")
@@ -590,6 +621,25 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
       }
 
       const nuevaOrden = await res.json()
+
+      // Guardar checklist si hay template y valores completados
+      if (checklistTemplate && Object.keys(checklistValores).length > 0) {
+        try {
+          await fetch(`/api/ordenes/${nuevaOrden.id}/checklist`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              templateId: checklistTemplate.id,
+              valores: checklistValores,
+              notas: checklistNotas || undefined,
+              firmaCliente: checklistFirma || undefined,
+              firmaMime: checklistFirmaMime || undefined,
+            }),
+          })
+        } catch (checklistError) {
+          console.error("Error saving checklist:", checklistError)
+        }
+      }
 
       const clienteSeleccionado = clientes.find(c => c.id === data.clienteId)
 
@@ -1195,6 +1245,156 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
               )}
             </div>
           </div>
+
+          {/* Checklist de Recepción inline */}
+          {checklistTemplate && checklistTemplate.items && checklistTemplate.items.length > 0 && (
+            <div className="border rounded-lg overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setChecklistOpen(!checklistOpen)}
+                className="w-full flex items-center justify-between p-4 bg-muted/50 hover:bg-muted transition-colors"
+              >
+                <div className="flex items-center gap-2 font-medium">
+                  <ClipboardCheck className="h-4 w-4" />
+                  Checklist de Recepción
+                  <span className="text-xs text-muted-foreground font-normal">
+                    ({checklistTemplate.nombre})
+                  </span>
+                </div>
+                {checklistOpen ? (
+                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                )}
+              </button>
+              {checklistOpen && (
+                <div className="p-4 space-y-4">
+                  {(() => {
+                    const itemsByCategory = checklistTemplate.items.reduce((acc: Record<string, any[]>, item: any) => {
+                      const cat = item.categoria || "GENERAL"
+                      if (!acc[cat]) acc[cat] = []
+                      acc[cat].push(item)
+                      return acc
+                    }, {})
+                    const categoriaLabels: Record<string, string> = {
+                      CONDICION_FISICA: "Condición Física",
+                      ACCESORIOS: "Accesorios Entregados",
+                      FUNCIONAL: "Estado Funcional",
+                      OTRO: "Otros",
+                      GENERAL: "General",
+                    }
+                    return Object.entries(itemsByCategory).map(([categoria, items]) => (
+                      <div key={categoria}>
+                        <h4 className="text-sm font-medium text-muted-foreground border-b pb-1 mb-2">
+                          {categoriaLabels[categoria] || categoria}
+                        </h4>
+                        <div className="space-y-1">
+                          {(items as any[]).sort((a, b) => a.orden - b.orden).map((item) => {
+                            const value = checklistValores[item.id]
+                            if (item.tipo === "BOOLEAN") {
+                              return (
+                                <div key={item.id} className="flex items-center justify-between py-1.5">
+                                  <span className="text-sm">
+                                    {item.label}
+                                    {item.requerido && <span className="text-red-500 ml-1">*</span>}
+                                  </span>
+                                  <div className="flex gap-1.5">
+                                    <button
+                                      type="button"
+                                      className={`px-3 py-1 text-xs rounded border transition-colors ${
+                                        value === true
+                                          ? "bg-primary text-primary-foreground border-primary"
+                                          : "hover:bg-muted"
+                                      }`}
+                                      onClick={() => setChecklistValores(prev => ({ ...prev, [item.id]: true }))}
+                                    >
+                                      Sí
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className={`px-3 py-1 text-xs rounded border transition-colors ${
+                                        value === false
+                                          ? "bg-primary text-primary-foreground border-primary"
+                                          : "hover:bg-muted"
+                                      }`}
+                                      onClick={() => setChecklistValores(prev => ({ ...prev, [item.id]: false }))}
+                                    >
+                                      No
+                                    </button>
+                                  </div>
+                                </div>
+                              )
+                            }
+                            if (item.tipo === "TEXT") {
+                              return (
+                                <div key={item.id} className="py-1.5">
+                                  <Label className="text-sm">
+                                    {item.label}
+                                    {item.requerido && <span className="text-red-500 ml-1">*</span>}
+                                  </Label>
+                                  <Input
+                                    value={(value as string) || ""}
+                                    onChange={(e) => setChecklistValores(prev => ({ ...prev, [item.id]: e.target.value }))}
+                                    className="h-8 mt-1"
+                                  />
+                                </div>
+                              )
+                            }
+                            if (item.tipo === "SELECT") {
+                              const opciones = item.opciones ? JSON.parse(item.opciones) : []
+                              return (
+                                <div key={item.id} className="py-1.5">
+                                  <Label className="text-sm">
+                                    {item.label}
+                                    {item.requerido && <span className="text-red-500 ml-1">*</span>}
+                                  </Label>
+                                  <Select
+                                    value={(value as string) || "none"}
+                                    onValueChange={(val) => setChecklistValores(prev => ({ ...prev, [item.id]: val === "none" ? "" : val }))}
+                                  >
+                                    <SelectTrigger className="h-8 mt-1">
+                                      <SelectValue placeholder="Seleccionar..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="none">Seleccionar...</SelectItem>
+                                      {opciones.map((opt: string) => (
+                                        <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              )
+                            }
+                            return null
+                          })}
+                        </div>
+                      </div>
+                    ))
+                  })()}
+                  <div>
+                    <Label className="text-sm">Observaciones del checklist</Label>
+                    <Textarea
+                      value={checklistNotas}
+                      onChange={(e) => setChecklistNotas(e.target.value)}
+                      placeholder="Notas adicionales sobre el estado del equipo..."
+                      rows={2}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div className="pt-2 border-t">
+                    <SignaturePad
+                      label="Firma del Cliente (Conformidad de recepción)"
+                      onSignatureChange={(data, mime) => {
+                        setChecklistFirma(data)
+                        setChecklistFirmaMime(mime)
+                      }}
+                      disabled={loading}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           <div>
             <Label htmlFor="observaciones">Observaciones</Label>
