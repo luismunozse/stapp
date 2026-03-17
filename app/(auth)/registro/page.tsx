@@ -16,6 +16,7 @@ import {
   CheckCircle2,
 } from "lucide-react"
 import { BusinessLogo } from "@/components/shared/business-logo"
+import { trackAdsConversion, trackEvent } from "@/lib/gtag"
 
 interface FormData {
   orgNombre: string
@@ -220,6 +221,13 @@ export default function RegistroPage() {
         setLoading(false)
         return
       }
+
+      // Tracking de conversión Google Ads + GA4
+      trackAdsConversion()
+      trackEvent("sign_up", {
+        method: "email",
+        organization: formData.orgNombre,
+      })
 
       // Éxito - redirigir al login del subdominio con mensaje de verificación
       const targetUrl = `https://${cleanSlug}.${rootDomain}/login?registered=true&verify=true`

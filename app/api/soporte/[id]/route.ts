@@ -18,7 +18,7 @@ export async function GET(
         *,
         users:user_id (nombre, email),
         support_ticket_messages (
-          id, autor_tipo, autor_id, autor_nombre, contenido, created_at
+          id, autor_tipo, autor_id, autor_nombre, contenido, created_at, leido_at
         ),
         support_ticket_attachments (
           id, message_id, url, nombre_archivo, mime, created_at
@@ -65,6 +65,7 @@ export async function GET(
         autorNombre: m.autor_nombre as string,
         contenido: m.contenido as string,
         createdAt: m.created_at as string,
+        leidoAt: (m.leido_at as string) || null,
         adjuntos: attachmentsByMessage.get(m.id as string) || [],
       }))
 

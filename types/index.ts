@@ -403,6 +403,7 @@ export interface SupportTicketMessage {
   autorNombre: string
   contenido: string
   createdAt: string
+  leidoAt?: string | null
   adjuntos?: SupportTicketAttachment[]
 }
 

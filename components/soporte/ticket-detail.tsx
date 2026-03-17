@@ -18,6 +18,8 @@ import {
   Headset,
   Paperclip,
   X,
+  CheckCheck,
+  Check,
 } from "lucide-react"
 import type { SupportTicketMessage, SupportTicketAttachment } from "@/types"
 
@@ -78,9 +80,24 @@ export function TicketDetail({ ticketId }: { ticketId: string }) {
     }
   }
 
+  const markAsRead = async () => {
+    try {
+      await fetch(`/api/soporte/${ticketId}/leido`, { method: "POST" })
+    } catch (err) {
+      console.error("Error marking as read:", err)
+    }
+  }
+
   useEffect(() => {
     fetchTicket()
   }, [ticketId])
+
+  // Marcar mensajes del superadmin como leídos al abrir el chat
+  useEffect(() => {
+    if (ticket?.mensajes?.some(m => m.autorTipo === "SUPERADMIN" && !m.leidoAt)) {
+      markAsRead()
+    }
+  }, [ticket?.mensajes])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -311,6 +328,16 @@ export function TicketDetail({ ticketId }: { ticketId: string }) {
                       </div>
                     )}
                   </div>
+                  {/* Indicador de leído para mensajes del usuario */}
+                  {isUser && (
+                    <div className={`flex items-center justify-end mt-0.5 gap-0.5`}>
+                      {msg.leidoAt ? (
+                        <CheckCheck className="h-3.5 w-3.5 text-blue-500" />
+                      ) : (
+                        <Check className="h-3.5 w-3.5 text-muted-foreground" />
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )

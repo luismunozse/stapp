@@ -1,5 +1,3 @@
-const { withSentryConfig } = require('@sentry/nextjs')
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -43,22 +41,4 @@ const nextConfig = {
   },
 }
 
-module.exports = withSentryConfig(nextConfig, {
-  org: process.env.SENTRY_ORG || "stapp-d4",
-  project: process.env.SENTRY_PROJECT || "javascript-nextjs",
-  authToken: process.env.SENTRY_AUTH_TOKEN,
-
-  silent: !process.env.CI,
-  hideSourceMaps: true,
-  telemetry: false,
-  disableLogger: true,
-  widenClientFileUpload: true,
-  tunnelRoute: "/monitoring",
-
-  webpack: {
-    automaticVercelMonitors: true,
-    treeshake: {
-      removeDebugLogging: true,
-    },
-  },
-})
+module.exports = nextConfig

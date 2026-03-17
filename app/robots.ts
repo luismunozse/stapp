@@ -18,6 +18,7 @@ export default function robots(): MetadataRoute.Robots {
           "/facturacion/",
           "/reportes/",
           "/inventario/",
+          "/monitoring",
         ],
       },
     ],
