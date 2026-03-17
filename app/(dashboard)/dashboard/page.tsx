@@ -127,7 +127,7 @@ const getDashboardData = unstable_cache(
         .from("ordenes_servicio")
         .select(`
           tecnico_id, estado,
-          usuarios!ordenes_servicio_tecnico_id_fkey (nombre)
+          users!ordenes_servicio_tecnico_id_fkey (nombre)
         `)
         .eq("organization_id", organizationId)
         .not("tecnico_id", "is", null)
@@ -280,7 +280,7 @@ export default async function DashboardPage() {
   const tecnicosMap: Record<string, { nombre: string; ordenes: number; completadas: number }> = {}
   ordenesPorTecnicoResult.data?.forEach((orden: any) => {
     const tecnicoId = orden.tecnico_id
-    const nombre = orden.usuarios?.nombre || "Sin nombre"
+    const nombre = orden.users?.nombre || "Sin nombre"
     if (!tecnicosMap[tecnicoId]) {
       tecnicosMap[tecnicoId] = { nombre, ordenes: 0, completadas: 0 }
     }
