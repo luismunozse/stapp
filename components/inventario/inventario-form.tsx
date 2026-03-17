@@ -18,6 +18,7 @@ const inventarioSchema = z.object({
   categoria: z.string().min(1, "La categoría es requerida"),
   tipoDispositivo: z.string().min(1, "El tipo de dispositivo es requerido"),
   stock: z.number().int().min(0),
+  precioCompra: z.number().min(0),
   precioVenta: z.number().min(0),
 })
 
@@ -64,6 +65,7 @@ export function InventarioForm({
           categoria: item.categoria,
           tipoDispositivo: item.tipoDispositivo,
           stock: item.stock,
+          precioCompra: item.precioCompra,
           precioVenta: item.precioVenta,
         }
       : {
@@ -71,6 +73,7 @@ export function InventarioForm({
           categoria: "",
           tipoDispositivo: "",
           stock: 0,
+          precioCompra: 0,
           precioVenta: 0,
         },
   })
@@ -118,6 +121,7 @@ export function InventarioForm({
         categoria: item.categoria,
         tipoDispositivo: item.tipoDispositivo,
         stock: item.stock,
+        precioCompra: item.precioCompra,
         precioVenta: item.precioVenta,
       })
     }
@@ -135,7 +139,6 @@ export function InventarioForm({
             ...data,
             codigo: generatedCode,
             descripcion: "",
-            precioCompra: 0,
             proveedor: "",
           }
 
@@ -250,7 +253,7 @@ export function InventarioForm({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div>
               <Label htmlFor="stock">Stock *</Label>
               <Input
@@ -267,7 +270,24 @@ export function InventarioForm({
             </div>
 
             <div>
-              <Label htmlFor="precioVenta">Precio *</Label>
+              <Label htmlFor="precioCompra">Costo *</Label>
+              <Input
+                id="precioCompra"
+                type="number"
+                step="0.01"
+                {...register("precioCompra", { valueAsNumber: true })}
+                min={0}
+                placeholder="0.00"
+              />
+              {errors.precioCompra && (
+                <p className="text-sm text-destructive mt-1">
+                  {errors.precioCompra.message}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <Label htmlFor="precioVenta">Precio Venta *</Label>
               <Input
                 id="precioVenta"
                 type="number"
