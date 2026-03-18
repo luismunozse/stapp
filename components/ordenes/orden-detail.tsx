@@ -543,6 +543,9 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             </CardContent>
           </Card>
 
+          {/* Checklist de Recepción - justo después de la info del equipo */}
+          <ChecklistCard ordenId={ordenId} />
+
           {/* Tabs for additional sections */}
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="w-full justify-start overflow-x-auto flex-nowrap">
@@ -553,10 +556,6 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
               <TabsTrigger value="fotos" className="gap-2">
                 <Camera className="h-4 w-4" />
                 Fotos
-              </TabsTrigger>
-              <TabsTrigger value="checklist" className="gap-2">
-                <ClipboardCheck className="h-4 w-4" />
-                Checklist
               </TabsTrigger>
               <TabsTrigger value="cotizaciones" className="gap-2">
                 <FileText className="h-4 w-4" />
@@ -580,9 +579,6 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
               <FotoGallery ordenId={ordenId} />
             </TabsContent>
 
-            <TabsContent value="checklist" className="mt-4">
-              <ChecklistCard ordenId={ordenId} />
-            </TabsContent>
 
             <TabsContent value="cotizaciones" className="mt-4">
               <Card>
