@@ -5,7 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { safeParseBody } from "@/lib/api-utils"
 
 const renewSchema = z.object({
-  organizationId: z.string().uuid("ID de organización inválido"),
+  organizationId: z.string().min(1, "ID de organización requerido"),
   billingPeriod: z.enum(["MONTHLY", "YEARLY"]).optional().default("MONTHLY"),
   months: z.number().int().min(1).max(36).optional(),
 })

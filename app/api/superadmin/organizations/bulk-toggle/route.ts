@@ -5,7 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { safeParseBody } from "@/lib/api-utils"
 
 const bulkToggleSchema = z.object({
-  ids: z.array(z.string().uuid("ID inválido")).min(1, "Debe seleccionar al menos una organización"),
+  ids: z.array(z.string().min(1, "ID inválido")).min(1, "Debe seleccionar al menos una organización"),
   activo: z.boolean(),
 })
 
