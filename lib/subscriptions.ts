@@ -7,7 +7,7 @@ export interface SubscriptionInfo {
   planTipo: "FREE" | "PREMIUM"
   status: "ACTIVE" | "CANCELED" | "PAST_DUE" | "TRIALING"
   billingPeriod: "MONTHLY" | "YEARLY" | null
-  paymentProvider: "MERCADOPAGO" | "STRIPE" | null
+  paymentProvider: "MERCADOPAGO" | "STRIPE" | "LEMONSQUEEZY" | null
   currentPeriodEnd: string | null
   trialEnd: string | null
   cancelAtPeriodEnd: boolean
@@ -15,6 +15,7 @@ export interface SubscriptionInfo {
     ordenes: number | null
     tecnicos: number | null
     clientes: number | null
+    vendedores: number | null
     storageMb: number | null
   }
   features: string[]
@@ -58,6 +59,7 @@ export async function getSubscriptionInfo(
         limite_ordenes,
         limite_tecnicos,
         limite_clientes,
+        limite_vendedores,
         limite_storage_mb,
         features
       )
@@ -86,6 +88,7 @@ export async function getSubscriptionInfo(
       ordenes: plan.limite_ordenes,
       tecnicos: plan.limite_tecnicos,
       clientes: plan.limite_clientes,
+      vendedores: plan.limite_vendedores,
       storageMb: plan.limite_storage_mb,
     },
     features: plan.features || [],
@@ -133,7 +136,7 @@ const FREE_PLAN_LIMITS: Record<string, number> = {
 // Verificar si una organización puede realizar una acción según su plan
 export async function checkPlanLimit(
   organizationId: string,
-  limitType: "ordenes" | "tecnicos" | "clientes" | "vendedores"
+  limitType: "ordenes" | "tecnicos" | "clientes" | "vendedores" | "storage"
 ): Promise<{ allowed: boolean; current: number; limit: number | null; message?: string }> {
   const subscription = await getSubscriptionInfo(organizationId)
   const usage = await getUsageInfo(organizationId)
@@ -154,13 +157,16 @@ export async function checkPlanLimit(
         current = usage.tecnicos
         break
       case "vendedores":
-        // Vendedores usa el mismo límite que técnicos en el plan
-        limit = subscription.limits.tecnicos
+        limit = subscription.limits.vendedores
         current = usage.vendedores
         break
       case "clientes":
         limit = subscription.limits.clientes
         current = usage.clientes
+        break
+      case "storage":
+        limit = subscription.limits.storageMb
+        current = Math.round(usage.storageMb)
         break
     }
   } else {
@@ -178,6 +184,9 @@ export async function checkPlanLimit(
         break
       case "clientes":
         current = usage.clientes
+        break
+      case "storage":
+        current = Math.round(usage.storageMb)
         break
     }
   }

@@ -17,6 +17,7 @@ const createPlanSchema = z.object({
   limite_ordenes: z.number().positive("Límite debe ser positivo").nullable(),
   limite_tecnicos: z.number().positive("Límite debe ser positivo").nullable(),
   limite_clientes: z.number().positive("Límite debe ser positivo").nullable(),
+  limite_vendedores: z.number().positive("Límite debe ser positivo").nullable(),
   limite_storage_mb: z.number().positive("Límite debe ser positivo").nullable(),
   features: z.array(z.string()).default([]),
 }).refine(
@@ -132,6 +133,7 @@ export async function POST(request: NextRequest) {
         limite_ordenes: data.limite_ordenes,
         limite_tecnicos: data.limite_tecnicos,
         limite_clientes: data.limite_clientes,
+        limite_vendedores: data.limite_vendedores,
         limite_storage_mb: data.limite_storage_mb,
         features: data.features,
         activo: true,

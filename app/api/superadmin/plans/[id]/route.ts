@@ -13,6 +13,7 @@ const updatePlanSchema = z.object({
   limite_ordenes: z.number().positive().nullable().optional(),
   limite_tecnicos: z.number().positive().nullable().optional(),
   limite_clientes: z.number().positive().nullable().optional(),
+  limite_vendedores: z.number().positive().nullable().optional(),
   limite_storage_mb: z.number().positive().nullable().optional(),
   features: z.array(z.string()).optional(),
 })

@@ -141,9 +141,9 @@ async function handleSubscriptionCreated(payload: LemonSqueezyWebhookPayload) {
       plan_id: premiumPlan.id,
       status: "ACTIVE",
       billing_period: billingPeriod,
-      payment_provider: "STRIPE", // Usamos STRIPE en DB ya que el enum ya lo soporta
-      stripe_subscription_id: subscriptionId, // Guardamos el LS subscription ID aquí
-      stripe_customer_id: payload.data.attributes.customer_id?.toString() || null,
+      payment_provider: "LEMONSQUEEZY",
+      lemonsqueezy_subscription_id: subscriptionId,
+      lemonsqueezy_customer_id: payload.data.attributes.customer_id?.toString() || null,
       current_period_start: new Date().toISOString(),
       current_period_end: payload.data.attributes.renews_at || periodEnd.toISOString(),
     }, {
@@ -174,7 +174,7 @@ async function handleSubscriptionUpdated(payload: LemonSqueezyWebhookPayload) {
       status: mappedStatus,
       current_period_end: payload.data.attributes.renews_at || null,
     })
-    .eq("stripe_subscription_id", subscriptionId)
+    .eq("lemonsqueezy_subscription_id", subscriptionId)
 
   console.log(`LemonSqueezy subscription ${subscriptionId} updated to ${mappedStatus}`)
 }
@@ -189,7 +189,7 @@ async function handleSubscriptionCancelled(payload: LemonSqueezyWebhookPayload) 
       canceled_at: new Date().toISOString(),
       cancel_at_period_end: true,
     })
-    .eq("stripe_subscription_id", subscriptionId)
+    .eq("lemonsqueezy_subscription_id", subscriptionId)
 
   console.log(`LemonSqueezy subscription ${subscriptionId} cancelled`)
 }
@@ -204,7 +204,7 @@ async function handlePaymentSuccess(payload: LemonSqueezyWebhookPayload) {
   const { data: subscription } = await supabaseAdmin
     .from("subscriptions")
     .select("id, organization_id, billing_period")
-    .eq("stripe_subscription_id", subscriptionId)
+    .eq("lemonsqueezy_subscription_id", subscriptionId)
     .single()
 
   if (!subscription) {
@@ -233,7 +233,7 @@ async function handlePaymentSuccess(payload: LemonSqueezyWebhookPayload) {
     organization_id: subscription.organization_id,
     amount: (attrs.amount || 0) / 100,
     currency: attrs.currency?.toUpperCase() || "USD",
-    payment_provider: "STRIPE",
+    payment_provider: "LEMONSQUEEZY",
     provider_payment_id: payload.data.id,
     status: "SUCCEEDED",
     invoice_url: attrs.invoice_url || null,
@@ -254,13 +254,13 @@ async function handlePaymentFailed(payload: LemonSqueezyWebhookPayload) {
   await supabaseAdmin
     .from("subscriptions")
     .update({ status: "PAST_DUE" })
-    .eq("stripe_subscription_id", subscriptionId)
+    .eq("lemonsqueezy_subscription_id", subscriptionId)
 
   // Registrar pago fallido
   const { data: subscription } = await supabaseAdmin
     .from("subscriptions")
     .select("id, organization_id")
-    .eq("stripe_subscription_id", subscriptionId)
+    .eq("lemonsqueezy_subscription_id", subscriptionId)
     .single()
 
   if (subscription) {
@@ -269,7 +269,7 @@ async function handlePaymentFailed(payload: LemonSqueezyWebhookPayload) {
       organization_id: subscription.organization_id,
       amount: (attrs.amount || 0) / 100,
       currency: attrs.currency?.toUpperCase() || "USD",
-      payment_provider: "STRIPE",
+      payment_provider: "LEMONSQUEEZY",
       provider_payment_id: payload.data.id,
       status: "FAILED",
       paid_at: null,

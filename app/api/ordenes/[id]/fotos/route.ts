@@ -3,6 +3,8 @@ import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { uploadOrderPhoto, deleteFile, base64ToBuffer } from "@/lib/storage"
 import { formatFoto } from "@/lib/db-utils"
+import { enforcePlanLimit } from "@/lib/plan-limits"
+import { updateStorageUsage } from "@/lib/subscriptions"
 import { z } from "zod"
 
 const fotoSchema = z.object({
@@ -90,6 +92,10 @@ export async function POST(
       )
     }
 
+    // Verificar límite de storage antes de subir
+    const storageLimitError = await enforcePlanLimit(organizationId!, "storage")
+    if (storageLimitError) return storageLimitError
+
     const body = await request.json()
     const data = fotoSchema.parse(body)
 
@@ -132,6 +138,9 @@ export async function POST(
       await deleteFile("FOTOS_ORDENES", path)
       throw dbError
     }
+
+    // Actualizar uso de storage
+    await updateStorageUsage(organizationId!, buffer.length)
 
     return NextResponse.json(formatFoto(foto), { status: 201 })
   } catch (error) {

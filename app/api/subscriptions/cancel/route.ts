@@ -28,8 +28,8 @@ export async function POST() {
       await cancelPreApproval(subscription.mercadopago_preapproval_id)
     }
 
-    if (subscription.stripe_subscription_id) {
-      await cancelLemonSqueezySubscription(subscription.stripe_subscription_id)
+    if (subscription.lemonsqueezy_subscription_id) {
+      await cancelLemonSqueezySubscription(subscription.lemonsqueezy_subscription_id)
     }
 
     // Actualizar en base de datos

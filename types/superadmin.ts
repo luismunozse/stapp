@@ -56,6 +56,7 @@ export interface OrganizationUsage {
   ordenes_count: number
   ordenes_mes_actual: number
   tecnicos_count: number
+  vendedores_count: number
   clientes_count: number
   storage_used_mb: number
   periodo_inicio: string
@@ -87,6 +88,7 @@ export interface Plan {
   limite_ordenes: number | null
   limite_tecnicos: number | null
   limite_clientes: number | null
+  limite_vendedores: number | null
   limite_storage_mb: number | null
   features: string[]
   activo: boolean
@@ -154,7 +156,7 @@ export interface AuditLogWithRelations {
 // Enums
 export type SubscriptionStatus = "ACTIVE" | "CANCELED" | "PAST_DUE" | "TRIALING"
 export type BillingPeriod = "MONTHLY" | "YEARLY"
-export type PaymentProvider = "STRIPE" | "MERCADOPAGO"
+export type PaymentProvider = "STRIPE" | "MERCADOPAGO" | "LEMONSQUEEZY"
 export type PaymentStatus = "PENDING" | "SUCCEEDED" | "FAILED" | "REFUNDED"
 export type PlanType = "FREE" | "PREMIUM"
 export type UserRole = "ADMIN" | "TECNICO" | "VENDEDOR"
@@ -228,6 +230,7 @@ export interface CreatePlanInput {
   limite_ordenes: number | null
   limite_tecnicos: number | null
   limite_clientes: number | null
+  limite_vendedores: number | null
   limite_storage_mb: number | null
   features: string[]
 }
@@ -240,6 +243,7 @@ export interface UpdatePlanInput {
   limite_ordenes?: number | null
   limite_tecnicos?: number | null
   limite_clientes?: number | null
+  limite_vendedores?: number | null
   limite_storage_mb?: number | null
   features?: string[]
 }

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import {
   Dialog,
@@ -24,16 +24,27 @@ export function UpgradeModal({ open, onClose }: UpgradeModalProps) {
   const [billingPeriod, setBillingPeriod] = useState<"MONTHLY" | "YEARLY">("MONTHLY")
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("mercadopago")
   const [loading, setLoading] = useState(false)
+  const [pricesArs, setPricesArs] = useState({ MONTHLY: 19999, YEARLY: 191990 })
+  const [pricesUsd, setPricesUsd] = useState({ MONTHLY: 12, YEARLY: 115 })
 
-  const pricesArs = {
-    MONTHLY: 19999,
-    YEARLY: 191990,
-  }
-
-  const pricesUsd = {
-    MONTHLY: 12,
-    YEARLY: 115,
-  }
+  useEffect(() => {
+    if (!open) return
+    fetch("/api/subscriptions")
+      .then((res) => res.json())
+      .then((data) => {
+        const premiumPlan = data.plans?.find((p: any) => p.tipo === "PREMIUM")
+        if (premiumPlan) {
+          const mensual = Number(premiumPlan.precio_mensual)
+          const anual = Number(premiumPlan.precio_anual)
+          if (premiumPlan.moneda === "ARS") {
+            setPricesArs({ MONTHLY: mensual, YEARLY: anual })
+          } else {
+            setPricesUsd({ MONTHLY: mensual, YEARLY: anual })
+          }
+        }
+      })
+      .catch(() => {})
+  }, [open])
 
   const formatPriceArs = (price: number) => {
     return price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
