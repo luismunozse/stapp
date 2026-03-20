@@ -207,25 +207,38 @@ export async function POST(
       return NextResponse.json({ error: "Template no encontrado" }, { status: 404 })
     }
 
-    const { data: checklist, error: createError } = await supabaseAdmin
+    // Intentar insertar con organization_id, si falla intentar sin él
+    const insertData: Record<string, any> = {
+      orden_id: ordenId,
+      template_id: data.templateId,
+      valores: data.valores,
+      notas: data.notas || null,
+      firma_cliente: data.firmaCliente || null,
+      firma_mime: data.firmaMime || null,
+    }
+
+    let result = await supabaseAdmin
       .from("checklists_recepcion")
-      .insert({
-        orden_id: ordenId,
-        template_id: data.templateId,
-        organization_id: organizationId!,
-        valores: JSON.stringify(data.valores),
-        notas: data.notas || null,
-        firma_cliente: data.firmaCliente || null,
-        firma_mime: data.firmaMime || null,
-      })
+      .insert({ ...insertData, organization_id: organizationId! })
       .select()
       .single()
 
-    if (createError) {
-      console.error("[CHECKLIST POST] Error creando checklist:", createError.message, createError.details, createError.code)
-      throw createError
+    // Si falla por organization_id (columna no existe), intentar sin él
+    if (result.error) {
+      console.error("[CHECKLIST POST] Error con organization_id:", result.error.message, result.error.code)
+      result = await supabaseAdmin
+        .from("checklists_recepcion")
+        .insert(insertData)
+        .select()
+        .single()
     }
 
+    if (result.error) {
+      console.error("[CHECKLIST POST] Error creando checklist:", result.error.message, result.error.details, result.error.code)
+      throw result.error
+    }
+
+    const checklist = result.data
     console.log("[CHECKLIST POST] Checklist creado exitosamente:", checklist.id)
 
     return NextResponse.json({

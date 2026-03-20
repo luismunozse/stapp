@@ -623,30 +623,33 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
       const nuevaOrden = await res.json()
 
       // Guardar checklist si hay template y valores completados
-      console.log("[CHECKLIST SAVE] template:", !!checklistTemplate, "valores count:", Object.keys(checklistValores).length, "valores:", checklistValores)
+      console.log("[CHECKLIST SAVE] template:", !!checklistTemplate, "templateId:", checklistTemplate?.id, "valores count:", Object.keys(checklistValores).length)
       if (checklistTemplate && Object.keys(checklistValores).length > 0) {
         try {
-          console.log("[CHECKLIST SAVE] Enviando POST a /api/ordenes/" + nuevaOrden.id + "/checklist")
+          const checklistBody = {
+            templateId: checklistTemplate.id,
+            valores: checklistValores,
+            notas: checklistNotas || undefined,
+            firmaCliente: checklistFirma || undefined,
+            firmaMime: checklistFirmaMime || undefined,
+          }
+          console.log("[CHECKLIST SAVE] Enviando POST a /api/ordenes/" + nuevaOrden.id + "/checklist", JSON.stringify(checklistBody))
           const checklistRes = await fetch(`/api/ordenes/${nuevaOrden.id}/checklist`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              templateId: checklistTemplate.id,
-              valores: checklistValores,
-              notas: checklistNotas || undefined,
-              firmaCliente: checklistFirma || undefined,
-              firmaMime: checklistFirmaMime || undefined,
-            }),
+            body: JSON.stringify(checklistBody),
           })
           if (!checklistRes.ok) {
             const checklistErr = await checklistRes.json().catch(() => ({}))
-            console.error("[CHECKLIST SAVE] Error:", checklistRes.status, checklistErr)
+            console.error("[CHECKLIST SAVE] Error:", checklistRes.status, JSON.stringify(checklistErr))
           } else {
             console.log("[CHECKLIST SAVE] Checklist guardado exitosamente")
           }
         } catch (checklistError) {
-          console.error("Error saving checklist:", checklistError)
+          console.error("[CHECKLIST SAVE] Exception:", checklistError)
         }
+      } else {
+        console.warn("[CHECKLIST SAVE] SKIPPED - template:", !!checklistTemplate, "valores:", Object.keys(checklistValores).length)
       }
 
       const clienteSeleccionado = clientes.find(c => c.id === data.clienteId)
