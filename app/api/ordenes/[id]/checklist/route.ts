@@ -101,10 +101,36 @@ export async function GET(
         template = anyTemplate
       }
 
-      return NextResponse.json({ checklist: null, template })
+      const formattedTemplate = template ? {
+        id: template.id,
+        nombre: template.nombre,
+        items: (template.checklist_template_items || []).map((item: any) => ({
+          id: item.id,
+          label: item.label,
+          tipo: item.tipo,
+          categoria: item.categoria,
+          opciones: item.opciones,
+          orden: item.orden,
+          requerido: item.requerido,
+        })),
+      } : null
+      return NextResponse.json({ checklist: null, template: formattedTemplate })
     }
 
     const templateData = checklist.checklist_templates
+    const formattedTemplate = templateData ? {
+      id: templateData.id,
+      nombre: templateData.nombre,
+      items: (templateData.checklist_template_items || []).map((item: any) => ({
+        id: item.id,
+        label: item.label,
+        tipo: item.tipo,
+        categoria: item.categoria,
+        opciones: item.opciones,
+        orden: item.orden,
+        requerido: item.requerido,
+      })),
+    } : null
     return NextResponse.json({
       checklist: {
         id: checklist.id,
@@ -116,7 +142,7 @@ export async function GET(
         firmaMime: checklist.firma_mime,
         createdAt: checklist.created_at,
       },
-      template: templateData,
+      template: formattedTemplate,
     })
   } catch (error) {
     console.error("Error fetching order checklist:", error)
