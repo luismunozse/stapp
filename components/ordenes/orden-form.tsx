@@ -625,7 +625,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
       // Guardar checklist si hay template y valores completados
       if (checklistTemplate && Object.keys(checklistValores).length > 0) {
         try {
-          await fetch(`/api/ordenes/${nuevaOrden.id}/checklist`, {
+          const checklistRes = await fetch(`/api/ordenes/${nuevaOrden.id}/checklist`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -636,6 +636,10 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
               firmaMime: checklistFirmaMime || undefined,
             }),
           })
+          if (!checklistRes.ok) {
+            const checklistErr = await checklistRes.json().catch(() => ({}))
+            console.error("Error saving checklist:", checklistRes.status, checklistErr)
+          }
         } catch (checklistError) {
           console.error("Error saving checklist:", checklistError)
         }

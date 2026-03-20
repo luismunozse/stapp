@@ -206,6 +206,7 @@ export async function POST(
       .insert({
         orden_id: ordenId,
         template_id: data.templateId,
+        organization_id: organizationId!,
         valores: JSON.stringify(data.valores),
         notas: data.notas,
         firma_cliente: data.firmaCliente,
