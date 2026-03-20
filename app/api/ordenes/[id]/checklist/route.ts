@@ -207,25 +207,27 @@ export async function POST(
       return NextResponse.json({ error: "Template no encontrado" }, { status: 404 })
     }
 
-    // Intentar insertar con organization_id, si falla intentar sin él
     const insertData: Record<string, any> = {
       orden_id: ordenId,
       template_id: data.templateId,
-      valores: data.valores,
+      valores: JSON.stringify(data.valores),
       notas: data.notas || null,
       firma_cliente: data.firmaCliente || null,
       firma_mime: data.firmaMime || null,
     }
 
+    console.log("[CHECKLIST POST] Intentando insertar:", JSON.stringify(insertData))
+
+    // Intentar con organization_id primero
     let result = await supabaseAdmin
       .from("checklists_recepcion")
       .insert({ ...insertData, organization_id: organizationId! })
       .select()
       .single()
 
-    // Si falla por organization_id (columna no existe), intentar sin él
     if (result.error) {
-      console.error("[CHECKLIST POST] Error con organization_id:", result.error.message, result.error.code)
+      console.error("[CHECKLIST POST] Fallo con org_id:", result.error.message, result.error.code)
+      // Reintentar sin organization_id
       result = await supabaseAdmin
         .from("checklists_recepcion")
         .insert(insertData)
@@ -234,8 +236,11 @@ export async function POST(
     }
 
     if (result.error) {
-      console.error("[CHECKLIST POST] Error creando checklist:", result.error.message, result.error.details, result.error.code)
-      throw result.error
+      console.error("[CHECKLIST POST] Fallo final:", result.error.message, result.error.details, result.error.code)
+      return NextResponse.json(
+        { error: "Error al crear checklist: " + result.error.message },
+        { status: 500 }
+      )
     }
 
     const checklist = result.data
@@ -257,9 +262,10 @@ export async function POST(
         { status: 400 }
       )
     }
-    console.error("Error creating order checklist:", error)
+    const errMsg = error instanceof Error ? error.message : String(error)
+    console.error("Error creating order checklist:", errMsg, error)
     return NextResponse.json(
-      { error: "Error al crear checklist" },
+      { error: "Error al crear checklist: " + errMsg },
       { status: 500 }
     )
   }
