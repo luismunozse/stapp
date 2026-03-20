@@ -4,6 +4,7 @@ import { useEffect, useRef, useCallback } from "react"
 import useSWR from "swr"
 import { getSupabaseClient } from "@/lib/supabase-client"
 import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import type { UserNotification } from "@/types/database"
 import type { RealtimeChannel } from "@supabase/supabase-js"
@@ -15,6 +16,7 @@ type ListData = { notifications: UserNotification[]; nextCursor: string | null }
 
 export function useNotifications() {
   const { data: session } = useSession()
+  const router = useRouter()
   const organizationId = session?.user?.organizationId
   const userId = session?.user?.id
   const channelRef = useRef<RealtimeChannel | null>(null)
@@ -68,11 +70,22 @@ export function useNotifications() {
               audio.play().catch(() => {})
             } catch {}
 
-            // Toast visual
-            toast(n.title, {
-              description: n.body,
-              duration: 5000,
-            })
+            // Toast visual - con acción si tiene action_url
+            if (n.action_url) {
+              toast(n.title, {
+                description: n.body,
+                duration: 6000,
+                action: {
+                  label: "Ver",
+                  onClick: () => router.push(n.action_url!),
+                },
+              })
+            } else {
+              toast(n.title, {
+                description: n.body,
+                duration: 5000,
+              })
+            }
           }
         }
       )
