@@ -164,6 +164,9 @@ export async function POST(
 
     const { id: ordenId } = await params
     const body = await request.json()
+
+    console.log("[CHECKLIST POST] ordenId:", ordenId, "body keys:", Object.keys(body), "valores count:", body.valores ? Object.keys(body.valores).length : 0)
+
     const data = checklistSchema.parse(body)
 
     // Verificar que la orden existe y pertenece a la organización
@@ -175,17 +178,19 @@ export async function POST(
       .single()
 
     if (ordenError || !orden) {
+      console.log("[CHECKLIST POST] Orden no encontrada:", ordenId, ordenError?.message)
       return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
     }
 
     // Verificar que no exista ya un checklist
-    const { data: existing } = await supabaseAdmin
+    const { data: existing, error: existingError } = await supabaseAdmin
       .from("checklists_recepcion")
       .select("id")
       .eq("orden_id", ordenId)
-      .single()
+      .maybeSingle()
 
     if (existing) {
+      console.log("[CHECKLIST POST] Ya existe checklist para orden:", ordenId)
       return NextResponse.json({ error: "Esta orden ya tiene un checklist" }, { status: 400 })
     }
 
@@ -198,6 +203,7 @@ export async function POST(
       .single()
 
     if (templateError || !template) {
+      console.log("[CHECKLIST POST] Template no encontrado:", data.templateId, templateError?.message)
       return NextResponse.json({ error: "Template no encontrado" }, { status: 404 })
     }
 
@@ -208,14 +214,19 @@ export async function POST(
         template_id: data.templateId,
         organization_id: organizationId!,
         valores: JSON.stringify(data.valores),
-        notas: data.notas,
-        firma_cliente: data.firmaCliente,
-        firma_mime: data.firmaMime,
+        notas: data.notas || null,
+        firma_cliente: data.firmaCliente || null,
+        firma_mime: data.firmaMime || null,
       })
       .select()
       .single()
 
-    if (createError) throw createError
+    if (createError) {
+      console.error("[CHECKLIST POST] Error creando checklist:", createError.message, createError.details, createError.code)
+      throw createError
+    }
+
+    console.log("[CHECKLIST POST] Checklist creado exitosamente:", checklist.id)
 
     return NextResponse.json({
       id: checklist.id,
