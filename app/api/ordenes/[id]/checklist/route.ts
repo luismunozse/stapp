@@ -43,7 +43,7 @@ export async function GET(
 
     // Obtener el checklist con el template y sus items
     const { data: checklist } = await supabaseAdmin
-      .from("checklists_recepcion")
+      .from("checklist_recepcion")
       .select(`
         *,
         checklist_templates (
@@ -184,7 +184,7 @@ export async function POST(
 
     // Verificar que no exista ya un checklist
     const { data: existing, error: existingError } = await supabaseAdmin
-      .from("checklists_recepcion")
+      .from("checklist_recepcion")
       .select("id")
       .eq("orden_id", ordenId)
       .maybeSingle()
@@ -212,38 +212,29 @@ export async function POST(
       template_id: data.templateId,
       valores: JSON.stringify(data.valores),
       notas: data.notas || null,
-      firma_cliente: data.firmaCliente || null,
-      firma_mime: data.firmaMime || null,
+    }
+    // Solo incluir firma si tiene datos
+    if (data.firmaCliente) {
+      insertData.firma_cliente = data.firmaCliente
+      insertData.firma_mime = data.firmaMime || null
     }
 
-    console.log("[CHECKLIST POST] Intentando insertar:", JSON.stringify(insertData))
+    console.log("[CHECKLIST POST] Insertando en checklist_recepcion para orden:", ordenId)
 
-    // Intentar con organization_id primero
-    let result = await supabaseAdmin
-      .from("checklists_recepcion")
-      .insert({ ...insertData, organization_id: organizationId! })
+    const { data: checklist, error: createError } = await supabaseAdmin
+      .from("checklist_recepcion")
+      .insert(insertData)
       .select()
       .single()
 
-    if (result.error) {
-      console.error("[CHECKLIST POST] Fallo con org_id:", result.error.message, result.error.code)
-      // Reintentar sin organization_id
-      result = await supabaseAdmin
-        .from("checklists_recepcion")
-        .insert(insertData)
-        .select()
-        .single()
-    }
-
-    if (result.error) {
-      console.error("[CHECKLIST POST] Fallo final:", result.error.message, result.error.details, result.error.code)
+    if (createError) {
+      console.error("[CHECKLIST POST] Error:", createError.message, createError.details, createError.code)
       return NextResponse.json(
-        { error: "Error al crear checklist: " + result.error.message },
+        { error: "Error al crear checklist: " + createError.message },
         { status: 500 }
       )
     }
 
-    const checklist = result.data
     console.log("[CHECKLIST POST] Checklist creado exitosamente:", checklist.id)
 
     return NextResponse.json({
@@ -298,7 +289,7 @@ export async function PUT(
 
     // Verificar que existe el checklist
     const { data: existing, error: existingError } = await supabaseAdmin
-      .from("checklists_recepcion")
+      .from("checklist_recepcion")
       .select("id")
       .eq("orden_id", ordenId)
       .single()
@@ -314,7 +305,7 @@ export async function PUT(
     if (data.firmaMime !== undefined) updateData.firma_mime = data.firmaMime
 
     const { data: checklist, error: updateError } = await supabaseAdmin
-      .from("checklists_recepcion")
+      .from("checklist_recepcion")
       .update(updateData)
       .eq("orden_id", ordenId)
       .select()
@@ -370,7 +361,7 @@ export async function DELETE(
     }
 
     await supabaseAdmin
-      .from("checklists_recepcion")
+      .from("checklist_recepcion")
       .delete()
       .eq("orden_id", ordenId)
 

@@ -138,7 +138,7 @@ export async function DELETE(
 
     // Verificar si tiene checklists asociados
     const { count } = await supabaseAdmin
-      .from("checklists_recepcion")
+      .from("checklist_recepcion")
       .select("id", { count: "exact", head: true })
       .eq("template_id", id)
 
