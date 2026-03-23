@@ -20,6 +20,12 @@ const PAGE_SIZE = 20
 interface SubsResponse {
   subscriptions: SubscriptionListItem[]
   total: number
+  counts: {
+    active: number
+    trialing: number
+    expiredTrials: number
+    canceled: number
+  }
 }
 
 export default function SuscripcionesPage() {
@@ -31,6 +37,7 @@ export default function SuscripcionesPage() {
   const [dateTo, setDateTo] = useState("")
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
+  const [counts, setCounts] = useState({ active: 0, trialing: 0, expiredTrials: 0, canceled: 0 })
 
   const { loading, fetchData } = useSuperadminFetch<SubsResponse>()
   const { formattedLastUpdated, markUpdated } = useLastUpdated()
@@ -49,6 +56,7 @@ export default function SuscripcionesPage() {
     if (result) {
       setSubscriptions(result.subscriptions || [])
       setTotal(result.total || 0)
+      if (result.counts) setCounts(result.counts)
       markUpdated()
     }
   }, [page, statusFilter, planFilter, dateFrom, dateTo, fetchData])
@@ -240,14 +248,6 @@ export default function SuscripcionesPage() {
     },
   ]
 
-  // Summary counts
-  const activeCount = subscriptions.filter(s => s.status === "ACTIVE").length
-  const trialingCount = subscriptions.filter(s => s.status === "TRIALING").length
-  const expiredTrials = subscriptions.filter(s => {
-    if (s.status !== "TRIALING" || !s.trial_end) return false
-    return new Date(s.trial_end) < new Date()
-  }).length
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -275,35 +275,39 @@ export default function SuscripcionesPage() {
         </Button>
       </div>
 
-      {/* Quick stats */}
-      {subscriptions.length > 0 && (
-        <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardContent className="p-4">
-              <p className="text-sm text-muted-foreground">Activas</p>
-              <p className="text-2xl font-bold text-green-600">{activeCount}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <p className="text-sm text-muted-foreground">En trial</p>
-              <p className="text-2xl font-bold text-blue-600">{trialingCount}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <p className="text-sm text-muted-foreground">Trials vencidos</p>
-              <p className="text-2xl font-bold text-red-600">{expiredTrials}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <p className="text-sm text-muted-foreground">Total</p>
-              <p className="text-2xl font-bold">{total}</p>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+      {/* Quick stats - counts from backend (global, not per-page) */}
+      <div className="grid gap-3 grid-cols-2 lg:grid-cols-5">
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-sm text-muted-foreground">Activas</p>
+            <p className="text-2xl font-bold text-green-600">{counts.active}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-sm text-muted-foreground">En trial</p>
+            <p className="text-2xl font-bold text-blue-600">{counts.trialing}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-sm text-muted-foreground">Trials vencidos</p>
+            <p className="text-2xl font-bold text-red-600">{counts.expiredTrials}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-sm text-muted-foreground">Canceladas</p>
+            <p className="text-2xl font-bold text-amber-600">{counts.canceled}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-sm text-muted-foreground">Total</p>
+            <p className="text-2xl font-bold">{counts.active + counts.trialing + counts.expiredTrials + counts.canceled}</p>
+          </CardContent>
+        </Card>
+      </div>
 
       <Card>
         <CardHeader>

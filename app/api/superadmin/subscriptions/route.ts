@@ -125,14 +125,40 @@ export async function GET(request: Request) {
       }
     })
 
-    const response: SubscriptionsListResponse = {
+    // Counts globales (independientes de filtros y paginación)
+    const [activeRes, trialingRes, expiredRes, canceledRes] = await Promise.all([
+      supabaseAdmin
+        .from("subscriptions")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "ACTIVE"),
+      supabaseAdmin
+        .from("subscriptions")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "TRIALING")
+        .gt("trial_end", new Date().toISOString()),
+      supabaseAdmin
+        .from("subscriptions")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "TRIALING")
+        .lte("trial_end", new Date().toISOString()),
+      supabaseAdmin
+        .from("subscriptions")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "CANCELED"),
+    ])
+
+    return NextResponse.json({
       subscriptions: result as SubscriptionListItem[],
       total: count || 0,
       page,
       limit,
-    }
-
-    return NextResponse.json(response)
+      counts: {
+        active: activeRes.count || 0,
+        trialing: trialingRes.count || 0,
+        expiredTrials: expiredRes.count || 0,
+        canceled: canceledRes.count || 0,
+      },
+    })
   } catch (error) {
     console.error("Error fetching subscriptions:", error)
     return NextResponse.json(
