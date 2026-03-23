@@ -162,13 +162,19 @@ export default function SuscripcionesPage() {
     {
       key: "plans",
       header: "Plan",
-      render: (sub) => (
-        <Badge
-          variant={sub.plans?.tipo === "PREMIUM" ? "default" : "secondary"}
-        >
-          {sub.plans?.nombre || "Free"}
-        </Badge>
-      ),
+      render: (sub) => {
+        // Trial con plan Premium pero sin pago = mostrar como "Free (trial)"
+        const isPaidPremium = sub.plans?.tipo === "PREMIUM" && sub.status === "ACTIVE" && !!sub.payment_provider
+        const isTrialPremium = sub.plans?.tipo === "PREMIUM" && sub.status === "TRIALING"
+
+        if (isPaidPremium) {
+          return <Badge variant="default">Premium</Badge>
+        }
+        if (isTrialPremium) {
+          return <Badge variant="secondary">Free (trial)</Badge>
+        }
+        return <Badge variant="secondary">{sub.plans?.nombre || "Free"}</Badge>
+      },
     },
     {
       key: "status",
