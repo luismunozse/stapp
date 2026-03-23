@@ -12,6 +12,8 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const status = searchParams.get("status") || ""
     const plan = searchParams.get("plan") || ""
+    const dateFrom = searchParams.get("dateFrom") || ""
+    const dateTo = searchParams.get("dateTo") || ""
     const { page, limit, offset } = parsePagination(searchParams)
 
     // Query base para suscripciones
@@ -23,9 +25,12 @@ export async function GET(request: Request) {
         organization_id,
         status,
         billing_period,
+        payment_provider,
         current_period_end,
+        trial_end,
         cancel_at_period_end,
         created_at,
+        plan_id,
         plans (
           id,
           nombre,
@@ -39,6 +44,35 @@ export async function GET(request: Request) {
     // Filtro de estado
     if (status) {
       query = query.eq("status", status.toUpperCase())
+    }
+
+    // Filtro de plan (en la query, no post-query)
+    if (plan) {
+      // Necesitamos filtrar por el tipo de plan
+      const { data: planIds } = await supabaseAdmin
+        .from("plans")
+        .select("id")
+        .eq("tipo", plan.toUpperCase())
+
+      if (planIds && planIds.length > 0) {
+        query = query.in("plan_id", planIds.map(p => p.id))
+      } else {
+        // No hay planes de este tipo, devolver vacío
+        return NextResponse.json({
+          subscriptions: [],
+          total: 0,
+          page,
+          limit,
+        } as SubscriptionsListResponse)
+      }
+    }
+
+    // Filtro de fechas
+    if (dateFrom) {
+      query = query.gte("created_at", `${dateFrom}T00:00:00.000Z`)
+    }
+    if (dateTo) {
+      query = query.lte("created_at", `${dateTo}T23:59:59.999Z`)
     }
 
     // Paginación
@@ -74,28 +108,22 @@ export async function GET(request: Request) {
       )
     }
 
-    // Combinar datos - plans puede ser objeto o array según Supabase
-    let result = (subscriptions || []).map((sub) => {
-      // Supabase puede devolver plans como objeto o array
+    // Combinar datos
+    const result = (subscriptions || []).map((sub) => {
       const plansData = Array.isArray(sub.plans) ? sub.plans[0] : sub.plans
       return {
         id: sub.id,
         status: sub.status,
         billing_period: sub.billing_period,
+        payment_provider: sub.payment_provider,
         current_period_end: sub.current_period_end,
+        trial_end: sub.trial_end,
         cancel_at_period_end: sub.cancel_at_period_end,
         created_at: sub.created_at,
         organization: orgsMap[sub.organization_id] || null,
         plans: plansData || null,
       }
     })
-
-    // Filtro de plan
-    if (plan === "free") {
-      result = result.filter((sub) => sub.plans?.tipo === "FREE")
-    } else if (plan === "premium") {
-      result = result.filter((sub) => sub.plans?.tipo === "PREMIUM")
-    }
 
     const response: SubscriptionsListResponse = {
       subscriptions: result as SubscriptionListItem[],

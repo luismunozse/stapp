@@ -118,6 +118,8 @@ export interface SubscriptionListItem {
   status: SubscriptionStatus
   billing_period: BillingPeriod | null
   current_period_end: string | null
+  trial_end: string | null
+  payment_provider: PaymentProvider | null
   cancel_at_period_end: boolean
   created_at: string
   organization: {

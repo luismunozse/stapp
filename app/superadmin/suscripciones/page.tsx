@@ -59,14 +59,19 @@ export default function SuscripcionesPage() {
 
   const handleExportCSV = () => {
     const csv = [
-      "organizacion,plan,estado,periodo,vence",
+      "organizacion,slug,plan,estado,proveedor_pago,periodo,vence_trial,vence_periodo,cancelacion_pendiente,creado",
       ...subscriptions.map((sub) =>
         [
           `"${sub.organization?.nombre || "-"}"`,
+          sub.organization?.slug || "-",
           sub.plans?.nombre || "Free",
           sub.status,
+          sub.payment_provider || "-",
           sub.billing_period || "-",
+          sub.trial_end || "-",
           sub.current_period_end || "-",
+          sub.cancel_at_period_end ? "Si" : "No",
+          sub.created_at?.split("T")[0] || "-",
         ].join(",")
       ),
     ].join("\n")
@@ -79,25 +84,64 @@ export default function SuscripcionesPage() {
     URL.revokeObjectURL(url)
   }
 
-  const getStatusVariant = (status: string) => {
-    switch (status) {
+  const getStatusBadge = (sub: SubscriptionListItem) => {
+    const now = new Date()
+
+    switch (sub.status) {
       case "ACTIVE":
-        return "default"
-      case "TRIALING":
-        return "secondary"
+        return <Badge variant="default">Activa</Badge>
+      case "TRIALING": {
+        if (sub.trial_end) {
+          const trialEnd = new Date(sub.trial_end)
+          const daysLeft = Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+          if (daysLeft <= 0) {
+            return <Badge variant="destructive">Trial vencido</Badge>
+          }
+          if (daysLeft <= 3) {
+            return (
+              <Badge variant="destructive">
+                Trial · {daysLeft}d
+              </Badge>
+            )
+          }
+          if (daysLeft <= 7) {
+            return (
+              <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+                Trial · {daysLeft}d
+              </Badge>
+            )
+          }
+          return (
+            <Badge variant="secondary">
+              Trial · {daysLeft}d
+            </Badge>
+          )
+        }
+        return <Badge variant="secondary">Trial</Badge>
+      }
       case "PAST_DUE":
-        return "warning" as "default"
+        return <Badge variant="destructive">Pago pendiente</Badge>
       case "CANCELED":
-        return "destructive"
+        return <Badge variant="destructive">Cancelada</Badge>
       default:
-        return "secondary"
+        return <Badge variant="secondary">{sub.status}</Badge>
     }
+  }
+
+  const getVencimiento = (sub: SubscriptionListItem) => {
+    if (sub.status === "TRIALING" && sub.trial_end) {
+      return formatDate(sub.trial_end)
+    }
+    if (sub.current_period_end) {
+      return formatDate(sub.current_period_end)
+    }
+    return "-"
   }
 
   const columns: Column<SubscriptionListItem>[] = [
     {
       key: "organization",
-      header: "Organización",
+      header: "Organizacion",
       render: (sub) => (
         <div>
           <div className="font-medium">{sub.organization?.nombre || "-"}</div>
@@ -121,36 +165,66 @@ export default function SuscripcionesPage() {
     {
       key: "status",
       header: "Estado",
-      render: (sub) => (
-        <Badge variant={getStatusVariant(sub.status)}>{sub.status}</Badge>
-      ),
+      render: (sub) => getStatusBadge(sub),
+    },
+    {
+      key: "payment_provider",
+      header: "Pago",
+      hideOnMobile: true,
+      render: (sub) => {
+        if (!sub.payment_provider) return <span className="text-muted-foreground">-</span>
+        const labels: Record<string, string> = {
+          MERCADOPAGO: "MercadoPago",
+          STRIPE: "Stripe",
+          LEMONSQUEEZY: "LemonSqueezy",
+        }
+        return <span className="text-sm">{labels[sub.payment_provider] || sub.payment_provider}</span>
+      },
     },
     {
       key: "billing_period",
-      header: "Período",
+      header: "Periodo",
       hideOnMobile: true,
-      render: (sub) => sub.billing_period || "-",
+      render: (sub) => {
+        if (!sub.billing_period) return <span className="text-muted-foreground">-</span>
+        return sub.billing_period === "YEARLY" ? "Anual" : "Mensual"
+      },
     },
     {
-      key: "current_period_end",
+      key: "vencimiento",
       header: "Vence",
-      render: (sub) =>
-        sub.current_period_end ? formatDate(sub.current_period_end) : "-",
+      render: (sub) => {
+        const text = getVencimiento(sub)
+        if (text === "-") return <span className="text-muted-foreground">-</span>
+
+        // Highlight si está por vencer pronto
+        const now = new Date()
+        const dateStr = sub.status === "TRIALING" ? sub.trial_end : sub.current_period_end
+        if (dateStr) {
+          const date = new Date(dateStr)
+          const daysLeft = Math.ceil((date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+          if (daysLeft <= 0) return <span className="text-red-600 font-medium">{text}</span>
+          if (daysLeft <= 3) return <span className="text-red-500">{text}</span>
+          if (daysLeft <= 7) return <span className="text-amber-600">{text}</span>
+        }
+
+        return text
+      },
     },
     {
       key: "cancel_at_period_end",
-      header: "Cancelación",
+      header: "Cancelacion",
       hideOnMobile: true,
       render: (sub) =>
         sub.cancel_at_period_end ? (
           <Badge variant="secondary">Pendiente</Badge>
         ) : (
-          "-"
+          <span className="text-muted-foreground">-</span>
         ),
     },
     {
       key: "actions",
-      header: "Acciones",
+      header: "",
       render: (sub) => (
         <Button
           size="sm"
@@ -158,13 +232,21 @@ export default function SuscripcionesPage() {
           onClick={() =>
             router.push(`/superadmin/organizaciones/${sub.organization?.id}`)
           }
-          title="Ver organización"
+          title="Ver organizacion"
         >
           <Eye className="h-4 w-4" />
         </Button>
       ),
     },
   ]
+
+  // Summary counts
+  const activeCount = subscriptions.filter(s => s.status === "ACTIVE").length
+  const trialingCount = subscriptions.filter(s => s.status === "TRIALING").length
+  const expiredTrials = subscriptions.filter(s => {
+    if (s.status !== "TRIALING" || !s.trial_end) return false
+    return new Date(s.trial_end) < new Date()
+  }).length
 
   return (
     <div className="space-y-6">
@@ -192,6 +274,36 @@ export default function SuscripcionesPage() {
           Exportar CSV
         </Button>
       </div>
+
+      {/* Quick stats */}
+      {subscriptions.length > 0 && (
+        <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-sm text-muted-foreground">Activas</p>
+              <p className="text-2xl font-bold text-green-600">{activeCount}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-sm text-muted-foreground">En trial</p>
+              <p className="text-2xl font-bold text-blue-600">{trialingCount}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-sm text-muted-foreground">Trials vencidos</p>
+              <p className="text-2xl font-bold text-red-600">{expiredTrials}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-sm text-muted-foreground">Total</p>
+              <p className="text-2xl font-bold">{total}</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       <Card>
         <CardHeader>
@@ -231,7 +343,7 @@ export default function SuscripcionesPage() {
               </SelectContent>
             </Select>
             <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Desde:</span>
+              <span className="text-sm text-muted-foreground whitespace-nowrap">Desde:</span>
               <Input
                 type="date"
                 value={dateFrom}
@@ -243,7 +355,7 @@ export default function SuscripcionesPage() {
               />
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Hasta:</span>
+              <span className="text-sm text-muted-foreground whitespace-nowrap">Hasta:</span>
               <Input
                 type="date"
                 value={dateTo}
