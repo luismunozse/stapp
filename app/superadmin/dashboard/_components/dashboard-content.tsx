@@ -19,6 +19,7 @@ import {
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { useSuperadminFetch } from "@/hooks/use-superadmin-fetch"
 import { DashboardCharts } from "./dashboard-charts"
+import { CronPanel } from "./cron-panel"
 
 interface RecentOrganization {
   id: string
@@ -353,6 +354,9 @@ export function DashboardContent() {
           </Card>
         </div>
       ) : null}
+
+      {/* Cron Jobs Panel */}
+      <CronPanel />
     </div>
   )
 }
