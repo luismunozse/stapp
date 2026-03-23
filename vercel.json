@@ -9,6 +9,9 @@
       "maxDuration": 30,
       "includeFiles": "node_modules/@sparticuz/chromium/**"
     },
+    "app/api/cron/**/*.ts": {
+      "maxDuration": 60
+    },
     "app/api/inngest/route.ts": {
       "maxDuration": 60,
       "includeFiles": "node_modules/@sparticuz/chromium/**"
@@ -16,7 +19,23 @@
   },
   "crons": [
     {
-      "path": "/api/inngest",
+      "path": "/api/cron/lifecycle-emails",
+      "schedule": "0 11 * * *"
+    },
+    {
+      "path": "/api/cron/trial-management",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/engagement",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/feature-usage",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/recordatorios",
       "schedule": "0 10 * * *"
     }
   ]

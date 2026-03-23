@@ -62,7 +62,7 @@ describe('getOrderByPublicToken', () => {
     expect(result.orden).toEqual(mockOrden)
   })
 
-  it('usa select por defecto "id, organization_id" con public_token_expires_at', async () => {
+  it('usa select por defecto "id, organization_id"', async () => {
     const mockChain = {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
@@ -72,10 +72,10 @@ describe('getOrderByPublicToken', () => {
 
     const token = 'a'.repeat(32)
     await getOrderByPublicToken(token)
-    expect(mockChain.select).toHaveBeenCalledWith('id, organization_id, public_token_expires_at')
+    expect(mockChain.select).toHaveBeenCalledWith('id, organization_id')
   })
 
-  it('permite select personalizado y agrega public_token_expires_at', async () => {
+  it('permite select personalizado', async () => {
     const mockChain = {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
@@ -85,7 +85,7 @@ describe('getOrderByPublicToken', () => {
 
     const token = 'a'.repeat(32)
     const result = await getOrderByPublicToken(token, 'id, estado')
-    expect(mockChain.select).toHaveBeenCalledWith('id, estado, public_token_expires_at')
+    expect(mockChain.select).toHaveBeenCalledWith('id, estado')
     expect(result.orden.estado).toBe('RECIBIDO')
   })
 
@@ -105,7 +105,7 @@ describe('getOrderByPublicToken', () => {
 
   it('rechaza token público expirado (410 Gone)', async () => {
     const expiredDate = new Date()
-    expiredDate.setDate(expiredDate.getDate() - 1) // Ayer
+    expiredDate.setDate(expiredDate.getDate() - 1)
 
     const mockOrden = {
       id: 'orden-1',
@@ -129,7 +129,7 @@ describe('getOrderByPublicToken', () => {
 
   it('permite token público no expirado', async () => {
     const futureDate = new Date()
-    futureDate.setDate(futureDate.getDate() + 10) // En 10 días
+    futureDate.setDate(futureDate.getDate() + 10)
 
     const mockOrden = {
       id: 'orden-1',
@@ -169,30 +169,22 @@ describe('getOrderByPublicToken', () => {
     expect(result.orden).not.toBeNull()
   })
 
-  it('agrega public_token_expires_at al select automáticamente', async () => {
+  it('permite token sin campo public_token_expires_at (migración no ejecutada)', async () => {
+    const mockOrden = {
+      id: 'orden-1',
+      organization_id: 'org-1',
+      // Sin public_token_expires_at — columna no existe aún
+    }
     const mockChain = {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: { id: '1' }, error: null }),
+      single: vi.fn().mockResolvedValue({ data: mockOrden, error: null }),
     }
     vi.mocked(supabaseAdmin.from).mockReturnValue(mockChain as any)
 
     const token = 'a'.repeat(32)
-    await getOrderByPublicToken(token, 'id, estado')
-    // Debe haber agregado public_token_expires_at
-    expect(mockChain.select).toHaveBeenCalledWith('id, estado, public_token_expires_at')
-  })
-
-  it('no duplica public_token_expires_at si ya está en el select', async () => {
-    const mockChain = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: { id: '1' }, error: null }),
-    }
-    vi.mocked(supabaseAdmin.from).mockReturnValue(mockChain as any)
-
-    const token = 'a'.repeat(32)
-    await getOrderByPublicToken(token, 'id, public_token_expires_at')
-    expect(mockChain.select).toHaveBeenCalledWith('id, public_token_expires_at')
+    const result = await getOrderByPublicToken(token)
+    expect(result.error).toBeNull()
+    expect(result.orden).not.toBeNull()
   })
 })

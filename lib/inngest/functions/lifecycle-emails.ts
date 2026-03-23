@@ -279,27 +279,68 @@ export const lifecycleEmails = inngest.createFunction(
     })
 
     // ============================================
-    // 5. WIN-BACK (organizaciones inactivas)
+    // 5. WIN-BACK (organizaciones inactivas) - Optimizado sin N+1
     // ============================================
     await step.run("win-back-emails", async () => {
-      // Buscar orgs activas con suscripción activa/trial que no tienen actividad reciente
+      // Traer todas las orgs activas con su admin en una query
       const { data: allOrgs } = await supabaseAdmin
         .from("organizations")
         .select("id, nombre, slug")
         .eq("activo", true)
 
-      for (const org of allOrgs || []) {
-        // Ver última actividad (última orden creada)
-        const { data: lastOrder } = await supabaseAdmin
+      if (!allOrgs || allOrgs.length === 0) return
+
+      const orgIds = allOrgs.map(o => o.id)
+
+      // Traer todas las órdenes recientes en bulk (últimos 35 días cubre ambos rangos)
+      const thirtyFiveDaysAgo = new Date(now)
+      thirtyFiveDaysAgo.setDate(thirtyFiveDaysAgo.getDate() - 35)
+
+      const { data: recentOrders } = await supabaseAdmin
+        .from("ordenes_servicio")
+        .select("organization_id, created_at")
+        .in("organization_id", orgIds)
+        .gte("created_at", thirtyFiveDaysAgo.toISOString())
+        .order("created_at", { ascending: false })
+
+      // Obtener todos los admins en bulk
+      const { data: allAdmins } = await supabaseAdmin
+        .from("users")
+        .select("id, nombre, email, organization_id")
+        .in("organization_id", orgIds)
+        .eq("rol", "ADMIN")
+
+      const adminMap = new Map((allAdmins || []).map(a => [a.organization_id, a]))
+
+      // Calcular última actividad por org
+      const lastActivityMap = new Map<string, Date>()
+      for (const order of recentOrders || []) {
+        if (!lastActivityMap.has(order.organization_id)) {
+          lastActivityMap.set(order.organization_id, new Date(order.created_at))
+        }
+      }
+
+      // También verificar orgs que tienen órdenes más antiguas (sin actividad reciente)
+      // Traer última orden de todas las orgs que NO aparecen en recentOrders
+      const orgsWithoutRecent = allOrgs.filter(o => !lastActivityMap.has(o.id))
+      if (orgsWithoutRecent.length > 0) {
+        const { data: oldOrders } = await supabaseAdmin
           .from("ordenes_servicio")
-          .select("created_at")
-          .eq("organization_id", org.id)
+          .select("organization_id, created_at")
+          .in("organization_id", orgsWithoutRecent.map(o => o.id))
           .order("created_at", { ascending: false })
-          .limit(1)
 
-        if (!lastOrder || lastOrder.length === 0) continue
+        for (const order of oldOrders || []) {
+          if (!lastActivityMap.has(order.organization_id)) {
+            lastActivityMap.set(order.organization_id, new Date(order.created_at))
+          }
+        }
+      }
 
-        const lastActivity = new Date(lastOrder[0].created_at)
+      for (const org of allOrgs) {
+        const lastActivity = lastActivityMap.get(org.id)
+        if (!lastActivity) continue
+
         const daysSinceActivity = Math.floor((now.getTime() - lastActivity.getTime()) / (1000 * 60 * 60 * 24))
 
         let emailType: LifecycleEmailType | null = null
@@ -310,14 +351,7 @@ export const lifecycleEmails = inngest.createFunction(
         const alreadySent = await wasEmailAlreadySent(org.id, emailType)
         if (alreadySent) continue
 
-        const { data: admins } = await supabaseAdmin
-          .from("users")
-          .select("id, nombre, email")
-          .eq("organization_id", org.id)
-          .eq("rol", "ADMIN")
-          .limit(1)
-
-        const admin = admins?.[0]
+        const admin = adminMap.get(org.id)
         if (!admin?.email) continue
 
         const { subject, html } = getLifecycleEmail(emailType, {
@@ -336,7 +370,7 @@ export const lifecycleEmails = inngest.createFunction(
     })
 
     // ============================================
-    // 6. MILESTONES (hitos de uso)
+    // 6. MILESTONES (hitos de uso) - Optimizado sin N+1
     // ============================================
     await step.run("milestone-emails", async () => {
       const milestoneThresholds = [50, 100, 250, 500, 1000]
@@ -346,30 +380,40 @@ export const lifecycleEmails = inngest.createFunction(
         .select("id, nombre, slug")
         .eq("activo", true)
 
-      for (const org of allOrgs || []) {
-        // Contar órdenes totales
-        const { count: ordenesCount } = await supabaseAdmin
-          .from("ordenes_servicio")
-          .select("id", { count: "exact", head: true })
-          .eq("organization_id", org.id)
+      if (!allOrgs || allOrgs.length === 0) return
 
-        const total = ordenesCount || 0
+      const orgIds = allOrgs.map(o => o.id)
 
-        // Verificar si cruzó algún milestone
+      // Contar órdenes por org en bulk
+      const { data: allOrders } = await supabaseAdmin
+        .from("ordenes_servicio")
+        .select("organization_id")
+        .in("organization_id", orgIds)
+
+      const orderCounts: Record<string, number> = {}
+      for (const o of allOrders || []) {
+        orderCounts[o.organization_id] = (orderCounts[o.organization_id] || 0) + 1
+      }
+
+      // Obtener admins en bulk
+      const { data: allAdmins } = await supabaseAdmin
+        .from("users")
+        .select("id, nombre, email, organization_id")
+        .in("organization_id", orgIds)
+        .eq("rol", "ADMIN")
+
+      const adminMap = new Map((allAdmins || []).map(a => [a.organization_id, a]))
+
+      for (const org of allOrgs) {
+        const total = orderCounts[org.id] || 0
+
         for (const threshold of milestoneThresholds) {
           if (total >= threshold && total < threshold + 5) {
             const milestoneKey = `MILESTONE_ORDENES_${threshold}`
             const alreadySent = await wasEmailAlreadySent(org.id, milestoneKey)
             if (alreadySent) continue
 
-            const { data: admins } = await supabaseAdmin
-              .from("users")
-              .select("id, nombre, email")
-              .eq("organization_id", org.id)
-              .eq("rol", "ADMIN")
-              .limit(1)
-
-            const admin = admins?.[0]
+            const admin = adminMap.get(org.id)
             if (!admin?.email) continue
 
             const { subject, html } = getLifecycleEmail("MILESTONE", {
@@ -382,7 +426,7 @@ export const lifecycleEmails = inngest.createFunction(
             const sent = await sendLifecycleEmail(admin.email, subject, html)
             await logLifecycleEmail(org.id, milestoneKey, sent ? "SENT" : "FAILED", admin.id)
             if (sent) results.milestones++
-            break // Solo un milestone por org por día
+            break
           }
         }
       }
