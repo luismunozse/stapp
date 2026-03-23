@@ -13,18 +13,25 @@ export async function GET() {
 
     const now = new Date()
 
-    // Calcular segmentos en paralelo
+    const in3Days = new Date(now)
+    in3Days.setDate(in3Days.getDate() + 3)
+    const in7Days = new Date(now)
+    in7Days.setDate(in7Days.getDate() + 7)
+    const sevenDaysAgo = new Date(now)
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+    const thirtyDaysAgo = new Date(now)
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
+    // Todo en paralelo - sin loops N+1
     const [
-      trialExpiredRes,
-      trialExpiring3Res,
-      trialExpiring7Res,
-      inactivos7Res,
-      inactivos30Res,
-      allTrialingRes,
+      allTrialingSubs,
       canceledRes,
       historialRes,
+      allActiveOrgsRes,
+      recentOrdenes7Res,
+      recentOrdenes30Res,
     ] = await Promise.all([
-      // Trials vencidos
+      // Todos los trials (vencidos y activos) de orgs activas
       supabaseAdmin
         .from("subscriptions")
         .select(`
@@ -33,57 +40,7 @@ export async function GET() {
           organizations!inner (id, nombre, slug, activo)
         `)
         .eq("status", "TRIALING")
-        .lte("trial_end", now.toISOString())
-        .eq("organizations.activo", true),
-
-      // Trials por vencer en 3 días
-      (() => {
-        const in3Days = new Date(now)
-        in3Days.setDate(in3Days.getDate() + 3)
-        return supabaseAdmin
-          .from("subscriptions")
-          .select(`
-            organization_id,
-            trial_end,
-            organizations!inner (id, nombre, slug, activo)
-          `)
-          .eq("status", "TRIALING")
-          .gt("trial_end", now.toISOString())
-          .lte("trial_end", in3Days.toISOString())
-          .eq("organizations.activo", true)
-      })(),
-
-      // Trials por vencer en 7 días
-      (() => {
-        const in7Days = new Date(now)
-        in7Days.setDate(in7Days.getDate() + 7)
-        return supabaseAdmin
-          .from("subscriptions")
-          .select(`
-            organization_id,
-            trial_end,
-            organizations!inner (id, nombre, slug, activo)
-          `)
-          .eq("status", "TRIALING")
-          .gt("trial_end", now.toISOString())
-          .lte("trial_end", in7Days.toISOString())
-          .eq("organizations.activo", true)
-      })(),
-
-      // Placeholders - se calculan manualmente más abajo
-      Promise.resolve({ data: null }),
-      Promise.resolve({ data: null }),
-
-      // Todos los trials activos (no vencidos)
-      supabaseAdmin
-        .from("subscriptions")
-        .select(`
-          organization_id,
-          trial_end,
-          organizations!inner (id, nombre, slug, activo)
-        `)
-        .eq("status", "TRIALING")
-        .gt("trial_end", now.toISOString())
+        .not("trial_end", "is", null)
         .eq("organizations.activo", true),
 
       // Cancelados
@@ -96,54 +53,53 @@ export async function GET() {
         .eq("status", "CANCELED")
         .eq("organizations.activo", true),
 
-      // Historial de campañas de email (últimos 30 days)
+      // Historial de campañas
       supabaseAdmin
         .from("lifecycle_emails")
         .select("email_type, status, sent_at, organization_id, metadata")
         .in("email_type", ["CAMPAIGN_CUSTOM", "CAMPAIGN_TRIAL_EXPIRED", "CAMPAIGN_TRIAL_EXPIRING", "CAMPAIGN_WIN_BACK", "CAMPAIGN_UPGRADE"])
         .order("sent_at", { ascending: false })
         .limit(50),
+
+      // Todas las orgs activas
+      supabaseAdmin
+        .from("organizations")
+        .select("id, nombre, slug")
+        .eq("activo", true),
+
+      // Orgs con órdenes en últimos 7 días (una sola query bulk)
+      supabaseAdmin
+        .from("ordenes_servicio")
+        .select("organization_id")
+        .gte("created_at", sevenDaysAgo.toISOString()),
+
+      // Orgs con órdenes en últimos 30 días
+      supabaseAdmin
+        .from("ordenes_servicio")
+        .select("organization_id")
+        .gte("created_at", thirtyDaysAgo.toISOString()),
     ])
 
-    // Calcular inactivos manualmente si el RPC no existe
-    let inactivos7: Array<{ id: string; nombre: string; slug: string }> = []
-    let inactivos30: Array<{ id: string; nombre: string; slug: string }> = []
+    // Clasificar trials por estado
+    const allTrials = allTrialingSubs.data || []
+    const trialExpiredData = allTrials.filter(s => new Date(s.trial_end!) <= now)
+    const trialExpiring3Data = allTrials.filter(s => {
+      const te = new Date(s.trial_end!)
+      return te > now && te <= in3Days
+    })
+    const trialExpiring7Data = allTrials.filter(s => {
+      const te = new Date(s.trial_end!)
+      return te > now && te <= in7Days
+    })
+    const allTrialingActiveData = allTrials.filter(s => new Date(s.trial_end!) > now)
 
-    // Buscar orgs activas con suscripción que no tienen actividad reciente
-    const { data: allActiveOrgs } = await supabaseAdmin
-      .from("organizations")
-      .select("id, nombre, slug")
-      .eq("activo", true)
+    // Calcular inactivos con sets (O(1) lookup, no loops)
+    const activeIn7d = new Set((recentOrdenes7Res.data || []).map(o => o.organization_id))
+    const activeIn30d = new Set((recentOrdenes30Res.data || []).map(o => o.organization_id))
+    const allActiveOrgs = allActiveOrgsRes.data || []
 
-    if (allActiveOrgs) {
-      const sevenDaysAgo = new Date(now)
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-      const thirtyDaysAgo = new Date(now)
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-
-      for (const org of allActiveOrgs) {
-        const { count: recentActivity } = await supabaseAdmin
-          .from("ordenes_servicio")
-          .select("id", { count: "exact", head: true })
-          .eq("organization_id", org.id)
-          .gte("created_at", sevenDaysAgo.toISOString())
-
-        if ((recentActivity || 0) === 0) {
-          inactivos7.push(org)
-
-          // Check 30 days too
-          const { count: thirtyDayActivity } = await supabaseAdmin
-            .from("ordenes_servicio")
-            .select("id", { count: "exact", head: true })
-            .eq("organization_id", org.id)
-            .gte("created_at", thirtyDaysAgo.toISOString())
-
-          if ((thirtyDayActivity || 0) === 0) {
-            inactivos30.push(org)
-          }
-        }
-      }
-    }
+    const inactivos7 = allActiveOrgs.filter(o => !activeIn7d.has(o.id))
+    const inactivos30 = allActiveOrgs.filter(o => !activeIn30d.has(o.id))
 
     const formatOrgs = (data: any[] | null) =>
       (data || []).map((d: any) => {
@@ -161,32 +117,32 @@ export async function GET() {
         id: "trial_expired",
         nombre: "Trials vencidos",
         descripcion: "Organizaciones con trial expirado que no se suscribieron",
-        count: trialExpiredRes.data?.length || 0,
-        orgs: formatOrgs(trialExpiredRes.data),
+        count: trialExpiredData.length,
+        orgs: formatOrgs(trialExpiredData),
         color: "red",
       },
       {
         id: "trial_expiring_3",
         nombre: "Trial vence en 3 dias",
         descripcion: "Organizaciones con trial por vencer en los proximos 3 dias",
-        count: trialExpiring3Res.data?.length || 0,
-        orgs: formatOrgs(trialExpiring3Res.data),
+        count: trialExpiring3Data.length,
+        orgs: formatOrgs(trialExpiring3Data),
         color: "orange",
       },
       {
         id: "trial_expiring_7",
         nombre: "Trial vence en 7 dias",
         descripcion: "Organizaciones con trial por vencer en los proximos 7 dias",
-        count: trialExpiring7Res.data?.length || 0,
-        orgs: formatOrgs(trialExpiring7Res.data),
+        count: trialExpiring7Data.length,
+        orgs: formatOrgs(trialExpiring7Data),
         color: "amber",
       },
       {
         id: "all_trialing",
         nombre: "Todos los trials activos",
         descripcion: "Todas las organizaciones en periodo de prueba",
-        count: allTrialingRes.data?.length || 0,
-        orgs: formatOrgs(allTrialingRes.data),
+        count: allTrialingActiveData.length,
+        orgs: formatOrgs(allTrialingActiveData),
         color: "blue",
       },
       {
