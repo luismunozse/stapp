@@ -42,6 +42,7 @@ const navItems = [
   { href: "/superadmin/engagement", label: "Engagement", icon: HeartPulse },
   { href: "/superadmin/lifecycle-emails", label: "Lifecycle Emails", icon: MailCheck },
   { href: "/superadmin/feature-usage", label: "Feature Usage", icon: Puzzle },
+  { href: "/superadmin/email-campaigns", label: "Campañas Email", icon: MailCheck },
   { href: "/superadmin/broadcast", label: "Broadcast", icon: Megaphone },
   { href: "/superadmin/changelog", label: "Changelog", icon: Newspaper },
   { href: "/superadmin/waitlist", label: "Waitlist iOS", icon: Smartphone },
