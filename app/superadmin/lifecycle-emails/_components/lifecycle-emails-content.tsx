@@ -95,10 +95,10 @@ export function LifecycleEmailsContent() {
           <div className="flex items-start gap-3">
             <Mail className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
             <div>
-              <p className="font-medium text-sm">Emails automaticos via Inngest</p>
+              <p className="font-medium text-sm">Emails automáticos programados</p>
               <p className="text-sm text-muted-foreground mt-1">
-                Estos emails se envian automaticamente todos los dias a las 11:00 AM.
-                Cada email se envia una sola vez por organizacion y se logea en la tabla lifecycle_emails.
+                Estos emails se envían automáticamente todos los días a las 11:00 AM via Vercel Cron.
+                Cada email se envía una sola vez por taller y se registra en el historial.
               </p>
             </div>
           </div>
