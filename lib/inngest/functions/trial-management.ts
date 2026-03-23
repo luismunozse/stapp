@@ -179,7 +179,7 @@ export const trialManagement = inngest.createFunction(
             const appUrl = `https://${org.slug}.${ROOT_DOMAIN}`
             const sent = await sendEmail(
               admin.email,
-              "Buenas noticias - Extendimos tu prueba gratuita",
+              "Buenas noticias - Te extendimos la prueba gratuita",
               getTrialExtendedEmail(admin.nombre, org.nombre, appUrl, AUTO_EXTENSION_DAYS, newTrialEnd)
             )
             await supabaseAdmin.from("lifecycle_emails").insert({
@@ -203,7 +203,7 @@ export const trialManagement = inngest.createFunction(
             const appUrl = `https://${org.slug}.${ROOT_DOMAIN}`
             const sent = await sendEmail(
               admin.email,
-              "Te damos 7 dias mas - Solo tenes que usarlos",
+              "Te damos 7 días más - Solo tenés que usarlos",
               getLastChanceEmail(admin.nombre, org.nombre, appUrl)
             )
             await supabaseAdmin.from("lifecycle_emails").insert({
@@ -281,23 +281,23 @@ function getTrialExtendedEmail(nombre: string, org: string, appUrl: string, dias
                 <tr>
                   <td style="background-color: #ffffff; padding: 40px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 16px 16px;">
                     <h1 style="color: #1f2937; font-size: 24px; font-weight: 700; text-align: center; margin: 0 0 16px 0;">
-                      Extendimos tu prueba gratuita
+                      Te extendimos la prueba gratuita
                     </h1>
                     <p style="color: #4b5563; font-size: 16px; text-align: center; margin: 0 0 24px 0;">
-                      Hola <strong>${nombre}</strong>, vimos que estas usando <strong>${org}</strong> activamente, asi que te extendimos la prueba <strong>${dias} dias mas</strong>.
+                      Hola <strong>${nombre}</strong>, vimos que estás usando <strong>${org}</strong> activamente, así que te extendimos la prueba <strong>${dias} días más</strong>.
                     </p>
 
                     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 24px 0;">
                       <tr>
                         <td style="background-color: #ecfdf5; padding: 24px; border-radius: 12px; border: 1px solid #a7f3d0; text-align: center;">
-                          <p style="color: #065f46; font-size: 14px; margin: 0 0 8px 0; font-weight: 600;">Nueva fecha limite</p>
+                          <p style="color: #065f46; font-size: 14px; margin: 0 0 8px 0; font-weight: 600;">Nueva fecha límite</p>
                           <p style="color: #065f46; font-size: 28px; font-weight: 700; margin: 0;">${fechaStr}</p>
                         </td>
                       </tr>
                     </table>
 
                     <p style="color: #4b5563; font-size: 15px; text-align: center; margin: 0 0 24px 0;">
-                      Segui usando STApp y cuando estes listo, podes suscribirte al plan Premium para mantener acceso ilimitado.
+                      Seguí usando STApp y cuando estés listo, podés suscribirte al plan Premium para mantener acceso ilimitado.
                     </p>
 
                     <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
@@ -314,7 +314,7 @@ function getTrialExtendedEmail(nombre: string, org: string, appUrl: string, dias
                 <tr>
                   <td style="padding: 24px 40px; text-align: center;">
                     <p style="color: #9ca3af; font-size: 13px; margin: 0;">
-                      Este correo fue enviado automaticamente por STApp.
+                      Este correo fue enviado automáticamente por STApp.
                     </p>
                   </td>
                 </tr>
@@ -334,7 +334,7 @@ function getLastChanceEmail(nombre: string, org: string, appUrl: string): string
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>STApp - Ultima Oportunidad</title>
+        <title>STApp - Última Oportunidad</title>
       </head>
       <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; line-height: 1.6; background-color: #f3f4f6;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #f3f4f6;">
@@ -358,17 +358,17 @@ function getLastChanceEmail(nombre: string, org: string, appUrl: string): string
                 <tr>
                   <td style="background-color: #ffffff; padding: 40px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 16px 16px;">
                     <h1 style="color: #1f2937; font-size: 24px; font-weight: 700; text-align: center; margin: 0 0 16px 0;">
-                      Te damos 7 dias mas
+                      Te damos 7 días más
                     </h1>
                     <p style="color: #4b5563; font-size: 16px; text-align: center; margin: 0 0 24px 0;">
-                      Hola <strong>${nombre}</strong>, tu prueba gratuita de <strong>${org}</strong> vencio, pero no queremos que te vayas sin probar STApp a fondo.
+                      Hola <strong>${nombre}</strong>, tu prueba gratuita de <strong>${org}</strong> venció, pero no queremos que te vayas sin probar STApp a fondo.
                     </p>
 
                     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 24px 0;">
                       <tr>
                         <td style="background-color: #fffbeb; padding: 24px; border-radius: 12px; border: 1px solid #fde68a; text-align: center;">
                           <p style="color: #92400e; font-size: 16px; margin: 0; font-weight: 600;">
-                            Te extendimos la prueba 7 dias mas para que puedas evaluar la plataforma.
+                            Te extendimos la prueba 7 días más para que puedas evaluar la plataforma.
                           </p>
                         </td>
                       </tr>
@@ -378,9 +378,9 @@ function getLastChanceEmail(nombre: string, org: string, appUrl: string): string
                       Aprovecha para:
                     </p>
                     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 24px 0;">
-                      <tr><td style="color: #4b5563; font-size: 15px; padding: 4px 0;">• Cargar tus clientes y ordenes reales</td></tr>
+                      <tr><td style="color: #4b5563; font-size: 15px; padding: 4px 0;">• Cargar tus clientes y órdenes reales</td></tr>
                       <tr><td style="color: #4b5563; font-size: 15px; padding: 4px 0;">• Probar las notificaciones por WhatsApp</td></tr>
-                      <tr><td style="color: #4b5563; font-size: 15px; padding: 4px 0;">• Ver como funciona el seguimiento publico</td></tr>
+                      <tr><td style="color: #4b5563; font-size: 15px; padding: 4px 0;">• Ver cómo funciona el seguimiento público</td></tr>
                     </table>
 
                     <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
@@ -394,14 +394,14 @@ function getLastChanceEmail(nombre: string, org: string, appUrl: string): string
                     </table>
 
                     <p style="color: #9ca3af; font-size: 13px; text-align: center; margin: 24px 0 0 0;">
-                      Necesitas ayuda? Responde a este correo y te ayudamos a empezar.
+                      ¿Necesitás ayuda? Respondé a este correo y te ayudamos a empezar.
                     </p>
                   </td>
                 </tr>
                 <tr>
                   <td style="padding: 24px 40px; text-align: center;">
                     <p style="color: #9ca3af; font-size: 13px; margin: 0;">
-                      Este correo fue enviado automaticamente por STApp.
+                      Este correo fue enviado automáticamente por STApp.
                     </p>
                   </td>
                 </tr>

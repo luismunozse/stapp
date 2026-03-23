@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { signOut } from "next-auth/react"
 
-import { Clock, AlertTriangle, CreditCard, LogOut, Sparkles, Check } from "lucide-react"
+import { Clock, AlertTriangle, CreditCard, LogOut, Sparkles, Check, CheckCircle2, ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { BusinessLogo } from "@/components/shared/business-logo"
@@ -12,6 +12,8 @@ import { UpgradeModal } from "@/components/billing/upgrade-modal"
 interface SubscriptionRequiredViewProps {
   reason?: "trial_expired" | "canceled" | "past_due"
   planNombre?: string
+  hasAccess?: boolean
+  daysRemaining?: number
 }
 
 const reasonMessages = {
@@ -50,10 +52,12 @@ const premiumFeatures = [
 export function SubscriptionRequiredView({
   reason = "trial_expired",
   planNombre,
+  hasAccess = false,
+  daysRemaining = 0,
 }: SubscriptionRequiredViewProps) {
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false)
-  const message = reasonMessages[reason]
-  const Icon = message.icon
+  const message = hasAccess ? null : reasonMessages[reason]
+  const Icon = message?.icon || CheckCircle2
 
   const handleLogout = async () => {
     await signOut({ redirect: false })
@@ -75,13 +79,32 @@ export function SubscriptionRequiredView({
 
       {/* Main Content */}
       <main className="flex-1 container max-w-4xl mx-auto py-12 px-4">
-        <div className="text-center mb-8">
-          <div className={`inline-flex p-4 rounded-full bg-muted mb-4 ${message.color}`}>
-            <Icon className="h-12 w-12" />
+        {hasAccess ? (
+          <div className="text-center mb-8">
+            <div className="inline-flex p-4 rounded-full bg-green-100 dark:bg-green-950 mb-4 text-green-600">
+              <CheckCircle2 className="h-12 w-12" />
+            </div>
+            <h1 className="text-3xl font-bold mb-2">¡Tu cuenta está activa!</h1>
+            <p className="text-muted-foreground max-w-xl mx-auto mb-2">
+              Tenés {daysRemaining} día{daysRemaining !== 1 ? "s" : ""} de prueba restantes. Aprovechá para conocer todas las funcionalidades.
+            </p>
+            <Button size="lg" className="mt-4" onClick={() => window.location.href = "/dashboard"}>
+              Ir a mi taller
+              <ArrowRight className="h-4 w-4 ml-2" />
+            </Button>
+            <p className="text-sm text-muted-foreground mt-6">
+              ¿Querés acceso permanente? Suscribite al plan Premium:
+            </p>
           </div>
-          <h1 className="text-3xl font-bold mb-2">{message.title}</h1>
-          <p className="text-muted-foreground max-w-xl mx-auto">{message.description}</p>
-        </div>
+        ) : (
+          <div className="text-center mb-8">
+            <div className={`inline-flex p-4 rounded-full bg-muted mb-4 ${message!.color}`}>
+              <Icon className="h-12 w-12" />
+            </div>
+            <h1 className="text-3xl font-bold mb-2">{message!.title}</h1>
+            <p className="text-muted-foreground max-w-xl mx-auto">{message!.description}</p>
+          </div>
+        )}
 
         <div className="grid md:grid-cols-2 gap-6">
           {/* Plan Card */}

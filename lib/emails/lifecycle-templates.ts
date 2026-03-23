@@ -159,9 +159,9 @@ export function getLifecycleEmail(type: LifecycleEmailType, data: LifecycleEmail
   switch (type) {
     case "WELCOME":
       return {
-        subject: "Bienvenido a STApp - Tu servicio tecnico en la nube",
+        subject: "Bienvenido a STApp - Tu servicio técnico en la nube",
         html: baseTemplate({
-          preheader: `${data.nombre}, tu cuenta esta lista. Empeza a gestionar tu negocio.`,
+          preheader: `${data.nombre}, tu cuenta está lista. Empezá a gestionar tu taller.`,
           headerGradient: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
           content: `
             <h1 class="text-heading" style="color: #1f2937; font-size: 24px; font-weight: 700; text-align: center; margin: 0 0 16px 0;">
@@ -171,16 +171,16 @@ export function getLifecycleEmail(type: LifecycleEmailType, data: LifecycleEmail
               Hola <strong>${data.nombre}</strong>,
             </p>
             <p class="text-body" style="color: #4b5563; font-size: 16px; text-align: center; margin: 0 0 24px 0;">
-              Tu organizacion <strong>${data.organizacion}</strong> ya esta lista. Tenes <strong>30 dias gratis</strong> para probar todas las funcionalidades.
+              Tu taller <strong>${data.organizacion}</strong> ya está listo. Tenés <strong>30 días gratis</strong> para probar todas las funcionalidades.
             </p>
 
             <p class="text-heading" style="color: #1f2937; font-size: 16px; font-weight: 600; margin: 0 0 12px 0;">
               Primeros pasos recomendados:
             </p>
 
-            ${tipCard("👥", "Carga tus primeros clientes", "Agrega los datos de tus clientes para asociarlos a las ordenes de servicio.")}
-            ${tipCard("📱", "Crea tu primera orden", "Registra un equipo y segui todo el proceso de reparacion.")}
-            ${tipCard("📦", "Arma tu inventario", "Carga los repuestos que usas para tener control de stock.")}
+            ${tipCard("👥", "Cargá tus primeros clientes", "Agregá los datos de tus clientes para asociarlos a las órdenes de servicio.")}
+            ${tipCard("📱", "Creá tu primera orden", "Registrá un equipo y seguí todo el proceso de reparación.")}
+            ${tipCard("📦", "Armá tu inventario", "Cargá los repuestos que usás para tener control de stock.")}
 
             ${button(appUrl, "Ir a mi panel")}
           `,
@@ -189,67 +189,67 @@ export function getLifecycleEmail(type: LifecycleEmailType, data: LifecycleEmail
 
     case "TIP_DAY_3":
       return {
-        subject: "Tip: Envia presupuestos por WhatsApp a tus clientes",
+        subject: "Tip: Enviá presupuestos por WhatsApp a tus clientes",
         html: baseTemplate({
-          preheader: "Sabia que podes enviar presupuestos directamente por WhatsApp?",
+          preheader: "¿Sabías que podés enviar presupuestos directamente por WhatsApp?",
           content: `
             <h1 class="text-heading" style="color: #1f2937; font-size: 24px; font-weight: 700; text-align: center; margin: 0 0 16px 0;">
-              Tips para sacarle mas jugo a STApp
+              Tips para sacarle más jugo a STApp
             </h1>
             <p class="text-body" style="color: #4b5563; font-size: 16px; text-align: center; margin: 0 0 24px 0;">
-              Hola <strong>${data.nombre}</strong>, llevas unos dias usando STApp. Aca van algunos tips:
+              Hola <strong>${data.nombre}</strong>, llevás unos días usando STApp. Acá van algunos tips:
             </p>
 
-            ${tipCard("💬", "Notificaciones por WhatsApp", "Tus clientes reciben actualizaciones automaticas del estado de su equipo. Activalas desde Configuracion.")}
-            ${tipCard("📄", "Cotizaciones con firma digital", "Genera presupuestos profesionales que tu cliente puede aprobar con firma digital desde su celular.")}
-            ${tipCard("📊", "Seguimiento publico", "Cada orden tiene un link publico que podes compartir para que tu cliente vea el estado en tiempo real.")}
+            ${tipCard("💬", "Notificaciones por WhatsApp", "Tus clientes reciben actualizaciones automáticas del estado de su equipo. Activalas desde Configuración.")}
+            ${tipCard("📄", "Cotizaciones con firma digital", "Generá presupuestos profesionales que tu cliente puede aprobar con firma digital desde su celular.")}
+            ${tipCard("📊", "Seguimiento público", "Cada orden tiene un link público que podés compartir para que tu cliente vea el estado en tiempo real.")}
 
-            ${button(appUrl + "/configuracion", "Ir a Configuracion")}
+            ${button(appUrl + "/configuracion", "Ir a Configuración")}
           `,
         }),
       }
 
     case "TIP_DAY_7":
       return {
-        subject: "Tip: Controla tu inventario y nunca te quedes sin repuestos",
+        subject: "Tip: Controlá tu inventario y nunca te quedes sin repuestos",
         html: baseTemplate({
-          preheader: "Gestion de inventario, ventas y mas en STApp",
+          preheader: "Gestión de inventario, ventas y más en STApp",
           content: `
             <h1 class="text-heading" style="color: #1f2937; font-size: 24px; font-weight: 700; text-align: center; margin: 0 0 16px 0;">
-              Ya llevas una semana con STApp
+              Ya llevás una semana con STApp
             </h1>
             <p class="text-body" style="color: #4b5563; font-size: 16px; text-align: center; margin: 0 0 24px 0;">
-              Hola <strong>${data.nombre}</strong>, esperamos que estes aprovechando la plataforma. Estos features te van a encantar:
+              Hola <strong>${data.nombre}</strong>, esperamos que estés aprovechando la plataforma. Estas funciones te van a encantar:
             </p>
 
-            ${tipCard("📦", "Gestion de inventario", "Controla stock, precios y proveedores. Asocia repuestos a cada orden automaticamente.")}
-            ${tipCard("🛒", "Modulo de ventas", "Vende accesorios y repuestos por mostrador con facturacion integrada.")}
-            ${tipCard("🔧", "Garantias automaticas", "Cada reparacion genera una garantia con certificado digital para tu cliente.")}
-            ${tipCard("📈", "Reportes y metricas", "Analiza tu negocio: ordenes por mes, ingresos, tecnicos mas productivos y mas.")}
+            ${tipCard("📦", "Gestión de inventario", "Controlá stock, precios y proveedores. Asociá repuestos a cada orden automáticamente.")}
+            ${tipCard("🛒", "Módulo de ventas", "Vendé accesorios y repuestos por mostrador con facturación integrada.")}
+            ${tipCard("🔧", "Garantías automáticas", "Cada reparación genera una garantía con certificado digital para tu cliente.")}
+            ${tipCard("📈", "Reportes y métricas", "Analizá tu taller: órdenes por mes, ingresos, técnicos más productivos y más.")}
 
-            ${button(appUrl, "Explorar mas funciones")}
+            ${button(appUrl, "Explorar más funciones")}
           `,
         }),
       }
 
     case "TRIAL_EXPIRING_5":
       return {
-        subject: "Tu prueba gratuita vence en 5 dias",
+        subject: "Tu prueba gratuita vence en 5 días",
         html: baseTemplate({
-          preheader: `${data.nombre}, te quedan 5 dias de prueba. No pierdas tu progreso.`,
+          preheader: `${data.nombre}, te quedan 5 días de prueba. No pierdas tu progreso.`,
           headerGradient: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
           content: `
             <h1 class="text-heading" style="color: #1f2937; font-size: 24px; font-weight: 700; text-align: center; margin: 0 0 16px 0;">
-              Tu prueba vence en 5 dias
+              Tu prueba vence en 5 días
             </h1>
             <p class="text-body" style="color: #4b5563; font-size: 16px; text-align: center; margin: 0 0 24px 0;">
-              Hola <strong>${data.nombre}</strong>, tu periodo de prueba en <strong>${data.organizacion}</strong> esta por terminar.
+              Hola <strong>${data.nombre}</strong>, tu período de prueba en <strong>${data.organizacion}</strong> está por terminar.
             </p>
 
             <table class="email-card" role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 24px 0;">
               <tr>
                 <td style="background-color: #fef3c7; padding: 24px; border-radius: 12px; border: 1px solid #fde68a; text-align: center;">
-                  <p style="color: #92400e; font-size: 14px; margin: 0 0 8px 0; font-weight: 600;">Dias restantes</p>
+                  <p style="color: #92400e; font-size: 14px; margin: 0 0 8px 0; font-weight: 600;">Días restantes</p>
                   <p style="color: #92400e; font-size: 48px; font-weight: 700; margin: 0;">5</p>
                 </td>
               </tr>
@@ -259,9 +259,9 @@ export function getLifecycleEmail(type: LifecycleEmailType, data: LifecycleEmail
               Suscribite al plan Premium para mantener acceso a:
             </p>
 
-            ${tipCard("♾️", "Ordenes ilimitadas", "Sin limite mensual de ordenes de servicio.")}
-            ${tipCard("👥", "Tecnicos y vendedores ilimitados", "Agrega todo tu equipo sin restricciones.")}
-            ${tipCard("💬", "Notificaciones WhatsApp", "Comunicacion automatica con tus clientes.")}
+            ${tipCard("♾️", "Órdenes ilimitadas", "Sin límite mensual de órdenes de servicio.")}
+            ${tipCard("👥", "Técnicos y vendedores ilimitados", "Agregá todo tu equipo sin restricciones.")}
+            ${tipCard("💬", "Notificaciones WhatsApp", "Comunicación automática con tus clientes.")}
 
             ${button(appUrl + "/suscripcion-requerida", "Ver planes y precios", "#f59e0b")}
           `,
@@ -270,36 +270,36 @@ export function getLifecycleEmail(type: LifecycleEmailType, data: LifecycleEmail
 
     case "TRIAL_EXPIRING_1":
       return {
-        subject: "Ultimo dia de prueba gratuita - No pierdas tu progreso",
+        subject: "Último día de prueba gratuita - No pierdas tu progreso",
         html: baseTemplate({
-          preheader: `${data.nombre}, manana vence tu prueba. Suscribite hoy.`,
+          preheader: `${data.nombre}, mañana vence tu prueba. Suscribite hoy.`,
           headerGradient: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
           content: `
             <h1 class="text-heading" style="color: #1f2937; font-size: 24px; font-weight: 700; text-align: center; margin: 0 0 16px 0;">
-              Tu prueba vence manana
+              Tu prueba vence mañana
             </h1>
             <p class="text-body" style="color: #4b5563; font-size: 16px; text-align: center; margin: 0 0 24px 0;">
-              Hola <strong>${data.nombre}</strong>, este es tu ultimo dia de prueba gratuita.
+              Hola <strong>${data.nombre}</strong>, este es tu último día de prueba gratuita.
             </p>
 
             <table class="email-card" role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 24px 0;">
               <tr>
                 <td style="background-color: #fef2f2; padding: 24px; border-radius: 12px; border: 1px solid #fecaca; text-align: center;">
                   <p style="color: #991b1b; font-size: 16px; margin: 0; font-weight: 600;">
-                    Si no te suscribis, perderas acceso a tu cuenta manana.
+                    Si no te suscribís, perderás acceso a tu cuenta mañana.
                   </p>
                 </td>
               </tr>
             </table>
 
             <p class="text-body" style="color: #4b5563; font-size: 15px; text-align: center; margin: 0 0 8px 0;">
-              Todos tus datos se conservan. Solo necesitas activar tu plan para seguir usandolos.
+              Todos tus datos se conservan. Solo necesitás activar tu plan para seguir usándolos.
             </p>
 
             ${button(appUrl + "/suscripcion-requerida", "Suscribirme ahora", "#ef4444")}
 
             <p class="text-muted" style="color: #9ca3af; font-size: 13px; text-align: center; margin: 24px 0 0 0;">
-              Necesitas ayuda? Responde a este correo y te ayudamos.
+              ¿Necesitás ayuda? Respondé a este correo y te ayudamos.
             </p>
           `,
         }),
@@ -307,23 +307,23 @@ export function getLifecycleEmail(type: LifecycleEmailType, data: LifecycleEmail
 
     case "TRIAL_EXPIRED":
       return {
-        subject: "Tu prueba expiro - Tus datos siguen esperandote",
+        subject: "Tu prueba expiró - Tus datos siguen esperándote",
         html: baseTemplate({
-          preheader: `${data.nombre}, tu prueba termino pero tus datos estan seguros. Suscribite para volver.`,
+          preheader: `${data.nombre}, tu prueba terminó pero tus datos están seguros. Suscribite para volver.`,
           headerGradient: "linear-gradient(135deg, #6b7280 0%, #4b5563 100%)",
           content: `
             <h1 class="text-heading" style="color: #1f2937; font-size: 24px; font-weight: 700; text-align: center; margin: 0 0 16px 0;">
-              Tu periodo de prueba termino
+              Tu período de prueba terminó
             </h1>
             <p class="text-body" style="color: #4b5563; font-size: 16px; text-align: center; margin: 0 0 24px 0;">
-              Hola <strong>${data.nombre}</strong>, tu prueba gratuita en <strong>${data.organizacion}</strong> expiro.
+              Hola <strong>${data.nombre}</strong>, tu prueba gratuita en <strong>${data.organizacion}</strong> expiró.
             </p>
 
             <table class="email-card" role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 24px 0;">
               <tr>
                 <td style="background-color: #f0fdf4; padding: 24px; border-radius: 12px; border: 1px solid #bbf7d0; text-align: center;">
                   <p style="color: #166534; font-size: 15px; margin: 0;">
-                    Tus datos estan seguros y te esperan. Suscribite cuando quieras para retomar donde dejaste.
+                    Tus datos están seguros y te esperan. Suscribite cuando quieras para retomar donde dejaste.
                   </p>
                 </td>
               </tr>
@@ -336,16 +336,16 @@ export function getLifecycleEmail(type: LifecycleEmailType, data: LifecycleEmail
 
     case "WIN_BACK_7":
       return {
-        subject: "Te extranamos - Tu negocio te necesita organizado",
+        subject: "Te extrañamos - Tu taller te necesita organizado",
         html: baseTemplate({
-          preheader: `${data.nombre}, hace una semana que no entras. Tu negocio te necesita.`,
+          preheader: `${data.nombre}, hace una semana que no entrás. Tu taller te necesita.`,
           headerGradient: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)",
           content: `
             <h1 class="text-heading" style="color: #1f2937; font-size: 24px; font-weight: 700; text-align: center; margin: 0 0 16px 0;">
-              Te extranamos en STApp
+              Te extrañamos en STApp
             </h1>
             <p class="text-body" style="color: #4b5563; font-size: 16px; text-align: center; margin: 0 0 24px 0;">
-              Hola <strong>${data.nombre}</strong>, hace un tiempo que no te vemos por aca.
+              Hola <strong>${data.nombre}</strong>, hace un tiempo que no te vemos por acá.
             </p>
             <p class="text-body" style="color: #4b5563; font-size: 15px; text-align: center; margin: 0 0 24px 0;">
               Mientras no estabas, seguimos mejorando STApp. Algunas novedades te pueden interesar.
@@ -354,7 +354,7 @@ export function getLifecycleEmail(type: LifecycleEmailType, data: LifecycleEmail
             ${button(appUrl, "Volver a STApp", "#8b5cf6")}
 
             <p class="text-muted" style="color: #9ca3af; font-size: 13px; text-align: center; margin: 24px 0 0 0;">
-              Si ya no queres recibir estos emails, simplemente ignoralo.
+              Si ya no querés recibir estos emails, simplemente ignoralo.
             </p>
           `,
         }),
@@ -362,7 +362,7 @@ export function getLifecycleEmail(type: LifecycleEmailType, data: LifecycleEmail
 
     case "WIN_BACK_30":
       return {
-        subject: "Hace un mes que no te vemos - Volvemos?",
+        subject: "Hace un mes que no te vemos - ¿Volvemos?",
         html: baseTemplate({
           preheader: `${data.nombre}, hace un mes sin STApp. Tu cuenta sigue activa.`,
           headerGradient: "linear-gradient(135deg, #ec4899 0%, #db2777 100%)",
@@ -371,19 +371,19 @@ export function getLifecycleEmail(type: LifecycleEmailType, data: LifecycleEmail
               Tu cuenta sigue activa
             </h1>
             <p class="text-body" style="color: #4b5563; font-size: 16px; text-align: center; margin: 0 0 24px 0;">
-              Hola <strong>${data.nombre}</strong>, hace un mes que no entras a <strong>${data.organizacion}</strong>.
+              Hola <strong>${data.nombre}</strong>, hace un mes que no entrás a <strong>${data.organizacion}</strong>.
             </p>
             <p class="text-body" style="color: #4b5563; font-size: 15px; text-align: center; margin: 0 0 8px 0;">
-              Tus datos, clientes y ordenes siguen ahi, esperandote.
+              Tus datos, clientes y órdenes siguen ahí, esperándote.
             </p>
             <p class="text-body" style="color: #4b5563; font-size: 15px; text-align: center; margin: 0 0 24px 0;">
-              Si necesitas ayuda o tenes alguna sugerencia, estamos para escucharte.
+              Si necesitás ayuda o tenés alguna sugerencia, estamos para escucharte.
             </p>
 
             ${button(appUrl, "Volver a mi cuenta", "#ec4899")}
 
             <p class="text-muted" style="color: #9ca3af; font-size: 13px; text-align: center; margin: 24px 0 0 0;">
-              Responde a este correo si necesitas ayuda con algo.
+              Respondé a este correo si necesitás ayuda con algo.
             </p>
           `,
         }),
@@ -400,7 +400,7 @@ export function getLifecycleEmail(type: LifecycleEmailType, data: LifecycleEmail
               ${getMilestoneTitle(data.milestone!)}
             </h1>
             <p class="text-body" style="color: #4b5563; font-size: 16px; text-align: center; margin: 0 0 24px 0;">
-              Hola <strong>${data.nombre}</strong>, felicitaciones!
+              Hola <strong>${data.nombre}</strong>, ¡felicitaciones!
             </p>
 
             <table class="email-card" role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 24px 0;">
@@ -415,7 +415,7 @@ export function getLifecycleEmail(type: LifecycleEmailType, data: LifecycleEmail
             </table>
 
             <p class="text-body" style="color: #4b5563; font-size: 15px; text-align: center; margin: 0 0 24px 0;">
-              Segui asi! STApp te acompana en el crecimiento de tu negocio.
+              ¡Seguí así! STApp te acompaña en el crecimiento de tu taller.
             </p>
 
             ${button(appUrl, "Seguir trabajando")}
@@ -427,13 +427,13 @@ export function getLifecycleEmail(type: LifecycleEmailType, data: LifecycleEmail
       return {
         subject: "Novedades de STApp",
         html: baseTemplate({
-          preheader: `${data.nombre}, tenes novedades en STApp`,
+          preheader: `${data.nombre}, tenés novedades en STApp`,
           content: `
             <h1 class="text-heading" style="color: #1f2937; font-size: 24px; font-weight: 700; text-align: center; margin: 0 0 16px 0;">
               Novedades en STApp
             </h1>
             <p class="text-body" style="color: #4b5563; font-size: 16px; text-align: center; margin: 0 0 24px 0;">
-              Hola <strong>${data.nombre}</strong>, entra a tu cuenta para ver las novedades.
+              Hola <strong>${data.nombre}</strong>, entrá a tu cuenta para ver las novedades.
             </p>
             ${button(appUrl, "Ir a STApp")}
           `,
@@ -444,10 +444,10 @@ export function getLifecycleEmail(type: LifecycleEmailType, data: LifecycleEmail
 
 function getMilestoneSubject(milestone: { tipo: string; valor: number }): string {
   switch (milestone.tipo) {
-    case "ordenes": return `Felicitaciones! Llegaste a ${milestone.valor} ordenes`
-    case "clientes": return `Felicitaciones! Ya tenes ${milestone.valor} clientes`
-    case "ventas": return `Felicitaciones! ${milestone.valor} ventas realizadas`
-    default: return "Un nuevo hito en tu negocio!"
+    case "ordenes": return `¡Felicitaciones! Llegaste a ${milestone.valor} órdenes`
+    case "clientes": return `¡Felicitaciones! Ya tenés ${milestone.valor} clientes`
+    case "ventas": return `¡Felicitaciones! ${milestone.valor} ventas realizadas`
+    default: return "¡Un nuevo hito en tu taller!"
   }
 }
 
@@ -456,14 +456,14 @@ function getMilestonePreheader(nombre: string, milestone: { tipo: string; valor:
 }
 
 function getMilestoneTitle(milestone: { tipo: string; valor: number }): string {
-  return `Nuevo hito: ${milestone.valor} ${milestone.tipo}!`
+  return `¡Nuevo hito: ${milestone.valor} ${milestone.tipo}!`
 }
 
 function getMilestoneMessage(org: string, milestone: { tipo: string; valor: number }): string {
   switch (milestone.tipo) {
-    case "ordenes": return `${org} ya proceso ${milestone.valor} ordenes de servicio`
+    case "ordenes": return `${org} ya procesó ${milestone.valor} órdenes de servicio`
     case "clientes": return `${org} ya tiene ${milestone.valor} clientes registrados`
-    case "ventas": return `${org} ya realizo ${milestone.valor} ventas`
-    default: return `${org} alcanzo un nuevo hito!`
+    case "ventas": return `${org} ya realizó ${milestone.valor} ventas`
+    default: return `${org} alcanzó un nuevo hito!`
   }
 }

@@ -59,45 +59,45 @@ const ROOT_DOMAIN = "stapp.com.ar"
 
 const TEMPLATES: Record<string, { subject: string; body: string }> = {
   trial_expired: {
-    subject: "Te damos 7 dias mas para que pruebes STApp",
+    subject: "Te damos 7 días más para que pruebes STApp",
     body: `Hola {{nombre}},
 
-Vimos que tu periodo de prueba en {{organizacion}} termino y no queremos que te quedes sin conocer todo lo que STApp puede hacer por tu negocio.
+Vimos que tu período de prueba en {{organizacion}} terminó y no queremos que te quedes sin conocer todo lo que STApp puede hacer por tu taller.
 
-Por eso, te reactivamos la cuenta por 7 dias mas para que puedas probar todas las funcionalidades sin compromiso.
+Por eso, te reactivamos la cuenta por 7 días más para que puedas probar todas las funcionalidades sin compromiso.
 
-Esto es lo que podes hacer ahora mismo:
+Esto es lo que podés hacer ahora mismo:
 
-- Cargar ordenes de servicio reales y hacer el seguimiento completo
-- Enviar notificaciones automaticas por WhatsApp a tus clientes
+- Cargar órdenes de servicio reales y hacer el seguimiento completo
+- Enviar notificaciones automáticas por WhatsApp a tus clientes
 - Generar presupuestos con firma digital desde el celular
-- Cobrar ordenes con multiples metodos de pago y cuotas
+- Cobrar órdenes con múltiples métodos de pago y cuotas
 - Controlar tu inventario de repuestos y accesorios
 - Registrar ventas por mostrador
-- Ver reportes y metricas de tu negocio en tiempo real
-- Compartir el seguimiento publico de cada orden con tus clientes
-- Gestionar garantias con certificado digital
+- Ver reportes y métricas de tu taller en tiempo real
+- Compartir el seguimiento público de cada orden con tus clientes
+- Gestionar garantías con certificado digital
 
-Tu cuenta ya esta activa. Solo tenes que entrar:
+Tu cuenta ya está activa. Solo tenés que entrar:
 
 https://{{slug}}.${ROOT_DOMAIN}
 
-Todos tus datos anteriores siguen ahi, tal como los dejaste.
+Todos tus datos anteriores siguen ahí, tal como los dejaste.
 
-Si tenes alguna duda o necesitas ayuda para arrancar, responde a este correo y te ayudamos.
+Si tenés alguna duda o necesitás ayuda para arrancar, respondé a este correo y te ayudamos.
 
 Saludos,
 El equipo de STApp`,
   },
   trial_expiring: {
-    subject: "Tu prueba gratuita esta por vencer",
+    subject: "Tu prueba gratuita está por vencer",
     body: `Hola {{nombre}},
 
-Tu periodo de prueba en {{organizacion}} esta por terminar.
+Tu período de prueba en {{organizacion}} está por terminar.
 
 No pierdas el acceso a tu cuenta y todos los datos que cargaste. Suscribite al plan Premium para seguir usando STApp sin interrupciones.
 
-Entra a https://{{slug}}.${ROOT_DOMAIN}/suscripcion-requerida para ver los planes.
+Entrá a https://{{slug}}.${ROOT_DOMAIN}/suscripcion-requerida para ver los planes.
 
 Saludos,
 El equipo de STApp`,
@@ -108,27 +108,27 @@ El equipo de STApp`,
 
 Hace un tiempo que no te vemos por {{organizacion}}. Queremos que sepas que tu cuenta y todos tus datos siguen activos.
 
-Mientras no estabas, seguimos mejorando STApp con nuevas funcionalidades. Entra y mira las novedades.
+Mientras no estabas, seguimos mejorando STApp con nuevas funcionalidades. Entrá y mirá las novedades.
 
 https://{{slug}}.${ROOT_DOMAIN}
 
-Necesitas ayuda? Responde a este correo.
+¿Necesitás ayuda? Respondé a este correo.
 
 Saludos,
 El equipo de STApp`,
   },
   upgrade: {
-    subject: "Oferta especial para tu negocio",
+    subject: "Oferta especial para tu taller",
     body: `Hola {{nombre}},
 
-Tenemos una oferta especial para {{organizacion}}. Suscribite al plan Premium y obtene acceso a todas las funcionalidades:
+Tenemos una oferta especial para {{organizacion}}. Suscribite al plan Premium y obtené acceso a todas las funcionalidades:
 
-- Ordenes de servicio ilimitadas
-- Tecnicos y vendedores ilimitados
-- Notificaciones automaticas por WhatsApp
+- Órdenes de servicio ilimitadas
+- Técnicos y vendedores ilimitados
+- Notificaciones automáticas por WhatsApp
 - Soporte prioritario
 
-Entra a https://{{slug}}.${ROOT_DOMAIN}/suscripcion-requerida para ver los planes.
+Entrá a https://{{slug}}.${ROOT_DOMAIN}/suscripcion-requerida para ver los planes.
 
 Saludos,
 El equipo de STApp`,
@@ -137,7 +137,7 @@ El equipo de STApp`,
     subject: "",
     body: `Hola {{nombre}},
 
-[Tu mensaje aqui]
+[Tu mensaje acá]
 
 Saludos,
 El equipo de STApp`,
@@ -602,7 +602,16 @@ function textToHtml(text: string, subject: string): string {
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px;">
                 <tr>
                   <td style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); padding: 32px 40px; text-align: center; border-radius: 16px 16px 0 0;">
-                    <span style="color: #ffffff; font-size: 24px; font-weight: 700;">STApp</span>
+                    <table role="presentation" cellpadding="0" cellspacing="0" style="margin: 0 auto;">
+                      <tr>
+                        <td style="vertical-align: middle; padding-right: 10px;">
+                          <img src="https://${ROOT_DOMAIN}/icon-192.png" alt="STApp" style="height: 36px; width: 36px; border-radius: 8px;" />
+                        </td>
+                        <td style="vertical-align: middle;">
+                          <span style="color: #ffffff; font-size: 24px; font-weight: 700; letter-spacing: -0.5px;">STApp</span>
+                        </td>
+                      </tr>
+                    </table>
                   </td>
                 </tr>
                 <tr>

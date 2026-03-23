@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth"
 import { redirect } from "next/navigation"
-import { getSubscriptionInfo, hasValidAccess } from "@/lib/subscriptions"
+import { getSubscriptionInfo, hasValidAccess, getTrialInfo } from "@/lib/subscriptions"
 import { SubscriptionRequiredView } from "@/components/subscription/subscription-required-view"
 
 export const dynamic = "force-dynamic"
@@ -17,21 +17,17 @@ export default async function SubscripcionRequeridaPage({ searchParams }: PagePr
   }
 
   const organizationId = session.user.organizationId
-
-  // Verificar si realmente no tiene acceso (por si llegaron aquí por error)
   const { hasAccess } = await hasValidAccess(organizationId)
-
-  if (hasAccess) {
-    redirect("/dashboard")
-  }
-
   const subscription = await getSubscriptionInfo(organizationId)
+  const trialInfo = await getTrialInfo(organizationId)
   const { reason } = await searchParams
 
   return (
     <SubscriptionRequiredView
       reason={reason as "trial_expired" | "canceled" | "past_due" | undefined}
       planNombre={subscription?.planNombre}
+      hasAccess={hasAccess}
+      daysRemaining={trialInfo.daysRemaining}
     />
   )
 }
