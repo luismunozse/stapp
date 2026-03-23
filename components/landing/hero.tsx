@@ -583,8 +583,9 @@ function MockupSlider() {
 export function Hero() {
   const benefits = [
     "Órdenes ilimitadas",
-    "Control de inventario",
-    "Reportes en tiempo real",
+    "Seguimiento online para clientes",
+    "Punto de venta incluido",
+    "15+ reportes avanzados",
     "30 días gratis",
   ]
 

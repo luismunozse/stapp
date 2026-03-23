@@ -1,18 +1,47 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
-import { X, Send, Loader2, Bot } from "lucide-react"
+import { useEffect, useRef, useState, useCallback } from "react"
+import { X, Send, Loader2, Bot, MessageCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { ChatMessage } from "./chat-message"
 import { v4 as uuidv4 } from "uuid"
 
+const WHATSAPP_NUMBER = "5491169625733"
+const WHATSAPP_MESSAGE = encodeURIComponent(
+  "Hola! Estuve chateando con Santi en la web y me gustaría hablar con una persona."
+)
+
 interface Message {
   id: string
   tipo: "USER" | "ASSISTANT" | "SYSTEM"
   contenido: string
   timestamp: Date
+}
+
+// Extraer email de un texto
+function extractEmail(text: string): string | undefined {
+  const match = text.match(/[\w.+-]+@[\w-]+\.[\w.-]+/)
+  return match ? match[0] : undefined
+}
+
+// Extraer teléfono de un texto (números de 7+ dígitos, con o sin prefijo)
+function extractPhone(text: string): string | undefined {
+  const match = text.match(/(?:\+?\d[\d\s\-().]{6,}\d)/)
+  return match ? match[0].replace(/[\s\-().]/g, "") : undefined
+}
+
+// Extraer nombre de frases como "me llamo X", "soy X", "mi nombre es X"
+function extractName(text: string): string | undefined {
+  const patterns = [
+    /(?:me llamo|mi nombre es|soy)\s+([A-ZÁÉÍÓÚÑa-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑa-záéíóúñ]+)?)/i,
+  ]
+  for (const pattern of patterns) {
+    const match = text.match(pattern)
+    if (match) return match[1].trim()
+  }
+  return undefined
 }
 
 interface ChatbotPanelProps {
@@ -27,6 +56,7 @@ export function ChatbotPanel({ isOpen, onClose }: ChatbotPanelProps) {
   const [sessionId, setSessionId] = useState<string>("")
   const [conversacionId, setConversacionId] = useState<string | null>(null)
   const [isClient, setIsClient] = useState(false)
+  const [leadCaptured, setLeadCaptured] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Verificar que estamos en el cliente
@@ -64,6 +94,42 @@ export function ChatbotPanel({ isOpen, onClose }: ChatbotPanelProps) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
+  // Intentar capturar lead cuando se detectan datos de contacto
+  const tryCaptureLead = useCallback(
+    async (userText: string, convId: string) => {
+      if (leadCaptured) return
+
+      const email = extractEmail(userText)
+      const phone = extractPhone(userText)
+      const name = extractName(userText)
+
+      // Solo capturar si hay al menos email o teléfono
+      if (!email && !phone) return
+
+      try {
+        const res = await fetch("/api/chatbot/capture-lead", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId,
+            conversacionId: convId,
+            nombre: name || undefined,
+            email: email || undefined,
+            telefono: phone || undefined,
+            interes: "Consulta desde chatbot",
+          }),
+        })
+
+        if (res.ok) {
+          setLeadCaptured(true)
+        }
+      } catch (err) {
+        console.error("Error capturing lead:", err)
+      }
+    },
+    [sessionId, leadCaptured]
+  )
+
   const handleSendMessage = async () => {
     if (!input.trim() || isLoading || !sessionId) return
 
@@ -96,6 +162,7 @@ export function ChatbotPanel({ isOpen, onClose }: ChatbotPanelProps) {
 
       const data = await response.json()
 
+      const currentConvId = data.conversacionId || conversacionId
       if (data.conversacionId && !conversacionId) {
         setConversacionId(data.conversacionId)
       }
@@ -108,6 +175,16 @@ export function ChatbotPanel({ isOpen, onClose }: ChatbotPanelProps) {
       }
 
       setMessages((prev) => [...prev, assistantMessage])
+
+      // Intentar capturar lead si se detectó intención de contacto
+      if (
+        currentConvId &&
+        (data.intencion === "proporcionar_contacto" ||
+          extractEmail(userMessage.contenido) ||
+          extractPhone(userMessage.contenido))
+      ) {
+        tryCaptureLead(userMessage.contenido, currentConvId)
+      }
     } catch (error) {
       console.error("Error sending message:", error)
       const errorMessage: Message = {
@@ -208,9 +285,20 @@ export function ChatbotPanel({ isOpen, onClose }: ChatbotPanelProps) {
             {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground mt-2 text-center">
-          Presioná Enter para enviar
-        </p>
+        <div className="flex items-center justify-between mt-2">
+          <p className="text-xs text-muted-foreground">
+            Presioná Enter para enviar
+          </p>
+          <a
+            href={`https://wa.me/${WHATSAPP_NUMBER}?text=${WHATSAPP_MESSAGE}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 text-xs text-green-600 hover:text-green-700 font-medium transition-colors"
+          >
+            <MessageCircle className="w-3.5 h-3.5" />
+            Hablar con una persona
+          </a>
+        </div>
       </div>
     </div>
   )

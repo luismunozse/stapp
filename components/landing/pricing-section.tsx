@@ -19,12 +19,18 @@ const features: PricingFeature[] = [
   { text: "Técnicos ilimitados" },
   { text: "Vendedores ilimitados" },
   { text: "Clientes ilimitados" },
-  { text: "Reportes avanzados" },
+  { text: "Punto de venta con garantías" },
+  { text: "Cotizaciones con aprobación online" },
+  { text: "Portal de seguimiento para clientes", highlight: "Diferencial" },
+  { text: "Modo kiosco para tu local" },
+  { text: "15+ reportes avanzados" },
+  { text: "Cuenta corriente de clientes" },
+  { text: "Gestión de proveedores" },
+  { text: "Importación y exportación de datos" },
   { text: "5GB almacenamiento" },
-  { text: "Soporte prioritario" },
   { text: "Notificaciones WhatsApp" },
+  { text: "Soporte prioritario" },
   { text: "Tu logo en presupuestos y órdenes", highlight: "Tu marca" },
-  { text: "Exportación de datos" },
 ]
 
 const prices = {

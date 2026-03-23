@@ -233,7 +233,7 @@ Un solo plan: Plan Premium, todo incluido.
 - Primeros 30 días gratis, sin tarjeta de crédito requerida
 - Argentina: $19.999 ARS/mes o $191.990/año (ahorro ~20% con plan anual)
 - Otros países: USD $12/mes o USD $115/año
-- Garantía de devolución de 30 días. Cancelás cuando quieras.
+- Garantía de devolución de 30 días. Cancelás cuando quieras, sin penalidades.
 - Pagos seguros con MercadoPago (Argentina) o tarjeta internacional (otros países)
 
 Todo incluido en el plan:
@@ -241,56 +241,83 @@ Todo incluido en el plan:
 - Técnicos ilimitados
 - Vendedores ilimitados
 - Clientes ilimitados
-- Reportes avanzados
+- Punto de venta con garantías por producto
+- Cotizaciones con aprobación online
+- Portal de seguimiento para clientes (link público)
+- Modo kiosco para mostrar estado de reparaciones en el local
+- 15+ reportes avanzados
+- Cuenta corriente de clientes
+- Gestión de proveedores
+- Importación y exportación de datos (Excel/CSV)
 - 5GB de almacenamiento
-- Soporte prioritario
 - Notificaciones por WhatsApp
-- Logo personalizado
-- Exportación de datos
+- Soporte prioritario
+- Tu logo en presupuestos y órdenes
 
-CARACTERÍSTICAS PRINCIPALES (12 herramientas):
+CARACTERÍSTICAS PRINCIPALES:
 
 Servicio Técnico:
-- Órdenes de Servicio: gestión de cada reparación de principio a fin con estados en tiempo real y checklists personalizados
-- Presupuestos: generación de presupuestos profesionales en segundos, envío de PDF por WhatsApp y aprobación con firma digital
-- Fotos por Etapa: documentación visual del ingreso, durante la reparación y entrega para proteger ante reclamos
-- Firma Digital: captura de firma del cliente en la entrega desde cualquier dispositivo
+- Órdenes de Servicio: gestión de cada reparación de principio a fin con 10 estados (recibido, en diagnóstico, presupuestado, aprobado, en reparación, esperando repuesto, reparado, entregado, cancelado, sin reparación), checklists personalizados por tipo de dispositivo y seguimiento completo
+- Cotizaciones y Presupuestos: sistema independiente de presupuestos con descuentos (fijos o porcentuales), impuestos configurables (IVA), condiciones y términos. El cliente los aprueba online con firma digital desde un link único, sin necesidad de crear cuenta. Exportación a PDF y envío por WhatsApp
+- Fotos por Etapa: documentación visual de ingreso, durante la reparación y entrega. Protección ante reclamos con evidencia fotográfica almacenada en la nube
+- Portal de Seguimiento: cada orden genera un link único que se comparte por WhatsApp. El cliente ve el estado en tiempo real, fotos, garantía y descarga el comprobante en PDF. No necesita cuenta ni instalar nada. El link expira automáticamente 30 días después de la entrega
 
 Administración:
-- Gestión de Clientes: toda la info en un solo lugar con historial completo de reparaciones
-- Control de Inventario: alertas automáticas de stock bajo, control de costos y gestión de proveedores
-- Control de Cobros: comprobantes internos, pagos parciales y control de cuentas por cobrar
-- Sistema de Garantías: alertas de vencimiento, registro de reclamos y trazabilidad completa
+- Gestión de Clientes: historial completo y automático de reparaciones, pagos y cuenta corriente (crédito/débito). Soporte para clientes individuales y empresas con sectores. Búsqueda por nombre, teléfono o DNI. Importación masiva desde Excel/CSV
+- Control de Inventario: alertas automáticas de stock bajo, historial de precios, control de costos y márgenes en tiempo real. Código automático, categorización por tipo de dispositivo. Importación masiva desde Excel/CSV con plantillas descargables
+- Cobros y Facturación: desde la orden al cobro en un click. Pagos parciales, cuotas con recargo configurable, múltiples medios de pago (efectivo, transferencia, tarjeta de débito/crédito, MercadoPago, cuenta corriente). Facturación automática con numeración secuencial e IVA
+- Sistema de Garantías: garantías vigentes, vencimientos con alertas automáticas (7 días antes), reclamos con estados (pendiente, en revisión, aceptado, rechazado, resuelto) y reingresos vinculados a la orden original. Trazabilidad completa
+
+Ventas:
+- Punto de Venta: módulo completo para vender accesorios y repuestos. Ventas con garantía por producto, múltiples medios de pago, gestión de devoluciones y numeración automática. Exportación a PDF
+- Proveedores: gestión de proveedores con datos de contacto, WhatsApp, dirección, sitio web y notas. Estado activo/inactivo
+- Equipo Comercial: técnicos, vendedores y administradores con roles diferenciados y permisos específicos. Métricas de rendimiento individuales por técnico y por vendedor
+- Modo Kiosco: pantalla pública personalizable para mostrar el estado de las reparaciones en tu local. Columnas configurables, auto-refresh, filtros, tamaño de fuente y branding. Acceso por token sin login
 
 Productividad:
-- Gestión de Equipo: administración de técnicos y vendedores, asignación de reparaciones y medición de rendimiento
-- Notificaciones por WhatsApp: plantillas listas para enviar con un click
-- Reportes y Métricas: dashboard con ingresos, tiempos de reparación, rendimiento del equipo y tendencias
-- App Móvil (PWA): instalable en el celular para gestionar todo desde cualquier lugar
+- 15+ Reportes Avanzados: ingresos, ingresos unificados, comparativa de ingresos, analytics de clientes, analytics de ventas, analytics de inventario, fallas comunes, garantías vs ventas, rendimiento por técnico, tasa de retorno, tiempos de reparación, top clientes, rentabilidad, predicción de repuestos y resumen general. Exportación a CSV con filtros por fecha
+- Notificaciones por WhatsApp: plantillas listas para enviar con un click. Aviso de equipo listo, presupuestos, seguimiento de reparación y entrega. Historial de notificaciones por cliente
+- Firma Digital: captura de firma del cliente en la entrega y en la aprobación de presupuestos. Respaldo legal ante cualquier reclamo
+- App Móvil + Offline: app nativa para Android (APK descargable), instalable como PWA en cualquier dispositivo (iPhone incluido), y modo offline con sincronización automática cuando volvés a tener conexión
 
-VENTAJAS:
+SEGURIDAD:
+- Encriptación HTTPS/TLS en todo momento
+- Autenticación de dos factores (2FA) con códigos de respaldo para administradores
+- Roles y permisos diferenciados (Admin, Técnico, Vendedor)
+- Row-Level Security (aislamiento completo de datos por organización)
+- Backups automáticos periódicos
+- Auditoría completa de acciones (quién hizo qué y cuándo)
+
+VENTAJAS COMPETITIVAS vs Excel/Papel:
 - No necesita instalación, funciona 100% en el navegador
-- Accesible desde cualquier dispositivo (PC, tablet, celular)
-- Datos seguros con encriptación
-- Backups automáticos
-- Soporte en español
-- Interfaz intuitiva y fácil de usar
+- Accesible desde cualquier dispositivo (PC, tablet, celular) incluso sin conexión
+- Tu cliente puede seguir su reparación online (nadie más ofrece esto gratis)
+- Aprobación de presupuestos online con firma digital
+- Pantalla kiosco en tu local para que el cliente vea el estado sin preguntar
+- Multi-usuario con roles y permisos
 - Actualizaciones automáticas sin costo adicional
-- Multi-usuario con roles (Admin, Técnico, Vendedor)
+- Soporte en español con asistente virtual y sistema de tickets
 
 CASOS DE USO TÍPICOS:
 - Service de celulares
-- Reparación de computadoras
+- Reparación de computadoras y notebooks
 - Talleres de electrónica
-- Service de tablets y consolas
-- Tiendas de reparación multi-marca
+- Service de tablets, consolas y smartwatches
+- Tiendas de reparación que también venden accesorios y repuestos
+- Talleres con múltiples técnicos y sucursales
+
+CONTACTO:
+- WhatsApp: +54 9 11 6962-5733
+- Web: https://stapp.com.ar
+- Email: contacto@stapp.com.ar
 
 Si detectás interés genuino (solicitud de demo, preguntas detalladas sobre precios, preguntar cómo empezar, pedir más info), preguntá amablemente y de forma natural por:
 1. Primero el nombre
 2. Luego email o teléfono
 3. Opcionalmente nombre del taller
 
-Nunca pidas todos los datos de golpe. Hacelo natural en la conversación, como lo haría un vendedor humano.`
+Nunca pidas todos los datos de golpe. Hacelo natural en la conversación, como lo haría un vendedor humano.
+Si el usuario quiere hablar con una persona, indicale que puede escribirnos por WhatsApp al +54 9 11 6962-5733.`
 }
 
 function detectIntention(userMessage: string, assistantResponse: string): { tipo: string; confianza: number } {

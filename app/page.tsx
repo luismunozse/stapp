@@ -10,6 +10,7 @@ import { FAQ } from "@/components/landing/faq"
 import { DownloadApp } from "@/components/landing/download-app"
 import { Footer } from "@/components/landing/footer"
 import { ChatbotButton } from "@/components/chatbot/chatbot-button"
+import { WhatsAppButton } from "@/components/landing/whatsapp-button"
 import { SkipLinks } from "@/components/shared/skip-links"
 import { FAQPageJsonLd } from "@/components/seo/json-ld"
 
@@ -68,7 +69,7 @@ const faqData = [
   {
     question: "\u00bfMis datos est\u00e1n seguros?",
     answer:
-      "Absolutamente. Usamos encriptaci\u00f3n HTTPS/TLS, controles de acceso estrictos, monitoreo continuo y copias de seguridad peri\u00f3dicas. Tu informaci\u00f3n y la de tus clientes est\u00e1 protegida en todo momento.",
+      "Absolutamente. Usamos encriptaci\u00f3n HTTPS/TLS, autenticaci\u00f3n de dos factores (2FA) con c\u00f3digos de respaldo, controles de acceso estrictos, monitoreo continuo y copias de seguridad peri\u00f3dicas. Tu informaci\u00f3n y la de tus clientes est\u00e1 protegida en todo momento.",
   },
   {
     question: "\u00bfC\u00f3mo funcionan las notificaciones por WhatsApp?",
@@ -78,7 +79,17 @@ const faqData = [
   {
     question: "\u00bfPuedo gestionar varios t\u00e9cnicos y vendedores?",
     answer:
-      "S\u00ed, pod\u00e9s agregar t\u00e9cnicos y vendedores ilimitados. Asign\u00e1 reparaciones, visualiz\u00e1 la carga de trabajo de cada uno y segu\u00ed el rendimiento del equipo con m\u00e9tricas en tiempo real.",
+      "S\u00ed, pod\u00e9s agregar t\u00e9cnicos y vendedores ilimitados con roles diferenciados (admin, t\u00e9cnico, vendedor). Asign\u00e1 reparaciones, visualiz\u00e1 la carga de trabajo de cada uno y segu\u00ed el rendimiento del equipo con m\u00e9tricas en tiempo real.",
+  },
+  {
+    question: "\u00bfMi cliente puede ver el estado de su reparaci\u00f3n?",
+    answer:
+      "S\u00ed. Cada orden genera un link \u00fanico que pod\u00e9s compartir por WhatsApp. Tu cliente ve el estado en tiempo real, las fotos, la informaci\u00f3n de garant\u00eda y puede descargar el comprobante en PDF. No necesita crear cuenta ni instalar nada.",
+  },
+  {
+    question: "\u00bfPuedo vender accesorios y repuestos adem\u00e1s de reparar?",
+    answer:
+      "S\u00ed, STApp incluye un m\u00f3dulo de ventas completo. Registr\u00e1 ventas con garant\u00eda por producto, m\u00faltiples medios de pago, gesti\u00f3n de devoluciones y seguimiento de vendedores con m\u00e9tricas individuales.",
   },
   {
     question: "\u00bfC\u00f3mo puedo obtener soporte si tengo un problema?",
@@ -114,6 +125,7 @@ export default async function Home() {
         <FAQ faqs={faqData} />
         <DownloadApp />
         <Footer />
+        <WhatsAppButton />
         <ChatbotButton />
       </main>
     </>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
+import { sendNewLeadNotification } from "@/lib/email"
 
 const leadCaptureSchema = z.object({
   sessionId: z.string().min(1, "Session ID es requerido"),
@@ -60,6 +61,16 @@ export async function POST(request: Request) {
 
       if (updateError) throw updateError
 
+      // Notificar actualización si se agregaron datos nuevos
+      sendNewLeadNotification({
+        nombre: data.nombre,
+        email: data.email,
+        telefono: data.telefono,
+        empresa: data.empresa,
+        interes: data.interes,
+        origen: "Chatbot (actualización)",
+      }).catch((err) => console.error("[Lead] Error enviando notificación:", err))
+
       return NextResponse.json({
         success: true,
         leadId: leadExistente.id,
@@ -93,6 +104,16 @@ export async function POST(request: Request) {
         lead_capturado: true,
       })
       .eq("id", data.conversacionId)
+
+    // Enviar notificación por email al admin (no bloquear la respuesta)
+    sendNewLeadNotification({
+      nombre: data.nombre,
+      email: data.email,
+      telefono: data.telefono,
+      empresa: data.empresa,
+      interes: data.interes,
+      origen: "Chatbot",
+    }).catch((err) => console.error("[Lead] Error enviando notificación:", err))
 
     return NextResponse.json({
       success: true,

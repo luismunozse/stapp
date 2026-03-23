@@ -15,6 +15,12 @@ import {
   Smartphone,
   Settings,
   Zap,
+  ShoppingCart,
+  Link2,
+  Monitor,
+  Truck,
+  UserCheck,
+  Wallet,
 } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { m, LazyMotion, domAnimation } from "@/components/animations/motion"
@@ -34,9 +40,9 @@ const categories = [
         color: "bg-blue-500",
       },
       {
-        name: "Presupuestos",
+        name: "Cotizaciones y Presupuestos",
         description:
-          "Generá presupuestos profesionales en 30 segundos. Enviá el PDF por WhatsApp y registrá la aprobación con firma digital.",
+          "Creá presupuestos profesionales con descuentos, impuestos y condiciones. Tu cliente los aprueba online con firma digital desde un link, sin necesidad de cuenta.",
         icon: Calculator,
         color: "bg-indigo-500",
       },
@@ -48,10 +54,10 @@ const categories = [
         color: "bg-amber-500",
       },
       {
-        name: "Firma Digital",
+        name: "Portal de Seguimiento",
         description:
-          "Capturá la firma del cliente al momento de la entrega. Ante cualquier reclamo, tenés el respaldo.",
-        icon: PenLine,
+          "Tu cliente sigue su reparación en tiempo real desde un link, sin crear cuenta. Ve el estado, fotos, garantía y descarga el comprobante en PDF.",
+        icon: Link2,
         color: "bg-emerald-500",
       },
     ],
@@ -65,30 +71,66 @@ const categories = [
       {
         name: "Gestión de Clientes",
         description:
-          "Cuando un cliente vuelve, en 2 clicks ya sabés todo: qué trajo, qué le hiciste y cuánto pagó. Sin buscar en papeles.",
+          "Historial completo y automático: reparaciones, pagos y cuenta corriente. Cuando un cliente vuelve, en 2 clicks ya sabés todo.",
         icon: Users,
         color: "bg-orange-500",
       },
       {
         name: "Control de Inventario",
         description:
-          "Recibí alertas antes de quedarte sin stock. Controlá costos y márgenes en tiempo real con actualizaciones automáticas.",
+          "Alertas de stock bajo, historial de precios, costos y márgenes en tiempo real. Importá tu inventario desde Excel o CSV en minutos.",
         icon: Package,
         color: "bg-green-500",
       },
       {
-        name: "Control de Cobros",
+        name: "Cobros y Facturación",
         description:
-          "De la orden al cobro en un click. Pagos parciales, comprobantes automáticos y un panel claro de quién te debe y cuánto.",
+          "De la orden al cobro en un click. Pagos parciales, cuotas con recargo, comprobantes automáticos y un panel claro de quién te debe y cuánto.",
         icon: Receipt,
         color: "bg-purple-500",
       },
       {
         name: "Sistema de Garantías",
         description:
-          "Sabé en todo momento qué garantías están vigentes, cuáles vencen pronto y qué reclamos tenés pendientes. Sin perder nada.",
+          "Garantías vigentes, vencimientos, reclamos pendientes y reingresos vinculados a la orden original. Todo trazable, sin perder nada.",
         icon: ShieldCheck,
         color: "bg-red-500",
+      },
+    ],
+  },
+  {
+    id: "ventas",
+    name: "Ventas",
+    icon: ShoppingCart,
+    description: "Vendé productos y gestioná tu equipo comercial",
+    features: [
+      {
+        name: "Punto de Venta",
+        description:
+          "Registrá ventas de accesorios y repuestos con garantía por producto, múltiples medios de pago y gestión de devoluciones incluida.",
+        icon: ShoppingCart,
+        color: "bg-teal-500",
+      },
+      {
+        name: "Proveedores",
+        description:
+          "Gestioná tus proveedores con datos de contacto, WhatsApp y notas. Sabé a quién pedirle cada repuesto sin buscar en la agenda.",
+        icon: Truck,
+        color: "bg-lime-600",
+      },
+      {
+        name: "Equipo Comercial",
+        description:
+          "Técnicos, vendedores y administradores con roles diferenciados. Medí el rendimiento de cada uno con métricas individuales.",
+        icon: UserCheck,
+        color: "bg-violet-500",
+      },
+      {
+        name: "Modo Kiosco",
+        description:
+          "Mostrá el estado de las reparaciones en una pantalla en tu local. Tu cliente ve el avance sin preguntar. Personalizable y sin login.",
+        icon: Monitor,
+        color: "bg-sky-500",
       },
     ],
   },
@@ -99,11 +141,11 @@ const categories = [
     description: "Optimiza tu equipo y toma mejores decisiones",
     features: [
       {
-        name: "Gestión de Equipo",
+        name: "15+ Reportes Avanzados",
         description:
-          "Asigná reparaciones a cada técnico, equilibrá la carga de trabajo y medí el rendimiento con métricas claras.",
-        icon: Wrench,
-        color: "bg-rose-500",
+          "Rentabilidad, predicción de repuestos, fallas comunes, tiempos de reparación, tasa de retorno, rendimiento por técnico y mucho más.",
+        icon: BarChart3,
+        color: "bg-cyan-500",
       },
       {
         name: "Notificaciones por WhatsApp",
@@ -113,16 +155,16 @@ const categories = [
         color: "bg-yellow-500",
       },
       {
-        name: "Reportes y Métricas",
+        name: "Firma Digital",
         description:
-          "¿Tu taller crece o pierde plata? Ingresos, tiempos promedio de reparación y rendimiento del equipo en un vistazo.",
-        icon: BarChart3,
-        color: "bg-cyan-500",
+          "Capturá la firma del cliente en la entrega y en la aprobación de presupuestos. Ante cualquier reclamo, tenés el respaldo.",
+        icon: PenLine,
+        color: "bg-rose-500",
       },
       {
-        name: "App Móvil (PWA)",
+        name: "App Móvil + Offline",
         description:
-          "¿Usás iPhone o no querés instalar nada? Accedé igual desde cualquier dispositivo, incluso sin conexión.",
+          "App nativa para Android, PWA para cualquier dispositivo y modo offline que sincroniza cuando volvés a tener conexión.",
         icon: Smartphone,
         color: "bg-pink-500",
       },
@@ -147,9 +189,9 @@ export function Features() {
               Menos caos, más reparaciones
             </h2>
             <p className="text-lg text-muted-foreground">
-              Todo lo que pasa en tu taller, en una sola pantalla. Fotos por
-              etapa, firma digital, WhatsApp integrado y control de garantías
-              — pensado para talleres de reparación, no adaptado de otro rubro.
+              Todo lo que pasa en tu taller, en una sola pantalla. Reparaciones,
+              ventas, cotizaciones, seguimiento online para clientes, reportes
+              avanzados y más — pensado para talleres de reparación, no adaptado de otro rubro.
             </p>
           </m.div>
 

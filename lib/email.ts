@@ -615,3 +615,99 @@ export async function sendCotizacionEmail({
     }),
   })
 }
+
+// ============================================
+// NOTIFICACIÓN DE NUEVO LEAD (Chatbot)
+// ============================================
+interface SendNewLeadNotificationParams {
+  nombre?: string | null
+  email?: string | null
+  telefono?: string | null
+  empresa?: string | null
+  interes?: string | null
+  origen: string
+}
+
+export async function sendNewLeadNotification({
+  nombre,
+  email,
+  telefono,
+  empresa,
+  interes,
+  origen,
+}: SendNewLeadNotificationParams) {
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
+  const adminEmail = process.env.LEAD_NOTIFICATION_EMAIL || process.env.EMAIL_FROM || "contacto@stapp.com.ar"
+  const leadsUrl = `https://${rootDomain}/leads`
+
+  const contactDetails = [
+    nombre ? `<strong>Nombre:</strong> ${nombre}` : null,
+    email ? `<strong>Email:</strong> <a href="mailto:${email}" style="color: #3b82f6;">${email}</a>` : null,
+    telefono ? `<strong>Teléfono:</strong> <a href="https://wa.me/${telefono.replace(/\D/g, "")}" style="color: #25D366;">${telefono}</a>` : null,
+    empresa ? `<strong>Empresa:</strong> ${empresa}` : null,
+    interes ? `<strong>Interés:</strong> ${interes}` : null,
+  ]
+    .filter(Boolean)
+    .map((line) => `<p class="text-body" style="color: #4b5563; font-size: 15px; margin: 4px 0;">${line}</p>`)
+    .join("")
+
+  const content = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td align="center" style="padding-bottom: 24px;">
+          <table role="presentation" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%); width: 80px; height: 80px; border-radius: 50%; text-align: center; vertical-align: middle; font-size: 36px;">
+                &#127775;
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+      <tr>
+        <td align="center">
+          <h1 class="text-heading" style="color: #1f2937; font-size: 24px; font-weight: 700; margin: 0 0 8px 0;">
+            Nuevo lead desde ${origen}
+          </h1>
+        </td>
+      </tr>
+    </table>
+
+    <p class="text-body" style="color: #4b5563; font-size: 16px; text-align: center; margin: 16px 0 0 0;">
+      Un potencial cliente dejó sus datos de contacto.
+    </p>
+
+    ${getInfoCard(`
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td>
+            <p class="text-muted" style="color: #6b7280; font-size: 12px; margin: 0 0 12px 0; text-transform: uppercase; letter-spacing: 1px;">
+              Datos del lead
+            </p>
+            ${contactDetails}
+          </td>
+        </tr>
+      </table>
+    `)}
+
+    ${getButton(leadsUrl, "Ver lead en el dashboard", "#22c55e")}
+
+    ${getDivider()}
+
+    <p class="text-muted" style="color: #9ca3af; font-size: 13px; text-align: center; margin: 0;">
+      Respondé lo antes posible para no perder este potencial cliente.
+    </p>
+  `
+
+  return sendEmail({
+    to: adminEmail,
+    subject: `Nuevo lead: ${nombre || email || telefono || "Sin identificar"} - STApp`,
+    html: getBaseTemplate({
+      preheader: `Nuevo lead desde ${origen}: ${nombre || email || telefono || "contacto pendiente"}`,
+      headerGradient: "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)",
+      content,
+      rootDomain,
+      footerText: "Recibiste este correo porque un potencial cliente dejó sus datos en STApp.",
+    }),
+  })
+}
