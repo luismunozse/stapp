@@ -8,6 +8,7 @@ import { dailyReminders, checkExpiringWarranties } from "./functions/daily-remin
 import { cleanupNotifications } from "./functions/cleanup-notifications"
 import { lifecycleEmails, calculateEngagement } from "./functions/lifecycle-emails"
 import { calculateFeatureUsage } from "./functions/feature-usage"
+import { trialManagement } from "./functions/trial-management"
 
 // Exportar array de funciones para el handler
 export const functions = [
@@ -18,6 +19,7 @@ export const functions = [
   lifecycleEmails,
   calculateEngagement,
   calculateFeatureUsage,
+  trialManagement,
 ]
 
 // Helper para enviar notificación

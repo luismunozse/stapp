@@ -135,6 +135,8 @@ export type LifecycleEmailType =
   | "TRIAL_EXPIRING_5"
   | "TRIAL_EXPIRING_1"
   | "TRIAL_EXPIRED"
+  | "TRIAL_AUTO_EXTENDED"
+  | "TRIAL_LAST_CHANCE"
   | "WIN_BACK_7"
   | "WIN_BACK_30"
   | "MILESTONE"
@@ -417,6 +419,23 @@ export function getLifecycleEmail(type: LifecycleEmailType, data: LifecycleEmail
             </p>
 
             ${button(appUrl, "Seguir trabajando")}
+          `,
+        }),
+      }
+
+    default:
+      return {
+        subject: "Novedades de STApp",
+        html: baseTemplate({
+          preheader: `${data.nombre}, tenes novedades en STApp`,
+          content: `
+            <h1 class="text-heading" style="color: #1f2937; font-size: 24px; font-weight: 700; text-align: center; margin: 0 0 16px 0;">
+              Novedades en STApp
+            </h1>
+            <p class="text-body" style="color: #4b5563; font-size: 16px; text-align: center; margin: 0 0 24px 0;">
+              Hola <strong>${data.nombre}</strong>, entra a tu cuenta para ver las novedades.
+            </p>
+            ${button(appUrl, "Ir a STApp")}
           `,
         }),
       }

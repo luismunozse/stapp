@@ -112,6 +112,8 @@ const EMAIL_TYPE_LABELS: Record<string, string> = {
   TRIAL_EXPIRING_5: "Trial -5 dias",
   TRIAL_EXPIRING_1: "Trial -1 dia",
   TRIAL_EXPIRED: "Trial expirado",
+  TRIAL_AUTO_EXTENDED: "Auto-extension",
+  TRIAL_LAST_CHANCE: "Ultima oportunidad",
   WIN_BACK_7: "Win-back 7d",
   WIN_BACK_30: "Win-back 30d",
 }
