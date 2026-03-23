@@ -24,6 +24,8 @@ import {
   Newspaper,
   MailCheck,
   Puzzle,
+  MessageCircle,
+  UserSearch,
 } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import { cn } from "@/lib/utils"
@@ -38,6 +40,8 @@ const navItems = [
   { href: "/superadmin/suscripciones", label: "Suscripciones", icon: CreditCard },
   { href: "/superadmin/pagos", label: "Pagos", icon: Receipt },
   { href: "/superadmin/planes", label: "Planes", icon: Package },
+  { href: "/superadmin/leads", label: "Leads", icon: UserSearch },
+  { href: "/superadmin/conversaciones", label: "Chatbot", icon: MessageCircle },
   { href: "/superadmin/soporte", label: "Soporte", icon: Headset },
   { href: "/superadmin/engagement", label: "Engagement", icon: HeartPulse },
   { href: "/superadmin/lifecycle-emails", label: "Lifecycle Emails", icon: MailCheck },
