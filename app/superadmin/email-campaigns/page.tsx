@@ -59,19 +59,32 @@ const ROOT_DOMAIN = "stapp.com.ar"
 
 const TEMPLATES: Record<string, { subject: string; body: string }> = {
   trial_expired: {
-    subject: "Tu prueba termino pero tus datos te esperan",
+    subject: "Te damos 7 dias mas para que pruebes STApp",
     body: `Hola {{nombre}},
 
-Tu periodo de prueba en {{organizacion}} termino, pero todos tus datos siguen seguros.
+Vimos que tu periodo de prueba en {{organizacion}} termino y no queremos que te quedes sin conocer todo lo que STApp puede hacer por tu negocio.
 
-Suscribite al plan Premium para retomar donde dejaste:
-- Ordenes ilimitadas
-- Notificaciones por WhatsApp
-- Soporte prioritario
+Por eso, te reactivamos la cuenta por 7 dias mas para que puedas probar todas las funcionalidades sin compromiso.
 
-Entra a https://{{slug}}.${ROOT_DOMAIN}/suscripcion para activar tu cuenta.
+Esto es lo que podes hacer ahora mismo:
 
-Necesitas ayuda? Responde a este correo.
+- Cargar ordenes de servicio reales y hacer el seguimiento completo
+- Enviar notificaciones automaticas por WhatsApp a tus clientes
+- Generar presupuestos con firma digital desde el celular
+- Cobrar ordenes con multiples metodos de pago y cuotas
+- Controlar tu inventario de repuestos y accesorios
+- Registrar ventas por mostrador
+- Ver reportes y metricas de tu negocio en tiempo real
+- Compartir el seguimiento publico de cada orden con tus clientes
+- Gestionar garantias con certificado digital
+
+Tu cuenta ya esta activa. Solo tenes que entrar:
+
+https://{{slug}}.${ROOT_DOMAIN}
+
+Todos tus datos anteriores siguen ahi, tal como los dejaste.
+
+Si tenes alguna duda o necesitas ayuda para arrancar, responde a este correo y te ayudamos.
 
 Saludos,
 El equipo de STApp`,
@@ -132,7 +145,7 @@ El equipo de STApp`,
 }
 
 const TEMPLATE_LABELS: Record<string, string> = {
-  trial_expired: "Trial vencido - Volver a activar",
+  trial_expired: "Trial vencido - 7 dias mas",
   trial_expiring: "Trial por vencer - Suscribirse",
   win_back: "Win-back - Te extrañamos",
   upgrade: "Oferta de upgrade",
@@ -276,9 +289,9 @@ export default function EmailCampaignsPage() {
   const getPreviewHtml = () => {
     const sampleOrg = selectedSegment?.orgs[0]
     return body
-      .replace(/\{\{nombre\}\}/g, "Juan Perez")
-      .replace(/\{\{organizacion\}\}/g, sampleOrg?.nombre || "Mi Servicio Tecnico")
-      .replace(/\{\{slug\}\}/g, sampleOrg?.slug || "mi-servicio")
+      .replace(/\{\{nombre\}\}/g, "[Nombre del admin]")
+      .replace(/\{\{organizacion\}\}/g, sampleOrg?.nombre || "[Nombre de la org]")
+      .replace(/\{\{slug\}\}/g, sampleOrg?.slug || "[slug]")
   }
 
   const segments = data?.segments || []
