@@ -263,7 +263,7 @@ export function getLifecycleEmail(type: LifecycleEmailType, data: LifecycleEmail
             ${tipCard("👥", "Tecnicos y vendedores ilimitados", "Agrega todo tu equipo sin restricciones.")}
             ${tipCard("💬", "Notificaciones WhatsApp", "Comunicacion automatica con tus clientes.")}
 
-            ${button(appUrl + "/suscripcion", "Ver planes y precios", "#f59e0b")}
+            ${button(appUrl + "/suscripcion-requerida", "Ver planes y precios", "#f59e0b")}
           `,
         }),
       }
@@ -296,7 +296,7 @@ export function getLifecycleEmail(type: LifecycleEmailType, data: LifecycleEmail
               Todos tus datos se conservan. Solo necesitas activar tu plan para seguir usandolos.
             </p>
 
-            ${button(appUrl + "/suscripcion", "Suscribirme ahora", "#ef4444")}
+            ${button(appUrl + "/suscripcion-requerida", "Suscribirme ahora", "#ef4444")}
 
             <p class="text-muted" style="color: #9ca3af; font-size: 13px; text-align: center; margin: 24px 0 0 0;">
               Necesitas ayuda? Responde a este correo y te ayudamos.
@@ -329,7 +329,7 @@ export function getLifecycleEmail(type: LifecycleEmailType, data: LifecycleEmail
               </tr>
             </table>
 
-            ${button(appUrl + "/suscripcion", "Activar mi cuenta")}
+            ${button(appUrl + "/suscripcion-requerida", "Activar mi cuenta")}
           `,
         }),
       }

@@ -97,7 +97,7 @@ Tu periodo de prueba en {{organizacion}} esta por terminar.
 
 No pierdas el acceso a tu cuenta y todos los datos que cargaste. Suscribite al plan Premium para seguir usando STApp sin interrupciones.
 
-Entra a https://{{slug}}.${ROOT_DOMAIN}/suscripcion para ver los planes.
+Entra a https://{{slug}}.${ROOT_DOMAIN}/suscripcion-requerida para ver los planes.
 
 Saludos,
 El equipo de STApp`,
@@ -128,7 +128,7 @@ Tenemos una oferta especial para {{organizacion}}. Suscribite al plan Premium y 
 - Notificaciones automaticas por WhatsApp
 - Soporte prioritario
 
-Entra a https://{{slug}}.${ROOT_DOMAIN}/suscripcion para ver los planes.
+Entra a https://{{slug}}.${ROOT_DOMAIN}/suscripcion-requerida para ver los planes.
 
 Saludos,
 El equipo de STApp`,
