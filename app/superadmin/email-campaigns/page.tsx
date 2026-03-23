@@ -78,9 +78,9 @@ Esto es lo que podés hacer ahora mismo:
 - Compartir el seguimiento público de cada orden con tus clientes
 - Gestionar garantías con certificado digital
 
-Tu cuenta ya está activa. Solo tenés que entrar:
+Solo tenés que hacer clic acá para reactivar tu cuenta:
 
-https://{{slug}}.${ROOT_DOMAIN}
+https://{{slug}}.${ROOT_DOMAIN}/reactivar
 
 Todos tus datos anteriores siguen ahí, tal como los dejaste.
 

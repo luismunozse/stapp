@@ -134,19 +134,33 @@ describe('validateInventarioRow', () => {
     expect(result.data?.stock).toBe(10)
   })
 
-  it('rechaza tipo de dispositivo invalido', () => {
+  it('acepta tipos de dispositivo personalizados (custom types)', () => {
     const row = {
       codigo: 'PROD001',
       nombre: 'Producto',
       categoria: 'Cat',
-      tipoDispositivo: 'INVALIDO',
+      tipoDispositivo: 'IMPRESORA',
+      stock: '10',
+      precioCompra: '100',
+      precioVenta: '150',
+    }
+    const result = validateInventarioRow(row, 0)
+    // tipoDispositivo ahora acepta cualquier string (tipos personalizados)
+    expect(result.valid).toBe(true)
+  })
+
+  it('rechaza tipo de dispositivo vacío', () => {
+    const row = {
+      codigo: 'PROD001',
+      nombre: 'Producto',
+      categoria: 'Cat',
+      tipoDispositivo: '',
       stock: '10',
       precioCompra: '100',
       precioVenta: '150',
     }
     const result = validateInventarioRow(row, 0)
     expect(result.valid).toBe(false)
-    expect(result.error).toContain('Tipo de dispositivo')
   })
 
   it('acepta todos los tipos validos', () => {

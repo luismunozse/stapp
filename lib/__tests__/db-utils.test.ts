@@ -168,6 +168,7 @@ describe('formatCliente', () => {
       tipoCliente: 'INDIVIDUAL',
       razonSocial: undefined,
       cuit: undefined,
+      saldoCuenta: 0,
       organizationId: 'org-1',
       createdAt: '2024-01-01',
       updatedAt: '2024-01-02',

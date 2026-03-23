@@ -59,8 +59,8 @@ export const calculateFeatureUsage = inngest.createFunction(
           supabaseAdmin.from("ordenes_servicio").select("id", { count: "exact", head: true }).eq("organization_id", org.id).not("public_token", "is", null),
           // Kiosco: check config
           supabaseAdmin.from("organizations").select("kiosco_habilitado").eq("id", org.id).single(),
-          supabaseAdmin.from("users").select("id", { count: "exact", head: true }).eq("organization_id", org.id).eq("role", "TECNICO"),
-          supabaseAdmin.from("users").select("id", { count: "exact", head: true }).eq("organization_id", org.id).eq("role", "VENDEDOR"),
+          supabaseAdmin.from("users").select("id", { count: "exact", head: true }).eq("organization_id", org.id).eq("rol", "TECNICO"),
+          supabaseAdmin.from("users").select("id", { count: "exact", head: true }).eq("organization_id", org.id).eq("rol", "VENDEDOR"),
           supabaseAdmin.from("clientes").select("id", { count: "exact", head: true }).eq("organization_id", org.id),
         ])
 

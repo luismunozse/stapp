@@ -35,7 +35,7 @@ describe("POST /api/facturacion/generar", () => {
     const { status, body } = await parseResponse(response)
 
     expect(status).toBe(403)
-    expect(body.error).toContain("Solo administradores")
+    expect(body.error).toContain("Acceso denegado")
   })
 
   it("returns 400 when ordenId is missing", async () => {

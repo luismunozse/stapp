@@ -177,7 +177,7 @@ describe("POST /api/ventas", () => {
     const { status, body } = await parseResponse(response)
 
     expect(status).toBe(403)
-    expect(body.error).toContain("No autorizado")
+    expect(body.error).toContain("Acceso denegado")
   })
 
   it("validates required fields", async () => {

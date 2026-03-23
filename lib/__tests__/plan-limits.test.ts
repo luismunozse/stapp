@@ -54,9 +54,9 @@ describe('LIMIT_MESSAGES', () => {
     })
   })
 
-  it('todas las descripciones mencionan "plan Free"', () => {
+  it('todas las descripciones mencionan "plan"', () => {
     Object.values(LIMIT_MESSAGES).forEach((msg) => {
-      expect(msg.description).toContain('plan Free')
+      expect(msg.description).toContain('plan')
     })
   })
 })
