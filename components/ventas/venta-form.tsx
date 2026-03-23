@@ -15,9 +15,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useModal } from "@/contexts/modal-context"
-import { Plus, Trash2, Package, Search, Loader2, Banknote, ArrowRightLeft, CreditCard, Wallet, MoreHorizontal } from "lucide-react"
+import { Plus, Trash2, Package, Search, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useCurrency } from "@/contexts/currency-context"
+import { useOffline } from "@/contexts/offline-context"
+import { STORES } from "@/lib/offline/constants"
+import { MultiPagoInput, createPagoLine, type PagoLineItem } from "@/components/pagos/multi-pago-input"
 
 const clienteSchema = z.object({
   nombre: z.string()
@@ -47,17 +50,6 @@ const itemSchema = z.object({
   porcentajeDescuento: z.number().min(0).max(100).default(0),
 })
 
-const METODOS_PAGO = [
-  { value: "EFECTIVO", label: "Efectivo", icon: Banknote },
-  { value: "TRANSFERENCIA", label: "Transferencia", icon: ArrowRightLeft },
-  { value: "TARJETA_DEBITO", label: "Tarjeta Débito", icon: CreditCard },
-  { value: "TARJETA_CREDITO", label: "Tarjeta Crédito", icon: CreditCard },
-  { value: "MERCADOPAGO", label: "MercadoPago", icon: Wallet },
-  { value: "OTRO", label: "Otro", icon: MoreHorizontal },
-] as const
-
-type MetodoPago = typeof METODOS_PAGO[number]["value"]
-
 const ventaSchema = z.object({
   clienteId: z.string().nullable().optional(),
   clienteNombre: z.string().min(1, "Nombre del cliente requerido"),
@@ -66,11 +58,12 @@ const ventaSchema = z.object({
   descuento: z.number().min(0).default(0),
   tipoDescuento: z.enum(["MONTO", "PORCENTAJE"]).default("MONTO"),
   porcentajeDescuento: z.number().min(0).max(100).default(0),
-  metodoPago: z.enum(["EFECTIVO", "TRANSFERENCIA", "TARJETA", "TARJETA_DEBITO", "TARJETA_CREDITO", "MERCADOPAGO", "OTRO"]),
+  metodoPago: z.enum(["EFECTIVO", "TRANSFERENCIA", "TARJETA", "TARJETA_DEBITO", "TARJETA_CREDITO", "MERCADOPAGO", "CUENTA_CORRIENTE", "OTRO"]),
   observaciones: z.string().optional(),
   cuotas: z.number().int().min(1).nullable().optional(),
   recargoPorcentaje: z.number().min(0).max(100).nullable().optional(),
   numeroReferencia: z.string().optional(),
+  pagosParcial: z.boolean().default(false), // si es pago parcial (dejar saldo pendiente)
 })
 
 type VentaFormData = z.infer<typeof ventaSchema>
@@ -121,6 +114,7 @@ interface VentaFormProps {
 export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
   const { showError } = useModal()
   const { formatPrice } = useCurrency()
+  const { offlineFetch } = useOffline()
   const [loading, setLoading] = useState(false)
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [invResults, setInvResults] = useState<Record<number, Inventario[]>>({})
@@ -133,6 +127,8 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
   const [showClienteModal, setShowClienteModal] = useState(false)
   const [clienteLoading, setClienteLoading] = useState(false)
   const clienteDropdownRef = useRef<HTMLDivElement>(null)
+  const [pagosLines, setPagosLines] = useState<PagoLineItem[]>([createPagoLine(0)])
+  const [saldoCuenta, setSaldoCuenta] = useState(0)
 
   // Cerrar dropdowns al hacer click afuera
   useEffect(() => {
@@ -194,13 +190,8 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
   const watchDescuento = watch("descuento") || 0
   const watchTipoDescuento = watch("tipoDescuento")
   const watchPorcentajeDescuento = watch("porcentajeDescuento") || 0
-  const watchMetodoPago = watch("metodoPago")
-  const watchCuotas = watch("cuotas")
-  const watchRecargo = watch("recargoPorcentaje")
-
-  const showReferencia = watchMetodoPago === "TRANSFERENCIA" || watchMetodoPago === "MERCADOPAGO"
-  const showCuotas = watchMetodoPago === "TARJETA_CREDITO"
-  const showRecargo = watchMetodoPago === "TARJETA_CREDITO" || watchMetodoPago === "TARJETA_DEBITO"
+  const watchClienteId = watch("clienteId")
+  const watchPagosParcial = watch("pagosParcial")
 
   const subtotal = watchItems.reduce(
     (sum, item) => sum + (item.cantidad || 0) * (item.precioUnitario || 0),
@@ -267,6 +258,26 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
     return invResults[index] || []
   }
 
+  // Fetch saldo cuenta corriente cuando cambia el cliente
+  useEffect(() => {
+    if (!watchClienteId) {
+      setSaldoCuenta(0)
+      return
+    }
+    const fetchSaldo = async () => {
+      try {
+        const res = await fetch(`/api/clientes/${watchClienteId}/cuenta-corriente`)
+        if (res.ok) {
+          const data = await res.json()
+          setSaldoCuenta(data.saldo || 0)
+        }
+      } catch {
+        setSaldoCuenta(0)
+      }
+    }
+    fetchSaldo()
+  }, [watchClienteId])
+
   const selectCliente = (cliente: Cliente) => {
     setValue("clienteId", cliente.id)
     setValue("clienteNombre", cliente.nombre)
@@ -321,28 +332,72 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
     }
   }
 
-  const handleMetodoChange = (value: MetodoPago) => {
-    setValue("metodoPago", value)
-    if (value !== "TARJETA_CREDITO" && value !== "TARJETA_DEBITO") {
-      setValue("cuotas", null)
-      setValue("recargoPorcentaje", null)
+  // Update pagos amounts when total changes
+  useEffect(() => {
+    if (pagosLines.length === 1 && total > 0) {
+      const updated = [...pagosLines]
+      updated[0] = { ...updated[0], monto: total }
+      setPagosLines(updated)
     }
-    if (value !== "TRANSFERENCIA" && value !== "MERCADOPAGO") {
-      setValue("numeroReferencia", "")
-    }
-    if (value === "TARJETA_CREDITO") {
-      setValue("cuotas", 1)
-    }
-  }
+  }, [total])
 
   const onSubmit = async (data: VentaFormData) => {
+    // Validar pagos
+    const totalPagos = pagosLines.reduce((sum, p) => sum + (p.monto || 0), 0)
+    if (totalPagos <= 0) {
+      await showError("Debe registrar al menos un pago")
+      return
+    }
+    if (!data.pagosParcial && Math.abs(totalPagos - total) > 0.01) {
+      await showError(`El total de pagos (${formatPrice(totalPagos)}) no coincide con el total de la venta (${formatPrice(total)}). Si desea dejar saldo pendiente, active "Pago parcial".`)
+      return
+    }
+    if (data.pagosParcial && totalPagos > total + 0.01) {
+      await showError("El total de pagos no puede exceder el total de la venta")
+      return
+    }
+    // Validar cuenta corriente
+    const pagoCC = pagosLines.find(p => p.metodo === "CUENTA_CORRIENTE")
+    if (pagoCC && pagoCC.monto > saldoCuenta) {
+      await showError(`El monto de cuenta corriente (${formatPrice(pagoCC.monto)}) excede el saldo disponible (${formatPrice(saldoCuenta)})`)
+      return
+    }
+    if (pagoCC && !data.clienteId) {
+      await showError("Debe seleccionar un cliente registrado para usar cuenta corriente")
+      return
+    }
+
     setLoading(true)
     try {
-      const res = await fetch("/api/ventas", {
+      // Set primary metodo_pago from first payment line
+      data.metodoPago = pagosLines[0].metodo as any
+
+      const payload = {
+        ...data,
+        pagos: pagosLines.map(p => ({
+          metodo: p.metodo,
+          monto: p.monto,
+          referencia: p.referencia || null,
+          cuotas: p.cuotas,
+          recargo: p.recargo,
+          montoOriginal: p.montoOriginal,
+        })),
+      }
+
+      const res = await offlineFetch("/api/ventas", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      })
+        body: JSON.stringify(payload),
+      }, { store: STORES.SALES, description: `Venta - ${payload.items?.length || 0} items` })
+
+      if (res.status === 202) {
+        // Queued offline
+        alert("Venta guardada offline. Se sincronizará automáticamente cuando vuelva la conexión.")
+        reset()
+        setPagosLines([createPagoLine(0)])
+        onSuccess({ id: "offline", numeroVenta: "PENDIENTE" } as any)
+        return
+      }
 
       if (!res.ok) {
         const error = await res.json()
@@ -368,6 +423,8 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
       }
 
       reset()
+      setPagosLines([createPagoLine(0)])
+      setSaldoCuenta(0)
       onOpenChange(false)
       onSuccess(ventaCreada)
     } catch (error) {
@@ -588,82 +645,25 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
           {/* Totales y Pago */}
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-4 rounded-lg border p-4">
-              <h3 className="font-medium">Método de Pago</h3>
-              <div className="grid grid-cols-3 sm:grid-cols-3 gap-2">
-                {METODOS_PAGO.map(({ value, label, icon: Icon }) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => handleMetodoChange(value)}
-                    className={cn(
-                      "flex flex-col items-center gap-1 p-2.5 rounded-lg border-2 text-center transition-all text-xs",
-                      watchMetodoPago === value
-                        ? "border-primary bg-primary/5 text-primary font-medium"
-                        : "border-border hover:border-muted-foreground/30 text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    <Icon className="h-4 w-4" />
-                    <span className="leading-tight">{label}</span>
-                  </button>
-                ))}
-              </div>
+              <h3 className="font-medium">Pago</h3>
 
-              {/* Cuotas y recargo para tarjeta crédito */}
-              {showCuotas && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs">Cuotas</Label>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={48}
-                      placeholder="1"
-                      {...register("cuotas", { valueAsNumber: true })}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Recargo %</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min={0}
-                      max={100}
-                      placeholder="0"
-                      {...register("recargoPorcentaje", { valueAsNumber: true })}
-                    />
-                  </div>
-                </div>
-              )}
+              {/* Checkbox pago parcial */}
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="rounded border-gray-300"
+                  {...register("pagosParcial")}
+                />
+                <span className="text-muted-foreground">Pago parcial (dejar saldo pendiente)</span>
+              </label>
 
-              {/* Recargo solo débito */}
-              {watchMetodoPago === "TARJETA_DEBITO" && (
-                <div className="space-y-1">
-                  <Label className="text-xs">Recargo % (si aplica)</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min={0}
-                    max={100}
-                    placeholder="0"
-                    {...register("recargoPorcentaje", { valueAsNumber: true })}
-                  />
-                </div>
-              )}
-
-              {/* Referencia para transferencia/mercadopago */}
-              {showReferencia && (
-                <div className="space-y-1">
-                  <Label className="text-xs">Nro. de referencia</Label>
-                  <Input
-                    {...register("numeroReferencia")}
-                    placeholder={
-                      watchMetodoPago === "TRANSFERENCIA"
-                        ? "CBU, alias o nro. de operación"
-                        : "Nro. de operación MercadoPago"
-                    }
-                  />
-                </div>
-              )}
+              <MultiPagoInput
+                montoPendiente={total}
+                pagos={pagosLines}
+                onChange={setPagosLines}
+                saldoCuenta={saldoCuenta}
+                showCuentaCorriente={!!watchClienteId && saldoCuenta > 0}
+              />
 
               <div className="space-y-2">
                 <Label>Descuento</Label>
@@ -750,6 +750,26 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
                   <span className="text-primary">{formatPrice(total)}</span>
                 </div>
               </div>
+
+              {/* Detalle de pagos */}
+              {(() => {
+                const totalPagos = pagosLines.reduce((sum, p) => sum + (p.monto || 0), 0)
+                const pendiente = total - totalPagos
+                return totalPagos > 0 && (
+                  <div className="space-y-1 border-t pt-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Total pagos:</span>
+                      <span className="font-medium text-green-600">{formatPrice(totalPagos)}</span>
+                    </div>
+                    {pendiente > 0.01 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Pendiente:</span>
+                        <span className="font-medium text-red-600">{formatPrice(pendiente)}</span>
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
 
               <div className="text-xs text-muted-foreground">
                 {watchItems.filter((i) => i.diasGarantia > 0).length > 0 && (

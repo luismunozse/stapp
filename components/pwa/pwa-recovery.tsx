@@ -139,13 +139,7 @@ export function PWARecovery() {
         </div>
       )}
 
-      {/* Banner offline */}
-      {!isOnline && (
-        <div className="fixed top-0 left-0 right-0 z-[60] bg-yellow-500 text-yellow-950 px-4 py-2 flex items-center justify-center gap-2 text-sm font-medium">
-          <WifiOff className="h-4 w-4" />
-          <span>Sin conexión - Trabajando offline</span>
-        </div>
-      )}
+      {/* Banner offline ahora lo maneja OfflineBanner del contexto offline */}
 
       {/* Hint de refresh para pantalla blanca */}
       {showRefreshHint && (

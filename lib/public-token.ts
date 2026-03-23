@@ -16,9 +16,14 @@ export async function getOrderByPublicToken(
     }
   }
 
+  // Ensure public_token_expires_at is always selected for expiry check
+  const fullSelect = select.includes("public_token_expires_at")
+    ? select
+    : `${select}, public_token_expires_at`
+
   const { data: orden, error: dbError } = await supabaseAdmin
     .from("ordenes_servicio")
-    .select(select)
+    .select(fullSelect)
     .eq("public_token", token)
     .single()
 
@@ -26,6 +31,14 @@ export async function getOrderByPublicToken(
     return {
       orden: null,
       error: NextResponse.json({ error: "Orden no encontrada" }, { status: 404 }),
+    }
+  }
+
+  // Verificar expiración del token público
+  if ((orden as any).public_token_expires_at && new Date((orden as any).public_token_expires_at) < new Date()) {
+    return {
+      orden: null,
+      error: NextResponse.json({ error: "El enlace de seguimiento ha expirado" }, { status: 410 }),
     }
   }
 

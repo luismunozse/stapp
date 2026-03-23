@@ -38,6 +38,7 @@ const ordenSchema = z.object({
   // Nuevos campos para presupuesto aceptado
   presupuestoAceptado: z.boolean().optional(),
   sena: z.number().optional(),
+  metodoPagoSena: z.string().optional(),
   metadata: z.record(z.any()).optional(),
   sectorId: z.string().optional(),
 })
@@ -220,6 +221,7 @@ export async function POST(request: Request) {
         estado: estadoInicial,
         costo_final: costoFinal,
         sena: data.sena || 0,
+        metodo_pago_sena: data.metodoPagoSena || "EFECTIVO",
         metadata: data.metadata || {},
         sector_id: data.sectorId || null,
       })
@@ -231,6 +233,19 @@ export async function POST(request: Request) {
 
     if (dbError) {
       throw dbError
+    }
+
+    // Si hay seña, crear cobro_orden y actualizar total_cobrado
+    if (data.sena && data.sena > 0) {
+      await supabaseAdmin.from("cobros_orden").insert({
+        orden_id: orden.id,
+        organization_id: organizationId!,
+        monto: data.sena,
+        metodo_pago: data.metodoPagoSena || "EFECTIVO",
+        observaciones: "Seña al ingreso del equipo",
+        usuario_id: userId!,
+      })
+      await supabaseAdmin.rpc("recalcular_estado_cobro", { p_orden_id: orden.id })
     }
 
     // Subir fotos de ingreso si se proporcionaron

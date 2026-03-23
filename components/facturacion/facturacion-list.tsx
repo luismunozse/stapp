@@ -223,6 +223,7 @@ export function FacturacionList() {
                       facturaId={factura.id}
                       total={factura.total}
                       montoAbonado={factura.montoAbonado || 0}
+                      clienteId={factura.orden?.cliente?.id}
                       onClose={() => setShowPagoForm(null)}
                       onSuccess={() => {
                         setShowPagoForm(null)

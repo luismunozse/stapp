@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { SignaturePad } from "@/components/firma/signature-pad"
-import { Loader2, PackageCheck } from "lucide-react"
+import { Loader2, PackageCheck, AlertTriangle } from "lucide-react"
 
 interface EntregaDialogProps {
   open: boolean
@@ -27,6 +27,8 @@ interface EntregaDialogProps {
       nombre: string
       telefono: string
     }
+    estadoCobro?: string
+    pendienteCobro?: number
   }
   encargadoNombre: string
 }
@@ -45,6 +47,9 @@ export function EntregaDialog({
   const [firmaEncargadoMime, setFirmaEncargadoMime] = useState<string | null>(null)
   const [notasEntrega, setNotasEntrega] = useState("")
   const [error, setError] = useState<string | null>(null)
+  const [entregarSinCobro, setEntregarSinCobro] = useState(false)
+
+  const tienePendiente = orden.estadoCobro && orden.estadoCobro !== "COBRADO" && (orden.pendienteCobro || 0) > 0
 
   const handleFirmaClienteChange = (data: string | null, mime: string | null) => {
     setFirmaCliente(data)
@@ -108,6 +113,7 @@ export function EntregaDialog({
       setFirmaEncargadoMime(null)
       setNotasEntrega("")
       setError(null)
+      setEntregarSinCobro(false)
       onClose()
     }
   }
@@ -128,6 +134,32 @@ export function EntregaDialog({
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* Alerta/Bloqueo si no está cobrado */}
+          {orden.estadoCobro && orden.estadoCobro !== "COBRADO" && orden.pendienteCobro && orden.pendienteCobro > 0 && (
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-sm">
+              <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
+              <div>
+                <p className="font-medium text-red-800 dark:text-red-300">
+                  Cobro pendiente: {orden.pendienteCobro?.toLocaleString("es-AR", { style: "currency", currency: "ARS" })}
+                </p>
+                <p className="text-red-700 dark:text-red-400 text-xs mt-0.5">
+                  Se recomienda cobrar antes de entregar. Para entregar sin cobro completo, marque la casilla a continuación.
+                </p>
+                <label className="flex items-center gap-2 mt-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={entregarSinCobro}
+                    onChange={(e) => setEntregarSinCobro(e.target.checked)}
+                    className="rounded border-red-300"
+                  />
+                  <span className="text-xs text-red-700 dark:text-red-400">
+                    Confirmo la entrega sin cobro completo
+                  </span>
+                </label>
+              </div>
+            </div>
+          )}
+
           <div className="bg-muted/50 p-3 rounded-lg text-sm">
             <p><strong>Cliente:</strong> {orden.cliente.nombre}</p>
             <p><strong>Telefono:</strong> {orden.cliente.telefono}</p>
@@ -182,7 +214,7 @@ export function EntregaDialog({
             </Button>
             <Button
               onClick={handleConfirmar}
-              disabled={loading || !firmaCliente || !firmaEncargado}
+              disabled={loading || !firmaCliente || !firmaEncargado || (!!tienePendiente && !entregarSinCobro)}
             >
               {loading ? (
                 <>

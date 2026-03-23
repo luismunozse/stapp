@@ -29,6 +29,7 @@ import {
   Copy,
   Check,
   ExternalLink,
+  DollarSign,
 } from "lucide-react"
 import Link from "next/link"
 import { useCurrency } from "@/contexts/currency-context"
@@ -43,22 +44,12 @@ import { OrdenEstadoCard } from "@/components/ordenes/orden-estado-card"
 import { OrdenTecnicoCard } from "@/components/ordenes/orden-tecnico-card"
 import { OrdenCostosCard } from "@/components/ordenes/orden-costos-card"
 import { OrdenRepuestosTab } from "@/components/ordenes/orden-repuestos-tab"
+import { CobrarOrdenDialog } from "@/components/ordenes/cobrar-orden-dialog"
 import { PatternDisplay } from "@/components/ui/pattern-display"
 import { useModal } from "@/contexts/modal-context"
 import type { OrdenServicio, EstadoOrden, User as UserType } from "@/types"
 
-const estadoLabels: Record<EstadoOrden, string> = {
-  RECIBIDO: "Recibido",
-  EN_DIAGNOSTICO: "En Diagnóstico",
-  PRESUPUESTADO: "Presupuestado",
-  APROBADO: "Aprobado",
-  EN_REPARACION: "En Reparación",
-  ESPERANDO_REPUESTO: "Esperando Repuesto",
-  REPARADO: "Reparado",
-  ENTREGADO: "Entregado",
-  CANCELADO: "Cancelado",
-  SIN_REPARACION: "Sin Reparación",
-}
+import { ESTADO_LABELS } from "@/lib/orden-state-machine"
 
 // Orden de los estados en el flujo normal
 const estadoFlow: EstadoOrden[] = [
@@ -88,6 +79,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const [downloadingPdf, setDownloadingPdf] = useState(false)
   const [activeTab, setActiveTab] = useState("repuestos")
   const [showEntregaDialog, setShowEntregaDialog] = useState(false)
+  const [showCobrarDialog, setShowCobrarDialog] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
 
   const isAdmin = session?.user?.role === "ADMIN"
@@ -156,7 +148,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
       const label = nuevoEstado === "CANCELADO" ? "Cancelar" : "Marcar Sin Reparación"
       const confirmed = await confirm({
         title: label,
-        description: `¿Estás seguro de cambiar el estado a "${estadoLabels[nuevoEstado]}"? Esta acción puede ser difícil de revertir.`,
+        description: `¿Estás seguro de cambiar el estado a "${ESTADO_LABELS[nuevoEstado]}"? Esta acción puede ser difícil de revertir.`,
         confirmText: label,
         variant: "danger",
       })
@@ -187,6 +179,43 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const handleEntregaSuccess = () => {
     setShowEntregaDialog(false)
     fetchOrden()
+  }
+
+  const handleReingreso = async () => {
+    const confirmed = await confirm({
+      title: "Re-ingreso por Garantía",
+      description: "Se creará una nueva orden vinculada a esta como re-ingreso por garantía. ¿Desea continuar?",
+      confirmText: "Crear Re-ingreso",
+      variant: "info",
+    })
+    if (!confirmed) return
+
+    setUpdating(true)
+    try {
+      const res = await fetch(`/api/ordenes/${ordenId}/reingreso`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          problemaReportado: `Re-ingreso: problema recurrente del equipo`,
+        }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        await alert({
+          title: "Re-ingreso creado",
+          description: `Se creó la orden ${data.codigoOrden || `#${data.numeroOrden}`}`,
+          variant: "success",
+        })
+        router.push(`/ordenes/${data.id}`)
+      } else {
+        const error = await res.json()
+        await alert({ title: "Error", description: error.error || "Error al crear re-ingreso", variant: "error" })
+      }
+    } catch {
+      await alert({ title: "Error", description: "Error al crear re-ingreso", variant: "error" })
+    } finally {
+      setUpdating(false)
+    }
   }
 
   const handleAsignarTecnico = async (tecnicoId: string | null) => {
@@ -420,6 +449,19 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
         </div>
       </div>
 
+      {/* Banner de re-ingreso */}
+      {orden.esReingreso && orden.ordenOrigenId && (
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-sm">
+          <Shield className="h-4 w-4 text-blue-600 shrink-0" />
+          <span className="text-blue-800 dark:text-blue-300">
+            Re-ingreso por garantía — Orden original:{" "}
+            <Link href={`/ordenes/${orden.ordenOrigenId}`} className="underline hover:text-blue-600">
+              ver orden original
+            </Link>
+          </span>
+        </div>
+      )}
+
       {/* Progress Bar */}
       {orden.estado !== "CANCELADO" && orden.estado !== "SIN_REPARACION" && (
         <div className="space-y-2">
@@ -595,6 +637,24 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
 
           {/* Garantía */}
           <GarantiaCard ordenId={ordenId} ordenEstado={orden.estado} />
+
+          {/* Re-ingreso por garantía (solo para órdenes entregadas/reparadas) */}
+          {isAdmin && (orden.estado === "ENTREGADO" || orden.estado === "REPARADO") && !orden.esReingreso && (
+            <Card>
+              <CardContent className="p-4">
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  size="sm"
+                  onClick={handleReingreso}
+                  disabled={updating}
+                >
+                  <Shield className="h-4 w-4 mr-2" />
+                  Crear Re-ingreso por Garantía
+                </Button>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Right Column - Management */}
@@ -669,14 +729,62 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             presupuesto={orden.presupuesto}
             costoFinal={orden.costoFinal}
             sena={orden.sena || 0}
+            totalCobrado={orden.totalCobrado || 0}
+            descuentoCobro={orden.descuentoCobro || 0}
             onUpdateField={handleUpdateField}
           />
 
-          {/* Facturación */}
+          {/* Cobro directo */}
+          {orden.costoFinal && orden.costoFinal > 0 && orden.estado !== "CANCELADO" && orden.estado !== "SIN_REPARACION" && (
+            <Card>
+              <CardContent className="p-4 space-y-3">
+                {/* Estado de cobro */}
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Cobro</span>
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                    orden.estadoCobro === "COBRADO"
+                      ? "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400"
+                      : orden.estadoCobro === "PARCIAL"
+                      ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400"
+                      : "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400"
+                  }`}>
+                    {orden.estadoCobro === "COBRADO" ? "Cobrado" : orden.estadoCobro === "PARCIAL" ? "Parcial" : "Pendiente"}
+                  </span>
+                </div>
+                {/* Resumen rápido */}
+                <div className="text-sm space-y-1">
+                  {(orden.totalCobrado || 0) > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Cobrado:</span>
+                      <span className="text-green-600 font-medium">{formatPrice(orden.totalCobrado || 0)}</span>
+                    </div>
+                  )}
+                  {orden.estadoCobro !== "COBRADO" && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Pendiente:</span>
+                      <span className="text-red-600 font-medium">
+                        {formatPrice(orden.costoFinal - (orden.descuentoCobro || 0) - (orden.totalCobrado || 0))}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <Button
+                  onClick={() => setShowCobrarDialog(true)}
+                  className="w-full"
+                  variant={orden.estadoCobro === "COBRADO" ? "outline" : "default"}
+                >
+                  <DollarSign className="h-4 w-4 mr-2" />
+                  {orden.estadoCobro === "COBRADO" ? "Ver Cobros" : "Cobrar"}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Facturación (opcional) */}
           {(orden.estado === "REPARADO" || orden.estado === "ENTREGADO") && (
             <Card>
-              <CardContent className="p-6">
-                <Button onClick={handleGenerarFactura} disabled={updating} className="w-full">
+              <CardContent className="p-4">
+                <Button onClick={handleGenerarFactura} disabled={updating} variant="outline" className="w-full" size="sm">
                   <FileText className="h-4 w-4 mr-2" />
                   Generar Factura
                 </Button>
@@ -685,6 +793,26 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           )}
         </div>
       </div>
+
+      {/* Diálogo de Cobro */}
+      {orden && orden.costoFinal && (
+        <CobrarOrdenDialog
+          open={showCobrarDialog}
+          onOpenChange={setShowCobrarDialog}
+          orden={{
+            id: orden.id,
+            numeroOrden: orden.numeroOrden,
+            codigoOrden: orden.codigoOrden,
+            costoFinal: orden.costoFinal || 0,
+            totalCobrado: orden.totalCobrado || 0,
+            estadoCobro: orden.estadoCobro || "PENDIENTE",
+            descuentoCobro: orden.descuentoCobro || 0,
+            clienteId: orden.cliente?.id,
+            clienteNombre: orden.cliente?.nombre,
+          }}
+          onSuccess={() => fetchOrden()}
+        />
+      )}
 
       {/* Diálogo de Entrega con Firma */}
       {orden && (
@@ -701,6 +829,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
               nombre: orden.cliente?.nombre || "Sin nombre",
               telefono: orden.cliente?.telefono || "",
             },
+            estadoCobro: orden.estadoCobro,
+            pendienteCobro: (orden.costoFinal || 0) - (orden.descuentoCobro || 0) - (orden.totalCobrado || 0),
           }}
           encargadoNombre={session?.user?.name || "Usuario"}
         />

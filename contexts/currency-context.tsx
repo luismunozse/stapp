@@ -13,10 +13,12 @@ import {
   formatDateTimeValue,
   DEFAULT_TIMEZONE,
 } from "@/lib/timezone"
+import { DEFAULT_COUNTRY, getCountryConfig, type CountryCode } from "@/lib/countries"
 
 interface CurrencyContextType {
   currency: CurrencyCode
   timezone: string
+  pais: CountryCode
   formatPrice: (amount: number | string | null | undefined) => string
   formatDate: (date: Date | string | null | undefined) => string
   formatDateTime: (date: Date | string | null | undefined) => string
@@ -25,6 +27,7 @@ interface CurrencyContextType {
 const CurrencyContext = createContext<CurrencyContextType>({
   currency: DEFAULT_CURRENCY,
   timezone: DEFAULT_TIMEZONE,
+  pais: DEFAULT_COUNTRY,
   formatPrice: (amount) => formatCurrencyValue(amount, DEFAULT_CURRENCY),
   formatDate: (date) => formatDateValue(date, DEFAULT_TIMEZONE),
   formatDateTime: (date) => formatDateTimeValue(date, DEFAULT_TIMEZONE),
@@ -34,6 +37,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
   const { data: session } = useSession()
   const [currency, setCurrency] = useState<CurrencyCode>(DEFAULT_CURRENCY)
   const [timezone, setTimezone] = useState<string>(DEFAULT_TIMEZONE)
+  const [pais, setPais] = useState<CountryCode>(DEFAULT_COUNTRY)
 
   useEffect(() => {
     if (!session?.user?.organizationId) return
@@ -49,6 +53,9 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
           }
           if (data.zonaHoraria) {
             setTimezone(data.zonaHoraria)
+          }
+          if (data.pais) {
+            setPais(data.pais as CountryCode)
           }
         }
       } catch (error) {
@@ -69,22 +76,24 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
     [currency]
   )
 
+  const locale = getCountryConfig(pais).locale
+
   const formatDate = useCallback(
     (date: Date | string | null | undefined) => {
-      return formatDateValue(date, timezone)
+      return formatDateValue(date, timezone, locale)
     },
-    [timezone]
+    [timezone, locale]
   )
 
   const formatDateTime = useCallback(
     (date: Date | string | null | undefined) => {
-      return formatDateTimeValue(date, timezone)
+      return formatDateTimeValue(date, timezone, locale)
     },
-    [timezone]
+    [timezone, locale]
   )
 
   return (
-    <CurrencyContext.Provider value={{ currency, timezone, formatPrice, formatDate, formatDateTime }}>
+    <CurrencyContext.Provider value={{ currency, timezone, pais, formatPrice, formatDate, formatDateTime }}>
       {children}
     </CurrencyContext.Provider>
   )

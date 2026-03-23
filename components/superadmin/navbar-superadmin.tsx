@@ -20,6 +20,10 @@ import {
   Headset,
   Smartphone,
   Megaphone,
+  HeartPulse,
+  Newspaper,
+  MailCheck,
+  Puzzle,
 } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import { cn } from "@/lib/utils"
@@ -35,7 +39,11 @@ const navItems = [
   { href: "/superadmin/pagos", label: "Pagos", icon: Receipt },
   { href: "/superadmin/planes", label: "Planes", icon: Package },
   { href: "/superadmin/soporte", label: "Soporte", icon: Headset },
+  { href: "/superadmin/engagement", label: "Engagement", icon: HeartPulse },
+  { href: "/superadmin/lifecycle-emails", label: "Lifecycle Emails", icon: MailCheck },
+  { href: "/superadmin/feature-usage", label: "Feature Usage", icon: Puzzle },
   { href: "/superadmin/broadcast", label: "Broadcast", icon: Megaphone },
+  { href: "/superadmin/changelog", label: "Changelog", icon: Newspaper },
   { href: "/superadmin/waitlist", label: "Waitlist iOS", icon: Smartphone },
   { href: "/superadmin/logs", label: "Auditoría", icon: FileText },
 ]

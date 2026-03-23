@@ -32,6 +32,7 @@ export async function POST(request: Request) {
         costo_final,
         presupuesto,
         sena,
+        metodo_pago_sena,
         organization_id,
         numero_orden,
         dispositivo,
@@ -218,7 +219,7 @@ export async function POST(request: Request) {
         .insert({
           factura_id: factura.id,
           monto: sena,
-          metodo_pago: "EFECTIVO",
+          metodo_pago: orden.metodo_pago_sena || "EFECTIVO",
           observaciones: "Seña abonada al momento del ingreso",
         })
     }

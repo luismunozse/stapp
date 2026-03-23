@@ -24,6 +24,7 @@ const metodoPagoLabels: Record<string, string> = {
   TARJETA_DEBITO: "Tarjeta Débito",
   TARJETA_CREDITO: "Tarjeta Crédito",
   MERCADOPAGO: "MercadoPago",
+  CUENTA_CORRIENTE: "Cuenta Corriente",
   OTRO: "Otro",
 }
 

@@ -1,7 +1,9 @@
-// Service Worker para PWA - Optimizado para móviles
-const CACHE_NAME = 'stapp-v7'
-const API_CACHE_NAME = 'stapp-api-v1'
+// Service Worker para PWA - Optimizado para móviles con soporte offline completo
+const CACHE_NAME = 'stapp-v8'
+const API_CACHE_NAME = 'stapp-api-v2'
 const STATIC_CACHE_NAME = 'stapp-static-v3'
+const DB_NAME = 'stapp-offline'
+const DB_VERSION = 2
 
 // Assets estáticos para cachear inmediatamente
 const STATIC_ASSETS = [
@@ -19,15 +21,41 @@ const EXCLUDED_ROUTES = [
   '/landing',
 ]
 
-// Rutas de API que se pueden cachear temporalmente
+// Rutas de API que se pueden cachear temporalmente (lectura)
 const CACHEABLE_API_ROUTES = [
   '/api/clientes',
   '/api/inventario',
   '/api/servicios',
+  '/api/configuracion',
+  '/api/tipos-dispositivo',
 ]
 
 // Tiempo de vida del caché de API (5 minutos)
 const API_CACHE_TTL = 5 * 60 * 1000
+
+// Todos los stores de IndexedDB para operaciones offline
+const ALL_STORES = [
+  'pendingOrders',
+  'pendingClients',
+  'pendingVentas',
+  'pendingPagos',
+  'pendingCobros',
+  'pendingOrderEdits',
+  'pendingFacturas',
+  'pendingUploads',
+]
+
+// Mapeo de sync tags a store names
+const SYNC_TAG_MAP = {
+  'sync-orders': 'pendingOrders',
+  'sync-clients': 'pendingClients',
+  'sync-ventas': 'pendingVentas',
+  'sync-pagos': 'pendingPagos',
+  'sync-cobros': 'pendingCobros',
+  'sync-order-edits': 'pendingOrderEdits',
+  'sync-facturas': 'pendingFacturas',
+  'sync-uploads': 'pendingUploads',
+}
 
 self.addEventListener('install', (event) => {
   self.skipWaiting()
@@ -59,7 +87,7 @@ self.addEventListener('activate', (event) => {
   )
 })
 
-// Manejar mensajes del cliente (ej: CLEAR_CACHE desde PWARecovery)
+// Manejar mensajes del cliente
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'CLEAR_CACHE') {
     event.waitUntil(
@@ -70,7 +98,6 @@ self.addEventListener('message', (event) => {
             .map((name) => caches.delete(name))
         )
       }).then(() => {
-        // Notificar al cliente que el caché fue limpiado
         if (event.source) {
           event.source.postMessage({ type: 'CACHE_CLEARED' })
         }
@@ -78,9 +105,24 @@ self.addEventListener('message', (event) => {
     )
   }
 
-  // Skip waiting para activar nueva versión del SW inmediatamente
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting()
+  }
+
+  // Force sync all stores (used by iOS fallback)
+  if (event.data && event.data.type === 'FORCE_SYNC') {
+    event.waitUntil(syncAllStores())
+  }
+
+  // Get pending count across all stores
+  if (event.data && event.data.type === 'GET_PENDING_COUNT') {
+    event.waitUntil(
+      getPendingCountAll().then((count) => {
+        if (event.source) {
+          event.source.postMessage({ type: 'PENDING_COUNT', count })
+        }
+      })
+    )
   }
 })
 
@@ -130,24 +172,20 @@ self.addEventListener('fetch', (event) => {
 async function networkFirstWithOfflineFallback(request) {
   try {
     const response = await fetch(request)
-    // Cachear la respuesta para uso offline
     if (response.ok) {
       const cache = await caches.open(CACHE_NAME)
       cache.put(request, response.clone())
     }
     return response
   } catch (error) {
-    // Intentar servir desde caché
     const cached = await caches.match(request)
     if (cached) {
       return cached
     }
-    // Fallback a login como página offline
     const offlinePage = await caches.match('/login')
     if (offlinePage) {
       return offlinePage
     }
-    // Última opción: respuesta de error
     return new Response('Offline', { status: 503, statusText: 'Service Unavailable' })
   }
 }
@@ -176,7 +214,6 @@ async function staleWhileRevalidate(request, cacheName) {
   const cache = await caches.open(cacheName)
   const cached = await cache.match(request)
 
-  // Fetch en background para actualizar el caché
   const fetchPromise = fetch(request).then((response) => {
     if (response.ok) {
       cache.put(request, response.clone())
@@ -184,7 +221,6 @@ async function staleWhileRevalidate(request, cacheName) {
     return response
   }).catch(() => null)
 
-  // Retornar cached si existe, sino esperar el fetch
   if (cached) {
     return cached
   }
@@ -212,81 +248,135 @@ async function networkOnlyWithError(request) {
   }
 }
 
-// Background Sync para operaciones pendientes
+// ============================================
+// Background Sync - Generalizado
+// ============================================
+
 self.addEventListener('sync', (event) => {
-  if (event.tag === 'sync-orders') {
-    event.waitUntil(syncPendingOrders())
-  }
-  if (event.tag === 'sync-clients') {
-    event.waitUntil(syncPendingClients())
+  const storeName = SYNC_TAG_MAP[event.tag]
+  if (storeName) {
+    event.waitUntil(syncStore(storeName))
   }
 })
 
-async function syncPendingOrders() {
+// Sync genérico para cualquier store
+async function syncStore(storeName) {
   try {
     const db = await openIndexedDB()
-    const pendingOrders = await getPendingItems(db, 'pendingOrders')
+    const items = await getPendingItems(db, storeName)
 
-    for (const order of pendingOrders) {
+    for (const item of items) {
+      // Skip items that have exceeded max retries
+      if (item.retryCount >= 5) continue
+
       try {
-        const response = await fetch('/api/ordenes', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(order.data)
+        const response = await fetch(item.url || getDefaultUrl(storeName), {
+          method: item.method || 'POST',
+          headers: item.headers || { 'Content-Type': 'application/json' },
+          body: JSON.stringify(item.body || item.data)
         })
 
         if (response.ok) {
-          await removeFromPending(db, 'pendingOrders', order.id)
+          const serverData = await response.json().catch(() => null)
+          await removeFromPending(db, storeName, item.id)
+
+          // Notify all clients about successful sync
+          const allClients = await self.clients.matchAll()
+          allClients.forEach(client => {
+            client.postMessage({
+              type: 'SYNC_ITEM_COMPLETE',
+              storeName,
+              tempId: item.tempId,
+              serverData,
+              description: item.description
+            })
+          })
+        } else if (response.status === 409) {
+          // Conflict - mark but don't remove
+          await updateItemInStore(db, storeName, item.id, {
+            status: 'conflict',
+            lastError: 'Conflicto: recurso modificado por otro usuario'
+          })
+
+          const allClients = await self.clients.matchAll()
+          allClients.forEach(client => {
+            client.postMessage({
+              type: 'SYNC_CONFLICT',
+              storeName,
+              tempId: item.tempId,
+              error: 'Conflicto detectado'
+            })
+          })
+        } else {
+          // Other error - increment retry count
+          await updateItemInStore(db, storeName, item.id, {
+            retryCount: (item.retryCount || 0) + 1,
+            lastError: `Error ${response.status}`,
+            status: 'failed'
+          })
         }
       } catch (err) {
-        console.log('Failed to sync order:', order.id)
+        console.log(`[SW] Failed to sync ${storeName} item:`, item.id, err.message)
+        await updateItemInStore(db, storeName, item.id, {
+          retryCount: (item.retryCount || 0) + 1,
+          lastError: 'Error de red',
+          status: 'pending'
+        }).catch(() => {})
       }
     }
+
+    db.close()
   } catch (error) {
-    console.log('Sync failed:', error)
+    console.log(`[SW] Sync ${storeName} failed:`, error)
   }
 }
 
-async function syncPendingClients() {
-  try {
-    const db = await openIndexedDB()
-    const pendingClients = await getPendingItems(db, 'pendingClients')
-
-    for (const client of pendingClients) {
-      try {
-        const response = await fetch('/api/clientes', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(client.data)
-        })
-
-        if (response.ok) {
-          await removeFromPending(db, 'pendingClients', client.id)
-        }
-      } catch (err) {
-        console.log('Failed to sync client:', client.id)
-      }
-    }
-  } catch (error) {
-    console.log('Sync failed:', error)
+// Sync all stores
+async function syncAllStores() {
+  for (const storeName of ALL_STORES) {
+    await syncStore(storeName)
   }
+
+  // Notify clients that full sync is done
+  const allClients = await self.clients.matchAll()
+  const count = await getPendingCountAll()
+  allClients.forEach(client => {
+    client.postMessage({ type: 'SYNC_ALL_COMPLETE', remainingCount: count })
+  })
 }
 
-// IndexedDB helpers para Background Sync
+// Default URLs for legacy items that don't have a url field
+function getDefaultUrl(storeName) {
+  const urls = {
+    pendingOrders: '/api/ordenes',
+    pendingClients: '/api/clientes',
+    pendingVentas: '/api/ventas',
+    pendingPagos: '/api/pagos',
+    pendingCobros: '/api/ordenes',
+    pendingOrderEdits: '/api/ordenes',
+    pendingFacturas: '/api/facturacion/generar',
+    pendingUploads: '/api/ordenes',
+  }
+  return urls[storeName] || '/api/ordenes'
+}
+
+// ============================================
+// IndexedDB helpers - Actualizado para v2
+// ============================================
+
 function openIndexedDB() {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open('stapp-offline', 1)
+    const request = indexedDB.open(DB_NAME, DB_VERSION)
 
     request.onerror = () => reject(request.error)
     request.onsuccess = () => resolve(request.result)
 
     request.onupgradeneeded = (event) => {
       const db = event.target.result
-      if (!db.objectStoreNames.contains('pendingOrders')) {
-        db.createObjectStore('pendingOrders', { keyPath: 'id', autoIncrement: true })
-      }
-      if (!db.objectStoreNames.contains('pendingClients')) {
-        db.createObjectStore('pendingClients', { keyPath: 'id', autoIncrement: true })
+      for (const storeName of ALL_STORES) {
+        if (!db.objectStoreNames.contains(storeName)) {
+          db.createObjectStore(storeName, { keyPath: 'id', autoIncrement: true })
+        }
       }
     }
   })
@@ -294,6 +384,10 @@ function openIndexedDB() {
 
 function getPendingItems(db, storeName) {
   return new Promise((resolve, reject) => {
+    if (!db.objectStoreNames.contains(storeName)) {
+      resolve([])
+      return
+    }
     const transaction = db.transaction(storeName, 'readonly')
     const store = transaction.objectStore(storeName)
     const request = store.getAll()
@@ -314,7 +408,53 @@ function removeFromPending(db, storeName, id) {
   })
 }
 
-// Push notifications (preparado para futuro uso)
+function updateItemInStore(db, storeName, id, updates) {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(storeName, 'readwrite')
+    const store = transaction.objectStore(storeName)
+    const getRequest = store.get(id)
+
+    getRequest.onsuccess = () => {
+      const existing = getRequest.result
+      if (!existing) {
+        resolve()
+        return
+      }
+      const putRequest = store.put({ ...existing, ...updates })
+      putRequest.onerror = () => reject(putRequest.error)
+      putRequest.onsuccess = () => resolve()
+    }
+    getRequest.onerror = () => reject(getRequest.error)
+  })
+}
+
+async function getPendingCountAll() {
+  try {
+    const db = await openIndexedDB()
+    let total = 0
+    for (const storeName of ALL_STORES) {
+      if (db.objectStoreNames.contains(storeName)) {
+        const count = await new Promise((resolve, reject) => {
+          const tx = db.transaction(storeName, 'readonly')
+          const store = tx.objectStore(storeName)
+          const request = store.count()
+          request.onerror = () => resolve(0)
+          request.onsuccess = () => resolve(request.result)
+        })
+        total += count
+      }
+    }
+    db.close()
+    return total
+  } catch {
+    return 0
+  }
+}
+
+// ============================================
+// Push notifications
+// ============================================
+
 self.addEventListener('push', (event) => {
   if (!event.data) return
 
@@ -344,14 +484,12 @@ self.addEventListener('notificationclick', (event) => {
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true })
       .then((clientList) => {
-        // Si ya hay una ventana abierta, enfocarla
         for (const client of clientList) {
           if (client.url.includes(self.location.origin) && 'focus' in client) {
             client.navigate(url)
             return client.focus()
           }
         }
-        // Si no, abrir una nueva
         return clients.openWindow(url)
       })
   )

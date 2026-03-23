@@ -10,6 +10,10 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { X, User, Building2 } from "lucide-react"
 import type { Cliente, TipoCliente } from "@/types"
+import { useCurrency } from "@/contexts/currency-context"
+import { useOffline } from "@/contexts/offline-context"
+import { STORES } from "@/lib/offline/constants"
+import { getCountryConfig } from "@/lib/countries"
 
 const clienteSchema = z.object({
   tipoCliente: z.enum(["INDIVIDUAL", "EMPRESA"]).default("INDIVIDUAL"),
@@ -18,18 +22,12 @@ const clienteSchema = z.object({
     .regex(/^[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s.]+$/, "El nombre solo debe contener letras"),
   telefono: z.string()
     .min(1, "El teléfono es requerido")
-    .regex(/^\d{10}$/, "El teléfono debe tener exactamente 10 dígitos"),
+    .min(7, "El teléfono debe tener al menos 7 dígitos"),
   email: z.string().email("Email inválido").optional().or(z.literal("")),
   direccion: z.string().optional(),
-  dni: z.string()
-    .regex(/^(\d{7,8})?$/, "El DNI debe tener 7 u 8 dígitos")
-    .optional()
-    .or(z.literal("")),
+  dni: z.string().optional().or(z.literal("")),
   razonSocial: z.string().optional(),
-  cuit: z.string()
-    .regex(/^(\d{2}-?\d{8}-?\d{1})?$/, "CUIT inválido (formato: XX-XXXXXXXX-X)")
-    .optional()
-    .or(z.literal("")),
+  cuit: z.string().optional().or(z.literal("")),
 })
 
 type ClienteFormData = z.infer<typeof clienteSchema>
@@ -41,6 +39,9 @@ interface ClienteFormProps {
 }
 
 export function ClienteForm({ cliente, onClose, onSuccess }: ClienteFormProps) {
+  const { pais } = useCurrency()
+  const countryConfig = getCountryConfig(pais)
+  const { offlineFetch } = useOffline()
   const [loading, setLoading] = useState(false)
   const {
     register,
@@ -103,11 +104,24 @@ export function ClienteForm({ cliente, onClose, onSuccess }: ClienteFormProps) {
         payload.cuit = ""
       }
 
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
+      const isCreating = !cliente
+      const res = await (isCreating
+        ? offlineFetch(url, {
+            method,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          }, { store: STORES.CLIENTS, description: `Cliente - ${data.nombre}` })
+        : fetch(url, {
+            method,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          }))
+
+      if (res.status === 202) {
+        alert("Cliente guardado offline. Se sincronizará automáticamente.")
+        onSuccess()
+        return
+      }
 
       if (!res.ok) {
         const error = await res.json()
@@ -196,12 +210,11 @@ export function ClienteForm({ cliente, onClose, onSuccess }: ClienteFormProps) {
               </div>
 
               <div>
-                <Label htmlFor="cuit">CUIT</Label>
+                <Label htmlFor="cuit">{countryConfig.taxIdLabel}</Label>
                 <Input
                   id="cuit"
                   {...register("cuit")}
-                  placeholder="XX-XXXXXXXX-X"
-                  maxLength={13}
+                  placeholder={countryConfig.taxIdPlaceholder}
                 />
                 {errors.cuit && (
                   <p className="text-sm text-destructive mt-1">
@@ -244,13 +257,12 @@ export function ClienteForm({ cliente, onClose, onSuccess }: ClienteFormProps) {
 
           <div>
             <Label htmlFor="dni">
-              {tipoCliente === "EMPRESA" ? "DNI del contacto" : "DNI"}
+              {tipoCliente === "EMPRESA" ? `${countryConfig.personalIdLabel} del contacto` : countryConfig.personalIdLabel}
             </Label>
             <Input
               id="dni"
               {...register("dni")}
-              placeholder="12345678"
-              maxLength={8}
+              placeholder={countryConfig.personalIdPlaceholder}
             />
             {errors.dni && (
               <p className="text-sm text-destructive mt-1">

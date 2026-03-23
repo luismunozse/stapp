@@ -1,44 +1,21 @@
 "use client"
 
-import { useState, useMemo } from "react"
-import { useForm } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { z } from "zod"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { X, DollarSign, CreditCard, Banknote, ArrowRightLeft, Wallet, MoreHorizontal } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { X, DollarSign } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
-
-const METODOS_PAGO = [
-  { value: "EFECTIVO", label: "Efectivo", icon: Banknote },
-  { value: "TRANSFERENCIA", label: "Transferencia", icon: ArrowRightLeft },
-  { value: "TARJETA_DEBITO", label: "Tarjeta Débito", icon: CreditCard },
-  { value: "TARJETA_CREDITO", label: "Tarjeta Crédito", icon: CreditCard },
-  { value: "MERCADOPAGO", label: "MercadoPago", icon: Wallet },
-  { value: "OTRO", label: "Otro", icon: MoreHorizontal },
-] as const
-
-type MetodoPago = typeof METODOS_PAGO[number]["value"]
-
-const pagoSchema = z.object({
-  monto: z.number().positive("El monto debe ser mayor a 0"),
-  metodoPago: z.enum(["EFECTIVO", "TRANSFERENCIA", "TARJETA_DEBITO", "TARJETA_CREDITO", "MERCADOPAGO", "OTRO"]),
-  numeroReferencia: z.string().optional(),
-  observaciones: z.string().optional(),
-  cuotas: z.number().int().min(1).nullable().optional(),
-  recargoPorcentaje: z.number().min(0).max(100).nullable().optional(),
-})
-
-type PagoFormData = z.infer<typeof pagoSchema>
+import { useOffline } from "@/contexts/offline-context"
+import { STORES } from "@/lib/offline/constants"
+import { MultiPagoInput, createPagoLine, type PagoLineItem } from "@/components/pagos/multi-pago-input"
 
 interface VentaPagoFormProps {
   ventaId: string
   total: number
   montoAbonado: number
+  clienteId?: string | null
   onClose: () => void
   onSuccess: () => void
 }
@@ -47,87 +24,81 @@ export function VentaPagoForm({
   ventaId,
   total,
   montoAbonado,
+  clienteId,
   onClose,
   onSuccess,
 }: VentaPagoFormProps) {
   const { formatPrice } = useCurrency()
+  const { offlineFetch } = useOffline()
   const [loading, setLoading] = useState(false)
   const pendiente = total - montoAbonado
+  const [pagosLines, setPagosLines] = useState<PagoLineItem[]>([createPagoLine(pendiente)])
+  const [observaciones, setObservaciones] = useState("")
+  const [saldoCuenta, setSaldoCuenta] = useState(0)
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-    watch,
-    setValue,
-  } = useForm<PagoFormData>({
-    resolver: zodResolver(pagoSchema),
-    defaultValues: {
-      monto: pendiente,
-      metodoPago: "EFECTIVO",
-      numeroReferencia: "",
-      observaciones: "",
-      cuotas: null,
-      recargoPorcentaje: null,
-    },
-  })
-
-  const metodoPago = watch("metodoPago")
-  const cuotas = watch("cuotas")
-  const recargoPorcentaje = watch("recargoPorcentaje")
-  const monto = watch("monto")
-
-  const showReferencia = metodoPago === "TRANSFERENCIA" || metodoPago === "MERCADOPAGO"
-  const showCuotas = metodoPago === "TARJETA_CREDITO"
-  const showRecargo = metodoPago === "TARJETA_CREDITO" || metodoPago === "TARJETA_DEBITO"
-
-  const recargoInfo = useMemo(() => {
-    if (!showRecargo || !recargoPorcentaje || recargoPorcentaje <= 0) return null
-
-    const montoOriginal = monto / (1 + recargoPorcentaje / 100)
-    const montoRecargo = monto - montoOriginal
-    const montoCuota = cuotas && cuotas > 1 ? monto / cuotas : null
-
-    return { montoOriginal, montoRecargo, montoCuota }
-  }, [monto, recargoPorcentaje, cuotas, showRecargo])
-
-  const handleMetodoChange = (value: MetodoPago) => {
-    setValue("metodoPago", value)
-    if (value !== "TARJETA_CREDITO" && value !== "TARJETA_DEBITO") {
-      setValue("cuotas", null)
-      setValue("recargoPorcentaje", null)
+  // Fetch saldo cuenta corriente si hay cliente
+  useEffect(() => {
+    if (!clienteId) return
+    const fetchSaldo = async () => {
+      try {
+        const res = await fetch(`/api/clientes/${clienteId}/cuenta-corriente`)
+        if (res.ok) {
+          const data = await res.json()
+          setSaldoCuenta(data.saldo || 0)
+        }
+      } catch {
+        setSaldoCuenta(0)
+      }
     }
-    if (value !== "TRANSFERENCIA" && value !== "MERCADOPAGO") {
-      setValue("numeroReferencia", "")
-    }
-    if (value === "TARJETA_CREDITO") {
-      setValue("cuotas", 1)
-    }
-  }
+    fetchSaldo()
+  }, [clienteId])
 
-  const onSubmit = async (data: PagoFormData) => {
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    const totalPagos = pagosLines.reduce((sum, p) => sum + (p.monto || 0), 0)
+    if (totalPagos <= 0) {
+      alert("Debe registrar al menos un pago")
+      return
+    }
+    if (totalPagos > pendiente + 0.01) {
+      alert(`El total de pagos (${formatPrice(totalPagos)}) excede el pendiente (${formatPrice(pendiente)})`)
+      return
+    }
+
+    // Validar cuenta corriente
+    const pagoCC = pagosLines.find(p => p.metodo === "CUENTA_CORRIENTE")
+    if (pagoCC && pagoCC.monto > saldoCuenta) {
+      alert(`El monto de cuenta corriente excede el saldo disponible (${formatPrice(saldoCuenta)})`)
+      return
+    }
+
     setLoading(true)
     try {
-      const payload: Record<string, any> = {
-        monto: data.monto,
-        metodoPago: data.metodoPago,
-        numeroReferencia: data.numeroReferencia || undefined,
-        observaciones: data.observaciones || undefined,
+      const payload = {
+        pagos: pagosLines.map(p => ({
+          monto: p.monto,
+          metodo: p.metodo,
+          referencia: p.referencia || null,
+          cuotas: p.cuotas,
+          recargo: p.recargo,
+          montoOriginal: p.montoOriginal,
+        })),
+        observaciones: observaciones || undefined,
+        clienteId: clienteId || undefined,
       }
 
-      if (showCuotas && data.cuotas && data.cuotas > 0) {
-        payload.cuotas = data.cuotas
-      }
-      if (showRecargo && data.recargoPorcentaje && data.recargoPorcentaje > 0) {
-        payload.recargoPorcentaje = data.recargoPorcentaje
-        payload.montoOriginal = recargoInfo?.montoOriginal ?? null
-      }
-
-      const res = await fetch(`/api/ventas/${ventaId}/pagos`, {
+      const res = await offlineFetch(`/api/ventas/${ventaId}/pagos`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-      })
+      }, { store: STORES.PAYMENTS, description: `Pago venta` })
+
+      if (res.status === 202) {
+        alert("Pago guardado offline. Se sincronizará automáticamente.")
+        onSuccess()
+        return
+      }
 
       if (!res.ok) {
         const error = await res.json()
@@ -179,140 +150,22 @@ export function VentaPagoForm({
           </div>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          {/* Método de pago */}
-          <div>
-            <Label className="mb-2 block">Método de pago</Label>
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-              {METODOS_PAGO.map(({ value, label, icon: Icon }) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => handleMetodoChange(value)}
-                  className={cn(
-                    "flex flex-col items-center gap-1 p-2.5 rounded-lg border-2 text-center transition-all text-xs",
-                    metodoPago === value
-                      ? "border-primary bg-primary/5 text-primary font-medium"
-                      : "border-border hover:border-muted-foreground/30 text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  <Icon className="h-4 w-4" />
-                  <span className="leading-tight">{label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Monto */}
-          <div>
-            <Label htmlFor="monto">
-              {showRecargo && recargoPorcentaje ? "Monto total (con recargo)" : "Monto a pagar"} *
-            </Label>
-            <Input
-              id="monto"
-              type="number"
-              step="0.01"
-              max={pendiente}
-              {...register("monto", { valueAsNumber: true })}
-            />
-            {errors.monto && (
-              <p className="text-sm text-destructive mt-1">
-                {errors.monto.message}
-              </p>
-            )}
-          </div>
-
-          {/* Cuotas - solo tarjeta crédito */}
-          {showCuotas && (
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="cuotas">Cuotas</Label>
-                <Input
-                  id="cuotas"
-                  type="number"
-                  min={1}
-                  max={48}
-                  placeholder="1"
-                  {...register("cuotas", { valueAsNumber: true })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="recargoPorcentaje">Recargo %</Label>
-                <Input
-                  id="recargoPorcentaje"
-                  type="number"
-                  step="0.01"
-                  min={0}
-                  max={100}
-                  placeholder="0"
-                  {...register("recargoPorcentaje", { valueAsNumber: true })}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Recargo solo débito */}
-          {metodoPago === "TARJETA_DEBITO" && (
-            <div>
-              <Label htmlFor="recargoPorcentaje">Recargo % (si aplica)</Label>
-              <Input
-                id="recargoPorcentaje"
-                type="number"
-                step="0.01"
-                min={0}
-                max={100}
-                placeholder="0"
-                {...register("recargoPorcentaje", { valueAsNumber: true })}
-              />
-            </div>
-          )}
-
-          {/* Preview de recargo */}
-          {recargoInfo && (
-            <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg text-sm space-y-1">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Monto sin recargo:</span>
-                <span className="font-medium">{formatPrice(recargoInfo.montoOriginal)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Recargo ({recargoPorcentaje}%):</span>
-                <span className="font-medium text-amber-600">+{formatPrice(recargoInfo.montoRecargo)}</span>
-              </div>
-              <div className="flex justify-between border-t border-amber-200 dark:border-amber-800 pt-1">
-                <span className="font-medium">Total cobrado:</span>
-                <span className="font-bold">{formatPrice(monto)}</span>
-              </div>
-              {recargoInfo.montoCuota && cuotas && cuotas > 1 && (
-                <div className="flex justify-between text-muted-foreground">
-                  <span>{cuotas} cuotas de:</span>
-                  <span>{formatPrice(recargoInfo.montoCuota)}</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Referencia */}
-          {showReferencia && (
-            <div>
-              <Label htmlFor="numeroReferencia">Número de referencia</Label>
-              <Input
-                id="numeroReferencia"
-                {...register("numeroReferencia")}
-                placeholder={
-                  metodoPago === "TRANSFERENCIA"
-                    ? "CBU, alias o nro. de operación"
-                    : "Nro. de operación MercadoPago"
-                }
-              />
-            </div>
-          )}
+        <form onSubmit={onSubmit} className="space-y-4">
+          <MultiPagoInput
+            montoPendiente={pendiente}
+            pagos={pagosLines}
+            onChange={setPagosLines}
+            saldoCuenta={saldoCuenta}
+            showCuentaCorriente={!!clienteId && saldoCuenta > 0}
+          />
 
           {/* Observaciones */}
           <div>
             <Label htmlFor="observaciones">Observaciones</Label>
             <Textarea
               id="observaciones"
-              {...register("observaciones")}
+              value={observaciones}
+              onChange={(e) => setObservaciones(e.target.value)}
               placeholder="Notas adicionales..."
               rows={2}
             />

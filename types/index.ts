@@ -98,6 +98,7 @@ export interface Cliente {
   razonSocial?: string | null
   cuit?: string | null
   sectores?: SectorCliente[]
+  saldoCuenta?: number
   createdAt: Date
   updatedAt: Date
 }
@@ -122,6 +123,10 @@ export interface OrdenServicio {
   presupuesto?: number | null
   costoFinal?: number | null
   sena?: number
+  metodoPagoSena?: string
+  totalCobrado?: number
+  estadoCobro?: string
+  descuentoCobro?: number
   fechaIngreso: Date
   fechaPrometida?: Date | null
   fechaCompletado?: Date | null
@@ -142,6 +147,12 @@ export interface OrdenServicio {
   entregadoPor?: User | null
   notasEntrega?: string | null
   publicToken?: string | null
+  publicTokenExpiresAt?: Date | null
+  // Re-ingreso/garantía
+  ordenOrigenId?: string | null
+  esReingreso?: boolean
+  garantiaOrigenId?: string | null
+  ordenOrigen?: OrdenServicio | null
 }
 
 export interface Inventario {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { uploadLogo, deleteLogo, dataUrlToBuffer } from "@/lib/storage"
+import { COUNTRIES } from "@/lib/countries"
 
 // GET - Obtener configuración (solo ADMIN)
 export async function GET() {
@@ -25,7 +26,8 @@ export async function GET() {
         umbral_stock_bajo,
         iva_porcentaje,
         cotizacion_validez_dias,
-        cotizacion_terminos
+        cotizacion_terminos,
+        pais
       `)
       .eq("id", organizationId!)
       .single()
@@ -51,6 +53,7 @@ export async function GET() {
       ivaPorcentaje: organization.iva_porcentaje ?? 0,
       cotizacionValidezDias: organization.cotizacion_validez_dias ?? 30,
       cotizacionTerminos: organization.cotizacion_terminos || "",
+      pais: organization.pais || "AR",
     })
   } catch (error) {
     console.error("Error fetching config:", error)
@@ -65,7 +68,7 @@ export async function PUT(request: Request) {
     if (error) return error
 
     const body = await request.json()
-    const { logoData, logoMime, nombreEmpresa, telefono, direccion, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos } = body
+    const { logoData, logoMime, nombreEmpresa, telefono, direccion, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, pais } = body
 
     const updateData: Record<string, any> = {}
 
@@ -154,12 +157,16 @@ export async function PUT(request: Request) {
       updateData.cotizacion_terminos = cotizacionTerminos || null
     }
 
+    if (pais !== undefined && typeof pais === "string" && pais in COUNTRIES) {
+      updateData.pais = pais
+    }
+
     // Solo actualizar si hay cambios
     if (Object.keys(updateData).length === 0) {
       // Retornar estado actual
       const { data: org } = await supabaseAdmin
         .from("organizations")
-        .select("id, logo_url, nombre_mostrar, telefono, direccion, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos")
+        .select("id, logo_url, nombre_mostrar, telefono, direccion, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, pais")
         .eq("id", organizationId!)
         .single()
 
@@ -175,6 +182,7 @@ export async function PUT(request: Request) {
         ivaPorcentaje: org?.iva_porcentaje ?? 0,
         cotizacionValidezDias: org?.cotizacion_validez_dias ?? 30,
         cotizacionTerminos: org?.cotizacion_terminos || "",
+        pais: org?.pais || "AR",
       })
     }
 
@@ -182,7 +190,7 @@ export async function PUT(request: Request) {
       .from("organizations")
       .update(updateData)
       .eq("id", organizationId!)
-      .select("id, logo_url, logo_path, nombre_mostrar, telefono, direccion, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos")
+      .select("id, logo_url, logo_path, nombre_mostrar, telefono, direccion, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, pais")
       .single()
 
     if (dbError) {
@@ -201,6 +209,7 @@ export async function PUT(request: Request) {
       ivaPorcentaje: organization.iva_porcentaje ?? 0,
       cotizacionValidezDias: organization.cotizacion_validez_dias ?? 30,
       cotizacionTerminos: organization.cotizacion_terminos || "",
+      pais: organization.pais || "AR",
     })
   } catch (error) {
     console.error("Error updating config:", error)

@@ -12,6 +12,7 @@ import { useModal } from "@/contexts/modal-context"
 import { NotificationSettings } from "@/components/configuracion/notification-settings"
 import { CURRENCY_OPTIONS } from "@/lib/currency"
 import { TIMEZONE_OPTIONS } from "@/lib/timezone"
+import { COUNTRY_OPTIONS, getCountryConfig } from "@/lib/countries"
 
 interface Config {
   logoData: string | null
@@ -39,6 +40,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
   const [direccion, setDireccion] = useState("")
   const [moneda, setMoneda] = useState("ARS")
   const [zonaHoraria, setZonaHoraria] = useState("America/Argentina/Buenos_Aires")
+  const [pais, setPais] = useState("AR")
   const [ivaPorcentaje, setIvaPorcentaje] = useState("0")
   const [cotizacionValidezDias, setCotizacionValidezDias] = useState("30")
   const [cotizacionTerminos, setCotizacionTerminos] = useState("")
@@ -58,6 +60,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
         setNombreEmpresa(data.nombreEmpresa || "Servicio Técnico")
         setTelefono(data.telefono || "")
         setDireccion(data.direccion || "")
+        setPais(data.pais || "AR")
         setMoneda(data.moneda || "ARS")
         setZonaHoraria(data.zonaHoraria || "America/Argentina/Buenos_Aires")
         setIvaPorcentaje(String(data.ivaPorcentaje ?? 0))
@@ -116,7 +119,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
       const res = await fetch("/api/configuracion", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos }),
+        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, pais }),
       })
 
       if (res.ok) {
@@ -291,6 +294,42 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
 
       <Card>
         <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="text-base sm:text-lg">País</CardTitle>
+          <CardDescription className="text-xs sm:text-sm">
+            El país determina la moneda, zona horaria, formato de teléfono e identificación fiscal por defecto.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-4 sm:p-6 pt-0">
+          <div>
+            <Label htmlFor="pais" className="text-sm">País</Label>
+            <Select
+              value={pais}
+              onValueChange={(val) => {
+                setPais(val)
+                // Auto-completar defaults del país
+                const countryConfig = getCountryConfig(val)
+                setMoneda(countryConfig.defaultCurrency)
+                setZonaHoraria(countryConfig.defaultTimezone)
+              }}
+              disabled={!allowEdit}
+            >
+              <SelectTrigger id="pais">
+                <SelectValue placeholder="Seleccionar país" />
+              </SelectTrigger>
+              <SelectContent>
+                {COUNTRY_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="p-4 sm:p-6">
           <CardTitle className="text-base sm:text-lg">Moneda</CardTitle>
           <CardDescription className="text-xs sm:text-sm">
             Moneda utilizada para montos, facturas y comprobantes.
@@ -362,10 +401,11 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
                 <SelectValue placeholder="Seleccionar IVA" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="0">0% (Sin IVA)</SelectItem>
-                <SelectItem value="10.5">10.5%</SelectItem>
-                <SelectItem value="21">21%</SelectItem>
-                <SelectItem value="27">27%</SelectItem>
+                {getCountryConfig(pais).ivaOptions.map((opt) => (
+                  <SelectItem key={opt} value={String(opt)}>
+                    {opt === 0 ? "0% (Sin IVA)" : `${opt}%`}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <p className="text-xs sm:text-sm text-muted-foreground mt-1">

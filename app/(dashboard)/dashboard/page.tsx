@@ -12,6 +12,7 @@ import {
   DashboardCharts,
 } from "@/components/dashboard"
 import { WhatsNewModal } from "@/components/whats-new-modal"
+import { NpsSurvey } from "@/components/nps-survey"
 import { unstable_cache } from "next/cache"
 
 // Cachear datos del dashboard por 2 minutos
@@ -38,6 +39,8 @@ const getDashboardData = unstable_cache(
       ventasMesResult,
       garantiasVentaPorVencerResult,
       ordenesPorTecnicoResult,
+      ordenesPendienteCobroResult,
+      ordenesFechaVencidaResult,
     ] = await Promise.all([
       supabaseAdmin
         .from("ordenes_servicio")
@@ -132,6 +135,29 @@ const getDashboardData = unstable_cache(
         .eq("organization_id", organizationId)
         .not("tecnico_id", "is", null)
         .in("estado", ["RECIBIDO", "EN_DIAGNOSTICO", "PRESUPUESTADO", "APROBADO", "EN_REPARACION", "ESPERANDO_REPUESTO", "REPARADO"]),
+      // Órdenes con cobro pendiente (para antigüedad de deuda)
+      supabaseAdmin
+        .from("ordenes_servicio")
+        .select(`
+          id, numero_orden, codigo_orden, costo_final, total_cobrado, descuento_cobro,
+          estado_cobro, fecha_ingreso, estado,
+          clientes (nombre)
+        `)
+        .eq("organization_id", organizationId)
+        .in("estado_cobro", ["PENDIENTE", "PARCIAL"])
+        .in("estado", ["REPARADO", "ENTREGADO"])
+        .gt("costo_final", 0),
+      // Órdenes con fecha prometida vencida
+      supabaseAdmin
+        .from("ordenes_servicio")
+        .select(`
+          id, numero_orden, codigo_orden, dispositivo, estado, fecha_prometida,
+          clientes (nombre)
+        `)
+        .eq("organization_id", organizationId)
+        .in("estado", ["RECIBIDO", "EN_DIAGNOSTICO", "PRESUPUESTADO", "APROBADO", "EN_REPARACION", "ESPERANDO_REPUESTO"])
+        .lt("fecha_prometida", hoy.toISOString())
+        .not("fecha_prometida", "is", null),
     ])
 
     return {
@@ -148,6 +174,8 @@ const getDashboardData = unstable_cache(
       ventasMesResult,
       garantiasVentaPorVencerResult,
       ordenesPorTecnicoResult,
+      ordenesPendienteCobroResult,
+      ordenesFechaVencidaResult,
       hace7Dias: hace7Dias.toISOString(),
     }
   },
@@ -212,6 +240,8 @@ export default async function DashboardPage() {
     ventasMesResult,
     garantiasVentaPorVencerResult,
     ordenesPorTecnicoResult,
+    ordenesPendienteCobroResult,
+    ordenesFechaVencidaResult,
     hace7Dias,
   } = await getDashboardData(organizationId)
 
@@ -291,6 +321,38 @@ export default async function DashboardPage() {
     }
   })
   const ordenesPorTecnico = Object.values(tecnicosMap)
+
+  // Procesar deuda pendiente con antigüedad
+  const ordenesPendienteCobro = (ordenesPendienteCobroResult?.data || []).map((o: any) => {
+    const pendiente = (parseFloat(o.costo_final || 0)) - (parseFloat(o.descuento_cobro || 0)) - (parseFloat(o.total_cobrado || 0))
+    const diasDesdeIngreso = Math.floor((Date.now() - new Date(o.fecha_ingreso).getTime()) / (1000 * 60 * 60 * 24))
+    return {
+      id: o.id,
+      numeroOrden: o.numero_orden,
+      codigoOrden: o.codigo_orden,
+      cliente: o.clientes?.nombre || "Sin cliente",
+      pendiente,
+      dias: diasDesdeIngreso,
+      estado: o.estado,
+    }
+  }).filter((o: any) => o.pendiente > 0)
+
+  const totalDeudaPendiente = ordenesPendienteCobro.reduce((sum: number, o: any) => sum + o.pendiente, 0)
+  const deuda30dias = ordenesPendienteCobro.filter((o: any) => o.dias <= 30)
+  const deuda60dias = ordenesPendienteCobro.filter((o: any) => o.dias > 30 && o.dias <= 60)
+  const deuda90dias = ordenesPendienteCobro.filter((o: any) => o.dias > 60)
+
+  // SLA: Órdenes con fecha prometida vencida
+  const ordenesFechaVencida = (ordenesFechaVencidaResult?.data || []).map((o: any) => ({
+    id: o.id,
+    numeroOrden: o.numero_orden,
+    codigoOrden: o.codigo_orden,
+    dispositivo: o.dispositivo,
+    estado: o.estado,
+    fechaPrometida: o.fecha_prometida,
+    cliente: o.clientes?.nombre || "Sin cliente",
+    diasAtraso: Math.floor((Date.now() - new Date(o.fecha_prometida).getTime()) / (1000 * 60 * 60 * 24)),
+  }))
 
   // Procesar ventas
   const ventasHoyData = ventasHoyResult.data as { total: number }[] | null
@@ -486,7 +548,45 @@ export default async function DashboardPage() {
                 </div>
               </Link>
             )}
-            {garantiasPorVencer.length === 0 && garantiasVentaPorVencer.length === 0 && itemsBajoStock === 0 && ordenesPendientes === 0 && (
+            {/* SLA: Órdenes con fecha vencida */}
+            {ordenesFechaVencida.length > 0 && (
+              <div className="p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg">
+                <div className="flex items-center gap-2 text-red-700 dark:text-red-400 font-medium">
+                  <ClipboardList className="h-4 w-4" />
+                  {ordenesFechaVencida.length} orden{ordenesFechaVencida.length > 1 ? "es" : ""} con fecha prometida vencida
+                </div>
+                <div className="mt-2 space-y-1">
+                  {ordenesFechaVencida.slice(0, 3).map((o: any) => (
+                    <Link
+                      key={o.id}
+                      href={`/ordenes/${o.id}`}
+                      className="block text-sm text-red-600 dark:text-red-400 hover:underline"
+                    >
+                      {o.codigoOrden || `#${o.numeroOrden}`} - {o.cliente}
+                      <span className="ml-1">({o.diasAtraso} día{o.diasAtraso !== 1 ? "s" : ""} de atraso)</span>
+                    </Link>
+                  ))}
+                  {ordenesFechaVencida.length > 3 && (
+                    <p className="text-xs text-red-500">y {ordenesFechaVencida.length - 3} más...</p>
+                  )}
+                </div>
+              </div>
+            )}
+            {/* Deuda pendiente de cobro */}
+            {ordenesPendienteCobro.length > 0 && (
+              <div className="p-3 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+                <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-medium">
+                  <DollarSign className="h-4 w-4" />
+                  {ordenesPendienteCobro.length} orden{ordenesPendienteCobro.length > 1 ? "es" : ""} sin cobrar — {formatCurrency(totalDeudaPendiente, moneda)}
+                </div>
+                <div className="mt-2 space-y-1 text-xs text-amber-600 dark:text-amber-400">
+                  {deuda30dias.length > 0 && <div>0-30 días: {deuda30dias.length} ({formatCurrency(deuda30dias.reduce((s: number, o: any) => s + o.pendiente, 0), moneda)})</div>}
+                  {deuda60dias.length > 0 && <div>31-60 días: {deuda60dias.length} ({formatCurrency(deuda60dias.reduce((s: number, o: any) => s + o.pendiente, 0), moneda)})</div>}
+                  {deuda90dias.length > 0 && <div className="font-semibold">+60 días: {deuda90dias.length} ({formatCurrency(deuda90dias.reduce((s: number, o: any) => s + o.pendiente, 0), moneda)})</div>}
+                </div>
+              </div>
+            )}
+            {garantiasPorVencer.length === 0 && garantiasVentaPorVencer.length === 0 && itemsBajoStock === 0 && ordenesPendientes === 0 && ordenesFechaVencida.length === 0 && ordenesPendienteCobro.length === 0 && (
               <p className="text-sm text-muted-foreground">
                 No hay alertas pendientes
               </p>
@@ -498,6 +598,9 @@ export default async function DashboardPage() {
 
       {/* Modal de novedades — se muestra si hay nueva versión */}
       <WhatsNewModal lastSeenVersion={lastSeenVersion} />
+
+      {/* NPS Survey — se muestra cada 60 días */}
+      <NpsSurvey />
     </div>
   )
 }

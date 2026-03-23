@@ -11,6 +11,8 @@ interface OrdenCostosCardProps {
   presupuesto: number | null | undefined
   costoFinal: number | null | undefined
   sena: number
+  totalCobrado?: number
+  descuentoCobro?: number
   onUpdateField: (field: string, value: any) => void
 }
 
@@ -19,9 +21,12 @@ export function OrdenCostosCard({
   presupuesto,
   costoFinal,
   sena,
+  totalCobrado = 0,
+  descuentoCobro = 0,
   onUpdateField,
 }: OrdenCostosCardProps) {
   const { formatPrice } = useCurrency()
+  const pendienteReal = Math.max(0, (costoFinal || 0) - descuentoCobro - totalCobrado)
 
   return (
     <Card>
@@ -66,22 +71,26 @@ export function OrdenCostosCard({
           </div>
         </div>
 
-        {(sena > 0 || costoFinal) && (
+        {costoFinal && costoFinal > 0 && (
           <div className="pt-3 border-t space-y-2">
-            {sena > 0 && (
+            {totalCobrado > 0 && (
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Seña/Adelanto</span>
-                <span className="text-success">-{formatPrice(sena)}</span>
+                <span className="text-muted-foreground">Cobrado</span>
+                <span className="text-green-600 font-medium">{formatPrice(totalCobrado)}</span>
               </div>
             )}
-            {costoFinal && (
-              <div className="flex justify-between font-semibold">
-                <span>Saldo Pendiente</span>
-                <span className="text-lg">
-                  {formatPrice(Math.max(0, (costoFinal || 0) - (sena || 0)))}
-                </span>
+            {descuentoCobro > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Descuento</span>
+                <span className="text-muted-foreground">-{formatPrice(descuentoCobro)}</span>
               </div>
             )}
+            <div className="flex justify-between font-semibold">
+              <span>{pendienteReal <= 0 ? "Cobrado" : "Pendiente"}</span>
+              <span className={`text-lg ${pendienteReal <= 0 ? "text-green-600" : ""}`}>
+                {formatPrice(pendienteReal)}
+              </span>
+            </div>
           </div>
         )}
       </CardContent>

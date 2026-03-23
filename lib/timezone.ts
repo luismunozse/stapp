@@ -68,13 +68,14 @@ export const TIMEZONE_OPTIONS: TimezoneOption[] = [
 
 export function formatDateValue(
   date: Date | string | null | undefined,
-  timezone: string = DEFAULT_TIMEZONE
+  timezone: string = DEFAULT_TIMEZONE,
+  locale: string = "es-AR"
 ): string {
   if (!date) return ""
   const d = typeof date === "string" ? new Date(date) : date
   if (Number.isNaN(d.getTime())) return ""
 
-  return new Intl.DateTimeFormat("es-AR", {
+  return new Intl.DateTimeFormat(locale, {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -84,13 +85,14 @@ export function formatDateValue(
 
 export function formatDateTimeValue(
   date: Date | string | null | undefined,
-  timezone: string = DEFAULT_TIMEZONE
+  timezone: string = DEFAULT_TIMEZONE,
+  locale: string = "es-AR"
 ): string {
   if (!date) return ""
   const d = typeof date === "string" ? new Date(date) : date
   if (Number.isNaN(d.getTime())) return ""
 
-  return new Intl.DateTimeFormat("es-AR", {
+  return new Intl.DateTimeFormat(locale, {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",

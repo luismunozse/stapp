@@ -3,14 +3,28 @@ import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
 
-const pagoVentaSchema = z.object({
+const pagoLineSchema = z.object({
   monto: z.number().positive("El monto debe ser mayor a 0"),
-  metodoPago: z.enum(["EFECTIVO", "TRANSFERENCIA", "TARJETA_DEBITO", "TARJETA_CREDITO", "MERCADOPAGO", "OTRO"]),
+  metodo: z.enum(["EFECTIVO", "TRANSFERENCIA", "TARJETA_DEBITO", "TARJETA_CREDITO", "MERCADOPAGO", "CUENTA_CORRIENTE", "OTRO"]),
+  referencia: z.string().nullable().optional(),
+  cuotas: z.number().int().min(1).nullable().optional(),
+  recargo: z.number().min(0).nullable().optional(),
+  montoOriginal: z.number().positive().nullable().optional(),
+})
+
+// Supports both legacy single payment and new multi-payment
+const pagoVentaSchema = z.object({
+  // Multi-payment (new)
+  pagos: z.array(pagoLineSchema).optional(),
+  // Legacy single payment (backwards compat)
+  monto: z.number().positive().optional(),
+  metodoPago: z.enum(["EFECTIVO", "TRANSFERENCIA", "TARJETA_DEBITO", "TARJETA_CREDITO", "MERCADOPAGO", "CUENTA_CORRIENTE", "OTRO"]).optional(),
   numeroReferencia: z.string().optional(),
-  observaciones: z.string().optional(),
   cuotas: z.number().int().min(1).nullable().optional(),
   recargoPorcentaje: z.number().min(0).nullable().optional(),
   montoOriginal: z.number().positive().nullable().optional(),
+  observaciones: z.string().optional(),
+  clienteId: z.string().optional(),
 })
 
 function calcularEstadoPago(montoAbonado: number, total: number): string {
@@ -24,7 +38,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, role } = await requireAdminOrVendedor()
+    const { error, organizationId, userId, role } = await requireAdminOrVendedor()
     if (error) return error
 
     if (role !== "ADMIN") {
@@ -38,6 +52,23 @@ export async function POST(
     const body = await request.json()
     const data = pagoVentaSchema.parse(body)
 
+    // Normalize: convert legacy single payment to array
+    let pagosToProcess: z.infer<typeof pagoLineSchema>[]
+    if (data.pagos && data.pagos.length > 0) {
+      pagosToProcess = data.pagos
+    } else if (data.monto && data.metodoPago) {
+      pagosToProcess = [{
+        monto: data.monto,
+        metodo: data.metodoPago,
+        referencia: data.numeroReferencia || null,
+        cuotas: data.cuotas || null,
+        recargo: data.recargoPorcentaje || null,
+        montoOriginal: data.montoOriginal || null,
+      }]
+    } else {
+      return NextResponse.json({ error: "Debe enviar al menos un pago" }, { status: 400 })
+    }
+
     // Obtener venta y verificar org
     const { data: venta, error: fetchError } = await supabaseAdmin
       .from("ventas")
@@ -47,10 +78,7 @@ export async function POST(
       .single()
 
     if (fetchError || !venta) {
-      return NextResponse.json(
-        { error: "Venta no encontrada" },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: "Venta no encontrada" }, { status: 404 })
     }
 
     if (venta.estado === "ANULADA") {
@@ -62,33 +90,58 @@ export async function POST(
 
     // Validar que no se pague más del pendiente
     const pendiente = parseFloat(venta.total) - parseFloat(venta.monto_abonado || "0")
-    if (data.monto > pendiente) {
+    const totalPagos = pagosToProcess.reduce((sum, p) => sum + p.monto, 0)
+    if (totalPagos > pendiente + 0.01) {
       return NextResponse.json(
-        { error: `El monto excede el pendiente (${pendiente.toFixed(2)})` },
+        { error: `El monto total (${totalPagos.toFixed(2)}) excede el pendiente (${pendiente.toFixed(2)})` },
         { status: 400 }
       )
     }
 
-    // Crear pago
-    const { data: pago, error: pagoError } = await supabaseAdmin
-      .from("pagos_venta")
-      .insert({
-        venta_id: ventaId,
-        monto: data.monto,
-        metodo_pago: data.metodoPago,
-        numero_referencia: data.numeroReferencia || null,
-        observaciones: data.observaciones || null,
-        cuotas: data.cuotas || null,
-        recargo_porcentaje: data.recargoPorcentaje || null,
-        monto_original: data.montoOriginal || null,
-      })
-      .select()
-      .single()
+    const clienteId = data.clienteId || venta.cliente_id
+    const pagosCreados = []
 
-    if (pagoError) throw pagoError
+    // Crear cada pago
+    for (const pagoLine of pagosToProcess) {
+      // Si es CUENTA_CORRIENTE, descontar del saldo del cliente
+      if (pagoLine.metodo === "CUENTA_CORRIENTE" && clienteId) {
+        const { error: ccError } = await supabaseAdmin.rpc("usar_cuenta_corriente", {
+          p_org_id: organizationId!,
+          p_cliente_id: clienteId,
+          p_monto: pagoLine.monto,
+          p_referencia_tipo: "VENTA",
+          p_referencia_id: ventaId,
+          p_usuario_id: userId!,
+        })
+        if (ccError) {
+          return NextResponse.json(
+            { error: ccError.message || "Error al usar cuenta corriente" },
+            { status: 400 }
+          )
+        }
+      }
+
+      const { data: pago, error: pagoError } = await supabaseAdmin
+        .from("pagos_venta")
+        .insert({
+          venta_id: ventaId,
+          monto: pagoLine.monto,
+          metodo_pago: pagoLine.metodo,
+          numero_referencia: pagoLine.referencia || null,
+          observaciones: data.observaciones || null,
+          cuotas: pagoLine.cuotas || null,
+          recargo_porcentaje: pagoLine.recargo || null,
+          monto_original: pagoLine.montoOriginal || null,
+        })
+        .select()
+        .single()
+
+      if (pagoError) throw pagoError
+      pagosCreados.push(pago)
+    }
 
     // Actualizar venta
-    const nuevoMontoAbonado = parseFloat(venta.monto_abonado || "0") + data.monto
+    const nuevoMontoAbonado = parseFloat(venta.monto_abonado || "0") + totalPagos
     const nuevoEstado = calcularEstadoPago(nuevoMontoAbonado, parseFloat(venta.total))
 
     await supabaseAdmin
@@ -101,16 +154,16 @@ export async function POST(
 
     return NextResponse.json(
       {
-        pago: {
-          id: pago.id,
-          monto: pago.monto,
-          metodoPago: pago.metodo_pago,
-          referencia: pago.numero_referencia,
-          fecha: pago.fecha,
-          cuotas: pago.cuotas,
-          recargoPorcentaje: pago.recargo_porcentaje,
-          montoOriginal: pago.monto_original,
-        },
+        pagos: pagosCreados.map(p => ({
+          id: p.id,
+          monto: p.monto,
+          metodoPago: p.metodo_pago,
+          referencia: p.numero_referencia,
+          fecha: p.fecha,
+          cuotas: p.cuotas,
+          recargoPorcentaje: p.recargo_porcentaje,
+          montoOriginal: p.monto_original,
+        })),
         venta: {
           montoAbonado: nuevoMontoAbonado,
           estadoPago: nuevoEstado,
@@ -121,15 +174,9 @@ export async function POST(
     )
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: error.errors[0].message },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: error.errors[0].message }, { status: 400 })
     }
     console.error("Error creating pago venta:", error)
-    return NextResponse.json(
-      { error: "Error al registrar pago" },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: "Error al registrar pago" }, { status: 500 })
   }
 }

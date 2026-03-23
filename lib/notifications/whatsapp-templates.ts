@@ -1,5 +1,6 @@
 import { formatCurrencyValue, type CurrencyCode, DEFAULT_CURRENCY } from "@/lib/currency"
 import { formatDateValue } from "@/lib/timezone"
+import { formatPhoneForCountry } from "@/lib/countries"
 import { EstadoOrden, NotificationContext, MetodoPagoVenta } from "./types"
 
 export interface WhatsAppTemplate {
@@ -229,6 +230,7 @@ const metodoPagoLabels: Record<MetodoPagoVenta, string> = {
   TARJETA_DEBITO: "tarjeta de débito",
   TARJETA_CREDITO: "tarjeta de crédito",
   MERCADOPAGO: "MercadoPago",
+  CUENTA_CORRIENTE: "cuenta corriente",
   OTRO: "otro medio",
 }
 
@@ -304,8 +306,13 @@ Lo esperamos pronto!
 ${ctx.organizationName}`
 }
 
-export function formatPhoneForWhatsApp(phone: string): string {
-  // Remover todo excepto numeros
+export function formatPhoneForWhatsApp(phone: string, countryCode?: string | null): string {
+  // Si se proporciona país, usar la función multi-país
+  if (countryCode) {
+    return formatPhoneForCountry(phone, countryCode)
+  }
+
+  // Fallback: comportamiento original (Argentina)
   let cleaned = phone.replace(/\D/g, "")
 
   // Si empieza con 0, removemos y agregamos 54 (Argentina)
@@ -321,8 +328,8 @@ export function formatPhoneForWhatsApp(phone: string): string {
   return cleaned
 }
 
-export function generateWhatsAppUrl(phone: string, message: string): string {
-  const formattedPhone = formatPhoneForWhatsApp(phone)
+export function generateWhatsAppUrl(phone: string, message: string, countryCode?: string | null): string {
+  const formattedPhone = formatPhoneForWhatsApp(phone, countryCode)
   const encodedMessage = encodeURIComponent(message)
   return `https://wa.me/${formattedPhone}?text=${encodedMessage}`
 }

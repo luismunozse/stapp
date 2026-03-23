@@ -6,6 +6,8 @@ export type { NotificationEvent, DailyReminderEvent, InngestEvents } from "./cli
 import { sendNotification } from "./functions/send-notification"
 import { dailyReminders, checkExpiringWarranties } from "./functions/daily-reminders"
 import { cleanupNotifications } from "./functions/cleanup-notifications"
+import { lifecycleEmails, calculateEngagement } from "./functions/lifecycle-emails"
+import { calculateFeatureUsage } from "./functions/feature-usage"
 
 // Exportar array de funciones para el handler
 export const functions = [
@@ -13,6 +15,9 @@ export const functions = [
   dailyReminders,
   checkExpiringWarranties,
   cleanupNotifications,
+  lifecycleEmails,
+  calculateEngagement,
+  calculateFeatureUsage,
 ]
 
 // Helper para enviar notificación

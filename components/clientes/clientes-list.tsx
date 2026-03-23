@@ -5,8 +5,10 @@ import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DataTable, DataTablePagination, type Column } from "@/components/ui/data-table"
-import { Plus, Search, Phone, Mail, Edit, Trash2, User, Building2, Upload } from "lucide-react"
+import { Plus, Search, Phone, Mail, Edit, Trash2, User, Building2, Upload, PiggyBank, DollarSign } from "lucide-react"
 import { ClienteForm } from "./cliente-form"
+import { CuentaCorrienteDialog } from "@/components/clientes/cuenta-corriente-dialog"
+import { CobrarMultipleDialog } from "@/components/ordenes/cobrar-multiple-dialog"
 import { ImportModal } from "@/components/import/import-modal"
 import { ExportButton } from "@/components/export/export-button"
 import { ClienteMobileCard } from "./cliente-mobile-card"
@@ -23,11 +25,13 @@ interface ClientesListProps {
 
 export function ClientesList({ allowImport = true }: ClientesListProps) {
   const { confirm, showError } = useModal()
-  const { formatDate } = useCurrency()
+  const { formatDate, formatPrice } = useCurrency()
   const [showForm, setShowForm] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [cuentaCorrienteCliente, setCuentaCorrienteCliente] = useState<Cliente | null>(null)
+  const [cobrarCliente, setCobrarCliente] = useState<Cliente | null>(null)
 
   // Filters
   const [search, setSearch] = useState("")
@@ -200,11 +204,49 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
       render: (cliente) => formatDate(cliente.createdAt),
     },
     {
+      key: "saldoCuenta",
+      header: "Saldo",
+      sortable: false,
+      hideOnMobile: true,
+      render: (cliente) => {
+        const saldo = (cliente as any).saldoCuenta || 0
+        if (saldo <= 0) return <span className="text-muted-foreground">-</span>
+        return (
+          <button
+            type="button"
+            className="flex items-center gap-1 text-blue-600 hover:text-blue-700 font-medium text-sm"
+            onClick={(e) => { e.stopPropagation(); setCuentaCorrienteCliente(cliente) }}
+          >
+            <PiggyBank className="h-3.5 w-3.5" />
+            {formatPrice(saldo)}
+          </button>
+        )
+      },
+    },
+    {
       key: "actions",
       header: "",
       className: "w-auto sm:w-[100px]",
       render: (cliente) => (
         <div role="group" className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-muted-foreground hover:text-green-600"
+            onClick={(e) => { e.stopPropagation(); setCobrarCliente(cliente) }}
+            title="Cobrar órdenes"
+          >
+            <DollarSign className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-muted-foreground hover:text-blue-600"
+            onClick={(e) => { e.stopPropagation(); setCuentaCorrienteCliente(cliente) }}
+            title="Cuenta corriente"
+          >
+            <PiggyBank className="h-4 w-4" />
+          </Button>
           <Button
             variant="ghost"
             size="icon"
@@ -287,6 +329,30 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
           onClose={() => setShowImport(false)}
           onSuccess={() => {
             setShowImport(false)
+            mutate()
+          }}
+        />
+      )}
+
+      {/* Cuenta Corriente Dialog */}
+      {cuentaCorrienteCliente && (
+        <CuentaCorrienteDialog
+          open={!!cuentaCorrienteCliente}
+          onOpenChange={(open) => !open && setCuentaCorrienteCliente(null)}
+          cliente={cuentaCorrienteCliente}
+          onDeposito={() => mutate()}
+        />
+      )}
+
+      {/* Cobrar Múltiple Dialog */}
+      {cobrarCliente && (
+        <CobrarMultipleDialog
+          open={!!cobrarCliente}
+          onOpenChange={(open) => !open && setCobrarCliente(null)}
+          clienteId={cobrarCliente.id}
+          clienteNombre={cobrarCliente.nombre}
+          onSuccess={() => {
+            setCobrarCliente(null)
             mutate()
           }}
         />

@@ -24,13 +24,22 @@ const ventaSchema = z.object({
   descuento: z.number().min(0).default(0),
   tipoDescuento: z.enum(["MONTO", "PORCENTAJE"]).default("MONTO"),
   porcentajeDescuento: z.number().min(0).max(100).default(0),
-  metodoPago: z.enum(["EFECTIVO", "TRANSFERENCIA", "TARJETA", "TARJETA_DEBITO", "TARJETA_CREDITO", "MERCADOPAGO", "OTRO"]),
+  metodoPago: z.enum(["EFECTIVO", "TRANSFERENCIA", "TARJETA", "TARJETA_DEBITO", "TARJETA_CREDITO", "MERCADOPAGO", "CUENTA_CORRIENTE", "OTRO"]),
   observaciones: z.string().optional(),
   cuotas: z.number().int().min(1).nullable().optional(),
   recargoPorcentaje: z.number().min(0).nullable().optional(),
   montoOriginal: z.number().positive().nullable().optional(),
   numeroReferencia: z.string().optional(),
   descuentoMotivo: z.string().optional(),
+  pagosParcial: z.boolean().optional(),
+  pagos: z.array(z.object({
+    metodo: z.string(),
+    monto: z.number().positive(),
+    referencia: z.string().nullable().optional(),
+    cuotas: z.number().int().min(1).nullable().optional(),
+    recargo: z.number().min(0).nullable().optional(),
+    montoOriginal: z.number().positive().nullable().optional(),
+  })).optional(),
 })
 
 export async function GET(request: Request) {
@@ -182,7 +191,7 @@ export async function POST(request: Request) {
     }))
 
     // Crear venta atómicamente
-    const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc("crear_venta_atomica", {
+    const rpcParams: Record<string, any> = {
       p_org_id: organizationId!,
       p_vendedor_id: userId!,
       p_cliente_id: data.clienteId || null,
@@ -200,7 +209,14 @@ export async function POST(request: Request) {
       p_recargo_porcentaje: data.recargoPorcentaje || null,
       p_monto_original: data.montoOriginal || null,
       p_items: pItems,
-    })
+    }
+
+    // Pass multi-payment array if provided
+    if (data.pagos && data.pagos.length > 0) {
+      rpcParams.p_pagos = data.pagos
+    }
+
+    const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc("crear_venta_atomica", rpcParams)
 
     if (rpcError) {
       // Los errores de RAISE EXCEPTION vienen en error.message

@@ -7,6 +7,9 @@ import { SkipLinks } from "@/components/shared/skip-links"
 import { ApkDownloadBanner } from "@/components/shared/apk-download-banner"
 import { SampleDataBannerWrapper } from "@/components/onboarding/sample-data-banner-wrapper"
 import { GuidedTour } from "@/components/guided-tour"
+import { OfflineProvider } from "@/contexts/offline-context"
+import { OfflineBanner } from "@/components/offline/offline-banner"
+import { SyncStatusIndicator } from "@/components/offline/sync-status-indicator"
 import { auth } from "@/lib/auth"
 import { hasValidAccess, getTrialInfo } from "@/lib/subscriptions"
 import { supabaseAdmin } from "@/lib/supabase"
@@ -59,33 +62,38 @@ export default async function DashboardLayout({
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen bg-muted/30 dark:bg-background">
-        <SkipLinks />
-        <Navbar />
-        {/* Banner de trial si está en período de prueba */}
-        {showTrialBanner && (
-          <TrialBanner daysRemaining={trialInfo.daysRemaining} />
-        )}
-        {/* Banner de datos de ejemplo */}
-        {hasSampleData && <SampleDataBannerWrapper />}
-        {/* Banner de descarga APK para móvil (no se muestra en app nativa) */}
-        {!showTrialBanner && !hasSampleData && <ApkDownloadBanner variant="top" />}
-        <SidebarMain
-          className={
-            showTrialBanner
-              ? "pt-[calc(3.5rem+2.5rem+env(safe-area-inset-top,0px))] lg:pt-10"
-              : "pt-[calc(3.5rem+env(safe-area-inset-top,0px))] lg:pt-0"
-          }
-        >
-          {children}
-        </SidebarMain>
-        {/* Modal de cambio de políticas - se muestra una sola vez */}
-        {showTrialBanner && (
-          <PolicyChangeModal daysRemaining={trialInfo.daysRemaining} />
-        )}
-        {/* Tour guiado - se muestra automáticamente la primera vez */}
-        <GuidedTour />
-      </div>
+      <OfflineProvider>
+        <div className="min-h-screen bg-muted/30 dark:bg-background">
+          <SkipLinks />
+          <OfflineBanner />
+          <Navbar />
+          {/* Banner de trial si está en período de prueba */}
+          {showTrialBanner && (
+            <TrialBanner daysRemaining={trialInfo.daysRemaining} />
+          )}
+          {/* Banner de datos de ejemplo */}
+          {hasSampleData && <SampleDataBannerWrapper />}
+          {/* Banner de descarga APK para móvil (no se muestra en app nativa) */}
+          {!showTrialBanner && !hasSampleData && <ApkDownloadBanner variant="top" />}
+          <SidebarMain
+            className={
+              showTrialBanner
+                ? "pt-[calc(3.5rem+2.5rem+env(safe-area-inset-top,0px))] lg:pt-10"
+                : "pt-[calc(3.5rem+env(safe-area-inset-top,0px))] lg:pt-0"
+            }
+          >
+            {children}
+          </SidebarMain>
+          {/* Modal de cambio de políticas - se muestra una sola vez */}
+          {showTrialBanner && (
+            <PolicyChangeModal daysRemaining={trialInfo.daysRemaining} />
+          )}
+          {/* Tour guiado - se muestra automáticamente la primera vez */}
+          <GuidedTour />
+          {/* Indicador de operaciones offline pendientes */}
+          <SyncStatusIndicator />
+        </div>
+      </OfflineProvider>
     </SidebarProvider>
   )
 }

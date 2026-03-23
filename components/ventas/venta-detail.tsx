@@ -121,6 +121,7 @@ const metodoPagoLabels: Record<string, string> = {
   TARJETA_DEBITO: "Tarjeta Débito",
   TARJETA_CREDITO: "Tarjeta Crédito",
   MERCADOPAGO: "MercadoPago",
+  CUENTA_CORRIENTE: "Cuenta Corriente",
   OTRO: "Otro",
 }
 
@@ -497,6 +498,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
               ventaId={venta.id}
               total={venta.total}
               montoAbonado={venta.montoAbonado || 0}
+              clienteId={venta.clienteId}
               onClose={() => setShowPagoForm(false)}
               onSuccess={() => {
                 setShowPagoForm(false)

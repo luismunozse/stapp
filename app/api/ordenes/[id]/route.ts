@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger, diffObjects } from "@/lib/audit"
 import { queueNotification } from "@/lib/inngest"
 import { formatOrden } from "@/lib/db-utils"
+import { esTransicionValida, getMensajeTransicionInvalida, validarCamposRequeridos } from "@/lib/orden-state-machine"
 import { z } from "zod"
 
 const updateOrdenSchema = z.object({
@@ -130,6 +131,30 @@ export async function PUT(
         { error: "No autorizado" },
         { status: 403 }
       )
+    }
+
+    // Validar transición de estado (state machine)
+    if (data.estado && data.estado !== orden.estado) {
+      if (!esTransicionValida(orden.estado, data.estado)) {
+        return NextResponse.json(
+          { error: getMensajeTransicionInvalida(orden.estado, data.estado) },
+          { status: 400 }
+        )
+      }
+
+      // Validar campos requeridos para el nuevo estado
+      // Considerar los datos que se envían en esta misma request
+      const ordenConDatosNuevos = {
+        ...orden,
+        ...(data.presupuesto !== undefined ? { presupuesto: data.presupuesto } : {}),
+        ...(data.costoFinal !== undefined ? { costo_final: data.costoFinal } : {}),
+        ...(data.tecnicoId !== undefined ? { tecnico_id: data.tecnicoId } : {}),
+        ...(data.diagnostico !== undefined ? { diagnostico: data.diagnostico } : {}),
+      }
+      const errorCampos = validarCamposRequeridos(data.estado, ordenConDatosNuevos)
+      if (errorCampos) {
+        return NextResponse.json({ error: errorCampos }, { status: 400 })
+      }
     }
 
     // Preparar datos para update

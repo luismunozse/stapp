@@ -23,6 +23,8 @@ import { OrdenCreadaModal } from "./orden-creada-modal"
 import { compressImage } from "@/lib/image-compression"
 import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
 import { SignaturePad } from "@/components/firma/signature-pad"
+import { useOffline } from "@/contexts/offline-context"
+import { STORES } from "@/lib/offline/constants"
 import type { Cliente, TipoDispositivoConfig, CampoExtra } from "@/types"
 
 interface FotoPreview {
@@ -125,6 +127,7 @@ interface OrdenCreadaData {
 }
 
 export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
+  const { offlineFetch } = useOffline()
   const [loading, setLoading] = useState(false)
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [showClienteModal, setShowClienteModal] = useState(false)
@@ -137,6 +140,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
   const [ordenCreada, setOrdenCreada] = useState<OrdenCreadaData | null>(null)
   const [presupuestoAceptado, setPresupuestoAceptado] = useState(false)
   const [sena, setSena] = useState<number | undefined>(undefined)
+  const [metodoPagoSena, setMetodoPagoSena] = useState<string>("EFECTIVO")
   const [comprimiendo, setComprimiendo] = useState(false)
   const [camposExtraValues, setCamposExtraValues] = useState<Record<string, any>>({})
   const [selectedSectorId, setSelectedSectorId] = useState<string>("")
@@ -597,22 +601,34 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
         }
       }
 
-      const res = await fetch("/api/ordenes", {
+      const ordenPayload = {
+        ...data,
+        accesorios: accesoriosLabels.length > 0 ? accesoriosLabels.join(", ") : undefined,
+        presupuesto: data.presupuesto && data.presupuesto > 0 ? data.presupuesto : undefined,
+        fechaPrometida: data.fechaPrometida || undefined,
+        fotos: fotosData.length > 0 ? fotosData : undefined,
+        presupuestoAceptado: presupuestoAceptado,
+        sena: presupuestoAceptado && sena ? sena : undefined,
+        metodoPagoSena: presupuestoAceptado && sena ? metodoPagoSena : undefined,
+        observaciones: data.observaciones || undefined,
+        metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+        sectorId: selectedSectorId || undefined,
+      }
+
+      const res = await offlineFetch("/api/ordenes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...data,
-          accesorios: accesoriosLabels.length > 0 ? accesoriosLabels.join(", ") : undefined,
-          presupuesto: data.presupuesto && data.presupuesto > 0 ? data.presupuesto : undefined,
-          fechaPrometida: data.fechaPrometida || undefined,
-          fotos: fotosData.length > 0 ? fotosData : undefined,
-          presupuestoAceptado: presupuestoAceptado,
-          sena: presupuestoAceptado && sena ? sena : undefined,
-          observaciones: data.observaciones || undefined,
-          metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
-          sectorId: selectedSectorId || undefined,
-        }),
-      })
+        body: JSON.stringify(ordenPayload),
+      }, { store: STORES.ORDERS, description: `Orden - ${data.dispositivo}` })
+
+      if (res.status === 202) {
+        // Queued offline
+        const clienteSeleccionado = clientes.find(c => c.id === data.clienteId)
+        alert("Orden guardada offline. Se sincronizará automáticamente cuando vuelva la conexión.")
+        onSuccess?.()
+        onClose()
+        return
+      }
 
       if (!res.ok) {
         const error = await res.json()
@@ -1021,7 +1037,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
 
               {presupuestoAceptado && (
                 <div className="mt-4 pl-7">
-                  <Label htmlFor="sena">Sena / Adelanto (Opcional)</Label>
+                  <Label htmlFor="sena">Seña / Adelanto (Opcional)</Label>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-muted-foreground">$</span>
                     <Input
@@ -1036,9 +1052,32 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
                       className="w-40"
                     />
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Monto que el cliente deja como anticipo
-                  </p>
+                  {sena && sena > 0 && (
+                    <div className="mt-2">
+                      <Label className="text-xs text-muted-foreground">Método de pago de la seña</Label>
+                      <div className="flex gap-1.5 mt-1">
+                        {[
+                          { value: "EFECTIVO", label: "Efectivo" },
+                          { value: "TRANSFERENCIA", label: "Transfer." },
+                          { value: "MERCADOPAGO", label: "MP" },
+                          { value: "OTRO", label: "Otro" },
+                        ].map(({ value, label }) => (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() => setMetodoPagoSena(value)}
+                            className={`px-2.5 py-1 rounded text-xs font-medium border transition-all ${
+                              metodoPagoSena === value
+                                ? "border-primary bg-primary/10 text-primary"
+                                : "border-border text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
