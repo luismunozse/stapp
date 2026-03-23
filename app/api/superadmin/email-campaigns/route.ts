@@ -243,7 +243,7 @@ export async function POST(request: NextRequest) {
       .from("users")
       .select("id, nombre, email, organization_id")
       .in("organization_id", organizationIds)
-      .eq("role", "ADMIN")
+      .eq("rol", "ADMIN")
 
     if (!admins || admins.length === 0) {
       return NextResponse.json(

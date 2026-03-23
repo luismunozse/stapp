@@ -115,7 +115,7 @@ export const lifecycleEmails = inngest.createFunction(
           .from("users")
           .select("id, nombre, email")
           .eq("organization_id", org.id)
-          .eq("role", "ADMIN")
+          .eq("rol", "ADMIN")
           .limit(1)
 
         const admin = admins?.[0]
@@ -159,7 +159,7 @@ export const lifecycleEmails = inngest.createFunction(
           .from("users")
           .select("id, nombre, email")
           .eq("organization_id", org.id)
-          .eq("role", "ADMIN")
+          .eq("rol", "ADMIN")
           .limit(1)
 
         const admin = admins?.[0]
@@ -203,7 +203,7 @@ export const lifecycleEmails = inngest.createFunction(
           .from("users")
           .select("id, nombre, email")
           .eq("organization_id", org.id)
-          .eq("role", "ADMIN")
+          .eq("rol", "ADMIN")
           .limit(1)
 
         const admin = admins?.[0]
@@ -255,7 +255,7 @@ export const lifecycleEmails = inngest.createFunction(
           .from("users")
           .select("id, nombre, email")
           .eq("organization_id", org.id)
-          .eq("role", "ADMIN")
+          .eq("rol", "ADMIN")
           .limit(1)
 
         const admin = admins?.[0]
@@ -314,7 +314,7 @@ export const lifecycleEmails = inngest.createFunction(
           .from("users")
           .select("id, nombre, email")
           .eq("organization_id", org.id)
-          .eq("role", "ADMIN")
+          .eq("rol", "ADMIN")
           .limit(1)
 
         const admin = admins?.[0]
@@ -366,7 +366,7 @@ export const lifecycleEmails = inngest.createFunction(
               .from("users")
               .select("id, nombre, email")
               .eq("organization_id", org.id)
-              .eq("role", "ADMIN")
+              .eq("rol", "ADMIN")
               .limit(1)
 
             const admin = admins?.[0]
