@@ -619,6 +619,73 @@ export async function sendCotizacionEmail({
 // ============================================
 // NOTIFICACIÓN DE NUEVO LEAD (Chatbot)
 // ============================================
+// ============================================
+// EMAIL INDIVIDUAL DESDE ADMIN
+// ============================================
+interface SendAdminEmailParams {
+  to: string
+  nombreDestinatario: string
+  asunto: string
+  contenido: string
+  nombreOrganizacion: string
+}
+
+export async function sendAdminEmail({
+  to,
+  nombreDestinatario,
+  asunto,
+  contenido,
+  nombreOrganizacion,
+}: SendAdminEmailParams) {
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
+
+  const escapedContent = contenido
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\n/g, "<br>")
+
+  const content = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td align="center">
+          <h1 class="text-heading" style="color: #1f2937; font-size: 24px; font-weight: 700; margin: 0 0 8px 0;">
+            ${asunto}
+          </h1>
+        </td>
+      </tr>
+    </table>
+
+    <p class="text-body" style="color: #4b5563; font-size: 16px; margin: 24px 0 0 0;">
+      Hola <strong>${nombreDestinatario}</strong>,
+    </p>
+
+    <div class="text-body" style="color: #4b5563; font-size: 15px; line-height: 1.7; margin: 16px 0 0 0;">
+      ${escapedContent}
+    </div>
+
+    ${getDivider()}
+
+    <p class="text-muted" style="color: #9ca3af; font-size: 13px; text-align: center; margin: 0;">
+      Este mensaje fue enviado por <strong>${nombreOrganizacion}</strong> a través de STApp.
+    </p>
+  `
+
+  return sendEmail({
+    to,
+    subject: `${asunto} - ${nombreOrganizacion}`,
+    html: getBaseTemplate({
+      preheader: `${nombreDestinatario}, tienes un mensaje de ${nombreOrganizacion}`,
+      content,
+      rootDomain,
+      footerText: `Este correo fue enviado por ${nombreOrganizacion} a través de STApp.`,
+    }),
+  })
+}
+
+// ============================================
+// NOTIFICACIÓN DE NUEVO LEAD (Chatbot)
+// ============================================
 interface SendNewLeadNotificationParams {
   nombre?: string | null
   email?: string | null

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DataTable, Column } from "@/components/ui/data-table"
-import { Search, Eye, Power, PowerOff, Building2, Loader2, Download, CheckCircle, XCircle, X } from "lucide-react"
+import { Search, Eye, Power, PowerOff, Building2, Loader2, Download, CheckCircle, XCircle, X, Phone } from "lucide-react"
 import { formatDate } from "@/lib/utils"
 import { useSuperadminFetch, useSuperadminMutation } from "@/hooks/use-superadmin-fetch"
 import { useLastUpdated } from "@/hooks/use-last-updated"
@@ -79,12 +79,13 @@ export default function OrganizacionesPage() {
 
   const handleExportCSV = () => {
     const csv = [
-      "nombre,slug,email,plan,estado,creada",
+      "nombre,slug,email,telefono,plan,estado,creada",
       ...organizations.map((org) =>
         [
           `"${org.nombre}"`,
           org.slug,
           org.email || "-",
+          org.telefono || "-",
           org.subscription?.plans?.nombre || "Free",
           org.activo ? "Activa" : "Inactiva",
           org.created_at,
@@ -154,6 +155,19 @@ export default function OrganizacionesPage() {
       header: "Email",
       hideOnMobile: true,
       render: (org) => org.email || "-",
+    },
+    {
+      key: "telefono",
+      header: "Teléfono",
+      hideOnMobile: true,
+      render: (org) => org.telefono ? (
+        <span className="flex items-center gap-1">
+          <Phone className="h-3 w-3 text-muted-foreground" />
+          {org.telefono}
+        </span>
+      ) : (
+        <span className="text-muted-foreground">-</span>
+      ),
     },
     {
       key: "usersCount",

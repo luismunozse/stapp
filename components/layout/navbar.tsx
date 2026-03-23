@@ -28,6 +28,7 @@ import {
   HelpCircle,
   PanelLeft,
   ChevronsLeft,
+  Mail,
 } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import { cn } from "@/lib/utils"
@@ -56,6 +57,7 @@ const navItems: NavItem[] = [
   { href: "/caja", label: "Caja", icon: Landmark, roles: ["ADMIN"] },
   { href: "/facturacion", label: "Facturación", icon: FileText, roles: ["ADMIN", "VENDEDOR"] },
   { href: "/reportes", label: "Reportes", icon: BarChart3, roles: ["ADMIN", "VENDEDOR"] },
+  { href: "/emails", label: "Emails", icon: Mail, roles: ["ADMIN"] },
   { href: "/soporte", label: "Soporte", icon: Headset },
 ]
 

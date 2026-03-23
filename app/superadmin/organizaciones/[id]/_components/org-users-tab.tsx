@@ -1,16 +1,48 @@
 "use client"
 
+import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Users } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Users, CheckCircle, Loader2 } from "lucide-react"
 import { formatDate } from "@/lib/utils"
+import { toast } from "sonner"
 import type { OrganizationUser } from "@/types/superadmin"
 
 interface OrgUsersTabProps {
   users: OrganizationUser[]
 }
 
-export function OrgUsersTab({ users }: OrgUsersTabProps) {
+export function OrgUsersTab({ users: initialUsers }: OrgUsersTabProps) {
+  const [users, setUsers] = useState(initialUsers)
+  const [verifyingId, setVerifyingId] = useState<string | null>(null)
+
+  async function handleVerifyEmail(userId: string) {
+    setVerifyingId(userId)
+    try {
+      const res = await fetch(`/api/superadmin/users/${userId}/verify-email`, {
+        method: "POST",
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        toast.error(data.error || "Error al verificar email")
+        return
+      }
+
+      toast.success(data.message)
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === userId ? { ...u, email_verified: true } : u
+        )
+      )
+    } catch {
+      toast.error("Error al verificar email")
+    } finally {
+      setVerifyingId(null)
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -32,6 +64,7 @@ export function OrgUsersTab({ users }: OrgUsersTabProps) {
                 <th className="text-left p-3 font-medium">Rol</th>
                 <th className="text-left p-3 font-medium">Email verificado</th>
                 <th className="text-left p-3 font-medium">Creado</th>
+                <th className="text-left p-3 font-medium">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -50,11 +83,28 @@ export function OrgUsersTab({ users }: OrgUsersTabProps) {
                   <td className="p-3 text-muted-foreground">
                     {formatDate(user.created_at)}
                   </td>
+                  <td className="p-3">
+                    {!user.email_verified && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleVerifyEmail(user.id)}
+                        disabled={verifyingId === user.id}
+                      >
+                        {verifyingId === user.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                        ) : (
+                          <CheckCircle className="h-4 w-4 mr-1" />
+                        )}
+                        Activar
+                      </Button>
+                    )}
+                  </td>
                 </tr>
               ))}
               {users.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center text-muted-foreground">
+                  <td colSpan={6} className="p-8 text-center text-muted-foreground">
                     No hay usuarios registrados
                   </td>
                 </tr>
