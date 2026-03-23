@@ -11,6 +11,7 @@ import { DownloadApp } from "@/components/landing/download-app"
 import { Footer } from "@/components/landing/footer"
 import { ChatbotButton } from "@/components/chatbot/chatbot-button"
 import { WhatsAppButton } from "@/components/landing/whatsapp-button"
+import { getPremiumPrices } from "@/lib/pricing"
 import { SkipLinks } from "@/components/shared/skip-links"
 import { FAQPageJsonLd } from "@/components/seo/json-ld"
 
@@ -104,7 +105,7 @@ const faqData = [
 ]
 
 export default async function Home() {
-  const session = await auth()
+  const [session, prices] = await Promise.all([auth(), getPremiumPrices()])
 
   // Si el usuario est\u00e1 autenticado, redirigir al dashboard
   if (session) {
@@ -121,7 +122,7 @@ export default async function Home() {
         <Hero />
         <Features />
         <Comparison />
-        <PricingSection />
+        <PricingSection prices={prices} />
         <FAQ faqs={faqData} />
         <DownloadApp />
         <Footer />

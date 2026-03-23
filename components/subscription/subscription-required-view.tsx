@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { signOut } from "next-auth/react"
 
 import { Clock, AlertTriangle, CreditCard, LogOut, Sparkles, Check, CheckCircle2, ArrowRight } from "lucide-react"
@@ -56,8 +56,28 @@ export function SubscriptionRequiredView({
   daysRemaining = 0,
 }: SubscriptionRequiredViewProps) {
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false)
+  const [pricesArs, setPricesArs] = useState({ monthly: 19999, yearly: 191990 })
+  const [pricesUsd, setPricesUsd] = useState({ monthly: 14, yearly: 134 })
   const message = hasAccess ? null : reasonMessages[reason]
   const Icon = message?.icon || CheckCircle2
+
+  useEffect(() => {
+    fetch("/api/subscriptions")
+      .then((res) => res.json())
+      .then((data) => {
+        const plan = data.plans?.find((p: any) => p.tipo === "PREMIUM")
+        if (plan) {
+          setPricesArs({ monthly: Number(plan.precio_mensual), yearly: Number(plan.precio_anual) })
+          if (plan.precio_mensual_usd) {
+            setPricesUsd({ monthly: Number(plan.precio_mensual_usd), yearly: Number(plan.precio_anual_usd) })
+          }
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  const formatArs = (n: number) => n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
+  const savingsPercent = Math.round(((pricesArs.monthly * 12 - pricesArs.yearly) / (pricesArs.monthly * 12)) * 100)
 
   const handleLogout = async () => {
     await signOut({ redirect: false })
@@ -119,16 +139,23 @@ export function SubscriptionRequiredView({
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="text-center">
-                <div className="text-4xl font-bold">$19.999</div>
+                <div className="text-4xl font-bold">${formatArs(pricesArs.monthly)}</div>
                 <div className="text-sm text-muted-foreground">ARS / mes</div>
                 <div className="text-xs text-muted-foreground mt-0.5">🇦🇷 Argentina</div>
                 <div className="text-sm text-green-600 mt-1">
-                  o $191.990/año (ahorra 20%)
+                  o ${formatArs(pricesArs.yearly)}/año (ahorra {savingsPercent}%)
                 </div>
                 <div className="mt-3 pt-3 border-t border-dashed">
-                  <div className="text-2xl font-bold">USD $12</div>
+                  <div className="flex items-center justify-center gap-1.5 mb-1">
+                    <span className="text-sm">🇲🇽</span>
+                    <span className="text-sm">🇨🇴</span>
+                    <span className="text-sm">🇨🇱</span>
+                    <span className="text-sm">🇵🇪</span>
+                    <span className="text-xs text-muted-foreground">+más</span>
+                  </div>
+                  <div className="text-2xl font-bold">USD ${pricesUsd.monthly}</div>
                   <div className="text-sm text-muted-foreground">/mes</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">🌎 Otros países</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">Tarjeta internacional</div>
                 </div>
               </div>
 

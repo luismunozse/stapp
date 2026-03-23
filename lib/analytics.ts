@@ -74,10 +74,10 @@ export const analytics = {
     }),
 
   /** Usuario vio la sección de pricing */
-  viewPricing: () =>
+  viewPricing: (price?: number) =>
     trackEvent("view_item", {
       event_category: "pricing",
-      items: [{ item_name: "STApp Pro", price: 19999, currency: "ARS" }],
+      items: [{ item_name: "STApp Premium", price: price || 0, currency: "ARS" }],
     }),
 
   /** Usuario inició el checkout / suscripción */

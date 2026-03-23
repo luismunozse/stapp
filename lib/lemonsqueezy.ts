@@ -4,6 +4,7 @@ import {
   cancelSubscription as lsCancelSubscription,
   getSubscription as lsGetSubscription,
 } from "@lemonsqueezy/lemonsqueezy.js"
+import { getPremiumPrices } from "@/lib/pricing"
 
 // Initialize LemonSqueezy with API key
 function initLemonSqueezy() {
@@ -14,10 +15,13 @@ function initLemonSqueezy() {
   lemonSqueezySetup({ apiKey })
 }
 
-// Precios del plan Premium en USD
-export const LS_PRICES = {
-  MONTHLY: 12, // $12 USD
-  YEARLY: 115, // $115 USD (~20% off $144)
+// Obtener precios dinámicos desde la base de datos
+export async function getLSPrices() {
+  const prices = await getPremiumPrices()
+  return {
+    MONTHLY: prices.usd.monthly,
+    YEARLY: prices.usd.yearly,
+  }
 }
 
 // Crear checkout session de LemonSqueezy

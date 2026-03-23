@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai"
 import { headers } from "next/headers"
+import { getPremiumPrices } from "@/lib/pricing"
 
 // NO usar requireAuth() - este endpoint es público
 // Usando gemini-2.0-flash
@@ -105,7 +106,7 @@ export async function POST(request: Request) {
       .limit(10)
 
     // Construir contexto para Gemini
-    const contextPrompt = buildContextPrompt()
+    const contextPrompt = await buildContextPrompt()
     const conversationHistory =
       historial
         ?.reverse()
@@ -216,7 +217,12 @@ Instrucciones:
   }
 }
 
-function buildContextPrompt(): string {
+async function buildContextPrompt(): Promise<string> {
+  const prices = await getPremiumPrices()
+  const formatArs = (n: number) => n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
+  const savingsArs = Math.round(((prices.ars.monthly * 12 - prices.ars.yearly) / (prices.ars.monthly * 12)) * 100)
+  const savingsUsd = Math.round(((prices.usd.monthly * 12 - prices.usd.yearly) / (prices.usd.monthly * 12)) * 100)
+
   return `Sos Santi, el asistente virtual de STApp, un software para gestión de talleres de reparación de dispositivos electrónicos.
 
 Tu personalidad:
@@ -231,8 +237,8 @@ Información sobre STApp:
 PLAN:
 Un solo plan: Plan Premium, todo incluido.
 - Primeros 30 días gratis, sin tarjeta de crédito requerida
-- Argentina: $19.999 ARS/mes o $191.990/año (ahorro ~20% con plan anual)
-- Otros países: USD $12/mes o USD $115/año
+- Argentina: $${formatArs(prices.ars.monthly)} ARS/mes o $${formatArs(prices.ars.yearly)}/año (ahorro ~${savingsArs}% con plan anual)
+- Otros países: USD $${prices.usd.monthly}/mes o USD $${prices.usd.yearly}/año (ahorro ~${savingsUsd}% con plan anual)
 - Garantía de devolución de 30 días. Cancelás cuando quieras, sin penalidades.
 - Pagos seguros con MercadoPago (Argentina) o tarjeta internacional (otros países)
 

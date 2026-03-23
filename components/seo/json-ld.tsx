@@ -1,4 +1,5 @@
 import Script from "next/script"
+import { getPremiumPrices } from "@/lib/pricing"
 
 const siteUrl = "https://stapp.com.ar"
 
@@ -37,7 +38,8 @@ export function OrganizationJsonLd() {
 }
 
 // SoftwareApplication Schema
-export function SoftwareApplicationJsonLd() {
+export async function SoftwareApplicationJsonLd() {
+  const prices = await getPremiumPrices()
   const schema = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
@@ -46,7 +48,7 @@ export function SoftwareApplicationJsonLd() {
     operatingSystem: "Web",
     offers: {
       "@type": "Offer",
-      price: "19999",
+      price: String(prices.ars.monthly),
       priceCurrency: "ARS",
       priceValidUntil: "2026-12-31",
     },

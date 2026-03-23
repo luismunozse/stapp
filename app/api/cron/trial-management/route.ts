@@ -5,7 +5,6 @@ const ENVIALOSIMPLE_API_URL = "https://backend.envialosimple.email/api/v1/mail/s
 const EMAIL_FROM = process.env.EMAIL_FROM || "noreply@stapp.com.ar"
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
 
-const AUTO_EXTENSION_DAYS = 7
 const ACTIVITY_LOOKBACK_DAYS = 14
 
 async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
@@ -111,8 +110,9 @@ export async function GET(request: Request) {
 
       if (daysLeft > 3) continue
 
-      // Máximo 2 auto-extensiones
-      if ((extensionCounts[org.id] || 0) >= 2) {
+      // Verificar si ya se le envió email de reactivación
+      const alreadyNotified = await wasAlreadySent(org.id, "TRIAL_REACTIVATION_INVITE")
+      if (alreadyNotified) {
         results.alreadyHandled++
         continue
       }
@@ -120,61 +120,23 @@ export async function GET(request: Request) {
       const admin = adminMap.get(org.id)
       if (!admin?.email) continue
 
-      const hasActivity = (activityCounts[org.id] || 0) >= 3
       const appUrl = `https://${org.slug}.${ROOT_DOMAIN}`
+      const reactivarUrl = `${appUrl}/reactivar`
 
-      if (hasActivity) {
-        // Auto-extensión
-        const newTrialEnd = new Date(trialEnd)
-        newTrialEnd.setDate(newTrialEnd.getDate() + AUTO_EXTENSION_DAYS)
-
-        await supabaseAdmin.from("subscriptions").update({
-          status: "TRIALING",
-          trial_end: newTrialEnd.toISOString(),
-        }).eq("id", sub.id)
-
-        await supabaseAdmin.from("trial_extensions").insert({
-          organization_id: org.id,
-          dias_extendidos: AUTO_EXTENSION_DAYS,
-          nueva_fecha_fin: newTrialEnd.toISOString(),
-          motivo: `auto-extension: ${activityCounts[org.id]} acciones en ${ACTIVITY_LOOKBACK_DAYS} días`,
-          extendido_por: "sistema",
+      if (daysLeft <= 0) {
+        // Trial vencido: enviar email invitando a reactivar (NO extender automáticamente)
+        // Los 7 días se activan solo cuando el usuario hace clic en /reactivar
+        const sent = await sendEmail(
+          admin.email,
+          "Reactivá tu cuenta en STApp - Tenés 7 días más para probar",
+          getReactivationEmailHtml(admin.nombre, org.nombre, reactivarUrl)
+        )
+        await supabaseAdmin.from("lifecycle_emails").insert({
+          organization_id: org.id, user_id: admin.id,
+          email_type: "TRIAL_REACTIVATION_INVITE",
+          status: sent ? "SENT" : "FAILED",
         })
-
-        if (!(await wasAlreadySent(org.id, "TRIAL_AUTO_EXTENDED"))) {
-          const fechaStr = newTrialEnd.toLocaleDateString("es-AR", { day: "numeric", month: "long", year: "numeric" })
-          await sendEmail(admin.email, "Buenas noticias - Te extendimos la prueba gratuita", getTrialExtendedEmailHtml(admin.nombre, org.nombre, appUrl, AUTO_EXTENSION_DAYS, fechaStr))
-          await supabaseAdmin.from("lifecycle_emails").insert({
-            organization_id: org.id, user_id: admin.id,
-            email_type: "TRIAL_AUTO_EXTENDED", status: "SENT",
-            metadata: { dias: AUTO_EXTENSION_DAYS, nuevaFecha: newTrialEnd.toISOString() },
-          })
-        }
-        results.autoExtended++
-      } else if (daysLeft <= 0) {
-        // Última oportunidad
-        if (!(await wasAlreadySent(org.id, "TRIAL_LAST_CHANCE"))) {
-          const newTrialEnd = new Date(now)
-          newTrialEnd.setDate(newTrialEnd.getDate() + AUTO_EXTENSION_DAYS)
-
-          await supabaseAdmin.from("subscriptions").update({
-            status: "TRIALING", trial_end: newTrialEnd.toISOString(),
-          }).eq("id", sub.id)
-
-          await supabaseAdmin.from("trial_extensions").insert({
-            organization_id: org.id, dias_extendidos: AUTO_EXTENSION_DAYS,
-            nueva_fecha_fin: newTrialEnd.toISOString(),
-            motivo: "auto-extension: última oportunidad (sin actividad)",
-            extendido_por: "sistema",
-          })
-
-          await sendEmail(admin.email, "Te damos 7 días más - Solo tenés que usarlos", getLastChanceEmailHtml(admin.nombre, org.nombre, appUrl))
-          await supabaseAdmin.from("lifecycle_emails").insert({
-            organization_id: org.id, user_id: admin.id,
-            email_type: "TRIAL_LAST_CHANCE", status: "SENT",
-          })
-          results.lastChanceEmails++
-        }
+        if (sent) results.lastChanceEmails++
       }
     }
 
@@ -185,34 +147,8 @@ export async function GET(request: Request) {
   }
 }
 
-// Inline email templates (simplified)
-function getTrialExtendedEmailHtml(nombre: string, org: string, appUrl: string, dias: number, fechaStr: string): string {
-  return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
-<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background:#f3f4f6;">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;"><tr><td align="center" style="padding:40px 20px;">
-<table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;">
-<tr><td style="background:linear-gradient(135deg,#10b981,#059669);padding:32px 40px;text-align:center;border-radius:16px 16px 0 0;">
-<table cellpadding="0" cellspacing="0" style="margin:0 auto;"><tr>
-<td style="vertical-align:middle;padding-right:10px;"><img src="https://${ROOT_DOMAIN}/icon-192.png" style="height:36px;width:36px;border-radius:8px;" /></td>
-<td style="vertical-align:middle;"><span style="color:#fff;font-size:24px;font-weight:700;">STApp</span></td>
-</tr></table></td></tr>
-<tr><td style="background:#fff;padding:40px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 16px 16px;">
-<h1 style="color:#1f2937;font-size:24px;font-weight:700;text-align:center;margin:0 0 16px;">Te extendimos la prueba gratuita</h1>
-<p style="color:#4b5563;font-size:16px;text-align:center;margin:0 0 24px;">Hola <strong>${nombre}</strong>, vimos que estás usando <strong>${org}</strong> activamente, así que te extendimos la prueba <strong>${dias} días más</strong>.</p>
-<table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;"><tr>
-<td style="background:#ecfdf5;padding:24px;border-radius:12px;border:1px solid #a7f3d0;text-align:center;">
-<p style="color:#065f46;font-size:14px;margin:0 0 8px;font-weight:600;">Nueva fecha límite</p>
-<p style="color:#065f46;font-size:28px;font-weight:700;margin:0;">${fechaStr}</p>
-</td></tr></table>
-<p style="color:#4b5563;font-size:15px;text-align:center;margin:0 0 24px;">Seguí usando STApp y cuando estés listo, podés suscribirte al plan Premium para mantener acceso ilimitado.</p>
-<table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:16px 0;">
-<a href="${appUrl}" style="background:#10b981;color:#fff;padding:16px 32px;text-decoration:none;border-radius:10px;font-weight:600;font-size:16px;display:inline-block;">Seguir usando STApp</a>
-</td></tr></table></td></tr>
-<tr><td style="padding:24px 40px;text-align:center;"><p style="color:#9ca3af;font-size:13px;margin:0;">Este correo fue enviado automáticamente por STApp.</p></td></tr>
-</table></td></tr></table></body></html>`
-}
-
-function getLastChanceEmailHtml(nombre: string, org: string, appUrl: string): string {
+// Email template: invitación a reactivar (sin extender automáticamente)
+function getReactivationEmailHtml(nombre: string, org: string, reactivarUrl: string): string {
   return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
 <body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background:#f3f4f6;">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;"><tr><td align="center" style="padding:40px 20px;">
@@ -223,22 +159,23 @@ function getLastChanceEmailHtml(nombre: string, org: string, appUrl: string): st
 <td style="vertical-align:middle;"><span style="color:#fff;font-size:24px;font-weight:700;">STApp</span></td>
 </tr></table></td></tr>
 <tr><td style="background:#fff;padding:40px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 16px 16px;">
-<h1 style="color:#1f2937;font-size:24px;font-weight:700;text-align:center;margin:0 0 16px;">Te damos 7 días más</h1>
-<p style="color:#4b5563;font-size:16px;text-align:center;margin:0 0 24px;">Hola <strong>${nombre}</strong>, tu prueba gratuita de <strong>${org}</strong> venció, pero no queremos que te vayas sin probar STApp a fondo.</p>
+<h1 style="color:#1f2937;font-size:24px;font-weight:700;text-align:center;margin:0 0 16px;">Tenés 7 días más para probar STApp</h1>
+<p style="color:#4b5563;font-size:16px;text-align:center;margin:0 0 24px;">Hola <strong>${nombre}</strong>, tu prueba gratuita de <strong>${org}</strong> venció, pero no queremos que te vayas sin conocer todo lo que STApp puede hacer por tu taller.</p>
 <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;"><tr>
 <td style="background:#fffbeb;padding:24px;border-radius:12px;border:1px solid #fde68a;text-align:center;">
-<p style="color:#92400e;font-size:16px;margin:0;font-weight:600;">Te extendimos la prueba 7 días más para que puedas evaluar la plataforma.</p>
+<p style="color:#92400e;font-size:16px;margin:0;font-weight:600;">Hacé clic abajo para reactivar tu cuenta por 7 días más.</p>
 </td></tr></table>
 <p style="color:#4b5563;font-size:15px;text-align:center;margin:0 0 8px;">Aprovechá para:</p>
 <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
 <tr><td style="color:#4b5563;font-size:15px;padding:4px 0;">• Cargar tus clientes y órdenes reales</td></tr>
 <tr><td style="color:#4b5563;font-size:15px;padding:4px 0;">• Probar las notificaciones por WhatsApp</td></tr>
 <tr><td style="color:#4b5563;font-size:15px;padding:4px 0;">• Ver cómo funciona el seguimiento público</td></tr>
+<tr><td style="color:#4b5563;font-size:15px;padding:4px 0;">• Cobrar órdenes con múltiples métodos de pago</td></tr>
 </table>
 <table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:16px 0;">
-<a href="${appUrl}" style="background:#f59e0b;color:#fff;padding:16px 32px;text-decoration:none;border-radius:10px;font-weight:600;font-size:16px;display:inline-block;">Volver a STApp</a>
+<a href="${reactivarUrl}" style="background:#f59e0b;color:#fff;padding:16px 32px;text-decoration:none;border-radius:10px;font-weight:600;font-size:16px;display:inline-block;">Reactivar mi cuenta</a>
 </td></tr></table>
-<p style="color:#9ca3af;font-size:13px;text-align:center;margin:24px 0 0;">¿Necesitás ayuda? Respondé a este correo y te ayudamos a empezar.</p>
+<p style="color:#9ca3af;font-size:13px;text-align:center;margin:24px 0 0;">Los 7 días empiezan a correr desde que hacés clic. Tus datos siguen ahí, tal como los dejaste.</p>
 </td></tr>
 <tr><td style="padding:24px 40px;text-align:center;"><p style="color:#9ca3af;font-size:13px;margin:0;">Este correo fue enviado automáticamente por STApp.</p></td></tr>
 </table></td></tr></table></body></html>`

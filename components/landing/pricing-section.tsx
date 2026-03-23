@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch"
 import { Check } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { m, LazyMotion, domAnimation } from "@/components/animations/motion"
+import type { PlanPrices } from "@/lib/pricing"
 
 interface PricingFeature {
   text: string
@@ -33,18 +34,17 @@ const features: PricingFeature[] = [
   { text: "Tu logo en presupuestos y órdenes", highlight: "Tu marca" },
 ]
 
-const prices = {
-  ars: { monthly: 19999, yearly: 191990 },
-  usd: { monthly: 12, yearly: 115 },
-}
-
 // Formatear precio (formato fijo para evitar hydration mismatch)
 function formatPrice(price: number): string {
   if (price === 0) return "0"
   return price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
 }
 
-export function PricingSection() {
+interface PricingSectionProps {
+  prices: PlanPrices
+}
+
+export function PricingSection({ prices }: PricingSectionProps) {
   const [annual, setAnnual] = useState(false)
 
   const currentPriceArs = annual ? Math.round(prices.ars.yearly / 12) : prices.ars.monthly
@@ -144,7 +144,7 @@ export function PricingSection() {
 
               {/* Value anchoring */}
               <p className="text-center text-xs text-muted-foreground mb-2">
-                Menos de $700/día para organizar todo tu taller
+                Menos de ${formatPrice(Math.ceil(prices.ars.monthly / 30))}/día para organizar todo tu taller
               </p>
 
               {/* Price */}
@@ -164,7 +164,17 @@ export function PricingSection() {
                 <p className="text-xs text-muted-foreground mt-0.5">
                   🇦🇷 Precio en pesos argentinos (ARS)
                 </p>
-                <div className="mt-3 pt-3 border-t border-dashed">
+                <div className="mt-4 pt-4 border-t border-dashed">
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <div className="flex -space-x-1">
+                      <span className="text-base">🇲🇽</span>
+                      <span className="text-base">🇨🇴</span>
+                      <span className="text-base">🇨🇱</span>
+                      <span className="text-base">🇵🇪</span>
+                      <span className="text-base">🇪🇨</span>
+                    </div>
+                    <span className="text-xs font-medium text-muted-foreground">y más países</span>
+                  </div>
                   <m.div
                     key={`usd-${currentPriceUsd}`}
                     initial={{ opacity: 0 }}
@@ -174,8 +184,8 @@ export function PricingSection() {
                     <span className="text-2xl font-bold text-foreground">USD ${currentPriceUsd}</span>
                     <span className="text-muted-foreground text-sm">/mes</span>
                   </m.div>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    🌎 Para el resto de Latinoamérica y otros países
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Pagá con tarjeta internacional desde cualquier país
                   </p>
                 </div>
                 {annual && (

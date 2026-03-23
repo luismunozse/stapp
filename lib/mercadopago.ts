@@ -1,4 +1,5 @@
 import { MercadoPagoConfig, Preference, PreApproval } from "mercadopago"
+import { getPremiumPrices } from "@/lib/pricing"
 
 // Lazy initialization to avoid errors during build
 let _client: MercadoPagoConfig | null = null
@@ -30,16 +31,19 @@ function getPreApprovalApi(): PreApproval {
   return _preApprovalApi
 }
 
-// Precios del plan Premium en pesos argentinos
-export const MP_PRICES = {
-  MONTHLY: {
-    amount: 1999900, // $19.999 ARS (en centavos)
-    currency: "ARS",
-  },
-  YEARLY: {
-    amount: 19199000, // $191.990 ARS (en centavos)
-    currency: "ARS",
-  },
+// Obtener precios dinámicos desde la base de datos
+async function getMPPrices() {
+  const prices = await getPremiumPrices()
+  return {
+    MONTHLY: {
+      amount: Math.round(prices.ars.monthly * 100), // en centavos
+      currency: "ARS",
+    },
+    YEARLY: {
+      amount: Math.round(prices.ars.yearly * 100), // en centavos
+      currency: "ARS",
+    },
+  }
 }
 
 // Crear preferencia de pago único (para suscripción manual)
@@ -60,7 +64,8 @@ export async function createPaymentPreference({
   failureUrl: string
   pendingUrl: string
 }) {
-  const price = billingPeriod === "YEARLY" ? MP_PRICES.YEARLY : MP_PRICES.MONTHLY
+  const mpPrices = await getMPPrices()
+  const price = billingPeriod === "YEARLY" ? mpPrices.YEARLY : mpPrices.MONTHLY
   const title =
     billingPeriod === "YEARLY"
       ? "Plan Premium Anual - Servicio Técnico"
@@ -113,7 +118,8 @@ export async function createSubscription({
   billingPeriod: "MONTHLY" | "YEARLY"
   backUrl: string
 }) {
-  const price = billingPeriod === "YEARLY" ? MP_PRICES.YEARLY : MP_PRICES.MONTHLY
+  const mpPrices = await getMPPrices()
+  const price = billingPeriod === "YEARLY" ? mpPrices.YEARLY : mpPrices.MONTHLY
   const frequency = billingPeriod === "YEARLY" ? 12 : 1
 
   const preApproval = await getPreApprovalApi().create({

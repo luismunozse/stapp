@@ -341,7 +341,7 @@ La inversi\u00f3n var\u00eda seg\u00fan tu ubicaci\u00f3n:
 - Herramientas b\u00e1sicas: USD 500-1000
 - Stock inicial de repuestos: USD 1000-3000
 - Local o espacio de trabajo: variable
-- Software de gesti\u00f3n: desde USD 12/mes
+- Software de gesti\u00f3n: desde USD 14/mes
 
 ## 3. Equipamiento esencial
 

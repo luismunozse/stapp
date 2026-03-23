@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Check, Loader2, Wallet, Crown, Shield, Zap } from "lucide-react"
+import { Check, Loader2, Crown, Shield, Zap, Globe } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 type PaymentMethod = "mercadopago" | "stripe"
@@ -25,7 +25,7 @@ export function UpgradeModal({ open, onClose }: UpgradeModalProps) {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("mercadopago")
   const [loading, setLoading] = useState(false)
   const [pricesArs, setPricesArs] = useState({ MONTHLY: 19999, YEARLY: 191990 })
-  const [pricesUsd, setPricesUsd] = useState({ MONTHLY: 12, YEARLY: 115 })
+  const [pricesUsd, setPricesUsd] = useState({ MONTHLY: 14, YEARLY: 134 })
 
   useEffect(() => {
     if (!open) return
@@ -34,12 +34,15 @@ export function UpgradeModal({ open, onClose }: UpgradeModalProps) {
       .then((data) => {
         const premiumPlan = data.plans?.find((p: any) => p.tipo === "PREMIUM")
         if (premiumPlan) {
-          const mensual = Number(premiumPlan.precio_mensual)
-          const anual = Number(premiumPlan.precio_anual)
-          if (premiumPlan.moneda === "ARS") {
-            setPricesArs({ MONTHLY: mensual, YEARLY: anual })
-          } else {
-            setPricesUsd({ MONTHLY: mensual, YEARLY: anual })
+          setPricesArs({
+            MONTHLY: Number(premiumPlan.precio_mensual),
+            YEARLY: Number(premiumPlan.precio_anual),
+          })
+          if (premiumPlan.precio_mensual_usd) {
+            setPricesUsd({
+              MONTHLY: Number(premiumPlan.precio_mensual_usd),
+              YEARLY: Number(premiumPlan.precio_anual_usd),
+            })
           }
         }
       })
@@ -193,9 +196,12 @@ export function UpgradeModal({ open, onClose }: UpgradeModalProps) {
                   </div>
                 )}
                 <div className="flex justify-center mb-2">
-                  <Wallet className="h-6 w-6 text-muted-foreground" />
+                  <div className="relative">
+                    <Globe className="h-6 w-6 text-blue-500" />
+                    <span className="absolute -top-1 -right-2 text-[10px]">🌎</span>
+                  </div>
                 </div>
-                <div className="text-sm font-semibold">Otros países</div>
+                <div className="text-sm font-semibold">Internacional</div>
                 <div className="text-xs text-muted-foreground">Dólares (USD)</div>
               </button>
             </div>
