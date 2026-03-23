@@ -146,13 +146,7 @@ export function SubscriptionRequiredView({
                   o ${formatArs(pricesArs.yearly)}/año (ahorra {savingsPercent}%)
                 </div>
                 <div className="mt-3 pt-3 border-t border-dashed">
-                  <div className="flex items-center justify-center gap-1.5 mb-1">
-                    <span className="text-sm">🇲🇽</span>
-                    <span className="text-sm">🇨🇴</span>
-                    <span className="text-sm">🇨🇱</span>
-                    <span className="text-sm">🇵🇪</span>
-                    <span className="text-xs text-muted-foreground">+más</span>
-                  </div>
+                  <p className="text-xs text-muted-foreground mb-1">Latinoamérica y el mundo</p>
                   <div className="text-2xl font-bold">USD ${pricesUsd.monthly}</div>
                   <div className="text-sm text-muted-foreground">/mes</div>
                   <div className="text-xs text-muted-foreground mt-0.5">Tarjeta internacional</div>

@@ -15,7 +15,11 @@ export async function GET() {
         id,
         nombre,
         email,
-        created_at
+        created_at,
+        ventas (
+          id,
+          estado
+        )
       `)
       .eq("rol", "VENDEDOR")
       .eq("organization_id", organizationId!)
@@ -25,7 +29,23 @@ export async function GET() {
       throw dbError
     }
 
-    return NextResponse.json(vendedores || [], {
+    const vendedoresConStats = (vendedores || []).map((vendedor) => {
+      const ventas = vendedor.ventas || []
+      const ventasCompletadas = ventas.filter(
+        (v: any) => v.estado === "COMPLETADA"
+      ).length
+
+      return {
+        id: vendedor.id,
+        nombre: vendedor.nombre,
+        email: vendedor.email,
+        created_at: vendedor.created_at,
+        ventasCompletadas,
+        ventasTotal: ventas.length,
+      }
+    })
+
+    return NextResponse.json(vendedoresConStats, {
       headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
     })
   } catch (error) {

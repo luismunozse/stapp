@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { enforcePlanLimit } from "@/lib/plan-limits"
+import { ESTADOS_ACTIVOS, ESTADOS_COMPLETADOS } from "@/lib/order-states"
 import bcrypt from "bcryptjs"
 
 export async function GET() {
@@ -32,10 +33,10 @@ export async function GET() {
     const tecnicosConStats = tecnicos?.map((tecnico) => {
       const ordenes = tecnico.ordenes_servicio || []
       const ordenesActivas = ordenes.filter(
-        (o: any) => ["RECIBIDO", "EN_DIAGNOSTICO", "PRESUPUESTADO", "APROBADO", "EN_REPARACION", "ESPERANDO_REPUESTO"].includes(o.estado)
+        (o: any) => ESTADOS_ACTIVOS.includes(o.estado)
       ).length
       const ordenesCompletadas = ordenes.filter(
-        (o: any) => ["REPARADO", "ENTREGADO"].includes(o.estado)
+        (o: any) => ESTADOS_COMPLETADOS.includes(o.estado)
       ).length
 
       return {

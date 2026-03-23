@@ -5,7 +5,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
-import { Check } from "lucide-react"
+import { Check, Globe } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { m, LazyMotion, domAnimation } from "@/components/animations/motion"
 import type { PlanPrices } from "@/lib/pricing"
@@ -166,14 +166,8 @@ export function PricingSection({ prices }: PricingSectionProps) {
                 </p>
                 <div className="mt-4 pt-4 border-t border-dashed">
                   <div className="flex items-center justify-center gap-2 mb-2">
-                    <div className="flex -space-x-1">
-                      <span className="text-base">🇲🇽</span>
-                      <span className="text-base">🇨🇴</span>
-                      <span className="text-base">🇨🇱</span>
-                      <span className="text-base">🇵🇪</span>
-                      <span className="text-base">🇪🇨</span>
-                    </div>
-                    <span className="text-xs font-medium text-muted-foreground">y más países</span>
+                    <Globe className="w-4 h-4 text-blue-500" />
+                    <span className="text-xs font-medium text-muted-foreground">Latinoamérica y el mundo</span>
                   </div>
                   <m.div
                     key={`usd-${currentPriceUsd}`}

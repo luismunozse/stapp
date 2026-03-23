@@ -19,7 +19,13 @@ export async function GET(
         id,
         nombre,
         email,
-        created_at
+        created_at,
+        ventas (
+          id,
+          total,
+          estado,
+          created_at
+        )
       `)
       .eq("id", id)
       .eq("rol", "VENDEDOR")
@@ -30,11 +36,30 @@ export async function GET(
       return NextResponse.json({ error: "Vendedor no encontrado" }, { status: 404 })
     }
 
+    const ventas = vendedor.ventas || []
+    const ventasCompletadas = ventas.filter((v: any) => v.estado === "COMPLETADA")
+
     return NextResponse.json({
       id: vendedor.id,
       nombre: vendedor.nombre,
       email: vendedor.email,
       createdAt: vendedor.created_at,
+      ventasCompletadas: ventasCompletadas.length,
+      ventasTotal: ventas.length,
+      montoTotalVentas: ventasCompletadas.reduce(
+        (sum: number, v: any) => sum + parseFloat(v.total || "0"),
+        0
+      ),
+      ventas: ventas
+        .sort((a: any, b: any) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        )
+        .map((v: any) => ({
+          id: v.id,
+          total: v.total,
+          estado: v.estado,
+          fecha: v.created_at,
+        })),
     })
   } catch (error) {
     console.error("Error fetching vendedor:", error)
@@ -122,10 +147,16 @@ export async function DELETE(
 
     const { id } = await params
 
-    // Verificar que el vendedor existe
+    // Verificar que el vendedor existe y obtener ventas asociadas
     const { data: vendedor, error: fetchError } = await supabaseAdmin
       .from("users")
-      .select("id")
+      .select(`
+        id,
+        ventas (
+          id,
+          estado
+        )
+      `)
       .eq("id", id)
       .eq("rol", "VENDEDOR")
       .eq("organization_id", organizationId!)
@@ -133,6 +164,15 @@ export async function DELETE(
 
     if (fetchError || !vendedor) {
       return NextResponse.json({ error: "Vendedor no encontrado" }, { status: 404 })
+    }
+
+    // No permitir eliminar si tiene ventas asociadas
+    const ventas = vendedor.ventas || []
+    if (ventas.length > 0) {
+      return NextResponse.json(
+        { error: `No se puede eliminar un vendedor con ${ventas.length} venta(s) asociada(s). Reasigne las ventas primero.` },
+        { status: 400 }
+      )
     }
 
     const { error: deleteError } = await supabaseAdmin

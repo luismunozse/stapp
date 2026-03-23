@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { ESTADOS_ACTIVOS, ESTADOS_COMPLETADOS } from "@/lib/order-states"
 import bcrypt from "bcryptjs"
 
 export async function GET(
@@ -40,10 +41,10 @@ export async function GET(
 
     const ordenes = tecnico.ordenes_servicio || []
     const ordenesActivas = ordenes.filter(
-      (o: any) => ["RECIBIDO", "EN_DIAGNOSTICO", "PRESUPUESTADO", "APROBADO", "EN_REPARACION", "ESPERANDO_REPUESTO"].includes(o.estado)
+      (o: any) => ESTADOS_ACTIVOS.includes(o.estado)
     )
     const ordenesCompletadas = ordenes.filter(
-      (o: any) => ["REPARADO", "ENTREGADO"].includes(o.estado)
+      (o: any) => ESTADOS_COMPLETADOS.includes(o.estado)
     )
 
     return NextResponse.json({
@@ -172,7 +173,7 @@ export async function DELETE(
     }
 
     const ordenesActivas = (tecnico.ordenes_servicio || []).filter(
-      (o: any) => ["RECIBIDO", "EN_DIAGNOSTICO", "PRESUPUESTADO", "APROBADO", "EN_REPARACION", "ESPERANDO_REPUESTO"].includes(o.estado)
+      (o: any) => ESTADOS_ACTIVOS.includes(o.estado)
     )
 
     if (ordenesActivas.length > 0) {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { ESTADOS_ACTIVOS, ESTADOS_COMPLETADOS } from "@/lib/order-states"
 
 interface TecnicoPerformance {
   tecnicoId: string
@@ -10,16 +11,6 @@ interface TecnicoPerformance {
   tiempoPromedioReparacion: number | null
   tasaCompletado: number
 }
-
-const ESTADOS_COMPLETADOS = ["ENTREGADO", "REPARADO"]
-const ESTADOS_EN_PROCESO = [
-  "RECIBIDO",
-  "EN_DIAGNOSTICO",
-  "PRESUPUESTADO",
-  "APROBADO",
-  "EN_REPARACION",
-  "ESPERANDO_REPUESTO",
-]
 
 /**
  * GET /api/reportes/performance-tecnicos
@@ -63,7 +54,7 @@ export async function GET() {
         ESTADOS_COMPLETADOS.includes(o.estado)
       )
       const enProceso = ordenesTecnico.filter((o) =>
-        ESTADOS_EN_PROCESO.includes(o.estado)
+        ESTADOS_ACTIVOS.includes(o.estado)
       )
 
       // Calcular tiempo promedio de reparación (solo para completadas con fechas)
