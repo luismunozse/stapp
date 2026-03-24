@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Save } from "lucide-react"
+import { Save, MessageCircle } from "lucide-react"
 import { useSuperadminMutation } from "@/hooks/use-superadmin-fetch"
 import { formatDateTime } from "@/lib/utils"
 import type { OrganizationDetail } from "@/types/superadmin"
@@ -96,6 +96,35 @@ export function OrgInfoTab({ organization, onUpdated }: OrgInfoTabProps) {
             />
           </div>
         </div>
+
+        {/* Contacto por WhatsApp */}
+        {formData.telefono && (
+          <div className="pt-4 border-t">
+            <div className="flex items-center gap-3">
+              <div className="flex-1">
+                <p className="text-sm font-medium">Contactar por WhatsApp</p>
+                <p className="text-xs text-muted-foreground">
+                  Enviar mensaje al teléfono de la organización
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-green-600 border-green-600 hover:bg-green-50 hover:text-green-700"
+                onClick={() => {
+                  const phone = formData.telefono.replace(/\D/g, "")
+                  window.open(
+                    `https://wa.me/${phone}`,
+                    "_blank"
+                  )
+                }}
+              >
+                <MessageCircle className="h-4 w-4 mr-2" />
+                WhatsApp
+              </Button>
+            </div>
+          </div>
+        )}
 
         <div className="flex justify-between items-center pt-4 border-t">
           <div className="text-sm text-muted-foreground">

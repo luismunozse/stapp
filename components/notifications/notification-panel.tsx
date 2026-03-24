@@ -1,8 +1,9 @@
 "use client"
 
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { CheckCheck, Bell, Loader2, X } from "lucide-react"
+import { CheckCheck, Bell, Loader2, X, ChevronDown, ChevronUp } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { UserNotification } from "@/types/database"
 import {
@@ -63,6 +64,11 @@ function NotificationItem({
   onDismiss: (id: string) => void
 }) {
   const isUnread = !notification.read_at
+  const [expanded, setExpanded] = useState(false)
+
+  // Detectar si el texto es largo y necesita expansión
+  const bodyIsLong = (notification.body?.length || 0) > 120
+  const titleIsLong = (notification.title?.length || 0) > 80
 
   return (
     <div
@@ -84,7 +90,8 @@ function NotificationItem({
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <p className={cn(
-              "text-sm line-clamp-2",
+              "text-sm",
+              !expanded && "line-clamp-2",
               isUnread ? "font-semibold" : "font-medium text-muted-foreground"
             )}>
               {notification.title}
@@ -93,12 +100,36 @@ function NotificationItem({
               <span className="mt-1.5 h-2 w-2 rounded-full bg-primary shrink-0" />
             )}
           </div>
-          <p className="text-xs text-muted-foreground line-clamp-3 mt-0.5">
+          <p className={cn(
+            "text-xs text-muted-foreground mt-0.5",
+            !expanded && "line-clamp-3"
+          )}>
             {notification.body}
           </p>
-          <p className="text-[11px] text-muted-foreground/70 mt-1">
-            {timeAgo(notification.created_at)}
-          </p>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-[11px] text-muted-foreground/70">
+              {timeAgo(notification.created_at)}
+            </p>
+            {(bodyIsLong || titleIsLong) && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setExpanded(!expanded)
+                }}
+                className="text-[11px] text-primary hover:underline flex items-center gap-0.5"
+              >
+                {expanded ? (
+                  <>
+                    Ver menos <ChevronUp className="h-3 w-3" />
+                  </>
+                ) : (
+                  <>
+                    Ver más <ChevronDown className="h-3 w-3" />
+                  </>
+                )}
+              </button>
+            )}
+          </div>
         </div>
       </button>
       {/* Boton dismiss */}
