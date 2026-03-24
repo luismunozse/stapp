@@ -17,10 +17,10 @@ const registerSchema = z.object({
     email: z.string().email("Email inválido").optional().or(z.literal("")),
     direccion: z.string().optional(),
   }),
-  // Datos del usuario admin
+  // Datos del usuario admin (nombre y email pueden estar vacíos si hay googleIdToken)
   usuario: z.object({
-    nombre: z.string().min(2, "El nombre debe tener al menos 2 caracteres"),
-    email: z.string().email("Email inválido"),
+    nombre: z.string().default(""),
+    email: z.string().default(""),
     password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres").optional(),
   }),
   // Google ID Token (opcional, para registro con Google)
@@ -60,11 +60,26 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         )
       }
-    } else if (!usuario.password) {
-      return NextResponse.json(
-        { error: "La contraseña es requerida" },
-        { status: 400 }
-      )
+    } else {
+      // Registro tradicional: validar campos obligatorios
+      if (!usuario.nombre || usuario.nombre.length < 2) {
+        return NextResponse.json(
+          { error: "El nombre debe tener al menos 2 caracteres" },
+          { status: 400 }
+        )
+      }
+      if (!usuario.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(usuario.email)) {
+        return NextResponse.json(
+          { error: "Email inválido" },
+          { status: 400 }
+        )
+      }
+      if (!usuario.password) {
+        return NextResponse.json(
+          { error: "La contraseña es requerida" },
+          { status: 400 }
+        )
+      }
     }
 
     // Para Google, usar el email verificado por Google
