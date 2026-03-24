@@ -11,6 +11,13 @@ import {
   Tablet,
   Gamepad2,
   Watch,
+  Printer,
+  Tv,
+  Camera,
+  Headphones,
+  Router,
+  HardDrive,
+  Cpu,
   CheckCircle2,
   Circle,
   Phone,
@@ -139,6 +146,18 @@ const tipoDispositivoIcons: Record<string, typeof Smartphone> = {
   TABLET: Tablet,
   CONSOLA: Gamepad2,
   SMARTWATCH: Watch,
+  IMPRESORA: Printer,
+  TELEVISION: Tv,
+  TV: Tv,
+  CAMARA: Camera,
+  AUDIFONOS: Headphones,
+  AURICULARES: Headphones,
+  ROUTER: Router,
+  DISCO_DURO: HardDrive,
+  SERVIDOR: Cpu,
+  NOTEBOOK: Monitor,
+  LAPTOP: Monitor,
+  PC: Monitor,
 }
 
 const tipoDispositivoLabels: Record<string, string> = {
@@ -147,6 +166,18 @@ const tipoDispositivoLabels: Record<string, string> = {
   TABLET: "Tablet",
   CONSOLA: "Consola",
   SMARTWATCH: "Smartwatch",
+  IMPRESORA: "Impresora",
+  TELEVISION: "Televisión",
+  TV: "TV",
+  CAMARA: "Cámara",
+  AUDIFONOS: "Audífonos",
+  AURICULARES: "Auriculares",
+  ROUTER: "Router",
+  DISCO_DURO: "Disco Duro",
+  SERVIDOR: "Servidor",
+  NOTEBOOK: "Notebook",
+  LAPTOP: "Laptop",
+  PC: "PC",
 }
 
 interface TrackingData {
@@ -256,7 +287,7 @@ export function SeguimientoContent({ token }: { token: string }) {
     )
   }
 
-  const DeviceIcon = tipoDispositivoIcons[data.tipoDispositivo] || Smartphone
+  const DeviceIcon = tipoDispositivoIcons[data.tipoDispositivo] || Package
   const isTerminal = data.estado === "CANCELADO" || data.estado === "SIN_REPARACION"
   const isCompleted = data.estado === "ENTREGADO"
   const isReady = data.estado === "REPARADO"

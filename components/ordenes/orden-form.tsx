@@ -650,11 +650,11 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
             firmaMime: checklistFirmaMime || undefined,
           }
           console.log("[CHECKLIST SAVE] Enviando POST a /api/ordenes/" + nuevaOrden.id + "/checklist", JSON.stringify(checklistBody))
-          const checklistRes = await fetch(`/api/ordenes/${nuevaOrden.id}/checklist`, {
+          const checklistRes = await offlineFetch(`/api/ordenes/${nuevaOrden.id}/checklist`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(checklistBody),
-          })
+          }, { store: STORES.ORDERS, description: `Checklist - ${data.dispositivo}` })
           if (!checklistRes.ok) {
             const checklistErr = await checklistRes.json().catch(() => ({}))
             console.error("[CHECKLIST SAVE] Error:", checklistRes.status, JSON.stringify(checklistErr))

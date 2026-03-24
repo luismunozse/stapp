@@ -14,6 +14,17 @@ const THIRTY_DAYS = 30 * 24 * 60 * 60 // 30 días en segundos
 // Tiempo antes de expiración para refrescar automáticamente (6 horas antes)
 const REFRESH_THRESHOLD = 6 * 60 * 60
 
+// Derivar dominio de cookies automáticamente en producción
+// para que la sesión se comparta entre todos los subdominios
+function getCookieDomain(): string | undefined {
+  if (process.env.COOKIE_DOMAIN) return process.env.COOKIE_DOMAIN
+  if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_ROOT_DOMAIN) {
+    return `.${process.env.NEXT_PUBLIC_ROOT_DOMAIN}`
+  }
+  return undefined
+}
+const COOKIE_DOMAIN = getCookieDomain()
+
 // Genera un refresh token único
 function generateRefreshToken(): string {
   return randomBytes(64).toString("hex")
@@ -297,7 +308,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         sameSite: "lax",
         path: "/",
         secure: process.env.NODE_ENV === "production",
-        domain: process.env.COOKIE_DOMAIN || undefined,
+        domain: COOKIE_DOMAIN,
       },
     },
     callbackUrl: {
@@ -309,7 +320,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         sameSite: "lax",
         path: "/",
         secure: process.env.NODE_ENV === "production",
-        domain: process.env.COOKIE_DOMAIN || undefined,
+        domain: COOKIE_DOMAIN,
       },
     },
     csrfToken: {
