@@ -11,6 +11,7 @@ import {
   OrganizationJsonLd,
   SoftwareApplicationJsonLd,
   WebSiteJsonLd,
+  ServiceJsonLd,
 } from "@/components/seo/json-ld"
 import { GoogleAnalytics } from "@/components/seo/google-analytics"
 
@@ -47,8 +48,24 @@ export const metadata: Metadata = {
     default: "STApp - Gestión de Servicio Técnico",
     template: "%s | STApp",
   },
-  description: "Sistema de gestión para servicio técnico de dispositivos electrónicos. Administra órdenes de trabajo, clientes, inventario y facturación desde una sola plataforma.",
-  keywords: ["servicio técnico", "gestión taller", "reparación celulares", "software reparaciones", "orden de trabajo", "gestión técnicos"],
+  description: "Software #1 de gestión para talleres de reparación de celulares y servicio técnico. Órdenes de trabajo, clientes, inventario, facturación electrónica y notificaciones WhatsApp. Probá 30 días gratis.",
+  keywords: [
+    "software servicio técnico",
+    "gestión taller reparación",
+    "reparación celulares",
+    "software reparaciones",
+    "orden de trabajo",
+    "gestión técnicos",
+    "programa para taller de celulares",
+    "sistema servicio técnico online",
+    "software taller reparación celulares",
+    "control inventario repuestos",
+    "facturación electrónica taller",
+    "gestión órdenes de reparación",
+    "software gestión taller electrónica",
+    "sistema de órdenes de trabajo",
+    "app servicio técnico",
+  ],
   authors: [{ name: "STApp" }],
   creator: "STApp",
   publisher: "STApp",
@@ -200,6 +217,7 @@ export default async function RootLayout({
         <OrganizationJsonLd />
         <SoftwareApplicationJsonLd />
         <WebSiteJsonLd />
+        <ServiceJsonLd />
 
         {/* Google Analytics */}
         <GoogleAnalytics />

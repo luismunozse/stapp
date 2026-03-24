@@ -14,27 +14,35 @@ import { ChatbotButton } from "@/components/chatbot/chatbot-button"
 import { WhatsAppButton } from "@/components/landing/whatsapp-button"
 import { getPremiumPrices } from "@/lib/pricing"
 import { SkipLinks } from "@/components/shared/skip-links"
-import { FAQPageJsonLd } from "@/components/seo/json-ld"
+import { FAQPageJsonLd, HowToJsonLd, UseCasesListJsonLd } from "@/components/seo/json-ld"
 
 export const metadata: Metadata = {
-  title: "Software de Gesti\u00f3n para Servicio T\u00e9cnico | Reparaci\u00f3n de Celulares",
+  title: "Software de Gestión para Servicio Técnico | Reparación de Celulares y Electrónica",
   description:
-    "STApp es el software de gesti\u00f3n m\u00e1s completo para talleres de reparaci\u00f3n de celulares y dispositivos electr\u00f3nicos. Administra \u00f3rdenes de trabajo, clientes, inventario y facturaci\u00f3n. 30 d\u00edas gratis.",
+    "STApp es el software #1 para talleres de reparación de celulares y servicio técnico en Argentina. Gestión de órdenes de trabajo, clientes, inventario de repuestos, facturación electrónica y notificaciones WhatsApp. Probá 30 días gratis sin tarjeta.",
   keywords: [
-    "software servicio t\u00e9cnico",
-    "gesti\u00f3n taller reparaci\u00f3n",
-    "sistema \u00f3rdenes de trabajo",
-    "software reparaci\u00f3n celulares",
-    "gesti\u00f3n clientes taller",
+    "software servicio técnico",
+    "gestión taller reparación",
+    "sistema órdenes de trabajo",
+    "software reparación celulares",
+    "gestión clientes taller",
     "control de cobros taller",
     "inventario repuestos",
-    "software taller de reparaci\u00f3n de celulares",
-    "sistema gesti\u00f3n servicio t\u00e9cnico",
+    "software taller de reparación de celulares",
+    "sistema gestión servicio técnico",
+    "programa para taller de celulares",
+    "app servicio técnico",
+    "facturación electrónica taller",
+    "notificaciones WhatsApp reparaciones",
+    "seguimiento de reparaciones online",
+    "software gestión taller electrónica argentina",
+    "mejor software servicio técnico",
+    "sistema de reparaciones gratis",
   ],
   openGraph: {
-    title: "STApp - Software de Gesti\u00f3n para Servicio T\u00e9cnico y Reparaci\u00f3n",
+    title: "STApp - El Mejor Software para Talleres de Reparación de Celulares",
     description:
-      "El sistema m\u00e1s completo para talleres de reparaci\u00f3n de celulares. \u00d3rdenes de trabajo, clientes, inventario y cobros en una plataforma.",
+      "Gestión completa para tu taller: órdenes de trabajo, clientes, inventario, facturación y WhatsApp. Usado por +500 talleres en Argentina. 30 días gratis.",
     url: "https://stapp.com.ar",
   },
   alternates: {
@@ -129,6 +137,8 @@ export default async function Home() {
   return (
     <>
       <FAQPageJsonLd faqs={faqData} />
+      <HowToJsonLd />
+      <UseCasesListJsonLd />
       <SkipLinks />
       <main id="main-content" className="min-h-screen">
         <NavbarLanding />

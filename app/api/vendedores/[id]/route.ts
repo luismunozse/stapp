@@ -20,7 +20,7 @@ export async function GET(
         nombre,
         email,
         created_at,
-        ventas (
+        ventas!ventas_vendedor_id_fkey (
           id,
           total,
           estado,
@@ -152,7 +152,7 @@ export async function DELETE(
       .from("users")
       .select(`
         id,
-        ventas (
+        ventas!ventas_vendedor_id_fkey (
           id,
           estado
         )

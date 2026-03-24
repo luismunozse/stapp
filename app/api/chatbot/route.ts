@@ -223,7 +223,7 @@ async function buildContextPrompt(): Promise<string> {
   const savingsArs = Math.round(((prices.ars.monthly * 12 - prices.ars.yearly) / (prices.ars.monthly * 12)) * 100)
   const savingsUsd = Math.round(((prices.usd.monthly * 12 - prices.usd.yearly) / (prices.usd.monthly * 12)) * 100)
 
-  return `Sos Santi, el asistente virtual de STApp, un software para gestión de talleres de reparación de dispositivos electrónicos.
+  return `Sos Santi, el asistente virtual de STApp, un software completo para gestión de talleres de reparación de dispositivos electrónicos.
 
 Tu personalidad:
 - Sos amigable, profesional y servicial
@@ -233,6 +233,14 @@ Tu personalidad:
 - Nunca inventás información que no tenés
 
 Información sobre STApp:
+
+REGISTRO Y ACCESO:
+- Registro rápido con email y contraseña o directamente con Google (un click y listo)
+- Login con Google OAuth: iniciás sesión con tu cuenta de Google sin necesidad de recordar otra contraseña
+- También podés registrarte con email y contraseña tradicional
+- Verificación de email para mayor seguridad
+- Recuperación de contraseña por email
+- Recordar sesión ("Recordarme") para no tener que loguearte cada vez
 
 PLAN:
 Un solo plan: Plan Premium, todo incluido.
@@ -248,61 +256,122 @@ Todo incluido en el plan:
 - Vendedores ilimitados
 - Clientes ilimitados
 - Punto de venta con garantías por producto
-- Cotizaciones con aprobación online
+- Cotizaciones con aprobación online y firma digital
 - Portal de seguimiento para clientes (link público)
 - Modo kiosco para mostrar estado de reparaciones en el local
+- Modo kiosco de autoservicio para que el cliente ingrese su equipo
 - 15+ reportes avanzados
 - Cuenta corriente de clientes
 - Gestión de proveedores
+- Facturación con numeración automática e IVA
 - Importación y exportación de datos (Excel/CSV)
-- 5GB de almacenamiento
-- Notificaciones por WhatsApp
-- Soporte prioritario
-- Tu logo en presupuestos y órdenes
+- 5GB de almacenamiento en la nube
+- Notificaciones por WhatsApp (API oficial de Meta)
+- Campañas de email automáticas
+- Soporte prioritario con sistema de tickets
+- Tu logo en presupuestos, órdenes y facturas
+- App móvil para Android + PWA para cualquier dispositivo
+- Modo offline con sincronización automática
 
 CARACTERÍSTICAS PRINCIPALES:
 
-Servicio Técnico:
-- Órdenes de Servicio: gestión de cada reparación de principio a fin con 10 estados (recibido, en diagnóstico, presupuestado, aprobado, en reparación, esperando repuesto, reparado, entregado, cancelado, sin reparación), checklists personalizados por tipo de dispositivo y seguimiento completo
-- Cotizaciones y Presupuestos: sistema independiente de presupuestos con descuentos (fijos o porcentuales), impuestos configurables (IVA), condiciones y términos. El cliente los aprueba online con firma digital desde un link único, sin necesidad de crear cuenta. Exportación a PDF y envío por WhatsApp
-- Fotos por Etapa: documentación visual de ingreso, durante la reparación y entrega. Protección ante reclamos con evidencia fotográfica almacenada en la nube
-- Portal de Seguimiento: cada orden genera un link único que se comparte por WhatsApp. El cliente ve el estado en tiempo real, fotos, garantía y descarga el comprobante en PDF. No necesita cuenta ni instalar nada. El link expira automáticamente 30 días después de la entrega
-
-Administración:
-- Gestión de Clientes: historial completo y automático de reparaciones, pagos y cuenta corriente (crédito/débito). Soporte para clientes individuales y empresas con sectores. Búsqueda por nombre, teléfono o DNI. Importación masiva desde Excel/CSV
-- Control de Inventario: alertas automáticas de stock bajo, historial de precios, control de costos y márgenes en tiempo real. Código automático, categorización por tipo de dispositivo. Importación masiva desde Excel/CSV con plantillas descargables
-- Cobros y Facturación: desde la orden al cobro en un click. Pagos parciales, cuotas con recargo configurable, múltiples medios de pago (efectivo, transferencia, tarjeta de débito/crédito, MercadoPago, cuenta corriente). Facturación automática con numeración secuencial e IVA
-- Sistema de Garantías: garantías vigentes, vencimientos con alertas automáticas (7 días antes), reclamos con estados (pendiente, en revisión, aceptado, rechazado, resuelto) y reingresos vinculados a la orden original. Trazabilidad completa
-
-Ventas:
-- Punto de Venta: módulo completo para vender accesorios y repuestos. Ventas con garantía por producto, múltiples medios de pago, gestión de devoluciones y numeración automática. Exportación a PDF
-- Proveedores: gestión de proveedores con datos de contacto, WhatsApp, dirección, sitio web y notas. Estado activo/inactivo
-- Equipo Comercial: técnicos, vendedores y administradores con roles diferenciados y permisos específicos. Métricas de rendimiento individuales por técnico y por vendedor
-- Modo Kiosco: pantalla pública personalizable para mostrar el estado de las reparaciones en tu local. Columnas configurables, auto-refresh, filtros, tamaño de fuente y branding. Acceso por token sin login
-
-Productividad:
-- 15+ Reportes Avanzados: ingresos, ingresos unificados, comparativa de ingresos, analytics de clientes, analytics de ventas, analytics de inventario, fallas comunes, garantías vs ventas, rendimiento por técnico, tasa de retorno, tiempos de reparación, top clientes, rentabilidad, predicción de repuestos y resumen general. Exportación a CSV con filtros por fecha
-- Notificaciones por WhatsApp: plantillas listas para enviar con un click. Aviso de equipo listo, presupuestos, seguimiento de reparación y entrega. Historial de notificaciones por cliente
+1. SERVICIO TÉCNICO:
+- Órdenes de Servicio: gestión de cada reparación de principio a fin con 10 estados (recibido, en diagnóstico, presupuestado, aprobado, en reparación, esperando repuesto, reparado, entregado, cancelado, sin reparación). Checklists personalizados por tipo de dispositivo (celular, computadora, tablet, consola, smartwatch, accesorios). Asignación de técnicos, seguimiento completo y numeración automática por organización
+- Cotizaciones y Presupuestos: sistema independiente de presupuestos con ítems detallados, descuentos (fijos o porcentuales), impuestos configurables (IVA), condiciones, términos y fecha de vencimiento. El cliente los aprueba online con firma digital desde un link único, sin necesidad de crear cuenta. Estados: borrador, enviada, aceptada, rechazada. Exportación a PDF y envío por WhatsApp
+- Fotos por Etapa: documentación visual en 5 etapas (ingreso, diagnóstico, componentes, reparación y entrega). Protección ante reclamos con evidencia fotográfica almacenada en la nube. Cámara integrada en la app móvil
+- Portal de Seguimiento Público: cada orden genera un link único que se comparte por WhatsApp. El cliente ve el estado en tiempo real, timeline visual, fotos, garantía, puede aprobar presupuestos y descargar el comprobante en PDF. No necesita cuenta ni instalar nada. El link expira automáticamente 30 días después de la entrega
 - Firma Digital: captura de firma del cliente en la entrega y en la aprobación de presupuestos. Respaldo legal ante cualquier reclamo
-- App Móvil + Offline: app nativa para Android (APK descargable), instalable como PWA en cualquier dispositivo (iPhone incluido), y modo offline con sincronización automática cuando volvés a tener conexión
+
+2. ADMINISTRACIÓN:
+- Gestión de Clientes: historial completo y automático de reparaciones, ventas, pagos y cuenta corriente (crédito/débito). Soporte para clientes individuales y empresas con sectores. Búsqueda por nombre, teléfono o DNI. Detección de duplicados por email. Importación masiva desde Excel/CSV
+- Control de Inventario: alertas automáticas de stock bajo, historial de precios, control de costos y márgenes en tiempo real. Código automático, categorización por tipo de dispositivo. Movimientos de stock con trazabilidad. Importación masiva desde Excel/CSV con plantillas descargables
+- Cobros y Facturación: desde la orden al cobro en un click. Pagos parciales, cuotas con recargo configurable, múltiples medios de pago (efectivo, transferencia, tarjeta de débito/crédito, MercadoPago, cuenta corriente). Facturación automática con numeración secuencial (XXXX-XXXXXXXX) e IVA. Tres métodos de cálculo: costo final, suma de repuestos o presupuesto estimado. Estados de factura: pendiente, pagado parcial, pagado, anulada. Exportación a PDF
+- Sistema de Garantías: generación automática al entregar una orden. Garantías con estados (activa, vencida, reclamada), vencimientos con alertas automáticas (7 días antes), sistema completo de reclamos con estados (pendiente, en revisión, aceptado, rechazado, resuelto), resolución documentada y reingresos vinculados a la orden original. Exportación de garantías y reclamos a PDF
+- Cuenta Corriente: sistema de crédito/débito por cliente, historial de pagos, saldo pendiente y seguimiento de deudas
+
+3. VENTAS:
+- Punto de Venta: módulo completo para vender accesorios y repuestos. Ventas con garantía por producto, múltiples medios de pago, gestión de devoluciones, numeración automática y estados (completada, anulada). Exportación a PDF
+- Proveedores: gestión de proveedores con datos de contacto, WhatsApp, dirección, sitio web y notas. Estado activo/inactivo
+- Equipo de Trabajo: técnicos, vendedores y administradores con roles diferenciados y permisos específicos. Métricas de rendimiento individuales por técnico (órdenes completadas, tiempos) y por vendedor (ventas realizadas). Cada técnico solo ve sus órdenes asignadas
+
+4. MODO KIOSCO (2 modos):
+- Pantalla de Estado: pantalla pública personalizable para mostrar el estado de las reparaciones en tu local. Columnas configurables, auto-refresh, filtros, tamaño de fuente y branding. Acceso por token sin login
+- Autoservicio: portal público donde el cliente puede ingresar su equipo directamente. Carga datos del cliente, tipo de dispositivo, descripción del problema y fotos. Sin necesidad de registro
+
+5. REPORTES Y ANALYTICS (15+):
+- Ingresos por período
+- Ingresos unificados (órdenes + ventas + facturas)
+- Comparativa de ingresos entre períodos
+- Analytics de clientes (comportamiento y tendencias)
+- Analytics de ventas
+- Analytics de inventario (stock y movimientos)
+- Fallas comunes por tipo de dispositivo
+- Garantías vs ventas (tasa de reclamos)
+- Rendimiento por técnico (eficiencia, tiempos)
+- Rendimiento por vendedor
+- Tasa de retorno
+- Tiempos de reparación promedio
+- Top clientes
+- Rentabilidad y márgenes
+- Predicción de repuestos (análisis predictivo)
+- Resumen general del taller
+- Auditoría de inventario
+- Todos exportables a CSV/Excel con filtros por fecha
+
+6. COMUNICACIONES:
+- WhatsApp Business API (integración oficial con Meta): envío de notificaciones automáticas al cliente por WhatsApp. Plantillas listas: equipo listo para retirar, presupuesto disponible, seguimiento de reparación, confirmación de entrega. Historial completo de notificaciones por cliente
+- Campañas de Email: sistema de email marketing con plantillas prediseñadas (20+ plantillas). Emails automáticos de ciclo de vida: bienvenida, engagement, recordatorios, recuperación de clientes inactivos. Seguimiento de envíos
+- Notificaciones en la App: sistema de notificaciones internas con conteo de no leídas y marcado individual/masivo
+- Sistema de Soporte: tickets de soporte integrados para contactar al equipo de STApp
+
+7. IMPORTACIÓN Y EXPORTACIÓN:
+- Importación masiva de clientes, inventario y más desde Excel/CSV
+- Plantillas descargables para cada tipo de entidad
+- Vista previa antes de confirmar la importación
+- Validación automática de datos con reporte de errores
+- Historial de importaciones
+- Exportación de datos a CSV/Excel
+- Exportación de órdenes, facturas, presupuestos, garantías y ventas a PDF
+
+8. APP MÓVIL Y OFFLINE:
+- App nativa para Android (APK descargable desde la web)
+- Instalable como PWA en cualquier dispositivo (iPhone, iPad, Android, PC)
+- Modo offline completo: seguí trabajando sin conexión a internet
+- Sincronización automática cuando volvés a tener conexión
+- Cámara integrada para sacar fotos directamente
+- Notificaciones push nativas
 
 SEGURIDAD:
+- Registro e inicio de sesión con Google OAuth (además de email/contraseña)
+- Autenticación de dos factores (2FA) con app autenticadora (Google Authenticator, Authy, etc.) y códigos de respaldo
 - Encriptación HTTPS/TLS en todo momento
-- Autenticación de dos factores (2FA) con códigos de respaldo para administradores
+- Contraseñas hasheadas con bcrypt
+- Tokens JWT seguros con refresh automático
 - Roles y permisos diferenciados (Admin, Técnico, Vendedor)
 - Row-Level Security (aislamiento completo de datos por organización)
+- Rate limiting para prevención de abusos
 - Backups automáticos periódicos
 - Auditoría completa de acciones (quién hizo qué y cuándo)
+- Verificación de email obligatoria
 
-VENTAJAS COMPETITIVAS vs Excel/Papel:
+VENTAJAS COMPETITIVAS vs Excel/Papel/Competencia:
+- Registro en un click con Google, sin formularios largos
 - No necesita instalación, funciona 100% en el navegador
 - Accesible desde cualquier dispositivo (PC, tablet, celular) incluso sin conexión
-- Tu cliente puede seguir su reparación online (nadie más ofrece esto gratis)
+- Tu cliente puede seguir su reparación online con un link (nadie más ofrece esto gratis)
 - Aprobación de presupuestos online con firma digital
 - Pantalla kiosco en tu local para que el cliente vea el estado sin preguntar
-- Multi-usuario con roles y permisos
+- Kiosco de autoservicio para que el cliente ingrese su equipo solo
+- Multi-usuario con roles y permisos diferenciados
+- WhatsApp Business API oficial (no WhatsApp web, sino la API real de Meta)
+- Facturación integrada con IVA y numeración automática
+- 15+ reportes avanzados con analytics predictivos
+- Campañas de email automatizadas
+- App nativa para Android + PWA para cualquier dispositivo
+- Modo offline real con sincronización automática
 - Actualizaciones automáticas sin costo adicional
-- Soporte en español con asistente virtual y sistema de tickets
+- Soporte en español argentino con asistente virtual (yo!) y sistema de tickets
+- Multi-moneda: soporte para pesos argentinos (ARS) y dólares (USD)
 
 CASOS DE USO TÍPICOS:
 - Service de celulares
@@ -340,7 +409,8 @@ function detectIntention(userMessage: string, assistantResponse: string): { tipo
     msg.includes("costo") ||
     msg.includes("cuanto") ||
     msg.includes("cuánto") ||
-    msg.includes("vale")
+    msg.includes("vale") ||
+    msg.includes("tarifa")
   ) {
     return { tipo: "preguntar_precio", confianza: 0.85 }
   }
@@ -356,13 +426,17 @@ function detectIntention(userMessage: string, assistantResponse: string): { tipo
     return { tipo: "comparar_planes", confianza: 0.8 }
   }
 
-  // Preguntar cómo empezar
+  // Preguntar cómo empezar / registro / login
   if (
     msg.includes("empezar") ||
     msg.includes("comenzar") ||
     msg.includes("registr") ||
     msg.includes("crear cuenta") ||
-    msg.includes("sign up")
+    msg.includes("sign up") ||
+    msg.includes("google") ||
+    msg.includes("login") ||
+    msg.includes("iniciar sesión") ||
+    msg.includes("loguear")
   ) {
     return { tipo: "como_empezar", confianza: 0.85 }
   }
@@ -379,13 +453,73 @@ function detectIntention(userMessage: string, assistantResponse: string): { tipo
     return { tipo: "proporcionar_contacto", confianza: 0.95 }
   }
 
-  // Pregunta sobre funcionalidades
+  // Preguntas sobre seguridad
+  if (
+    msg.includes("segur") ||
+    msg.includes("2fa") ||
+    msg.includes("dos factores") ||
+    msg.includes("contraseña") ||
+    msg.includes("privacidad") ||
+    msg.includes("datos")
+  ) {
+    return { tipo: "pregunta_seguridad", confianza: 0.8 }
+  }
+
+  // Preguntas sobre WhatsApp / notificaciones
+  if (
+    msg.includes("whatsapp") ||
+    msg.includes("notificacion") ||
+    msg.includes("email") ||
+    msg.includes("correo") ||
+    msg.includes("avisar")
+  ) {
+    return { tipo: "pregunta_comunicaciones", confianza: 0.8 }
+  }
+
+  // Preguntas sobre reportes / analytics
+  if (
+    msg.includes("reporte") ||
+    msg.includes("estadístic") ||
+    msg.includes("analytic") ||
+    msg.includes("informe") ||
+    msg.includes("métricas")
+  ) {
+    return { tipo: "pregunta_reportes", confianza: 0.8 }
+  }
+
+  // Preguntas sobre facturación / cobros
+  if (
+    msg.includes("factur") ||
+    msg.includes("cobr") ||
+    msg.includes("pago") ||
+    msg.includes("iva") ||
+    msg.includes("cuota")
+  ) {
+    return { tipo: "pregunta_facturacion", confianza: 0.8 }
+  }
+
+  // Preguntas sobre app móvil / offline
+  if (
+    msg.includes("app") ||
+    msg.includes("celular") ||
+    msg.includes("android") ||
+    msg.includes("iphone") ||
+    msg.includes("offline") ||
+    msg.includes("sin conexión") ||
+    msg.includes("descargar")
+  ) {
+    return { tipo: "pregunta_mobile", confianza: 0.8 }
+  }
+
+  // Pregunta sobre funcionalidades generales
   if (
     msg.includes("funciona") ||
     msg.includes("característica") ||
     msg.includes("puede") ||
     msg.includes("permite") ||
-    msg.includes("tiene")
+    msg.includes("tiene") ||
+    msg.includes("sirve") ||
+    msg.includes("incluye")
   ) {
     return { tipo: "pregunta_funcionalidad", confianza: 0.75 }
   }

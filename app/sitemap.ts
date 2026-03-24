@@ -14,6 +14,27 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "weekly",
       priority: 1,
     },
+    // Precios - página de alta conversión
+    {
+      url: `${baseUrl}/precios`,
+      lastModified: new Date(),
+      changeFrequency: "weekly",
+      priority: 0.9,
+    },
+    // Registro - landing de conversión
+    {
+      url: `${baseUrl}/registro`,
+      lastModified: new Date(),
+      changeFrequency: "monthly",
+      priority: 0.8,
+    },
+    // Ayuda
+    {
+      url: `${baseUrl}/ayuda`,
+      lastModified: new Date(),
+      changeFrequency: "weekly",
+      priority: 0.6,
+    },
     // Empresa
     {
       url: `${baseUrl}/empresa/sobre-nosotros`,

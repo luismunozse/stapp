@@ -2,6 +2,8 @@ import {
   Smartphone,
   Monitor,
   Tv,
+  Tablet,
+  Gamepad2,
   type LucideIcon,
 } from "lucide-react"
 
@@ -162,6 +164,102 @@ export const useCases: UseCase[] = [
       "software taller reparaciones",
       "sistema servicio técnico electrónica",
       "órdenes trabajo electrónicos",
+    ],
+  },
+  {
+    slug: "tablets",
+    title: "Reparación de Tablets",
+    metaTitle: "Software para Taller de Reparación de Tablets | STApp",
+    metaDescription:
+      "Sistema de gestión para talleres de reparación de tablets y iPads. Órdenes de trabajo, seguimiento de reparaciones, inventario de pantallas y repuestos.",
+    icon: Tablet,
+    heroTitle: "El software ideal para tu taller de",
+    heroHighlight: "reparación de tablets",
+    heroDescription:
+      "Gestioná reparaciones de iPads, tablets Samsung, Lenovo y más. Registrá diagnósticos, controlá stock de pantallas y digitalizadores, y mantené informado a tu cliente.",
+    problems: [
+      "Las tablets tienen repuestos específicos y es difícil mantener stock organizado",
+      "Los clientes no saben el estado de su tablet y llaman constantemente",
+      "Necesitás diferenciar reparaciones de pantalla, batería y software",
+      "Los presupuestos varían mucho según el modelo y no tenés un sistema ágil",
+    ],
+    solutions: [
+      {
+        title: "Inventario por modelo",
+        description:
+          "Organizá pantallas, digitalizadores, baterías y flex por marca y modelo de tablet. Alertas de stock bajo para no perder ventas.",
+      },
+      {
+        title: "Seguimiento en tiempo real",
+        description:
+          "Tu cliente accede a un link único para ver el estado de su tablet: recibida, en diagnóstico, esperando repuesto, reparada, lista.",
+      },
+      {
+        title: "Presupuestos rápidos",
+        description:
+          "Generá presupuestos profesionales en segundos seleccionando el tipo de reparación y el modelo de tablet.",
+      },
+      {
+        title: "Historial completo",
+        description:
+          "Cada tablet queda registrada con su historial de reparaciones, fotos del antes y después, y datos de garantía.",
+      },
+    ],
+    keywords: [
+      "software reparación tablets",
+      "sistema taller tablets",
+      "gestión reparaciones iPad",
+      "software taller tablets",
+      "órdenes trabajo tablets",
+      "inventario repuestos tablets",
+    ],
+  },
+  {
+    slug: "consolas",
+    title: "Reparación de Consolas",
+    metaTitle: "Software para Taller de Reparación de Consolas | STApp",
+    metaDescription:
+      "Sistema de gestión para talleres de reparación de consolas de videojuegos. PlayStation, Xbox, Nintendo Switch. Órdenes de trabajo, inventario y seguimiento.",
+    icon: Gamepad2,
+    heroTitle: "Gestioná tu taller de reparación de",
+    heroHighlight: "consolas de videojuegos",
+    heroDescription:
+      "PlayStation, Xbox, Nintendo Switch — administrá reparaciones de consolas con un sistema profesional. Control de órdenes, repuestos y comunicación con clientes.",
+    problems: [
+      "Las consolas requieren diagnósticos técnicos específicos difíciles de documentar",
+      "Los repuestos de consolas son variados y de alta rotación en temporadas",
+      "Los clientes gamers son exigentes y quieren saber el estado exacto",
+      "Las garantías de reparación de consolas son críticas y se pierden sin sistema",
+    ],
+    solutions: [
+      {
+        title: "Diagnóstico detallado",
+        description:
+          "Campos personalizados para cada tipo de consola: problemas de HDMI, ventiladores, lectoras, joysticks, placas. Todo documentado.",
+      },
+      {
+        title: "Stock por consola",
+        description:
+          "Organizá repuestos por tipo de consola: PS5, Xbox Series, Switch. Controlá el stock de componentes específicos con alertas automáticas.",
+      },
+      {
+        title: "Notificaciones instantáneas",
+        description:
+          "Avisá a tu cliente por WhatsApp cuando su consola esté lista. Sin llamadas, sin demoras.",
+      },
+      {
+        title: "Garantía documentada",
+        description:
+          "Cada reparación queda con garantía registrada digitalmente. El cliente accede a su comprobante desde cualquier dispositivo.",
+      },
+    ],
+    keywords: [
+      "software reparación consolas",
+      "sistema taller consolas",
+      "gestión reparaciones PlayStation",
+      "software taller consolas videojuegos",
+      "reparación Xbox Nintendo Switch",
+      "órdenes trabajo consolas",
     ],
   },
 ]

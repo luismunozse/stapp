@@ -541,13 +541,302 @@ La combinaci\u00f3n correcta de herramientas f\u00edsicas y software te permite 
       "mejor software servicio t\u00e9cnico",
     ],
   },
+  {
+    id: 11,
+    slug: "software-vs-excel-gestion-taller-reparacion",
+    title: "Software de gestión vs Excel: por qué tu taller necesita migrar",
+    excerpt:
+      "Comparativa detallada entre usar Excel y un software especializado para gestionar tu taller de reparación. Descubrí por qué el cambio vale la pena.",
+    content: `
+## La trampa del Excel
+
+Muchos talleres arrancan con Excel porque es "gratis" y conocido. Pero a medida que crece el negocio, las limitaciones se hacen evidentes y el costo oculto de usar planillas supera al de un software especializado.
+
+## Comparativa directa
+
+### Órdenes de trabajo
+- **Excel**: Una fila por orden. Sin fotos, sin estados, sin notificaciones. Buscar una orden vieja es un dolor de cabeza.
+- **Software (STApp)**: Órdenes con estados en tiempo real, fotos por etapa, notificaciones WhatsApp automáticas y búsqueda instantánea.
+
+### Inventario
+- **Excel**: Actualización manual. Errores frecuentes. Sin alertas de stock bajo.
+- **Software (STApp)**: Descuento automático al usar repuestos, alertas de stock mínimo, historial de movimientos.
+
+### Clientes
+- **Excel**: Lista plana sin historial. Duplicados frecuentes.
+- **Software (STApp)**: Ficha por cliente con historial de reparaciones, contacto directo por WhatsApp, y portal de seguimiento.
+
+### Reportes
+- **Excel**: Hay que armar fórmulas y gráficos manualmente. Se rompen con frecuencia.
+- **Software (STApp)**: Reportes automáticos de ingresos, reparaciones por técnico, repuestos más usados y más.
+
+## El costo real del Excel
+
+- Horas perdidas buscando información: ~5 horas/semana
+- Errores de inventario: ~10% de pérdida
+- Clientes perdidos por falta de seguimiento: incalculable
+- Tiempo en hacer reportes manuales: ~3 horas/semana
+
+## Conclusión
+
+Un software especializado como STApp se paga solo en la primera semana de uso. La productividad que ganás y los errores que evitás superan ampliamente el costo mensual.
+    `,
+    category: "Tecnología",
+    date: "2024-03-01",
+    readTime: "8 min",
+    image: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800",
+    keywords: [
+      "software vs excel taller",
+      "dejar excel servicio técnico",
+      "mejor que excel para taller",
+      "software gestión vs planilla",
+      "migrar de excel a software",
+    ],
+  },
+  {
+    id: 12,
+    slug: "facturacion-electronica-servicio-tecnico-argentina",
+    title: "Facturación electrónica para servicio técnico en Argentina: guía completa",
+    excerpt:
+      "Todo lo que necesitás saber sobre facturación electrónica AFIP para tu taller de reparación. Requisitos, pasos y cómo automatizarla.",
+    content: `
+## Facturación electrónica obligatoria
+
+En Argentina, la facturación electrónica es obligatoria para la mayoría de los contribuyentes. Si tenés un taller de reparación, necesitás emitir facturas electrónicas por cada servicio.
+
+## Tipos de comprobantes para talleres
+
+- **Factura B**: Para consumidores finales (la más común en talleres)
+- **Factura A**: Para responsables inscriptos
+- **Nota de crédito**: Para devoluciones o correcciones
+
+## Cómo funciona con AFIP
+
+1. Registrate como contribuyente
+2. Obtené el certificado digital
+3. Conectá tu sistema de facturación
+
+## Automatizar la facturación
+
+Con un software de gestión como STApp podés:
+- Generar facturas automáticamente al cerrar una orden
+- Incluir detalle de repuestos y mano de obra
+- Enviar la factura por WhatsApp o email
+- Mantener un registro organizado para el contador
+
+## Beneficios de facturar digitalmente
+
+1. **Cumplimiento legal**: Evitás multas de AFIP
+2. **Profesionalismo**: Tu cliente recibe un comprobante formal
+3. **Organización**: Todo queda registrado automáticamente
+4. **Reportes fiscales**: Tenés los datos listos para tu contador
+
+## Conclusión
+
+La facturación electrónica no tiene por qué ser complicada. Con las herramientas correctas, se integra naturalmente al flujo de trabajo de tu taller.
+    `,
+    category: "Gestión",
+    date: "2024-03-10",
+    readTime: "7 min",
+    image: "https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=800",
+    keywords: [
+      "facturación electrónica servicio técnico",
+      "factura electrónica taller reparación",
+      "facturación AFIP taller celulares",
+      "cómo facturar servicio técnico",
+      "facturación electrónica Argentina taller",
+    ],
+  },
+  {
+    id: 13,
+    slug: "como-escalar-taller-reparacion-celulares",
+    title: "Cómo escalar tu taller de reparación de celulares sin perder calidad",
+    excerpt:
+      "Estrategias probadas para crecer tu taller de reparación: agregar técnicos, abrir sucursales y sistematizar procesos sin sacrificar la calidad.",
+    content: `
+## Cuándo es momento de escalar
+
+Tu taller está listo para crecer cuando:
+- Rechazás trabajo por falta de capacidad
+- Los tiempos de espera superan los 3 días
+- Tenés demanda constante de servicios
+- Tu flujo de caja es estable
+
+## 1. Sistematizá antes de crecer
+
+El error más común es contratar antes de tener procesos claros. Antes de agregar gente:
+- Documentá cada tipo de reparación con pasos claros
+- Implementá un sistema de gestión como STApp
+- Definí roles y responsabilidades
+- Establecé métricas de calidad
+
+## 2. Contratá estratégicamente
+
+- **Primer técnico**: Que domine las reparaciones más frecuentes (pantallas, baterías)
+- **Vendedor**: Para atención al público y ventas de accesorios
+- **Técnico especializado**: Para reparaciones complejas (micro-soldadura)
+
+## 3. Usá tecnología para mantener el control
+
+Con STApp podés:
+- Asignar órdenes a cada técnico
+- Ver la carga de trabajo en tiempo real
+- Medir productividad por técnico
+- Controlar calidad con fotos por etapa
+
+## 4. Considerá abrir una sucursal
+
+Antes de abrir una segunda ubicación:
+- Asegurate de que la primera funcione sin tu presencia
+- Elegí una ubicación con demanda comprobada
+- Replicá los procesos que funcionan
+- Usá el mismo sistema de gestión centralizado
+
+## Conclusión
+
+Escalar no es solo vender más — es mantener la calidad mientras crecés. La sistematización y la tecnología son tus mejores aliados.
+    `,
+    category: "Gestión",
+    date: "2024-03-15",
+    readTime: "9 min",
+    image: "https://images.unsplash.com/photo-1552664730-d307ca884978?w=800",
+    keywords: [
+      "escalar taller reparación",
+      "crecer taller celulares",
+      "abrir sucursal taller",
+      "contratar técnicos taller",
+      "cómo hacer crecer servicio técnico",
+    ],
+  },
+  {
+    id: 14,
+    slug: "notificaciones-whatsapp-clientes-reparacion",
+    title: "Notificaciones WhatsApp para clientes: la clave para fidelizar en tu taller",
+    excerpt:
+      "Cómo usar WhatsApp para mantener informados a tus clientes sobre el estado de sus reparaciones y aumentar la satisfacción.",
+    content: `
+## Por qué WhatsApp es el canal ideal
+
+En Latinoamérica, el 95% de los usuarios de smartphone usan WhatsApp. Es el canal natural para comunicarte con tus clientes.
+
+## Tipos de notificaciones para talleres
+
+### 1. Confirmación de recepción
+"Hola [nombre], tu [equipo] fue recibido en nuestro taller. Tu número de orden es #[número]. Podés seguir el estado en: [link]"
+
+### 2. Presupuesto listo
+"Tu [equipo] fue diagnosticado. El presupuesto es de $[monto]. ¿Querés que procedamos con la reparación?"
+
+### 3. Esperando repuesto
+"Te informamos que estamos esperando un repuesto para tu [equipo]. Tiempo estimado: [días] días."
+
+### 4. Equipo listo
+"¡Tu [equipo] está listo! Podés retirarlo en nuestro taller de [horario]. Recordá traer tu comprobante."
+
+## Automatización con STApp
+
+Con STApp, estas notificaciones se envían con un solo clic desde la orden de trabajo:
+- Plantillas pre-configuradas
+- Datos del cliente auto-completados
+- Link de seguimiento incluido
+- Historial de mensajes enviados
+
+## Resultados medibles
+
+Los talleres que usan notificaciones WhatsApp reportan:
+- 60% menos llamadas de "¿ya está listo?"
+- 40% más clientes recurrentes
+- 25% menos equipos sin retirar
+- Mayor percepción de profesionalismo
+
+## Conclusión
+
+Las notificaciones WhatsApp no son un lujo, son una necesidad. Mejoran la experiencia del cliente y te ahorran tiempo.
+    `,
+    category: "Marketing",
+    date: "2024-03-20",
+    readTime: "6 min",
+    image: "https://images.unsplash.com/photo-1611746872915-64382b5c76da?w=800",
+    keywords: [
+      "notificaciones WhatsApp taller",
+      "WhatsApp reparaciones",
+      "avisar cliente reparación lista",
+      "automatizar WhatsApp taller",
+      "comunicación cliente servicio técnico",
+    ],
+  },
+  {
+    id: 15,
+    slug: "elegir-mejor-software-servicio-tecnico",
+    title: "Cómo elegir el mejor software de servicio técnico en 2025",
+    excerpt:
+      "Criterios clave para evaluar y elegir el software de gestión ideal para tu taller de reparación. Comparativa de funciones esenciales.",
+    content: `
+## La decisión más importante para tu taller
+
+Elegir un software de gestión es una de las decisiones más importantes para tu negocio. Un mal software te hace perder tiempo; uno bueno te hace ganar dinero.
+
+## Criterios esenciales
+
+### 1. Facilidad de uso
+- ¿Lo puede usar un técnico sin capacitación?
+- ¿Funciona bien en celular y computadora?
+- ¿El soporte responde rápido?
+
+### 2. Funciones específicas para talleres
+No todos los software de "gestión" entienden las necesidades de un taller de reparación. Buscá uno que tenga:
+- Órdenes de trabajo con estados
+- Fotos del equipo
+- Control de inventario de repuestos
+- Notificaciones al cliente
+
+### 3. Precio accesible
+- ¿Tiene prueba gratis sin tarjeta?
+- ¿El plan incluye todo o cobra extras?
+- ¿El precio es en moneda local?
+
+### 4. Soporte en español
+- ¿El equipo de soporte habla español?
+- ¿Tienen documentación en español?
+- ¿Hay comunidad o grupo de usuarios?
+
+### 5. Actualizaciones constantes
+- ¿Agregan funciones nuevas regularmente?
+- ¿Escuchan el feedback de usuarios?
+- ¿La plataforma mejora con el tiempo?
+
+## Por qué STApp cumple todos los criterios
+
+STApp fue diseñado desde cero para talleres de reparación en Latinoamérica:
+- Interfaz intuitiva en español
+- Todas las funciones incluidas en un solo plan
+- Precios en pesos argentinos y dólares
+- Soporte personalizado
+- Actualizaciones semanales basadas en feedback real
+
+## Conclusión
+
+No te conformes con un software genérico. Elegí uno que entienda tu negocio y te ayude a crecer.
+    `,
+    category: "Tecnología",
+    date: "2024-04-01",
+    readTime: "7 min",
+    image: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800",
+    keywords: [
+      "mejor software servicio técnico",
+      "elegir software taller",
+      "comparativa software reparación",
+      "software gestión taller 2025",
+      "qué software usar servicio técnico",
+    ],
+  },
 ]
 
 export const blogCategories = [
   "Todos",
-  "Gesti\u00f3n",
+  "Gestión",
   "Inventario",
-  "Tecnolog\u00eda",
+  "Tecnología",
   "Marketing",
   "Industria",
 ]
