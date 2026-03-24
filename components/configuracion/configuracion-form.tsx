@@ -44,6 +44,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
   const [ivaPorcentaje, setIvaPorcentaje] = useState("0")
   const [cotizacionValidezDias, setCotizacionValidezDias] = useState("30")
   const [cotizacionTerminos, setCotizacionTerminos] = useState("")
+  const [recepcionTerminos, setRecepcionTerminos] = useState("")
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -66,6 +67,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
         setIvaPorcentaje(String(data.ivaPorcentaje ?? 0))
         setCotizacionValidezDias(String(data.cotizacionValidezDias ?? 30))
         setCotizacionTerminos(data.cotizacionTerminos || "")
+        setRecepcionTerminos(data.recepcionTerminos || "")
         // Usar logoUrl si existe, o logoData para compatibilidad
         if (data.logoUrl) {
           setPreview(data.logoUrl)
@@ -119,7 +121,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
       const res = await fetch("/api/configuracion", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, pais }),
+        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, pais }),
       })
 
       if (res.ok) {
@@ -439,6 +441,31 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
             />
             <p className="text-xs sm:text-sm text-muted-foreground mt-1">
               Se incluirán por defecto en nuevas cotizaciones y PDFs
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="text-base sm:text-lg">Comprobante de Recepcion</CardTitle>
+          <CardDescription className="text-xs sm:text-sm">
+            Terminos y condiciones que aparecen en el comprobante PDF al recibir un equipo.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-4 sm:p-6 pt-0 space-y-4">
+          <div>
+            <Label htmlFor="recepcionTerminos" className="text-sm">Terminos y Condiciones</Label>
+            <Textarea
+              id="recepcionTerminos"
+              value={recepcionTerminos}
+              onChange={(e) => setRecepcionTerminos(e.target.value)}
+              placeholder={"1. Conserve este comprobante para retirar su equipo. El plazo de retiro es de 30 dias.\n2. No nos hacemos responsables por datos perdidos. Realice backup antes de entregar el equipo.\n3. Al firmar, el cliente declara haber revisado el estado del equipo al momento de la entrega.\n4. El presupuesto puede variar segun el diagnostico final del equipo."}
+              rows={5}
+              disabled={!allowEdit}
+            />
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+              Escriba cada termino en una linea separada. Si se deja vacio se usaran los terminos por defecto.
             </p>
           </div>
         </CardContent>

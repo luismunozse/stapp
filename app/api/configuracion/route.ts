@@ -27,6 +27,7 @@ export async function GET() {
         iva_porcentaje,
         cotizacion_validez_dias,
         cotizacion_terminos,
+        recepcion_terminos,
         pais
       `)
       .eq("id", organizationId!)
@@ -53,6 +54,7 @@ export async function GET() {
       ivaPorcentaje: organization.iva_porcentaje ?? 0,
       cotizacionValidezDias: organization.cotizacion_validez_dias ?? 30,
       cotizacionTerminos: organization.cotizacion_terminos || "",
+      recepcionTerminos: organization.recepcion_terminos || "",
       pais: organization.pais || "AR",
     })
   } catch (error) {
@@ -68,7 +70,7 @@ export async function PUT(request: Request) {
     if (error) return error
 
     const body = await request.json()
-    const { logoData, logoMime, nombreEmpresa, telefono, direccion, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, pais } = body
+    const { logoData, logoMime, nombreEmpresa, telefono, direccion, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, pais } = body
 
     const updateData: Record<string, any> = {}
 
@@ -157,6 +159,10 @@ export async function PUT(request: Request) {
       updateData.cotizacion_terminos = cotizacionTerminos || null
     }
 
+    if (recepcionTerminos !== undefined) {
+      updateData.recepcion_terminos = recepcionTerminos || null
+    }
+
     if (pais !== undefined && typeof pais === "string" && pais in COUNTRIES) {
       updateData.pais = pais
     }
@@ -166,7 +172,7 @@ export async function PUT(request: Request) {
       // Retornar estado actual
       const { data: org } = await supabaseAdmin
         .from("organizations")
-        .select("id, logo_url, nombre_mostrar, telefono, direccion, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, pais")
+        .select("id, logo_url, nombre_mostrar, telefono, direccion, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, recepcion_terminos, pais")
         .eq("id", organizationId!)
         .single()
 
@@ -182,6 +188,7 @@ export async function PUT(request: Request) {
         ivaPorcentaje: org?.iva_porcentaje ?? 0,
         cotizacionValidezDias: org?.cotizacion_validez_dias ?? 30,
         cotizacionTerminos: org?.cotizacion_terminos || "",
+        recepcionTerminos: org?.recepcion_terminos || "",
         pais: org?.pais || "AR",
       })
     }
@@ -190,7 +197,7 @@ export async function PUT(request: Request) {
       .from("organizations")
       .update(updateData)
       .eq("id", organizationId!)
-      .select("id, logo_url, logo_path, nombre_mostrar, telefono, direccion, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, pais")
+      .select("id, logo_url, logo_path, nombre_mostrar, telefono, direccion, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, recepcion_terminos, pais")
       .single()
 
     if (dbError) {
@@ -209,6 +216,7 @@ export async function PUT(request: Request) {
       ivaPorcentaje: organization.iva_porcentaje ?? 0,
       cotizacionValidezDias: organization.cotizacion_validez_dias ?? 30,
       cotizacionTerminos: organization.cotizacion_terminos || "",
+      recepcionTerminos: organization.recepcion_terminos || "",
       pais: organization.pais || "AR",
     })
   } catch (error) {

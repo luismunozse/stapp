@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server"
 import { generateOrdenPDF, OrdenPDFData } from "@/lib/pdf"
 import { getOrderByPublicToken } from "@/lib/public-token"
+import { getDeviceTypeLabel } from "@/lib/device-types"
+import { supabaseAdmin } from "@/lib/supabase"
+import { headers } from "next/headers"
 
 export async function GET(
   request: Request,
@@ -21,7 +24,8 @@ export async function GET(
           direccion,
           logo_url,
           moneda,
-          zona_horaria
+          zona_horaria,
+          recepcion_terminos
         ),
         users:entregado_por_user_id (
           nombre
@@ -32,10 +36,52 @@ export async function GET(
       `)
     if (error) return error
 
+    // Fetch checklist data
+    const { data: checklistData } = await supabaseAdmin
+      .from("checklist_recepcion")
+      .select(`
+        valores, notas, firma_cliente, firma_mime,
+        checklist_templates (
+          checklist_template_items (label, orden)
+        )
+      `)
+      .eq("orden_id", orden.id)
+      .single()
+
+    // Fetch intake photos
+    const { data: fotosData } = await supabaseAdmin
+      .from("fotos_orden")
+      .select("url, descripcion")
+      .eq("orden_id", orden.id)
+      .eq("tipo", "INGRESO")
+      .order("created_at", { ascending: true })
+      .limit(4)
+
+    // Build base URL for QR
+    const headersList = await headers()
+    const host = headersList.get("host") || "localhost:3000"
+    const proto = headersList.get("x-forwarded-proto") || "https"
+    const baseUrl = `${proto}://${host}`
+
     const cliente = orden.clientes as any
     const org = orden.organizations as any
     const entregadoPorUser = orden.users as any
     const sectorObj = orden.sectores_cliente as any
+    const tipoDisp = orden.tipos_dispositivo as any
+
+    // Build checklist items with labels
+    let checklistItems: Array<{ label: string; valor: boolean | string | null }> | null = null
+    if (checklistData?.checklist_templates) {
+      const templateItems = (checklistData.checklist_templates as any).checklist_template_items || []
+      const valores = typeof checklistData.valores === "string"
+        ? JSON.parse(checklistData.valores)
+        : checklistData.valores || {}
+      const sortedItems = [...templateItems].sort((a: any, b: any) => (a.orden || 0) - (b.orden || 0))
+      checklistItems = sortedItems.map((item: any) => ({
+        label: item.label,
+        valor: valores[item.id] ?? null,
+      })).filter((item: any) => item.valor !== null && item.valor !== undefined)
+    }
 
     // Preparar datos para el PDF
     const pdfData: OrdenPDFData = {
@@ -49,7 +95,7 @@ export async function GET(
         direccion: cliente.direccion,
       },
       dispositivo: orden.dispositivo,
-      tipoDispositivo: orden.tipo_dispositivo,
+      tipoDispositivo: getDeviceTypeLabel(orden.tipo_dispositivo, tipoDisp?.nombre),
       marca: orden.marca,
       color: orden.color,
       imei: orden.imei,
@@ -73,6 +119,16 @@ export async function GET(
       entregadoPor: entregadoPorUser?.nombre || null,
       notasEntrega: orden.notas_entrega,
       sector: sectorObj?.nombre || null,
+      recepcionTerminos: org?.recepcion_terminos || undefined,
+      publicToken: orden.public_token,
+      baseUrl,
+      sena: typeof orden.sena === "number" && orden.sena > 0 ? orden.sena : null,
+      metodoPagoSena: orden.metodo_pago_sena,
+      checklistItems,
+      checklistNotas: checklistData?.notas || null,
+      firmaRecepcion: checklistData?.firma_cliente || null,
+      firmaRecepcionMime: checklistData?.firma_mime || null,
+      fotosIngreso: fotosData && fotosData.length > 0 ? fotosData : null,
     }
 
     // Generar PDF

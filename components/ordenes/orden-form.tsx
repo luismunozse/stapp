@@ -172,7 +172,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
     defaultValues: {
       clienteId: "",
       dispositivo: "",
-      tipoDispositivo: "CELULAR",
+      tipoDispositivo: "",
       marca: "",
       color: "",
       imei: "",
