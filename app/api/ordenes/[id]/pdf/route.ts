@@ -22,17 +22,7 @@ export async function GET(
         *,
         tipos_dispositivo:tipo_dispositivo_id(nombre),
         clientes (*),
-        organizations (
-          id,
-          nombre,
-          nombre_mostrar,
-          telefono,
-          direccion,
-          logo_url,
-          moneda,
-          zona_horaria,
-          recepcion_terminos
-        ),
+        organizations (*),
         users:entregado_por_user_id (
           nombre
         ),
@@ -65,11 +55,11 @@ export async function GET(
       .select(`
         valores, notas, firma_cliente, firma_mime,
         checklist_templates (
-          checklist_template_items (label, orden)
+          checklist_template_items (id, label, orden)
         )
       `)
       .eq("orden_id", id)
-      .single()
+      .maybeSingle()
 
     // Fetch intake photos
     const { data: fotosData } = await supabaseAdmin
