@@ -7,10 +7,16 @@ import { z } from "zod"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { X, User, Building2 } from "lucide-react"
-import type { Cliente, TipoCliente } from "@/types"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { User, Building2 } from "lucide-react"
+import type { Cliente } from "@/types"
 import { useCurrency } from "@/contexts/currency-context"
+import { useModal } from "@/contexts/modal-context"
 import { useOffline } from "@/contexts/offline-context"
 import { STORES } from "@/lib/offline/constants"
 import { getCountryConfig } from "@/lib/countries"
@@ -19,7 +25,7 @@ const clienteSchema = z.object({
   tipoCliente: z.enum(["INDIVIDUAL", "EMPRESA"]).default("INDIVIDUAL"),
   nombre: z.string()
     .min(1, "El nombre es requerido")
-    .regex(/^[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s.]+$/, "El nombre solo debe contener letras"),
+    .regex(/^[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s.'\-0-9]+$/, "El nombre contiene caracteres no permitidos"),
   telefono: z.string()
     .min(1, "El teléfono es requerido")
     .min(7, "El teléfono debe tener al menos 7 dígitos"),
@@ -34,13 +40,15 @@ type ClienteFormData = z.infer<typeof clienteSchema>
 
 interface ClienteFormProps {
   cliente?: Cliente | null
+  open: boolean
   onClose: () => void
   onSuccess: () => void
 }
 
-export function ClienteForm({ cliente, onClose, onSuccess }: ClienteFormProps) {
+export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormProps) {
   const { pais } = useCurrency()
   const countryConfig = getCountryConfig(pais)
+  const { showError, showInfo } = useModal()
   const { offlineFetch } = useOffline()
   const [loading, setLoading] = useState(false)
   const {
@@ -78,19 +86,31 @@ export function ClienteForm({ cliente, onClose, onSuccess }: ClienteFormProps) {
   const tipoCliente = watch("tipoCliente")
 
   useEffect(() => {
-    if (cliente) {
-      reset({
-        tipoCliente: cliente.tipoCliente || "INDIVIDUAL",
-        nombre: cliente.nombre,
-        telefono: cliente.telefono,
-        email: cliente.email || "",
-        direccion: cliente.direccion || "",
-        dni: cliente.dni || "",
-        razonSocial: cliente.razonSocial || "",
-        cuit: cliente.cuit || "",
-      })
+    if (open) {
+      reset(cliente
+        ? {
+            tipoCliente: cliente.tipoCliente || "INDIVIDUAL",
+            nombre: cliente.nombre,
+            telefono: cliente.telefono,
+            email: cliente.email || "",
+            direccion: cliente.direccion || "",
+            dni: cliente.dni || "",
+            razonSocial: cliente.razonSocial || "",
+            cuit: cliente.cuit || "",
+          }
+        : {
+            tipoCliente: "INDIVIDUAL",
+            nombre: "",
+            telefono: "",
+            email: "",
+            direccion: "",
+            dni: "",
+            razonSocial: "",
+            cuit: "",
+          }
+      )
     }
-  }, [cliente, reset])
+  }, [open, cliente, reset])
 
   const onSubmit = async (data: ClienteFormData) => {
     setLoading(true)
@@ -118,37 +138,32 @@ export function ClienteForm({ cliente, onClose, onSuccess }: ClienteFormProps) {
           }))
 
       if (res.status === 202) {
-        alert("Cliente guardado offline. Se sincronizará automáticamente.")
+        await showInfo("Cliente guardado offline. Se sincronizará automáticamente.")
         onSuccess()
         return
       }
 
       if (!res.ok) {
         const error = await res.json()
-        alert(error.error || "Error al guardar cliente")
+        await showError(error.error || "Error al guardar cliente")
         return
       }
 
       onSuccess()
     } catch (error) {
       console.error("Error saving cliente:", error)
-      alert("Error al guardar cliente")
+      await showError("Error al guardar cliente")
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle>{cliente ? "Editar Cliente" : "Nuevo Cliente"}</CardTitle>
-          <Button variant="ghost" size="icon" onClick={onClose}>
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent>
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{cliente ? "Editar Cliente" : "Nuevo Cliente"}</DialogTitle>
+        </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           {/* Tipo de cliente */}
           <div>
@@ -231,7 +246,7 @@ export function ClienteForm({ cliente, onClose, onSuccess }: ClienteFormProps) {
               id="telefono"
               {...register("telefono")}
               placeholder="1123456789"
-              maxLength={10}
+              maxLength={15}
             />
             {errors.telefono && (
               <p className="text-sm text-destructive mt-1">
@@ -289,7 +304,7 @@ export function ClienteForm({ cliente, onClose, onSuccess }: ClienteFormProps) {
             </Button>
           </div>
         </form>
-      </CardContent>
-    </Card>
+      </DialogContent>
+    </Dialog>
   )
 }

@@ -5,8 +5,9 @@ import crypto from "crypto"
 import { z } from "zod"
 import { isValidSlug, RESERVED_SUBDOMAINS } from "@/lib/tenant"
 import { sendVerificationEmail } from "@/lib/email"
+import { verifyGoogleIdToken } from "@/lib/google"
 
-// Schema de validación
+// Schema de validación (password opcional para Google)
 const registerSchema = z.object({
   // Datos de la organización
   organizacion: z.object({
@@ -20,8 +21,10 @@ const registerSchema = z.object({
   usuario: z.object({
     nombre: z.string().min(2, "El nombre debe tener al menos 2 caracteres"),
     email: z.string().email("Email inválido"),
-    password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
+    password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres").optional(),
   }),
+  // Google ID Token (opcional, para registro con Google)
+  googleIdToken: z.string().optional(),
 })
 
 export async function POST(request: NextRequest) {
@@ -38,7 +41,35 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { organizacion, usuario } = validationResult.data
+    const { organizacion, usuario, googleIdToken } = validationResult.data
+
+    // Determinar si es registro con Google
+    const isGoogleRegister = !!googleIdToken
+    let googleEmail: string | null = null
+    let googleName: string | null = null
+
+    if (isGoogleRegister) {
+      // Verificar el token de Google
+      try {
+        const googleUser = await verifyGoogleIdToken(googleIdToken)
+        googleEmail = googleUser.email
+        googleName = googleUser.name
+      } catch {
+        return NextResponse.json(
+          { error: "Token de Google inválido. Intentá de nuevo." },
+          { status: 400 }
+        )
+      }
+    } else if (!usuario.password) {
+      return NextResponse.json(
+        { error: "La contraseña es requerida" },
+        { status: 400 }
+      )
+    }
+
+    // Para Google, usar el email verificado por Google
+    const userEmail = isGoogleRegister ? googleEmail! : usuario.email
+    const userName = isGoogleRegister ? (usuario.nombre || googleName!) : usuario.nombre
 
     // Validar formato del slug
     const slugValidation = isValidSlug(organizacion.slug)
@@ -61,7 +92,7 @@ export async function POST(request: NextRequest) {
     const { data: existingUser } = await supabaseAdmin
       .from("users")
       .select("id")
-      .eq("email", usuario.email)
+      .eq("email", userEmail)
       .single()
 
     if (existingUser) {
@@ -113,25 +144,28 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Hash de la contraseña
-    const hashedPassword = await bcrypt.hash(usuario.password, 10)
+    // Hash de la contraseña (null para Google)
+    const hashedPassword = usuario.password
+      ? await bcrypt.hash(usuario.password, 10)
+      : null
 
-    // Generar token de verificación
-    const verificationToken = crypto.randomBytes(32).toString("hex")
-    const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 horas
+    // Para Google, email ya está verificado. Para credentials, generar token de verificación
+    const verificationToken = isGoogleRegister ? null : crypto.randomBytes(32).toString("hex")
+    const verificationExpires = isGoogleRegister ? null : new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 horas
 
-    // Crear el usuario admin (sin verificar)
+    // Crear el usuario admin
     const { data: newUser, error: userError } = await supabaseAdmin
       .from("users")
       .insert({
-        email: usuario.email,
+        email: userEmail,
         password: hashedPassword,
-        nombre: usuario.nombre,
+        nombre: userName,
         rol: "ADMIN",
         organization_id: newOrg.id,
-        email_verified: false,
+        email_verified: isGoogleRegister, // Google = ya verificado
         email_verification_token: verificationToken,
-        email_verification_expires: verificationExpires.toISOString(),
+        email_verification_expires: verificationExpires?.toISOString() || null,
+        provider: isGoogleRegister ? "google" : "credentials",
       })
       .select("id, email, nombre, rol")
       .single()
@@ -225,23 +259,28 @@ export async function POST(request: NextRequest) {
       ])
     }
 
-    // Enviar email de verificación
-    try {
-      await sendVerificationEmail({
-        email: usuario.email,
-        token: verificationToken,
-        nombre: usuario.nombre,
-        slug: newOrg.slug,
-      })
-    } catch (emailError) {
-      console.error("Error sending verification email:", emailError)
-      // No hacemos rollback, el usuario puede solicitar reenvío
+    // Enviar email de verificación (solo para registro con credentials)
+    if (!isGoogleRegister && verificationToken) {
+      try {
+        await sendVerificationEmail({
+          email: userEmail,
+          token: verificationToken,
+          nombre: userName,
+          slug: newOrg.slug,
+        })
+      } catch (emailError) {
+        console.error("Error sending verification email:", emailError)
+        // No hacemos rollback, el usuario puede solicitar reenvío
+      }
     }
 
     return NextResponse.json({
       success: true,
-      message: "Cuenta creada. Revisa tu email para verificar tu cuenta.",
-      requiresVerification: true,
+      message: isGoogleRegister
+        ? "Cuenta creada exitosamente."
+        : "Cuenta creada. Revisá tu email para verificar tu cuenta.",
+      requiresVerification: !isGoogleRegister,
+      provider: isGoogleRegister ? "google" : "credentials",
       organization: {
         id: newOrg.id,
         nombre: newOrg.nombre,

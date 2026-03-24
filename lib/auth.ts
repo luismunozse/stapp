@@ -3,6 +3,7 @@ import Credentials from "next-auth/providers/credentials"
 import { supabaseAdmin } from "@/lib/supabase"
 import bcrypt from "bcryptjs"
 import { randomBytes } from "crypto"
+import { verifyGoogleIdToken } from "@/lib/google"
 
 type Rol = "ADMIN" | "TECNICO" | "VENDEDOR"
 
@@ -114,6 +115,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         pwaRefreshToken: { label: "PWA Refresh Token", type: "text" },
         totpCode: { label: "Codigo 2FA", type: "text" },
         skip2FA: { label: "Skip 2FA check", type: "text" },
+        googleIdToken: { label: "Google ID Token", type: "text" },
       },
       authorize: async (credentials) => {
         // Modo 1: Autenticación con refresh token (para PWA)
@@ -170,7 +172,65 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           }
         }
 
-        // Modo 2: Autenticación tradicional con email/password
+        // Modo 2: Autenticación con Google ID Token
+        if (credentials?.googleIdToken) {
+          const googleUser = await verifyGoogleIdToken(credentials.googleIdToken as string)
+
+          // Buscar usuario por email
+          const { data: gUser, error: gError } = await supabaseAdmin
+            .from("users")
+            .select(`
+              *,
+              organizations (
+                id,
+                activo
+              )
+            `)
+            .eq("email", googleUser.email)
+            .single()
+
+          if (gError || !gUser) {
+            throw new Error("GOOGLE_NO_ACCOUNT")
+          }
+
+          // Google ya verificó el email, marcar como verificado si no lo está
+          if (!gUser.email_verified) {
+            await supabaseAdmin
+              .from("users")
+              .update({ email_verified: true, email_verification_token: null, email_verification_expires: null })
+              .eq("id", gUser.id)
+          }
+
+          // Verificar si es superadmin
+          const isGoogleSuper = isSuperadminEmail(gUser.email)
+
+          // Verificar que la organización esté activa
+          const gOrg = gUser.organizations as { id: string; activo: boolean } | null
+          if (!isGoogleSuper && !gOrg?.activo) {
+            return null
+          }
+
+          // Verificar 2FA
+          if (gUser.totp_enabled && credentials.skip2FA !== "true") {
+            throw new Error(`REQUIRES_2FA:${gUser.id}`)
+          }
+
+          const rememberMe = credentials.rememberMe === "true"
+          const refreshToken = await saveRefreshToken(gUser.id, rememberMe)
+
+          return {
+            id: gUser.id,
+            email: gUser.email,
+            name: gUser.nombre,
+            role: gUser.rol as Rol,
+            organizationId: gUser.organization_id,
+            isSuperadmin: isGoogleSuper,
+            rememberMe,
+            refreshToken,
+          }
+        }
+
+        // Modo 3: Autenticación tradicional con email/password
         if (!credentials?.email || !credentials?.password) {
           return null
         }
@@ -204,6 +264,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const organization = user.organizations as { id: string; activo: boolean } | null
         if (!isSuper && !organization?.activo) {
           return null
+        }
+
+        // Verificar password (puede ser null si el usuario se registró con Google)
+        if (!user.password) {
+          throw new Error("USE_GOOGLE_LOGIN")
         }
 
         const isPasswordValid = await bcrypt.compare(

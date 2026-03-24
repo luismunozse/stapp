@@ -5,7 +5,7 @@ import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DataTable, DataTablePagination, type Column } from "@/components/ui/data-table"
-import { Plus, Search, Phone, Mail, Edit, Trash2, User, Building2, Upload, PiggyBank, DollarSign, MessageCircle } from "lucide-react"
+import { Plus, Search, Phone, Mail, Edit, Trash2, User, Building2, Upload, PiggyBank, DollarSign, MessageCircle, MoreHorizontal } from "lucide-react"
 import { ClienteForm } from "./cliente-form"
 import { CuentaCorrienteDialog } from "@/components/clientes/cuenta-corriente-dialog"
 import { CobrarMultipleDialog } from "@/components/ordenes/cobrar-multiple-dialog"
@@ -14,6 +14,7 @@ import { ExportButton } from "@/components/export/export-button"
 import { ClienteMobileCard } from "./cliente-mobile-card"
 import { ClienteWhatsAppDialog } from "./cliente-whatsapp-dialog"
 import { Card, CardContent } from "@/components/ui/card"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import type { Cliente } from "@/types"
 import { useModal } from "@/contexts/modal-context"
 import { useCurrency } from "@/contexts/currency-context"
@@ -218,7 +219,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
       sortable: false,
       hideOnMobile: true,
       render: (cliente) => {
-        const saldo = (cliente as any).saldoCuenta || 0
+        const saldo = cliente.saldoCuenta || 0
         if (saldo <= 0) return <span className="text-muted-foreground">-</span>
         return (
           <button
@@ -235,53 +236,67 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
     {
       key: "actions",
       header: "",
-      className: "w-auto sm:w-[100px]",
+      className: "w-auto sm:w-[80px]",
       render: (cliente) => (
         <div role="group" className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 text-muted-foreground hover:text-green-600"
-            onClick={(e) => { e.stopPropagation(); setWhatsappCliente(cliente) }}
-            title="Enviar WhatsApp"
-          >
-            <MessageCircle className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-muted-foreground hover:text-green-600"
-            onClick={(e) => { e.stopPropagation(); setCobrarCliente(cliente) }}
-            title="Cobrar órdenes"
-          >
-            <DollarSign className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-muted-foreground hover:text-blue-600"
-            onClick={(e) => { e.stopPropagation(); setCuentaCorrienteCliente(cliente) }}
-            title="Cuenta corriente"
-          >
-            <PiggyBank className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
             className="h-8 w-8"
             onClick={(e) => handleEdit(e, cliente)}
+            title="Editar"
           >
             <Edit className="h-4 w-4" />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-muted-foreground hover:text-destructive"
-            onClick={(e) => handleDelete(e, cliente)}
-            disabled={deleting === cliente.id}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground"
+                onClick={(e) => e.stopPropagation()}
+                title="Más acciones"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-48 p-1">
+              <button
+                type="button"
+                className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
+                onClick={(e) => { e.stopPropagation(); setWhatsappCliente(cliente) }}
+              >
+                <MessageCircle className="h-4 w-4 text-green-600" />
+                Enviar WhatsApp
+              </button>
+              <button
+                type="button"
+                className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
+                onClick={(e) => { e.stopPropagation(); setCobrarCliente(cliente) }}
+              >
+                <DollarSign className="h-4 w-4 text-green-600" />
+                Cobrar órdenes
+              </button>
+              <button
+                type="button"
+                className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
+                onClick={(e) => { e.stopPropagation(); setCuentaCorrienteCliente(cliente) }}
+              >
+                <PiggyBank className="h-4 w-4 text-blue-600" />
+                Cuenta corriente
+              </button>
+              <div className="h-px bg-border my-1" />
+              <button
+                type="button"
+                className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-destructive/10 text-destructive transition-colors"
+                onClick={(e) => handleDelete(e, cliente)}
+                disabled={deleting === cliente.id}
+              >
+                <Trash2 className="h-4 w-4" />
+                Eliminar
+              </button>
+            </PopoverContent>
+          </Popover>
         </div>
       ),
     },
@@ -325,20 +340,19 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
       </div>
 
       {/* Form Modal */}
-      {showForm && (
-        <ClienteForm
-          cliente={editingCliente}
-          onClose={() => {
-            setShowForm(false)
-            setEditingCliente(null)
-          }}
-          onSuccess={() => {
-            setShowForm(false)
-            setEditingCliente(null)
-            mutate()
-          }}
-        />
-      )}
+      <ClienteForm
+        open={showForm}
+        cliente={editingCliente}
+        onClose={() => {
+          setShowForm(false)
+          setEditingCliente(null)
+        }}
+        onSuccess={() => {
+          setShowForm(false)
+          setEditingCliente(null)
+          mutate()
+        }}
+      />
 
       {/* Import Modal */}
       {showImport && (
@@ -440,6 +454,8 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
                   onEdit={handleEdit}
                   onDelete={handleDelete}
                   onWhatsApp={(e, c) => { e.stopPropagation(); setWhatsappCliente(c) }}
+                  onCuentaCorriente={(e, c) => { e.stopPropagation(); setCuentaCorrienteCliente(c) }}
+                  onCobrar={(e, c) => { e.stopPropagation(); setCobrarCliente(c) }}
                   deleting={deleting === cliente.id}
                 />
               ))}

@@ -69,6 +69,7 @@ function isPublicPath(pathname: string): boolean {
     "/app-entry",
     "/ayuda",
     "/descargar",
+    "/google-auth",
   ]
   return publicPaths.some((path) => pathname.startsWith(path))
 }

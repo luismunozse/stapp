@@ -5,7 +5,8 @@ import { useSearchParams, useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
-import { CheckCircle, XCircle, Loader2 } from "lucide-react"
+import { CheckCircle, XCircle, Loader2, Mail } from "lucide-react"
+import { Input } from "@/components/ui/input"
 import { BusinessLogo } from "@/components/shared/business-logo"
 
 function VerifyEmailContent() {
@@ -15,6 +16,39 @@ function VerifyEmailContent() {
 
   const [status, setStatus] = useState<"loading" | "success" | "already" | "error">("loading")
   const [errorMessage, setErrorMessage] = useState("")
+
+  // Resend verification
+  const [resendEmail, setResendEmail] = useState("")
+  const [resendLoading, setResendLoading] = useState(false)
+  const [resendSuccess, setResendSuccess] = useState(false)
+  const [resendError, setResendError] = useState("")
+
+  const handleResend = async () => {
+    if (!resendEmail) {
+      setResendError("Ingresá tu email")
+      return
+    }
+    setResendLoading(true)
+    setResendError("")
+    setResendSuccess(false)
+    try {
+      const res = await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: resendEmail }),
+      })
+      if (res.ok) {
+        setResendSuccess(true)
+      } else {
+        const data = await res.json()
+        setResendError(data.error || "Error al reenviar")
+      }
+    } catch {
+      setResendError("Error de conexión")
+    } finally {
+      setResendLoading(false)
+    }
+  }
 
   useEffect(() => {
     if (!token) {
@@ -103,7 +137,7 @@ function VerifyEmailContent() {
           )}
 
           {status === "error" && (
-            <div className="flex flex-col items-center gap-4">
+            <div className="flex flex-col items-center gap-4 w-full">
               <div className="rounded-full bg-red-100 dark:bg-red-900/30 p-4">
                 <XCircle className="h-12 w-12 text-red-600 dark:text-red-400" />
               </div>
@@ -115,7 +149,41 @@ function VerifyEmailContent() {
                   {errorMessage}
                 </p>
               </div>
-              <div className="flex flex-col gap-2 w-full mt-4">
+
+              {/* Resend verification */}
+              <div className="w-full space-y-3 mt-2 p-4 bg-muted/50 rounded-lg">
+                <p className="text-sm text-center text-muted-foreground flex items-center justify-center gap-1">
+                  <Mail className="h-4 w-4" />
+                  ¿Necesitás un nuevo enlace de verificación?
+                </p>
+                <div className="flex gap-2">
+                  <Input
+                    type="email"
+                    placeholder="tu@email.com"
+                    value={resendEmail}
+                    onChange={(e) => setResendEmail(e.target.value)}
+                    className="flex-1"
+                  />
+                  <Button
+                    onClick={handleResend}
+                    disabled={resendLoading}
+                    size="sm"
+                    className="shrink-0"
+                  >
+                    {resendLoading ? "Enviando..." : "Reenviar"}
+                  </Button>
+                </div>
+                {resendSuccess && (
+                  <p className="text-xs text-green-600 dark:text-green-400 text-center">
+                    Email enviado. Revisá tu bandeja de entrada y la carpeta de spam.
+                  </p>
+                )}
+                {resendError && (
+                  <p className="text-xs text-destructive text-center">{resendError}</p>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-2 w-full mt-2">
                 <Button onClick={handleGoToLogin} variant="outline" className="w-full">
                   Ir a Iniciar Sesión
                 </Button>

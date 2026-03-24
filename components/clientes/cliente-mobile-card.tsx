@@ -2,7 +2,8 @@
 
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { User, Building2, Phone, Mail, MapPin, Edit, Trash2, MessageCircle } from "lucide-react"
+import { User, Building2, Phone, Mail, MapPin, Edit, Trash2, MessageCircle, PiggyBank, DollarSign, MoreHorizontal } from "lucide-react"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import type { Cliente } from "@/types"
 import { useCurrency } from "@/contexts/currency-context"
 
@@ -11,10 +12,12 @@ interface ClienteMobileCardProps {
   onEdit: (e: React.MouseEvent, cliente: Cliente) => void
   onDelete: (e: React.MouseEvent, cliente: Cliente) => void
   onWhatsApp?: (e: React.MouseEvent, cliente: Cliente) => void
+  onCuentaCorriente?: (e: React.MouseEvent, cliente: Cliente) => void
+  onCobrar?: (e: React.MouseEvent, cliente: Cliente) => void
   deleting: boolean
 }
 
-export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, deleting }: ClienteMobileCardProps) {
+export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCuentaCorriente, onCobrar, deleting }: ClienteMobileCardProps) {
   const { formatDate } = useCurrency()
 
   return (
@@ -49,34 +52,71 @@ export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, delet
               )}
             </div>
           </div>
-          <div role="group" className="flex items-center gap-1" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-            {onWhatsApp && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="no-touch-min h-8 w-8 text-muted-foreground hover:text-green-600"
-                onClick={(e) => onWhatsApp(e, cliente)}
-              >
-                <MessageCircle className="h-3.5 w-3.5" />
-              </Button>
-            )}
+          <div role="group" className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
             <Button
               variant="ghost"
               size="icon"
               className="no-touch-min h-8 w-8"
               onClick={(e) => onEdit(e, cliente)}
+              title="Editar"
             >
               <Edit className="h-3.5 w-3.5" />
             </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="no-touch-min h-8 w-8 text-muted-foreground hover:text-destructive"
-              onClick={(e) => onDelete(e, cliente)}
-              disabled={deleting}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="no-touch-min h-8 w-8 text-muted-foreground"
+                  onClick={(e) => e.stopPropagation()}
+                  title="Más acciones"
+                >
+                  <MoreHorizontal className="h-3.5 w-3.5" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-48 p-1">
+                {onWhatsApp && (
+                  <button
+                    type="button"
+                    className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
+                    onClick={(e) => onWhatsApp(e, cliente)}
+                  >
+                    <MessageCircle className="h-4 w-4 text-green-600" />
+                    Enviar WhatsApp
+                  </button>
+                )}
+                {onCobrar && (
+                  <button
+                    type="button"
+                    className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
+                    onClick={(e) => onCobrar(e, cliente)}
+                  >
+                    <DollarSign className="h-4 w-4 text-green-600" />
+                    Cobrar órdenes
+                  </button>
+                )}
+                {onCuentaCorriente && (
+                  <button
+                    type="button"
+                    className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
+                    onClick={(e) => onCuentaCorriente(e, cliente)}
+                  >
+                    <PiggyBank className="h-4 w-4 text-blue-600" />
+                    Cuenta corriente
+                  </button>
+                )}
+                <div className="h-px bg-border my-1" />
+                <button
+                  type="button"
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-destructive/10 text-destructive transition-colors"
+                  onClick={(e) => onDelete(e, cliente)}
+                  disabled={deleting}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Eliminar
+                </button>
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
 

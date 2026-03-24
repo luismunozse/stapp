@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { X, Copy, Check, Send } from "lucide-react"
+import { Copy, Check, Send } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import {
   getWhatsAppTemplates,

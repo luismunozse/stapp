@@ -27,6 +27,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useCurrency } from "@/contexts/currency-context"
+import { useModal } from "@/contexts/modal-context"
 import type { Cliente } from "@/types"
 
 const METODOS_DEPOSITO = [
@@ -83,6 +84,7 @@ export function CuentaCorrienteDialog({
   onDeposito,
 }: CuentaCorrienteDialogProps) {
   const { formatPrice, formatDate } = useCurrency()
+  const { showError } = useModal()
   const [saldo, setSaldo] = useState(0)
   const [movimientos, setMovimientos] = useState<Movimiento[]>([])
   const [loading, setLoading] = useState(true)
@@ -112,12 +114,19 @@ export function CuentaCorrienteDialog({
   }
 
   useEffect(() => {
-    if (open) fetchData()
+    if (open) {
+      fetchData()
+      setShowDeposito(false)
+      setDepositoMonto(0)
+      setDepositoMetodo("EFECTIVO")
+      setDepositoReferencia("")
+      setDepositoObservaciones("")
+    }
   }, [open, cliente.id])
 
   const handleDeposito = async () => {
     if (!depositoMonto || depositoMonto <= 0) {
-      alert("El monto debe ser mayor a 0")
+      await showError("El monto debe ser mayor a 0")
       return
     }
 
@@ -136,7 +145,7 @@ export function CuentaCorrienteDialog({
 
       if (!res.ok) {
         const error = await res.json()
-        alert(error.error || "Error al registrar depósito")
+        await showError(error.error || "Error al registrar depósito")
         return
       }
 
@@ -152,7 +161,7 @@ export function CuentaCorrienteDialog({
       onDeposito?.()
     } catch (err) {
       console.error("Error creating deposito:", err)
-      alert("Error al registrar depósito")
+      await showError("Error al registrar depósito")
     } finally {
       setDepositoLoading(false)
     }

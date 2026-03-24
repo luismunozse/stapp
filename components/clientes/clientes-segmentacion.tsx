@@ -23,6 +23,7 @@ import {
   BarChart3,
 } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
+import { formatPhoneForWhatsApp } from "@/lib/notifications/whatsapp-templates"
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
@@ -51,7 +52,7 @@ interface Props {
 }
 
 export function ClientesSegmentacion({ open, onOpenChange }: Props) {
-  const { formatPrice, formatDate } = useCurrency()
+  const { formatPrice, formatDate, pais } = useCurrency()
   const [activeTab, setActiveTab] = useState<TabId>("top")
   const [selectedSegment, setSelectedSegment] = useState<SegmentKey | null>(null)
 
@@ -62,8 +63,8 @@ export function ClientesSegmentacion({ open, onOpenChange }: Props) {
   )
 
   const formatWhatsAppLink = (telefono: string) => {
-    const clean = telefono.replace(/\D/g, "")
-    return `https://wa.me/549${clean}`
+    const formattedPhone = formatPhoneForWhatsApp(telefono, pais)
+    return `https://wa.me/${formattedPhone}`
   }
 
   return (
@@ -141,7 +142,7 @@ export function ClientesSegmentacion({ open, onOpenChange }: Props) {
             )}
 
             {/* Tabs */}
-            <div className="flex gap-1 border-b pb-1">
+            <div className="flex gap-1 border-b pb-1 overflow-x-auto scrollbar-hide">
               {TABS.map(tab => {
                 const Icon = tab.icon
                 return (
@@ -149,7 +150,7 @@ export function ClientesSegmentacion({ open, onOpenChange }: Props) {
                     key={tab.id}
                     variant={activeTab === tab.id ? "default" : "ghost"}
                     size="sm"
-                    className="text-xs gap-1.5"
+                    className="text-xs gap-1.5 whitespace-nowrap shrink-0"
                     onClick={() => setActiveTab(tab.id)}
                   >
                     <Icon className="h-3.5 w-3.5" />
