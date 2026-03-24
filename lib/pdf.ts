@@ -676,7 +676,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     page.drawText(truncateToWidth(imei, valueMaxWidth, courier, 8), { x: cardX2 + labelCol + 14, y: deviceInfoY, size: 8, font: courier, color: textColor })
   }
 
-  y -= cardHeight + 15
+  y -= cardHeight + 8
 
   // === PROBLEMA REPORTADO ===
   const problemaLines: string[] = []
@@ -705,7 +705,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     page.drawText(line, { x: margin + 14, y: problemaY, size: 10, font: helvetica, color: textColor })
     problemaY -= 14
   }
-  y -= problemaHeight + 10
+  y -= problemaHeight + 6
 
   // === ACCESORIOS (si hay) ===
   if (accesorios) {
@@ -732,7 +732,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
       page.drawText(line, { x: margin + 90, y: accY, size: 9, font: helvetica, color: brownColor })
       accY -= 14
     }
-    y -= accHeight + 10
+    y -= accHeight + 6
   }
 
   // === CONTRASENA (si hay) ===
@@ -816,7 +816,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
       page.drawText("Secuencia:", { x: margin + 105, y: y - 30, size: 8, font: helveticaBold, color: grayColor })
       page.drawText(patternNumbers.join(" > "), { x: margin + 105, y: y - 45, size: 10, font: courier, color: textColor })
 
-      y -= patternBoxHeight + 12
+      y -= patternBoxHeight + 6
     } else {
       // PIN o Contraseña - mostrar como texto
       page.drawRectangle({ x: margin, y: y - 22, width: 180, height: 22, color: bgGray, borderColor: lightGray, borderWidth: 1 })
@@ -843,7 +843,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
       page.drawText(`SEÑA ABONADA: ${senaFormatted}`, { x: margin + 14, y: senaY, size: 9, font: helveticaBold, color: greenColor })
       page.drawText(`(${metodoPago})`, { x: margin + 14 + helveticaBold.widthOfTextAtSize(`SEÑA ABONADA: ${senaFormatted}`, 9) + 6, y: senaY, size: 8, font: helvetica, color: grayColor })
     }
-    y -= presupuestoHeight + 10
+    y -= presupuestoHeight + 6
   }
 
   // === OBSERVACIONES (si hay) ===
@@ -870,7 +870,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
       page.drawText(line, { x: margin + 12, y: obsY, size: 9, font: helvetica, color: textColor })
       obsY -= 13
     }
-    y -= obsHeight + 10
+    y -= obsHeight + 6
   }
 
   // === CHECKLIST DE RECEPCION (si hay) ===
@@ -919,8 +919,102 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     }
   }
 
-  // === QR + FIRMA + TERMINOS (bottom section) ===
-  // Calculate space needed for terms
+  // === QR + FIRMA (fluye desde y, sin gap artificial) ===
+  const hasQR = data.publicToken && data.baseUrl
+  const hasFirma = data.firmaRecepcion
+
+  if (hasQR || hasFirma) {
+    const firmaHeight = 80
+    const qrSize = 60
+
+    if (hasQR && hasFirma) {
+      // QR a la izquierda, firma a la derecha
+      try {
+        const trackingUrl = `${data.baseUrl}/seguimiento/${data.publicToken}`
+        const qrDataUrl = await QRCode.toDataURL(trackingUrl, {
+          width: 200,
+          margin: 1,
+          color: { dark: "#1e293b", light: "#ffffff" }
+        })
+        const qrBase64 = qrDataUrl.split(",")[1]
+        const qrBytes = Uint8Array.from(atob(qrBase64), c => c.charCodeAt(0))
+        const qrImage = await pdfDoc.embedPng(qrBytes)
+        page.drawImage(qrImage, { x: margin, y: y - qrSize, width: qrSize, height: qrSize })
+        page.drawText("Escanea para ver el estado", { x: margin, y: y - qrSize - 10, size: 6, font: helvetica, color: grayColor })
+        page.drawText("de tu reparacion", { x: margin, y: y - qrSize - 18, size: 6, font: helvetica, color: grayColor })
+      } catch (qrError) {
+        console.error("Error generating QR:", qrError)
+      }
+
+      try {
+        const firmaX = margin + 90
+        const firmaBoxWidth = contentWidth - 90
+
+        page.drawRectangle({ x: firmaX, y: y - firmaHeight, width: firmaBoxWidth, height: firmaHeight, color: bgGray, borderColor: lightGray, borderWidth: 0.5 })
+        page.drawText("FIRMA DEL CLIENTE AL ENTREGAR EQUIPO", { x: firmaX + 10, y: y - 12, size: 7, font: helveticaBold, color: grayColor })
+
+        const firmaBytes = Uint8Array.from(atob(data.firmaRecepcion!), c => c.charCodeAt(0))
+        const firmaImg = await pdfDoc.embedPng(firmaBytes)
+        const firmaDims = firmaImg.scale(1)
+        const firmaScale = Math.min((firmaBoxWidth - 40) / firmaDims.width, 50 / firmaDims.height)
+        page.drawImage(firmaImg, {
+          x: firmaX + (firmaBoxWidth - firmaDims.width * firmaScale) / 2,
+          y: y - firmaHeight + 15,
+          width: firmaDims.width * firmaScale,
+          height: firmaDims.height * firmaScale,
+        })
+
+        page.drawLine({ start: { x: firmaX + 20, y: y - firmaHeight + 12 }, end: { x: firmaX + firmaBoxWidth - 20, y: y - firmaHeight + 12 }, thickness: 0.5, color: grayColor })
+        page.drawText(clienteNombre, { x: firmaX + 20, y: y - firmaHeight + 4, size: 7, font: helvetica, color: grayColor })
+      } catch (firmaError) {
+        console.error("Error embedding reception signature:", firmaError)
+      }
+
+      y -= firmaHeight + 6
+    } else if (hasQR) {
+      try {
+        const trackingUrl = `${data.baseUrl}/seguimiento/${data.publicToken}`
+        const qrDataUrl = await QRCode.toDataURL(trackingUrl, {
+          width: 200,
+          margin: 1,
+          color: { dark: "#1e293b", light: "#ffffff" }
+        })
+        const qrBase64 = qrDataUrl.split(",")[1]
+        const qrBytes = Uint8Array.from(atob(qrBase64), c => c.charCodeAt(0))
+        const qrImage = await pdfDoc.embedPng(qrBytes)
+        page.drawImage(qrImage, { x: margin, y: y - qrSize, width: qrSize, height: qrSize })
+        page.drawText("Escanea para ver el estado", { x: margin + qrSize + 10, y: y - 20, size: 7, font: helvetica, color: grayColor })
+        page.drawText("de tu reparacion", { x: margin + qrSize + 10, y: y - 30, size: 7, font: helvetica, color: grayColor })
+      } catch (qrError) {
+        console.error("Error generating QR:", qrError)
+      }
+      y -= qrSize + 6
+    } else if (hasFirma) {
+      try {
+        page.drawRectangle({ x: margin, y: y - firmaHeight, width: contentWidth, height: firmaHeight, color: bgGray, borderColor: lightGray, borderWidth: 0.5 })
+        page.drawText("FIRMA DEL CLIENTE AL ENTREGAR EQUIPO", { x: margin + 10, y: y - 12, size: 7, font: helveticaBold, color: grayColor })
+
+        const firmaBytes = Uint8Array.from(atob(data.firmaRecepcion!), c => c.charCodeAt(0))
+        const firmaImg = await pdfDoc.embedPng(firmaBytes)
+        const firmaDims = firmaImg.scale(1)
+        const firmaScale = Math.min((contentWidth - 40) / firmaDims.width, 50 / firmaDims.height)
+        page.drawImage(firmaImg, {
+          x: margin + (contentWidth - firmaDims.width * firmaScale) / 2,
+          y: y - firmaHeight + 15,
+          width: firmaDims.width * firmaScale,
+          height: firmaDims.height * firmaScale,
+        })
+
+        page.drawLine({ start: { x: margin + 20, y: y - firmaHeight + 12 }, end: { x: width - margin - 20, y: y - firmaHeight + 12 }, thickness: 0.5, color: grayColor })
+        page.drawText(clienteNombre, { x: margin + 20, y: y - firmaHeight + 4, size: 7, font: helvetica, color: grayColor })
+      } catch (firmaError) {
+        console.error("Error embedding reception signature:", firmaError)
+      }
+      y -= firmaHeight + 6
+    }
+  }
+
+  // === QR + TERMINOS LADO A LADO ===
   const defaultTerminos = [
     "1. Conserve este comprobante para retirar su equipo. El plazo de retiro es de 30 dias.",
     "2. No nos hacemos responsables por datos perdidos. Realice backup antes de entregar el equipo.",
@@ -934,12 +1028,12 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const terminosWrapped: string[] = []
   const maxTermWidth = contentWidth - 24
   for (const t of terminos) {
-    if (helvetica.widthOfTextAtSize(t, 7) <= maxTermWidth) {
+    if (helvetica.widthOfTextAtSize(t, 6.5) <= maxTermWidth) {
       terminosWrapped.push(t)
     } else {
       let line = ""
       for (const word of t.split(" ")) {
-        if (helvetica.widthOfTextAtSize(line + " " + word, 7) <= maxTermWidth) {
+        if (helvetica.widthOfTextAtSize(line + " " + word, 6.5) <= maxTermWidth) {
           line += (line ? " " : "") + word
         } else {
           if (line) terminosWrapped.push(line)
@@ -950,72 +1044,12 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     }
   }
   const displayedTerminos = terminosWrapped.slice(0, 8)
-  const terminosBoxHeight = 16 + displayedTerminos.length * 11 + 6
+  const terminosBoxHeight = 14 + displayedTerminos.length * 10 + 4
 
-  // Render QR code and signature side by side if available
-  const hasQR = data.publicToken && data.baseUrl
-  const hasFirma = data.firmaRecepcion
-
-  if (hasQR || hasFirma) {
-    const sectionHeight = 90
-    const sectionY = Math.max(y - 5, terminosBoxHeight + 55 + sectionHeight)
-
-    if (hasQR) {
-      try {
-        const trackingUrl = `${data.baseUrl}/seguimiento/${data.publicToken}`
-        const qrDataUrl = await QRCode.toDataURL(trackingUrl, {
-          width: 200,
-          margin: 1,
-          color: { dark: "#1e293b", light: "#ffffff" }
-        })
-        const qrBase64 = qrDataUrl.split(",")[1]
-        const qrBytes = Uint8Array.from(atob(qrBase64), c => c.charCodeAt(0))
-        const qrImage = await pdfDoc.embedPng(qrBytes)
-        const qrSize = 70
-        page.drawImage(qrImage, { x: margin, y: sectionY - qrSize - 18, width: qrSize, height: qrSize })
-        page.drawText("Escanea para ver el estado", { x: margin, y: sectionY - qrSize - 28, size: 6, font: helvetica, color: grayColor })
-        page.drawText("de tu reparacion", { x: margin, y: sectionY - qrSize - 36, size: 6, font: helvetica, color: grayColor })
-      } catch (qrError) {
-        console.error("Error generating QR:", qrError)
-      }
-    }
-
-    if (hasFirma) {
-      try {
-        const firmaX = hasQR ? margin + 100 : margin
-        const firmaBoxWidth = hasQR ? contentWidth - 100 : contentWidth
-        const firmaBoxHeight = sectionHeight
-
-        page.drawRectangle({ x: firmaX, y: sectionY - firmaBoxHeight, width: firmaBoxWidth, height: firmaBoxHeight, color: bgGray, borderColor: lightGray, borderWidth: 0.5 })
-        page.drawText("FIRMA DEL CLIENTE AL ENTREGAR EQUIPO", { x: firmaX + 10, y: sectionY - 12, size: 7, font: helveticaBold, color: grayColor })
-
-        const firmaBytes = Uint8Array.from(atob(data.firmaRecepcion!), c => c.charCodeAt(0))
-        const firmaImg = await pdfDoc.embedPng(firmaBytes)
-        const firmaDims = firmaImg.scale(1)
-        const firmaScale = Math.min((firmaBoxWidth - 40) / firmaDims.width, 55 / firmaDims.height)
-        page.drawImage(firmaImg, {
-          x: firmaX + (firmaBoxWidth - firmaDims.width * firmaScale) / 2,
-          y: sectionY - firmaBoxHeight + 15,
-          width: firmaDims.width * firmaScale,
-          height: firmaDims.height * firmaScale,
-        })
-
-        page.drawLine({ start: { x: firmaX + 20, y: sectionY - firmaBoxHeight + 12 }, end: { x: firmaX + firmaBoxWidth - 20, y: sectionY - firmaBoxHeight + 12 }, thickness: 0.5, color: grayColor })
-        page.drawText(clienteNombre, { x: firmaX + 20, y: sectionY - firmaBoxHeight + 4, size: 7, font: helvetica, color: grayColor })
-      } catch (firmaError) {
-        console.error("Error embedding reception signature:", firmaError)
-      }
-    }
-
-    y = sectionY - sectionHeight - 8
-  }
-
-  // === SECCION TERMINOS Y CONDICIONES ===
-  const terminosStartY = Math.max(y - 5, 55)
-
+  // Terminos fluye directamente desde y
   page.drawRectangle({
     x: margin,
-    y: terminosStartY - terminosBoxHeight,
+    y: y - terminosBoxHeight,
     width: contentWidth,
     height: terminosBoxHeight,
     color: rgb(0.98, 0.98, 0.98),
@@ -1023,22 +1057,35 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     borderWidth: 0.5
   })
 
-  page.drawText("TERMINOS Y CONDICIONES", { x: margin + 10, y: terminosStartY - 12, size: 7, font: helveticaBold, color: grayColor })
+  page.drawText("TERMINOS Y CONDICIONES", { x: margin + 10, y: y - 11, size: 6.5, font: helveticaBold, color: grayColor })
 
-  let termY = terminosStartY - 26
+  let termY = y - 23
   displayedTerminos.forEach(t => {
-    page.drawText(t, { x: margin + 10, y: termY, size: 7, font: helvetica, color: grayColor })
-    termY -= 11
+    page.drawText(t, { x: margin + 10, y: termY, size: 6.5, font: helvetica, color: grayColor })
+    termY -= 10
   })
 
-  // === FOOTER ===
-  const footerY = 30
+  y -= terminosBoxHeight + 6
+
+  // === FOOTER (fluye desde y) ===
+  const footerY = y - 10
   page.drawLine({ start: { x: margin, y: footerY + 10 }, end: { x: width - margin, y: footerY + 10 }, thickness: 0.5, color: lightGray })
   page.drawText(`Orden #${numeroOrden}`, { x: margin, y: footerY, size: 8, font: helveticaBold, color: primaryColor })
   page.drawText(`Impreso: ${fechaImpresion}`, { x: width - margin - 120, y: footerY, size: 7, font: helvetica, color: grayColor })
 
-  // === BARRA INFERIOR ===
-  page.drawRectangle({ x: 0, y: 0, width, height: 6, color: primaryColor })
+  // === BARRA INFERIOR (justo debajo del footer) ===
+  const barraY = footerY - 12
+  page.drawRectangle({ x: 0, y: barraY, width, height: 6, color: primaryColor })
+
+  // === AJUSTAR ALTURA DE PAGINA AL CONTENIDO ===
+  const minPageHeight = 400 // altura minima razonable
+  const contentBottom = barraY - 10 // espacio debajo de la barra
+  const dynamicHeight = Math.max(height - contentBottom, minPageHeight)
+  if (dynamicHeight < height) {
+    // Recortar la pagina: mover el borde inferior hacia arriba
+    page.setMediaBox(0, contentBottom, width, dynamicHeight)
+    page.setCropBox(0, contentBottom, width, dynamicHeight)
+  }
 
   // === PAGINA DE FOTOS DE INGRESO (si hay fotos) ===
   if (data.fotosIngreso && data.fotosIngreso.length > 0) {
