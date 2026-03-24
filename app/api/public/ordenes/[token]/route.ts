@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { getOrderByPublicToken } from "@/lib/public-token"
+import { getDeviceTypeLabel } from "@/lib/device-types"
 
 export async function GET(
   request: Request,
@@ -24,6 +25,9 @@ export async function GET(
         accesorios,
         problema_reportado,
         public_token,
+        tipos_dispositivo:tipo_dispositivo_id (
+          nombre
+        ),
         clientes (
           nombre
         ),
@@ -41,12 +45,14 @@ export async function GET(
 
     const org = orden.organizations as any
     const cliente = orden.clientes as any
+    const tipoDisp = orden.tipos_dispositivo as any
 
     return NextResponse.json({
       numeroOrden: orden.numero_orden,
       codigoOrden: orden.codigo_orden,
       dispositivo: orden.dispositivo,
       tipoDispositivo: orden.tipo_dispositivo,
+      tipoDispositivoNombre: getDeviceTypeLabel(orden.tipo_dispositivo, tipoDisp?.nombre),
       marca: orden.marca,
       color: orden.color,
       estado: orden.estado,

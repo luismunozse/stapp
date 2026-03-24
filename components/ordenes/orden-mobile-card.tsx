@@ -3,7 +3,7 @@
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { OrderStatusBadge } from "@/components/ui/badge"
-import { Eye, Trash2, Calendar, Smartphone } from "lucide-react"
+import { Eye, Trash2, Calendar, Smartphone, AlertTriangle, Clock } from "lucide-react"
 import Link from "next/link"
 import { useCurrency } from "@/contexts/currency-context"
 import type { OrdenServicio } from "@/types"
@@ -51,6 +51,24 @@ export function OrdenMobileCard({ orden, onDelete, deleting, onClick }: OrdenMob
               <Calendar className="h-3 w-3" />
               {formatDate(orden.fechaIngreso)}
             </div>
+            {/* SLA indicator */}
+            {orden.fechaPrometida && new Date(orden.fechaPrometida) < new Date() &&
+             orden.estado !== "ENTREGADO" && orden.estado !== "CANCELADO" && orden.estado !== "SIN_REPARACION" && (
+              <div className="flex items-center gap-1 text-red-600 font-medium">
+                <AlertTriangle className="h-3 w-3" />
+                Vencida
+              </div>
+            )}
+            {orden.fechaPrometida && new Date(orden.fechaPrometida) >= new Date() &&
+             orden.estado !== "ENTREGADO" && orden.estado !== "CANCELADO" && orden.estado !== "SIN_REPARACION" && (
+              <div className="flex items-center gap-1 text-amber-600">
+                <Clock className="h-3 w-3" />
+                {(() => {
+                  const days = Math.ceil((new Date(orden.fechaPrometida).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+                  return days === 0 ? "Hoy" : days === 1 ? "Mañana" : `${days} días`
+                })()}
+              </div>
+            )}
             {orden.presupuesto && (
               <div className="font-medium text-foreground">
                 {formatPrice(orden.presupuesto)}
@@ -60,21 +78,21 @@ export function OrdenMobileCard({ orden, onDelete, deleting, onClick }: OrdenMob
         </div>
 
         {/* Actions */}
-        <div role="group" className="flex items-center justify-end gap-1 mt-3 pt-2 border-t" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+        <div role="group" className="flex items-center justify-end gap-2 mt-3 pt-2 border-t" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
           <Link href={`/ordenes/${orden.id}`}>
-            <Button variant="ghost" size="sm" className="h-8 text-xs">
-              <Eye className="h-3.5 w-3.5 mr-1" />
-              Ver
+            <Button variant="ghost" size="sm" className="h-10 px-3 text-sm">
+              <Eye className="h-4 w-4 mr-1.5" />
+              Ver detalle
             </Button>
           </Link>
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 text-xs text-muted-foreground hover:text-destructive"
+            className="h-10 w-10 text-muted-foreground hover:text-destructive"
             onClick={(e) => onDelete(e, orden)}
             disabled={deleting}
           >
-            <Trash2 className="h-3.5 w-3.5" />
+            <Trash2 className="h-4 w-4" />
           </Button>
         </div>
       </CardContent>

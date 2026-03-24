@@ -11,6 +11,7 @@ export async function GET(
 
     const { orden, error } = await getOrderByPublicToken(token, `
         *,
+        tipos_dispositivo:tipo_dispositivo_id(nombre),
         clientes (*),
         organizations (
           id,

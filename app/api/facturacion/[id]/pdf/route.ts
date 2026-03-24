@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAdminOrVendedor } from "@/lib/auth-utils"
+import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { generateFacturaPDF } from "@/lib/pdf"
 
@@ -8,7 +8,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAdminOrVendedor()
+    const { error, organizationId } = await requireAdmin()
     if (error) return error
 
     const { id } = await params

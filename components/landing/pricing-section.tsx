@@ -162,8 +162,17 @@ export function PricingSection({ prices }: PricingSectionProps) {
                   <span className="text-muted-foreground">/mes</span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  🇦🇷 Precio en pesos argentinos (ARS)
+                  Precio en pesos argentinos (ARS)
                 </p>
+                {annual ? (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Facturado anualmente: ${formatPrice(prices.ars.yearly)}
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    o ${formatPrice(prices.ars.yearly)}/año (ahorrá {savingsPercent}%)
+                  </p>
+                )}
                 <div className="mt-4 pt-4 border-t border-dashed">
                   <div className="flex items-center justify-center gap-2 mb-2">
                     <Globe className="w-4 h-4 text-blue-500" />
@@ -178,15 +187,19 @@ export function PricingSection({ prices }: PricingSectionProps) {
                     <span className="text-2xl font-bold text-foreground">USD ${currentPriceUsd}</span>
                     <span className="text-muted-foreground text-sm">/mes</span>
                   </m.div>
-                  <p className="text-xs text-muted-foreground mt-1">
+                  {annual ? (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Facturado anualmente: USD ${prices.usd.yearly}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      o USD ${prices.usd.yearly}/año (ahorrá {Math.round(((prices.usd.monthly * 12 - prices.usd.yearly) / (prices.usd.monthly * 12)) * 100)}%)
+                    </p>
+                  )}
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
                     Pagá con tarjeta internacional desde cualquier país
                   </p>
                 </div>
-                {annual && (
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Facturado anualmente: ARS ${formatPrice(prices.ars.yearly)} / USD ${prices.usd.yearly}
-                  </p>
-                )}
                 <p className="text-sm text-green-600 dark:text-green-400 mt-3 font-medium">
                   Primeros 30 días gratis
                 </p>

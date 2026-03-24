@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAdminOrVendedor } from "@/lib/auth-utils"
+import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getNextInvoiceNumber } from "@/lib/counters"
 import { z } from "zod"
@@ -10,7 +10,7 @@ const generarFacturaSchema = z.object({
 
 export async function POST(request: Request) {
   try {
-    const { error, organizationId, role } = await requireAdminOrVendedor()
+    const { error, organizationId, role } = await requireAdmin()
     if (error) return error
 
     if (role !== "ADMIN") {

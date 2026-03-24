@@ -15,7 +15,9 @@ import {
   Trash2,
   Filter,
   X,
+  CheckSquare,
 } from "lucide-react"
+import { toast } from "sonner"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { OrdenForm } from "./orden-form"
@@ -28,6 +30,19 @@ import type { OrdenServicio, EstadoOrden } from "@/types"
 
 // Fetcher para SWR
 const fetcher = (url: string) => fetch(url).then(res => res.json())
+
+const ESTADO_LABELS_MAP: Record<string, string> = {
+  RECIBIDO: "Recibido",
+  EN_DIAGNOSTICO: "En Diagnóstico",
+  PRESUPUESTADO: "Presupuestado",
+  APROBADO: "Aprobado",
+  EN_REPARACION: "En Reparación",
+  ESPERANDO_REPUESTO: "Esperando Repuesto",
+  REPARADO: "Reparado",
+  ENTREGADO: "Entregado",
+  CANCELADO: "Cancelado",
+  SIN_REPARACION: "Sin Reparación",
+}
 
 const estadoOptions = [
   { value: "RECIBIDO", label: "Recibido" },
@@ -48,6 +63,50 @@ export function OrdenesList() {
   const [showForm, setShowForm] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
   const { confirm, showError } = useModal()
+
+  // Bulk actions
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkUpdating, setBulkUpdating] = useState(false)
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === ordenes.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(ordenes.map((o) => o.id)))
+    }
+  }
+
+  const handleBulkEstado = async (nuevoEstado: EstadoOrden) => {
+    if (selectedIds.size === 0) return
+    setBulkUpdating(true)
+    try {
+      const promises = Array.from(selectedIds).map((id) =>
+        fetch(`/api/ordenes/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ estado: nuevoEstado }),
+        })
+      )
+      const results = await Promise.all(promises)
+      const successCount = results.filter((r) => r.ok).length
+      toast.success(`${successCount} órdenes actualizadas a ${ESTADO_LABELS_MAP[nuevoEstado]}`)
+      setSelectedIds(new Set())
+      mutate()
+    } catch (error) {
+      toast.error("Error al actualizar órdenes")
+    } finally {
+      setBulkUpdating(false)
+    }
+  }
 
   // Filters
   const [search, setSearch] = useState("")
@@ -157,6 +216,23 @@ export function OrdenesList() {
   const hasActiveFilters = search || estado || fechaDesde || fechaHasta
 
   const columns: Column<OrdenServicio>[] = [
+    {
+      key: "select",
+      header: "",
+      className: "w-[40px]",
+      render: (orden) => (
+        <input
+          type="checkbox"
+          checked={selectedIds.has(orden.id)}
+          onChange={(e) => {
+            e.stopPropagation()
+            toggleSelect(orden.id)
+          }}
+          onClick={(e) => e.stopPropagation()}
+          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+        />
+      ),
+    },
     {
       key: "numeroOrden",
       header: "# Orden",
@@ -366,6 +442,55 @@ export function OrdenesList() {
         />
       )}
 
+      {/* Total count + bulk actions */}
+      {!isLoading && total > 0 && (
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={toggleSelectAll}
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <CheckSquare className="h-4 w-4" />
+              {selectedIds.size > 0
+                ? `${selectedIds.size} seleccionada${selectedIds.size > 1 ? "s" : ""}`
+                : "Seleccionar"}
+            </button>
+            {selectedIds.size > 0 && (
+              <div className="flex items-center gap-2">
+                <Select
+                  value=""
+                  onValueChange={(value) => handleBulkEstado(value as EstadoOrden)}
+                  disabled={bulkUpdating}
+                >
+                  <SelectTrigger className="h-8 w-auto min-w-[180px] text-xs">
+                    <SelectValue placeholder="Cambiar estado a..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {estadoOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedIds(new Set())}
+                  className="h-8 text-xs"
+                >
+                  Cancelar
+                </Button>
+              </div>
+            )}
+          </div>
+          <div className="text-sm text-muted-foreground">
+            Mostrando {ordenes.length} de {total} órdenes
+            {hasActiveFilters && " (filtradas)"}
+          </div>
+        </div>
+      )}
+
       {/* Desktop: Data Table */}
       <div className="hidden sm:block">
         <DataTable
@@ -373,7 +498,7 @@ export function OrdenesList() {
           columns={columns}
           keyExtractor={(orden) => orden.id}
           loading={isLoading}
-          emptyMessage="No hay órdenes registradas"
+          emptyMessage="No hay órdenes registradas. Crea tu primera orden con el botón + Nueva"
           sortKey={sortKey}
           sortDirection={sortDirection}
           onSort={handleSort}
@@ -407,8 +532,12 @@ export function OrdenesList() {
           </div>
         ) : ordenes.length === 0 ? (
           <Card>
-            <CardContent className="py-8 text-center text-sm text-muted-foreground">
-              No hay órdenes registradas
+            <CardContent className="py-8 text-center">
+              <p className="text-sm text-muted-foreground mb-3">No hay órdenes registradas</p>
+              <Button size="sm" onClick={() => setShowForm(true)} className="gap-1.5">
+                <Plus className="h-4 w-4" />
+                Crear primera orden
+              </Button>
             </CardContent>
           </Card>
         ) : (

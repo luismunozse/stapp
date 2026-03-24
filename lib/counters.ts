@@ -1,15 +1,5 @@
 import { supabaseAdmin } from "./supabase"
 
-// Mapeo de tipos de dispositivo a prefijos de orden
-const DEVICE_TYPE_PREFIXES: Record<string, string> = {
-  CELULAR: "CEL",
-  COMPUTADORA: "PC",
-  TABLET: "TAB",
-  CONSOLA: "CONS",
-  SMARTWATCH: "SW",
-  TODOS: "ORD", // Fallback para tipo genérico
-}
-
 /**
  * Obtener el siguiente número de orden para una organización
  * Usa una función PostgreSQL para garantizar atomicidad
@@ -29,27 +19,24 @@ export async function getNextOrderNumber(organizationId: string): Promise<number
 /**
  * Obtener el siguiente número de orden formateado con prefijo por tipo de dispositivo
  * Formato: CEL001, PC001, TAB001, CONS001, SW001
- * Para tipos personalizados, busca el prefijo en la tabla tipos_dispositivo
+ * Siempre busca el prefijo en la tabla tipos_dispositivo de la organización
+ * para soportar tipos base y personalizados de forma uniforme.
  * Usa RPC atómica para evitar race conditions en generación concurrente
  */
 export async function getNextOrderNumberByType(
   organizationId: string,
   tipoDispositivo: string
 ): Promise<{ codigo: string; numero: number }> {
-  let prefix = DEVICE_TYPE_PREFIXES[tipoDispositivo]
+  // Buscar el prefijo en la tabla de tipos de dispositivo de la organización
+  const { data: tipoData } = await supabaseAdmin
+    .from("tipos_dispositivo")
+    .select("prefijo_orden")
+    .eq("organization_id", organizationId)
+    .eq("codigo", tipoDispositivo)
+    .eq("activo", true)
+    .single()
 
-  // Si no es un tipo base, buscar el prefijo en la tabla de tipos personalizados
-  if (!prefix) {
-    const { data: tipoCustom } = await supabaseAdmin
-      .from("tipos_dispositivo")
-      .select("prefijo_orden")
-      .eq("organization_id", organizationId)
-      .eq("codigo", tipoDispositivo)
-      .eq("activo", true)
-      .single()
-
-    prefix = tipoCustom?.prefijo_orden || "ORD"
-  }
+  const prefix = tipoData?.prefijo_orden || "ORD"
 
   // Usar RPC atómica para obtener el siguiente número (evita race conditions)
   const nextNumber = await getNextOrderNumber(organizationId)

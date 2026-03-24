@@ -3,6 +3,7 @@
 import { useState, useEffect, use } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import { useSession } from "next-auth/react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -64,9 +65,19 @@ const estadoLabels: Record<string, string> = {
   SIN_REPARACION: "Sin Reparación",
 }
 
+const formatDate = (dateStr: string) => {
+  return new Date(dateStr).toLocaleDateString("es-AR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  })
+}
+
 export default function TecnicoDetallePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
+  const { data: session } = useSession()
+  const isAdmin = session?.user?.role === "ADMIN"
   const { confirm, showError } = useModal()
   const [tecnico, setTecnico] = useState<TecnicoDetalle | null>(null)
   const [loading, setLoading] = useState(true)
@@ -149,22 +160,24 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
             <p className="text-xs sm:text-sm text-muted-foreground">Detalle del técnico</p>
           </div>
         </div>
-        <div className="flex gap-2 pl-12 sm:pl-0">
-          <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
-            <Edit className="mr-1.5 h-4 w-4" />
-            Editar
-          </Button>
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={handleDelete}
-            disabled={deleting || tecnico.ordenesActivas > 0}
-          >
-            <Trash2 className="mr-1.5 h-4 w-4" />
-            <span className="hidden sm:inline">{deleting ? "Eliminando..." : "Eliminar"}</span>
-            <span className="sm:hidden">{deleting ? "..." : "Eliminar"}</span>
-          </Button>
-        </div>
+        {isAdmin && (
+          <div className="flex gap-2 pl-12 sm:pl-0">
+            <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+              <Edit className="mr-1.5 h-4 w-4" />
+              Editar
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleDelete}
+              disabled={deleting || tecnico.ordenesActivas > 0}
+            >
+              <Trash2 className="mr-1.5 h-4 w-4" />
+              <span className="hidden sm:inline">{deleting ? "Eliminando..." : "Eliminar"}</span>
+              <span className="sm:hidden">{deleting ? "..." : "Eliminar"}</span>
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Stats */}
@@ -186,7 +199,7 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
             </div>
             <div className="flex items-center gap-2">
               <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground shrink-0" />
-              <span className="text-xs sm:text-sm">{new Date(tecnico.createdAt).toLocaleDateString()}</span>
+              <span className="text-xs sm:text-sm">Desde {formatDate(tecnico.createdAt)}</span>
             </div>
           </CardContent>
         </Card>
@@ -245,7 +258,7 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
                   </div>
                   <div className="flex items-center gap-2 sm:gap-4 pl-7 sm:pl-0">
                     <span className="text-[10px] sm:text-sm text-muted-foreground">
-                      {new Date(orden.fechaIngreso).toLocaleDateString()}
+                      {formatDate(orden.fechaIngreso)}
                     </span>
                     <Badge className={`text-[10px] sm:text-xs ${estadoColors[orden.estado]}`}>
                       {estadoLabels[orden.estado]}

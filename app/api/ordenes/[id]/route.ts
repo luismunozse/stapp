@@ -23,8 +23,8 @@ const updateOrdenSchema = z.object({
     ])
     .optional(),
   tecnicoId: z.string().optional().nullable(),
-  presupuesto: z.number().optional().nullable(),
-  costoFinal: z.number().optional().nullable(),
+  presupuesto: z.number().min(0, "El presupuesto no puede ser negativo").optional().nullable(),
+  costoFinal: z.number().min(0, "El costo final no puede ser negativo").optional().nullable(),
   fechaPrometida: z.string().optional().nullable(),
   observaciones: z.string().optional().nullable(),
   diagnostico: z.string().optional().nullable(),
@@ -157,6 +157,23 @@ export async function PUT(
       }
     }
 
+    // Validar que el técnico exista y tenga rol TECNICO
+    if (data.tecnicoId) {
+      const { data: tecnico } = await supabaseAdmin
+        .from("users")
+        .select("id, rol")
+        .eq("id", data.tecnicoId)
+        .eq("organization_id", organizationId!)
+        .single()
+
+      if (!tecnico) {
+        return NextResponse.json({ error: "El técnico seleccionado no existe" }, { status: 400 })
+      }
+      if (tecnico.rol !== "TECNICO" && tecnico.rol !== "ADMIN") {
+        return NextResponse.json({ error: "El usuario seleccionado no tiene rol de técnico" }, { status: 400 })
+      }
+    }
+
     // Preparar datos para update
     const updateData: Record<string, any> = {}
 
@@ -173,7 +190,8 @@ export async function PUT(
         : null
     }
 
-    if (data.estado === "REPARADO" && !orden.fecha_completado) {
+    // Setear fecha_completado la primera vez que llega a REPARADO o ENTREGADO
+    if ((data.estado === "REPARADO" || data.estado === "ENTREGADO") && !orden.fecha_completado) {
       updateData.fecha_completado = new Date().toISOString()
     }
 

@@ -3,29 +3,65 @@
 import { useState, useEffect, use } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import { useSession } from "next-auth/react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import {
   ArrowLeft,
   TrendingUp,
   Mail,
   Calendar,
+  ShoppingCart,
+  CheckCircle,
+  DollarSign,
   Edit,
   Trash2,
 } from "lucide-react"
 import { VendedorForm } from "@/components/vendedores/vendedor-form"
 import { useModal } from "@/contexts/modal-context"
 
+interface Venta {
+  id: string
+  total: string
+  estado: string
+  fecha: string
+}
+
 interface VendedorDetalle {
   id: string
   nombre: string
   email: string
   createdAt: string
+  ventasCompletadas: number
+  ventasTotal: number
+  montoTotalVentas: number
+  ventas: Venta[]
+}
+
+const estadoVentaColors: Record<string, string> = {
+  COMPLETADA: "bg-green-100 text-green-800",
+  ANULADA: "bg-red-100 text-red-800",
+}
+
+const estadoVentaLabels: Record<string, string> = {
+  COMPLETADA: "Completada",
+  ANULADA: "Anulada",
+}
+
+const formatDate = (dateStr: string) => {
+  return new Date(dateStr).toLocaleDateString("es-AR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  })
 }
 
 export default function VendedorDetallePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
+  const { data: session } = useSession()
+  const isAdmin = session?.user?.role === "ADMIN"
   const { confirm, showError } = useModal()
   const [vendedor, setVendedor] = useState<VendedorDetalle | null>(null)
   const [loading, setLoading] = useState(true)
@@ -54,6 +90,11 @@ export default function VendedorDetallePage({ params }: { params: Promise<{ id: 
   }
 
   const handleDelete = async () => {
+    if (vendedor && vendedor.ventasTotal > 0) {
+      await showError(`No se puede eliminar un vendedor con ${vendedor.ventasTotal} venta(s) asociada(s). Reasigne las ventas primero.`)
+      return
+    }
+
     const confirmed = await confirm({
       title: "Eliminar Vendedor",
       description: "¿Estás seguro de eliminar este vendedor? Esta acción no se puede deshacer.",
@@ -81,6 +122,14 @@ export default function VendedorDetallePage({ params }: { params: Promise<{ id: 
     }
   }
 
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("es-AR", {
+      style: "currency",
+      currency: "ARS",
+      minimumFractionDigits: 0,
+    }).format(amount)
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -95,6 +144,7 @@ export default function VendedorDetallePage({ params }: { params: Promise<{ id: 
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-center gap-3 sm:gap-4">
           <Button variant="ghost" size="icon" asChild className="shrink-0">
@@ -107,24 +157,28 @@ export default function VendedorDetallePage({ params }: { params: Promise<{ id: 
             <p className="text-xs sm:text-sm text-muted-foreground">Detalle del vendedor</p>
           </div>
         </div>
-        <div className="flex gap-2 pl-12 sm:pl-0">
-          <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
-            <Edit className="mr-1.5 h-4 w-4" />
-            Editar
-          </Button>
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={handleDelete}
-            disabled={deleting}
-          >
-            <Trash2 className="mr-1.5 h-4 w-4" />
-            {deleting ? "..." : "Eliminar"}
-          </Button>
-        </div>
+        {isAdmin && (
+          <div className="flex gap-2 pl-12 sm:pl-0">
+            <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+              <Edit className="mr-1.5 h-4 w-4" />
+              Editar
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleDelete}
+              disabled={deleting || vendedor.ventasTotal > 0}
+            >
+              <Trash2 className="mr-1.5 h-4 w-4" />
+              <span className="hidden sm:inline">{deleting ? "Eliminando..." : "Eliminar"}</span>
+              <span className="sm:hidden">{deleting ? "..." : "Eliminar"}</span>
+            </Button>
+          </div>
+        )}
       </div>
 
-      <div className="grid gap-3 sm:gap-6 md:grid-cols-2">
+      {/* Stats */}
+      <div className="grid gap-3 sm:gap-6 grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="p-3 sm:p-6 pb-1 sm:pb-2">
             <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
@@ -142,43 +196,90 @@ export default function VendedorDetallePage({ params }: { params: Promise<{ id: 
             </div>
             <div className="flex items-center gap-2">
               <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground shrink-0" />
-              <span className="text-xs sm:text-sm">Desde {new Date(vendedor.createdAt).toLocaleDateString()}</span>
+              <span className="text-xs sm:text-sm">Desde {formatDate(vendedor.createdAt)}</span>
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="p-3 sm:p-6 pb-1 sm:pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">
-              Permisos del Rol
+            <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground flex items-center gap-1.5 sm:gap-2">
+              <ShoppingCart className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">Total Ventas</span>
+              <span className="sm:hidden">Ventas</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="p-3 sm:p-6 pt-0">
-            <ul className="space-y-1.5 sm:space-y-2 text-xs sm:text-sm">
-              <li className="flex items-center gap-2">
-                <span className="h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-green-500 shrink-0"></span>
-                Crear y gestionar clientes
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-green-500 shrink-0"></span>
-                Crear órdenes de servicio
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-green-500 shrink-0"></span>
-                Ver inventario (solo lectura)
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-red-500 shrink-0"></span>
-                No puede gestionar usuarios
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-red-500 shrink-0"></span>
-                No puede modificar configuración
-              </li>
-            </ul>
+            <div className="text-xl sm:text-3xl font-bold">{vendedor.ventasTotal}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="p-3 sm:p-6 pb-1 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground flex items-center gap-1.5 sm:gap-2">
+              <CheckCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span>Completadas</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-3 sm:p-6 pt-0">
+            <div className="text-xl sm:text-3xl font-bold text-green-600">{vendedor.ventasCompletadas}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="p-3 sm:p-6 pb-1 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground flex items-center gap-1.5 sm:gap-2">
+              <DollarSign className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">Monto Total</span>
+              <span className="sm:hidden">Monto</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-3 sm:p-6 pt-0">
+            <div className="text-lg sm:text-2xl font-bold text-primary">
+              {formatCurrency(vendedor.montoTotalVentas)}
+            </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Historial de Ventas */}
+      <Card>
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="text-base sm:text-lg">Historial de Ventas</CardTitle>
+        </CardHeader>
+        <CardContent className="p-4 sm:p-6 pt-0">
+          {vendedor.ventas.length === 0 ? (
+            <p className="text-center text-muted-foreground py-6 sm:py-8 text-sm">
+              No hay ventas registradas para este vendedor
+            </p>
+          ) : (
+            <div className="space-y-2 sm:space-y-3">
+              {vendedor.ventas.map((venta) => (
+                <Link
+                  key={venta.id}
+                  href={`/ventas/${venta.id}`}
+                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4 border rounded-lg hover:bg-muted/50 transition-colors gap-2"
+                >
+                  <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+                    <ShoppingCart className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <div className="min-w-0">
+                      <div className="font-medium text-sm">
+                        {formatCurrency(parseFloat(venta.total || "0"))}
+                      </div>
+                      <div className="text-xs sm:text-sm text-muted-foreground">
+                        {formatDate(venta.fecha)}
+                      </div>
+                    </div>
+                  </div>
+                  <Badge className={`text-[10px] sm:text-xs w-fit ${estadoVentaColors[venta.estado] || "bg-gray-100 text-gray-800"}`}>
+                    {estadoVentaLabels[venta.estado] || venta.estado}
+                  </Badge>
+                </Link>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <VendedorForm
         open={editOpen}

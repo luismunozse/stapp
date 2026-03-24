@@ -5,13 +5,14 @@ import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DataTable, DataTablePagination, type Column } from "@/components/ui/data-table"
-import { Plus, Search, Phone, Mail, Edit, Trash2, User, Building2, Upload, PiggyBank, DollarSign } from "lucide-react"
+import { Plus, Search, Phone, Mail, Edit, Trash2, User, Building2, Upload, PiggyBank, DollarSign, MessageCircle } from "lucide-react"
 import { ClienteForm } from "./cliente-form"
 import { CuentaCorrienteDialog } from "@/components/clientes/cuenta-corriente-dialog"
 import { CobrarMultipleDialog } from "@/components/ordenes/cobrar-multiple-dialog"
 import { ImportModal } from "@/components/import/import-modal"
 import { ExportButton } from "@/components/export/export-button"
 import { ClienteMobileCard } from "./cliente-mobile-card"
+import { ClienteWhatsAppDialog } from "./cliente-whatsapp-dialog"
 import { Card, CardContent } from "@/components/ui/card"
 import type { Cliente } from "@/types"
 import { useModal } from "@/contexts/modal-context"
@@ -32,6 +33,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
   const [deleting, setDeleting] = useState<string | null>(null)
   const [cuentaCorrienteCliente, setCuentaCorrienteCliente] = useState<Cliente | null>(null)
   const [cobrarCliente, setCobrarCliente] = useState<Cliente | null>(null)
+  const [whatsappCliente, setWhatsappCliente] = useState<Cliente | null>(null)
 
   // Filters
   const [search, setSearch] = useState("")
@@ -74,6 +76,13 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
     dedupingInterval: 5000,
     keepPreviousData: true,
   })
+
+  // Fetch org name for WhatsApp dialog
+  const { data: configData } = useSWR("/api/configuracion", fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 60000,
+  })
+  const organizationName: string = configData?.nombreEmpresa || ""
 
   // Extract data from response
   const clientes: Cliente[] = data?.data || (Array.isArray(data) ? data : [])
@@ -233,6 +242,15 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
             variant="ghost"
             size="icon"
             className="h-8 w-8 text-muted-foreground hover:text-green-600"
+            onClick={(e) => { e.stopPropagation(); setWhatsappCliente(cliente) }}
+            title="Enviar WhatsApp"
+          >
+            <MessageCircle className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-muted-foreground hover:text-green-600"
             onClick={(e) => { e.stopPropagation(); setCobrarCliente(cliente) }}
             title="Cobrar órdenes"
           >
@@ -358,6 +376,16 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
         />
       )}
 
+      {/* WhatsApp Dialog */}
+      {whatsappCliente && (
+        <ClienteWhatsAppDialog
+          open={!!whatsappCliente}
+          onOpenChange={(open) => !open && setWhatsappCliente(null)}
+          cliente={whatsappCliente}
+          organizationName={organizationName}
+        />
+      )}
+
       {/* Desktop: Data Table */}
       <div className="hidden sm:block">
         <DataTable
@@ -411,6 +439,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
                   cliente={cliente}
                   onEdit={handleEdit}
                   onDelete={handleDelete}
+                  onWhatsApp={(e, c) => { e.stopPropagation(); setWhatsappCliente(c) }}
                   deleting={deleting === cliente.id}
                 />
               ))}

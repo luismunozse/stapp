@@ -47,6 +47,7 @@ import { OrdenRepuestosTab } from "@/components/ordenes/orden-repuestos-tab"
 import { CobrarOrdenDialog } from "@/components/ordenes/cobrar-orden-dialog"
 import { PatternDisplay } from "@/components/ui/pattern-display"
 import { useModal } from "@/contexts/modal-context"
+import { toast } from "sonner"
 import type { OrdenServicio, EstadoOrden, User as UserType } from "@/types"
 
 import { ESTADO_LABELS } from "@/lib/orden-state-machine"
@@ -93,6 +94,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
     try {
       await navigator.clipboard.writeText(seguimientoUrl)
       setLinkCopied(true)
+      toast.success("Link copiado al portapapeles")
       setTimeout(() => setLinkCopied(false), 2000)
     } catch {
       // fallback
@@ -164,6 +166,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
       })
       if (res.ok) {
         fetchOrden()
+        toast.success("Estado actualizado")
       } else {
         const error = await res.json()
         await alert({ title: "Error", description: error.error || "Error al actualizar estado", variant: "error" })
@@ -179,6 +182,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const handleEntregaSuccess = () => {
     setShowEntregaDialog(false)
     fetchOrden()
+    toast.success("Estado actualizado")
   }
 
   const handleReingreso = async () => {
@@ -228,6 +232,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
       })
       if (res.ok) {
         fetchOrden()
+        toast.success("Técnico asignado")
       } else {
         const error = await res.json()
         await alert({ title: "Error", description: error.error || "Error al asignar técnico", variant: "error" })
@@ -250,6 +255,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
       })
       if (res.ok) {
         fetchOrden()
+        toast.success("Actualizado")
       } else {
         const error = await res.json()
         await alert({ title: "Error", description: error.error || "Error al actualizar", variant: "error" })
@@ -345,6 +351,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
     try {
       const res = await fetch(`/api/ordenes/${ordenId}`, { method: "DELETE" })
       if (res.ok) {
+        toast.success("Orden eliminada")
         router.push("/ordenes")
       } else {
         const error = await res.json()
@@ -388,7 +395,9 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
     return <div className="text-center py-8 text-muted-foreground">Orden no encontrada</div>
   }
 
-  const currentEstadoIndex = estadoFlow.indexOf(orden.estado)
+  // ESPERANDO_REPUESTO es un sub-estado de EN_REPARACION, mapear al mismo índice
+  const estadoParaProgreso = orden.estado === "ESPERANDO_REPUESTO" ? "EN_REPARACION" : orden.estado
+  const currentEstadoIndex = estadoFlow.indexOf(estadoParaProgreso)
   const progressPercentage = orden.estado === "CANCELADO" || orden.estado === "SIN_REPARACION"
     ? 0
     : Math.round(((currentEstadoIndex + 1) / estadoFlow.length) * 100)
@@ -599,10 +608,12 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                 <Camera className="h-4 w-4" />
                 Fotos
               </TabsTrigger>
-              <TabsTrigger value="cotizaciones" className="gap-2">
-                <FileText className="h-4 w-4" />
-                Cotizaciones
-              </TabsTrigger>
+              {isAdmin && (
+                <TabsTrigger value="cotizaciones" className="gap-2">
+                  <FileText className="h-4 w-4" />
+                  Cotizaciones
+                </TabsTrigger>
+              )}
               <TabsTrigger value="historial" className="gap-2">
                 <History className="h-4 w-4" />
                 Historial
@@ -622,13 +633,15 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             </TabsContent>
 
 
-            <TabsContent value="cotizaciones" className="mt-4">
-              <Card>
-                <CardContent className="p-6">
-                  <CotizacionList ordenId={ordenId} clienteEmail={orden.cliente?.email} />
-                </CardContent>
-              </Card>
-            </TabsContent>
+            {isAdmin && (
+              <TabsContent value="cotizaciones" className="mt-4">
+                <Card>
+                  <CardContent className="p-6">
+                    <CotizacionList ordenId={ordenId} clienteEmail={orden.cliente?.email} />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            )}
 
             <TabsContent value="historial" className="mt-4">
               <NotificationHistory ordenId={ordenId} />
@@ -717,6 +730,20 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             </Card>
           )}
 
+          {/* Tiempo en estado actual */}
+          {orden.estado !== "ENTREGADO" && orden.estado !== "CANCELADO" && orden.estado !== "SIN_REPARACION" && (
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Tiempo en estado actual</span>
+                  <span className="font-medium">
+                    <ElapsedTime since={orden.fechaIngreso} />
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <OrdenTecnicoCard
             tecnicoId={orden.tecnicoId}
             tecnicos={tecnicos}
@@ -731,57 +758,14 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             sena={orden.sena || 0}
             totalCobrado={orden.totalCobrado || 0}
             descuentoCobro={orden.descuentoCobro || 0}
+            estadoCobro={orden.estadoCobro}
+            estado={orden.estado}
             onUpdateField={handleUpdateField}
+            onCobrar={() => setShowCobrarDialog(true)}
           />
 
-          {/* Cobro directo */}
-          {orden.costoFinal && orden.costoFinal > 0 && orden.estado !== "CANCELADO" && orden.estado !== "SIN_REPARACION" && (
-            <Card>
-              <CardContent className="p-4 space-y-3">
-                {/* Estado de cobro */}
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Cobro</span>
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                    orden.estadoCobro === "COBRADO"
-                      ? "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400"
-                      : orden.estadoCobro === "PARCIAL"
-                      ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400"
-                      : "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400"
-                  }`}>
-                    {orden.estadoCobro === "COBRADO" ? "Cobrado" : orden.estadoCobro === "PARCIAL" ? "Parcial" : "Pendiente"}
-                  </span>
-                </div>
-                {/* Resumen rápido */}
-                <div className="text-sm space-y-1">
-                  {(orden.totalCobrado || 0) > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Cobrado:</span>
-                      <span className="text-green-600 font-medium">{formatPrice(orden.totalCobrado || 0)}</span>
-                    </div>
-                  )}
-                  {orden.estadoCobro !== "COBRADO" && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Pendiente:</span>
-                      <span className="text-red-600 font-medium">
-                        {formatPrice(orden.costoFinal - (orden.descuentoCobro || 0) - (orden.totalCobrado || 0))}
-                      </span>
-                    </div>
-                  )}
-                </div>
-                <Button
-                  onClick={() => setShowCobrarDialog(true)}
-                  className="w-full"
-                  variant={orden.estadoCobro === "COBRADO" ? "outline" : "default"}
-                >
-                  <DollarSign className="h-4 w-4 mr-2" />
-                  {orden.estadoCobro === "COBRADO" ? "Ver Cobros" : "Cobrar"}
-                </Button>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Facturación (opcional) */}
-          {(orden.estado === "REPARADO" || orden.estado === "ENTREGADO") && (
+          {/* Facturación (solo admin) */}
+          {isAdmin && (orden.estado === "REPARADO" || orden.estado === "ENTREGADO") && (
             <Card>
               <CardContent className="p-4">
                 <Button onClick={handleGenerarFactura} disabled={updating} variant="outline" className="w-full" size="sm">
@@ -837,4 +821,23 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
       )}
     </div>
   )
+}
+
+function ElapsedTime({ since }: { since: string | Date }) {
+  const start = new Date(since)
+  const now = new Date()
+  const diffMs = now.getTime() - start.getTime()
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+  const diffDays = Math.floor(diffHours / 24)
+
+  if (diffDays > 0) {
+    const hours = diffHours % 24
+    return <>{diffDays}d {hours}h</>
+  }
+  if (diffHours > 0) {
+    const mins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
+    return <>{diffHours}h {mins}m</>
+  }
+  const mins = Math.floor(diffMs / (1000 * 60))
+  return <>{mins}m</>
 }

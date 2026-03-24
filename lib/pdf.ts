@@ -1,6 +1,7 @@
 import { PDFDocument as PDFLib, rgb, StandardFonts } from "pdf-lib"
 import { formatCurrencyValue, type CurrencyCode, DEFAULT_CURRENCY } from "@/lib/currency"
 import { formatDateValue, formatDateTimeValue, DEFAULT_TIMEZONE } from "@/lib/timezone"
+import { getDeviceTypeLabel } from "@/lib/device-types"
 
 // ========================================
 // COTIZACION PDF (pdf-lib)
@@ -442,11 +443,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const clienteDireccion = safe(cliente.direccion)
   const sector = safe(data.sector)
 
-  const tipoLabels: Record<string, string> = {
-    CELULAR: "Celular", COMPUTADORA: "Computadora", TABLET: "Tablet",
-    CONSOLA: "Consola", SMARTWATCH: "Smartwatch", OTRO: "Otro"
-  }
-  const tipoDispositivo = tipoLabels[data.tipoDispositivo] || safe(data.tipoDispositivo) || "Otro"
+  const tipoDispositivo = getDeviceTypeLabel(data.tipoDispositivo) || "Otro"
   const dispositivo = safe(data.dispositivo) || "Sin especificar"
   const marca = safe(data.marca)
   const colorDisp = safe(data.color)

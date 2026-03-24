@@ -3,6 +3,27 @@ export type NotificationType =
   | "PRESUPUESTO_DEFINIDO"
   | "GARANTIA_CREADA"
   | "RECORDATORIO_RETIRO"
+  // Pre-venta y captación
+  | "BIENVENIDA_CLIENTE"
+  | "RESPUESTA_CONSULTA"
+  // Cobranza y pagos
+  | "RECORDATORIO_PAGO"
+  | "CONFIRMACION_PAGO"
+  | "LINK_PAGO"
+  // Retención y fidelización
+  | "MANTENIMIENTO_PREVENTIVO"
+  | "PROMOCION"
+  | "ENCUESTA_SATISFACCION"
+  | "FELICITACION"
+  // Operativo avanzado
+  | "SOLICITUD_INFO"
+  | "REPUESTO_DISPONIBLE"
+  | "REPUESTO_NO_DISPONIBLE"
+  | "AVISO_DEMORA"
+  | "REINGRESO_GARANTIA"
+  // Recuperación
+  | "CLIENTE_INACTIVO"
+  | "SEGUIMIENTO_PRESUPUESTO_RECHAZADO"
 
 export type NotificationChannel = "EMAIL" | "WHATSAPP"
 
@@ -65,6 +86,34 @@ export interface NotificationContext {
     diasValidez: number
     fechaVencimiento: Date
   }
+  // Contexto extendido para nuevas plantillas
+  pago?: {
+    monto: number
+    metodoPago?: MetodoPagoVenta
+    fechaPago?: Date
+    saldoPendiente?: number
+    linkPago?: string
+  }
+  mantenimiento?: {
+    ultimoServicio?: Date
+    tipoServicio?: string
+  }
+  promocion?: {
+    titulo: string
+    descripcion: string
+    descuento?: string
+    validoHasta?: Date
+  }
+  demora?: {
+    motivo: string
+    nuevaFechaEstimada?: Date
+  }
+  repuesto?: {
+    nombre: string
+    disponible: boolean
+  }
+  encuestaUrl?: string
+  solicitudInfo?: string
 }
 
 export interface NotificationResult {

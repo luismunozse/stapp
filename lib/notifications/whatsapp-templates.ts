@@ -76,6 +76,135 @@ export function getWhatsAppTemplates(ctx: NotificationContext): WhatsAppTemplate
     })
   }
 
+  // === Plantillas de pre-venta y captación (solo sin orden activa) ===
+  if (!ctx.orden) {
+    templates.push({
+      id: "bienvenida_cliente",
+      nombre: "Bienvenida nuevo cliente",
+      mensaje: generateBienvenidaMessage(ctx),
+    })
+
+    templates.push({
+      id: "respuesta_consulta",
+      nombre: "Respuesta a consulta",
+      mensaje: generateRespuestaConsultaMessage(ctx),
+    })
+  }
+
+  // === Plantillas de cobranza y pagos ===
+  if (ctx.pago) {
+    if (ctx.pago.saldoPendiente && ctx.pago.saldoPendiente > 0) {
+      templates.push({
+        id: "recordatorio_pago",
+        nombre: "Recordatorio de pago",
+        mensaje: generateRecordatorioPagoMessage(ctx),
+      })
+    }
+
+    templates.push({
+      id: "confirmacion_pago",
+      nombre: "Confirmacion de pago",
+      mensaje: generateConfirmacionPagoMessage(ctx),
+    })
+
+    if (ctx.pago.linkPago) {
+      templates.push({
+        id: "link_pago",
+        nombre: "Enviar link de pago",
+        mensaje: generateLinkPagoMessage(ctx),
+      })
+    }
+  }
+
+  // === Plantillas de retención y fidelización (solo sin orden activa) ===
+  if (!ctx.orden) {
+    templates.push({
+      id: "mantenimiento_preventivo",
+      nombre: "Recordatorio mantenimiento",
+      mensaje: generateMantenimientoMessage(ctx),
+    })
+
+    if (ctx.promocion) {
+      templates.push({
+        id: "promocion",
+        nombre: "Promocion / Oferta",
+        mensaje: generatePromocionMessage(ctx),
+      })
+    }
+
+    templates.push({
+      id: "felicitacion",
+      nombre: "Felicitacion",
+      mensaje: generateFelicitacionMessage(ctx),
+    })
+
+    templates.push({
+      id: "cliente_inactivo",
+      nombre: "Cliente inactivo",
+      mensaje: generateClienteInactivoMessage(ctx),
+    })
+  }
+
+  // Encuesta: disponible post-entrega o sin orden (envio manual)
+  if (!ctx.orden || ctx.orden.estado === "ENTREGADO") {
+    templates.push({
+      id: "encuesta_satisfaccion",
+      nombre: "Encuesta de satisfaccion",
+      mensaje: generateEncuestaMessage(ctx),
+    })
+  }
+
+  // === Plantillas operativo avanzado ===
+  if (ctx.orden) {
+    templates.push({
+      id: "solicitud_info",
+      nombre: "Solicitar informacion",
+      mensaje: generateSolicitudInfoMessage(ctx),
+    })
+
+    // Repuesto: disponible en ESPERANDO_REPUESTO o si acaba de cambiar desde ese estado
+    if (ctx.repuesto && (ctx.orden.estado === "ESPERANDO_REPUESTO" || ctx.orden.estadoAnterior === "ESPERANDO_REPUESTO")) {
+      if (ctx.repuesto.disponible) {
+        templates.push({
+          id: "repuesto_disponible",
+          nombre: "Repuesto disponible",
+          mensaje: generateRepuestoDisponibleMessage(ctx),
+        })
+      } else {
+        templates.push({
+          id: "repuesto_no_disponible",
+          nombre: "Repuesto no disponible",
+          mensaje: generateRepuestoNoDisponibleMessage(ctx),
+        })
+      }
+    }
+
+    if (ctx.demora) {
+      templates.push({
+        id: "aviso_demora",
+        nombre: "Aviso de demora",
+        mensaje: generateAvisoDemoraMessage(ctx),
+      })
+    }
+
+    if (ctx.garantia) {
+      templates.push({
+        id: "reingreso_garantia",
+        nombre: "Re-ingreso por garantia",
+        mensaje: generateReingresoGarantiaMessage(ctx),
+      })
+    }
+
+    // Seguimiento presupuesto rechazado: cuando cancelaron desde presupuestado
+    if (ctx.orden.estado === "CANCELADO" && ctx.orden.estadoAnterior === "PRESUPUESTADO") {
+      templates.push({
+        id: "seguimiento_presupuesto_rechazado",
+        nombre: "Seguimiento presupuesto rechazado",
+        mensaje: generateSeguimientoPresupuestoRechazadoMessage(ctx),
+      })
+    }
+  }
+
   // Plantillas para ventas
   if (ctx.venta) {
     templates.push({
@@ -175,17 +304,18 @@ ${ctx.organizationName}`
 function generateGarantiaMessage(ctx: NotificationContext): string {
   const formatDate = (date: Date) => formatDateValue(date, ctx.zonaHoraria)
 
-  return `Hola ${ctx.cliente.nombre}, su reparacion ahora cuenta con garantia:
+  let mensaje = `Hola ${ctx.cliente.nombre}, su reparacion ahora cuenta con garantia:
 
 *${ctx.garantia!.diasValidez} dias de garantia*
-Valida hasta: ${formatDate(ctx.garantia!.fechaVencimiento)}
+Valida hasta: ${formatDate(ctx.garantia!.fechaVencimiento)}`
 
-Orden #${ctx.orden!.numeroOrden}
-Dispositivo: ${ctx.orden!.dispositivo}
+  if (ctx.orden) {
+    mensaje += `\n\nOrden #${ctx.orden.numeroOrden}\nDispositivo: ${ctx.orden.dispositivo}`
+  }
 
-Conserve este mensaje como comprobante.
+  mensaje += `\n\nConserve este mensaje como comprobante.\n\n${ctx.organizationName}`
 
-${ctx.organizationName}`
+  return mensaje
 }
 
 function generateRecordatorioMessage(ctx: NotificationContext): string {
@@ -302,6 +432,253 @@ function generateVentaAgradecimientoMessage(ctx: NotificationContext): string {
 Esperamos que disfrute su compra. Si tiene alguna consulta, no dude en contactarnos.
 
 Lo esperamos pronto!
+
+${ctx.organizationName}`
+}
+
+// === Funciones generadoras para nuevas plantillas ===
+
+function generateBienvenidaMessage(ctx: NotificationContext): string {
+  return `Hola ${ctx.cliente.nombre}, bienvenido/a a ${ctx.organizationName}!
+
+Gracias por confiar en nosotros. Somos especialistas en reparacion y servicio tecnico.
+
+Puede contactarnos por este medio para cualquier consulta sobre nuestros servicios.
+
+${ctx.organizationName}`
+}
+
+function generateRespuestaConsultaMessage(ctx: NotificationContext): string {
+  return `Hola ${ctx.cliente.nombre}, gracias por su consulta.
+
+[Detalle su respuesta aqui]
+
+Si desea traer su equipo para una revision sin cargo, estamos a su disposicion.
+
+${ctx.organizationName}`
+}
+
+function generateRecordatorioPagoMessage(ctx: NotificationContext): string {
+  const formatCurrency = (amount: number) =>
+    formatCurrencyValue(amount, (ctx.moneda as CurrencyCode) || DEFAULT_CURRENCY)
+
+  const saldo = ctx.pago?.saldoPendiente || 0
+  let mensaje = `Hola ${ctx.cliente.nombre}, le recordamos que tiene un saldo pendiente de *${formatCurrency(saldo)}*.`
+
+  if (ctx.orden) {
+    mensaje += `\n\nOrden #${ctx.orden.numeroOrden} - ${ctx.orden.dispositivo}`
+  }
+
+  mensaje += `\n\nPuede acercarse a nuestro local o consultarnos por medios de pago disponibles.`
+  mensaje += `\n\n${ctx.organizationName}`
+
+  return mensaje
+}
+
+function generateConfirmacionPagoMessage(ctx: NotificationContext): string {
+  const formatCurrency = (amount: number) =>
+    formatCurrencyValue(amount, (ctx.moneda as CurrencyCode) || DEFAULT_CURRENCY)
+
+  let mensaje = `Hola ${ctx.cliente.nombre}, confirmamos la recepcion de su pago por *${formatCurrency(ctx.pago?.monto || 0)}*.`
+
+  if (ctx.orden) {
+    mensaje += `\n\nOrden #${ctx.orden.numeroOrden} - ${ctx.orden.dispositivo}`
+  }
+
+  if (ctx.pago?.saldoPendiente && ctx.pago.saldoPendiente > 0) {
+    mensaje += `\nSaldo restante: ${formatCurrency(ctx.pago.saldoPendiente)}`
+  } else {
+    mensaje += `\n\nSu cuenta se encuentra al dia. Gracias!`
+  }
+
+  mensaje += `\n\n${ctx.organizationName}`
+
+  return mensaje
+}
+
+function generateLinkPagoMessage(ctx: NotificationContext): string {
+  const formatCurrency = (amount: number) =>
+    formatCurrencyValue(amount, (ctx.moneda as CurrencyCode) || DEFAULT_CURRENCY)
+
+  let mensaje = `Hola ${ctx.cliente.nombre}, le enviamos el link para realizar el pago:`
+
+  if (ctx.pago?.monto) {
+    mensaje += `\n\n*Monto: ${formatCurrency(ctx.pago.monto)}*`
+  }
+
+  mensaje += `\n\n${ctx.pago?.linkPago || "[Link de pago]"}`
+
+  if (ctx.orden) {
+    mensaje += `\n\nOrden #${ctx.orden.numeroOrden}`
+  }
+
+  mensaje += `\n\n${ctx.organizationName}`
+
+  return mensaje
+}
+
+function generateMantenimientoMessage(ctx: NotificationContext): string {
+  let mensaje = `Hola ${ctx.cliente.nombre}, desde ${ctx.organizationName} queremos recordarle que es buen momento para un chequeo preventivo de su equipo.`
+
+  if (ctx.mantenimiento?.ultimoServicio) {
+    const formatDate = (date: Date) => formatDateValue(date, ctx.zonaHoraria)
+    mensaje += `\n\nSu ultimo servicio fue el ${formatDate(ctx.mantenimiento.ultimoServicio)}.`
+  }
+
+  if (ctx.mantenimiento?.tipoServicio) {
+    mensaje += ` Servicio realizado: ${ctx.mantenimiento.tipoServicio}.`
+  }
+
+  mensaje += `\n\nEl mantenimiento preventivo ayuda a evitar fallas y prolongar la vida util de su equipo.`
+  mensaje += `\n\nConsulte por turno disponible!`
+  mensaje += `\n\n${ctx.organizationName}`
+
+  return mensaje
+}
+
+function generatePromocionMessage(ctx: NotificationContext): string {
+  const formatDate = (date: Date) => formatDateValue(date, ctx.zonaHoraria)
+
+  let mensaje = `Hola ${ctx.cliente.nombre}!`
+  mensaje += `\n\n*${ctx.promocion!.titulo}*`
+  mensaje += `\n${ctx.promocion!.descripcion}`
+
+  if (ctx.promocion!.descuento) {
+    mensaje += `\n\n*${ctx.promocion!.descuento}*`
+  }
+
+  if (ctx.promocion!.validoHasta) {
+    mensaje += `\nValido hasta: ${formatDate(ctx.promocion!.validoHasta)}`
+  }
+
+  mensaje += `\n\nNo dude en consultarnos!`
+  mensaje += `\n\n${ctx.organizationName}`
+
+  return mensaje
+}
+
+function generateEncuestaMessage(ctx: NotificationContext): string {
+  let mensaje = `Hola ${ctx.cliente.nombre}, nos importa su opinion!`
+
+  if (ctx.orden) {
+    mensaje += `\n\nQueremos saber como fue su experiencia con la reparacion de su ${ctx.orden.dispositivo} (Orden #${ctx.orden.numeroOrden}).`
+  } else {
+    mensaje += `\n\nQueremos saber como fue su experiencia con nuestro servicio.`
+  }
+
+  mensaje += `\n\nDel 1 al 5, que tan satisfecho esta? (1 = Muy insatisfecho, 5 = Excelente)`
+
+  if (ctx.encuestaUrl) {
+    mensaje += `\n\nTambien puede completar nuestra encuesta aqui: ${ctx.encuestaUrl}`
+  }
+
+  mensaje += `\n\nSu opinion nos ayuda a mejorar. Gracias!`
+  mensaje += `\n\n${ctx.organizationName}`
+
+  return mensaje
+}
+
+function generateFelicitacionMessage(ctx: NotificationContext): string {
+  return `Hola ${ctx.cliente.nombre}, desde ${ctx.organizationName} queremos desearle un muy feliz dia!
+
+Gracias por ser parte de nuestra comunidad de clientes.
+
+Como regalo, tiene un descuento especial en su proximo servicio. Consulte por mensaje!
+
+${ctx.organizationName}`
+}
+
+function generateSolicitudInfoMessage(ctx: NotificationContext): string {
+  let mensaje = `Hola ${ctx.cliente.nombre}, nos comunicamos por su ${ctx.orden!.dispositivo} (Orden #${ctx.orden!.numeroOrden}).`
+
+  if (ctx.solicitudInfo) {
+    mensaje += `\n\n${ctx.solicitudInfo}`
+  } else {
+    mensaje += `\n\nNecesitamos informacion adicional para continuar con el servicio.`
+    mensaje += `\n\n[Detalle lo que necesita: fotos, contrasena, descripcion del problema, etc.]`
+  }
+
+  mensaje += `\n\nAgradecemos su pronta respuesta.`
+  mensaje += `\n\n${ctx.organizationName}`
+
+  return mensaje
+}
+
+function generateRepuestoDisponibleMessage(ctx: NotificationContext): string {
+  return `Hola ${ctx.cliente.nombre}, buenas noticias!
+
+El repuesto *${ctx.repuesto?.nombre || "necesario"}* para su ${ctx.orden!.dispositivo} ya esta disponible.
+
+Orden #${ctx.orden!.numeroOrden}
+
+Retomamos la reparacion de inmediato. Le avisaremos cuando este listo.
+
+${ctx.organizationName}`
+}
+
+function generateRepuestoNoDisponibleMessage(ctx: NotificationContext): string {
+  return `Hola ${ctx.cliente.nombre}, le informamos sobre su ${ctx.orden!.dispositivo} (Orden #${ctx.orden!.numeroOrden}).
+
+Lamentablemente el repuesto *${ctx.repuesto?.nombre || "necesario"}* no se encuentra disponible o esta discontinuado.
+
+Podemos ofrecerle las siguientes opciones:
+- Buscar un repuesto alternativo compatible
+- Devolver el equipo sin cargo
+
+Por favor indiquenos como desea proceder.
+
+${ctx.organizationName}`
+}
+
+function generateAvisoDemoraMessage(ctx: NotificationContext): string {
+  const formatDate = (date: Date) => formatDateValue(date, ctx.zonaHoraria)
+
+  let mensaje = `Hola ${ctx.cliente.nombre}, le informamos que la reparacion de su ${ctx.orden!.dispositivo} (Orden #${ctx.orden!.numeroOrden}) esta tomando mas tiempo del estimado.`
+
+  if (ctx.demora?.motivo) {
+    mensaje += `\n\nMotivo: ${ctx.demora.motivo}`
+  }
+
+  if (ctx.demora?.nuevaFechaEstimada) {
+    mensaje += `\nNueva fecha estimada: ${formatDate(ctx.demora.nuevaFechaEstimada)}`
+  }
+
+  mensaje += `\n\nPedimos disculpas por la demora. Estamos trabajando para resolverlo lo antes posible.`
+  mensaje += `\n\n${ctx.organizationName}`
+
+  return mensaje
+}
+
+function generateReingresoGarantiaMessage(ctx: NotificationContext): string {
+  return `Hola ${ctx.cliente.nombre}, lamentamos que tenga inconvenientes con su ${ctx.orden!.dispositivo}.
+
+Su reparacion esta cubierta por garantia (valida hasta ${formatDateValue(ctx.garantia!.fechaVencimiento, ctx.zonaHoraria)}).
+
+Puede traer su equipo para que lo revisemos sin costo adicional. No necesita turno, solo acerquese en horario de atencion.
+
+Orden original #${ctx.orden!.numeroOrden}
+
+${ctx.organizationName}`
+}
+
+function generateClienteInactivoMessage(ctx: NotificationContext): string {
+  return `Hola ${ctx.cliente.nombre}, hace tiempo que no nos visita y lo extraniamos!
+
+En ${ctx.organizationName} seguimos a su disposicion para cualquier servicio tecnico o consulta que necesite.
+
+Recuerde que ofrecemos diagnostico sin cargo. Traiga su equipo y lo revisamos sin compromiso.
+
+Lo esperamos!
+
+${ctx.organizationName}`
+}
+
+function generateSeguimientoPresupuestoRechazadoMessage(ctx: NotificationContext): string {
+  return `Hola ${ctx.cliente.nombre}, nos comunicamos por su ${ctx.orden!.dispositivo} (Orden #${ctx.orden!.numeroOrden}).
+
+Entendemos que el presupuesto anterior no se ajustaba a sus necesidades. Queremos informarle que podemos evaluar alternativas para resolver el problema de su equipo.
+
+Puede responder este mensaje si desea que revisemos otras opciones.
 
 ${ctx.organizationName}`
 }

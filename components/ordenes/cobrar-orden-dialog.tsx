@@ -49,6 +49,7 @@ export function CobrarOrdenDialog({
   const [descuento, setDescuento] = useState(0)
   const [saldoCuenta, setSaldoCuenta] = useState(0)
   const [cobrosHistorial, setCobrosHistorial] = useState<any[]>([])
+  const [cuotasPendientes, setCuotasPendientes] = useState<any[]>([])
   const [showHistorial, setShowHistorial] = useState(false)
   const [loadingHistorial, setLoadingHistorial] = useState(false)
 
@@ -66,6 +67,7 @@ export function CobrarOrdenDialog({
       setObservaciones("")
       fetchHistorial()
       fetchSaldoCuenta()
+      fetchCuotas()
     }
   }, [open, orden.id])
 
@@ -86,6 +88,16 @@ export function CobrarOrdenDialog({
         setSaldoCuenta(data.saldo || 0)
       }
     } catch { setSaldoCuenta(0) }
+  }
+
+  const fetchCuotas = async () => {
+    try {
+      const res = await fetch(`/api/ordenes/${orden.id}/cuotas`)
+      if (res.ok) {
+        const data = await res.json()
+        setCuotasPendientes(data.filter((c: any) => !c.pagada))
+      }
+    } catch { /* ignore */ }
   }
 
   const fetchHistorial = async () => {
@@ -271,6 +283,27 @@ export function CobrarOrdenDialog({
                 `Cobrar ${formatPrice(pagosLines.reduce((s, p) => s + (p.monto || 0), 0))}`
               )}
             </Button>
+          </div>
+        )}
+
+        {/* Cuotas pendientes */}
+        {cuotasPendientes.length > 0 && (
+          <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+            <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-2">
+              Cuotas pendientes ({cuotasPendientes.length})
+            </p>
+            <div className="space-y-1.5">
+              {cuotasPendientes.map((c: any) => (
+                <div key={c.id} className="flex justify-between text-xs">
+                  <span className="text-amber-700 dark:text-amber-400">
+                    Cuota {c.numeroCuota}/{c.totalCuotas} — vence {new Date(c.fechaVencimiento).toLocaleDateString("es-AR")}
+                  </span>
+                  <span className="font-medium text-amber-800 dark:text-amber-300">
+                    {formatPrice(c.monto)}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

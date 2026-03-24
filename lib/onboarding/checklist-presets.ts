@@ -77,6 +77,48 @@ export const CHECKLIST_PRESETS: ChecklistPreset[] = [
       { label: "Observaciones adicionales", tipo: "TEXT", categoria: "OTRO", opciones: null, orden: 8, requerido: false },
     ],
   },
+  {
+    nombre: "Recepción Smartwatch",
+    tipoDispositivo: "SMARTWATCH",
+    items: [
+      { label: "Estado de pantalla", tipo: "SELECT", categoria: "CONDICION_FISICA", opciones: "Sin daño,Rayones leves,Rajaduras,Rota", orden: 1, requerido: true },
+      { label: "Estado de carcasa", tipo: "SELECT", categoria: "CONDICION_FISICA", opciones: "Sin daño,Rayones,Abolladura", orden: 2, requerido: true },
+      { label: "Enciende correctamente", tipo: "BOOLEAN", categoria: "FUNCIONAL", opciones: null, orden: 3, requerido: true },
+      { label: "Touch funciona", tipo: "BOOLEAN", categoria: "FUNCIONAL", opciones: null, orden: 4, requerido: true },
+      { label: "Sensor cardíaco funciona", tipo: "BOOLEAN", categoria: "FUNCIONAL", opciones: null, orden: 5, requerido: false },
+      { label: "Cargador incluido", tipo: "BOOLEAN", categoria: "ACCESORIOS", opciones: null, orden: 6, requerido: true },
+      { label: "Malla/correa incluida", tipo: "BOOLEAN", categoria: "ACCESORIOS", opciones: null, orden: 7, requerido: true },
+      { label: "Observaciones adicionales", tipo: "TEXT", categoria: "OTRO", opciones: null, orden: 8, requerido: false },
+    ],
+  },
+  {
+    nombre: "Recepción Impresora",
+    tipoDispositivo: "IMPRESORA",
+    items: [
+      { label: "Estado exterior", tipo: "SELECT", categoria: "CONDICION_FISICA", opciones: "Sin daño,Rayones,Abolladura,Rota", orden: 1, requerido: true },
+      { label: "Enciende correctamente", tipo: "BOOLEAN", categoria: "FUNCIONAL", opciones: null, orden: 2, requerido: true },
+      { label: "Imprime hoja de prueba", tipo: "BOOLEAN", categoria: "FUNCIONAL", opciones: null, orden: 3, requerido: false },
+      { label: "Bandeja de papel funciona", tipo: "BOOLEAN", categoria: "FUNCIONAL", opciones: null, orden: 4, requerido: false },
+      { label: "Scanner funciona", tipo: "BOOLEAN", categoria: "FUNCIONAL", opciones: null, orden: 5, requerido: false },
+      { label: "Cable de poder incluido", tipo: "BOOLEAN", categoria: "ACCESORIOS", opciones: null, orden: 6, requerido: true },
+      { label: "Cable USB incluido", tipo: "BOOLEAN", categoria: "ACCESORIOS", opciones: null, orden: 7, requerido: false },
+      { label: "Cartuchos/tóner incluidos", tipo: "BOOLEAN", categoria: "ACCESORIOS", opciones: null, orden: 8, requerido: false },
+      { label: "Observaciones adicionales", tipo: "TEXT", categoria: "OTRO", opciones: null, orden: 9, requerido: false },
+    ],
+  },
+  {
+    nombre: "Recepción Electrodoméstico",
+    tipoDispositivo: "_GENERICO_ELECTRODOMESTICO",
+    items: [
+      { label: "Estado exterior", tipo: "SELECT", categoria: "CONDICION_FISICA", opciones: "Sin daño,Rayones,Abolladura,Oxidado,Roto", orden: 1, requerido: true },
+      { label: "Enciende correctamente", tipo: "BOOLEAN", categoria: "FUNCIONAL", opciones: null, orden: 2, requerido: true },
+      { label: "Hace ruidos anormales", tipo: "BOOLEAN", categoria: "FUNCIONAL", opciones: null, orden: 3, requerido: false },
+      { label: "Cable de alimentación incluido", tipo: "BOOLEAN", categoria: "ACCESORIOS", opciones: null, orden: 4, requerido: true },
+      { label: "Control remoto incluido", tipo: "BOOLEAN", categoria: "ACCESORIOS", opciones: null, orden: 5, requerido: false },
+      { label: "Modelo/número de serie", tipo: "TEXT", categoria: "OTRO", opciones: null, orden: 6, requerido: false },
+      { label: "Observaciones adicionales", tipo: "TEXT", categoria: "OTRO", opciones: null, orden: 7, requerido: false },
+    ],
+  },
 ]
 
 /**

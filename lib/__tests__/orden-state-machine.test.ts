@@ -158,13 +158,19 @@ describe("orden-state-machine", () => {
     })
 
     it("requiere técnico asignado para EN_REPARACION", () => {
-      const error = validarCamposRequeridos("EN_REPARACION", { tecnico_id: null })
+      const error = validarCamposRequeridos("EN_REPARACION", { tecnico_id: null, costo_final: 5000 })
       expect(error).not.toBeNull()
       expect(error).toContain("Técnico")
     })
 
-    it("permite EN_REPARACION con técnico asignado", () => {
-      const error = validarCamposRequeridos("EN_REPARACION", { tecnico_id: "t1" })
+    it("requiere costo final para EN_REPARACION", () => {
+      const error = validarCamposRequeridos("EN_REPARACION", { tecnico_id: "t1", costo_final: null })
+      expect(error).not.toBeNull()
+      expect(error).toContain("Costo final")
+    })
+
+    it("permite EN_REPARACION con técnico y costo final", () => {
+      const error = validarCamposRequeridos("EN_REPARACION", { tecnico_id: "t1", costo_final: 5000 })
       expect(error).toBeNull()
     })
 

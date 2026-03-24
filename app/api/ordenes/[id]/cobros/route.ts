@@ -226,6 +226,21 @@ export async function DELETE(
       return NextResponse.json({ error: "Se requiere cobroId" }, { status: 400 })
     }
 
+    // Verificar que la orden no esté entregada
+    const { data: ordenCheck } = await supabaseAdmin
+      .from("ordenes_servicio")
+      .select("estado")
+      .eq("id", ordenId)
+      .eq("organization_id", organizationId!)
+      .single()
+
+    if (ordenCheck?.estado === "ENTREGADO") {
+      return NextResponse.json(
+        { error: "No se pueden anular cobros de órdenes ya entregadas" },
+        { status: 400 }
+      )
+    }
+
     // Verificar que el cobro existe y pertenece a la orden
     const { data: cobro, error: cobroError } = await supabaseAdmin
       .from("cobros_orden")

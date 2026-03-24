@@ -2,7 +2,7 @@
 
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { User, Building2, Phone, Mail, MapPin, Edit, Trash2 } from "lucide-react"
+import { User, Building2, Phone, Mail, MapPin, Edit, Trash2, MessageCircle } from "lucide-react"
 import type { Cliente } from "@/types"
 import { useCurrency } from "@/contexts/currency-context"
 
@@ -10,10 +10,11 @@ interface ClienteMobileCardProps {
   cliente: Cliente
   onEdit: (e: React.MouseEvent, cliente: Cliente) => void
   onDelete: (e: React.MouseEvent, cliente: Cliente) => void
+  onWhatsApp?: (e: React.MouseEvent, cliente: Cliente) => void
   deleting: boolean
 }
 
-export function ClienteMobileCard({ cliente, onEdit, onDelete, deleting }: ClienteMobileCardProps) {
+export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, deleting }: ClienteMobileCardProps) {
   const { formatDate } = useCurrency()
 
   return (
@@ -49,6 +50,16 @@ export function ClienteMobileCard({ cliente, onEdit, onDelete, deleting }: Clien
             </div>
           </div>
           <div role="group" className="flex items-center gap-1" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+            {onWhatsApp && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="no-touch-min h-8 w-8 text-muted-foreground hover:text-green-600"
+                onClick={(e) => onWhatsApp(e, cliente)}
+              >
+                <MessageCircle className="h-3.5 w-3.5" />
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon"

@@ -47,6 +47,14 @@ export async function POST(
       return NextResponse.json({ error: "La orden ya fue entregada" }, { status: 400 })
     }
 
+    // Solo se puede entregar desde REPARADO
+    if (orden.estado !== "REPARADO") {
+      return NextResponse.json(
+        { error: `No se puede entregar una orden en estado "${orden.estado}". Debe estar en estado "REPARADO".` },
+        { status: 400 }
+      )
+    }
+
     // Actualizar orden con datos de entrega
     const { data: updatedOrden, error: updateError } = await supabaseAdmin
       .from("ordenes_servicio")

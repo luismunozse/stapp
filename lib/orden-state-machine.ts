@@ -73,6 +73,11 @@ export const CAMPOS_REQUERIDOS_POR_ESTADO: Partial<Record<EstadoOrden, {
       label: "Técnico asignado",
       validar: (o) => !!o.tecnico_id,
     },
+    {
+      campo: "costo_final",
+      label: "Costo final (presupuesto aceptado)",
+      validar: (o) => o.costo_final != null && parseFloat(o.costo_final) > 0,
+    },
   ],
   REPARADO: [
     {

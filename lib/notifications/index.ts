@@ -7,12 +7,7 @@ import {
   NotificationResult,
   NotificationConfig,
 } from "./types"
-import {
-  generateCambioEstadoEmail,
-  generatePresupuestoEmail,
-  generateGarantiaEmail,
-  generateRecordatorioEmail,
-} from "./email-templates"
+import { generateEmailByType } from "./email-templates"
 import { getWhatsAppTemplates, generateWhatsAppUrl } from "./whatsapp-templates"
 
 // Lazy initialization to avoid errors during build
@@ -85,35 +80,23 @@ export class NotificationService {
       }
     }
 
-    let emailContent: { subject: string; html: string }
+    // Calcular dias completado para recordatorio de retiro
+    const fechaCompletado = context.orden?.fechaCompletado
+    const diasCompletado = fechaCompletado
+      ? Math.floor(
+          (Date.now() - new Date(fechaCompletado).getTime()) /
+            (1000 * 60 * 60 * 24)
+        )
+      : 0
 
-    switch (type) {
-      case "CAMBIO_ESTADO":
-        emailContent = generateCambioEstadoEmail(context)
-        break
-      case "PRESUPUESTO_DEFINIDO":
-        emailContent = generatePresupuestoEmail(context)
-        break
-      case "GARANTIA_CREADA":
-        emailContent = generateGarantiaEmail(context)
-        break
-      case "RECORDATORIO_RETIRO":
-        // Calcular dias desde completado
-        const fechaCompletado = context.orden?.fechaCompletado
-        const diasCompletado = fechaCompletado
-          ? Math.floor(
-              (Date.now() - new Date(fechaCompletado).getTime()) /
-                (1000 * 60 * 60 * 24)
-            )
-          : 0
-        emailContent = generateRecordatorioEmail(context, diasCompletado)
-        break
-      default:
-        return {
-          success: false,
-          channel: "EMAIL",
-          error: "Tipo de notificacion no soportado",
-        }
+    const emailContent = generateEmailByType(type, context, { diasCompletado })
+
+    if (!emailContent) {
+      return {
+        success: false,
+        channel: "EMAIL",
+        error: `Tipo de notificacion "${type}" no tiene plantilla de email`,
+      }
     }
 
     try {
@@ -186,23 +169,35 @@ export class NotificationService {
     const templates = getWhatsAppTemplates(context)
 
     // Seleccionar plantilla segun tipo
-    let templateId: string
-    switch (type) {
-      case "CAMBIO_ESTADO":
-        templateId = "estado_actual"
-        break
-      case "PRESUPUESTO_DEFINIDO":
-        templateId = "presupuesto"
-        break
-      case "GARANTIA_CREADA":
-        templateId = "garantia"
-        break
-      case "RECORDATORIO_RETIRO":
-        templateId = "listo_retirar"
-        break
-      default:
-        templateId = "seguimiento"
+    const templateMap: Record<NotificationType, string> = {
+      // Flujo operativo core
+      CAMBIO_ESTADO: "estado_actual",
+      PRESUPUESTO_DEFINIDO: "presupuesto",
+      GARANTIA_CREADA: "garantia",
+      RECORDATORIO_RETIRO: "listo_retirar",
+      // Pre-venta y captación
+      BIENVENIDA_CLIENTE: "bienvenida_cliente",
+      RESPUESTA_CONSULTA: "respuesta_consulta",
+      // Cobranza y pagos
+      RECORDATORIO_PAGO: "recordatorio_pago",
+      CONFIRMACION_PAGO: "confirmacion_pago",
+      LINK_PAGO: "link_pago",
+      // Retención y fidelización
+      MANTENIMIENTO_PREVENTIVO: "mantenimiento_preventivo",
+      PROMOCION: "promocion",
+      ENCUESTA_SATISFACCION: "encuesta_satisfaccion",
+      FELICITACION: "felicitacion",
+      // Operativo avanzado
+      SOLICITUD_INFO: "solicitud_info",
+      REPUESTO_DISPONIBLE: "repuesto_disponible",
+      REPUESTO_NO_DISPONIBLE: "repuesto_no_disponible",
+      AVISO_DEMORA: "aviso_demora",
+      REINGRESO_GARANTIA: "reingreso_garantia",
+      // Recuperación
+      CLIENTE_INACTIVO: "cliente_inactivo",
+      SEGUIMIENTO_PRESUPUESTO_RECHAZADO: "seguimiento_presupuesto_rechazado",
     }
+    const templateId = templateMap[type] || "seguimiento"
 
     const template =
       templates.find((t) => t.id === templateId) || templates[0]

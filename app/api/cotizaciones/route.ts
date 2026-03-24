@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAdminOrVendedor } from "@/lib/auth-utils"
+import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getNextQuoteNumber } from "@/lib/counters"
 import { randomBytes } from "crypto"
@@ -94,7 +94,7 @@ function formatCotizacion(c: any) {
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAdminOrVendedor()
+    const { error, organizationId } = await requireAdmin()
     if (error) return error
 
     const { searchParams } = new URL(request.url)
@@ -172,7 +172,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { error, organizationId, role } = await requireAdminOrVendedor()
+    const { error, organizationId, role } = await requireAdmin()
     if (error) return error
 
     if (role !== "ADMIN") {

@@ -136,6 +136,34 @@ describe("POST /api/ordenes/[id]/entregar", () => {
     expect(body.error).toContain("ya fue entregada")
   })
 
+  it("returns 400 when order is not REPARADO", async () => {
+    mockAuthSuccess()
+
+    const mockOrden = {
+      id: "o1",
+      estado: "EN_REPARACION",
+      tecnico_id: "t1",
+      clientes: { id: "c1", nombre: "Test" },
+    }
+
+    const chain = createChainMock(mockOrden)
+    mockSupabaseFrom({ ordenes_servicio: chain })
+
+    const response = await POST(
+      createPostRequest({
+        firmaClienteEntrega: "base64sig",
+        firmaClienteMime: "image/png",
+        firmaEncargadoEntrega: "base64sig",
+        firmaEncargadoMime: "image/png",
+      }),
+      createParams("o1")
+    )
+    const { status, body } = await parseResponse(response)
+
+    expect(status).toBe(400)
+    expect(body.error).toContain("REPARADO")
+  })
+
   it("delivers order successfully", async () => {
     mockAuthSuccess({ userId: "user-1" })
 

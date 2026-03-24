@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { redirect } from "next/navigation"
 import { auth } from "@/lib/auth"
+import { supabaseAdmin } from "@/lib/supabase"
 import { NavbarLanding } from "@/components/landing/navbar-landing"
 import { Hero } from "@/components/landing/hero"
 import { Features } from "@/components/landing/features"
@@ -107,9 +108,21 @@ const faqData = [
 export default async function Home() {
   const [session, prices] = await Promise.all([auth(), getPremiumPrices()])
 
-  // Si el usuario est\u00e1 autenticado, redirigir al dashboard
+  // Si el usuario est\u00e1 autenticado, redirigir a su subdominio de tenant
   if (session) {
-    redirect("/dashboard")
+    const { data: org } = await supabaseAdmin
+      .from("organizations")
+      .select("slug")
+      .eq("id", session.user.organizationId)
+      .single()
+
+    if (org?.slug) {
+      const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
+      const protocol = process.env.NODE_ENV === "production" ? "https" : "http"
+      redirect(`${protocol}://${org.slug}.${rootDomain}/dashboard`)
+    }
+
+    // Fallback: si no se encuentra el slug, mostrar landing
   }
 
   // Mostrar landing page para usuarios no autenticados

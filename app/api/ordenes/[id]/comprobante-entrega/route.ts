@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { generateComprobanteEntregaPDF } from "@/lib/pdf"
+import { getDeviceTypeLabel } from "@/lib/device-types"
 
 export async function GET(
   request: Request,
@@ -18,6 +19,7 @@ export async function GET(
       .from("ordenes_servicio")
       .select(`
         *,
+        tipos_dispositivo:tipo_dispositivo_id(nombre),
         clientes(*),
         users:entregado_por_user_id(id, nombre, email)
       `)
@@ -48,15 +50,7 @@ export async function GET(
 
     const cliente = orden.clientes as any
     const entregadoPor = orden.users as any
-
-    // Mapeo de tipos de dispositivo
-    const tipoLabels: Record<string, string> = {
-      CELULAR: "Celular",
-      COMPUTADORA: "Computadora",
-      TABLET: "Tablet",
-      CONSOLA: "Consola",
-      SMARTWATCH: "Smartwatch",
-    }
+    const tipoDisp = orden.tipos_dispositivo as any
 
     const pdfBuffer = await generateComprobanteEntregaPDF({
       numeroOrden: orden.numero_orden,
@@ -69,7 +63,7 @@ export async function GET(
         email: cliente?.email,
       },
       dispositivo: orden.dispositivo,
-      tipoDispositivo: tipoLabels[orden.tipo_dispositivo] || orden.tipo_dispositivo,
+      tipoDispositivo: getDeviceTypeLabel(orden.tipo_dispositivo, tipoDisp?.nombre),
       marca: orden.marca,
       problemaReportado: orden.problema_reportado,
       diagnostico: orden.diagnostico,

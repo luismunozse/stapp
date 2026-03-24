@@ -190,6 +190,11 @@ export default async function DashboardPage() {
   }
 
   const organizationId = session.user.organizationId
+  const userRole = session.user.role || "TECNICO"
+  const userId = session.user.id
+  const isAdmin = userRole === "ADMIN"
+  const isVendedor = userRole === "VENDEDOR"
+  const isTecnico = userRole === "TECNICO"
 
   // Obtener la última versión vista por el usuario (sin caché, es por usuario)
   const { data: userData } = await supabaseAdmin
@@ -223,6 +228,62 @@ export default async function DashboardPage() {
         .update({ onboarding_completed: true })
         .eq("id", organizationId)
     }
+  }
+
+  // Datos específicos por rol (sin caché, por usuario)
+  let misOrdenesActivas = 0
+  let misOrdenesCompletadas = 0
+  let misVentasHoyTotal = 0
+  let misVentasHoyCount = 0
+  let misVentasMesTotal = 0
+  let misVentasMesCount = 0
+
+  if (isTecnico) {
+    const primerDiaMes = new Date(new Date().setDate(1))
+    const [activas, completadas] = await Promise.all([
+      supabaseAdmin
+        .from("ordenes_servicio")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", organizationId)
+        .eq("tecnico_id", userId)
+        .in("estado", ["RECIBIDO", "EN_DIAGNOSTICO", "PRESUPUESTADO", "APROBADO", "EN_REPARACION", "ESPERANDO_REPUESTO"]),
+      supabaseAdmin
+        .from("ordenes_servicio")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", organizationId)
+        .eq("tecnico_id", userId)
+        .in("estado", ["REPARADO", "ENTREGADO"])
+        .gte("fecha_ingreso", primerDiaMes.toISOString()),
+    ])
+    misOrdenesActivas = activas.count || 0
+    misOrdenesCompletadas = completadas.count || 0
+  }
+
+  if (isVendedor) {
+    const primerDiaMes = new Date(new Date().setDate(1))
+    const hoyInicio = new Date(new Date().setHours(0, 0, 0, 0))
+    const [ventasHoy, ventasMes] = await Promise.all([
+      supabaseAdmin
+        .from("ventas")
+        .select("id, total")
+        .eq("organization_id", organizationId)
+        .eq("vendedor_id", userId)
+        .eq("estado", "COMPLETADA")
+        .gte("created_at", hoyInicio.toISOString()),
+      supabaseAdmin
+        .from("ventas")
+        .select("id, total")
+        .eq("organization_id", organizationId)
+        .eq("vendedor_id", userId)
+        .eq("estado", "COMPLETADA")
+        .gte("created_at", primerDiaMes.toISOString()),
+    ])
+    const ventasHoyData = ventasHoy.data as { total: number }[] | null
+    misVentasHoyTotal = ventasHoyData?.reduce((sum, v) => sum + (v.total || 0), 0) || 0
+    misVentasHoyCount = ventasHoyData?.length || 0
+    const ventasMesData = ventasMes.data as { total: number }[] | null
+    misVentasMesTotal = ventasMesData?.reduce((sum, v) => sum + (v.total || 0), 0) || 0
+    misVentasMesCount = ventasMesData?.length || 0
   }
 
   // Obtener datos del dashboard con caché (2 minutos)
@@ -363,7 +424,8 @@ export default async function DashboardPage() {
   const ventasMesCount = ventasMesData?.length || 0
   const garantiasVentaPorVencer = garantiasVentaPorVencerResult.data || []
 
-  const stats = [
+  // Stats filtrados por rol
+  const adminStats = [
     {
       title: "Órdenes Totales",
       value: totalOrdenes.toString(),
@@ -414,6 +476,62 @@ export default async function DashboardPage() {
     },
   ]
 
+  const vendedorStats = [
+    {
+      title: "Órdenes Pendientes",
+      value: ordenesPendientes.toString(),
+      description: `${totalOrdenes} totales`,
+      icon: ClipboardList,
+      colorClass: "text-info-600 dark:text-info-500",
+      bgClass: "bg-info-50 dark:bg-info-100/50",
+    },
+    {
+      title: "Clientes",
+      value: totalClientes.toString(),
+      description: "Total registrados",
+      icon: Users,
+      colorClass: "text-success-600 dark:text-success-500",
+      bgClass: "bg-success-50 dark:bg-success-100/50",
+    },
+    {
+      title: "Mis Ventas Hoy",
+      value: formatCurrency(misVentasHoyTotal, moneda),
+      description: `${misVentasHoyCount} venta${misVentasHoyCount !== 1 ? "s" : ""}`,
+      icon: ShoppingCart,
+      colorClass: "text-emerald-600 dark:text-emerald-400",
+      bgClass: "bg-emerald-50 dark:bg-emerald-900/30",
+    },
+    {
+      title: "Mis Ventas del Mes",
+      value: formatCurrency(misVentasMesTotal, moneda),
+      description: `${misVentasMesCount} ventas completadas`,
+      icon: TrendingUp,
+      colorClass: "text-cyan-600 dark:text-cyan-400",
+      bgClass: "bg-cyan-50 dark:bg-cyan-900/30",
+    },
+  ]
+
+  const tecnicoStats = [
+    {
+      title: "Mis Órdenes Activas",
+      value: misOrdenesActivas.toString(),
+      description: "Asignadas a mí",
+      icon: ClipboardList,
+      colorClass: "text-info-600 dark:text-info-500",
+      bgClass: "bg-info-50 dark:bg-info-100/50",
+    },
+    {
+      title: "Completadas (Mes)",
+      value: misOrdenesCompletadas.toString(),
+      description: "Reparadas/entregadas",
+      icon: ClipboardList,
+      colorClass: "text-success-600 dark:text-success-500",
+      bgClass: "bg-success-50 dark:bg-success-100/50",
+    },
+  ]
+
+  const stats = isTecnico ? tecnicoStats : isVendedor ? vendedorStats : adminStats
+
   return (
     <div className="space-y-6">
       <div>
@@ -448,15 +566,22 @@ export default async function DashboardPage() {
         })}
       </div>
 
-      {/* Gráficos con lazy loading (Recharts) + Órdenes recientes */}
-      <DashboardCharts
-        ordenesPorEstado={ordenesPorEstado}
-        ingresosUltimos7Dias={ingresosUltimos7Dias}
-        totalIngresos7Dias={totalIngresos7Dias}
-        ordenesPorTecnico={ordenesPorTecnico}
-      >
+      {/* Gráficos con lazy loading (Recharts) + Órdenes recientes - Solo Admin */}
+      {isAdmin && (
+        <DashboardCharts
+          ordenesPorEstado={ordenesPorEstado}
+          ingresosUltimos7Dias={ingresosUltimos7Dias}
+          totalIngresos7Dias={totalIngresos7Dias}
+          ordenesPorTecnico={ordenesPorTecnico}
+        >
+          <OrdenesRecientes ordenes={ordenesRecientes} />
+        </DashboardCharts>
+      )}
+
+      {/* Vendedor: solo órdenes recientes */}
+      {isVendedor && (
         <OrdenesRecientes ordenes={ordenesRecientes} />
-      </DashboardCharts>
+      )}
 
       {/* Tercera fila: Alertas y Widget Dólar */}
       <div className="grid gap-4 md:grid-cols-2">
@@ -466,7 +591,7 @@ export default async function DashboardPage() {
             <CardDescription>Notificaciones importantes</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {garantiasPorVencer.length > 0 && (
+            {isAdmin && garantiasPorVencer.length > 0 && (
               <div className="p-3 bg-warning-50 dark:bg-warning-100/40 border border-warning/30 dark:border-warning/20 rounded-lg">
                 <div className="flex items-center gap-2 text-warning-700 dark:text-warning-500 font-medium">
                   <Shield className="h-4 w-4" />
@@ -499,7 +624,7 @@ export default async function DashboardPage() {
                 </div>
               </div>
             )}
-            {garantiasVentaPorVencer.length > 0 && (
+            {(isAdmin || isVendedor) && garantiasVentaPorVencer.length > 0 && (
               <Link href="/ventas" className="block">
                 <div className="p-3 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors">
                   <div className="flex items-center gap-2 text-purple-700 dark:text-purple-400 font-medium">
@@ -548,8 +673,8 @@ export default async function DashboardPage() {
                 </div>
               </Link>
             )}
-            {/* SLA: Órdenes con fecha vencida */}
-            {ordenesFechaVencida.length > 0 && (
+            {/* SLA: Órdenes con fecha vencida - Solo Admin */}
+            {isAdmin && ordenesFechaVencida.length > 0 && (
               <div className="p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg">
                 <div className="flex items-center gap-2 text-red-700 dark:text-red-400 font-medium">
                   <ClipboardList className="h-4 w-4" />
@@ -572,8 +697,8 @@ export default async function DashboardPage() {
                 </div>
               </div>
             )}
-            {/* Deuda pendiente de cobro */}
-            {ordenesPendienteCobro.length > 0 && (
+            {/* Deuda pendiente de cobro - Solo Admin */}
+            {isAdmin && ordenesPendienteCobro.length > 0 && (
               <div className="p-3 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg">
                 <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-medium">
                   <DollarSign className="h-4 w-4" />
@@ -586,7 +711,7 @@ export default async function DashboardPage() {
                 </div>
               </div>
             )}
-            {garantiasPorVencer.length === 0 && garantiasVentaPorVencer.length === 0 && itemsBajoStock === 0 && ordenesPendientes === 0 && ordenesFechaVencida.length === 0 && ordenesPendienteCobro.length === 0 && (
+            {ordenesPendientes === 0 && itemsBajoStock === 0 && (isTecnico || (garantiasPorVencer.length === 0 && garantiasVentaPorVencer.length === 0 && ordenesFechaVencida.length === 0 && ordenesPendienteCobro.length === 0)) && (
               <p className="text-sm text-muted-foreground">
                 No hay alertas pendientes
               </p>

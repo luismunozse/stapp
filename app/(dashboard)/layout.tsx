@@ -11,12 +11,13 @@ import { OfflineProvider } from "@/contexts/offline-context"
 import { OfflineBanner } from "@/components/offline/offline-banner"
 import { SyncStatusIndicator } from "@/components/offline/sync-status-indicator"
 import { auth } from "@/lib/auth"
+import { isSuperadminEmail } from "@/lib/superadmin-auth"
 import { hasValidAccess, getTrialInfo } from "@/lib/subscriptions"
 import { supabaseAdmin } from "@/lib/supabase"
 import { redirect } from "next/navigation"
 import { unstable_cache } from "next/cache"
 
-// Cachear verificación de acceso por 5 minutos para mejorar performance
+// Cachear verificación de acceso por 1 minuto para mejorar performance
 const getCachedAccessInfo = unstable_cache(
   async (organizationId: string) => {
     const [accessResult, trialInfo] = await Promise.all([
@@ -26,7 +27,7 @@ const getCachedAccessInfo = unstable_cache(
     return { accessResult, trialInfo }
   },
   ["access-info"],
-  { revalidate: 300, tags: ["subscription"] }
+  { revalidate: 60, tags: ["subscription"] }
 )
 
 export default async function DashboardLayout({
@@ -42,10 +43,13 @@ export default async function DashboardLayout({
 
   const organizationId = session.user.organizationId
 
+  // Superadmin siempre tiene acceso (no depende de suscripción)
+  const superadmin = isSuperadminEmail(session.user.email)
+
   // Verificar acceso válido con caché (trial no expirado o suscripción activa)
   const { accessResult, trialInfo } = await getCachedAccessInfo(organizationId)
 
-  if (!accessResult.hasAccess) {
+  if (!accessResult.hasAccess && !superadmin) {
     // Redirigir a página de trial expirado/bloqueo
     redirect(`/suscripcion-requerida?reason=${accessResult.reason || "trial_expired"}`)
   }

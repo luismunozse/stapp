@@ -1,6 +1,7 @@
 "use client"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { DollarSign } from "lucide-react"
@@ -13,7 +14,10 @@ interface OrdenCostosCardProps {
   sena: number
   totalCobrado?: number
   descuentoCobro?: number
+  estadoCobro?: string
+  estado?: string
   onUpdateField: (field: string, value: any) => void
+  onCobrar?: () => void
 }
 
 export function OrdenCostosCard({
@@ -23,7 +27,10 @@ export function OrdenCostosCard({
   sena,
   totalCobrado = 0,
   descuentoCobro = 0,
+  estadoCobro,
+  estado,
   onUpdateField,
+  onCobrar,
 }: OrdenCostosCardProps) {
   const { formatPrice } = useCurrency()
   const pendienteReal = Math.max(0, (costoFinal || 0) - descuentoCobro - totalCobrado)
@@ -91,6 +98,16 @@ export function OrdenCostosCard({
                 {formatPrice(pendienteReal)}
               </span>
             </div>
+            {onCobrar && estado !== "CANCELADO" && estado !== "SIN_REPARACION" && (
+              <Button
+                onClick={onCobrar}
+                className="w-full mt-3"
+                variant={estadoCobro === "COBRADO" ? "outline" : "default"}
+              >
+                <DollarSign className="h-4 w-4 mr-2" />
+                {estadoCobro === "COBRADO" ? "Ver Cobros" : "Cobrar"}
+              </Button>
+            )}
           </div>
         )}
       </CardContent>

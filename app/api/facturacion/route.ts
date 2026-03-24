@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server"
-import { requireAdminOrVendedor } from "@/lib/auth-utils"
+import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAdminOrVendedor()
+    const { error, organizationId } = await requireAdmin()
     if (error) return error
 
     const { searchParams } = new URL(request.url)

@@ -3,7 +3,7 @@
 import { useState } from "react"
 import dynamic from "next/dynamic"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { TrendingUp, Users, Package, BarChart3, Clock, AlertTriangle, DollarSign, Boxes } from "lucide-react"
+import { TrendingUp, Users, Package, BarChart3, Clock, AlertTriangle, DollarSign, Boxes, ShoppingCart } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { ExportButton } from "./export-button"
@@ -73,6 +73,11 @@ const PrediccionRepuestosChart = dynamic(
   { loading: () => <ReporteSkeleton />, ssr: false }
 )
 
+const PerformanceVendedores = dynamic(
+  () => import("./performance-vendedores").then(mod => ({ default: mod.PerformanceVendedores })),
+  { loading: () => <ReporteSkeleton />, ssr: false }
+)
+
 export function ReportesAvanzadosView() {
   const [activeTab, setActiveTab] = useState("ingresos")
 
@@ -103,7 +108,7 @@ export function ReportesAvanzadosView() {
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <div className="overflow-x-auto">
-          <TabsList className="inline-flex w-auto min-w-full lg:grid lg:grid-cols-9">
+          <TabsList className="inline-flex w-auto min-w-full lg:grid lg:grid-cols-10">
             <TabsTrigger value="ingresos" className="gap-2">
               <TrendingUp className="h-4 w-4" />
               <span className="hidden sm:inline">Ingresos</span>
@@ -111,6 +116,10 @@ export function ReportesAvanzadosView() {
             <TabsTrigger value="tecnicos" className="gap-2">
               <BarChart3 className="h-4 w-4" />
               <span className="hidden sm:inline">Tecnicos</span>
+            </TabsTrigger>
+            <TabsTrigger value="vendedores" className="gap-2">
+              <ShoppingCart className="h-4 w-4" />
+              <span className="hidden sm:inline">Vendedores</span>
             </TabsTrigger>
             <TabsTrigger value="clientes" className="gap-2">
               <Users className="h-4 w-4" />
@@ -149,6 +158,10 @@ export function ReportesAvanzadosView() {
 
         <TabsContent value="tecnicos" className="mt-6">
           <PerformanceTecnicos />
+        </TabsContent>
+
+        <TabsContent value="vendedores" className="mt-6">
+          <PerformanceVendedores />
         </TabsContent>
 
         <TabsContent value="clientes" className="mt-6">

@@ -223,7 +223,7 @@ describe("PUT /api/ordenes/[id] - Campos Requeridos", () => {
   it("rechaza EN_REPARACION sin técnico asignado", async () => {
     mockAuthSuccess()
 
-    const mockOrden = createMockOrden({ estado: "APROBADO", presupuesto: 5000, tecnico_id: null })
+    const mockOrden = createMockOrden({ estado: "APROBADO", presupuesto: 5000, costo_final: 5000, tecnico_id: null })
     const chain = createChainMock(mockOrden)
     mockSupabaseFrom({ ordenes_servicio: chain })
 
@@ -237,11 +237,28 @@ describe("PUT /api/ordenes/[id] - Campos Requeridos", () => {
     expect(body.error).toContain("Técnico")
   })
 
-  it("permite EN_REPARACION si técnico se envía en la misma request", async () => {
+  it("rechaza EN_REPARACION sin costo final", async () => {
     mockAuthSuccess()
 
-    const mockOrden = createMockOrden({ estado: "APROBADO", presupuesto: 5000, tecnico_id: null })
-    const mockUpdated = { ...mockOrden, estado: "EN_REPARACION", tecnico_id: "t1" }
+    const mockOrden = createMockOrden({ estado: "APROBADO", presupuesto: 5000, costo_final: null, tecnico_id: "t1" })
+    const chain = createChainMock(mockOrden)
+    mockSupabaseFrom({ ordenes_servicio: chain })
+
+    const response = await PUT(
+      createPutRequest({ estado: "EN_REPARACION" }),
+      createParams("o1")
+    )
+    const { status, body } = await parseResponse(response)
+
+    expect(status).toBe(400)
+    expect(body.error).toContain("Costo final")
+  })
+
+  it("permite EN_REPARACION si técnico y costoFinal se envían en la misma request", async () => {
+    mockAuthSuccess()
+
+    const mockOrden = createMockOrden({ estado: "APROBADO", presupuesto: 5000, costo_final: null, tecnico_id: null })
+    const mockUpdated = { ...mockOrden, estado: "EN_REPARACION", tecnico_id: "t1", costo_final: 5000 }
 
     let callCount = 0
     const chain = createChainMock(null)
@@ -251,13 +268,15 @@ describe("PUT /api/ordenes/[id] - Campos Requeridos", () => {
       return Promise.resolve({ data: mockUpdated, error: null })
     })
 
+    const usersChain = createChainMock({ id: "t1", rol: "TECNICO" })
     mockSupabaseFrom({
       ordenes_servicio: chain,
       orden_eventos: createChainMock(null),
+      users: usersChain,
     })
 
     const response = await PUT(
-      createPutRequest({ estado: "EN_REPARACION", tecnicoId: "t1" }),
+      createPutRequest({ estado: "EN_REPARACION", tecnicoId: "t1", costoFinal: 5000 }),
       createParams("o1")
     )
     const { status } = await parseResponse(response)
@@ -343,5 +362,31 @@ describe("PUT /api/ordenes/[id] - Campos Requeridos", () => {
     const { status } = await parseResponse(response)
 
     expect(status).toBe(200)
+  })
+
+  it("rechaza presupuesto negativo", async () => {
+    mockAuthSuccess()
+
+    const response = await PUT(
+      createPutRequest({ presupuesto: -500 }),
+      createParams("o1")
+    )
+    const { status, body } = await parseResponse(response)
+
+    expect(status).toBe(400)
+    expect(body.error).toContain("negativo")
+  })
+
+  it("rechaza costoFinal negativo", async () => {
+    mockAuthSuccess()
+
+    const response = await PUT(
+      createPutRequest({ costoFinal: -100 }),
+      createParams("o1")
+    )
+    const { status, body } = await parseResponse(response)
+
+    expect(status).toBe(400)
+    expect(body.error).toContain("negativo")
   })
 })

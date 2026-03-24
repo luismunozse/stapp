@@ -52,7 +52,7 @@ export type EstadoReclamo =
   | "RECHAZADO"
   | "RESUELTO"
 
-export type TipoFoto = "INGRESO" | "REPARACION" | "ENTREGA"
+export type TipoFoto = "INGRESO" | "DIAGNOSTICO" | "COMPONENTE" | "REPARACION" | "ENTREGA"
 
 export type TipoNotificacion =
   | "CAMBIO_ESTADO"

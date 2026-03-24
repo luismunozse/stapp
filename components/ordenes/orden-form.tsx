@@ -154,6 +154,8 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
   const [checklistFirma, setChecklistFirma] = useState<string | null>(null)
   const [checklistFirmaMime, setChecklistFirmaMime] = useState<string | null>(null)
   const [checklistOpen, setChecklistOpen] = useState(true)
+  const [currentStep, setCurrentStep] = useState(1)
+  const totalSteps = 3
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const { tipos: tiposDispositivo, loading: tiposLoading } = useTiposDispositivo()
@@ -164,6 +166,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
     formState: { errors },
     setValue,
     watch,
+    trigger,
   } = useForm<OrdenFormData>({
     resolver: zodResolver(ordenSchema),
     defaultValues: {
@@ -696,6 +699,23 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
   // Check if the selected type has a campo extra with usarComoDispositivo
   const campoDispositivo = camposExtra.find((c) => c.usarComoDispositivo)
 
+  const validateStep = async (step: number): Promise<boolean> => {
+    if (step === 1) {
+      const result = await trigger(["clienteId", "dispositivo", "tipoDispositivo", "problemaReportado"])
+      return result
+    }
+    return true
+  }
+
+  const handleNextStep = async () => {
+    const isValid = await validateStep(currentStep)
+    if (isValid) setCurrentStep((prev) => Math.min(prev + 1, totalSteps))
+  }
+
+  const handlePrevStep = () => {
+    setCurrentStep((prev) => Math.max(prev - 1, 1))
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -708,6 +728,42 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {/* Step indicator */}
+          <div className="flex items-center gap-2 mb-6">
+            {[
+              { step: 1, label: "Cliente y Equipo" },
+              { step: 2, label: "Detalles" },
+              { step: 3, label: "Fotos y Checklist" },
+            ].map(({ step, label }, index) => (
+              <div key={step} className="flex items-center gap-2 flex-1">
+                <button
+                  type="button"
+                  onClick={() => step < currentStep && setCurrentStep(step)}
+                  className={`flex items-center gap-2 w-full p-2 rounded-lg text-sm font-medium transition-colors ${
+                    step === currentStep
+                      ? "bg-primary text-primary-foreground"
+                      : step < currentStep
+                      ? "bg-primary/10 text-primary cursor-pointer hover:bg-primary/20"
+                      : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  <span className={`flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold shrink-0 ${
+                    step === currentStep
+                      ? "bg-primary-foreground text-primary"
+                      : step < currentStep
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted-foreground/20 text-muted-foreground"
+                  }`}>
+                    {step < currentStep ? "✓" : step}
+                  </span>
+                  <span className="hidden sm:inline truncate">{label}</span>
+                </button>
+                {index < 2 && <div className={`h-px w-4 shrink-0 ${step < currentStep ? "bg-primary" : "bg-border"}`} />}
+              </div>
+            ))}
+          </div>
+
+          {currentStep === 1 && (<>
           <div>
             <Label htmlFor="clienteId">Cliente *</Label>
             <div className="flex gap-2">
@@ -988,7 +1044,9 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
               </p>
             )}
           </div>
+          </>)}
 
+          {currentStep === 2 && (<>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="presupuesto">Presupuesto (Opcional)</Label>
@@ -1211,6 +1269,19 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
             </p>
           </div>}
 
+          {/* Observaciones */}
+          <div>
+            <Label htmlFor="observaciones">Observaciones</Label>
+            <Textarea
+              id="observaciones"
+              {...register("observaciones")}
+              placeholder="Observaciones adicionales..."
+              rows={2}
+            />
+          </div>
+          </>)}
+
+          {currentStep === 3 && (<>
           {/* Fotos de ingreso */}
           <div>
             <Label>Fotos del Equipo (Ingreso)</Label>
@@ -1445,24 +1516,30 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
               )}
             </div>
           )}
+          </>)}
 
-          <div>
-            <Label htmlFor="observaciones">Observaciones</Label>
-            <Textarea
-              id="observaciones"
-              {...register("observaciones")}
-              placeholder="Observaciones adicionales..."
-              rows={2}
-            />
-          </div>
-
-          <div className="flex gap-2 justify-end">
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? "Creando..." : "Crear Orden"}
-            </Button>
+          <div className="flex gap-2 justify-between">
+            <div>
+              {currentStep > 1 && (
+                <Button type="button" variant="outline" onClick={handlePrevStep}>
+                  Anterior
+                </Button>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" onClick={onClose}>
+                Cancelar
+              </Button>
+              {currentStep < totalSteps ? (
+                <Button type="button" onClick={handleNextStep}>
+                  Siguiente
+                </Button>
+              ) : (
+                <Button type="submit" disabled={loading}>
+                  {loading ? "Creando..." : "Crear Orden"}
+                </Button>
+              )}
+            </div>
           </div>
         </form>
       </CardContent>

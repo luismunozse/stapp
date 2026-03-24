@@ -1,15 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
-
-const LABELS_DISPOSITIVO: Record<string, string> = {
-  CELULAR: "Celular",
-  COMPUTADORA: "Computadora",
-  TABLET: "Tablet",
-  CONSOLA: "Consola",
-  SMARTWATCH: "Smartwatch",
-  ACCESORIOS: "Accesorios",
-}
+import { getDeviceTypeLabel } from "@/lib/device-types"
 
 export async function GET(request: Request) {
   try {
@@ -29,7 +21,8 @@ export async function GET(request: Request) {
       .select(`
         id, total, fecha,
         ordenes_servicio!inner (
-          id, organization_id, tipo_dispositivo, dispositivo
+          id, organization_id, tipo_dispositivo, dispositivo,
+          tipos_dispositivo:tipo_dispositivo_id(nombre)
         )
       `)
       .eq("ordenes_servicio.organization_id", organizationId!)
@@ -97,7 +90,8 @@ export async function GET(request: Request) {
     for (const f of facturas || []) {
       const orden = f.ordenes_servicio as any
       const tipo = orden?.tipo_dispositivo || "OTRO"
-      const label = LABELS_DISPOSITIVO[tipo] || tipo
+      const tipoDisp = orden?.tipos_dispositivo as any
+      const label = getDeviceTypeLabel(tipo, tipoDisp?.nombre)
       const existing = dispositivoMap.get(label) || { total: 0, cantidad: 0 }
       existing.total += f.total || 0
       existing.cantidad++

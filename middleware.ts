@@ -315,8 +315,8 @@ export async function middleware(request: NextRequest) {
 
   // Protección de rutas por rol
   const userRole = token.role as string
-  const adminOnlyRoutes = ["/tecnicos", "/vendedores", "/configuracion", "/emails"]
-  const adminOrVendedorRoutes = ["/clientes", "/ventas", "/cotizaciones", "/facturacion", "/reportes", "/proveedores"]
+  const adminOnlyRoutes = ["/tecnicos", "/vendedores", "/configuracion", "/emails", "/cotizaciones", "/facturacion"]
+  const adminOrVendedorRoutes = ["/clientes", "/ventas", "/reportes", "/proveedores"]
 
   const isAdminOnly = adminOnlyRoutes.some(r => pathname === r || pathname.startsWith(r + "/"))
   const isAdminOrVendedor = adminOrVendedorRoutes.some(r => pathname === r || pathname.startsWith(r + "/"))
