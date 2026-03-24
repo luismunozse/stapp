@@ -1,4 +1,5 @@
 import { TicketList } from "@/components/soporte/ticket-list"
+import { WhatsAppSoporteCard } from "@/components/soporte/whatsapp-soporte-card"
 
 export default function SoportePage() {
   return (
@@ -9,6 +10,7 @@ export default function SoportePage() {
           Reportá errores, enviá sugerencias o consultá tus dudas
         </p>
       </div>
+      <WhatsAppSoporteCard />
       <TicketList />
     </div>
   )
