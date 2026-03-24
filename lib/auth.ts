@@ -6,6 +6,13 @@ import { randomBytes } from "crypto"
 
 type Rol = "ADMIN" | "TECNICO" | "VENDEDOR"
 
+// Verificar si un email es superadmin (desde env)
+function isSuperadminEmail(email: string): boolean {
+  const superadminEmails =
+    process.env.SUPERADMIN_EMAILS?.split(",").map((e) => e.trim().toLowerCase()) || []
+  return superadminEmails.includes(email.toLowerCase())
+}
+
 // Duraciones de sesión
 const ONE_DAY = 24 * 60 * 60 // 1 día en segundos
 const SEVEN_DAYS = 7 * 24 * 60 * 60 // 7 días en segundos
@@ -76,10 +83,10 @@ export async function validateRefreshToken(refreshToken: string) {
     return null
   }
 
-  // Verificar organización activa (Supabase puede retornar objeto o array)
+  // Verificar organización activa (no requerido para superadmin)
   const orgs = user.organizations as unknown
   const org = Array.isArray(orgs) ? orgs[0] : orgs
-  if (!org || !(org as { activo: boolean }).activo) return null
+  if (!isSuperadminEmail(user.email) && (!org || !(org as { activo: boolean }).activo)) return null
 
   return user
 }
@@ -138,10 +145,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             return null
           }
 
-          // Verificar organización activa (Supabase puede retornar objeto o array)
+          // Verificar si es superadmin
+          const isSuper = isSuperadminEmail(fullUser.email)
+
+          // Verificar organización activa (no requerido para superadmin)
           const orgs = fullUser.organizations as unknown
           const organization = Array.isArray(orgs) ? orgs[0] : orgs
-          if (!organization || !(organization as { activo: boolean }).activo) {
+          if (!isSuper && (!organization || !(organization as { activo: boolean }).activo)) {
             return null
           }
 
@@ -154,6 +164,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             name: fullUser.nombre,
             role: fullUser.rol as Rol,
             organizationId: fullUser.organization_id,
+            isSuperadmin: isSuper,
             rememberMe: true,
             refreshToken: newRefreshToken,
           }
@@ -186,9 +197,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           throw new Error("EMAIL_NOT_VERIFIED")
         }
 
-        // Verificar que la organización esté activa
-        const organization = user.organizations as { id: string; activo: boolean }
-        if (!organization?.activo) {
+        // Verificar si es superadmin
+        const isSuper = isSuperadminEmail(user.email)
+
+        // Verificar que la organización esté activa (no requerido para superadmin)
+        const organization = user.organizations as { id: string; activo: boolean } | null
+        if (!isSuper && !organization?.activo) {
           return null
         }
 
@@ -219,6 +233,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           name: user.nombre,
           role: user.rol as Rol,
           organizationId: user.organization_id,
+          isSuperadmin: isSuper,
           rememberMe,
           refreshToken,
         }
@@ -232,6 +247,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.role = user.role
         token.id = user.id
         token.organizationId = user.organizationId
+        token.isSuperadmin = user.isSuperadmin
         token.rememberMe = user.rememberMe
         token.refreshToken = user.refreshToken
         // JWT expira en 1 día, pero se refresca automáticamente
@@ -271,6 +287,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.role = token.role as Rol
         session.user.id = token.id as string
         session.user.organizationId = token.organizationId as string
+        session.user.isSuperadmin = token.isSuperadmin as boolean
       }
 
       // Pasar error al cliente si existe

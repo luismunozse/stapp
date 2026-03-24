@@ -8,6 +8,7 @@ declare module "next-auth" {
       id: string
       role: Rol
       organizationId: string
+      isSuperadmin?: boolean
     } & DefaultSession["user"]
     error?: string
   }
@@ -15,6 +16,7 @@ declare module "next-auth" {
   interface User {
     role: Rol
     organizationId: string
+    isSuperadmin?: boolean
     rememberMe?: boolean
     refreshToken?: string
   }
@@ -25,6 +27,7 @@ declare module "next-auth/jwt" {
     role: Rol
     id: string
     organizationId: string
+    isSuperadmin?: boolean
     rememberMe?: boolean
     refreshToken?: string
     error?: string
