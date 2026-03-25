@@ -82,7 +82,38 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
     }
   }
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const compressImage = (file: File, maxWidth = 400, quality = 0.8): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        const img = new Image()
+        img.onload = () => {
+          const canvas = document.createElement("canvas")
+          let w = img.width
+          let h = img.height
+          if (w > maxWidth) {
+            h = Math.round((h * maxWidth) / w)
+            w = maxWidth
+          }
+          canvas.width = w
+          canvas.height = h
+          const ctx = canvas.getContext("2d")!
+          ctx.drawImage(img, 0, 0, w, h)
+          // Usar PNG si es transparente, JPEG si no
+          const isPng = file.type === "image/png"
+          const outputType = isPng ? "image/png" : "image/jpeg"
+          const dataUrl = canvas.toDataURL(outputType, isPng ? undefined : quality)
+          resolve(dataUrl)
+        }
+        img.onerror = reject
+        img.src = event.target?.result as string
+      }
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
+  }
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -91,18 +122,18 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
       return
     }
 
-    if (file.size > 2 * 1024 * 1024) {
-      setMessage({ type: "error", text: "La imagen es demasiado grande (máximo 2MB)" })
+    if (file.size > 5 * 1024 * 1024) {
+      setMessage({ type: "error", text: "La imagen es demasiado grande (máximo 5MB)" })
       return
     }
 
-    const reader = new FileReader()
-    reader.onload = (event) => {
-      const result = event.target?.result as string
-      setPreview(result)
+    try {
+      const compressed = await compressImage(file)
+      setPreview(compressed)
       setMessage(null)
+    } catch {
+      setMessage({ type: "error", text: "Error al procesar la imagen" })
     }
-    reader.readAsDataURL(file)
   }
 
   const handleSave = async () => {

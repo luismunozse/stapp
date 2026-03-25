@@ -69,7 +69,16 @@ export async function PUT(request: Request) {
     const { error, organizationId } = await requireAdmin()
     if (error) return error
 
-    const body = await request.json()
+    let body: any
+    try {
+      body = await request.json()
+    } catch (parseError) {
+      console.error("Error parsing request body:", parseError)
+      return NextResponse.json(
+        { error: "El archivo es demasiado grande. Usa una imagen de menor tamaño (máx 1MB)." },
+        { status: 413 }
+      )
+    }
     const { logoData, logoMime, nombreEmpresa, telefono, direccion, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, pais } = body
 
     const updateData: Record<string, any> = {}
@@ -221,7 +230,8 @@ export async function PUT(request: Request) {
     })
   } catch (error) {
     console.error("Error updating config:", error)
-    return NextResponse.json({ error: "Error al actualizar configuración" }, { status: 500 })
+    const message = error instanceof Error ? error.message : "Error desconocido"
+    return NextResponse.json({ error: `Error al actualizar configuración: ${message}` }, { status: 500 })
   }
 }
 
