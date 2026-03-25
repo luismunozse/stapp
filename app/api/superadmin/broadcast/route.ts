@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 
 export async function GET() {
   const { error } = await requireSuperadmin()
@@ -145,6 +146,10 @@ export async function POST(request: Request) {
       }
       totalInserted += batch.length
     }
+
+    // Audit log
+    const auditLogger = createSuperadminAuditLogger(email || null, request)
+    auditLogger.broadcast(title, totalInserted, target).catch(() => {})
 
     return NextResponse.json({
       success: true,

@@ -153,6 +153,9 @@ export interface AuditLogWithRelations {
     nombre: string
     slug: string
   } | null
+  // Campos extendidos para superadmin
+  performer_email?: string | null
+  description?: string | null
 }
 
 // Enums
@@ -162,7 +165,24 @@ export type PaymentProvider = "STRIPE" | "MERCADOPAGO" | "LEMONSQUEEZY"
 export type PaymentStatus = "PENDING" | "SUCCEEDED" | "FAILED" | "REFUNDED"
 export type PlanType = "FREE" | "PREMIUM"
 export type UserRole = "ADMIN" | "TECNICO" | "VENDEDOR"
-export type AuditAction = "CREATE" | "UPDATE" | "DELETE"
+export type AuditAction =
+  | "CREATE"
+  | "UPDATE"
+  | "DELETE"
+  | "LOGIN"
+  | "LOGOUT"
+  | "LOGIN_FAILED"
+  | "TOGGLE_STATUS"
+  | "BROADCAST"
+  | "EMAIL_CAMPAIGN"
+  | "CRON_RUN"
+  | "SUBSCRIPTION_RENEW"
+  | "TRIAL_EXTENSION"
+  | "EXPORT"
+  | "PLAN_TOGGLE"
+  | "BULK_ACTION"
+  | "TICKET_REPLY"
+  | "VERIFY_EMAIL"
 
 // Request/Response types
 export interface OrganizationsListResponse {

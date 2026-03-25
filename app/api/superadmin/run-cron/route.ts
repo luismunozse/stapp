@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
+import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 
 // Importar las funciones de cron directamente
 import { GET as engagementCron } from "@/app/api/cron/engagement/route"
@@ -20,7 +21,7 @@ export const maxDuration = 60
 
 export async function POST(request: NextRequest) {
   try {
-    const { error } = await requireSuperadmin()
+    const { error, email } = await requireSuperadmin()
     if (error) return error
 
     const { path } = await request.json()
@@ -41,6 +42,10 @@ export async function POST(request: NextRequest) {
     // Ejecutar el handler directamente (sin fetch)
     const response = await handler(fakeRequest)
     const data = await response.json()
+
+    // Audit log
+    const auditLogger = createSuperadminAuditLogger(email || null, request)
+    auditLogger.cronRun(path, response.ok).catch(() => {})
 
     return NextResponse.json(data, { status: response.status })
   } catch (error) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 
 const ENVIALOSIMPLE_API_URL = "https://backend.envialosimple.email/api/v1/mail/send"
 const EMAIL_FROM = process.env.EMAIL_FROM || "noreply@stapp.com.ar"
@@ -320,6 +321,10 @@ export async function POST(request: NextRequest) {
         })
       }
     }
+
+    // Audit log
+    const auditLogger = createSuperadminAuditLogger(superadminEmail || null, request)
+    auditLogger.emailCampaign(subject, sent, failed, segmentId).catch(() => {})
 
     return NextResponse.json({
       success: true,

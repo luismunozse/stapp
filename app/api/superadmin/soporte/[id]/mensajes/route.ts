@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { sendSupportReplyEmail } from "@/lib/email"
 import { uploadSupportMessageAttachment, dataUrlToBuffer } from "@/lib/storage"
 import { z } from "zod"
+import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 
 const MAX_IMAGES = 3
 const MAX_IMAGE_SIZE_MB = 5
@@ -108,6 +109,10 @@ export async function POST(
         .update({ estado: "EN_PROCESO" })
         .eq("id", id)
     }
+
+    // Audit log
+    const auditLogger = createSuperadminAuditLogger(email || null, request)
+    auditLogger.ticketReply(id, ticket.asunto).catch(() => {})
 
     // Notificar al usuario por email (sin bloquear la respuesta)
     const user = ticket.users as unknown as { nombre: string; email: string } | null

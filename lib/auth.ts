@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import bcrypt from "bcryptjs"
 import { randomBytes } from "crypto"
 import { verifyGoogleIdToken } from "@/lib/google"
+import { logLoginEvent, logLogoutEvent } from "@/lib/superadmin-audit"
 
 type Rol = "ADMIN" | "TECNICO" | "VENDEDOR"
 
@@ -249,6 +250,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           .single()
 
         if (error || !user) {
+          // Log login fallido - usuario no encontrado
+          logLoginEvent({
+            email: credentials.email as string,
+            success: false,
+            isSuperadmin: isSuperadminEmail(credentials.email as string),
+            reason: "Usuario no encontrado",
+          }).catch(() => {})
           return null
         }
 
@@ -263,6 +271,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         // Verificar que la organización esté activa (no requerido para superadmin)
         const organization = user.organizations as { id: string; activo: boolean } | null
         if (!isSuper && !organization?.activo) {
+          logLoginEvent({
+            userId: user.id,
+            email: user.email,
+            success: false,
+            isSuperadmin: isSuper,
+            reason: "Organización inactiva",
+          }).catch(() => {})
           return null
         }
 
@@ -277,6 +292,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         )
 
         if (!isPasswordValid) {
+          // Log login fallido - contraseña incorrecta
+          logLoginEvent({
+            userId: user.id,
+            email: user.email,
+            success: false,
+            isSuperadmin: isSuper,
+            reason: "Contraseña incorrecta",
+          }).catch(() => {})
           return null
         }
 
@@ -285,6 +308,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           // Lanzar error especial para que el frontend muestre el paso de 2FA
           throw new Error(`REQUIRES_2FA:${user.id}`)
         }
+
+        // Log login exitoso
+        logLoginEvent({
+          userId: user.id,
+          email: user.email,
+          success: true,
+          isSuperadmin: isSuper,
+        }).catch(() => {})
 
         // Pasar rememberMe al token
         const rememberMe = credentials.rememberMe === "true"
@@ -368,6 +399,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       // Invalidar refresh token al hacer logout
       if ("token" in message && message.token?.id) {
         await invalidateRefreshToken(message.token.id as string)
+        // Log logout event
+        logLogoutEvent({
+          userId: message.token.id as string,
+          email: (message.token.email as string) || "",
+          isSuperadmin: (message.token.isSuperadmin as boolean) || false,
+        }).catch(() => {})
       }
     },
   },

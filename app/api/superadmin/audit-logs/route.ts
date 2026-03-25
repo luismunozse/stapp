@@ -15,6 +15,7 @@ export async function GET(request: Request) {
     const action = searchParams.get("action") || ""
     const dateFrom = searchParams.get("dateFrom") || ""
     const dateTo = searchParams.get("dateTo") || ""
+    const tab = searchParams.get("tab") || "all" // all, security, superadmin
     const { page, limit, offset } = parsePagination(searchParams, { limit: 50 })
 
     // Query base para logs
@@ -36,6 +37,25 @@ export async function GET(request: Request) {
         { count: "exact" }
       )
       .order("created_at", { ascending: false })
+
+    // Filtros por tab
+    if (tab === "security") {
+      query = query.in("action", ["LOGIN", "LOGOUT", "LOGIN_FAILED"])
+    } else if (tab === "superadmin") {
+      query = query.in("action", [
+        "TOGGLE_STATUS",
+        "BROADCAST",
+        "EMAIL_CAMPAIGN",
+        "CRON_RUN",
+        "SUBSCRIPTION_RENEW",
+        "TRIAL_EXTENSION",
+        "PLAN_TOGGLE",
+        "BULK_ACTION",
+        "TICKET_REPLY",
+        "VERIFY_EMAIL",
+        "EXPORT",
+      ])
+    }
 
     // Filtros
     if (organizationId) {
@@ -67,7 +87,9 @@ export async function GET(request: Request) {
 
     // Obtener información de usuarios y organizaciones
     const userIds = [...new Set(logs?.filter((l) => l.user_id).map((l) => l.user_id) || [])]
-    const orgIds = [...new Set(logs?.map((l) => l.organization_id) || [])]
+    const orgIds = [...new Set(
+      logs?.map((l) => l.organization_id).filter((id) => id && id !== "00000000-0000-0000-0000-000000000000") || []
+    )]
 
     let usersMap: Record<string, { nombre: string; email: string }> = {}
     let orgsMap: Record<string, { nombre: string; slug: string }> = {}
@@ -98,11 +120,22 @@ export async function GET(request: Request) {
     )
 
     // Combinar datos
-    const result = (logs || []).map((log) => ({
-      ...log,
-      users: log.user_id ? usersMap[log.user_id] || null : null,
-      organizations: orgsMap[log.organization_id] || null,
-    }))
+    const result = (logs || []).map((log) => {
+      const changes = log.changes as Record<string, unknown> | null
+      return {
+        ...log,
+        users: log.user_id
+          ? usersMap[log.user_id] || null
+          : null,
+        organizations:
+          log.organization_id && log.organization_id !== "00000000-0000-0000-0000-000000000000"
+            ? orgsMap[log.organization_id] || null
+            : null,
+        // Extraer performer email para acciones de superadmin
+        performer_email: (changes?.performer_email as string) || null,
+        description: (changes?.description as string) || (changes?.action_description as string) || null,
+      }
+    })
 
     const response: AuditLogsResponse = {
       logs: result,

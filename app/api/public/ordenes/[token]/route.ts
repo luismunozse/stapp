@@ -24,6 +24,8 @@ export async function GET(
         fecha_entrega,
         accesorios,
         problema_reportado,
+        presupuesto,
+        presupuesto_aprobado_portal,
         public_token,
         tipos_dispositivo:tipo_dispositivo_id (
           nombre
@@ -62,6 +64,8 @@ export async function GET(
       fechaPrometida: orden.fecha_prometida,
       fechaCompletado: orden.fecha_completado,
       fechaEntrega: orden.fecha_entrega,
+      presupuesto: orden.presupuesto || null,
+      presupuestoAprobadoPortal: orden.presupuesto_aprobado_portal || false,
       publicToken: orden.public_token,
       cliente: {
         nombre: cliente?.nombre || null,
