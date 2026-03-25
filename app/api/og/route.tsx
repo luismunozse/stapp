@@ -128,10 +128,10 @@ export async function GET(request: NextRequest) {
               fontSize: "18px",
             }}
           >
-            <span>\u2713 \u00d3rdenes de trabajo</span>
-            <span>\u2713 Inventario</span>
-            <span>\u2713 Clientes</span>
-            <span>\u2713 Reportes</span>
+            <span>\u2022 \u00d3rdenes de trabajo</span>
+            <span>\u2022 Inventario</span>
+            <span>\u2022 Clientes</span>
+            <span>\u2022 Reportes</span>
           </div>
 
           {/* URL */}

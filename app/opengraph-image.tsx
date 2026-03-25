@@ -95,7 +95,7 @@ export default async function Image() {
               gap: "8px",
             }}
           >
-            ✓ Órdenes de trabajo
+            • Órdenes de trabajo
           </div>
           <div
             style={{
@@ -104,7 +104,7 @@ export default async function Image() {
               gap: "8px",
             }}
           >
-            ✓ Clientes
+            • Clientes
           </div>
           <div
             style={{
@@ -113,7 +113,7 @@ export default async function Image() {
               gap: "8px",
             }}
           >
-            ✓ Inventario
+            • Inventario
           </div>
           <div
             style={{
@@ -122,7 +122,7 @@ export default async function Image() {
               gap: "8px",
             }}
           >
-            ✓ Facturación
+            • Facturación
           </div>
         </div>
 

@@ -61,7 +61,7 @@ interface CotizacionPDFData {
 export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Buffer> {
   const safe = (val: unknown): string => {
     if (val === null || val === undefined) return ""
-    if (typeof val === "string") return val
+    if (typeof val === "string") return val.replace(/[\r\n]+/g, " ").trim()
     if (typeof val === "number") return String(val)
     return ""
   }
@@ -426,7 +426,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   // Helper para texto seguro
   const safe = (val: unknown): string => {
     if (val === null || val === undefined) return ""
-    if (typeof val === "string") return val
+    if (typeof val === "string") return val.replace(/[\r\n]+/g, " ").trim()
     if (typeof val === "number") return String(val)
     return ""
   }
@@ -1132,7 +1132,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
           })
 
           if (foto.descripcion) {
-            photosPage.drawText(foto.descripcion.substring(0, 40), { x: photoX, y: py - photoHeight - 12, size: 7, font: helvetica, color: grayColor })
+            photosPage.drawText(safe(foto.descripcion).substring(0, 40), { x: photoX, y: py - photoHeight - 12, size: 7, font: helvetica, color: grayColor })
           }
 
           photoCount++
@@ -1305,7 +1305,7 @@ const metodoPagoLabels: Record<string, string> = {
 export async function generateVentaPDF(data: VentaPDFData): Promise<Buffer> {
   const safe = (val: unknown): string => {
     if (val === null || val === undefined) return ""
-    if (typeof val === "string") return val
+    if (typeof val === "string") return val.replace(/[\r\n]+/g, " ").trim()
     if (typeof val === "number") return String(val)
     return ""
   }
@@ -1576,7 +1576,7 @@ interface GarantiaVentaPDFData {
 export async function generateGarantiaVentaPDF(data: GarantiaVentaPDFData): Promise<Buffer> {
   const safe = (val: unknown): string => {
     if (val === null || val === undefined) return ""
-    if (typeof val === "string") return val
+    if (typeof val === "string") return val.replace(/[\r\n]+/g, " ").trim()
     if (typeof val === "number") return String(val)
     return ""
   }
@@ -2078,7 +2078,7 @@ interface ComprobanteEntregaPDFData {
 export async function generateComprobanteEntregaPDF(data: ComprobanteEntregaPDFData): Promise<Buffer> {
   const safe = (val: unknown): string => {
     if (val === null || val === undefined) return ""
-    if (typeof val === "string") return val
+    if (typeof val === "string") return val.replace(/[\r\n]+/g, " ").trim()
     if (typeof val === "number") return String(val)
     return ""
   }
@@ -2403,7 +2403,7 @@ const metodoPagoFacturaLabels: Record<string, string> = {
 export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> {
   const safe = (val: unknown): string => {
     if (val === null || val === undefined) return ""
-    if (typeof val === "string") return val
+    if (typeof val === "string") return val.replace(/[\r\n]+/g, " ").trim()
     if (typeof val === "number") return String(val)
     return ""
   }
@@ -2720,7 +2720,7 @@ interface DevolucionPDFData {
 export async function generateDevolucionPDF(data: DevolucionPDFData): Promise<Buffer> {
   const safe = (val: unknown): string => {
     if (val === null || val === undefined) return ""
-    if (typeof val === "string") return val
+    if (typeof val === "string") return val.replace(/[\r\n]+/g, " ").trim()
     if (typeof val === "number") return String(val)
     return ""
   }
@@ -2802,9 +2802,9 @@ export async function generateDevolucionPDF(data: DevolucionPDFData): Promise<Bu
   if (data.cliente?.telefono) {
     page.drawText(safe(data.cliente.telefono), { x: col1X, y, size: 9, font: helvetica, color: grayColor })
   }
-  page.drawText(`Tipo: ${data.tipo}`, { x: col2X, y, size: 9, font: helvetica, color: grayColor })
+  page.drawText(`Tipo: ${safe(data.tipo)}`, { x: col2X, y, size: 9, font: helvetica, color: grayColor })
   y -= 13
-  page.drawText(`Motivo: ${data.motivo}`, { x: col2X, y, size: 9, font: helvetica, color: grayColor })
+  page.drawText(`Motivo: ${safe(data.motivo)}`, { x: col2X, y, size: 9, font: helvetica, color: grayColor })
 
   y -= 25
 
