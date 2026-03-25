@@ -895,40 +895,8 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
             )}
           </div>
 
-          {/* Dispositivo - Use select if a campoExtra has usarComoDispositivo, otherwise text input */}
+          {/* Marca y Dispositivo */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="dispositivo">
-                {campoDispositivo ? campoDispositivo.label + " *" : "Dispositivo *"}
-              </Label>
-              {campoDispositivo ? (
-                <Select
-                  value={watch("dispositivo") || ""}
-                  onValueChange={(value) => handleCampoExtraChange(campoDispositivo, value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(campoDispositivo.opciones || []).map((op) => (
-                      <SelectItem key={op} value={op}>{op}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <Input
-                  id="dispositivo"
-                  {...register("dispositivo")}
-                  placeholder="Modelo o descripcion del equipo"
-                />
-              )}
-              {errors.dispositivo && (
-                <p className="text-sm text-destructive mt-1">
-                  {errors.dispositivo.message}
-                </p>
-              )}
-            </div>
-
             {/* Marca with quick select */}
             {showMarca && (
               <div>
@@ -960,6 +928,38 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
                 </div>
               </div>
             )}
+
+            <div>
+              <Label htmlFor="dispositivo">
+                {campoDispositivo ? campoDispositivo.label + " *" : "Modelo / Dispositivo *"}
+              </Label>
+              {campoDispositivo ? (
+                <Select
+                  value={watch("dispositivo") || ""}
+                  onValueChange={(value) => handleCampoExtraChange(campoDispositivo, value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(campoDispositivo.opciones || []).map((op) => (
+                      <SelectItem key={op} value={op}>{op}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  id="dispositivo"
+                  {...register("dispositivo")}
+                  placeholder="Modelo o descripcion del equipo"
+                />
+              )}
+              {errors.dispositivo && (
+                <p className="text-sm text-destructive mt-1">
+                  {errors.dispositivo.message}
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Dynamic extra fields from config */}
