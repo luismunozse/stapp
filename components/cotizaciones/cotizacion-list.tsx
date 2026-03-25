@@ -167,9 +167,10 @@ export function CotizacionList({ ordenId, clienteEmail }: CotizacionListProps) {
     if (!cotizacion.publicToken) return
     const baseUrl = window.location.origin
     const url = `${baseUrl}/cotizacion/${cotizacion.publicToken}`
+    const wasBorador = cotizacion.estado === "BORRADOR"
 
     // Si está en BORRADOR, cambiar a ENVIADA para que sea visible en seguimiento
-    if (cotizacion.estado === "BORRADOR") {
+    if (wasBorador) {
       try {
         const res = await fetch(`/api/cotizaciones/${cotizacion.id}`, {
           method: "PUT",
@@ -186,7 +187,9 @@ export function CotizacionList({ ordenId, clienteEmail }: CotizacionListProps) {
 
     try {
       await navigator.clipboard.writeText(url)
-      await showSuccess("Link copiado al portapapeles")
+      await showSuccess(wasBorador
+        ? "Cotizacion enviada como presupuesto. Link copiado al portapapeles."
+        : "Link copiado al portapapeles")
     } catch {
       // Fallback
       prompt("Copiar este link:", url)
@@ -410,12 +413,15 @@ export function CotizacionList({ ordenId, clienteEmail }: CotizacionListProps) {
                     {cotizacion.publicToken && (
                       <Button
                         size="sm"
-                        variant="ghost"
+                        variant={cotizacion.estado === "BORRADOR" ? "default" : "ghost"}
                         onClick={() => handleShare(cotizacion)}
-                        title="Copiar link publico"
+                        title={cotizacion.estado === "BORRADOR" ? "Enviar como presupuesto y copiar link" : "Copiar link publico"}
                       >
-                        <Link2 className="mr-2 h-3 w-3" />
-                        Compartir
+                        {cotizacion.estado === "BORRADOR" ? (
+                          <><Send className="mr-2 h-3 w-3" />Enviar y compartir</>
+                        ) : (
+                          <><Link2 className="mr-2 h-3 w-3" />Compartir</>
+                        )}
                       </Button>
                     )}
                   </div>
