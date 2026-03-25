@@ -114,6 +114,38 @@ export async function POST(
     // Actualizar estado a ENVIADA
     await supabaseAdmin.from("cotizaciones").update({ estado: "ENVIADA" }).eq("id", id)
 
+    // Si la cotización está vinculada a una orden, transicionar a PRESUPUESTADO automáticamente
+    if (orden && orden.id) {
+      const validStates = ["RECIBIDO", "EN_DIAGNOSTICO"]
+      const { data: ordenActual } = await supabaseAdmin
+        .from("ordenes_servicio")
+        .select("id, estado")
+        .eq("id", orden.id)
+        .single()
+
+      if (ordenActual && validStates.includes(ordenActual.estado)) {
+        const estadoAnterior = ordenActual.estado
+        await supabaseAdmin
+          .from("ordenes_servicio")
+          .update({
+            estado: "PRESUPUESTADO",
+            presupuesto: cotizacion.total,
+          })
+          .eq("id", orden.id)
+
+        // Registrar evento
+        await supabaseAdmin.from("orden_eventos").insert({
+          orden_id: orden.id,
+          organization_id: organizationId,
+          tipo: "CAMBIO_ESTADO",
+          estado_anterior: estadoAnterior,
+          estado_nuevo: "PRESUPUESTADO",
+          descripcion: `Cotización ${cotizacion.numero_cotizacion} enviada al cliente`,
+          metadata: { cotizacionId: id },
+        })
+      }
+    }
+
     return NextResponse.json({
       message: "Cotización enviada exitosamente",
     })

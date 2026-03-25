@@ -259,6 +259,45 @@ export async function PUT(
       throw updateError
     }
 
+    // Si cambió a ENVIADA y está vinculada a una orden, transicionar a PRESUPUESTADO
+    if (data.estado === "ENVIADA") {
+      const { data: cotWithOrder } = await supabaseAdmin
+        .from("cotizaciones")
+        .select("orden_id, total")
+        .eq("id", id)
+        .single()
+
+      if (cotWithOrder?.orden_id) {
+        const validStates = ["RECIBIDO", "EN_DIAGNOSTICO"]
+        const { data: ordenActual } = await supabaseAdmin
+          .from("ordenes_servicio")
+          .select("id, estado")
+          .eq("id", cotWithOrder.orden_id)
+          .single()
+
+        if (ordenActual && validStates.includes(ordenActual.estado)) {
+          const estadoAnterior = ordenActual.estado
+          await supabaseAdmin
+            .from("ordenes_servicio")
+            .update({
+              estado: "PRESUPUESTADO",
+              presupuesto: cotWithOrder.total,
+            })
+            .eq("id", ordenActual.id)
+
+          await supabaseAdmin.from("orden_eventos").insert({
+            orden_id: ordenActual.id,
+            organization_id: organizationId,
+            tipo: "CAMBIO_ESTADO",
+            estado_anterior: estadoAnterior,
+            estado_nuevo: "PRESUPUESTADO",
+            descripcion: "Cotización compartida con el cliente",
+            metadata: { cotizacionId: id },
+          })
+        }
+      }
+    }
+
     // Get updated cotizacion
     const { data: cotizacion } = await supabaseAdmin
       .from("cotizaciones")
