@@ -579,7 +579,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   page.drawText(titleText, { x: (width - titleWidth) / 2, y, size: 12, font: helveticaBold, color: primaryColor })
   // Linea decorativa derecha
   page.drawLine({ start: { x: (width + titleWidth) / 2 + 15, y: y - 4 }, end: { x: width - margin, y: y - 4 }, thickness: 1, color: lightGray })
-  y -= 22
+  y -= 18
 
   // === GRID: CLIENTE | DISPOSITIVO ===
   // Calcular altura dinamica de los cards
@@ -705,7 +705,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     page.drawText(line, { x: margin + 14, y: problemaY, size: 10, font: helvetica, color: textColor })
     problemaY -= 14
   }
-  y -= problemaHeight + 6
+  y -= problemaHeight + 8
 
   // === ACCESORIOS (si hay) ===
   if (accesorios) {
@@ -732,47 +732,47 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
       page.drawText(line, { x: margin + 90, y: accY, size: 9, font: helvetica, color: brownColor })
       accY -= 14
     }
-    y -= accHeight + 6
+    y -= accHeight + 8
   }
 
-  // === CONTRASENA (si hay) ===
+  // === CODIGO DE ACCESO (si hay) ===
   if (codigoAccesoDispositivo) {
-    page.drawText("CODIGO DE ACCESO", { x: margin, y, size: 9, font: helveticaBold, color: grayColor })
-    y -= 12
-
     // Detectar si es un patrón
     const isPattern = codigoAccesoDispositivo.toLowerCase().startsWith("patrón:") ||
                       codigoAccesoDispositivo.toLowerCase().startsWith("patron:")
 
     if (isPattern) {
-      // Extraer los números del patrón (ej: "Patrón: 7-8-9-6-3-2-1-4" -> [7,8,9,6,3,2,1,4])
+      // Extraer los números del patrón
       const patternMatch = codigoAccesoDispositivo.match(/[\d-]+$/)
       const patternNumbers = patternMatch
         ? patternMatch[0].split("-").map(n => parseInt(n.trim())).filter(n => n >= 1 && n <= 9)
         : []
 
-      // Dibujar caja del patrón
-      const patternBoxWidth = 180
-      const patternBoxHeight = 90
-      page.drawRectangle({ x: margin, y: y - patternBoxHeight, width: patternBoxWidth, height: patternBoxHeight, color: bgGray, borderColor: lightGray, borderWidth: 1 })
+      // Card con header integrado como las demas secciones
+      const patternBoxHeight = 80
+      const patternCardHeight = 22 + patternBoxHeight + 4
+      page.drawRectangle({ x: margin, y: y - patternCardHeight, width: halfWidth, height: patternCardHeight, color: white, borderColor: lightGray, borderWidth: 1 })
+      page.drawRectangle({ x: margin, y: y - patternCardHeight, width: 4, height: patternCardHeight, color: grayColor })
+      page.drawRectangle({ x: margin + 4, y: y - 22, width: halfWidth - 4, height: 22, color: bgGray })
+      page.drawText("CODIGO DE ACCESO", { x: margin + 14, y: y - 15, size: 9, font: helveticaBold, color: grayColor })
+      page.drawText("Patron", { x: margin + halfWidth - 50, y: y - 15, size: 8, font: helvetica, color: grayColor })
 
-      // Posiciones de los 9 puntos en una grilla 3x3
-      // La grilla de Android es: 1-2-3 / 4-5-6 / 7-8-9
-      const gridStartX = margin + 30
-      const gridStartY = y - 20
-      const cellSize = 25
-      const dotRadius = 4
+      // Grilla 3x3 centrada en el card
+      const gridCenterX = margin + halfWidth / 2
+      const gridStartY = y - 32
+      const cellSize = 20
+      const dotRadius = 3.5
 
       const getPointPosition = (num: number) => {
-        const row = Math.floor((num - 1) / 3)  // 0, 1, 2
-        const col = (num - 1) % 3              // 0, 1, 2
+        const row = Math.floor((num - 1) / 3)
+        const col = (num - 1) % 3
         return {
-          x: gridStartX + col * cellSize + cellSize / 2,
-          y: gridStartY - row * cellSize - cellSize / 2
+          x: gridCenterX + (col - 1) * cellSize,
+          y: gridStartY - row * cellSize
         }
       }
 
-      // Dibujar líneas conectando los puntos del patrón
+      // Dibujar lineas conectando los puntos del patron
       if (patternNumbers.length > 1) {
         for (let i = 0; i < patternNumbers.length - 1; i++) {
           const start = getPointPosition(patternNumbers[i])
@@ -780,7 +780,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
           page.drawLine({
             start: { x: start.x, y: start.y },
             end: { x: end.x, y: end.y },
-            thickness: 2,
+            thickness: 1.5,
             color: primaryColor
           })
         }
@@ -790,38 +790,33 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
       for (let num = 1; num <= 9; num++) {
         const pos = getPointPosition(num)
         const isInPattern = patternNumbers.includes(num)
-
-        // Punto exterior (siempre visible)
         page.drawCircle({
           x: pos.x,
           y: pos.y,
           size: dotRadius,
-          color: isInPattern ? primaryColor : grayColor,
+          color: isInPattern ? primaryColor : lightGray,
           borderWidth: 0
         })
-
-        // Punto interior más pequeño para los activos
         if (isInPattern) {
           page.drawCircle({
             x: pos.x,
             y: pos.y,
-            size: dotRadius - 2,
-            color: rgb(1, 1, 1),
+            size: dotRadius - 1.5,
+            color: white,
             borderWidth: 0
           })
         }
       }
 
-      // Mostrar secuencia al lado
-      page.drawText("Secuencia:", { x: margin + 105, y: y - 30, size: 8, font: helveticaBold, color: grayColor })
-      page.drawText(patternNumbers.join(" > "), { x: margin + 105, y: y - 45, size: 10, font: courier, color: textColor })
-
-      y -= patternBoxHeight + 6
+      y -= patternCardHeight + 8
     } else {
-      // PIN o Contraseña - mostrar como texto
-      page.drawRectangle({ x: margin, y: y - 22, width: 180, height: 22, color: bgGray, borderColor: lightGray, borderWidth: 1 })
-      page.drawText(codigoAccesoDispositivo, { x: margin + 10, y: y - 15, size: 12, font: courier, color: textColor })
-      y -= 34
+      // PIN o Contrasena - card con el mismo estilo
+      const codeCardHeight = 40
+      page.drawRectangle({ x: margin, y: y - codeCardHeight, width: halfWidth, height: codeCardHeight, color: white, borderColor: lightGray, borderWidth: 1 })
+      page.drawRectangle({ x: margin, y: y - codeCardHeight, width: 4, height: codeCardHeight, color: grayColor })
+      page.drawText("CODIGO DE ACCESO", { x: margin + 14, y: y - 14, size: 8, font: helveticaBold, color: grayColor })
+      page.drawText(codigoAccesoDispositivo, { x: margin + 14, y: y - 30, size: 12, font: courier, color: textColor })
+      y -= codeCardHeight + 8
     }
   }
 
@@ -843,7 +838,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
       page.drawText(`SEÑA ABONADA: ${senaFormatted}`, { x: margin + 14, y: senaY, size: 9, font: helveticaBold, color: greenColor })
       page.drawText(`(${metodoPago})`, { x: margin + 14 + helveticaBold.widthOfTextAtSize(`SEÑA ABONADA: ${senaFormatted}`, 9) + 6, y: senaY, size: 8, font: helvetica, color: grayColor })
     }
-    y -= presupuestoHeight + 6
+    y -= presupuestoHeight + 8
   }
 
   // === OBSERVACIONES (si hay) ===
@@ -870,7 +865,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
       page.drawText(line, { x: margin + 12, y: obsY, size: 9, font: helvetica, color: textColor })
       obsY -= 13
     }
-    y -= obsHeight + 6
+    y -= obsHeight + 8
   }
 
   // === CHECKLIST DE RECEPCION (si hay) ===
@@ -970,7 +965,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
         console.error("Error embedding reception signature:", firmaError)
       }
 
-      y -= firmaHeight + 6
+      y -= firmaHeight + 8
     } else if (hasQR) {
       try {
         const trackingUrl = `${data.baseUrl}/seguimiento/${data.publicToken}`
@@ -988,7 +983,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
       } catch (qrError) {
         console.error("Error generating QR:", qrError)
       }
-      y -= qrSize + 6
+      y -= qrSize + 8
     } else if (hasFirma) {
       try {
         page.drawRectangle({ x: margin, y: y - firmaHeight, width: contentWidth, height: firmaHeight, color: bgGray, borderColor: lightGray, borderWidth: 0.5 })
@@ -1010,11 +1005,11 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
       } catch (firmaError) {
         console.error("Error embedding reception signature:", firmaError)
       }
-      y -= firmaHeight + 6
+      y -= firmaHeight + 8
     }
   }
 
-  // === QR + TERMINOS LADO A LADO ===
+  // === TERMINOS Y CONDICIONES ===
   const defaultTerminos = [
     "1. Conserve este comprobante para retirar su equipo. El plazo de retiro es de 30 dias.",
     "2. No nos hacemos responsables por datos perdidos. Realice backup antes de entregar el equipo.",
@@ -1065,7 +1060,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     termY -= 10
   })
 
-  y -= terminosBoxHeight + 6
+  y -= terminosBoxHeight + 8
 
   // === FOOTER (fluye desde y) ===
   const footerY = y - 10
