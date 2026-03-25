@@ -350,7 +350,7 @@ export async function DELETE(
     // Verify cotizacion via organization_id
     const { data: cotizacion, error: fetchError } = await supabaseAdmin
       .from("cotizaciones")
-      .select("id, estado, organization_id")
+      .select("id, estado, organization_id, orden_id")
       .eq("id", id)
       .eq("organization_id", organizationId!)
       .single()
@@ -376,6 +376,29 @@ export async function DELETE(
 
     if (deleteError) {
       throw deleteError
+    }
+
+    // Si la cotización estaba vinculada a una orden, limpiar presupuesto y revertir estado
+    if (cotizacion.orden_id) {
+      const { data: orden } = await supabaseAdmin
+        .from("ordenes_servicio")
+        .select("id, estado")
+        .eq("id", cotizacion.orden_id)
+        .single()
+
+      if (orden && (orden.estado === "PRESUPUESTADO" || orden.estado === "APROBADO")) {
+        await supabaseAdmin
+          .from("ordenes_servicio")
+          .update({
+            estado: "EN_DIAGNOSTICO",
+            presupuesto: null,
+            costo_final: null,
+            presupuesto_aprobado_portal: false,
+            presupuesto_firma_url: null,
+            presupuesto_fecha_aprobacion: null,
+          })
+          .eq("id", cotizacion.orden_id)
+      }
     }
 
     return NextResponse.json({ message: "Cotización eliminada" })
