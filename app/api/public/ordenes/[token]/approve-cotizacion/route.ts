@@ -5,7 +5,7 @@ import { z } from "zod"
 import { getOrderByPublicToken } from "@/lib/public-token"
 
 const approveSchema = z.object({
-  cotizacionId: z.string().uuid("ID de cotizacion invalido"),
+  cotizacionId: z.string().min(1, "ID de cotizacion requerido"),
   firmaAprobacion: z.string().min(1, "Firma requerida"),
   firmaMime: z.string().min(1, "Tipo de firma requerido"),
 })
