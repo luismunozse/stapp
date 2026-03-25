@@ -4,9 +4,11 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { SignaturePad } from "@/components/firma/signature-pad"
+import { Textarea } from "@/components/ui/textarea"
 import {
   FileText,
   CheckCircle2,
+  XCircle,
   Loader2,
   PenTool,
   CalendarClock,
@@ -65,11 +67,14 @@ export function CotizacionApproval({
   onApproved,
 }: CotizacionApprovalProps) {
   const [showApproval, setShowApproval] = useState(false)
+  const [showReject, setShowReject] = useState(false)
   const [firma, setFirma] = useState<string | null>(null)
   const [firmaMime, setFirmaMime] = useState<string | null>(null)
+  const [rejectMotivo, setRejectMotivo] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
+  const [rejected, setRejected] = useState(false)
 
   const fmt = (v: number) => formatCurrencyValue(v, moneda as CurrencyCode)
   const formatDate = (d: string | null | undefined) => formatDateValue(d, zonaHoraria)
@@ -121,6 +126,33 @@ export function CotizacionApproval({
     }
   }
 
+  const handleReject = async () => {
+    setLoading(true)
+    setError(null)
+
+    try {
+      const res = await fetch(`/api/public/ordenes/${token}/reject-budget`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ motivo: rejectMotivo || undefined }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        setError(data.error || "Error al rechazar")
+        return
+      }
+
+      setRejected(true)
+      setShowReject(false)
+      onApproved?.()
+    } catch {
+      setError("Error de conexion. Intenta de nuevo.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
   if (done) {
     return (
       <Card className="border-green-200 dark:border-green-800">
@@ -129,6 +161,20 @@ export function CotizacionApproval({
           <p className="font-semibold text-lg">Presupuesto aprobado</p>
           <p className="text-sm text-muted-foreground mt-1">
             El taller ha sido notificado y comenzara la reparacion.
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (rejected) {
+    return (
+      <Card className="border-red-200 dark:border-red-800">
+        <CardContent className="pt-6 text-center">
+          <XCircle className="h-12 w-12 text-red-500 mx-auto mb-3" />
+          <p className="font-semibold text-lg">Presupuesto rechazado</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            El taller ha sido notificado. Pueden contactarte para ofrecer alternativas.
           </p>
         </CardContent>
       </Card>
@@ -285,16 +331,77 @@ export function CotizacionApproval({
             </a>
           )}
 
-          {!isExpired && !showApproval && (
-            <Button
-              onClick={() => setShowApproval(true)}
-              className="w-full bg-amber-600 hover:bg-amber-700"
-            >
-              <PenTool className="mr-2 h-4 w-4" />
-              Aprobar presupuesto
-            </Button>
+          {!isExpired && !showApproval && !showReject && (
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                onClick={() => setShowReject(true)}
+              >
+                <XCircle className="mr-2 h-4 w-4" />
+                Rechazar
+              </Button>
+              <Button
+                onClick={() => setShowApproval(true)}
+                className="flex-1 bg-amber-600 hover:bg-amber-700"
+              >
+                <PenTool className="mr-2 h-4 w-4" />
+                Aprobar presupuesto
+              </Button>
+            </div>
           )}
         </div>
+
+        {/* Reject panel */}
+        {showReject && (
+          <div className="border border-red-200 rounded-lg p-4 space-y-3 bg-red-50/50 dark:bg-red-950/20">
+            <p className="text-sm font-medium text-red-800 dark:text-red-300">
+              ¿Estas seguro de rechazar el presupuesto?
+            </p>
+            <p className="text-xs text-muted-foreground">
+              El taller sera notificado y podra contactarte para ofrecer alternativas.
+            </p>
+
+            <Textarea
+              placeholder="Motivo del rechazo (opcional)"
+              value={rejectMotivo}
+              onChange={(e) => setRejectMotivo(e.target.value)}
+              disabled={loading}
+              rows={2}
+              maxLength={500}
+              className="text-sm"
+            />
+
+            {error && <p className="text-sm text-red-500">{error}</p>}
+
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowReject(false)
+                  setRejectMotivo("")
+                  setError(null)
+                }}
+                disabled={loading}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="destructive"
+                className="flex-1"
+                onClick={handleReject}
+                disabled={loading}
+              >
+                {loading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <XCircle className="mr-2 h-4 w-4" />
+                )}
+                Confirmar rechazo
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Signature panel */}
         {showApproval && (

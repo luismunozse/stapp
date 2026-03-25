@@ -200,6 +200,7 @@ const tipoDispositivoIcons: Record<string, typeof Smartphone> = {
 }
 
 interface TrackingData {
+  id: string
   numeroOrden: number
   codigoOrden?: string
   dispositivo: string

@@ -9,6 +9,7 @@ import {
   Package,
   FileText,
   ArrowRight,
+  XCircle,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -43,6 +44,7 @@ const eventIcons: Record<string, typeof CheckCircle2> = {
   FOTO_AGREGADA: Camera,
   PRESUPUESTO_DEFINIDO: DollarSign,
   PRESUPUESTO_APROBADO: CheckCircle2,
+  PRESUPUESTO_RECHAZADO: XCircle,
   NOTA: FileText,
   REPUESTO_AGREGADO: Package,
 }
@@ -52,6 +54,7 @@ const eventColors: Record<string, string> = {
   FOTO_AGREGADA: "bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-400",
   PRESUPUESTO_DEFINIDO: "bg-amber-100 text-amber-600 dark:bg-amber-900 dark:text-amber-400",
   PRESUPUESTO_APROBADO: "bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-400",
+  PRESUPUESTO_RECHAZADO: "bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-400",
   NOTA: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
   REPUESTO_AGREGADO: "bg-orange-100 text-orange-600 dark:bg-orange-900 dark:text-orange-400",
 }
@@ -83,6 +86,8 @@ function getEventDescription(event: TimelineEvent): string {
       return "Presupuesto definido"
     case "PRESUPUESTO_APROBADO":
       return "Presupuesto aprobado"
+    case "PRESUPUESTO_RECHAZADO":
+      return "Presupuesto rechazado por el cliente"
     default:
       return event.eventType
   }
