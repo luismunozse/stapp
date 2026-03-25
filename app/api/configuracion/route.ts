@@ -10,7 +10,11 @@ export async function GET() {
     const { error, organizationId } = await requireAdmin()
     if (error) return error
 
-    const { data: organization, error: dbError } = await supabaseAdmin
+    // Intentar con todas las columnas, fallback sin recepcion_terminos si no existe
+    let organization: any = null
+    let dbError: any = null
+
+    const result = await supabaseAdmin
       .from("organizations")
       .select(`
         id,
@@ -32,6 +36,24 @@ export async function GET() {
       `)
       .eq("id", organizationId!)
       .single()
+
+    if (result.error?.code === "PGRST204") {
+      // Column doesn't exist yet, query without it
+      const fallback = await supabaseAdmin
+        .from("organizations")
+        .select(`
+          id, logo_url, logo_path, nombre_mostrar, nombre, email,
+          telefono, direccion, moneda, zona_horaria, umbral_stock_bajo,
+          iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, pais
+        `)
+        .eq("id", organizationId!)
+        .single()
+      organization = fallback.data
+      dbError = fallback.error
+    } else {
+      organization = result.data
+      dbError = result.error
+    }
 
     if (dbError || !organization) {
       return NextResponse.json({ error: "Organización no encontrada" }, { status: 404 })
@@ -168,6 +190,8 @@ export async function PUT(request: Request) {
       updateData.cotizacion_terminos = cotizacionTerminos || null
     }
 
+    // recepcion_terminos puede no existir si la migración 072 no se ejecutó
+    let hasRecepcionTerminos = true
     if (recepcionTerminos !== undefined) {
       updateData.recepcion_terminos = recepcionTerminos || null
     }
@@ -176,14 +200,18 @@ export async function PUT(request: Request) {
       updateData.pais = pais
     }
 
+    const selectCols = "id, logo_url, logo_path, nombre_mostrar, telefono, direccion, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, pais"
+    const selectColsFull = selectCols + ", recepcion_terminos"
+
     // Solo actualizar si hay cambios
     if (Object.keys(updateData).length === 0) {
       // Retornar estado actual
-      const { data: org } = await supabaseAdmin
+      const { data } = await supabaseAdmin
         .from("organizations")
-        .select("id, logo_url, nombre_mostrar, telefono, direccion, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, recepcion_terminos, pais")
+        .select(selectCols)
         .eq("id", organizationId!)
         .single()
+      const org = data as any
 
       return NextResponse.json({
         id: org?.id,
@@ -202,16 +230,35 @@ export async function PUT(request: Request) {
       })
     }
 
-    const { data: organization, error: dbError } = await supabaseAdmin
+    // Intentar update con todas las columnas
+    let result2 = await supabaseAdmin
       .from("organizations")
       .update(updateData)
       .eq("id", organizationId!)
-      .select("id, logo_url, logo_path, nombre_mostrar, telefono, direccion, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, recepcion_terminos, pais")
+      .select(selectColsFull)
       .single()
 
-    if (dbError) {
-      throw dbError
+    if (result2.error?.code === "PGRST204") {
+      // recepcion_terminos column doesn't exist yet, retry without it
+      delete updateData.recepcion_terminos
+      hasRecepcionTerminos = false
+      result2 = await supabaseAdmin
+        .from("organizations")
+        .update(updateData)
+        .eq("id", organizationId!)
+        .select(selectCols)
+        .single() as any
     }
+
+    if (result2.error) {
+      console.error("DB Error updating config:", result2.error)
+      return NextResponse.json(
+        { error: `Error de base de datos: ${result2.error.message || result2.error.code || JSON.stringify(result2.error)}` },
+        { status: 500 }
+      )
+    }
+
+    const organization = result2.data as any
 
     return NextResponse.json({
       id: organization.id,
@@ -228,9 +275,9 @@ export async function PUT(request: Request) {
       recepcionTerminos: organization.recepcion_terminos || "",
       pais: organization.pais || "AR",
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error updating config:", error)
-    const message = error instanceof Error ? error.message : "Error desconocido"
+    const message = error?.message || (typeof error === "object" ? JSON.stringify(error) : String(error))
     return NextResponse.json({ error: `Error al actualizar configuración: ${message}` }, { status: 500 })
   }
 }

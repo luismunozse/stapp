@@ -728,12 +728,10 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
       </CardHeader>
       <CardContent>
         <form onSubmit={(e) => {
+          e.preventDefault()
           if (currentStep < totalSteps) {
-            e.preventDefault()
             handleNextStep()
-            return
           }
-          handleSubmit(onSubmit)(e)
         }} className="space-y-4">
           {/* Step indicator */}
           <div className="flex items-center gap-2 mb-6">
@@ -1542,7 +1540,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
                   Siguiente
                 </Button>
               ) : (
-                <Button type="submit" disabled={loading}>
+                <Button type="button" disabled={loading} onClick={handleSubmit(onSubmit)}>
                   {loading ? "Creando..." : "Crear Orden"}
                 </Button>
               )}
