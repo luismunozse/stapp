@@ -60,6 +60,41 @@ function formatTipoDispositivo(tipo: any) {
   }
 }
 
+// Tipos base que se crean automaticamente para organizaciones nuevas
+const TIPOS_BASE = [
+  { codigo: "CELULAR", nombre: "Celular", prefijo_orden: "CEL", orden: 1 },
+  { codigo: "COMPUTADORA", nombre: "Computadora", prefijo_orden: "PC", orden: 2 },
+  { codigo: "TABLET", nombre: "Tablet", prefijo_orden: "TAB", orden: 3 },
+  { codigo: "CONSOLA", nombre: "Consola", prefijo_orden: "CONS", orden: 4 },
+  { codigo: "SMARTWATCH", nombre: "Smartwatch", prefijo_orden: "SW", orden: 5 },
+  { codigo: "ACCESORIOS", nombre: "Accesorios", prefijo_orden: "ACC", orden: 6 },
+  { codigo: "TODOS", nombre: "Todos los dispositivos", prefijo_orden: "ORD", orden: 99 },
+]
+
+async function ensureTiposExist(organizationId: string) {
+  // Verificar si la org tiene al menos un tipo
+  const { count } = await supabaseAdmin
+    .from("tipos_dispositivo")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", organizationId)
+
+  if (count && count > 0) return
+
+  // No tiene tipos, crear los base
+  const rows = TIPOS_BASE.map((t) => ({
+    organization_id: organizationId,
+    codigo: t.codigo,
+    nombre: t.nombre,
+    prefijo_orden: t.prefijo_orden,
+    es_base: true,
+    orden: t.orden,
+  }))
+
+  await supabaseAdmin
+    .from("tipos_dispositivo")
+    .upsert(rows, { onConflict: "organization_id,codigo" })
+}
+
 export async function GET(request: Request) {
   try {
     const { error, organizationId } = await requireAuth()
@@ -68,6 +103,9 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const incluirTodos = searchParams.get("incluirTodos") === "true"
     const soloActivos = searchParams.get("soloActivos") !== "false"
+
+    // Auto-seed: si la org no tiene tipos, crearlos
+    await ensureTiposExist(organizationId!)
 
     let query = supabaseAdmin
       .from("tipos_dispositivo")

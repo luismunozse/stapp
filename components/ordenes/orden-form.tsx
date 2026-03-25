@@ -727,7 +727,14 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
         </div>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <form onSubmit={(e) => {
+          if (currentStep < totalSteps) {
+            e.preventDefault()
+            handleNextStep()
+            return
+          }
+          handleSubmit(onSubmit)(e)
+        }} className="space-y-4">
           {/* Step indicator */}
           <div className="flex items-center gap-2 mb-6">
             {[
