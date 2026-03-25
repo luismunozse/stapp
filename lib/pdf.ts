@@ -1017,7 +1017,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     "4. El presupuesto puede variar segun el diagnostico final del equipo."
   ]
   const terminos = data.recepcionTerminos
-    ? data.recepcionTerminos.split("\n").filter(l => l.trim() !== "")
+    ? data.recepcionTerminos.replace(/\r/g, "").split("\n").filter(l => l.trim() !== "")
     : defaultTerminos
 
   const terminosWrapped: string[] = []
