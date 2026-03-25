@@ -167,6 +167,23 @@ export function CotizacionList({ ordenId, clienteEmail }: CotizacionListProps) {
     if (!cotizacion.publicToken) return
     const baseUrl = window.location.origin
     const url = `${baseUrl}/cotizacion/${cotizacion.publicToken}`
+
+    // Si está en BORRADOR, cambiar a ENVIADA para que sea visible en seguimiento
+    if (cotizacion.estado === "BORRADOR") {
+      try {
+        const res = await fetch(`/api/cotizaciones/${cotizacion.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ estado: "ENVIADA" }),
+        })
+        if (res.ok) {
+          mutate() // Refresh list
+        }
+      } catch {
+        // Continue with share even if state change fails
+      }
+    }
+
     try {
       await navigator.clipboard.writeText(url)
       await showSuccess("Link copiado al portapapeles")
