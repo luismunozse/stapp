@@ -91,12 +91,13 @@ export async function POST(
 
     if (cotUpdateError) throw cotUpdateError
 
-    // Update order to APROBADO and set presupuesto from cotizacion total
+    // Update order to APROBADO and set presupuesto + costo_final from cotizacion total
     const { error: updateError } = await supabaseAdmin
       .from("ordenes_servicio")
       .update({
         estado: "APROBADO",
         presupuesto: cotizacion.total,
+        costo_final: cotizacion.total,
         presupuesto_aprobado_portal: true,
         presupuesto_firma_url: firmaUrl,
         presupuesto_firma_path: firmaPath,

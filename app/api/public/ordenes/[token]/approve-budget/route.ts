@@ -56,11 +56,12 @@ export async function POST(
       }
     }
 
-    // Actualizar orden a APROBADO
+    // Actualizar orden a APROBADO con costo_final = presupuesto
     const { error: updateError } = await supabaseAdmin
       .from("ordenes_servicio")
       .update({
         estado: "APROBADO",
+        costo_final: orden.presupuesto,
         presupuesto_aprobado_portal: true,
         presupuesto_firma_url: firmaUrl,
         presupuesto_firma_path: firmaPath,

@@ -74,6 +74,7 @@ export async function POST(
           .update({
             estado: "APROBADO",
             presupuesto: cotizacion.total,
+            costo_final: cotizacion.total,
             presupuesto_aprobado_portal: true,
             presupuesto_fecha_aprobacion: new Date().toISOString(),
           })
