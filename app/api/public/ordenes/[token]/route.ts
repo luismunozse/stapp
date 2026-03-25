@@ -101,6 +101,7 @@ export async function GET(
     }
 
     return NextResponse.json({
+      id: orden.id,
       numeroOrden: orden.numero_orden,
       codigoOrden: orden.codigo_orden,
       dispositivo: orden.dispositivo,

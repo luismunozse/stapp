@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
@@ -48,6 +48,8 @@ import { CobrarOrdenDialog } from "@/components/ordenes/cobrar-orden-dialog"
 import { PatternDisplay } from "@/components/ui/pattern-display"
 import { useModal } from "@/contexts/modal-context"
 import { toast } from "sonner"
+import { getSupabaseClient } from "@/lib/supabase-client"
+import type { RealtimeChannel } from "@supabase/supabase-js"
 import type { OrdenServicio, EstadoOrden, User as UserType } from "@/types"
 
 import { ESTADO_LABELS } from "@/lib/orden-state-machine"
@@ -109,12 +111,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank")
   }
 
-  useEffect(() => {
-    fetchOrden()
-    fetchTecnicos()
-  }, [ordenId])
-
-  const fetchOrden = async () => {
+  const fetchOrden = useCallback(async () => {
     try {
       const res = await fetch(`/api/ordenes/${ordenId}`)
       if (!res.ok) {
@@ -128,7 +125,44 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [ordenId, router])
+
+  useEffect(() => {
+    fetchOrden()
+    fetchTecnicos()
+  }, [ordenId, fetchOrden])
+
+  // Realtime: re-fetch cuando cambia la orden o sus cotizaciones
+  const channelRef = useRef<RealtimeChannel | null>(null)
+  useEffect(() => {
+    const supabase = getSupabaseClient()
+    const channel = supabase
+      .channel(`orden-detail-${ordenId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "ordenes_servicio", filter: `id=eq.${ordenId}` },
+        () => { fetchOrden() }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "cotizaciones", filter: `orden_id=eq.${ordenId}` },
+        () => { fetchOrden() }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "orden_eventos", filter: `orden_id=eq.${ordenId}` },
+        () => { fetchOrden() }
+      )
+      .subscribe()
+
+    channelRef.current = channel
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current)
+        channelRef.current = null
+      }
+    }
+  }, [ordenId, fetchOrden])
 
   const fetchTecnicos = async () => {
     try {

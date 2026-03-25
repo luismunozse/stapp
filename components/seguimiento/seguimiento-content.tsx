@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import dynamic from "next/dynamic"
 import Image from "next/image"
 import { formatDateValue } from "@/lib/timezone"
@@ -52,6 +52,8 @@ import {
   ArrowRight,
   Sparkles,
 } from "lucide-react"
+import { getSupabaseClient } from "@/lib/supabase-client"
+import type { RealtimeChannel } from "@supabase/supabase-js"
 
 // Lazy load enhanced components
 const VisualTimeline = dynamic(
@@ -316,9 +318,42 @@ export function SeguimientoContent({ token }: { token: string }) {
 
   useEffect(() => {
     const controller = fetchData()
-    const interval = setInterval(() => { fetchData() }, 30000)
-    return () => { controller.abort(); clearInterval(interval) }
+    return () => { controller.abort() }
   }, [fetchData])
+
+  // Realtime: suscribirse a cambios de la orden cuando tenemos el id
+  const channelRef = useRef<RealtimeChannel | null>(null)
+  useEffect(() => {
+    if (!data?.id) return
+
+    const supabase = getSupabaseClient()
+    const channel = supabase
+      .channel(`seguimiento-${data.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "ordenes_servicio", filter: `id=eq.${data.id}` },
+        () => { fetchData() }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "cotizaciones", filter: `orden_id=eq.${data.id}` },
+        () => { fetchData() }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "orden_eventos", filter: `orden_id=eq.${data.id}` },
+        () => { fetchData() }
+      )
+      .subscribe()
+
+    channelRef.current = channel
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current)
+        channelRef.current = null
+      }
+    }
+  }, [data?.id, fetchData])
 
   if (loading) {
     return (
