@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { supabaseAdmin } from "@/lib/supabase"
 import { getOrderByPublicToken } from "@/lib/public-token"
 import { getDeviceTypeLabel } from "@/lib/device-types"
 
@@ -49,6 +50,56 @@ export async function GET(
     const cliente = orden.clientes as any
     const tipoDisp = orden.tipos_dispositivo as any
 
+    // Fetch cotizaciones linked to this order (only ENVIADA or ACEPTADA)
+    let cotizaciones: any[] = []
+    const { data: cotizacionesData } = await supabaseAdmin
+      .from("cotizaciones")
+      .select(`
+        id, numero_cotizacion, estado, fecha_vencimiento, notas,
+        subtotal, iva, total, created_at, public_token,
+        firma_aprobacion, firma_mime, fecha_aprobacion,
+        descuento_global_tipo, descuento_global_valor, iva_porcentaje, terminos,
+        items_cotizacion (
+          id, descripcion, cantidad, precio_unitario, subtotal,
+          unidad, descuento_tipo, descuento_valor
+        )
+      `)
+      .eq("orden_id", orden.id)
+      .in("estado", ["ENVIADA", "ACEPTADA"])
+      .order("created_at", { ascending: false })
+
+    if (cotizacionesData && cotizacionesData.length > 0) {
+      cotizaciones = cotizacionesData.map((c: any) => ({
+        id: c.id,
+        numeroCotizacion: c.numero_cotizacion,
+        estado: c.estado,
+        fechaVencimiento: c.fecha_vencimiento,
+        notas: c.notas,
+        subtotal: c.subtotal,
+        iva: c.iva,
+        total: c.total,
+        createdAt: c.created_at,
+        publicToken: c.public_token,
+        firmaAprobacion: c.firma_aprobacion,
+        firmaMime: c.firma_mime,
+        fechaAprobacion: c.fecha_aprobacion,
+        descuentoGlobalTipo: c.descuento_global_tipo,
+        descuentoGlobalValor: c.descuento_global_valor,
+        ivaPorcentaje: c.iva_porcentaje,
+        terminos: c.terminos,
+        items: (c.items_cotizacion || []).map((i: any) => ({
+          id: i.id,
+          descripcion: i.descripcion,
+          cantidad: i.cantidad,
+          precioUnitario: i.precio_unitario,
+          subtotal: i.subtotal,
+          unidad: i.unidad,
+          descuentoTipo: i.descuento_tipo,
+          descuentoValor: i.descuento_valor,
+        })),
+      }))
+    }
+
     return NextResponse.json({
       numeroOrden: orden.numero_orden,
       codigoOrden: orden.codigo_orden,
@@ -67,6 +118,7 @@ export async function GET(
       presupuesto: orden.presupuesto || null,
       presupuestoAprobadoPortal: orden.presupuesto_aprobado_portal || false,
       publicToken: orden.public_token,
+      cotizaciones,
       cliente: {
         nombre: cliente?.nombre || null,
       },

@@ -69,6 +69,11 @@ const BudgetApproval = dynamic(
   { loading: () => null, ssr: false }
 )
 
+const CotizacionApproval = dynamic(
+  () => import("./cotizacion-approval").then((mod) => ({ default: mod.CotizacionApproval })),
+  { loading: () => null, ssr: false }
+)
+
 const WarrantyInfo = dynamic(
   () => import("./warranty-info").then((mod) => ({ default: mod.WarrantyInfo })),
   { loading: () => null, ssr: false }
@@ -212,6 +217,35 @@ interface TrackingData {
   presupuesto?: number
   moneda?: string
   presupuestoAprobadoPortal?: boolean
+  cotizaciones?: {
+    id: string
+    numeroCotizacion: string
+    estado: string
+    fechaVencimiento: string | null
+    notas: string | null
+    subtotal: number
+    iva: number
+    total: number
+    createdAt: string
+    publicToken: string
+    firmaAprobacion: string | null
+    firmaMime: string | null
+    fechaAprobacion: string | null
+    descuentoGlobalTipo?: string | null
+    descuentoGlobalValor?: number | null
+    ivaPorcentaje?: number | null
+    terminos?: string | null
+    items: {
+      id: string
+      descripcion: string
+      cantidad: number
+      precioUnitario: number
+      subtotal: number
+      unidad?: string
+      descuentoTipo?: string
+      descuentoValor?: number
+    }[]
+  }[]
   cliente: { nombre: string }
   organizacion: {
     nombre: string
@@ -319,7 +353,9 @@ export function SeguimientoContent({ token }: { token: string }) {
   const estadoParaProgreso = data.estado === "ESPERANDO_REPUESTO" ? "EN_REPARACION" : data.estado
   const currentIndex = estadoFlow.indexOf(estadoParaProgreso)
   const progressPercent = isTerminal ? 0 : isCompleted ? 100 : Math.round(((currentIndex) / (estadoFlow.length - 1)) * 100)
-  const showBudgetApproval = data.estado === "PRESUPUESTADO" && data.presupuesto && !data.presupuestoAprobadoPortal
+  const activeCotizacion = data.cotizaciones?.find(c => c.estado === "ENVIADA")
+  const showCotizacionApproval = data.estado === "PRESUPUESTADO" && !!activeCotizacion && !data.presupuestoAprobadoPortal
+  const showBudgetApproval = data.estado === "PRESUPUESTADO" && data.presupuesto && !data.presupuestoAprobadoPortal && !activeCotizacion
   const CurrentStateIcon = estadoIcons[data.estado] || Circle
   const colors = estadoColors[data.estado] || estadoColors.RECIBIDO
 
@@ -555,7 +591,17 @@ export function SeguimientoContent({ token }: { token: string }) {
         <VisualTimeline events={timelineEvents} timezone={data.zonaHoraria} />
       )}
 
-      {/* ══════════ BUDGET APPROVAL ══════════ */}
+      {/* ══════════ COTIZACION / BUDGET APPROVAL ══════════ */}
+      {showCotizacionApproval && activeCotizacion && (
+        <CotizacionApproval
+          token={token}
+          cotizacion={activeCotizacion}
+          dispositivo={data.dispositivo}
+          moneda={data.moneda}
+          zonaHoraria={data.zonaHoraria}
+          onApproved={() => { fetchData() }}
+        />
+      )}
       {showBudgetApproval && (
         <BudgetApproval
           token={token}

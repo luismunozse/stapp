@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
+import { inngest } from "@/lib/inngest/client"
 import { z } from "zod"
 
 const aprobarSchema = z.object({
@@ -25,10 +26,10 @@ export async function POST(
     const body = await request.json()
     const data = aprobarSchema.parse(body)
 
-    // Find cotizacion by public token
+    // Find cotizacion by public token (include orden_id and total)
     const { data: cotizacion, error: fetchError } = await supabaseAdmin
       .from("cotizaciones")
-      .select("id, estado")
+      .select("id, estado, orden_id, total")
       .eq("public_token", token)
       .single()
 
@@ -46,6 +47,7 @@ export async function POST(
       )
     }
 
+    // Update cotizacion to ACEPTADA
     const { error: updateError } = await supabaseAdmin
       .from("cotizaciones")
       .update({
@@ -57,6 +59,69 @@ export async function POST(
       .eq("id", cotizacion.id)
 
     if (updateError) throw updateError
+
+    // If cotizacion is linked to an order in PRESUPUESTADO, transition it to APROBADO
+    if (cotizacion.orden_id) {
+      const { data: orden } = await supabaseAdmin
+        .from("ordenes_servicio")
+        .select("id, estado, organization_id, cliente_id, numero_orden, dispositivo, clientes (id, nombre, email, telefono), organizations (nombre, nombre_mostrar)")
+        .eq("id", cotizacion.orden_id)
+        .single()
+
+      if (orden && orden.estado === "PRESUPUESTADO") {
+        await supabaseAdmin
+          .from("ordenes_servicio")
+          .update({
+            estado: "APROBADO",
+            presupuesto: cotizacion.total,
+            presupuesto_aprobado_portal: true,
+            presupuesto_fecha_aprobacion: new Date().toISOString(),
+          })
+          .eq("id", orden.id)
+
+        // Record event
+        await supabaseAdmin.from("orden_eventos").insert({
+          orden_id: orden.id,
+          organization_id: orden.organization_id,
+          tipo: "PRESUPUESTO_APROBADO",
+          estado_anterior: "PRESUPUESTADO",
+          estado_nuevo: "APROBADO",
+          descripcion: "Cotizacion aprobada por el cliente desde el enlace de cotizacion",
+          metadata: { aprobadoDesdePortal: true, cotizacionId: cotizacion.id },
+        })
+
+        // Send notification
+        const org = orden.organizations as unknown as Record<string, unknown>
+        const cliente = orden.clientes as unknown as Record<string, unknown>
+
+        inngest.send({
+          name: "notification/send",
+          data: {
+            organizationId: orden.organization_id,
+            ordenId: orden.id,
+            clienteId: orden.cliente_id,
+            tipo: "CAMBIO_ESTADO",
+            context: {
+              organizationName: (org?.nombre_mostrar as string) || (org?.nombre as string) || "",
+              cliente: {
+                id: cliente?.id as string,
+                nombre: cliente?.nombre as string,
+                email: cliente?.email as string | null,
+                telefono: cliente?.telefono as string,
+              },
+              orden: {
+                id: orden.id,
+                numeroOrden: orden.numero_orden,
+                dispositivo: orden.dispositivo,
+                estado: "APROBADO",
+                estadoAnterior: "PRESUPUESTADO",
+                presupuesto: cotizacion.total,
+              },
+            },
+          },
+        }).catch(err => console.error("Error sending notification:", err))
+      }
+    }
 
     return NextResponse.json({
       message: "Cotizacion aprobada exitosamente",
