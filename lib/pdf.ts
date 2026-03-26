@@ -905,15 +905,22 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
             symbolColor = textColor
           }
 
-          // For boolean values (SI/NO), use fixed right-aligned position
-          // For string values, place after label with truncation
+          // Calcular borde derecho real de esta columna (con padding interno)
+          const colRightEdge = margin + 14 + (col + 1) * colWidth - 14
           const isBooleanVal = item.valor === true || item.valor === false
-          const labelMaxW = isBooleanVal ? colWidth - 60 : colWidth * 0.55
-          const symbolX = isBooleanVal ? colX + colWidth - 55 : colX + colWidth * 0.58
-          const symbolMaxW = isBooleanVal ? 40 : colWidth * 0.38
 
-          page.drawText(truncateToWidth(item.label, labelMaxW, helvetica, 7), { x: colX, y: itemY, size: 7, font: helvetica, color: grayColor })
-          page.drawText(truncateToWidth(symbol, symbolMaxW, helveticaBold, 7), { x: symbolX, y: itemY, size: 7, font: helveticaBold, color: symbolColor })
+          if (isBooleanVal) {
+            // SI/NO: label ocupa casi todo, valor alineado a la derecha
+            page.drawText(truncateToWidth(item.label, colWidth - 60, helvetica, 7), { x: colX, y: itemY, size: 7, font: helvetica, color: grayColor })
+            page.drawText(symbol, { x: colRightEdge - helveticaBold.widthOfTextAtSize(symbol, 7), y: itemY, size: 7, font: helveticaBold, color: symbolColor })
+          } else {
+            // Texto libre: repartir espacio entre label y valor
+            const labelW = colWidth * 0.45
+            const symbolX = colX + labelW + 4
+            const symbolMaxW = colRightEdge - symbolX
+            page.drawText(truncateToWidth(item.label, labelW, helvetica, 7), { x: colX, y: itemY, size: 7, font: helvetica, color: grayColor })
+            page.drawText(truncateToWidth(symbol, symbolMaxW, helveticaBold, 7), { x: symbolX, y: itemY, size: 7, font: helveticaBold, color: symbolColor })
+          }
           itemY -= checklistRowHeight
         }
       }

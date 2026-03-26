@@ -11,6 +11,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const entity = searchParams.get("entity") || ""
     const action = searchParams.get("action") || ""
+    const organizationId = searchParams.get("organizationId") || ""
     const dateFrom = searchParams.get("dateFrom") || ""
     const dateTo = searchParams.get("dateTo") || ""
     const search = searchParams.get("search") || ""
@@ -23,8 +24,14 @@ export async function GET(request: Request) {
 
     if (entity) query = query.eq("entity", entity)
     if (action) query = query.eq("action", action.toUpperCase())
+    if (organizationId) query = query.eq("organization_id", organizationId)
     if (dateFrom) query = query.gte("created_at", dateFrom)
     if (dateTo) query = query.lte("created_at", dateTo + "T23:59:59.999Z")
+    if (search) {
+      query = query.or(
+        `action.ilike.%${search}%,entity.ilike.%${search}%,ip_address.ilike.%${search}%,changes->>'performer_email'.ilike.%${search}%,changes->>'description'.ilike.%${search}%`
+      )
+    }
 
     const { data: logs, error: dbError } = await query
     if (dbError) throw dbError
@@ -58,21 +65,6 @@ export async function GET(request: Request) {
         (changes?.action_description as string) ||
         ""
 
-      // Filtrar por búsqueda si se proporcionó
-      if (search) {
-        const searchLower = search.toLowerCase()
-        const matchesSearch =
-          log.action.toLowerCase().includes(searchLower) ||
-          log.entity.toLowerCase().includes(searchLower) ||
-          (user?.nombre || "").toLowerCase().includes(searchLower) ||
-          (user?.email || "").toLowerCase().includes(searchLower) ||
-          (org?.nombre || "").toLowerCase().includes(searchLower) ||
-          (changes?.performer_email as string || "").toLowerCase().includes(searchLower) ||
-          description.toLowerCase().includes(searchLower)
-
-        if (!matchesSearch) continue
-      }
-
       csvRows.push(
         [
           log.created_at,
@@ -94,7 +86,7 @@ export async function GET(request: Request) {
       action: "EXPORT",
       entity: "system",
       description: `Exportación de audit logs (${csvRows.length - 1} registros)`,
-      metadata: { filters: { entity, action, dateFrom, dateTo, search }, count: csvRows.length - 1 },
+      metadata: { filters: { entity, action, organizationId, dateFrom, dateTo, search }, count: csvRows.length - 1 },
     }).catch(() => {})
 
     const csv = csvRows.join("\n")

@@ -22,7 +22,7 @@ export const functions = [
   trialManagement,
 ]
 
-// Helper para enviar notificación
+// Helper para enviar notificación (ejecución directa, sin Inngest)
 export async function queueNotification(params: {
   organizationId: string
   ordenId?: string
@@ -55,10 +55,6 @@ export async function queueNotification(params: {
     }
   }
 }) {
-  const { inngest } = await import("./client")
-
-  return inngest.send({
-    name: "notification/send",
-    data: params,
-  })
+  const { sendNotificationDirect } = await import("@/lib/notifications/send-direct")
+  return sendNotificationDirect(params)
 }

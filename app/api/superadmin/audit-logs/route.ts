@@ -16,6 +16,7 @@ export async function GET(request: Request) {
     const dateFrom = searchParams.get("dateFrom") || ""
     const dateTo = searchParams.get("dateTo") || ""
     const tab = searchParams.get("tab") || "all" // all, security, superadmin
+    const search = searchParams.get("search") || ""
     const { page, limit, offset } = parsePagination(searchParams, { limit: 50 })
 
     // Query base para logs
@@ -76,6 +77,12 @@ export async function GET(request: Request) {
 
     if (dateTo) {
       query = query.lte("created_at", dateTo + "T23:59:59.999Z")
+    }
+
+    if (search) {
+      query = query.or(
+        `action.ilike.%${search}%,entity.ilike.%${search}%,ip_address.ilike.%${search}%,changes->>'performer_email'.ilike.%${search}%,changes->>'description'.ilike.%${search}%`
+      )
     }
 
     // Paginación

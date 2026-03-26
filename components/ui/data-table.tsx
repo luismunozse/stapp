@@ -57,6 +57,9 @@ export interface DataTableProps<T> {
   selectable?: boolean
   selectedKeys?: string[]
   onSelectionChange?: (keys: string[]) => void
+  // Expandable rows
+  renderExpandedRow?: (item: T) => React.ReactNode | null
+  expandedKeys?: Set<string>
 }
 
 const EMPTY_KEYS: string[] = []
@@ -76,6 +79,8 @@ export function DataTable<T>({
   selectable,
   selectedKeys = EMPTY_KEYS,
   onSelectionChange,
+  renderExpandedRow,
+  expandedKeys,
 }: DataTableProps<T>) {
   const handleSort = (key: string) => {
     if (onSort) {
@@ -170,43 +175,55 @@ export function DataTable<T>({
                 data.map((item) => {
                   const key = keyExtractor(item)
                   const isSelected = selectedKeys.includes(key)
+                  const isExpanded = expandedKeys?.has(key)
+                  const expandedContent = isExpanded && renderExpandedRow ? renderExpandedRow(item) : null
+                  const totalCols = columns.length + (selectable ? 1 : 0)
                   return (
-                    <tr
-                      key={key}
-                      className={cn(
-                        "border-b last:border-0 transition-colors",
-                        onRowClick && "cursor-pointer hover:bg-muted/50",
-                        isSelected && "bg-primary/5",
-                        rowClassName?.(item)
+                    <React.Fragment key={key}>
+                      <tr
+                        className={cn(
+                          "border-b transition-colors",
+                          !isExpanded && "last:border-0",
+                          onRowClick && "cursor-pointer hover:bg-muted/50",
+                          isSelected && "bg-primary/5",
+                          rowClassName?.(item)
+                        )}
+                        onClick={() => onRowClick?.(item)}
+                      >
+                        {selectable && (
+                          <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => handleSelectRow(key)}
+                              className="h-4 w-4 rounded border-input"
+                            />
+                          </td>
+                        )}
+                        {columns.map((column) => (
+                          <td
+                            key={column.key}
+                            className={cn(
+                              "px-4 py-3",
+                              column.hideOnMobile && "hidden sm:table-cell",
+                              column.hideOnTablet && "hidden md:table-cell",
+                              column.className
+                            )}
+                          >
+                            {column.render
+                              ? column.render(item)
+                              : (item as any)[column.key]}
+                          </td>
+                        ))}
+                      </tr>
+                      {expandedContent && (
+                        <tr className="border-b last:border-0">
+                          <td colSpan={totalCols} className="px-4 py-3 bg-muted/30">
+                            {expandedContent}
+                          </td>
+                        </tr>
                       )}
-                      onClick={() => onRowClick?.(item)}
-                    >
-                      {selectable && (
-                        <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => handleSelectRow(key)}
-                            className="h-4 w-4 rounded border-input"
-                          />
-                        </td>
-                      )}
-                      {columns.map((column) => (
-                        <td
-                          key={column.key}
-                          className={cn(
-                            "px-4 py-3",
-                            column.hideOnMobile && "hidden sm:table-cell",
-                            column.hideOnTablet && "hidden md:table-cell",
-                            column.className
-                          )}
-                        >
-                          {column.render
-                            ? column.render(item)
-                            : (item as any)[column.key]}
-                        </td>
-                      ))}
-                    </tr>
+                    </React.Fragment>
                   )
                 })
               )}

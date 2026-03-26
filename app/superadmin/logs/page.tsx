@@ -140,15 +140,18 @@ export default function LogsPage() {
   const [activeTab, setActiveTab] = useState("all")
   const [entityFilter, setEntityFilter] = useState("")
   const [actionFilter, setActionFilter] = useState("")
+  const [orgFilter, setOrgFilter] = useState("")
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
+  const [searchInput, setSearchInput] = useState("")
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const [logs, setLogs] = useState<AuditLogWithRelations[]>([])
   const [stats, setStats] = useState<AuditStats | null>(null)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [exporting, setExporting] = useState(false)
+  const [organizations, setOrganizations] = useState<Array<{ id: string; nombre: string }>>([])
 
   const { loading, fetchData } = useSuperadminFetch<{
     logs: AuditLogWithRelations[]
@@ -158,12 +161,43 @@ export default function LogsPage() {
     useSuperadminFetch<AuditStats>()
   const { formattedLastUpdated, markUpdated } = useLastUpdated()
 
+  // Cargar lista de organizaciones para el filtro
+  useEffect(() => {
+    const loadOrgs = async () => {
+      try {
+        const superadminEmail = document.cookie
+          .split("; ")
+          .find((c) => c.startsWith("superadmin_email="))
+          ?.split("=")[1]
+        const res = await fetch("/api/superadmin/organizations?limit=500", {
+          headers: {
+            "x-superadmin-panel": "true",
+            "x-superadmin-email": superadminEmail || "",
+          },
+        })
+        if (res.ok) {
+          const data = await res.json()
+          setOrganizations(
+            (data.organizations || []).map((o: { id: string; nombre: string }) => ({
+              id: o.id,
+              nombre: o.nombre,
+            }))
+          )
+        }
+      } catch {
+        // silencioso
+      }
+    }
+    loadOrgs()
+  }, [])
+
   const fetchStats = useCallback(async () => {
     const result = await fetchStatsData("/api/superadmin/audit-logs/stats")
     if (result) {
       setStats(result)
+      markUpdated()
     }
-  }, [fetchStatsData])
+  }, [fetchStatsData, markUpdated])
 
   const fetchLogs = useCallback(async () => {
     const params = new URLSearchParams({
@@ -172,8 +206,10 @@ export default function LogsPage() {
       tab: activeTab,
       ...(entityFilter && { entity: entityFilter }),
       ...(actionFilter && { action: actionFilter }),
+      ...(orgFilter && { organizationId: orgFilter }),
       ...(dateFrom && { dateFrom }),
       ...(dateTo && { dateTo }),
+      ...(searchQuery && { search: searchQuery }),
     })
 
     const result = await fetchData(`/api/superadmin/audit-logs?${params}`)
@@ -182,7 +218,7 @@ export default function LogsPage() {
       setTotal(result.total || 0)
       markUpdated()
     }
-  }, [page, activeTab, entityFilter, actionFilter, dateFrom, dateTo, fetchData])
+  }, [page, activeTab, entityFilter, actionFilter, orgFilter, dateFrom, dateTo, searchQuery, fetchData, markUpdated])
 
   useEffect(() => {
     fetchStats()
@@ -191,6 +227,15 @@ export default function LogsPage() {
   useEffect(() => {
     fetchLogs()
   }, [fetchLogs])
+
+  // Debounce de búsqueda
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setSearchQuery(searchInput)
+      setPage(1)
+    }, 400)
+    return () => clearTimeout(timeout)
+  }, [searchInput])
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab)
@@ -217,6 +262,7 @@ export default function LogsPage() {
       const params = new URLSearchParams({
         ...(entityFilter && { entity: entityFilter }),
         ...(actionFilter && { action: actionFilter }),
+        ...(orgFilter && { organizationId: orgFilter }),
         ...(dateFrom && { dateFrom }),
         ...(dateTo && { dateTo }),
         ...(searchQuery && { search: searchQuery }),
@@ -252,22 +298,72 @@ export default function LogsPage() {
     }
   }
 
-  // Filtrar logs localmente por búsqueda
-  const filteredLogs = searchQuery
-    ? logs.filter((log) => {
-        const q = searchQuery.toLowerCase()
-        return (
-          log.action.toLowerCase().includes(q) ||
-          log.entity.toLowerCase().includes(q) ||
-          (log.users?.nombre || "").toLowerCase().includes(q) ||
-          (log.users?.email || "").toLowerCase().includes(q) ||
-          (log.organizations?.nombre || "").toLowerCase().includes(q) ||
-          (log.performer_email || "").toLowerCase().includes(q) ||
-          (log.description || "").toLowerCase().includes(q) ||
-          (log.ip_address || "").toLowerCase().includes(q)
-        )
-      })
-    : logs
+  const renderExpandedRow = (log: AuditLogWithRelations) => {
+    if (!log.changes) return null
+    const changes = log.changes as Record<string, unknown>
+    const displayChanges = { ...changes }
+    delete displayChanges.performer_email
+    delete displayChanges.is_superadmin_action
+    delete displayChanges.description
+
+    return (
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs font-medium text-muted-foreground">
+            Detalles - {ENTITY_LABELS[log.entity] || log.entity} (
+            {ACTION_LABELS[log.action] || log.action}) -{" "}
+            {formatDateTime(log.created_at)}
+          </span>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => toggleRow(log.id)}
+          >
+            <ChevronUp className="h-3 w-3" />
+          </Button>
+        </div>
+
+        {changes.before && changes.after ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <span className="text-xs font-medium text-destructive/80 mb-1 block">
+                Antes:
+              </span>
+              <pre className="text-xs overflow-x-auto p-2 bg-destructive/5 rounded border border-destructive/10">
+                {JSON.stringify(changes.before, null, 2)}
+              </pre>
+            </div>
+            <div>
+              <span className="text-xs font-medium text-green-600 dark:text-green-400 mb-1 block">
+                Después:
+              </span>
+              <pre className="text-xs overflow-x-auto p-2 bg-green-500/5 rounded border border-green-500/10">
+                {JSON.stringify(changes.after, null, 2)}
+              </pre>
+            </div>
+          </div>
+        ) : (
+          <pre className="text-xs overflow-x-auto p-2 bg-muted rounded">
+            {JSON.stringify(displayChanges, null, 2)}
+          </pre>
+        )}
+
+        <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
+          {log.ip_address && (
+            <span>
+              IP: <span className="font-mono">{log.ip_address}</span>
+            </span>
+          )}
+          {log.user_agent && (
+            <span className="truncate max-w-[400px]">
+              UA: {log.user_agent}
+            </span>
+          )}
+          {log.entity_id && <span>Entity ID: {log.entity_id}</span>}
+        </div>
+      </div>
+    )
+  }
 
   const columns: Column<AuditLogWithRelations>[] = [
     {
@@ -401,7 +497,7 @@ export default function LogsPage() {
   ]
 
   const hasFilters =
-    dateFrom || dateTo || actionFilter || entityFilter || searchQuery
+    dateFrom || dateTo || actionFilter || entityFilter || searchInput || orgFilter
 
   // Acciones disponibles por tab
   const getActionsForTab = () => {
@@ -678,8 +774,8 @@ export default function LogsPage() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Buscar por usuario, email, org, IP..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
                   className="pl-9"
                 />
               </div>
@@ -714,23 +810,34 @@ export default function LogsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todas las entidades</SelectItem>
-                  <SelectItem value="organizations">Organizaciones</SelectItem>
-                  <SelectItem value="users">Usuarios</SelectItem>
-                  <SelectItem value="sessions">Sesiones</SelectItem>
-                  <SelectItem value="subscriptions">Suscripciones</SelectItem>
-                  <SelectItem value="plans">Planes</SelectItem>
-                  <SelectItem value="ordenes_servicio">Órdenes</SelectItem>
-                  <SelectItem value="clientes">Clientes</SelectItem>
-                  <SelectItem value="inventario">Inventario</SelectItem>
-                  <SelectItem value="broadcasts">Broadcasts</SelectItem>
-                  <SelectItem value="email_campaigns">
-                    Campañas Email
-                  </SelectItem>
-                  <SelectItem value="support_tickets">Soporte</SelectItem>
-                  <SelectItem value="cron_jobs">Cron Jobs</SelectItem>
-                  <SelectItem value="system">Sistema</SelectItem>
+                  {Object.entries(ENTITY_LABELS).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
+              {organizations.length > 0 && (
+                <Select
+                  value={orgFilter || "all"}
+                  onValueChange={(value) => {
+                    setOrgFilter(value === "all" ? "" : value)
+                    setPage(1)
+                  }}
+                >
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder="Todas las orgs" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas las orgs</SelectItem>
+                    {organizations.map((org) => (
+                      <SelectItem key={org.id} value={org.id}>
+                        {org.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               <div className="flex items-center gap-2">
                 <span className="text-sm text-muted-foreground whitespace-nowrap">
                   Desde:
@@ -767,6 +874,8 @@ export default function LogsPage() {
                     setDateTo("")
                     setActionFilter("")
                     setEntityFilter("")
+                    setOrgFilter("")
+                    setSearchInput("")
                     setSearchQuery("")
                     setPage(1)
                   }}
@@ -779,21 +888,25 @@ export default function LogsPage() {
 
           <CardContent>
             <TabsContent value="all" className="mt-0">
-              <AuditTable
-                logs={filteredLogs}
+              <DataTable
+                data={logs}
                 columns={columns}
+                keyExtractor={(log) => log.id}
                 loading={loading}
-                page={page}
-                total={searchQuery ? filteredLogs.length : total}
-                onPageChange={setPage}
-                expandedRows={expandedRows}
-                toggleRow={toggleRow}
-                searchQuery={searchQuery}
+                emptyMessage="No se encontraron logs"
+                expandedKeys={expandedRows}
+                renderExpandedRow={renderExpandedRow}
+                pagination={{
+                  page,
+                  pageSize: PAGE_SIZE,
+                  total,
+                  onPageChange: setPage,
+                }}
               />
             </TabsContent>
 
             <TabsContent value="security" className="mt-0">
-              {/* Security-specific alert */}
+              {/* Security alert */}
               {stats && stats.loginsFailed7Days > 5 && (
                 <div className="mb-4 p-3 bg-destructive/10 border border-destructive/30 rounded-lg flex items-start gap-2">
                   <AlertTriangle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
@@ -808,159 +921,77 @@ export default function LogsPage() {
                   </div>
                 </div>
               )}
-              <AuditTable
-                logs={filteredLogs}
+
+              {/* Eventos de seguridad recientes */}
+              {stats && stats.securityEvents.length > 0 && (
+                <div className="mb-4">
+                  <h3 className="text-sm font-medium mb-2">Últimos eventos de seguridad</h3>
+                  <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
+                    {stats.securityEvents.map((event) => (
+                      <div
+                        key={event.id}
+                        className="flex items-center gap-3 text-xs p-2 rounded bg-muted/40"
+                      >
+                        <Badge
+                          variant={ACTION_VARIANTS[event.action] || "secondary"}
+                          className="text-[10px] px-1.5 py-0"
+                        >
+                          {ACTION_LABELS[event.action] || event.action}
+                        </Badge>
+                        <span className="text-muted-foreground truncate max-w-[180px]">
+                          {event.email || "Desconocido"}
+                        </span>
+                        {event.ipAddress && (
+                          <span className="font-mono text-muted-foreground">
+                            {event.ipAddress}
+                          </span>
+                        )}
+                        <span className="text-muted-foreground ml-auto whitespace-nowrap">
+                          {formatDateTime(event.createdAt)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <DataTable
+                data={logs}
                 columns={columns}
+                keyExtractor={(log) => log.id}
                 loading={loading}
-                page={page}
-                total={searchQuery ? filteredLogs.length : total}
-                onPageChange={setPage}
-                expandedRows={expandedRows}
-                toggleRow={toggleRow}
-                searchQuery={searchQuery}
+                emptyMessage="No se encontraron eventos de seguridad"
+                expandedKeys={expandedRows}
+                renderExpandedRow={renderExpandedRow}
+                pagination={{
+                  page,
+                  pageSize: PAGE_SIZE,
+                  total,
+                  onPageChange: setPage,
+                }}
               />
             </TabsContent>
 
             <TabsContent value="superadmin" className="mt-0">
-              <AuditTable
-                logs={filteredLogs}
+              <DataTable
+                data={logs}
                 columns={columns}
+                keyExtractor={(log) => log.id}
                 loading={loading}
-                page={page}
-                total={searchQuery ? filteredLogs.length : total}
-                onPageChange={setPage}
-                expandedRows={expandedRows}
-                toggleRow={toggleRow}
-                searchQuery={searchQuery}
+                emptyMessage="No se encontraron acciones de superadmin"
+                expandedKeys={expandedRows}
+                renderExpandedRow={renderExpandedRow}
+                pagination={{
+                  page,
+                  pageSize: PAGE_SIZE,
+                  total,
+                  onPageChange: setPage,
+                }}
               />
             </TabsContent>
           </CardContent>
         </Card>
       </Tabs>
     </div>
-  )
-}
-
-function AuditTable({
-  logs,
-  columns,
-  loading,
-  page,
-  total,
-  onPageChange,
-  expandedRows,
-  toggleRow,
-  searchQuery,
-}: {
-  logs: AuditLogWithRelations[]
-  columns: Column<AuditLogWithRelations>[]
-  loading: boolean
-  page: number
-  total: number
-  onPageChange: (p: number) => void
-  expandedRows: Set<string>
-  toggleRow: (id: string) => void
-  searchQuery: string
-}) {
-  return (
-    <>
-      <DataTable
-        data={logs}
-        columns={columns}
-        keyExtractor={(log) => log.id}
-        loading={loading}
-        emptyMessage={
-          searchQuery
-            ? "No se encontraron logs con esa búsqueda"
-            : "No se encontraron logs"
-        }
-        pagination={
-          !searchQuery
-            ? {
-                page,
-                pageSize: PAGE_SIZE,
-                total,
-                onPageChange,
-              }
-            : undefined
-        }
-      />
-
-      {/* Expanded row details */}
-      {logs
-        .filter((log) => expandedRows.has(log.id) && log.changes)
-        .map((log) => {
-          const changes = log.changes as Record<string, unknown>
-          // Mostrar de forma más legible
-          const displayChanges = { ...changes }
-          // Remover campos ya mostrados en la tabla
-          delete displayChanges.performer_email
-          delete displayChanges.is_superadmin_action
-          delete displayChanges.description
-
-          return (
-            <div
-              key={`${log.id}-detail`}
-              className="mt-2 p-3 bg-muted/30 rounded-lg border"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-medium text-muted-foreground">
-                  Detalles - {ENTITY_LABELS[log.entity] || log.entity} (
-                  {ACTION_LABELS[log.action] || log.action}) -{" "}
-                  {formatDateTime(log.created_at)}
-                </span>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => toggleRow(log.id)}
-                >
-                  <ChevronUp className="h-3 w-3" />
-                </Button>
-              </div>
-
-              {/* Before/After diff if available */}
-              {changes.before && changes.after ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <span className="text-xs font-medium text-destructive/80 mb-1 block">
-                      Antes:
-                    </span>
-                    <pre className="text-xs overflow-x-auto p-2 bg-destructive/5 rounded border border-destructive/10">
-                      {JSON.stringify(changes.before, null, 2)}
-                    </pre>
-                  </div>
-                  <div>
-                    <span className="text-xs font-medium text-green-600 dark:text-green-400 mb-1 block">
-                      Después:
-                    </span>
-                    <pre className="text-xs overflow-x-auto p-2 bg-green-500/5 rounded border border-green-500/10">
-                      {JSON.stringify(changes.after, null, 2)}
-                    </pre>
-                  </div>
-                </div>
-              ) : (
-                <pre className="text-xs overflow-x-auto p-2 bg-muted rounded">
-                  {JSON.stringify(displayChanges, null, 2)}
-                </pre>
-              )}
-
-              {/* Metadata row */}
-              <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
-                {log.ip_address && (
-                  <span>
-                    IP: <span className="font-mono">{log.ip_address}</span>
-                  </span>
-                )}
-                {log.user_agent && (
-                  <span className="truncate max-w-[400px]">
-                    UA: {log.user_agent}
-                  </span>
-                )}
-                {log.entity_id && <span>Entity ID: {log.entity_id}</span>}
-              </div>
-            </div>
-          )
-        })}
-    </>
   )
 }
