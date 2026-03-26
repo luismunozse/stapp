@@ -916,10 +916,13 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
             page.drawText(truncateToWidth(item.label, availableW - 30, helvetica, 7), { x: colX, y: itemY, size: 7, font: helvetica, color: grayColor })
             page.drawText(symbol, { x: colRightEdge - helveticaBold.widthOfTextAtSize(symbol, 7), y: itemY, size: 7, font: helveticaBold, color: symbolColor })
           } else {
-            const labelW = availableW * 0.45
-            const symbolX = colX + labelW + 4
+            // Truncar label a max 45% y posicionar valor justo después del label real
+            const labelMaxW = availableW * 0.45
+            const truncatedLabel = truncateToWidth(item.label, labelMaxW, helvetica, 7)
+            const labelRealW = helvetica.widthOfTextAtSize(truncatedLabel, 7)
+            const symbolX = colX + labelRealW + 8
             const symbolMaxW = colRightEdge - symbolX
-            page.drawText(truncateToWidth(item.label, labelW, helvetica, 7), { x: colX, y: itemY, size: 7, font: helvetica, color: grayColor })
+            page.drawText(truncatedLabel, { x: colX, y: itemY, size: 7, font: helvetica, color: grayColor })
             page.drawText(truncateToWidth(symbol, Math.max(symbolMaxW, 0), helveticaBold, 7), { x: symbolX, y: itemY, size: 7, font: helveticaBold, color: symbolColor })
           }
           itemY -= checklistRowHeight
