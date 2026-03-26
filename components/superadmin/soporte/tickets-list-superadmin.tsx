@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -23,6 +23,7 @@ import {
   Building2,
   ChevronLeft,
   ChevronRight,
+  CircleDot,
 } from "lucide-react"
 
 interface TicketItem {
@@ -36,6 +37,12 @@ interface TicketItem {
   usuario: { nombre: string; email: string } | null
   organizacion: { nombre: string; slug: string } | null
   totalMensajes: number
+  noLeidos: number
+  ultimoMensaje: {
+    contenido: string
+    autorTipo: string
+    createdAt: string
+  } | null
 }
 
 const tipoConfig: Record<string, { label: string; icon: any; color: string }> = {
@@ -57,6 +64,21 @@ const prioridadConfig: Record<string, { label: string; color: string }> = {
   ALTA: { label: "Alta", color: "bg-red-100 text-red-700" },
 }
 
+function timeAgo(dateStr: string): string {
+  const now = Date.now()
+  const date = new Date(dateStr).getTime()
+  const diff = Math.floor((now - date) / 1000)
+
+  if (diff < 60) return "ahora"
+  if (diff < 3600) return `hace ${Math.floor(diff / 60)}m`
+  if (diff < 86400) return `hace ${Math.floor(diff / 3600)}h`
+  if (diff < 604800) return `hace ${Math.floor(diff / 86400)}d`
+  return new Date(dateStr).toLocaleDateString("es-AR", {
+    day: "numeric",
+    month: "short",
+  })
+}
+
 interface Stats {
   abiertos: number
   enProceso: number
@@ -71,10 +93,25 @@ export function TicketsListSuperadmin() {
   const [loading, setLoading] = useState(true)
   const [filtroEstado, setFiltroEstado] = useState("")
   const [filtroPrioridad, setFiltroPrioridad] = useState("")
+  const [filtroTipo, setFiltroTipo] = useState("")
   const [search, setSearch] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const pageSize = 20
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Debounce search
+  useEffect(() => {
+    if (debounceTimer.current) clearTimeout(debounceTimer.current)
+    debounceTimer.current = setTimeout(() => {
+      setDebouncedSearch(search)
+      setPage(1)
+    }, 300)
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current)
+    }
+  }, [search])
 
   const fetchTickets = useCallback(async () => {
     try {
@@ -84,7 +121,8 @@ export function TicketsListSuperadmin() {
       params.append("limit", pageSize.toString())
       if (filtroEstado) params.append("estado", filtroEstado)
       if (filtroPrioridad) params.append("prioridad", filtroPrioridad)
-      if (search) params.append("search", search)
+      if (filtroTipo) params.append("tipo", filtroTipo)
+      if (debouncedSearch) params.append("search", debouncedSearch)
 
       const res = await fetch(`/api/superadmin/soporte?${params}`)
       if (res.ok) {
@@ -97,7 +135,7 @@ export function TicketsListSuperadmin() {
     } finally {
       setLoading(false)
     }
-  }, [filtroEstado, filtroPrioridad, search, page])
+  }, [filtroEstado, filtroPrioridad, filtroTipo, debouncedSearch, page])
 
   const fetchStats = useCallback(async () => {
     try {
@@ -115,33 +153,41 @@ export function TicketsListSuperadmin() {
     fetchStats()
   }, [fetchTickets, fetchStats])
 
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString("es-AR", {
-      day: "2-digit",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-    })
+  const handleStatClick = (estado: string) => {
+    setFiltroEstado((prev) => (prev === estado ? "" : estado))
+    setPage(1)
   }
 
   return (
     <div className="space-y-4">
-      {/* Stats */}
+      {/* Stats - clickeables */}
       {stats && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <Card className="p-3">
+          <Card
+            className={`p-3 cursor-pointer transition-all hover:ring-2 hover:ring-blue-400 ${filtroEstado === "ABIERTO" ? "ring-2 ring-blue-500" : ""}`}
+            onClick={() => handleStatClick("ABIERTO")}
+          >
             <p className="text-2xl font-bold text-blue-600">{stats.abiertos}</p>
             <p className="text-xs text-muted-foreground">Abiertos</p>
           </Card>
-          <Card className="p-3">
+          <Card
+            className={`p-3 cursor-pointer transition-all hover:ring-2 hover:ring-amber-400 ${filtroEstado === "EN_PROCESO" ? "ring-2 ring-amber-500" : ""}`}
+            onClick={() => handleStatClick("EN_PROCESO")}
+          >
             <p className="text-2xl font-bold text-amber-600">{stats.enProceso}</p>
             <p className="text-xs text-muted-foreground">En proceso</p>
           </Card>
-          <Card className="p-3">
+          <Card
+            className={`p-3 cursor-pointer transition-all hover:ring-2 hover:ring-green-400 ${filtroEstado === "RESUELTO" ? "ring-2 ring-green-500" : ""}`}
+            onClick={() => handleStatClick("RESUELTO")}
+          >
             <p className="text-2xl font-bold text-green-600">{stats.resueltos}</p>
             <p className="text-xs text-muted-foreground">Resueltos</p>
           </Card>
-          <Card className="p-3">
+          <Card
+            className={`p-3 cursor-pointer transition-all hover:ring-2 hover:ring-gray-400 ${filtroEstado === "" ? "ring-2 ring-gray-500" : ""}`}
+            onClick={() => { setFiltroEstado(""); setPage(1) }}
+          >
             <p className="text-2xl font-bold">{stats.total}</p>
             <p className="text-xs text-muted-foreground">Total</p>
           </Card>
@@ -187,6 +233,17 @@ export function TicketsListSuperadmin() {
                 <SelectItem value="BAJA">Baja</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={filtroTipo || "all"} onValueChange={(v) => { setFiltroTipo(v === "all" ? "" : v); setPage(1) }}>
+              <SelectTrigger className="w-full sm:w-[150px]">
+                <SelectValue placeholder="Tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="BUG">Bug</SelectItem>
+                <SelectItem value="SUGERENCIA">Sugerencia</SelectItem>
+                <SelectItem value="PREGUNTA">Pregunta</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </CardHeader>
         <CardContent>
@@ -214,13 +271,29 @@ export function TicketsListSuperadmin() {
                     tabIndex={0}
                     onClick={() => router.push(`/superadmin/soporte/${ticket.id}`)}
                     onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); router.push(`/superadmin/soporte/${ticket.id}`); } }}
-                    className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-accent/50 transition-colors"
+                    className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-accent/50 transition-colors ${ticket.noLeidos > 0 ? "border-blue-300 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/20" : ""}`}
                   >
-                    <div className={`p-2 rounded-lg shrink-0 ${tipo?.color || ""}`}>
-                      <TipoIcon className="h-4 w-4" />
+                    <div className="relative">
+                      <div className={`p-2 rounded-lg shrink-0 ${tipo?.color || ""}`}>
+                        <TipoIcon className="h-4 w-4" />
+                      </div>
+                      {ticket.noLeidos > 0 && (
+                        <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center">
+                          {ticket.noLeidos}
+                        </span>
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">{ticket.asunto}</p>
+                      <div className="flex items-center gap-2">
+                        <p className={`font-medium truncate ${ticket.noLeidos > 0 ? "font-semibold" : ""}`}>{ticket.asunto}</p>
+                      </div>
+                      {/* Preview del ultimo mensaje */}
+                      {ticket.ultimoMensaje && (
+                        <p className="text-xs text-muted-foreground truncate mt-0.5">
+                          {ticket.ultimoMensaje.autorTipo === "SUPERADMIN" ? "Soporte: " : ""}
+                          {ticket.ultimoMensaje.contenido}
+                        </p>
+                      )}
                       <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground flex-wrap">
                         <span className="flex items-center gap-1">
                           <Building2 className="h-3 w-3" />
@@ -229,7 +302,7 @@ export function TicketsListSuperadmin() {
                         <span>·</span>
                         <span>{ticket.usuario?.nombre || "Usuario"}</span>
                         <span>·</span>
-                        <span>{formatDate(ticket.updatedAt)}</span>
+                        <span>{timeAgo(ticket.updatedAt)}</span>
                         {ticket.totalMensajes > 1 && (
                           <>
                             <span>·</span>
@@ -271,7 +344,7 @@ export function TicketsListSuperadmin() {
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
                 <span className="text-sm text-muted-foreground">
-                  Página {page} de {Math.ceil(total / pageSize)}
+                  Pagina {page} de {Math.ceil(total / pageSize)}
                 </span>
                 <Button
                   variant="outline"

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -29,7 +29,9 @@ import {
   X,
   CheckCheck,
   Check,
+  FileText,
 } from "lucide-react"
+import { toast } from "sonner"
 import type { SupportTicketMessage, SupportTicketAttachment } from "@/types"
 
 interface TicketData {
@@ -66,6 +68,26 @@ const prioridadConfig: Record<string, { label: string; color: string }> = {
   ALTA: { label: "Alta", color: "bg-red-100 text-red-700" },
 }
 
+function timeAgo(dateStr: string): string {
+  const now = Date.now()
+  const date = new Date(dateStr).getTime()
+  const diff = Math.floor((now - date) / 1000)
+
+  if (diff < 60) return "ahora"
+  if (diff < 3600) return `hace ${Math.floor(diff / 60)}m`
+  if (diff < 86400) return `hace ${Math.floor(diff / 3600)}h`
+  if (diff < 604800) return `hace ${Math.floor(diff / 86400)}d`
+  return new Date(dateStr).toLocaleDateString("es-AR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
+
+const POLL_INTERVAL = 30_000 // 30 seconds
+
 export function TicketDetailSuperadmin({ ticketId }: { ticketId: string }) {
   const router = useRouter()
   const [ticket, setTicket] = useState<TicketData | null>(null)
@@ -76,9 +98,11 @@ export function TicketDetailSuperadmin({ ticketId }: { ticketId: string }) {
   const [selectedImages, setSelectedImages] = useState<string[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const fetchTicket = async () => {
+  const fetchTicket = useCallback(async (silent = false) => {
     try {
+      if (!silent) setLoading(true)
       const res = await fetch(`/api/superadmin/soporte/${ticketId}`)
       if (res.ok) {
         setTicket(await res.json())
@@ -86,9 +110,9 @@ export function TicketDetailSuperadmin({ ticketId }: { ticketId: string }) {
     } catch (err) {
       console.error("Error:", err)
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
-  }
+  }, [ticketId])
 
   const markAsRead = async () => {
     try {
@@ -100,9 +124,19 @@ export function TicketDetailSuperadmin({ ticketId }: { ticketId: string }) {
 
   useEffect(() => {
     fetchTicket()
-  }, [ticketId])
+  }, [fetchTicket])
 
-  // Marcar mensajes del usuario como leídos al abrir el chat
+  // Auto-refresh polling cada 30s
+  useEffect(() => {
+    pollRef.current = setInterval(() => {
+      fetchTicket(true)
+    }, POLL_INTERVAL)
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current)
+    }
+  }, [fetchTicket])
+
+  // Marcar mensajes del usuario como leidos al abrir el chat
   useEffect(() => {
     if (ticket?.mensajes?.some(m => m.autorTipo === "USUARIO" && !m.leidoAt)) {
       markAsRead()
@@ -152,10 +186,15 @@ export function TicketDetailSuperadmin({ ticketId }: { ticketId: string }) {
       if (res.ok) {
         setNewMessage("")
         setSelectedImages([])
+        toast.success("Mensaje enviado")
         await fetchTicket()
+      } else {
+        const data = await res.json().catch(() => ({}))
+        toast.error(data.error || "Error al enviar mensaje")
       }
     } catch (err) {
       console.error("Error:", err)
+      toast.error("Error al enviar mensaje")
     } finally {
       setSending(false)
     }
@@ -170,10 +209,15 @@ export function TicketDetailSuperadmin({ ticketId }: { ticketId: string }) {
         body: JSON.stringify({ estado: newEstado }),
       })
       if (res.ok) {
+        const estadoLabel = estadoConfig[newEstado]?.label || newEstado
+        toast.success(`Estado cambiado a ${estadoLabel}`)
         await fetchTicket()
+      } else {
+        toast.error("Error al cambiar estado")
       }
     } catch (err) {
       console.error("Error:", err)
+      toast.error("Error al cambiar estado")
     } finally {
       setUpdatingStatus(false)
     }
@@ -207,16 +251,6 @@ export function TicketDetailSuperadmin({ ticketId }: { ticketId: string }) {
       e.preventDefault()
       handleSend()
     }
-  }
-
-  const formatDateTime = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString("es-AR", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    })
   }
 
   if (loading) {
@@ -286,7 +320,7 @@ export function TicketDetailSuperadmin({ ticketId }: { ticketId: string }) {
         </div>
       </div>
 
-      {/* Info del usuario y organización */}
+      {/* Info del usuario y organizacion */}
       <Card>
         <CardContent className="py-3">
           <div className="flex items-center gap-4 flex-wrap text-sm">
@@ -304,7 +338,7 @@ export function TicketDetailSuperadmin({ ticketId }: { ticketId: string }) {
             </span>
             <span className="flex items-center gap-1.5 text-muted-foreground">
               <Clock className="h-4 w-4" />
-              {formatDateTime(ticket.createdAt)}
+              {timeAgo(ticket.createdAt)}
             </span>
           </div>
         </CardContent>
@@ -316,7 +350,7 @@ export function TicketDetailSuperadmin({ ticketId }: { ticketId: string }) {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
               <ImageIcon className="h-4 w-4" />
-              Imágenes adjuntas
+              Imagenes adjuntas
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -340,12 +374,32 @@ export function TicketDetailSuperadmin({ ticketId }: { ticketId: string }) {
         </Card>
       )}
 
-      {/* Conversación */}
+      {/* Conversacion */}
       <Card className="flex flex-col" style={{ minHeight: "400px" }}>
         <CardHeader className="pb-2 border-b">
-          <CardTitle className="text-sm">Conversación</CardTitle>
+          <CardTitle className="text-sm">Conversacion</CardTitle>
         </CardHeader>
         <CardContent className="flex-1 overflow-y-auto p-4 space-y-4" style={{ maxHeight: "500px" }}>
+          {/* Descripcion original del ticket como primer mensaje */}
+          {ticket.descripcion && (
+            <div className="flex justify-start">
+              <div className="max-w-[80%]">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <FileText className="h-3 w-3 text-muted-foreground" />
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Descripcion original
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {timeAgo(ticket.createdAt)}
+                  </span>
+                </div>
+                <div className="rounded-lg px-3 py-2 text-sm bg-muted border-l-4 border-muted-foreground/20">
+                  <p className="whitespace-pre-wrap">{ticket.descripcion}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {ticket.mensajes.map((msg) => {
             const isSuperadmin = msg.autorTipo === "SUPERADMIN"
             return (
@@ -361,7 +415,7 @@ export function TicketDetailSuperadmin({ ticketId }: { ticketId: string }) {
                       {msg.autorNombre}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      {formatDateTime(msg.createdAt)}
+                      {timeAgo(msg.createdAt)}
                     </span>
                   </div>
                   <div
@@ -391,7 +445,7 @@ export function TicketDetailSuperadmin({ ticketId }: { ticketId: string }) {
                       </div>
                     )}
                   </div>
-                  {/* Indicador de leído para mensajes del superadmin */}
+                  {/* Indicador de leido para mensajes del superadmin */}
                   {isSuperadmin && (
                     <div className={`flex items-center justify-end mt-0.5 gap-0.5`}>
                       {msg.leidoAt ? (
@@ -411,7 +465,7 @@ export function TicketDetailSuperadmin({ ticketId }: { ticketId: string }) {
         {/* Input de respuesta */}
         {!isClosed ? (
           <div className="border-t p-3 space-y-2">
-            {/* Preview de imágenes seleccionadas */}
+            {/* Preview de imagenes seleccionadas */}
             {selectedImages.length > 0 && (
               <div className="flex gap-2 flex-wrap">
                 {selectedImages.map((img, i) => (
@@ -446,7 +500,7 @@ export function TicketDetailSuperadmin({ ticketId }: { ticketId: string }) {
                 className="shrink-0 self-end"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={sending || selectedImages.length >= 3}
-                title="Adjuntar imagen (máx. 3)"
+                title="Adjuntar imagen (max. 3)"
               >
                 <Paperclip className="h-4 w-4" />
               </Button>
@@ -476,7 +530,7 @@ export function TicketDetailSuperadmin({ ticketId }: { ticketId: string }) {
         ) : (
           <div className="border-t p-3 text-center">
             <p className="text-sm text-muted-foreground">
-              Ticket cerrado. Cambiá el estado para reactivar la conversación.
+              Ticket cerrado. Cambia el estado para reactivar la conversacion.
             </p>
           </div>
         )}

@@ -7,9 +7,7 @@ export async function GET() {
     const { error } = await requireSuperadmin()
     if (error) return error
 
-    const { data: tickets, error: dbError } = await supabaseAdmin
-      .from("support_tickets")
-      .select("estado")
+    const { data, error: dbError } = await supabaseAdmin.rpc("support_ticket_stats")
 
     if (dbError) throw dbError
 
@@ -18,15 +16,17 @@ export async function GET() {
       enProceso: 0,
       resueltos: 0,
       cerrados: 0,
-      total: tickets?.length || 0,
+      total: 0,
     }
 
-    for (const t of tickets || []) {
-      switch (t.estado) {
-        case "ABIERTO": stats.abiertos++; break
-        case "EN_PROCESO": stats.enProceso++; break
-        case "RESUELTO": stats.resueltos++; break
-        case "CERRADO": stats.cerrados++; break
+    for (const row of data || []) {
+      const count = row.count as number
+      stats.total += count
+      switch (row.estado) {
+        case "ABIERTO": stats.abiertos = count; break
+        case "EN_PROCESO": stats.enProceso = count; break
+        case "RESUELTO": stats.resueltos = count; break
+        case "CERRADO": stats.cerrados = count; break
       }
     }
 
