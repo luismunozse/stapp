@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Clock, AlertTriangle } from "lucide-react"
+import { Clock, AlertTriangle, Timer } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { getTransicionesPosibles, ESTADO_LABELS } from "@/lib/orden-state-machine"
 import type { EstadoOrden } from "@/types"
@@ -14,6 +14,24 @@ interface OrdenEstadoCardProps {
   fechaCompletado?: string | Date | null
   updating: boolean
   onUpdateEstado: (estado: EstadoOrden) => void
+}
+
+function ElapsedTime({ since }: { since: string | Date }) {
+  const start = new Date(since)
+  const now = new Date()
+  const diffMs = now.getTime() - start.getTime()
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+  const diffDays = Math.floor(diffHours / 24)
+  const remainingHours = diffHours % 24
+
+  if (diffDays > 0) {
+    return <span>{diffDays}d {remainingHours}h</span>
+  }
+  if (diffHours > 0) {
+    return <span>{diffHours}h</span>
+  }
+  const diffMinutes = Math.floor(diffMs / (1000 * 60))
+  return <span>{diffMinutes}m</span>
 }
 
 export function OrdenEstadoCard({
@@ -29,8 +47,9 @@ export function OrdenEstadoCard({
   const transicionesPosibles = getTransicionesPosibles(estado)
   const esTerminal = transicionesPosibles.length === 0
 
-  // Check SLA: fecha prometida vencida
   const fechaPrometidaVencida = fechaPrometida && new Date(fechaPrometida) < new Date() && estado !== "ENTREGADO" && estado !== "CANCELADO" && estado !== "SIN_REPARACION"
+
+  const showElapsed = estado !== "ENTREGADO" && estado !== "CANCELADO" && estado !== "SIN_REPARACION"
 
   return (
     <Card>
@@ -55,11 +74,9 @@ export function OrdenEstadoCard({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {/* Estado actual siempre visible */}
               <SelectItem key={estado} value={estado}>
                 {ESTADO_LABELS[estado]} (actual)
               </SelectItem>
-              {/* Solo transiciones válidas */}
               {transicionesPosibles.map((key) => (
                 <SelectItem key={key} value={key}>
                   {ESTADO_LABELS[key]}
@@ -69,12 +86,21 @@ export function OrdenEstadoCard({
           </Select>
         )}
 
-        {/* SLA: Alerta de fecha prometida vencida */}
         {fechaPrometidaVencida && (
           <div className="flex items-center gap-2 p-2 rounded-md bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-xs">
             <AlertTriangle className="h-3.5 w-3.5 text-red-600 shrink-0" />
             <span className="text-red-700 dark:text-red-400 font-medium">
               Fecha prometida vencida
+            </span>
+          </div>
+        )}
+
+        {showElapsed && (
+          <div className="flex items-center gap-2 p-2 rounded-md bg-muted text-xs">
+            <Timer className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <span className="text-muted-foreground">En este estado hace</span>
+            <span className="font-medium ml-auto">
+              <ElapsedTime since={fechaIngreso} />
             </span>
           </div>
         )}

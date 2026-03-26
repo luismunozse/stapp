@@ -23,7 +23,6 @@ import {
   ClipboardCheck,
   Package,
   History,
-  Receipt,
   Shield,
   Link2,
   Copy,
@@ -33,7 +32,17 @@ import {
   Pencil,
   Loader2,
   X,
+  MoreHorizontal,
+  Search,
+  Receipt,
 } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import Link from "next/link"
 import { useCurrency } from "@/contexts/currency-context"
 import { CotizacionList } from "@/components/cotizaciones/cotizacion-list"
@@ -90,6 +99,9 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const [editingProblema, setEditingProblema] = useState(false)
   const [problemaText, setProblemaText] = useState("")
   const [savingProblema, setSavingProblema] = useState(false)
+  const [editingDiagnostico, setEditingDiagnostico] = useState(false)
+  const [diagnosticoText, setDiagnosticoText] = useState("")
+  const [savingDiagnostico, setSavingDiagnostico] = useState(false)
 
   const isAdmin = session?.user?.role === "ADMIN"
 
@@ -120,6 +132,32 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
       toast.error("Error al guardar")
     } finally {
       setSavingProblema(false)
+    }
+  }
+
+  const handleSaveDiagnostico = async () => {
+    if (!orden || diagnosticoText.trim() === (orden.diagnostico || "")) {
+      setEditingDiagnostico(false)
+      return
+    }
+    setSavingDiagnostico(true)
+    try {
+      const res = await fetch(`/api/ordenes/${orden.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ diagnostico: diagnosticoText.trim() || null }),
+      })
+      if (res.ok) {
+        setOrden({ ...orden, diagnostico: diagnosticoText.trim() || null })
+        setEditingDiagnostico(false)
+        toast.success("Diagnostico actualizado")
+      } else {
+        toast.error("Error al guardar")
+      }
+    } catch {
+      toast.error("Error al guardar")
+    } finally {
+      setSavingDiagnostico(false)
     }
   }
 
@@ -515,12 +553,40 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             <FileDown className="h-4 w-4 mr-2" />
             {downloadingPdf ? "..." : "PDF"}
           </Button>
-          {isAdmin && (
-            <Button variant="destructive" size="sm" onClick={handleDeleteOrden} disabled={deleting}>
-              <Trash2 className="h-4 w-4 mr-2" />
-              {deleting ? "..." : "Eliminar"}
-            </Button>
-          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {isAdmin && (orden.estado === "REPARADO" || orden.estado === "ENTREGADO") && (
+                <DropdownMenuItem onClick={handleGenerarFactura} disabled={updating}>
+                  <Receipt className="h-4 w-4 mr-2" />
+                  Generar Factura
+                </DropdownMenuItem>
+              )}
+              {isAdmin && (orden.estado === "ENTREGADO" || orden.estado === "REPARADO") && !orden.esReingreso && (
+                <DropdownMenuItem onClick={handleReingreso} disabled={updating}>
+                  <Shield className="h-4 w-4 mr-2" />
+                  Re-ingreso por Garantia
+                </DropdownMenuItem>
+              )}
+              {isAdmin && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onClick={handleDeleteOrden}
+                    disabled={deleting}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Eliminar orden
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -529,7 +595,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
         <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-sm">
           <Shield className="h-4 w-4 text-blue-600 shrink-0" />
           <span className="text-blue-800 dark:text-blue-300">
-            Re-ingreso por garantía — Orden original:{" "}
+            Re-ingreso por garantia — Orden original:{" "}
             <Link href={`/ordenes/${orden.ordenOrigenId}`} className="underline hover:text-blue-600">
               ver orden original
             </Link>
@@ -553,6 +619,24 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
         </div>
       )}
 
+      {/* Mobile: Estado + Tecnico arriba */}
+      <div className="lg:hidden space-y-4">
+        <OrdenEstadoCard
+          estado={orden.estado}
+          fechaIngreso={orden.fechaIngreso}
+          fechaPrometida={orden.fechaPrometida}
+          fechaCompletado={orden.fechaCompletado}
+          updating={updating}
+          onUpdateEstado={handleUpdateEstado}
+        />
+        <OrdenTecnicoCard
+          tecnicoId={orden.tecnicoId}
+          tecnicos={tecnicos}
+          updating={updating}
+          onAsignarTecnico={handleAsignarTecnico}
+        />
+      </div>
+
       {/* Main Content - 2 columns */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Left Column - Info */}
@@ -562,10 +646,10 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             <CardContent className="p-6">
               <div className="grid gap-6 md:grid-cols-2">
                 {/* Cliente */}
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                    <User className="h-4 w-4" />
-                    CLIENTE
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    <User className="h-3.5 w-3.5" />
+                    Cliente
                   </div>
                   <div className="space-y-2">
                     <h3 className="text-lg font-semibold">{orden.cliente?.nombre}</h3>
@@ -591,17 +675,19 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                 </div>
 
                 {/* Dispositivo */}
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                    <Smartphone className="h-4 w-4" />
-                    DISPOSITIVO
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    <Smartphone className="h-3.5 w-3.5" />
+                    Dispositivo
                   </div>
                   <div className="space-y-2">
+                    {orden.marca && (
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{orden.marca}</p>
+                    )}
                     <h3 className="text-lg font-semibold">{orden.dispositivo}</h3>
-                    <div className="flex flex-wrap gap-2 text-sm">
-                      <span className="px-2 py-0.5 bg-muted rounded">{orden.tipoDispositivo}</span>
-                      {orden.marca && <span className="px-2 py-0.5 bg-muted rounded">{orden.marca}</span>}
-                      {orden.color && <span className="px-2 py-0.5 bg-muted rounded">{orden.color}</span>}
+                    <div className="flex flex-wrap gap-1.5 text-xs">
+                      <span className="px-2 py-0.5 bg-primary/10 text-primary rounded-full font-medium">{orden.tipoDispositivo}</span>
+                      {orden.color && <span className="px-2 py-0.5 bg-muted rounded-full">{orden.color}</span>}
                     </div>
                     {orden.imei && (
                       <div className="text-sm">
@@ -620,9 +706,9 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                       </div>
                     )}
                     {orden.metadata && Object.keys(orden.metadata).length > 0 && (
-                      <div className="flex flex-wrap gap-2 text-sm mt-1">
+                      <div className="flex flex-wrap gap-1.5 text-xs mt-1">
                         {Object.entries(orden.metadata).map(([key, val]) => (
-                          <span key={key} className="px-2 py-0.5 bg-muted rounded">
+                          <span key={key} className="px-2 py-0.5 bg-muted rounded-full">
                             {key}: {String(val)}
                           </span>
                         ))}
@@ -632,12 +718,12 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                 </div>
               </div>
 
-              {/* Problema */}
+              {/* Problema Reportado */}
               <div className="mt-6 pt-6 border-t">
                 <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                    <Wrench className="h-4 w-4" />
-                    PROBLEMA REPORTADO
+                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    <Wrench className="h-3.5 w-3.5" />
+                    Problema Reportado
                   </div>
                   {!editingProblema && (
                     <Button
@@ -663,25 +749,11 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                       autoFocus
                     />
                     <div className="flex gap-2 justify-end">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setEditingProblema(false)}
-                        disabled={savingProblema}
-                      >
-                        <X className="h-3 w-3 mr-1" />
-                        Cancelar
+                      <Button variant="ghost" size="sm" onClick={() => setEditingProblema(false)} disabled={savingProblema}>
+                        <X className="h-3 w-3 mr-1" />Cancelar
                       </Button>
-                      <Button
-                        size="sm"
-                        onClick={handleSaveProblema}
-                        disabled={savingProblema || !problemaText.trim()}
-                      >
-                        {savingProblema ? (
-                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                        ) : (
-                          <Check className="h-3 w-3 mr-1" />
-                        )}
+                      <Button size="sm" onClick={handleSaveProblema} disabled={savingProblema || !problemaText.trim()}>
+                        {savingProblema ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Check className="h-3 w-3 mr-1" />}
                         Guardar
                       </Button>
                     </div>
@@ -691,10 +763,60 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                 )}
               </div>
 
+              {/* Diagnostico - visible desde EN_DIAGNOSTICO en adelante */}
+              {(orden.estado !== "RECIBIDO" || orden.diagnostico) && (
+                <div className="mt-4 pt-4 border-t">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      <Search className="h-3.5 w-3.5" />
+                      Diagnostico
+                    </div>
+                    {!editingDiagnostico && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-muted-foreground hover:text-foreground"
+                        onClick={() => {
+                          setDiagnosticoText(orden.diagnostico || "")
+                          setEditingDiagnostico(true)
+                        }}
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
+                  {editingDiagnostico ? (
+                    <div className="space-y-2">
+                      <textarea
+                        className="w-full min-h-[80px] p-2 text-sm border rounded-md resize-y bg-background"
+                        value={diagnosticoText}
+                        onChange={(e) => setDiagnosticoText(e.target.value)}
+                        placeholder="Describir el diagnostico del equipo..."
+                        disabled={savingDiagnostico}
+                        autoFocus
+                      />
+                      <div className="flex gap-2 justify-end">
+                        <Button variant="ghost" size="sm" onClick={() => setEditingDiagnostico(false)} disabled={savingDiagnostico}>
+                          <X className="h-3 w-3 mr-1" />Cancelar
+                        </Button>
+                        <Button size="sm" onClick={handleSaveDiagnostico} disabled={savingDiagnostico}>
+                          {savingDiagnostico ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Check className="h-3 w-3 mr-1" />}
+                          Guardar
+                        </Button>
+                      </div>
+                    </div>
+                  ) : orden.diagnostico ? (
+                    <p className="text-sm whitespace-pre-wrap">{orden.diagnostico}</p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground italic">Sin diagnostico aun. Haz clic en el lapiz para agregar.</p>
+                  )}
+                </div>
+              )}
+
               {/* Accesorios */}
               {orden.accesorios && (
                 <div className="mt-4 pt-4 border-t">
-                  <div className="text-sm font-medium text-muted-foreground mb-1">Accesorios recibidos</div>
+                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Accesorios recibidos</div>
                   <p className="text-sm text-muted-foreground">{orden.accesorios}</p>
                 </div>
               )}
@@ -702,18 +824,14 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
               {/* Observaciones */}
               {orden.observaciones && (
                 <div className="mt-4 pt-4 border-t">
-                  <div className="text-sm font-medium text-muted-foreground mb-1">Observaciones</div>
+                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Observaciones</div>
                   <p className="text-sm whitespace-pre-wrap">{orden.observaciones}</p>
                 </div>
               )}
-
             </CardContent>
           </Card>
 
-          {/* Checklist de Recepción - justo después de la info del equipo */}
-          <ChecklistCard ordenId={ordenId} />
-
-          {/* Tabs for additional sections */}
+          {/* Tabs: Repuestos, Fotos, Checklist, Cotizaciones, Historial */}
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="w-full justify-start overflow-x-auto flex-nowrap">
               <TabsTrigger value="repuestos" className="gap-2">
@@ -724,12 +842,14 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                 <Camera className="h-4 w-4" />
                 Fotos
               </TabsTrigger>
-              {isAdmin && (
-                <TabsTrigger value="cotizaciones" className="gap-2">
-                  <FileText className="h-4 w-4" />
-                  Cotizaciones
-                </TabsTrigger>
-              )}
+              <TabsTrigger value="checklist" className="gap-2">
+                <ClipboardCheck className="h-4 w-4" />
+                Checklist
+              </TabsTrigger>
+              <TabsTrigger value="cotizaciones" className="gap-2">
+                <FileText className="h-4 w-4" />
+                Cotizaciones
+              </TabsTrigger>
               <TabsTrigger value="historial" className="gap-2">
                 <History className="h-4 w-4" />
                 Historial
@@ -748,46 +868,29 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
               <FotoGallery ordenId={ordenId} />
             </TabsContent>
 
+            <TabsContent value="checklist" className="mt-4">
+              <ChecklistCard ordenId={ordenId} />
+            </TabsContent>
 
-            {isAdmin && (
-              <TabsContent value="cotizaciones" className="mt-4">
-                <Card>
-                  <CardContent className="p-6">
-                    <CotizacionList ordenId={ordenId} clienteEmail={orden.cliente?.email} />
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            )}
+            <TabsContent value="cotizaciones" className="mt-4">
+              <Card>
+                <CardContent className="p-6">
+                  <CotizacionList ordenId={ordenId} clienteEmail={orden.cliente?.email} readOnly={!isAdmin} />
+                </CardContent>
+              </Card>
+            </TabsContent>
 
             <TabsContent value="historial" className="mt-4">
               <NotificationHistory ordenId={ordenId} />
             </TabsContent>
           </Tabs>
 
-          {/* Garantía */}
+          {/* Garantia */}
           <GarantiaCard ordenId={ordenId} ordenEstado={orden.estado} />
-
-          {/* Re-ingreso por garantía (solo para órdenes entregadas/reparadas) */}
-          {isAdmin && (orden.estado === "ENTREGADO" || orden.estado === "REPARADO") && !orden.esReingreso && (
-            <Card>
-              <CardContent className="p-4">
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  size="sm"
-                  onClick={handleReingreso}
-                  disabled={updating}
-                >
-                  <Shield className="h-4 w-4 mr-2" />
-                  Crear Re-ingreso por Garantía
-                </Button>
-              </CardContent>
-            </Card>
-          )}
         </div>
 
-        {/* Right Column - Management */}
-        <div className="space-y-6">
+        {/* Right Column - Management (hidden on mobile, shown above) */}
+        <div className="hidden lg:block space-y-6">
           <OrdenEstadoCard
             estado={orden.estado}
             fechaIngreso={orden.fechaIngreso}
@@ -809,52 +912,19 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                   <span className="flex-1 text-muted-foreground truncate">{seguimientoUrl}</span>
                 </div>
                 <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1"
-                    onClick={handleCopyLink}
-                  >
-                    {linkCopied ? (
-                      <Check className="h-4 w-4 mr-1.5 text-green-500" />
-                    ) : (
-                      <Copy className="h-4 w-4 mr-1.5" />
-                    )}
+                  <Button variant="outline" size="sm" className="flex-1" onClick={handleCopyLink}>
+                    {linkCopied ? <Check className="h-4 w-4 mr-1.5 text-green-500" /> : <Copy className="h-4 w-4 mr-1.5" />}
                     {linkCopied ? "Copiado" : "Copiar"}
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1"
-                    onClick={handleShareWhatsApp}
-                  >
+                  <Button variant="outline" size="sm" className="flex-1" onClick={handleShareWhatsApp}>
                     <ExternalLink className="h-4 w-4 mr-1.5" />
                     WhatsApp
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="shrink-0"
-                    asChild
-                  >
+                  <Button variant="ghost" size="icon" className="shrink-0" asChild>
                     <a href={seguimientoUrl} target="_blank" rel="noopener noreferrer">
                       <ExternalLink className="h-4 w-4" />
                     </a>
                   </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Tiempo en estado actual */}
-          {orden.estado !== "ENTREGADO" && orden.estado !== "CANCELADO" && orden.estado !== "SIN_REPARACION" && (
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Tiempo en estado actual</span>
-                  <span className="font-medium">
-                    <ElapsedTime since={orden.fechaIngreso} />
-                  </span>
                 </div>
               </CardContent>
             </Card>
@@ -876,22 +946,44 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             descuentoCobro={orden.descuentoCobro || 0}
             estadoCobro={orden.estadoCobro}
             estado={orden.estado}
+            origenPresupuesto={(orden as any).origenPresupuesto || null}
             onUpdateField={handleUpdateField}
             onCobrar={() => setShowCobrarDialog(true)}
           />
-
-          {/* Facturación (solo admin) */}
-          {isAdmin && (orden.estado === "REPARADO" || orden.estado === "ENTREGADO") && (
-            <Card>
-              <CardContent className="p-4">
-                <Button onClick={handleGenerarFactura} disabled={updating} variant="outline" className="w-full" size="sm">
-                  <FileText className="h-4 w-4 mr-2" />
-                  Generar Factura
-                </Button>
-              </CardContent>
-            </Card>
-          )}
         </div>
+      </div>
+
+      {/* Mobile: Costos (below content) */}
+      <div className="lg:hidden space-y-4">
+        {seguimientoUrl && (
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" className="flex-1" onClick={handleCopyLink}>
+                  {linkCopied ? <Check className="h-4 w-4 mr-1.5 text-green-500" /> : <Copy className="h-4 w-4 mr-1.5" />}
+                  {linkCopied ? "Copiado" : "Copiar link"}
+                </Button>
+                <Button variant="outline" size="sm" className="flex-1" onClick={handleShareWhatsApp}>
+                  <ExternalLink className="h-4 w-4 mr-1.5" />
+                  WhatsApp
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+        <OrdenCostosCard
+          ordenId={orden.id}
+          presupuesto={orden.presupuesto}
+          costoFinal={orden.costoFinal}
+          sena={orden.sena || 0}
+          totalCobrado={orden.totalCobrado || 0}
+          descuentoCobro={orden.descuentoCobro || 0}
+          estadoCobro={orden.estadoCobro}
+          estado={orden.estado}
+          origenPresupuesto={(orden as any).origenPresupuesto || null}
+          onUpdateField={handleUpdateField}
+          onCobrar={() => setShowCobrarDialog(true)}
+        />
       </div>
 
       {/* Diálogo de Cobro */}
@@ -939,21 +1031,3 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   )
 }
 
-function ElapsedTime({ since }: { since: string | Date }) {
-  const start = new Date(since)
-  const now = new Date()
-  const diffMs = now.getTime() - start.getTime()
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
-  const diffDays = Math.floor(diffHours / 24)
-
-  if (diffDays > 0) {
-    const hours = diffHours % 24
-    return <>{diffDays}d {hours}h</>
-  }
-  if (diffHours > 0) {
-    const mins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
-    return <>{diffHours}h {mins}m</>
-  }
-  const mins = Math.floor(diffMs / (1000 * 60))
-  return <>{mins}m</>
-}

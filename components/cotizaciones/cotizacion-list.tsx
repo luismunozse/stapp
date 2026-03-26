@@ -52,6 +52,7 @@ interface Cotizacion {
 interface CotizacionListProps {
   ordenId: string
   clienteEmail?: string | null
+  readOnly?: boolean
 }
 
 const estadoConfig: Record<string, { label: string; icon: typeof Clock; color: string }> = {
@@ -61,7 +62,7 @@ const estadoConfig: Record<string, { label: string; icon: typeof Clock; color: s
   RECHAZADA: { label: "Rechazada", icon: XCircle, color: "bg-red-100 text-red-800" },
 }
 
-export function CotizacionList({ ordenId, clienteEmail }: CotizacionListProps) {
+export function CotizacionList({ ordenId, clienteEmail, readOnly = false }: CotizacionListProps) {
   const { formatPrice, formatDate } = useCurrency()
   const [showForm, setShowForm] = useState(false)
   const [editingCotizacion, setEditingCotizacion] = useState<Cotizacion | null>(null)
@@ -229,7 +230,7 @@ export function CotizacionList({ ordenId, clienteEmail }: CotizacionListProps) {
           <FileText className="h-4 w-4" />
           Cotizaciones ({cotizaciones.length})
         </h3>
-        {!showForm && !editingCotizacion && (
+        {!readOnly && !showForm && !editingCotizacion && (
           <Button size="sm" onClick={() => setShowForm(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Nueva Cotización
@@ -358,7 +359,7 @@ export function CotizacionList({ ordenId, clienteEmail }: CotizacionListProps) {
                         </Button>
                       )
                     )}
-                    {canEdit && (
+                    {!readOnly && canEdit && (
                       <Button
                         size="sm"
                         variant="outline"
@@ -368,7 +369,7 @@ export function CotizacionList({ ordenId, clienteEmail }: CotizacionListProps) {
                         Editar
                       </Button>
                     )}
-                    {cotizacion.estado === "ENVIADA" && (
+                    {!readOnly && cotizacion.estado === "ENVIADA" && (
                       <>
                         <Button
                           size="sm"
@@ -390,7 +391,7 @@ export function CotizacionList({ ordenId, clienteEmail }: CotizacionListProps) {
                         </Button>
                       </>
                     )}
-                    {canDelete && (
+                    {!readOnly && canDelete && (
                       <Button
                         size="sm"
                         variant="ghost"
