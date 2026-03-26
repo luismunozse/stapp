@@ -870,65 +870,77 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
 
   // === CHECKLIST DE RECEPCION (si hay) ===
   if (data.checklistItems && data.checklistItems.length > 0) {
-    const items = data.checklistItems
+    // Separar items booleanos de items con texto libre
+    const boolItems = data.checklistItems.filter(i => i.valor === true || i.valor === false)
+    const textItems = data.checklistItems.filter(i => i.valor !== true && i.valor !== false && i.valor !== null && i.valor !== undefined && String(i.valor).trim() !== "")
+
     const cols = 2
-    const itemsPerCol = Math.ceil(items.length / cols)
     const colWidth = (contentWidth - 4) / cols
     const checklistRowHeight = 13
-    const checklistHeight = 24 + Math.min(itemsPerCol, 8) * checklistRowHeight + 6
 
-    if (y - checklistHeight < 60) {
-      // Not enough space, will be on next page
-    } else {
-      page.drawRectangle({ x: margin, y: y - checklistHeight, width: contentWidth, height: checklistHeight, color: white, borderColor: lightGray, borderWidth: 1 })
-      page.drawRectangle({ x: margin, y: y - checklistHeight, width: 4, height: checklistHeight, color: primaryColor })
-      page.drawRectangle({ x: margin + 4, y: y - 22, width: contentWidth - 4, height: 22, color: bgGray })
-      page.drawText("CHECKLIST DE RECEPCION", { x: margin + 14, y: y - 15, size: 9, font: helveticaBold, color: primaryColor })
+    // Calcular altura del card de booleanos
+    if (boolItems.length > 0) {
+      const itemsPerCol = Math.ceil(boolItems.length / cols)
+      const checklistHeight = 24 + Math.min(itemsPerCol, 8) * checklistRowHeight + 6
 
-      for (let col = 0; col < cols; col++) {
-        const startIdx = col * itemsPerCol
-        const colItems = items.slice(startIdx, startIdx + itemsPerCol).slice(0, 8)
-        let itemY = y - 36
-        const colX = margin + 14 + col * colWidth
+      if (y - checklistHeight >= 60) {
+        page.drawRectangle({ x: margin, y: y - checklistHeight, width: contentWidth, height: checklistHeight, color: white, borderColor: lightGray, borderWidth: 1 })
+        page.drawRectangle({ x: margin, y: y - checklistHeight, width: 4, height: checklistHeight, color: primaryColor })
+        page.drawRectangle({ x: margin + 4, y: y - 22, width: contentWidth - 4, height: 22, color: bgGray })
+        page.drawText("CHECKLIST DE RECEPCION", { x: margin + 14, y: y - 15, size: 9, font: helveticaBold, color: primaryColor })
 
-        for (const item of colItems) {
-          let symbol: string
-          let symbolColor = grayColor
-          if (item.valor === true) {
-            symbol = "SI"
-            symbolColor = greenColor
-          } else if (item.valor === false) {
-            symbol = "NO"
-            symbolColor = rgb(0.918, 0.306, 0.306)
-          } else {
-            symbol = String(item.valor || "-")
-            symbolColor = textColor
-          }
-
-          // Borde derecho absoluto de esta columna
+        for (let col = 0; col < cols; col++) {
+          const startIdx = col * itemsPerCol
+          const colItems = boolItems.slice(startIdx, startIdx + itemsPerCol).slice(0, 8)
+          let itemY = y - 36
+          const colX = margin + 14 + col * colWidth
           const colRightEdge = col === 0
             ? margin + 4 + colWidth - 10
             : margin + contentWidth - 10
-          const isBooleanVal = item.valor === true || item.valor === false
-          const availableW = colRightEdge - colX
 
-          if (isBooleanVal) {
+          for (const item of colItems) {
+            const symbol = item.valor === true ? "SI" : "NO"
+            const symbolColor = item.valor === true ? greenColor : rgb(0.918, 0.306, 0.306)
+            const availableW = colRightEdge - colX
+
             page.drawText(truncateToWidth(item.label, availableW - 30, helvetica, 7), { x: colX, y: itemY, size: 7, font: helvetica, color: grayColor })
             page.drawText(symbol, { x: colRightEdge - helveticaBold.widthOfTextAtSize(symbol, 7), y: itemY, size: 7, font: helveticaBold, color: symbolColor })
-          } else {
-            // Truncar label a max 45% y posicionar valor justo después del label real
-            const labelMaxW = availableW * 0.45
-            const truncatedLabel = truncateToWidth(item.label, labelMaxW, helvetica, 7)
-            const labelRealW = helvetica.widthOfTextAtSize(truncatedLabel, 7)
-            const symbolX = colX + labelRealW + 8
-            const symbolMaxW = colRightEdge - symbolX
-            page.drawText(truncatedLabel, { x: colX, y: itemY, size: 7, font: helvetica, color: grayColor })
-            page.drawText(truncateToWidth(symbol, Math.max(symbolMaxW, 0), helveticaBold, 7), { x: symbolX, y: itemY, size: 7, font: helveticaBold, color: symbolColor })
+            itemY -= checklistRowHeight
           }
-          itemY -= checklistRowHeight
         }
+        y -= checklistHeight + 4
       }
-      y -= checklistHeight + 8
+    }
+
+    // Items con texto libre + notas del checklist, ancho completo debajo
+    const notasText = data.checklistNotas ? safe(data.checklistNotas) : ""
+    if (textItems.length > 0 || notasText) {
+      const textRowHeight = 13
+      const rowCount = textItems.length + (notasText ? 1 : 0)
+      const textBlockHeight = 6 + rowCount * textRowHeight + 4
+      const maxTextW = contentWidth - 28
+
+      if (y - textBlockHeight >= 60) {
+        page.drawRectangle({ x: margin, y: y - textBlockHeight, width: contentWidth, height: textBlockHeight, color: bgGray, borderColor: lightGray, borderWidth: 0.5 })
+
+        let tY = y - 12
+        for (const item of textItems) {
+          const labelText = item.label + ":"
+          const labelW = helveticaBold.widthOfTextAtSize(labelText, 7)
+          page.drawText(labelText, { x: margin + 14, y: tY, size: 7, font: helveticaBold, color: grayColor })
+          page.drawText(truncateToWidth(String(item.valor), maxTextW - labelW - 8, helvetica, 7), { x: margin + 14 + labelW + 6, y: tY, size: 7, font: helvetica, color: textColor })
+          tY -= textRowHeight
+        }
+        if (notasText) {
+          const notasLabel = "Notas:"
+          const notasLabelW = helveticaBold.widthOfTextAtSize(notasLabel, 7)
+          page.drawText(notasLabel, { x: margin + 14, y: tY, size: 7, font: helveticaBold, color: grayColor })
+          page.drawText(truncateToWidth(notasText, maxTextW - notasLabelW - 8, helvetica, 7), { x: margin + 14 + notasLabelW + 6, y: tY, size: 7, font: helvetica, color: textColor })
+        }
+        y -= textBlockHeight + 8
+      }
+    } else {
+      y -= 4 // solo agregar un poco de espacio si no hay texto
     }
   }
 
