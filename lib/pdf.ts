@@ -905,21 +905,22 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
             symbolColor = textColor
           }
 
-          // Calcular borde derecho real de esta columna (con padding interno)
-          const colRightEdge = margin + 14 + (col + 1) * colWidth - 14
+          // Borde derecho absoluto de esta columna
+          const colRightEdge = col === 0
+            ? margin + 4 + colWidth - 10
+            : margin + contentWidth - 10
           const isBooleanVal = item.valor === true || item.valor === false
+          const availableW = colRightEdge - colX
 
           if (isBooleanVal) {
-            // SI/NO: label ocupa casi todo, valor alineado a la derecha
-            page.drawText(truncateToWidth(item.label, colWidth - 60, helvetica, 7), { x: colX, y: itemY, size: 7, font: helvetica, color: grayColor })
+            page.drawText(truncateToWidth(item.label, availableW - 30, helvetica, 7), { x: colX, y: itemY, size: 7, font: helvetica, color: grayColor })
             page.drawText(symbol, { x: colRightEdge - helveticaBold.widthOfTextAtSize(symbol, 7), y: itemY, size: 7, font: helveticaBold, color: symbolColor })
           } else {
-            // Texto libre: repartir espacio entre label y valor
-            const labelW = colWidth * 0.45
+            const labelW = availableW * 0.45
             const symbolX = colX + labelW + 4
             const symbolMaxW = colRightEdge - symbolX
             page.drawText(truncateToWidth(item.label, labelW, helvetica, 7), { x: colX, y: itemY, size: 7, font: helvetica, color: grayColor })
-            page.drawText(truncateToWidth(symbol, symbolMaxW, helveticaBold, 7), { x: symbolX, y: itemY, size: 7, font: helveticaBold, color: symbolColor })
+            page.drawText(truncateToWidth(symbol, Math.max(symbolMaxW, 0), helveticaBold, 7), { x: symbolX, y: itemY, size: 7, font: helveticaBold, color: symbolColor })
           }
           itemY -= checklistRowHeight
         }
