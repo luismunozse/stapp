@@ -150,7 +150,8 @@ export async function POST(
       message: "Cotización enviada exitosamente",
     })
   } catch (error) {
-    console.error("Error sending cotizacion:", error)
-    return NextResponse.json({ error: "Error al enviar la cotización" }, { status: 500 })
+    const message = error instanceof Error ? error.message : String(error)
+    console.error("Error sending cotizacion:", message)
+    return NextResponse.json({ error: `Error al enviar la cotización: ${message}` }, { status: 500 })
   }
 }

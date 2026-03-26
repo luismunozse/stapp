@@ -179,6 +179,7 @@ async function sendEmail({ to, subject, html, substitutions, attachments }: Send
       filename: att.filename,
       content: att.content,
       type: att.type,
+      disposition: "attachment",
     }))
   }
 
@@ -194,7 +195,12 @@ async function sendEmail({ to, subject, html, substitutions, attachments }: Send
   if (!response.ok) {
     const errorData = await response.text()
     console.error("EnvialoSimple error:", errorData)
-    throw new Error("Error al enviar el correo")
+    console.error("EnvialoSimple status:", response.status)
+    console.error("EnvialoSimple payload keys:", Object.keys(payload))
+    if (attachments && attachments.length > 0) {
+      console.error("EnvialoSimple attachment info:", attachments.map(a => ({ filename: a.filename, type: a.type, contentLength: a.content.length })))
+    }
+    throw new Error(`Error al enviar el correo: ${errorData}`)
   }
 
   return await response.json()
