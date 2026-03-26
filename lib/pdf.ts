@@ -905,8 +905,15 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
             symbolColor = textColor
           }
 
-          page.drawText(truncateToWidth(item.label, colWidth - 60, helvetica, 7), { x: colX, y: itemY, size: 7, font: helvetica, color: grayColor })
-          page.drawText(symbol, { x: colX + colWidth - 55, y: itemY, size: 7, font: helveticaBold, color: symbolColor })
+          // For boolean values (SI/NO), use fixed right-aligned position
+          // For string values, place after label with truncation
+          const isBooleanVal = item.valor === true || item.valor === false
+          const labelMaxW = isBooleanVal ? colWidth - 60 : colWidth * 0.55
+          const symbolX = isBooleanVal ? colX + colWidth - 55 : colX + colWidth * 0.58
+          const symbolMaxW = isBooleanVal ? 40 : colWidth * 0.38
+
+          page.drawText(truncateToWidth(item.label, labelMaxW, helvetica, 7), { x: colX, y: itemY, size: 7, font: helvetica, color: grayColor })
+          page.drawText(truncateToWidth(symbol, symbolMaxW, helveticaBold, 7), { x: symbolX, y: itemY, size: 7, font: helveticaBold, color: symbolColor })
           itemY -= checklistRowHeight
         }
       }
