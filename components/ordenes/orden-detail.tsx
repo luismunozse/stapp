@@ -30,6 +30,9 @@ import {
   Check,
   ExternalLink,
   DollarSign,
+  Pencil,
+  Loader2,
+  X,
 } from "lucide-react"
 import Link from "next/link"
 import { useCurrency } from "@/contexts/currency-context"
@@ -84,12 +87,41 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const [showEntregaDialog, setShowEntregaDialog] = useState(false)
   const [showCobrarDialog, setShowCobrarDialog] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
+  const [editingProblema, setEditingProblema] = useState(false)
+  const [problemaText, setProblemaText] = useState("")
+  const [savingProblema, setSavingProblema] = useState(false)
 
   const isAdmin = session?.user?.role === "ADMIN"
 
   const seguimientoUrl = orden?.publicToken
     ? `${typeof window !== "undefined" ? window.location.origin : ""}/seguimiento/${orden.publicToken}`
     : null
+
+  const handleSaveProblema = async () => {
+    if (!orden || problemaText.trim() === orden.problemaReportado) {
+      setEditingProblema(false)
+      return
+    }
+    setSavingProblema(true)
+    try {
+      const res = await fetch(`/api/ordenes/${orden.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ problemaReportado: problemaText.trim() }),
+      })
+      if (res.ok) {
+        setOrden({ ...orden, problemaReportado: problemaText.trim() })
+        setEditingProblema(false)
+        toast.success("Problema reportado actualizado")
+      } else {
+        toast.error("Error al guardar")
+      }
+    } catch {
+      toast.error("Error al guardar")
+    } finally {
+      setSavingProblema(false)
+    }
+  }
 
   const handleCopyLink = async () => {
     if (!seguimientoUrl) return
@@ -602,11 +634,61 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
 
               {/* Problema */}
               <div className="mt-6 pt-6 border-t">
-                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
-                  <Wrench className="h-4 w-4" />
-                  PROBLEMA REPORTADO
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                    <Wrench className="h-4 w-4" />
+                    PROBLEMA REPORTADO
+                  </div>
+                  {!editingProblema && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-muted-foreground hover:text-foreground"
+                      onClick={() => {
+                        setProblemaText(orden.problemaReportado || "")
+                        setEditingProblema(true)
+                      }}
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                  )}
                 </div>
-                <p className="text-sm">{orden.problemaReportado}</p>
+                {editingProblema ? (
+                  <div className="space-y-2">
+                    <textarea
+                      className="w-full min-h-[80px] p-2 text-sm border rounded-md resize-y bg-background"
+                      value={problemaText}
+                      onChange={(e) => setProblemaText(e.target.value)}
+                      disabled={savingProblema}
+                      autoFocus
+                    />
+                    <div className="flex gap-2 justify-end">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setEditingProblema(false)}
+                        disabled={savingProblema}
+                      >
+                        <X className="h-3 w-3 mr-1" />
+                        Cancelar
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={handleSaveProblema}
+                        disabled={savingProblema || !problemaText.trim()}
+                      >
+                        {savingProblema ? (
+                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                        ) : (
+                          <Check className="h-3 w-3 mr-1" />
+                        )}
+                        Guardar
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm whitespace-pre-wrap">{orden.problemaReportado}</p>
+                )}
               </div>
 
               {/* Accesorios */}

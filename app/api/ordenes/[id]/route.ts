@@ -28,6 +28,7 @@ const updateOrdenSchema = z.object({
   fechaPrometida: z.string().optional().nullable(),
   observaciones: z.string().optional().nullable(),
   diagnostico: z.string().optional().nullable(),
+  problemaReportado: z.string().min(1, "El problema reportado no puede estar vacío").optional(),
 })
 
 export async function GET(
@@ -183,6 +184,7 @@ export async function PUT(
     if (data.costoFinal !== undefined) updateData.costo_final = data.costoFinal
     if (data.observaciones !== undefined) updateData.observaciones = data.observaciones
     if (data.diagnostico !== undefined) updateData.diagnostico = data.diagnostico
+    if (data.problemaReportado !== undefined) updateData.problema_reportado = data.problemaReportado
 
     if (data.fechaPrometida !== undefined) {
       updateData.fecha_prometida = data.fechaPrometida
