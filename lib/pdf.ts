@@ -1107,9 +1107,9 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const contentBottom = barraY - 10 // espacio debajo de la barra
   const dynamicHeight = Math.max(height - contentBottom, minPageHeight)
   if (dynamicHeight < height) {
-    // Recortar la pagina: mover el borde inferior hacia arriba
-    page.setMediaBox(0, contentBottom, width, dynamicHeight)
-    page.setCropBox(0, contentBottom, width, dynamicHeight)
+    // Trasladar contenido y redimensionar la pagina para eliminar espacio en blanco
+    page.translateContent(0, -contentBottom)
+    page.setSize(width, dynamicHeight)
   }
 
   // === PAGINA DE FOTOS DE INGRESO (si hay fotos) ===
