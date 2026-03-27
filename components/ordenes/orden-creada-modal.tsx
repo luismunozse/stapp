@@ -18,6 +18,7 @@ import {
   ExternalLink,
   FileText,
   Loader2,
+  Printer,
 } from "lucide-react"
 import { generateWhatsAppUrl, formatPhoneForWhatsApp } from "@/lib/notifications/whatsapp-templates"
 import { useCurrency } from "@/contexts/currency-context"
@@ -95,6 +96,7 @@ ${orden.organizationName || "Servicio Tecnico"}`
 export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps) {
   const [copied, setCopied] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  const [printing, setPrinting] = useState(false)
   const [mensaje, setMensaje] = useState("")
   const { formatPrice, formatDate } = useCurrency()
 
@@ -137,6 +139,30 @@ export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps
       alert("Error al descargar el PDF")
     } finally {
       setDownloading(false)
+    }
+  }
+
+  const handlePrint = async () => {
+    if (!orden) return
+
+    setPrinting(true)
+    try {
+      const response = await fetch(`/api/ordenes/${orden.id}/pdf`)
+      if (!response.ok) throw new Error("Error al generar PDF")
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const printWindow = window.open(url, "_blank")
+      if (printWindow) {
+        printWindow.addEventListener("load", () => {
+          printWindow.print()
+        })
+      }
+    } catch (error) {
+      console.error("Error printing PDF:", error)
+      alert("Error al imprimir la orden")
+    } finally {
+      setPrinting(false)
     }
   }
 
@@ -186,20 +212,35 @@ export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps
             )}
           </div>
 
-          {/* Descargar PDF */}
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={handleDownloadPDF}
-            disabled={downloading}
-          >
-            {downloading ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <FileText className="mr-2 h-4 w-4" />
-            )}
-            Descargar Comprobante PDF
-          </Button>
+          {/* Descargar PDF e Imprimir */}
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={handleDownloadPDF}
+              disabled={downloading}
+            >
+              {downloading ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <FileText className="mr-2 h-4 w-4" />
+              )}
+              Descargar PDF
+            </Button>
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={handlePrint}
+              disabled={printing}
+            >
+              {printing ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Printer className="mr-2 h-4 w-4" />
+              )}
+              Imprimir
+            </Button>
+          </div>
 
           {/* Mensaje para WhatsApp */}
           <div>

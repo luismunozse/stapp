@@ -35,6 +35,7 @@ import {
   MoreHorizontal,
   Search,
   Receipt,
+  Printer,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -92,6 +93,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const [updating, setUpdating] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
+  const [printingPdf, setPrintingPdf] = useState(false)
   const [activeTab, setActiveTab] = useState("repuestos")
   const [showEntregaDialog, setShowEntregaDialog] = useState(false)
   const [showCobrarDialog, setShowCobrarDialog] = useState(false)
@@ -440,6 +442,30 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
     }
   }
 
+  const handlePrintPdf = async () => {
+    setPrintingPdf(true)
+    try {
+      const res = await fetch(`/api/ordenes/${ordenId}/pdf`)
+      if (!res.ok) throw new Error("Error al generar PDF")
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const printWindow = window.open(url, "_blank")
+      if (printWindow) {
+        printWindow.addEventListener("load", () => {
+          printWindow.print()
+        })
+      }
+    } catch (error) {
+      await alert({
+        title: "Error",
+        description: "No se pudo imprimir el PDF",
+        variant: "error",
+      })
+    } finally {
+      setPrintingPdf(false)
+    }
+  }
+
   const handleDeleteOrden = async () => {
     if (!orden) return
     const codigoDisplay = orden.codigoOrden || `#${orden.numeroOrden}`
@@ -552,6 +578,10 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           <Button variant="outline" size="sm" onClick={handleDownloadPdf} disabled={downloadingPdf}>
             <FileDown className="h-4 w-4 mr-2" />
             {downloadingPdf ? "..." : "PDF"}
+          </Button>
+          <Button variant="outline" size="sm" onClick={handlePrintPdf} disabled={printingPdf}>
+            <Printer className="h-4 w-4 mr-2" />
+            {printingPdf ? "..." : "Imprimir"}
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
