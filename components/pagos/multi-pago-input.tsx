@@ -60,7 +60,16 @@ export function MultiPagoInput({
 }: MultiPagoInputProps) {
   const { formatPrice } = useCurrency()
 
-  const totalPagos = useMemo(() => pagos.reduce((sum, p) => sum + (p.monto || 0), 0), [pagos])
+  // Calculate effective amount per pago (base + surcharge)
+  const getMontoEfectivo = (pago: PagoLineItem): number => {
+    const base = pago.monto || 0
+    if (pago.recargo && pago.recargo > 0) {
+      return base + base * (pago.recargo / 100)
+    }
+    return base
+  }
+
+  const totalPagos = useMemo(() => pagos.reduce((sum, p) => sum + getMontoEfectivo(p), 0), [pagos])
   const restante = montoPendiente - totalPagos
 
   const metodosDisponibles = useMemo(() => {
@@ -87,11 +96,13 @@ export function MultiPagoInput({
       }
     }
 
-    // Recalcular montoOriginal si hay recargo
+    // Recalcular monto total cuando cambia recargo o monto base
+    // monto = precio original, montoOriginal = precio original (se guarda para referencia)
+    // El monto final que se paga = monto + (monto * recargo / 100)
     if (updates.recargo !== undefined || updates.monto !== undefined) {
       const pago = newPagos[index]
       if (pago.recargo && pago.recargo > 0) {
-        pago.montoOriginal = pago.monto / (1 + pago.recargo / 100)
+        pago.montoOriginal = pago.monto // guardar monto base original
       } else {
         pago.montoOriginal = null
       }
@@ -174,9 +185,7 @@ export function MultiPagoInput({
 
             {/* Monto */}
             <div>
-              <Label className="text-xs">
-                {showRecargo && pago.recargo ? "Monto total (con recargo)" : "Monto"} *
-              </Label>
+              <Label className="text-xs">Monto *</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -233,24 +242,32 @@ export function MultiPagoInput({
             )}
 
             {/* Preview de recargo */}
-            {showRecargo && pago.recargo && pago.recargo > 0 && pago.monto > 0 && (
-              <div className="p-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded text-xs space-y-0.5">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Sin recargo:</span>
-                  <span>{formatPrice(pago.monto / (1 + pago.recargo / 100))}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Recargo ({pago.recargo}%):</span>
-                  <span className="text-amber-600">+{formatPrice(pago.monto - pago.monto / (1 + pago.recargo / 100))}</span>
-                </div>
-                {showCuotas && pago.cuotas && pago.cuotas > 1 && (
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>{pago.cuotas} cuotas de:</span>
-                    <span>{formatPrice(pago.monto / pago.cuotas)}</span>
+            {showRecargo && pago.recargo && pago.recargo > 0 && pago.monto > 0 && (() => {
+              const montoRecargo = pago.monto * (pago.recargo / 100)
+              const totalConRecargo = pago.monto + montoRecargo
+              return (
+                <div className="p-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded text-xs space-y-0.5">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Monto base:</span>
+                    <span>{formatPrice(pago.monto)}</span>
                   </div>
-                )}
-              </div>
-            )}
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Recargo ({pago.recargo}%):</span>
+                    <span className="text-amber-600">+{formatPrice(montoRecargo)}</span>
+                  </div>
+                  <div className="flex justify-between font-medium border-t border-amber-300 dark:border-amber-700 pt-0.5">
+                    <span>Total a cobrar:</span>
+                    <span>{formatPrice(totalConRecargo)}</span>
+                  </div>
+                  {showCuotas && pago.cuotas && pago.cuotas > 1 && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>{pago.cuotas} cuotas de:</span>
+                      <span>{formatPrice(totalConRecargo / pago.cuotas)}</span>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
 
             {/* Referencia */}
             {showReferencia && (
@@ -286,12 +303,16 @@ export function MultiPagoInput({
       {/* Resumen de pagos */}
       {pagos.length > 1 && (
         <div className="p-3 rounded-lg bg-muted text-sm space-y-1">
-          {pagos.map((pago, i) => {
+          {pagos.map((pago) => {
             const metodoDef = METODOS_PAGO.find(m => m.value === pago.metodo)
+            const efectivo = getMontoEfectivo(pago)
             return (
               <div key={pago.id} className="flex justify-between">
-                <span className="text-muted-foreground">{metodoDef?.label || pago.metodo}:</span>
-                <span className="font-medium">{formatPrice(pago.monto || 0)}</span>
+                <span className="text-muted-foreground">
+                  {metodoDef?.label || pago.metodo}
+                  {pago.recargo && pago.recargo > 0 ? ` (+${pago.recargo}%)` : ""}:
+                </span>
+                <span className="font-medium">{formatPrice(efectivo)}</span>
               </div>
             )
           })}

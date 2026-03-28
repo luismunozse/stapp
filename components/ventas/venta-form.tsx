@@ -341,9 +341,16 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
     }
   }, [total])
 
+  // Calculate effective amount per pago (base + surcharge)
+  const getMontoEfectivo = (p: PagoLineItem): number => {
+    const base = p.monto || 0
+    if (p.recargo && p.recargo > 0) return base + base * (p.recargo / 100)
+    return base
+  }
+
   const onSubmit = async (data: VentaFormData) => {
     // Validar pagos
-    const totalPagos = pagosLines.reduce((sum, p) => sum + (p.monto || 0), 0)
+    const totalPagos = pagosLines.reduce((sum, p) => sum + getMontoEfectivo(p), 0)
     if (totalPagos <= 0) {
       await showError("Debe registrar al menos un pago")
       return
@@ -358,8 +365,8 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
     }
     // Validar cuenta corriente
     const pagoCC = pagosLines.find(p => p.metodo === "CUENTA_CORRIENTE")
-    if (pagoCC && pagoCC.monto > saldoCuenta) {
-      await showError(`El monto de cuenta corriente (${formatPrice(pagoCC.monto)}) excede el saldo disponible (${formatPrice(saldoCuenta)})`)
+    if (pagoCC && getMontoEfectivo(pagoCC) > saldoCuenta) {
+      await showError(`El monto de cuenta corriente (${formatPrice(getMontoEfectivo(pagoCC))}) excede el saldo disponible (${formatPrice(saldoCuenta)})`)
       return
     }
     if (pagoCC && !data.clienteId) {
@@ -374,14 +381,17 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
 
       const payload = {
         ...data,
-        pagos: pagosLines.map(p => ({
-          metodo: p.metodo,
-          monto: p.monto,
-          referencia: p.referencia || null,
-          cuotas: p.cuotas,
-          recargo: p.recargo,
-          montoOriginal: p.montoOriginal,
-        })),
+        pagos: pagosLines.map(p => {
+          const montoEfectivo = getMontoEfectivo(p)
+          return {
+            metodo: p.metodo,
+            monto: montoEfectivo, // total con recargo incluido
+            referencia: p.referencia || null,
+            cuotas: p.cuotas,
+            recargo: p.recargo,
+            montoOriginal: p.recargo && p.recargo > 0 ? p.monto : null, // monto base sin recargo
+          }
+        }),
       }
 
       const res = await offlineFetch("/api/ventas", {
@@ -753,13 +763,13 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
 
               {/* Detalle de pagos */}
               {(() => {
-                const totalPagos = pagosLines.reduce((sum, p) => sum + (p.monto || 0), 0)
-                const pendiente = total - totalPagos
-                return totalPagos > 0 && (
+                const totalPagosEfectivo = pagosLines.reduce((sum, p) => sum + getMontoEfectivo(p), 0)
+                const pendiente = total - totalPagosEfectivo
+                return totalPagosEfectivo > 0 && (
                   <div className="space-y-1 border-t pt-2">
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Total pagos:</span>
-                      <span className="font-medium text-green-600">{formatPrice(totalPagos)}</span>
+                      <span className="font-medium text-green-600">{formatPrice(totalPagosEfectivo)}</span>
                     </div>
                     {pendiente > 0.01 && (
                       <div className="flex justify-between text-sm">

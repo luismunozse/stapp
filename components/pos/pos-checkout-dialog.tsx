@@ -90,8 +90,15 @@ export function PosCheckoutDialog({
     fetchSaldo()
   }, [cliente.id])
 
+  // Calculate effective amount per pago (base + surcharge)
+  const getMontoEfectivo = (p: PagoLineItem): number => {
+    const base = p.monto || 0
+    if (p.recargo && p.recargo > 0) return base + base * (p.recargo / 100)
+    return base
+  }
+
   const handleSubmit = async () => {
-    const totalPagos = pagosLines.reduce((sum, p) => sum + (p.monto || 0), 0)
+    const totalPagos = pagosLines.reduce((sum, p) => sum + getMontoEfectivo(p), 0)
 
     // Without partial payment, pagos must match total exactly
     if (!pagoParcial && Math.abs(totalPagos - total) > 0.01) {
@@ -108,7 +115,7 @@ export function PosCheckoutDialog({
 
     // Validate cuenta corriente
     const pagoCC = pagosLines.find((p) => p.metodo === "CUENTA_CORRIENTE")
-    if (pagoCC && pagoCC.monto > saldoCuenta) {
+    if (pagoCC && getMontoEfectivo(pagoCC) > saldoCuenta) {
       await showError(`Saldo insuficiente en cuenta corriente (${formatPrice(saldoCuenta)})`)
       return
     }
@@ -143,14 +150,17 @@ export function PosCheckoutDialog({
         metodoPago: pagosConMonto.length > 0 ? pagosConMonto[0].metodo : "EFECTIVO",
         observaciones: observaciones || undefined,
         ...(pagosConMonto.length > 0 && {
-          pagos: pagosConMonto.map((p) => ({
-            metodo: p.metodo,
-            monto: p.monto,
-            ...(p.referencia && { referencia: p.referencia }),
-            ...(p.cuotas && { cuotas: p.cuotas }),
-            ...(p.recargo && { recargo: p.recargo }),
-            ...(p.montoOriginal && { montoOriginal: p.montoOriginal }),
-          })),
+          pagos: pagosConMonto.map((p) => {
+            const montoEfectivo = getMontoEfectivo(p)
+            return {
+              metodo: p.metodo,
+              monto: montoEfectivo, // total a cobrar (con recargo incluido)
+              ...(p.referencia && { referencia: p.referencia }),
+              ...(p.cuotas && { cuotas: p.cuotas }),
+              ...(p.recargo && p.recargo > 0 && { recargo: p.recargo }),
+              ...(p.recargo && p.recargo > 0 && { montoOriginal: p.monto }), // monto base sin recargo
+            }
+          }),
         }),
       }
 
@@ -288,13 +298,13 @@ export function PosCheckoutDialog({
 
           {/* Partial payment summary */}
           {pagoParcial && (() => {
-            const totalPagos = pagosLines.reduce((sum, p) => sum + (p.monto || 0), 0)
-            const pendiente = total - totalPagos
-            return (pendiente > 0.01 && totalPagos > 0) ? (
+            const totalPagosEfectivo = pagosLines.reduce((sum, p) => sum + getMontoEfectivo(p), 0)
+            const pendiente = total - totalPagosEfectivo
+            return (pendiente > 0.01 && totalPagosEfectivo > 0) ? (
               <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3 space-y-1">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Total pagos:</span>
-                  <span className="font-medium text-green-600">{formatPrice(totalPagos)}</span>
+                  <span className="font-medium text-green-600">{formatPrice(totalPagosEfectivo)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Saldo pendiente:</span>
