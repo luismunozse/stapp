@@ -17,6 +17,7 @@ import {
 } from "lucide-react"
 import { BusinessLogo } from "@/components/shared/business-logo"
 import { trackAdsConversion, trackEvent } from "@/lib/gtag"
+import { getStoredUtmParams } from "@/lib/utm"
 
 interface FormData {
   orgNombre: string
@@ -213,6 +214,11 @@ function RegistroForm() {
       orgSlug: cleanSlug,
       userName: formData.nombre || "",
     })
+    // Pasar UTMs al flujo de Google auth
+    const utm = getStoredUtmParams()
+    if (utm) {
+      Object.entries(utm).forEach(([k, v]) => { if (v) params.set(k, v) })
+    }
     window.location.href = `https://${rootDomain}/google-auth?${params.toString()}`
   }
 
@@ -241,6 +247,7 @@ function RegistroForm() {
             email: formData.email,
             password: formData.password,
           },
+          utm: getStoredUtmParams(),
         }),
       })
 

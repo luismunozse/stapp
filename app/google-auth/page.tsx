@@ -29,6 +29,17 @@ function GoogleAuthContent() {
   const orgSlug = searchParams.get("orgSlug") || ""
   const userName = searchParams.get("userName") || ""
 
+  // UTM params pasados desde el registro
+  const utmFromParams = {
+    utm_source: searchParams.get("utm_source") || undefined,
+    utm_medium: searchParams.get("utm_medium") || undefined,
+    utm_campaign: searchParams.get("utm_campaign") || undefined,
+    utm_content: searchParams.get("utm_content") || undefined,
+    utm_term: searchParams.get("utm_term") || undefined,
+  }
+  const hasUtm = Object.values(utmFromParams).some(Boolean)
+  const utm = hasUtm ? utmFromParams : null
+
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
 
@@ -73,6 +84,7 @@ function GoogleAuthContent() {
               email: "",
             },
             googleIdToken: credentialResponse.credential,
+            utm,
           }),
         })
 

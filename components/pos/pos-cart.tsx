@@ -250,15 +250,15 @@ export function PosCart({
                       </div>
                     </button>
 
-                    {/* Quantity controls */}
+                    {/* Quantity controls - larger touch targets on mobile */}
                     <div className="flex items-center gap-1 shrink-0">
                       <Button
                         variant="outline"
                         size="icon"
-                        className="h-7 w-7"
+                        className="h-8 w-8 sm:h-7 sm:w-7"
                         onClick={() => onUpdateQuantity(item.lineId, -1)}
                       >
-                        <Minus className="h-3 w-3" />
+                        <Minus className="h-3.5 w-3.5 sm:h-3 sm:w-3" />
                       </Button>
                       <span className="w-8 text-center text-sm font-semibold tabular-nums">
                         {item.cantidad}
@@ -266,11 +266,11 @@ export function PosCart({
                       <Button
                         variant="outline"
                         size="icon"
-                        className="h-7 w-7"
+                        className="h-8 w-8 sm:h-7 sm:w-7"
                         onClick={() => onUpdateQuantity(item.lineId, 1)}
                         disabled={item.inventarioId !== null && item.cantidad >= item.stockDisponible}
                       >
-                        <Plus className="h-3 w-3" />
+                        <Plus className="h-3.5 w-3.5 sm:h-3 sm:w-3" />
                       </Button>
                     </div>
 
@@ -285,10 +285,10 @@ export function PosCart({
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7 text-destructive shrink-0"
+                      className="h-8 w-8 sm:h-7 sm:w-7 text-destructive shrink-0"
                       onClick={() => onRemoveItem(item.lineId)}
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Trash2 className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
                     </Button>
                   </div>
 
@@ -316,7 +316,7 @@ export function PosCart({
       </div>
 
       {/* Footer: Totals + Actions */}
-      <div className="border-t bg-muted/30">
+      <div className="border-t bg-muted/30 shrink-0">
         {/* Totals */}
         {items.length > 0 && (
           <div className="px-4 pt-3 space-y-1">

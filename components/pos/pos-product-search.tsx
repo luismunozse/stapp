@@ -7,8 +7,14 @@ import { Search, Package, Loader2, Plus, Barcode } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import type { InventarioResult } from "./pos-types"
 
+interface ManualProduct {
+  nombre: string
+  precioUnitario: number
+}
+
 interface PosProductSearchProps {
   onAddProduct: (product: InventarioResult) => void
+  onAddManualProduct: (product: ManualProduct) => void
 }
 
 export interface PosProductSearchRef {
@@ -16,14 +22,19 @@ export interface PosProductSearchRef {
 }
 
 export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearchProps>(
-  function PosProductSearch({ onAddProduct }, ref) {
+  function PosProductSearch({ onAddProduct, onAddManualProduct }, ref) {
     const { formatPrice } = useCurrency()
     const inputRef = useRef<HTMLInputElement>(null)
+    const manualPriceRef = useRef<HTMLInputElement>(null)
     const [query, setQuery] = useState("")
     const [results, setResults] = useState<InventarioResult[]>([])
     const [loading, setLoading] = useState(false)
     const [recentProducts, setRecentProducts] = useState<InventarioResult[]>([])
     const [initialLoad, setInitialLoad] = useState(true)
+    const [showManualForm, setShowManualForm] = useState(false)
+    const [manualNombre, setManualNombre] = useState("")
+    const [manualPrecio, setManualPrecio] = useState<number | "">(0)
+    const [searchDone, setSearchDone] = useState(false)
 
     useImperativeHandle(ref, () => ({
       focusSearch: () => {
@@ -54,9 +65,12 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
     useEffect(() => {
       if (!query.trim()) {
         setResults([])
+        setSearchDone(false)
+        setShowManualForm(false)
         return
       }
 
+      setSearchDone(false)
       const timer = setTimeout(async () => {
         setLoading(true)
         try {
@@ -67,6 +81,7 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
           setResults([])
         } finally {
           setLoading(false)
+          setSearchDone(true)
         }
       }, 200)
 
@@ -77,17 +92,34 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
       onAddProduct(product)
       setQuery("")
       setResults([])
+      setShowManualForm(false)
       inputRef.current?.focus()
     }, [onAddProduct])
+
+    const handleAddManual = useCallback(() => {
+      const nombre = manualNombre.trim() || query.trim()
+      if (!nombre || !manualPrecio || manualPrecio <= 0) return
+      onAddManualProduct({ nombre, precioUnitario: manualPrecio })
+      setQuery("")
+      setResults([])
+      setManualNombre("")
+      setManualPrecio(0)
+      setShowManualForm(false)
+      inputRef.current?.focus()
+    }, [manualNombre, manualPrecio, query, onAddManualProduct])
+
+    const openManualForm = useCallback(() => {
+      setShowManualForm(true)
+      setManualNombre(query.trim())
+      setManualPrecio(0)
+      setTimeout(() => manualPriceRef.current?.focus(), 100)
+    }, [query])
 
     // Handle barcode scan in the input itself (fast typing + Enter)
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
       if (e.key === "Enter" && results.length === 1) {
         e.preventDefault()
         handleAdd(results[0])
-      }
-      if (e.key === "Enter" && results.length === 0 && query.trim()) {
-        // Could be a barcode - search will handle it
       }
     }
 
@@ -104,8 +136,8 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Buscar producto o escanear código de barras..."
-              className="pl-10 pr-10 h-12 text-lg"
+              placeholder="Buscar producto o escanear código..."
+              className="pl-10 pr-10 h-12 text-base sm:text-lg"
               autoFocus
             />
             {loading && (
@@ -140,17 +172,80 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-12">
               <Package className="h-12 w-12 mb-3 opacity-30" />
               <p className="text-sm">
-                {query.trim() ? "No se encontraron productos" : "Sin productos en inventario"}
+                {query.trim() ? "No se encontraron productos en inventario" : "Sin productos en inventario"}
               </p>
+              {/* Manual product add - appears when search yields no results */}
+              {query.trim() && searchDone && !loading && !showManualForm && (
+                <Button
+                  variant="outline"
+                  className="mt-4 gap-2"
+                  onClick={openManualForm}
+                >
+                  <Plus className="h-4 w-4" />
+                  Agregar "{query.trim()}" manualmente
+                </Button>
+              )}
+              {showManualForm && (
+                <div className="mt-4 w-full max-w-sm space-y-3 p-4 rounded-xl border bg-card text-left">
+                  <p className="text-sm font-medium text-foreground">Producto manual</p>
+                  <div>
+                    <label className="text-xs text-muted-foreground">Descripción</label>
+                    <Input
+                      value={manualNombre}
+                      onChange={(e) => setManualNombre(e.target.value)}
+                      placeholder="Nombre del producto"
+                      className="h-10 mt-1"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">Precio</label>
+                    <Input
+                      ref={manualPriceRef}
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={manualPrecio || ""}
+                      onChange={(e) => setManualPrecio(e.target.value ? parseFloat(e.target.value) : "")}
+                      placeholder="0.00"
+                      className="h-10 mt-1 text-lg font-medium"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault()
+                          handleAddManual()
+                        }
+                      }}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => setShowManualForm(false)}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="flex-1"
+                      onClick={handleAddManual}
+                      disabled={!manualNombre.trim() && !query.trim() || !manualPrecio || manualPrecio <= 0}
+                    >
+                      <Plus className="mr-1.5 h-3.5 w-3.5" />
+                      Agregar
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-2 pb-20 lg:pb-0">
               {displayProducts.map((product) => (
                 <button
                   key={product.id}
                   type="button"
                   onClick={() => handleAdd(product)}
-                  className="group relative flex flex-col items-start rounded-lg border bg-card p-3 text-left transition-all hover:border-primary hover:shadow-md active:scale-[0.98]"
+                  className="group relative flex flex-col items-start rounded-xl border bg-card p-3 sm:p-3 text-left transition-all hover:border-primary hover:shadow-md active:scale-[0.97] min-h-[5.5rem]"
                 >
                   <div className="flex items-center gap-1.5 mb-1">
                     <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
@@ -162,7 +257,7 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
                     {product.nombre}
                   </span>
                   <div className="flex items-center justify-between w-full mt-2">
-                    <span className="text-base font-bold text-primary">
+                    <span className="text-sm sm:text-base font-bold text-primary">
                       {formatPrice(product.precioVenta)}
                     </span>
                     <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
@@ -173,8 +268,8 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
                       Stock: {product.stock}
                     </span>
                   </div>
-                  {/* Quick add overlay */}
-                  <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                  {/* Quick add overlay - desktop only */}
+                  <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none hidden sm:flex">
                     <div className="bg-primary text-primary-foreground rounded-full p-1.5">
                       <Plus className="h-4 w-4" />
                     </div>

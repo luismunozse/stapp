@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
+import { captureUtmParams } from "@/lib/utm"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
@@ -581,6 +582,9 @@ function MockupSlider() {
 // ========================================
 
 export function Hero() {
+  // Capturar UTM params de la URL al cargar la landing
+  useEffect(() => { captureUtmParams() }, [])
+
   const benefits = [
     "Órdenes ilimitadas",
     "Seguimiento online para clientes",

@@ -214,6 +214,10 @@ export async function POST(request: Request) {
     // Pass multi-payment array if provided
     if (data.pagos && data.pagos.length > 0) {
       rpcParams.p_pagos = data.pagos
+    } else if (data.pagosParcial) {
+      // Deferred payment ("paga después"): send empty array
+      // RPC distinguishes NULL (legacy full payment) vs empty array (no payments)
+      rpcParams.p_pagos = []
     }
 
     const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc("crear_venta_atomica", rpcParams)

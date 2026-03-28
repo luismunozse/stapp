@@ -46,6 +46,7 @@ export function PosCheckoutDialog({
   const [pagosLines, setPagosLines] = useState<PagoLineItem[]>([createPagoLine(0)])
   const [observaciones, setObservaciones] = useState("")
   const [saldoCuenta, setSaldoCuenta] = useState(0)
+  const [pagoParcial, setPagoParcial] = useState(false)
 
   // Cash change calculation
   const [montoRecibido, setMontoRecibido] = useState<number | "">("")
@@ -65,6 +66,7 @@ export function PosCheckoutDialog({
       setPagosLines([createPagoLine(total)])
       setMontoRecibido("")
       setObservaciones("")
+      setPagoParcial(false)
     }
   }, [open, total])
 
@@ -91,14 +93,16 @@ export function PosCheckoutDialog({
   const handleSubmit = async () => {
     const totalPagos = pagosLines.reduce((sum, p) => sum + (p.monto || 0), 0)
 
-    if (totalPagos <= 0) {
-      await showError("Debe registrar al menos un pago")
+    // Without partial payment, pagos must match total exactly
+    if (!pagoParcial && Math.abs(totalPagos - total) > 0.01) {
+      await showError(
+        `El total de pagos (${formatPrice(totalPagos)}) no coincide con el total (${formatPrice(total)}). Active "Pago parcial" para dejar saldo pendiente.`
+      )
       return
     }
-    if (Math.abs(totalPagos - total) > 0.01) {
-      await showError(
-        `El total de pagos (${formatPrice(totalPagos)}) no coincide con el total (${formatPrice(total)}).`
-      )
+    // With partial payment, pagos can be 0 (paga despues) but not exceed total
+    if (pagoParcial && totalPagos > total + 0.01) {
+      await showError("El total de pagos no puede exceder el total de la venta")
       return
     }
 
@@ -115,10 +119,14 @@ export function PosCheckoutDialog({
 
     setLoading(true)
     try {
+      // Filter out pago lines with 0 amount
+      const pagosConMonto = pagosLines.filter((p) => p.monto > 0)
+
       const payload = {
         clienteId: cliente.id || null,
         clienteNombre: cliente.nombre || "Consumidor Final",
         clienteTelefono: cliente.telefono || null,
+        pagosParcial: pagoParcial,
         items: items.map((item) => ({
           inventarioId: item.inventarioId || null,
           descripcion: item.nombre,
@@ -132,9 +140,9 @@ export function PosCheckoutDialog({
         descuento: 0,
         tipoDescuento: "MONTO" as const,
         porcentajeDescuento: 0,
-        metodoPago: pagosLines[0].metodo,
+        metodoPago: pagosConMonto.length > 0 ? pagosConMonto[0].metodo : "EFECTIVO",
         observaciones: observaciones || null,
-        pagos: pagosLines.map((p) => ({
+        pagos: pagosConMonto.map((p) => ({
           metodo: p.metodo,
           monto: p.monto,
           referencia: p.referencia || null,
@@ -206,7 +214,43 @@ export function PosCheckoutDialog({
             </div>
           </div>
 
-          {/* Payment method */}
+          {/* Quick action: Paga despues */}
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                className="rounded border-gray-300 h-4 w-4"
+                checked={pagoParcial}
+                onChange={(e) => {
+                  setPagoParcial(e.target.checked)
+                  if (!e.target.checked) {
+                    // Restore full amount on first pago line
+                    setPagosLines([createPagoLine(total)])
+                  }
+                }}
+              />
+              <span className="text-sm text-muted-foreground">
+                Pago parcial
+              </span>
+            </label>
+            {!pagoParcial && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs text-amber-600 border-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                onClick={() => {
+                  setPagoParcial(true)
+                  setPagosLines([createPagoLine(0)])
+                }}
+              >
+                Paga después ($0)
+              </Button>
+            )}
+          </div>
+
+          {/* Payment method - hidden when fully deferred */}
+          {!(pagoParcial && pagosLines.length === 1 && (pagosLines[0].monto || 0) === 0) ? (
           <div className="space-y-3">
             <Label className="text-sm font-medium">Método de pago</Label>
             <MultiPagoInput
@@ -217,6 +261,46 @@ export function PosCheckoutDialog({
               showCuentaCorriente={!!cliente.id && saldoCuenta > 0}
             />
           </div>
+          ) : (
+            <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-4 text-center space-y-2">
+              <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                Venta sin pago — el total queda pendiente
+              </p>
+              <p className="text-2xl font-bold text-red-600">{formatPrice(total)}</p>
+              <p className="text-xs text-muted-foreground">
+                El cobro se registra después desde el detalle de la venta
+              </p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-xs"
+                onClick={() => {
+                  setPagosLines([createPagoLine(total)])
+                }}
+              >
+                Quiero registrar un pago parcial
+              </Button>
+            </div>
+          )}
+
+          {/* Partial payment summary */}
+          {pagoParcial && (() => {
+            const totalPagos = pagosLines.reduce((sum, p) => sum + (p.monto || 0), 0)
+            const pendiente = total - totalPagos
+            return (pendiente > 0.01 && totalPagos > 0) ? (
+              <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3 space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Total pagos:</span>
+                  <span className="font-medium text-green-600">{formatPrice(totalPagos)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Saldo pendiente:</span>
+                  <span className="font-bold text-red-600">{formatPrice(pendiente)}</span>
+                </div>
+              </div>
+            ) : null
+          })()}
 
           {/* Cash change calculator */}
           {isCashOnly && (

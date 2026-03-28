@@ -9,11 +9,12 @@ import {
   ArrowLeft,
   Keyboard,
   Monitor,
-  Maximize,
   Check,
   FileText,
-  X,
+  ShoppingCart,
+  Package,
 } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { PosProductSearch, type PosProductSearchRef } from "./pos-product-search"
 import { PosCart } from "./pos-cart"
 import { PosCheckoutDialog } from "./pos-checkout-dialog"
@@ -53,6 +54,8 @@ function saveHeldSales(sales: HeldSale[]) {
   localStorage.setItem(HELD_SALES_KEY, JSON.stringify(sales))
 }
 
+type MobileTab = "products" | "cart"
+
 export function PosTerminal() {
   const router = useRouter()
   const { formatPrice } = useCurrency()
@@ -71,10 +74,26 @@ export function PosTerminal() {
   const [showShortcuts, setShowShortcuts] = useState(false)
   const [successData, setSuccessData] = useState<any>(null)
 
+  // Mobile tab state
+  const [mobileTab, setMobileTab] = useState<MobileTab>("products")
+
+  // Computed values
+  const cartCount = cartItems.reduce((sum, i) => sum + i.cantidad, 0)
+  const cartTotal = cartItems.reduce((sum, i) => sum + i.precioUnitario * i.cantidad, 0)
+
   // Load held sales from localStorage
   useEffect(() => {
     setHeldSales(loadHeldSales())
   }, [])
+
+  // Auto-switch to cart on mobile when first item is added
+  const prevCartCount = useRef(0)
+  useEffect(() => {
+    if (cartCount > 0 && prevCartCount.current === 0) {
+      // Don't auto-switch, let the user stay on products to keep adding
+    }
+    prevCartCount.current = cartCount
+  }, [cartCount])
 
   // --- Cart operations ---
   const addProduct = useCallback((product: InventarioResult) => {
@@ -102,6 +121,22 @@ export function PosTerminal() {
         },
       ]
     })
+  }, [])
+
+  const addManualProduct = useCallback((product: { nombre: string; precioUnitario: number }) => {
+    setCartItems((prev) => [
+      ...prev,
+      {
+        lineId: nextLineId(),
+        inventarioId: null,
+        codigo: "",
+        nombre: product.nombre,
+        precioUnitario: product.precioUnitario,
+        cantidad: 1,
+        stockDisponible: 999,
+        diasGarantia: 0,
+      },
+    ])
   }, [])
 
   const updateQuantity = useCallback((lineId: string, delta: number) => {
@@ -147,13 +182,12 @@ export function PosTerminal() {
   // --- Hold/Recall ---
   const holdSale = useCallback(async () => {
     if (cartItems.length === 0) return
-    const nota = ""
     const held: HeldSale = {
       id: `held_${Date.now()}`,
       timestamp: Date.now(),
       cliente: { ...cliente },
       items: [...cartItems],
-      nota,
+      nota: "",
     }
     const updated = [...heldSales, held]
     setHeldSales(updated)
@@ -161,6 +195,7 @@ export function PosTerminal() {
     setCartItems([])
     setCliente({ ...EMPTY_CLIENT })
     setShowClienteSearch(false)
+    setMobileTab("products")
   }, [cartItems, cliente, heldSales])
 
   const recallSale = useCallback(
@@ -168,7 +203,6 @@ export function PosTerminal() {
       const sale = heldSales.find((s) => s.id === id)
       if (!sale) return
 
-      // If current cart has items, hold them first
       if (cartItems.length > 0) {
         const currentHeld: HeldSale = {
           id: `held_${Date.now()}`,
@@ -189,6 +223,7 @@ export function PosTerminal() {
 
       setCartItems(sale.items)
       setCliente(sale.cliente)
+      setMobileTab("cart")
     },
     [heldSales, cartItems, cliente]
   )
@@ -213,6 +248,7 @@ export function PosTerminal() {
 
   const handleSuccessClose = useCallback(() => {
     setSuccessData(null)
+    setMobileTab("products")
     searchRef.current?.focusSearch()
   }, [])
 
@@ -243,21 +279,28 @@ export function PosTerminal() {
       setCartItems([])
       setCliente({ ...EMPTY_CLIENT })
       setShowClienteSearch(false)
+      setMobileTab("products")
       searchRef.current?.focusSearch()
     },
-    onSearchFocus: () => searchRef.current?.focusSearch(),
+    onSearchFocus: () => {
+      setMobileTab("products")
+      searchRef.current?.focusSearch()
+    },
     onHoldSale: holdSale,
     onRecallSale: () => setHeldSalesOpen(true),
     onCheckout: () => {
       if (cartItems.length > 0) setCheckoutOpen(true)
     },
-    onToggleClient: () => setShowClienteSearch((prev) => !prev),
+    onToggleClient: () => {
+      setMobileTab("cart")
+      setShowClienteSearch((prev) => !prev)
+    },
     enabled: !checkoutOpen && !heldSalesOpen && !successData,
   })
 
   return (
     <div className="fixed inset-0 z-50 bg-background flex flex-col">
-      {/* Top bar */}
+      {/* ===== Top bar ===== */}
       <header className="h-12 border-b bg-background flex items-center justify-between px-3 shrink-0">
         <div className="flex items-center gap-3">
           <Button
@@ -276,40 +319,40 @@ export function PosTerminal() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Shortcuts toggle - desktop only */}
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 gap-1.5 text-xs"
+            className="h-8 gap-1.5 text-xs hidden lg:flex"
             onClick={() => setShowShortcuts(!showShortcuts)}
           >
             <Keyboard className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Atajos</span>
+            Atajos
           </Button>
         </div>
       </header>
 
-      {/* Shortcuts bar */}
+      {/* Shortcuts bar - desktop only */}
       {showShortcuts && (
-        <div className="bg-muted border-b px-3 py-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground shrink-0">
+        <div className="hidden lg:flex bg-muted border-b px-3 py-2 flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground shrink-0">
           <span><kbd className="px-1.5 py-0.5 rounded bg-background border text-[10px] font-mono">F2</kbd> Nueva venta</span>
           <span><kbd className="px-1.5 py-0.5 rounded bg-background border text-[10px] font-mono">F4</kbd> Buscar producto</span>
           <span><kbd className="px-1.5 py-0.5 rounded bg-background border text-[10px] font-mono">F5</kbd> Apartar venta</span>
           <span><kbd className="px-1.5 py-0.5 rounded bg-background border text-[10px] font-mono">F6</kbd> Recuperar venta</span>
           <span><kbd className="px-1.5 py-0.5 rounded bg-background border text-[10px] font-mono">F7</kbd> Cliente</span>
           <span><kbd className="px-1.5 py-0.5 rounded bg-background border text-[10px] font-mono">F8</kbd> Cobrar</span>
-          <span><kbd className="px-1.5 py-0.5 rounded bg-background border text-[10px] font-mono">Scanner</kbd> Código de barras automático</span>
+          <span><kbd className="px-1.5 py-0.5 rounded bg-background border text-[10px] font-mono">Scanner</kbd> Código de barras</span>
         </div>
       )}
 
-      {/* Main content: split view */}
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+      {/* ===== Desktop: Split view ===== */}
+      <div className="hidden lg:flex flex-1 overflow-hidden">
         {/* Left: Product search */}
-        <div className="flex-1 lg:w-[60%] lg:flex-none border-r overflow-hidden flex flex-col">
-          <PosProductSearch ref={searchRef} onAddProduct={addProduct} />
+        <div className="w-[60%] border-r overflow-hidden flex flex-col">
+          <PosProductSearch ref={searchRef} onAddProduct={addProduct} onAddManualProduct={addManualProduct} />
         </div>
-
         {/* Right: Cart */}
-        <div className="lg:w-[40%] lg:flex-none overflow-hidden flex flex-col border-t lg:border-t-0">
+        <div className="w-[40%] overflow-hidden flex flex-col">
           <PosCart
             items={cartItems}
             cliente={cliente}
@@ -328,7 +371,96 @@ export function PosTerminal() {
         </div>
       </div>
 
-      {/* Checkout dialog */}
+      {/* ===== Mobile: Tab-based view ===== */}
+      <div className="flex-1 flex flex-col lg:hidden overflow-hidden">
+        {/* Content area */}
+        <div className="flex-1 overflow-hidden">
+          {mobileTab === "products" ? (
+            <PosProductSearch ref={searchRef} onAddProduct={addProduct} onAddManualProduct={addManualProduct} />
+          ) : (
+            <PosCart
+              items={cartItems}
+              cliente={cliente}
+              onUpdateQuantity={updateQuantity}
+              onRemoveItem={removeItem}
+              onSetGarantia={setGarantia}
+              onSetCliente={setCliente}
+              onCheckout={() => cartItems.length > 0 && setCheckoutOpen(true)}
+              onHoldSale={holdSale}
+              onRecallSale={() => setHeldSalesOpen(true)}
+              onClearCart={clearCart}
+              heldCount={heldSales.length}
+              showClienteSearch={showClienteSearch}
+              onToggleClienteSearch={() => setShowClienteSearch((prev) => !prev)}
+            />
+          )}
+        </div>
+
+        {/* Mobile bottom tab bar */}
+        <div className="shrink-0 border-t bg-background safe-area-bottom">
+          <div className="grid grid-cols-2 h-14">
+            <button
+              type="button"
+              onClick={() => setMobileTab("products")}
+              className={cn(
+                "flex flex-col items-center justify-center gap-0.5 transition-colors",
+                mobileTab === "products"
+                  ? "text-primary bg-primary/5"
+                  : "text-muted-foreground"
+              )}
+            >
+              <Package className="h-5 w-5" />
+              <span className="text-[10px] font-medium">Productos</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileTab("cart")}
+              className={cn(
+                "relative flex flex-col items-center justify-center gap-0.5 transition-colors",
+                mobileTab === "cart"
+                  ? "text-primary bg-primary/5"
+                  : "text-muted-foreground"
+              )}
+            >
+              <div className="relative">
+                <ShoppingCart className="h-5 w-5" />
+                {cartCount > 0 && (
+                  <span className="absolute -top-1.5 -right-2.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-bold px-1">
+                    {cartCount}
+                  </span>
+                )}
+              </div>
+              <span className="text-[10px] font-medium">
+                {cartTotal > 0 ? formatPrice(cartTotal) : "Carrito"}
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ===== Mobile: Floating cart badge (on products tab) ===== */}
+      {mobileTab === "products" && cartCount > 0 && (
+        <div className="lg:hidden fixed bottom-20 left-4 right-4 z-[51] safe-area-bottom">
+          <button
+            type="button"
+            onClick={() => setMobileTab("cart")}
+            className="w-full flex items-center justify-between bg-primary text-primary-foreground rounded-xl px-4 py-3 shadow-lg active:scale-[0.98] transition-transform"
+          >
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <ShoppingCart className="h-5 w-5" />
+                <span className="absolute -top-1 -right-1.5 min-w-[16px] h-[16px] flex items-center justify-center rounded-full bg-primary-foreground text-primary text-[9px] font-bold px-0.5">
+                  {cartCount}
+                </span>
+              </div>
+              <span className="text-sm font-medium">Ver carrito</span>
+            </div>
+            <span className="text-lg font-bold">{formatPrice(cartTotal)}</span>
+          </button>
+        </div>
+      )}
+
+      {/* ===== Dialogs ===== */}
       <PosCheckoutDialog
         open={checkoutOpen}
         onClose={() => setCheckoutOpen(false)}
@@ -337,7 +469,6 @@ export function PosTerminal() {
         onComplete={handleCheckoutComplete}
       />
 
-      {/* Held sales dialog */}
       <PosHeldSales
         open={heldSalesOpen}
         onClose={() => setHeldSalesOpen(false)}
@@ -346,7 +477,7 @@ export function PosTerminal() {
         onDelete={deleteHeldSale}
       />
 
-      {/* Success overlay */}
+      {/* ===== Success overlay ===== */}
       {successData && (
         <div className="fixed inset-0 z-[60] bg-background/95 flex items-center justify-center p-4">
           <div className="max-w-sm w-full text-center space-y-4">
@@ -372,6 +503,7 @@ export function PosTerminal() {
             <div className="flex flex-col gap-2">
               <Button
                 variant="outline"
+                className="h-11"
                 onClick={() => window.open(`/api/ventas/${successData.id}/pdf`, "_blank")}
               >
                 <FileText className="mr-2 h-4 w-4" />
@@ -381,7 +513,7 @@ export function PosTerminal() {
               {successData.clienteTelefono && (
                 <Button
                   variant="outline"
-                  className="text-green-600 border-green-300"
+                  className="h-11 text-green-600 border-green-300"
                   onClick={() => {
                     const msg = encodeURIComponent(
                       `Hola ${successData.clienteNombre}, gracias por tu compra! Venta #${successData.numeroVenta} por ${formatPrice(successData.total)}. Comprobante: ${window.location.origin}/api/ventas/${successData.id}/pdf`
@@ -396,7 +528,7 @@ export function PosTerminal() {
               )}
 
               <Button onClick={handleSuccessClose} className="h-12 text-lg font-semibold">
-                Nueva Venta (F2)
+                Nueva Venta
               </Button>
             </div>
           </div>

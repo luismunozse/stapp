@@ -25,6 +25,17 @@ const registerSchema = z.object({
   }),
   // Google ID Token (opcional, para registro con Google)
   googleIdToken: z.string().optional(),
+  // UTM params (capturados de la landing)
+  utm: z
+    .object({
+      utm_source: z.string().optional(),
+      utm_medium: z.string().optional(),
+      utm_campaign: z.string().optional(),
+      utm_content: z.string().optional(),
+      utm_term: z.string().optional(),
+    })
+    .nullable()
+    .optional(),
 })
 
 export async function POST(request: NextRequest) {
@@ -41,7 +52,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { organizacion, usuario, googleIdToken } = validationResult.data
+    const { organizacion, usuario, googleIdToken, utm } = validationResult.data
 
     // Determinar si es registro con Google
     const isGoogleRegister = !!googleIdToken
@@ -147,6 +158,12 @@ export async function POST(request: NextRequest) {
         notificaciones_email: true,
         notificaciones_whatsapp: false,
         dias_recordatorio: 3,
+        // UTM tracking
+        ...(utm?.utm_source && { utm_source: utm.utm_source }),
+        ...(utm?.utm_medium && { utm_medium: utm.utm_medium }),
+        ...(utm?.utm_campaign && { utm_campaign: utm.utm_campaign }),
+        ...(utm?.utm_content && { utm_content: utm.utm_content }),
+        ...(utm?.utm_term && { utm_term: utm.utm_term }),
       })
       .select()
       .single()
