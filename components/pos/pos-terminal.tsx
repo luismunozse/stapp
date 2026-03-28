@@ -504,7 +504,7 @@ export function PosTerminal() {
               <Button
                 variant="outline"
                 className="h-11"
-                onClick={() => window.open(`/api/ventas/${successData.id}/pdf`, "_blank")}
+                onClick={() => window.open(`/api/ventas/${successData.id}/pdf?format=ticket`, "_blank")}
               >
                 <FileText className="mr-2 h-4 w-4" />
                 Imprimir comprobante

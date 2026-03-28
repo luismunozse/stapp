@@ -1572,6 +1572,205 @@ export async function generateVentaPDF(data: VentaPDFData): Promise<Buffer> {
 }
 
 // ========================================
+// TICKET DE VENTA (58mm thermal printer)
+// ========================================
+
+export async function generateVentaTicketPDF(data: VentaPDFData): Promise<Buffer> {
+  const safe = (val: unknown): string => {
+    if (val === null || val === undefined) return ""
+    if (typeof val === "string") return val.replace(/[\r\n]+/g, " ").trim()
+    if (typeof val === "number") return String(val)
+    return ""
+  }
+
+  const formatDatePDF = (date: Date | string | null | undefined): string => {
+    return formatDateTimeValue(date, data.zonaHoraria || DEFAULT_TIMEZONE)
+  }
+
+  const formatCurrencyPDF = (amount: number | null | undefined): string => {
+    return formatCurrencyValue(amount, (data.moneda as CurrencyCode) || DEFAULT_CURRENCY)
+  }
+
+  // 58mm = ~164pt (at 72dpi). Printable area ~48mm = ~136pt
+  const ticketWidth = 164
+  const margin = 10
+  const contentWidth = ticketWidth - margin * 2
+  const lineHeight = 11
+  const smallLine = 9
+
+  // Pre-calculate height
+  const empresaNombre = safe(data.nombreEmpresa) || "Servicio Tecnico"
+  const telefonoEmpresa = safe(data.telefonoEmpresa)
+  const direccionEmpresa = safe(data.direccionEmpresa)
+  const clienteNombre = safe(data.cliente?.nombre) || "Consumidor Final"
+  const clienteTelefono = safe(data.cliente?.telefono)
+  const vendedor = safe(data.vendedor)
+  const fecha = formatDatePDF(data.fecha)
+  const metodoPago = metodoPagoLabels[data.metodoPago] || data.metodoPago
+
+  let estimatedHeight = 0
+  estimatedHeight += 60 // header (empresa + venta number)
+  estimatedHeight += 10 // separator
+  estimatedHeight += 30 // fecha + cliente
+  if (clienteTelefono) estimatedHeight += smallLine
+  estimatedHeight += 15 // vendedor + separator
+  estimatedHeight += 15 // column header
+  estimatedHeight += data.items.length * (lineHeight + smallLine + 4) // items (name + detail line)
+  estimatedHeight += 15 // separator
+  estimatedHeight += 20 // subtotal
+  if (data.descuento > 0) estimatedHeight += lineHeight
+  estimatedHeight += 20 // total
+  estimatedHeight += 15 // metodo pago
+  estimatedHeight += 40 // footer
+  estimatedHeight += 20 // bottom margin
+
+  const pdfDoc = await PDFLib.create()
+  const page = pdfDoc.addPage([ticketWidth, estimatedHeight])
+  const { height } = page.getSize()
+
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
+  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
+
+  const black = rgb(0, 0, 0)
+  const gray = rgb(0.35, 0.35, 0.35)
+  const lightGray = rgb(0.7, 0.7, 0.7)
+
+  // Helper: draw centered text
+  const drawCenter = (text: string, yPos: number, size: number, f = font, color = black) => {
+    const w = f.widthOfTextAtSize(text, size)
+    page.drawText(text, { x: (ticketWidth - w) / 2, y: yPos, size, font: f, color })
+  }
+
+  // Helper: draw right-aligned text
+  const drawRight = (text: string, yPos: number, size: number, f = font, color = black) => {
+    const w = f.widthOfTextAtSize(text, size)
+    page.drawText(text, { x: ticketWidth - margin - w, y: yPos, size, font: f, color })
+  }
+
+  // Helper: dashed separator line
+  const drawDash = (yPos: number) => {
+    const dash = "- ".repeat(18)
+    const w = font.widthOfTextAtSize(dash, 6)
+    page.drawText(dash, { x: (ticketWidth - w) / 2, y: yPos, size: 6, font, color: lightGray })
+  }
+
+  let y = height - margin
+
+  // === HEADER: Empresa ===
+  // Nombre empresa (centered, bold)
+  const empresaSize = empresaNombre.length > 20 ? 9 : 11
+  drawCenter(empresaNombre, y, empresaSize, fontBold)
+  y -= 12
+
+  if (telefonoEmpresa) {
+    drawCenter(`Tel: ${telefonoEmpresa}`, y, 7, font, gray)
+    y -= 9
+  }
+  if (direccionEmpresa) {
+    // Truncate long addresses
+    const addr = direccionEmpresa.length > 35 ? direccionEmpresa.substring(0, 35) + "..." : direccionEmpresa
+    drawCenter(addr, y, 6, font, gray)
+    y -= 9
+  }
+
+  y -= 3
+  drawDash(y)
+  y -= 10
+
+  // === VENTA NUMBER + FECHA ===
+  drawCenter(`VENTA #${String(data.numeroVenta).padStart(4, "0")}`, y, 10, fontBold)
+  y -= 12
+  drawCenter(fecha, y, 7, font, gray)
+  y -= 12
+
+  drawDash(y)
+  y -= 10
+
+  // === CLIENTE + VENDEDOR ===
+  page.drawText("Cliente:", { x: margin, y, size: 7, font, color: gray })
+  page.drawText(clienteNombre.substring(0, 22), { x: margin + 30, y, size: 7, font: fontBold, color: black })
+  y -= smallLine
+
+  if (clienteTelefono) {
+    page.drawText("Tel:", { x: margin, y, size: 7, font, color: gray })
+    page.drawText(clienteTelefono, { x: margin + 30, y, size: 7, font, color: black })
+    y -= smallLine
+  }
+
+  page.drawText("Vendedor:", { x: margin, y, size: 7, font, color: gray })
+  page.drawText(vendedor.substring(0, 20), { x: margin + 36, y, size: 7, font, color: black })
+  y -= 10
+
+  drawDash(y)
+  y -= 10
+
+  // === ITEMS ===
+  // Column headers
+  page.drawText("Producto", { x: margin, y, size: 6, font: fontBold, color: gray })
+  drawRight("Total", y, 6, fontBold, gray)
+  y -= 8
+
+  for (const item of data.items) {
+    // Product name (full width, may truncate)
+    const name = item.descripcion.length > 28 ? item.descripcion.substring(0, 28) + "..." : item.descripcion
+    page.drawText(name, { x: margin, y, size: 7, font: fontBold, color: black })
+    y -= smallLine
+
+    // Quantity x price                  subtotal
+    const qtyPrice = `  ${item.cantidad} x ${formatCurrencyPDF(item.precioUnitario)}`
+    page.drawText(qtyPrice, { x: margin, y, size: 7, font, color: gray })
+    drawRight(formatCurrencyPDF(item.subtotal), y, 7, font, black)
+
+    if (item.diasGarantia > 0) {
+      y -= smallLine
+      page.drawText(`  Garantia: ${item.diasGarantia} dias`, { x: margin, y, size: 6, font, color: gray })
+    }
+
+    y -= lineHeight + 1
+  }
+
+  y -= 2
+  drawDash(y)
+  y -= 10
+
+  // === TOTALES ===
+  page.drawText("Subtotal:", { x: margin, y, size: 7, font, color: gray })
+  drawRight(formatCurrencyPDF(data.subtotal), y, 7, font, black)
+  y -= lineHeight
+
+  if (data.descuento > 0) {
+    page.drawText("Descuento:", { x: margin, y, size: 7, font, color: gray })
+    drawRight(`-${formatCurrencyPDF(data.descuento)}`, y, 7, font, black)
+    y -= lineHeight
+  }
+
+  // Total line (bigger, bold)
+  y -= 2
+  page.drawRectangle({ x: margin, y: y - 3, width: contentWidth, height: 14, color: rgb(0.95, 0.95, 0.95) })
+  page.drawText("TOTAL:", { x: margin + 3, y, size: 9, font: fontBold, color: black })
+  drawRight(formatCurrencyPDF(data.total), y, 9, fontBold, black)
+  y -= 18
+
+  // Metodo de pago
+  page.drawText("Pago:", { x: margin, y, size: 7, font, color: gray })
+  page.drawText(metodoPago, { x: margin + 22, y, size: 7, font: fontBold, color: black })
+  y -= 14
+
+  drawDash(y)
+  y -= 10
+
+  // === FOOTER ===
+  drawCenter("Gracias por su compra!", y, 8, fontBold)
+  y -= 10
+  drawCenter("Conserve este ticket", y, 6, font, gray)
+  y -= 8
+  drawCenter("como comprobante", y, 6, font, gray)
+
+  const pdfBytes = await pdfDoc.save()
+  return Buffer.from(pdfBytes)
+}
+
+// ========================================
 // CERTIFICADO DE GARANTIA DE VENTA
 // ========================================
 

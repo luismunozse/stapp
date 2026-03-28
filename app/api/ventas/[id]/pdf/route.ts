@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
-import { generateVentaPDF } from "@/lib/pdf"
+import { generateVentaPDF, generateVentaTicketPDF } from "@/lib/pdf"
 
 export async function GET(
   request: Request,
@@ -79,8 +79,14 @@ export async function GET(
       zonaHoraria: venta.organizations?.zona_horaria || "America/Argentina/Buenos_Aires",
     }
 
+    // Check format: ticket (58mm thermal) or standard A4
+    const { searchParams } = new URL(request.url)
+    const format = searchParams.get("format")
+
     // Generar PDF
-    const pdfBuffer = await generateVentaPDF(pdfData)
+    const pdfBuffer = format === "ticket"
+      ? await generateVentaTicketPDF(pdfData)
+      : await generateVentaPDF(pdfData)
 
     // Retornar PDF
     return new NextResponse(new Uint8Array(pdfBuffer), {
