@@ -142,14 +142,16 @@ export function PosCheckoutDialog({
         porcentajeDescuento: 0,
         metodoPago: pagosConMonto.length > 0 ? pagosConMonto[0].metodo : "EFECTIVO",
         observaciones: observaciones || undefined,
-        pagos: pagosConMonto.map((p) => ({
-          metodo: p.metodo,
-          monto: p.monto,
-          referencia: p.referencia || null,
-          cuotas: p.cuotas,
-          recargo: p.recargo,
-          montoOriginal: p.montoOriginal,
-        })),
+        ...(pagosConMonto.length > 0 && {
+          pagos: pagosConMonto.map((p) => ({
+            metodo: p.metodo,
+            monto: p.monto,
+            ...(p.referencia && { referencia: p.referencia }),
+            ...(p.cuotas && { cuotas: p.cuotas }),
+            ...(p.recargo && { recargo: p.recargo }),
+            ...(p.montoOriginal && { montoOriginal: p.montoOriginal }),
+          })),
+        }),
       }
 
       const res = await fetch("/api/ventas", {

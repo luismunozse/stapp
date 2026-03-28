@@ -19,18 +19,18 @@ const itemSchema = z.object({
 const ventaSchema = z.object({
   clienteId: z.string().nullable().optional(),
   clienteNombre: z.string().min(1, "El nombre del cliente es requerido"),
-  clienteTelefono: z.string().optional(),
+  clienteTelefono: z.string().nullable().optional(),
   items: z.array(itemSchema).min(1, "Debe agregar al menos un item"),
   descuento: z.number().min(0).default(0),
   tipoDescuento: z.enum(["MONTO", "PORCENTAJE"]).default("MONTO"),
   porcentajeDescuento: z.number().min(0).max(100).default(0),
   metodoPago: z.enum(["EFECTIVO", "TRANSFERENCIA", "TARJETA", "TARJETA_DEBITO", "TARJETA_CREDITO", "MERCADOPAGO", "CUENTA_CORRIENTE", "OTRO"]),
-  observaciones: z.string().optional(),
+  observaciones: z.string().nullable().optional(),
   cuotas: z.number().int().min(1).nullable().optional(),
   recargoPorcentaje: z.number().min(0).nullable().optional(),
   montoOriginal: z.number().positive().nullable().optional(),
-  numeroReferencia: z.string().optional(),
-  descuentoMotivo: z.string().optional(),
+  numeroReferencia: z.string().nullable().optional(),
+  descuentoMotivo: z.string().nullable().optional(),
   pagosParcial: z.boolean().optional(),
   pagos: z.array(z.object({
     metodo: z.string(),
@@ -283,8 +283,12 @@ export async function POST(request: Request) {
     return NextResponse.json(response, { status: 201 })
   } catch (error) {
     if (error instanceof z.ZodError) {
+      const firstError = error.errors[0]
+      const field = firstError.path.join(".")
+      const message = field ? `${field}: ${firstError.message}` : firstError.message
+      console.error("Zod validation errors:", JSON.stringify(error.errors, null, 2))
       return NextResponse.json(
-        { error: error.errors[0].message },
+        { error: message },
         { status: 400 }
       )
     }
