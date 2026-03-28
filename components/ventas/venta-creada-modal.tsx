@@ -14,15 +14,12 @@ import { Label } from "@/components/ui/label"
 import {
   Copy,
   Check,
-  Download,
-  ExternalLink,
   FileText,
   Loader2,
-  ShoppingBag,
 } from "lucide-react"
-import { generateWhatsAppUrl } from "@/lib/notifications/whatsapp-templates"
 import type { VentaCreadaData } from "./venta-form"
 import { useCurrency } from "@/contexts/currency-context"
+import { PosTicketShare } from "@/components/pos/pos-ticket-share"
 
 // WhatsApp icon SVG component
 function WhatsAppIcon({ className }: { className?: string }) {
@@ -50,14 +47,10 @@ const metodoPagoLabel: Record<string, string> = {
   TARJETA: "Tarjeta",
 }
 
-function generateVentaMessage(venta: VentaCreadaData, baseUrl: string, formatPrice: (amount: number) => string): string {
-  let mensaje = `Hola ${venta.clienteNombre}, gracias por tu compra!
+function generateVentaMessage(venta: VentaCreadaData, formatPrice: (amount: number) => string): string {
+  let mensaje = `Hola ${venta.clienteNombre}, gracias por tu compra!\n\n`
+  mensaje += `*COMPROBANTE DE VENTA #${venta.numeroVenta}*\n\n`
 
-*COMPROBANTE DE VENTA #${venta.numeroVenta}*
-
-`
-
-  // Listar items
   venta.items.forEach((item) => {
     mensaje += `- ${item.descripcion} x${item.cantidad}: ${formatPrice(item.cantidad * item.precioUnitario)}\n`
   })
@@ -69,7 +62,6 @@ function generateVentaMessage(venta: VentaCreadaData, baseUrl: string, formatPri
   mensaje += `\n*Total: ${formatPrice(venta.total)}*`
   mensaje += `\nMetodo de pago: ${metodoPagoLabel[venta.metodoPago] || venta.metodoPago}`
 
-  // Información de garantías
   if (venta.garantias.length > 0) {
     mensaje += `\n\n*Garantias:*`
     venta.garantias.forEach((g) => {
@@ -77,11 +69,7 @@ function generateVentaMessage(venta: VentaCreadaData, baseUrl: string, formatPri
     })
   }
 
-  // Link al PDF
-  mensaje += `\n\nDescargar comprobante: ${baseUrl}/api/ventas/${venta.id}/pdf`
-
-  mensaje += `\n\nGracias por tu preferencia!
-${venta.organizationName || "Servicio Tecnico"}`
+  mensaje += `\n\nGracias por tu preferencia!\n${venta.organizationName || "Servicio Tecnico"}`
 
   return mensaje
 }
@@ -92,11 +80,9 @@ export function VentaCreadaModal({ open, onClose, venta }: VentaCreadaModalProps
   const [downloading, setDownloading] = useState(false)
   const [mensaje, setMensaje] = useState("")
 
-  // Actualizar mensaje cuando cambia la venta
   useEffect(() => {
     if (venta) {
-      const baseUrl = typeof window !== "undefined" ? window.location.origin : ""
-      setMensaje(generateVentaMessage(venta, baseUrl, formatPrice))
+      setMensaje(generateVentaMessage(venta, formatPrice))
     }
   }, [venta])
 
@@ -131,12 +117,6 @@ export function VentaCreadaModal({ open, onClose, venta }: VentaCreadaModalProps
     }
   }
 
-  const handleOpenWhatsApp = () => {
-    if (!venta || !venta.clienteTelefono) return
-    const url = generateWhatsAppUrl(venta.clienteTelefono, mensaje)
-    window.open(url, "_blank")
-  }
-
   const handleClose = () => {
     setMensaje("")
     setCopied(false)
@@ -156,7 +136,7 @@ export function VentaCreadaModal({ open, onClose, venta }: VentaCreadaModalProps
             Venta #{venta.numeroVenta} registrada
           </DialogTitle>
           <DialogDescription>
-            La venta fue registrada exitosamente. Puede enviar el comprobante al cliente por WhatsApp.
+            La venta fue registrada exitosamente.
           </DialogDescription>
         </DialogHeader>
 
@@ -177,7 +157,7 @@ export function VentaCreadaModal({ open, onClose, venta }: VentaCreadaModalProps
             </div>
             {venta.garantias.length > 0 && (
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Garantias:</span>
+                <span className="text-muted-foreground">Garantías:</span>
                 <span className="font-medium">{venta.garantias.length} certificado(s)</span>
               </div>
             )}
@@ -198,53 +178,46 @@ export function VentaCreadaModal({ open, onClose, venta }: VentaCreadaModalProps
             Descargar Comprobante PDF
           </Button>
 
-          {/* Mensaje para WhatsApp */}
-          <div>
-            <Label className="flex items-center gap-2 mb-2">
-              <WhatsAppIcon className="h-4 w-4 text-green-600" />
-              Mensaje para WhatsApp
-            </Label>
-            <Textarea
-              value={mensaje}
-              onChange={(e) => setMensaje(e.target.value)}
-              rows={8}
-              className="font-mono text-sm"
-            />
-          </div>
+          {/* Enviar ticket como imagen por WhatsApp */}
+          <PosTicketShare ventaData={venta} />
+
+          {/* Mensaje de texto para WhatsApp (alternativa) */}
+          <details className="text-sm">
+            <summary className="cursor-pointer text-muted-foreground hover:text-foreground flex items-center gap-1.5">
+              <WhatsAppIcon className="h-3.5 w-3.5 text-green-600" />
+              Enviar como texto (alternativa)
+            </summary>
+            <div className="mt-2 space-y-2">
+              <Textarea
+                value={mensaje}
+                onChange={(e) => setMensaje(e.target.value)}
+                rows={6}
+                className="font-mono text-xs"
+              />
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={handleCopy} className="flex-1">
+                  {copied ? (
+                    <>
+                      <Check className="mr-1.5 h-3.5 w-3.5" />
+                      Copiado
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="mr-1.5 h-3.5 w-3.5" />
+                      Copiar texto
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </details>
 
           {/* Aviso si no hay teléfono */}
           {!hasPhone && (
             <div className="text-sm text-amber-600 bg-amber-50 dark:bg-amber-950/30 rounded-lg px-3 py-2">
-              No se registró teléfono del cliente. Puede copiar el mensaje y enviarlo manualmente.
+              No se registró teléfono del cliente. Puede descargar la imagen y enviarla manualmente.
             </div>
           )}
-
-          {/* Botones de accion */}
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={handleCopy} className="flex-1">
-              {copied ? (
-                <>
-                  <Check className="mr-2 h-4 w-4" />
-                  Copiado
-                </>
-              ) : (
-                <>
-                  <Copy className="mr-2 h-4 w-4" />
-                  Copiar
-                </>
-              )}
-            </Button>
-            <Button
-              onClick={handleOpenWhatsApp}
-              className="flex-1 bg-green-600 hover:bg-green-700"
-              disabled={!hasPhone}
-              title={!hasPhone ? "Se requiere teléfono del cliente" : ""}
-            >
-              <WhatsAppIcon className="mr-2 h-4 w-4" />
-              Abrir WhatsApp
-              <ExternalLink className="ml-1 h-3 w-3" />
-            </Button>
-          </div>
 
           {/* Boton cerrar */}
           <Button variant="ghost" onClick={handleClose} className="w-full">

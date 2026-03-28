@@ -42,7 +42,7 @@ interface TicketShareProps {
     total: number
     metodoPago: string
     organizationName?: string
-    garantias?: Array<{ numeroGarantia: string; diasValidez: number }>
+    garantias?: Array<{ numeroGarantia: string | number; diasValidez: number }>
   }
 }
 
