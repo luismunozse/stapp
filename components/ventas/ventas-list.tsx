@@ -9,18 +9,16 @@ import { DatePicker } from "@/components/ui/date-picker"
 import { DataTable, DataTablePagination, type Column } from "@/components/ui/data-table"
 import { Badge, PaymentStatusBadge } from "@/components/ui/badge"
 import {
-  Plus,
   Search,
   Eye,
   FileText,
   Filter,
   X,
   ShoppingCart,
+  Monitor,
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { VentaForm, type VentaCreadaData } from "./venta-form"
-import { VentaCreadaModal } from "./venta-creada-modal"
 import { useModal } from "@/contexts/modal-context"
 import { ExportButton } from "@/components/export/export-button"
 import { VentaMobileCard } from "./venta-mobile-card"
@@ -63,9 +61,6 @@ const metodoPagoLabels: Record<string, string> = {
 export function VentasList() {
   const router = useRouter()
   const { formatPrice, formatDate } = useCurrency()
-  const [showForm, setShowForm] = useState(false)
-  const [ventaCreada, setVentaCreada] = useState<VentaCreadaData | null>(null)
-  const [showVentaCreadaModal, setShowVentaCreadaModal] = useState(false)
   const { showError } = useModal()
 
   // Filters
@@ -260,10 +255,12 @@ export function VentasList() {
             variant="outline"
             size="default"
           />
-          <Button onClick={() => setShowForm(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Nueva Venta
-          </Button>
+          <Link href="/pos">
+            <Button>
+              <Monitor className="mr-2 h-4 w-4" />
+              Ir al POS
+            </Button>
+          </Link>
         </div>
       </div>
 
@@ -410,27 +407,6 @@ export function VentasList() {
         )}
       </div>
 
-      {/* Form Dialog */}
-      <VentaForm
-        open={showForm}
-        onOpenChange={setShowForm}
-        onSuccess={(venta) => {
-          setShowForm(false)
-          setVentaCreada(venta)
-          setShowVentaCreadaModal(true)
-          mutate()
-        }}
-      />
-
-      {/* Modal de venta creada con opcion de WhatsApp */}
-      <VentaCreadaModal
-        open={showVentaCreadaModal}
-        onClose={() => {
-          setShowVentaCreadaModal(false)
-          setVentaCreada(null)
-        }}
-        venta={ventaCreada}
-      />
     </div>
   )
 }
