@@ -7,27 +7,19 @@ export async function GET() {
     const { error } = await requireSuperadmin()
     if (error) return error
 
-    const { data, error: dbError } = await supabaseAdmin.rpc("support_ticket_stats")
-
-    if (dbError) throw dbError
+    const [abiertos, enProceso, resueltos, cerrados] = await Promise.all([
+      supabaseAdmin.from("support_tickets").select("id", { count: "exact", head: true }).eq("estado", "ABIERTO"),
+      supabaseAdmin.from("support_tickets").select("id", { count: "exact", head: true }).eq("estado", "EN_PROCESO"),
+      supabaseAdmin.from("support_tickets").select("id", { count: "exact", head: true }).eq("estado", "RESUELTO"),
+      supabaseAdmin.from("support_tickets").select("id", { count: "exact", head: true }).eq("estado", "CERRADO"),
+    ])
 
     const stats = {
-      abiertos: 0,
-      enProceso: 0,
-      resueltos: 0,
-      cerrados: 0,
-      total: 0,
-    }
-
-    for (const row of data || []) {
-      const count = row.count as number
-      stats.total += count
-      switch (row.estado) {
-        case "ABIERTO": stats.abiertos = count; break
-        case "EN_PROCESO": stats.enProceso = count; break
-        case "RESUELTO": stats.resueltos = count; break
-        case "CERRADO": stats.cerrados = count; break
-      }
+      abiertos: abiertos.count || 0,
+      enProceso: enProceso.count || 0,
+      resueltos: resueltos.count || 0,
+      cerrados: cerrados.count || 0,
+      total: (abiertos.count || 0) + (enProceso.count || 0) + (resueltos.count || 0) + (cerrados.count || 0),
     }
 
     return NextResponse.json(stats)

@@ -60,16 +60,8 @@ export function MultiPagoInput({
 }: MultiPagoInputProps) {
   const { formatPrice } = useCurrency()
 
-  // Calculate effective amount per pago (base + surcharge)
-  const getMontoEfectivo = (pago: PagoLineItem): number => {
-    const base = pago.monto || 0
-    if (pago.recargo && pago.recargo > 0) {
-      return base + base * (pago.recargo / 100)
-    }
-    return base
-  }
-
-  const totalPagos = useMemo(() => pagos.reduce((sum, p) => sum + getMontoEfectivo(p), 0), [pagos])
+  // Use base amounts for totals (recargo is bank interest, not store income)
+  const totalPagos = useMemo(() => pagos.reduce((sum, p) => sum + (p.monto || 0), 0), [pagos])
   const restante = montoPendiente - totalPagos
 
   const metodosDisponibles = useMemo(() => {
@@ -305,14 +297,13 @@ export function MultiPagoInput({
         <div className="p-3 rounded-lg bg-muted text-sm space-y-1">
           {pagos.map((pago) => {
             const metodoDef = METODOS_PAGO.find(m => m.value === pago.metodo)
-            const efectivo = getMontoEfectivo(pago)
             return (
               <div key={pago.id} className="flex justify-between">
                 <span className="text-muted-foreground">
                   {metodoDef?.label || pago.metodo}
-                  {pago.recargo && pago.recargo > 0 ? ` (+${pago.recargo}%)` : ""}:
+                  {pago.recargo && pago.recargo > 0 ? ` (+${pago.recargo}% interés)` : ""}:
                 </span>
-                <span className="font-medium">{formatPrice(efectivo)}</span>
+                <span className="font-medium">{formatPrice(pago.monto || 0)}</span>
               </div>
             )
           })}

@@ -341,32 +341,25 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
     }
   }, [total])
 
-  // Calculate effective amount per pago (base + surcharge)
-  const getMontoEfectivo = (p: PagoLineItem): number => {
-    const base = p.monto || 0
-    if (p.recargo && p.recargo > 0) return base + base * (p.recargo / 100)
-    return base
-  }
-
   const onSubmit = async (data: VentaFormData) => {
-    // Validar pagos
-    const totalPagos = pagosLines.reduce((sum, p) => sum + getMontoEfectivo(p), 0)
-    if (totalPagos <= 0) {
+    // Validate against base amounts (recargo is bank interest, not store income)
+    const totalPagosBase = pagosLines.reduce((sum, p) => sum + (p.monto || 0), 0)
+    if (totalPagosBase <= 0) {
       await showError("Debe registrar al menos un pago")
       return
     }
-    if (!data.pagosParcial && Math.abs(totalPagos - total) > 0.01) {
-      await showError(`El total de pagos (${formatPrice(totalPagos)}) no coincide con el total de la venta (${formatPrice(total)}). Si desea dejar saldo pendiente, active "Pago parcial".`)
+    if (!data.pagosParcial && Math.abs(totalPagosBase - total) > 0.01) {
+      await showError(`El total de pagos (${formatPrice(totalPagosBase)}) no coincide con el total de la venta (${formatPrice(total)}). Si desea dejar saldo pendiente, active "Pago parcial".`)
       return
     }
-    if (data.pagosParcial && totalPagos > total + 0.01) {
+    if (data.pagosParcial && totalPagosBase > total + 0.01) {
       await showError("El total de pagos no puede exceder el total de la venta")
       return
     }
     // Validar cuenta corriente
     const pagoCC = pagosLines.find(p => p.metodo === "CUENTA_CORRIENTE")
-    if (pagoCC && getMontoEfectivo(pagoCC) > saldoCuenta) {
-      await showError(`El monto de cuenta corriente (${formatPrice(getMontoEfectivo(pagoCC))}) excede el saldo disponible (${formatPrice(saldoCuenta)})`)
+    if (pagoCC && pagoCC.monto > saldoCuenta) {
+      await showError(`El monto de cuenta corriente (${formatPrice(pagoCC.monto)}) excede el saldo disponible (${formatPrice(saldoCuenta)})`)
       return
     }
     if (pagoCC && !data.clienteId) {
@@ -381,17 +374,14 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
 
       const payload = {
         ...data,
-        pagos: pagosLines.map(p => {
-          const montoEfectivo = getMontoEfectivo(p)
-          return {
-            metodo: p.metodo,
-            monto: montoEfectivo, // total con recargo incluido
-            referencia: p.referencia || null,
-            cuotas: p.cuotas,
-            recargo: p.recargo,
-            montoOriginal: p.recargo && p.recargo > 0 ? p.monto : null, // monto base sin recargo
-          }
-        }),
+        pagos: pagosLines.map(p => ({
+          metodo: p.metodo,
+          monto: p.monto, // monto base = ingreso real del negocio
+          referencia: p.referencia || null,
+          cuotas: p.cuotas,
+          recargo: p.recargo,
+          montoOriginal: p.recargo && p.recargo > 0 ? p.monto + p.monto * (p.recargo / 100) : null, // total con recargo (informativo)
+        })),
       }
 
       const res = await offlineFetch("/api/ventas", {
@@ -763,13 +753,13 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
 
               {/* Detalle de pagos */}
               {(() => {
-                const totalPagosEfectivo = pagosLines.reduce((sum, p) => sum + getMontoEfectivo(p), 0)
-                const pendiente = total - totalPagosEfectivo
-                return totalPagosEfectivo > 0 && (
+                const totalPagosBase = pagosLines.reduce((sum, p) => sum + (p.monto || 0), 0)
+                const pendiente = total - totalPagosBase
+                return totalPagosBase > 0 && (
                   <div className="space-y-1 border-t pt-2">
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Total pagos:</span>
-                      <span className="font-medium text-green-600">{formatPrice(totalPagosEfectivo)}</span>
+                      <span className="font-medium text-green-600">{formatPrice(totalPagosBase)}</span>
                     </div>
                     {pendiente > 0.01 && (
                       <div className="flex justify-between text-sm">

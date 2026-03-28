@@ -90,32 +90,26 @@ export function PosCheckoutDialog({
     fetchSaldo()
   }, [cliente.id])
 
-  // Calculate effective amount per pago (base + surcharge)
-  const getMontoEfectivo = (p: PagoLineItem): number => {
-    const base = p.monto || 0
-    if (p.recargo && p.recargo > 0) return base + base * (p.recargo / 100)
-    return base
-  }
-
   const handleSubmit = async () => {
-    const totalPagos = pagosLines.reduce((sum, p) => sum + getMontoEfectivo(p), 0)
+    // Validate against base amounts (recargo is bank interest, not store income)
+    const totalPagosBase = pagosLines.reduce((sum, p) => sum + (p.monto || 0), 0)
 
-    // Without partial payment, pagos must match total exactly
-    if (!pagoParcial && Math.abs(totalPagos - total) > 0.01) {
+    // Without partial payment, base pagos must match total exactly
+    if (!pagoParcial && Math.abs(totalPagosBase - total) > 0.01) {
       await showError(
-        `El total de pagos (${formatPrice(totalPagos)}) no coincide con el total (${formatPrice(total)}). Active "Pago parcial" para dejar saldo pendiente.`
+        `El total de pagos (${formatPrice(totalPagosBase)}) no coincide con el total (${formatPrice(total)}). Active "Pago parcial" para dejar saldo pendiente.`
       )
       return
     }
-    // With partial payment, pagos can be 0 (paga despues) but not exceed total
-    if (pagoParcial && totalPagos > total + 0.01) {
+    // With partial payment, base pagos can be 0 but not exceed total
+    if (pagoParcial && totalPagosBase > total + 0.01) {
       await showError("El total de pagos no puede exceder el total de la venta")
       return
     }
 
     // Validate cuenta corriente
     const pagoCC = pagosLines.find((p) => p.metodo === "CUENTA_CORRIENTE")
-    if (pagoCC && getMontoEfectivo(pagoCC) > saldoCuenta) {
+    if (pagoCC && pagoCC.monto > saldoCuenta) {
       await showError(`Saldo insuficiente en cuenta corriente (${formatPrice(saldoCuenta)})`)
       return
     }
@@ -150,17 +144,14 @@ export function PosCheckoutDialog({
         metodoPago: pagosConMonto.length > 0 ? pagosConMonto[0].metodo : "EFECTIVO",
         observaciones: observaciones || undefined,
         ...(pagosConMonto.length > 0 && {
-          pagos: pagosConMonto.map((p) => {
-            const montoEfectivo = getMontoEfectivo(p)
-            return {
-              metodo: p.metodo,
-              monto: montoEfectivo, // total a cobrar (con recargo incluido)
-              ...(p.referencia && { referencia: p.referencia }),
-              ...(p.cuotas && { cuotas: p.cuotas }),
-              ...(p.recargo && p.recargo > 0 && { recargo: p.recargo }),
-              ...(p.recargo && p.recargo > 0 && { montoOriginal: p.monto }), // monto base sin recargo
-            }
-          }),
+          pagos: pagosConMonto.map((p) => ({
+            metodo: p.metodo,
+            monto: p.monto, // monto base = ingreso real del negocio
+            ...(p.referencia && { referencia: p.referencia }),
+            ...(p.cuotas && { cuotas: p.cuotas }),
+            ...(p.recargo && p.recargo > 0 && { recargo: p.recargo }),
+            ...(p.recargo && p.recargo > 0 && { montoOriginal: p.monto + p.monto * (p.recargo / 100) }), // total que paga el cliente (informativo)
+          })),
         }),
       }
 
@@ -298,13 +289,13 @@ export function PosCheckoutDialog({
 
           {/* Partial payment summary */}
           {pagoParcial && (() => {
-            const totalPagosEfectivo = pagosLines.reduce((sum, p) => sum + getMontoEfectivo(p), 0)
-            const pendiente = total - totalPagosEfectivo
-            return (pendiente > 0.01 && totalPagosEfectivo > 0) ? (
+            const totalPagosBase = pagosLines.reduce((sum, p) => sum + (p.monto || 0), 0)
+            const pendiente = total - totalPagosBase
+            return (pendiente > 0.01 && totalPagosBase > 0) ? (
               <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3 space-y-1">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Total pagos:</span>
-                  <span className="font-medium text-green-600">{formatPrice(totalPagosEfectivo)}</span>
+                  <span className="font-medium text-green-600">{formatPrice(totalPagosBase)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Saldo pendiente:</span>
