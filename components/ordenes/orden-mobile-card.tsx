@@ -3,7 +3,7 @@
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { OrderStatusBadge } from "@/components/ui/badge"
-import { Eye, Trash2, Calendar, Smartphone, AlertTriangle, Clock } from "lucide-react"
+import { Eye, Trash2, Calendar, Smartphone, AlertTriangle, Clock, Printer } from "lucide-react"
 import Link from "next/link"
 import { useCurrency } from "@/contexts/currency-context"
 import type { OrdenServicio } from "@/types"
@@ -11,11 +11,12 @@ import type { OrdenServicio } from "@/types"
 interface OrdenMobileCardProps {
   orden: OrdenServicio
   onDelete: (e: React.MouseEvent, orden: OrdenServicio) => void
+  onPrint: (e: React.MouseEvent, orden: OrdenServicio) => void
   deleting: boolean
   onClick: () => void
 }
 
-export function OrdenMobileCard({ orden, onDelete, deleting, onClick }: OrdenMobileCardProps) {
+export function OrdenMobileCard({ orden, onDelete, onPrint, deleting, onClick }: OrdenMobileCardProps) {
   const { formatPrice, formatDate } = useCurrency()
 
   return (
@@ -85,6 +86,14 @@ export function OrdenMobileCard({ orden, onDelete, deleting, onClick }: OrdenMob
               Ver detalle
             </Button>
           </Link>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-10 w-10 text-muted-foreground hover:text-primary"
+            onClick={(e) => onPrint(e, orden)}
+          >
+            <Printer className="h-4 w-4" />
+          </Button>
           <Button
             variant="ghost"
             size="sm"

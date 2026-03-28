@@ -16,6 +16,7 @@ import {
   Filter,
   X,
   CheckSquare,
+  Printer,
 } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
@@ -170,6 +171,24 @@ export function OrdenesList() {
     }
   }
 
+  const handlePrint = async (e: React.MouseEvent, orden: OrdenServicio) => {
+    e.stopPropagation()
+    try {
+      const res = await fetch(`/api/ordenes/${orden.id}/pdf`)
+      if (!res.ok) throw new Error("Error al generar PDF")
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const printWindow = window.open(url, "_blank")
+      if (printWindow) {
+        printWindow.addEventListener("load", () => {
+          printWindow.print()
+        })
+      }
+    } catch (error) {
+      toast.error("Error al imprimir la orden")
+    }
+  }
+
   const handleDelete = async (e: React.MouseEvent, orden: OrdenServicio) => {
     e.stopPropagation()
     const codigoDisplay = orden.codigoOrden || `#${orden.numeroOrden}`
@@ -307,7 +326,7 @@ export function OrdenesList() {
     {
       key: "actions",
       header: "",
-      className: "w-auto sm:w-[100px]",
+      className: "w-auto sm:w-[130px]",
       render: (orden) => (
         <div role="group" className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
           <Link href={`/ordenes/${orden.id}`}>
@@ -315,6 +334,15 @@ export function OrdenesList() {
               <Eye className="h-4 w-4" />
             </Button>
           </Link>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-muted-foreground hover:text-primary"
+            onClick={(e) => handlePrint(e, orden)}
+            title="Imprimir"
+          >
+            <Printer className="h-4 w-4" />
+          </Button>
           <Button
             variant="ghost"
             size="icon"
@@ -548,6 +576,7 @@ export function OrdenesList() {
                   key={orden.id}
                   orden={orden}
                   onDelete={handleDelete}
+                  onPrint={handlePrint}
                   deleting={deleting === orden.id}
                   onClick={() => router.push(`/ordenes/${orden.id}`)}
                 />

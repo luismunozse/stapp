@@ -1103,13 +1103,14 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   page.drawRectangle({ x: 0, y: barraY, width, height: 6, color: primaryColor })
 
   // === AJUSTAR ALTURA DE PAGINA AL CONTENIDO ===
-  const minPageHeight = 400 // altura minima razonable
+  // Minimo: ancho de pagina para mantener orientacion vertical en impresion
+  const minPageHeight = width
   const contentBottom = barraY - 10 // espacio debajo de la barra
   const dynamicHeight = Math.max(height - contentBottom, minPageHeight)
   if (dynamicHeight < height) {
-    // Trasladar contenido y redimensionar la pagina para eliminar espacio en blanco
-    page.translateContent(0, -contentBottom)
-    page.setSize(width, dynamicHeight)
+    page.setMediaBox(0, contentBottom, width, dynamicHeight)
+    page.setCropBox(0, contentBottom, width, dynamicHeight)
+    page.setTrimBox(0, contentBottom, width, dynamicHeight)
   }
 
   // === PAGINA DE FOTOS DE INGRESO (si hay fotos) ===
