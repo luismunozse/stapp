@@ -1,0 +1,374 @@
+"use client"
+
+import { useState, useRef, useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
+import {
+  Trash2,
+  Minus,
+  Plus,
+  User,
+  Search,
+  ShoppingCart,
+  CreditCard,
+  Pause,
+  RotateCcw,
+  X,
+  ChevronDown,
+  ChevronUp,
+  Shield,
+} from "lucide-react"
+import { cn } from "@/lib/utils"
+import { useCurrency } from "@/contexts/currency-context"
+import type { PosCartItem, PosCliente, EMPTY_CLIENT } from "./pos-types"
+
+interface PosCartProps {
+  items: PosCartItem[]
+  cliente: PosCliente
+  onUpdateQuantity: (lineId: string, delta: number) => void
+  onRemoveItem: (lineId: string) => void
+  onSetGarantia: (lineId: string, dias: number) => void
+  onSetCliente: (cliente: PosCliente) => void
+  onCheckout: () => void
+  onHoldSale: () => void
+  onRecallSale: () => void
+  onClearCart: () => void
+  heldCount: number
+  showClienteSearch: boolean
+  onToggleClienteSearch: () => void
+}
+
+interface ClienteResult {
+  id: string
+  nombre: string
+  telefono: string
+}
+
+export function PosCart({
+  items,
+  cliente,
+  onUpdateQuantity,
+  onRemoveItem,
+  onSetGarantia,
+  onSetCliente,
+  onCheckout,
+  onHoldSale,
+  onRecallSale,
+  onClearCart,
+  heldCount,
+  showClienteSearch,
+  onToggleClienteSearch,
+}: PosCartProps) {
+  const { formatPrice } = useCurrency()
+  const [clienteQuery, setClienteQuery] = useState("")
+  const [clienteResults, setClienteResults] = useState<ClienteResult[]>([])
+  const [clienteLoading, setClienteLoading] = useState(false)
+  const [expandedItem, setExpandedItem] = useState<string | null>(null)
+  const clienteInputRef = useRef<HTMLInputElement>(null)
+
+  const subtotal = items.reduce((sum, item) => sum + item.precioUnitario * item.cantidad, 0)
+  const total = subtotal
+
+  // Focus client search when toggled
+  useEffect(() => {
+    if (showClienteSearch) {
+      setTimeout(() => clienteInputRef.current?.focus(), 100)
+    }
+  }, [showClienteSearch])
+
+  // Client search
+  useEffect(() => {
+    if (!clienteQuery.trim()) {
+      setClienteResults([])
+      return
+    }
+    const timer = setTimeout(async () => {
+      setClienteLoading(true)
+      try {
+        const res = await fetch(`/api/clientes?search=${encodeURIComponent(clienteQuery)}&limit=8`)
+        const data = await res.json()
+        const items = data.data ?? (Array.isArray(data) ? data : [])
+        setClienteResults(items)
+      } catch {
+        setClienteResults([])
+      } finally {
+        setClienteLoading(false)
+      }
+    }, 250)
+    return () => clearTimeout(timer)
+  }, [clienteQuery])
+
+  const selectCliente = (c: ClienteResult) => {
+    onSetCliente({ id: c.id, nombre: c.nombre, telefono: c.telefono })
+    setClienteQuery("")
+    setClienteResults([])
+    onToggleClienteSearch()
+  }
+
+  return (
+    <div className="flex flex-col h-full bg-background">
+      {/* Header */}
+      <div className="p-3 border-b space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <ShoppingCart className="h-5 w-5 text-primary" />
+            <h2 className="font-semibold text-lg">Carrito</h2>
+            {items.length > 0 && (
+              <Badge variant="secondary" className="text-xs">
+                {items.reduce((sum, i) => sum + i.cantidad, 0)}
+              </Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-1">
+            {items.length > 0 && (
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={onClearCart} title="Vaciar carrito">
+                <X className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Cliente */}
+        <div className="flex items-center gap-2">
+          <Button
+            variant={cliente.id ? "secondary" : "outline"}
+            size="sm"
+            className="flex-1 justify-start h-9 text-sm"
+            onClick={onToggleClienteSearch}
+          >
+            <User className="h-3.5 w-3.5 mr-1.5 shrink-0" />
+            {cliente.nombre ? (
+              <span className="truncate">{cliente.nombre}</span>
+            ) : (
+              <span className="text-muted-foreground">Cliente (F7)</span>
+            )}
+          </Button>
+          {cliente.id && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0"
+              onClick={() => onSetCliente({ id: null, nombre: "", telefono: "" })}
+            >
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
+
+        {/* Client search dropdown */}
+        {showClienteSearch && (
+          <div className="space-y-2 p-2 rounded-lg border bg-muted/30">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                ref={clienteInputRef}
+                value={clienteQuery}
+                onChange={(e) => setClienteQuery(e.target.value)}
+                placeholder="Buscar cliente..."
+                className="pl-8 h-8 text-sm"
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") onToggleClienteSearch()
+                  if (e.key === "Enter" && clienteResults.length === 1) selectCliente(clienteResults[0])
+                }}
+              />
+            </div>
+            {/* Manual entry */}
+            {!clienteQuery.trim() && (
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  placeholder="Nombre"
+                  className="h-8 text-sm"
+                  value={cliente.nombre && !cliente.id ? cliente.nombre : ""}
+                  onChange={(e) => onSetCliente({ id: null, nombre: e.target.value, telefono: cliente.telefono })}
+                />
+                <Input
+                  placeholder="Teléfono"
+                  className="h-8 text-sm"
+                  value={cliente.telefono && !cliente.id ? cliente.telefono : ""}
+                  onChange={(e) => onSetCliente({ id: null, nombre: cliente.nombre, telefono: e.target.value })}
+                />
+              </div>
+            )}
+            {clienteResults.length > 0 && (
+              <div className="max-h-32 overflow-y-auto rounded border bg-background">
+                {clienteResults.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    className="w-full px-3 py-1.5 text-left text-sm hover:bg-muted flex justify-between"
+                    onClick={() => selectCliente(c)}
+                  >
+                    <span className="font-medium truncate">{c.nombre}</span>
+                    <span className="text-xs text-muted-foreground shrink-0 ml-2">{c.telefono}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Cart items */}
+      <div className="flex-1 overflow-y-auto">
+        {items.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-8">
+            <ShoppingCart className="h-10 w-10 mb-2 opacity-20" />
+            <p className="text-sm">Carrito vacío</p>
+            <p className="text-xs mt-1">Busca o escanea un producto</p>
+          </div>
+        ) : (
+          <div className="divide-y">
+            {items.map((item) => {
+              const isExpanded = expandedItem === item.lineId
+              return (
+                <div key={item.lineId} className="px-3 py-2">
+                  <div className="flex items-start gap-2">
+                    {/* Product info */}
+                    <button
+                      type="button"
+                      className="flex-1 min-w-0 text-left"
+                      onClick={() => setExpandedItem(isExpanded ? null : item.lineId)}
+                    >
+                      <div className="flex items-center gap-1">
+                        <span className="text-sm font-medium truncate">{item.nombre}</span>
+                        {item.diasGarantia > 0 && (
+                          <Shield className="h-3 w-3 text-green-600 shrink-0" />
+                        )}
+                        {isExpanded ? (
+                          <ChevronUp className="h-3 w-3 text-muted-foreground shrink-0" />
+                        ) : (
+                          <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span>{formatPrice(item.precioUnitario)} c/u</span>
+                        {item.codigo && <span className="font-mono">{item.codigo}</span>}
+                        {item.stockDisponible <= 3 && (
+                          <span className="text-red-500">Stock: {item.stockDisponible}</span>
+                        )}
+                      </div>
+                    </button>
+
+                    {/* Quantity controls */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => onUpdateQuantity(item.lineId, -1)}
+                      >
+                        <Minus className="h-3 w-3" />
+                      </Button>
+                      <span className="w-8 text-center text-sm font-semibold tabular-nums">
+                        {item.cantidad}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => onUpdateQuantity(item.lineId, 1)}
+                        disabled={item.inventarioId !== null && item.cantidad >= item.stockDisponible}
+                      >
+                        <Plus className="h-3 w-3" />
+                      </Button>
+                    </div>
+
+                    {/* Line total */}
+                    <div className="text-right shrink-0 w-20">
+                      <span className="text-sm font-semibold">
+                        {formatPrice(item.precioUnitario * item.cantidad)}
+                      </span>
+                    </div>
+
+                    {/* Remove */}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive shrink-0"
+                      onClick={() => onRemoveItem(item.lineId)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+
+                  {/* Expanded options */}
+                  {isExpanded && (
+                    <div className="mt-2 pl-1 flex items-center gap-3 text-xs">
+                      <label className="flex items-center gap-1.5">
+                        <Shield className="h-3 w-3 text-muted-foreground" />
+                        <span className="text-muted-foreground">Garantía (días):</span>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={item.diasGarantia}
+                          onChange={(e) => onSetGarantia(item.lineId, parseInt(e.target.value) || 0)}
+                          className="h-7 w-16 text-xs text-center"
+                        />
+                      </label>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Footer: Totals + Actions */}
+      <div className="border-t bg-muted/30">
+        {/* Totals */}
+        {items.length > 0 && (
+          <div className="px-4 pt-3 space-y-1">
+            <div className="flex justify-between text-sm text-muted-foreground">
+              <span>Subtotal ({items.reduce((s, i) => s + i.cantidad, 0)} items)</span>
+              <span>{formatPrice(subtotal)}</span>
+            </div>
+            <div className="flex justify-between text-xl font-bold">
+              <span>TOTAL</span>
+              <span className="text-primary">{formatPrice(total)}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Action buttons */}
+        <div className="p-3 space-y-2">
+          <Button
+            className="w-full h-12 text-lg font-semibold"
+            disabled={items.length === 0}
+            onClick={onCheckout}
+          >
+            <CreditCard className="mr-2 h-5 w-5" />
+            Cobrar (F8)
+          </Button>
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={items.length === 0}
+              onClick={onHoldSale}
+              className="h-9"
+            >
+              <Pause className="mr-1.5 h-3.5 w-3.5" />
+              Apartar (F5)
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onRecallSale}
+              className={cn("h-9", heldCount > 0 && "border-amber-500 text-amber-600")}
+            >
+              <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+              Recuperar (F6)
+              {heldCount > 0 && (
+                <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5">
+                  {heldCount}
+                </Badge>
+              )}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

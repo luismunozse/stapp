@@ -52,6 +52,7 @@ const navItems: NavItem[] = [
   { href: "/tecnicos", label: "Técnicos", icon: Wrench, roles: ["ADMIN"] },
   { href: "/vendedores", label: "Vendedores", icon: TrendingUp, roles: ["ADMIN"] },
   { href: "/ventas", label: "Ventas", icon: ShoppingCart, roles: ["ADMIN", "VENDEDOR"] },
+  { href: "/pos", label: "POS", icon: Store, roles: ["ADMIN", "VENDEDOR"] },
   { href: "/cotizaciones", label: "Cotizaciones", icon: Receipt, roles: ["ADMIN"] },
   { href: "/inventario", label: "Inventario", icon: Package },
   { href: "/caja", label: "Caja", icon: Landmark, roles: ["ADMIN"] },
