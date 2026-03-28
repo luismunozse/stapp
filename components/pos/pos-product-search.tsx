@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Search, Package, Loader2, Plus, Barcode } from "lucide-react"
+import { Search, Package, Loader2, Plus, Barcode, PenLine, X } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import type { InventarioResult } from "./pos-types"
 
@@ -25,6 +25,7 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
   function PosProductSearch({ onAddProduct, onAddManualProduct }, ref) {
     const { formatPrice } = useCurrency()
     const inputRef = useRef<HTMLInputElement>(null)
+    const manualNameRef = useRef<HTMLInputElement>(null)
     const manualPriceRef = useRef<HTMLInputElement>(null)
     const [query, setQuery] = useState("")
     const [results, setResults] = useState<InventarioResult[]>([])
@@ -34,7 +35,6 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
     const [showManualForm, setShowManualForm] = useState(false)
     const [manualNombre, setManualNombre] = useState("")
     const [manualPrecio, setManualPrecio] = useState<number | "">(0)
-    const [searchDone, setSearchDone] = useState(false)
 
     useImperativeHandle(ref, () => ({
       focusSearch: () => {
@@ -65,12 +65,9 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
     useEffect(() => {
       if (!query.trim()) {
         setResults([])
-        setSearchDone(false)
-        setShowManualForm(false)
         return
       }
 
-      setSearchDone(false)
       const timer = setTimeout(async () => {
         setLoading(true)
         try {
@@ -81,7 +78,6 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
           setResults([])
         } finally {
           setLoading(false)
-          setSearchDone(true)
         }
       }, 200)
 
@@ -92,28 +88,27 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
       onAddProduct(product)
       setQuery("")
       setResults([])
-      setShowManualForm(false)
       inputRef.current?.focus()
     }, [onAddProduct])
 
     const handleAddManual = useCallback(() => {
-      const nombre = manualNombre.trim() || query.trim()
+      const nombre = manualNombre.trim()
       if (!nombre || !manualPrecio || manualPrecio <= 0) return
       onAddManualProduct({ nombre, precioUnitario: manualPrecio })
-      setQuery("")
-      setResults([])
       setManualNombre("")
       setManualPrecio(0)
       setShowManualForm(false)
+      setQuery("")
+      setResults([])
       inputRef.current?.focus()
-    }, [manualNombre, manualPrecio, query, onAddManualProduct])
+    }, [manualNombre, manualPrecio, onAddManualProduct])
 
     const openManualForm = useCallback(() => {
       setShowManualForm(true)
-      setManualNombre(query.trim())
+      setManualNombre("")
       setManualPrecio(0)
-      setTimeout(() => manualPriceRef.current?.focus(), 100)
-    }, [query])
+      setTimeout(() => manualNameRef.current?.focus(), 100)
+    }, [])
 
     // Handle barcode scan in the input itself (fast typing + Enter)
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -127,38 +122,118 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
 
     return (
       <div className="flex flex-col h-full">
-        {/* Search bar */}
-        <div className="p-3 border-b bg-background sticky top-0 z-10">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              ref={inputRef}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Buscar producto o escanear código..."
-              className="pl-10 pr-10 h-12 text-base sm:text-lg"
-              autoFocus
-            />
-            {loading && (
-              <Loader2 className="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 animate-spin text-muted-foreground" />
-            )}
-            {!loading && query && (
-              <Barcode className="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground/40" />
-            )}
+        {/* Search bar + Manual button */}
+        <div className="p-3 border-b bg-background sticky top-0 z-10 space-y-2">
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                ref={inputRef}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Buscar producto o escanear código..."
+                className="pl-10 pr-10 h-12 text-base sm:text-lg"
+                autoFocus
+              />
+              {loading && (
+                <Loader2 className="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 animate-spin text-muted-foreground" />
+              )}
+              {!loading && query && (
+                <Barcode className="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground/40" />
+              )}
+            </div>
+            {/* Always-visible manual product button */}
+            <Button
+              variant={showManualForm ? "default" : "outline"}
+              className="h-12 shrink-0 gap-1.5 px-3"
+              onClick={() => {
+                if (showManualForm) {
+                  setShowManualForm(false)
+                } else {
+                  openManualForm()
+                }
+              }}
+              title="Agregar producto manual (sin inventario)"
+            >
+              <PenLine className="h-4 w-4" />
+              <span className="hidden sm:inline text-sm">Manual</span>
+            </Button>
           </div>
-          {!query.trim() && (
-            <p className="text-xs text-muted-foreground mt-1.5 px-1">
+          {!query.trim() && !showManualForm && (
+            <p className="text-xs text-muted-foreground px-1">
               Productos disponibles en stock
             </p>
           )}
-          {query.trim() && !loading && (
-            <p className="text-xs text-muted-foreground mt-1.5 px-1">
+          {query.trim() && !loading && !showManualForm && (
+            <p className="text-xs text-muted-foreground px-1">
               {results.length} resultado{results.length !== 1 ? "s" : ""}
               {results.length === 1 && " — Enter para agregar"}
             </p>
           )}
         </div>
+
+        {/* Manual product form - slides in above grid */}
+        {showManualForm && (
+          <div className="border-b bg-muted/30 p-3">
+            <div className="max-w-lg mx-auto space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium">Producto manual (sin inventario)</p>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => setShowManualForm(false)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <Input
+                    ref={manualNameRef}
+                    value={manualNombre}
+                    onChange={(e) => setManualNombre(e.target.value)}
+                    placeholder="Descripción del producto"
+                    className="h-11"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault()
+                        manualPriceRef.current?.focus()
+                      }
+                    }}
+                  />
+                </div>
+                <div className="w-32">
+                  <Input
+                    ref={manualPriceRef}
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={manualPrecio || ""}
+                    onChange={(e) => setManualPrecio(e.target.value ? parseFloat(e.target.value) : "")}
+                    placeholder="Precio"
+                    className="h-11 text-base font-medium"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault()
+                        handleAddManual()
+                      }
+                    }}
+                  />
+                </div>
+                <Button
+                  className="h-11 px-4"
+                  onClick={handleAddManual}
+                  disabled={!manualNombre.trim() || !manualPrecio || manualPrecio <= 0}
+                >
+                  <Plus className="h-4 w-4 sm:mr-1.5" />
+                  <span className="hidden sm:inline">Agregar</span>
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Product grid */}
         <div className="flex-1 overflow-y-auto p-3">
@@ -174,68 +249,15 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
               <p className="text-sm">
                 {query.trim() ? "No se encontraron productos en inventario" : "Sin productos en inventario"}
               </p>
-              {/* Manual product add - appears when search yields no results */}
-              {query.trim() && searchDone && !loading && !showManualForm && (
+              {query.trim() && !loading && !showManualForm && (
                 <Button
                   variant="outline"
                   className="mt-4 gap-2"
                   onClick={openManualForm}
                 >
-                  <Plus className="h-4 w-4" />
-                  Agregar "{query.trim()}" manualmente
+                  <PenLine className="h-4 w-4" />
+                  Agregar manualmente
                 </Button>
-              )}
-              {showManualForm && (
-                <div className="mt-4 w-full max-w-sm space-y-3 p-4 rounded-xl border bg-card text-left">
-                  <p className="text-sm font-medium text-foreground">Producto manual</p>
-                  <div>
-                    <label className="text-xs text-muted-foreground">Descripción</label>
-                    <Input
-                      value={manualNombre}
-                      onChange={(e) => setManualNombre(e.target.value)}
-                      placeholder="Nombre del producto"
-                      className="h-10 mt-1"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground">Precio</label>
-                    <Input
-                      ref={manualPriceRef}
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      value={manualPrecio || ""}
-                      onChange={(e) => setManualPrecio(e.target.value ? parseFloat(e.target.value) : "")}
-                      placeholder="0.00"
-                      className="h-10 mt-1 text-lg font-medium"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault()
-                          handleAddManual()
-                        }
-                      }}
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => setShowManualForm(false)}
-                    >
-                      Cancelar
-                    </Button>
-                    <Button
-                      size="sm"
-                      className="flex-1"
-                      onClick={handleAddManual}
-                      disabled={!manualNombre.trim() && !query.trim() || !manualPrecio || manualPrecio <= 0}
-                    >
-                      <Plus className="mr-1.5 h-3.5 w-3.5" />
-                      Agregar
-                    </Button>
-                  </div>
-                </div>
               )}
             </div>
           ) : (

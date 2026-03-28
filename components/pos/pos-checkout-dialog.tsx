@@ -125,7 +125,7 @@ export function PosCheckoutDialog({
       const payload = {
         clienteId: cliente.id || null,
         clienteNombre: cliente.nombre || "Consumidor Final",
-        clienteTelefono: cliente.telefono || null,
+        clienteTelefono: cliente.telefono || undefined,
         pagosParcial: pagoParcial,
         items: items.map((item) => ({
           inventarioId: item.inventarioId || null,
@@ -141,7 +141,7 @@ export function PosCheckoutDialog({
         tipoDescuento: "MONTO" as const,
         porcentajeDescuento: 0,
         metodoPago: pagosConMonto.length > 0 ? pagosConMonto[0].metodo : "EFECTIVO",
-        observaciones: observaciones || null,
+        observaciones: observaciones || undefined,
         pagos: pagosConMonto.map((p) => ({
           metodo: p.metodo,
           monto: p.monto,
