@@ -231,7 +231,7 @@ export function EntregaDialog({
             </Button>
             <Button
               onClick={handleConfirmar}
-              disabled={loading || !firmaCliente || !firmaEncargado || (!!tienePendiente && !entregarSinCobro)}
+              disabled={loading || !firmaCliente || !firmaEncargado || (!esRetiro && !!tienePendiente && !entregarSinCobro)}
             >
               {loading ? (
                 <>
