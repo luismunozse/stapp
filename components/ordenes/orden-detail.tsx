@@ -36,6 +36,7 @@ import {
   Search,
   Receipt,
   Printer,
+  Tag,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -52,6 +53,7 @@ import { FotoGallery } from "@/components/fotos/foto-gallery"
 import { ChecklistCard } from "@/components/checklist/checklist-card"
 import { WhatsAppDialog } from "@/components/ordenes/whatsapp-dialog"
 import { EntregaDialog } from "@/components/ordenes/entrega-dialog"
+import { printDeviceLabel } from "@/components/ordenes/print-label"
 import { NotificationHistory } from "@/components/ordenes/notification-history"
 import { OrdenEstadoCard } from "@/components/ordenes/orden-estado-card"
 import { OrdenTecnicoCard } from "@/components/ordenes/orden-tecnico-card"
@@ -590,6 +592,30 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           <Button variant="outline" size="sm" onClick={handlePrintPdf} disabled={printingPdf}>
             <Printer className="h-4 w-4 mr-2" />
             {printingPdf ? "..." : "Imprimir"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const baseUrl = window.location.origin
+              const fecha = orden.fechaIngreso
+                ? new Date(orden.fechaIngreso).toLocaleDateString("es-AR")
+                : new Date().toLocaleDateString("es-AR")
+              printDeviceLabel({
+                codigoOrden: orden.codigoOrden || `#${orden.numeroOrden}`,
+                numeroOrden: orden.numeroOrden,
+                clienteNombre: orden.cliente?.nombre || "",
+                dispositivo: orden.dispositivo,
+                problemaReportado: orden.problemaReportado,
+                fechaIngreso: fecha,
+                publicToken: orden.publicToken,
+                organizationName: undefined,
+              }, baseUrl)
+            }}
+            title="Imprimir etiqueta para el equipo"
+          >
+            <Tag className="h-4 w-4 mr-2" />
+            Etiqueta
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

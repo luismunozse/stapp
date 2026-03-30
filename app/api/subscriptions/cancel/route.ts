@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { cancelPreApproval } from "@/lib/mercadopago"
-import { cancelLemonSqueezySubscription } from "@/lib/lemonsqueezy"
+import { cancelRebillSubscription } from "@/lib/rebill"
 
 export async function POST() {
   try {
@@ -28,8 +28,8 @@ export async function POST() {
       await cancelPreApproval(subscription.mercadopago_preapproval_id)
     }
 
-    if (subscription.lemonsqueezy_subscription_id) {
-      await cancelLemonSqueezySubscription(subscription.lemonsqueezy_subscription_id)
+    if (subscription.rebill_subscription_id) {
+      await cancelRebillSubscription(subscription.rebill_subscription_id)
     }
 
     // Actualizar en base de datos

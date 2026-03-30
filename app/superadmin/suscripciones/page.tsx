@@ -189,8 +189,7 @@ export default function SuscripcionesPage() {
         if (!sub.payment_provider) return <span className="text-muted-foreground">-</span>
         const labels: Record<string, string> = {
           MERCADOPAGO: "MercadoPago",
-          STRIPE: "Stripe",
-          LEMONSQUEEZY: "LemonSqueezy",
+          REBILL: "Rebill (USD)",
         }
         return <span className="text-sm">{labels[sub.payment_provider] || sub.payment_provider}</span>
       },

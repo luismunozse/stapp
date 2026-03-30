@@ -101,7 +101,7 @@ export function getApiRateLimit(pathname: string): RateLimitConfig {
   // Webhooks exentos
   if (
     pathname.startsWith("/api/mercadopago/webhook") ||
-    pathname.startsWith("/api/lemonsqueezy/webhook") ||
+    pathname.startsWith("/api/rebill/webhook") ||
     pathname.startsWith("/api/inngest") ||
     pathname.startsWith("/api/cron") ||
     pathname.startsWith("/api/whatsapp/webhook")
@@ -133,7 +133,7 @@ export function getApiRateLimit(pathname: string): RateLimitConfig {
 export function isExemptFromRateLimit(pathname: string): boolean {
   const exemptPaths = [
     "/api/mercadopago/webhook",
-    "/api/lemonsqueezy/webhook",
+    "/api/rebill/webhook",
     "/api/inngest",
     "/api/cron",
     "/api/auth/session",

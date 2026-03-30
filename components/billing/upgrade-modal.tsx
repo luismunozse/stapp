@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button"
 import { Check, Loader2, Crown, Shield, Zap, Globe } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-type PaymentMethod = "mercadopago" | "stripe"
+type PaymentMethod = "mercadopago" | "rebill"
 
 interface UpgradeModalProps {
   open: boolean
@@ -97,7 +97,7 @@ export function UpgradeModal({ open, onClose }: UpgradeModalProps) {
           throw new Error("No se pudo iniciar el pago")
         }
       } else {
-        const response = await fetch("/api/lemonsqueezy/checkout", {
+        const response = await fetch("/api/rebill/checkout", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ billingPeriod }),
@@ -182,24 +182,21 @@ export function UpgradeModal({ open, onClose }: UpgradeModalProps) {
               </button>
               <button
                 type="button"
-                onClick={() => setPaymentMethod("stripe")}
+                onClick={() => setPaymentMethod("rebill")}
                 className={cn(
                   "relative p-4 rounded-xl border-2 text-center transition-all duration-200",
-                  paymentMethod === "stripe"
+                  paymentMethod === "rebill"
                     ? "border-primary bg-primary/5 shadow-sm shadow-primary/10"
                     : "border-border hover:border-muted-foreground/30 hover:bg-muted/50"
                 )}
               >
-                {paymentMethod === "stripe" && (
+                {paymentMethod === "rebill" && (
                   <div className="absolute top-2 right-2">
                     <div className="h-2 w-2 rounded-full bg-primary" />
                   </div>
                 )}
                 <div className="flex justify-center mb-2">
-                  <div className="relative">
-                    <Globe className="h-6 w-6 text-blue-500" />
-                    <span className="absolute -top-1 -right-2 text-[10px]">🌎</span>
-                  </div>
+                  <Globe className="h-6 w-6 text-blue-500" />
                 </div>
                 <div className="text-sm font-semibold">Internacional</div>
                 <div className="text-xs text-muted-foreground">Dólares (USD)</div>

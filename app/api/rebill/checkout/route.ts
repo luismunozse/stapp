@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
-import { createLemonSqueezyCheckout } from "@/lib/lemonsqueezy"
+import { createRebillCheckout } from "@/lib/rebill"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
 
@@ -32,28 +32,23 @@ export async function POST(request: NextRequest) {
 
     const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000"
 
-    // Crear checkout de LemonSqueezy
-    const checkout = await createLemonSqueezyCheckout({
+    const checkout = await createRebillCheckout({
       organizationId: org.id,
       organizationName: org.nombre,
       email: org.email || session?.user?.email || "",
       billingPeriod: billingPeriod as "MONTHLY" | "YEARLY",
-      successUrl: `${baseUrl}/configuracion/billing?ls_success=true`,
+      successUrl: `${baseUrl}/configuracion/billing?rebill_success=true`,
+      failureUrl: `${baseUrl}/configuracion/billing?rebill_failure=true`,
     })
-
-    const checkoutUrl = checkout?.data?.attributes?.url
-
-    if (!checkoutUrl) {
-      throw new Error("No checkout URL returned")
-    }
 
     return NextResponse.json({
-      url: checkoutUrl,
+      url: checkout.url,
+      paymentLinkId: checkout.id,
     })
-  } catch (err) {
-    console.error("Error creating LemonSqueezy checkout:", err)
+  } catch (error) {
+    console.error("Error creating Rebill checkout:", error)
     return NextResponse.json(
-      { error: "Error al crear sesión de pago" },
+      { error: "Error al crear checkout de pago" },
       { status: 500 }
     )
   }

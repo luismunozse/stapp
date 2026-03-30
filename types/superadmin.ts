@@ -161,7 +161,7 @@ export interface AuditLogWithRelations {
 // Enums
 export type SubscriptionStatus = "ACTIVE" | "CANCELED" | "PAST_DUE" | "TRIALING"
 export type BillingPeriod = "MONTHLY" | "YEARLY"
-export type PaymentProvider = "STRIPE" | "MERCADOPAGO" | "LEMONSQUEEZY"
+export type PaymentProvider = "MERCADOPAGO" | "REBILL"
 export type PaymentStatus = "PENDING" | "SUCCEEDED" | "FAILED" | "REFUNDED"
 export type PlanType = "FREE" | "PREMIUM"
 export type UserRole = "ADMIN" | "TECNICO" | "VENDEDOR"

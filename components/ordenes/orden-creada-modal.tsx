@@ -19,7 +19,9 @@ import {
   FileText,
   Loader2,
   Printer,
+  Tag,
 } from "lucide-react"
+import { printDeviceLabel } from "./print-label"
 import { generateWhatsAppUrl, formatPhoneForWhatsApp } from "@/lib/notifications/whatsapp-templates"
 import { useCurrency } from "@/contexts/currency-context"
 
@@ -166,6 +168,24 @@ export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps
     }
   }
 
+  const handlePrintLabel = async () => {
+    if (!orden) return
+    const baseUrl = typeof window !== "undefined" ? window.location.origin : ""
+    const fecha = new Date().toLocaleDateString("es-AR", {
+      day: "2-digit", month: "2-digit", year: "numeric",
+    })
+    await printDeviceLabel({
+      codigoOrden: orden.codigoOrden || `#${orden.numeroOrden}`,
+      numeroOrden: orden.numeroOrden,
+      clienteNombre: orden.cliente.nombre,
+      dispositivo: orden.dispositivo,
+      problemaReportado: orden.problemaReportado,
+      fechaIngreso: fecha,
+      publicToken: orden.publicToken,
+      organizationName: orden.organizationName,
+    }, baseUrl)
+  }
+
   const handleOpenWhatsApp = () => {
     if (!orden) return
     const url = generateWhatsAppUrl(orden.cliente.telefono, mensaje)
@@ -212,7 +232,7 @@ export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps
             )}
           </div>
 
-          {/* Descargar PDF e Imprimir */}
+          {/* Descargar PDF, Imprimir, Etiqueta */}
           <div className="flex gap-2">
             <Button
               variant="outline"
@@ -225,7 +245,7 @@ export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps
               ) : (
                 <FileText className="mr-2 h-4 w-4" />
               )}
-              Descargar PDF
+              PDF
             </Button>
             <Button
               variant="outline"
@@ -239,6 +259,14 @@ export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps
                 <Printer className="mr-2 h-4 w-4" />
               )}
               Imprimir
+            </Button>
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={handlePrintLabel}
+            >
+              <Tag className="mr-2 h-4 w-4" />
+              Etiqueta
             </Button>
           </div>
 
