@@ -78,6 +78,18 @@ export function PosTerminal() {
   const printer = useThermalPrinter()
   const [printing, setPrinting] = useState(false)
 
+  // Printer width setting (58mm or 80mm)
+  type PrinterWidth = 58 | 80
+  const [printerWidth, setPrinterWidth] = useState<PrinterWidth>(() => {
+    if (typeof window === "undefined") return 58
+    const saved = localStorage.getItem("pos_printer_width")
+    return saved === "80" ? 80 : 58
+  })
+  const handleSetPrinterWidth = (w: PrinterWidth) => {
+    setPrinterWidth(w)
+    localStorage.setItem("pos_printer_width", String(w))
+  }
+
   // Computed values
   const cartCount = cartItems.reduce((sum, i) => sum + i.cantidad, 0)
   const cartTotal = cartItems.reduce((sum, i) => sum + i.precioUnitario * i.cantidad, 0)
@@ -264,7 +276,7 @@ export function PosTerminal() {
         metodoPago: ventaData.metodoPago,
         nombreEmpresa: ventaData.organizationName,
       }
-      const commands = generateTicketCommands(ticketData)
+      const commands = generateTicketCommands(ticketData, printerWidth)
       await printer.print(commands)
       return true
     } catch (err) {
@@ -303,9 +315,9 @@ export function PosTerminal() {
     const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Ticket Venta #${ventaData.numeroVenta}</title>
 <style>
-  @page { size: 58mm auto; margin: 0; }
+  @page { size: ${printerWidth}mm auto; margin: 0; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Courier New', Courier, monospace; font-size: 12px; width: 58mm; padding: 8px; color: #000; }
+  body { font-family: 'Courier New', Courier, monospace; font-size: ${printerWidth === 80 ? 13 : 12}px; width: ${printerWidth}mm; padding: ${printerWidth === 80 ? 10 : 8}px; color: #000; }
   .center { text-align: center; }
   .bold { font-weight: bold; }
   .sep { border-top: 1px dashed #999; margin: 6px 0; }
@@ -459,6 +471,36 @@ export function PosTerminal() {
               </span>
             </Button>
           )}
+
+          {/* Printer width toggle */}
+          <div className="flex items-center rounded-md border overflow-hidden h-8">
+            <button
+              type="button"
+              onClick={() => handleSetPrinterWidth(58)}
+              className={cn(
+                "px-2 h-full text-[10px] font-medium transition-colors",
+                printerWidth === 58
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-background text-muted-foreground hover:bg-muted"
+              )}
+              title="Impresora térmica 58mm"
+            >
+              58mm
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSetPrinterWidth(80)}
+              className={cn(
+                "px-2 h-full text-[10px] font-medium transition-colors",
+                printerWidth === 80
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-background text-muted-foreground hover:bg-muted"
+              )}
+              title="Impresora térmica 80mm"
+            >
+              80mm
+            </button>
+          </div>
 
           {/* Shortcuts toggle - desktop only */}
           <Button

@@ -35,6 +35,7 @@ const estadoLabels: Record<string, string> = {
   ESPERANDO_REPUESTO: "Esperando Repuesto",
   REPARADO: "Reparado",
   ENTREGADO: "Entregado",
+  ENTREGADO_SIN_REPARACION: "Retirado sin Reparación",
   CANCELADO: "Cancelado",
   SIN_REPARACION: "Sin Reparación",
 }

@@ -63,7 +63,8 @@ export type EstadoOrden =
   | "EN_REPARACION"      // Técnico trabajando
   | "ESPERANDO_REPUESTO" // Pausado por falta de repuesto
   | "REPARADO"           // Reparación completada
-  | "ENTREGADO"          // Cliente retiró el equipo
+  | "ENTREGADO"          // Cliente retiró el equipo reparado
+  | "ENTREGADO_SIN_REPARACION" // Cliente retiró el equipo sin reparar
   | "CANCELADO"          // Orden cancelada
   | "SIN_REPARACION"     // No se puede reparar o rechazado
 export type EstadoPago = "PENDIENTE" | "PAGADO_PARCIAL" | "PAGADO" | "ANULADA"

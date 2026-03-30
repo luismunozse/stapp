@@ -36,6 +36,7 @@ export type EstadoOrden =
   | "ESPERANDO_REPUESTO"
   | "REPARADO"
   | "ENTREGADO"
+  | "ENTREGADO_SIN_REPARACION"
   | "CANCELADO"
   | "SIN_REPARACION"
 

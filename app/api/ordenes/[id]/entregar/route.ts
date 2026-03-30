@@ -43,7 +43,7 @@ export async function POST(
     }
 
     // Verificar que no esté ya entregada
-    if (orden.estado === "ENTREGADO") {
+    if (orden.estado === "ENTREGADO" || orden.estado === "ENTREGADO_SIN_REPARACION") {
       return NextResponse.json({ error: "La orden ya fue entregada" }, { status: 400 })
     }
 
@@ -56,12 +56,13 @@ export async function POST(
     }
 
     const esRetiro = orden.estado === "SIN_REPARACION"
+    const nuevoEstado = esRetiro ? "ENTREGADO_SIN_REPARACION" : "ENTREGADO"
 
     // Actualizar orden con datos de entrega
     const { data: updatedOrden, error: updateError } = await supabaseAdmin
       .from("ordenes_servicio")
       .update({
-        estado: "ENTREGADO",
+        estado: nuevoEstado,
         fecha_entrega: new Date().toISOString(),
         firma_cliente_entrega: data.firmaClienteEntrega,
         firma_cliente_entrega_mime: data.firmaClienteMime,
@@ -110,9 +111,8 @@ export async function POST(
             id: id,
             numeroOrden: orden.numero_orden,
             dispositivo: orden.dispositivo,
-            estado: "ENTREGADO",
+            estado: nuevoEstado,
             estadoAnterior: orden.estado,
-            esRetiroSinReparacion: esRetiro,
           },
         },
       }).catch(err => console.error("Error queueing notification:", err))

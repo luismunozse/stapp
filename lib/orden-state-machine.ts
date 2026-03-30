@@ -17,8 +17,9 @@ export const TRANSICIONES_VALIDAS: Record<EstadoOrden, EstadoOrden[]> = {
   ESPERANDO_REPUESTO: ["EN_REPARACION", "REPARADO", "CANCELADO", "SIN_REPARACION"],
   REPARADO: ["ENTREGADO", "EN_REPARACION"], // Puede volver a reparación si se detecta falla
   ENTREGADO: [], // Estado terminal
+  ENTREGADO_SIN_REPARACION: [], // Estado terminal - retirado sin reparar
   CANCELADO: ["RECIBIDO"], // Puede reactivarse
-  SIN_REPARACION: ["RECIBIDO", "ENTREGADO"], // Puede reactivarse o retirarse
+  SIN_REPARACION: ["RECIBIDO", "ENTREGADO_SIN_REPARACION"], // Puede reactivarse o retirarse
 }
 
 /**
@@ -113,6 +114,7 @@ export const ESTADO_LABELS: Record<EstadoOrden, string> = {
   ESPERANDO_REPUESTO: "Esperando Repuesto",
   REPARADO: "Reparado",
   ENTREGADO: "Entregado",
+  ENTREGADO_SIN_REPARACION: "Retirado sin Reparación",
   CANCELADO: "Cancelado",
   SIN_REPARACION: "Sin Reparación",
 }

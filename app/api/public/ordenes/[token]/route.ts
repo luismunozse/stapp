@@ -50,18 +50,6 @@ export async function GET(
     const cliente = orden.clientes as any
     const tipoDisp = orden.tipos_dispositivo as any
 
-    // Detectar si fue un retiro sin reparación
-    let esRetiroSinReparacion = false
-    if (orden.estado === "ENTREGADO") {
-      const { data: tiempoSinRep } = await supabaseAdmin
-        .from("orden_tiempos_estado")
-        .select("id")
-        .eq("orden_id", orden.id)
-        .eq("estado", "SIN_REPARACION")
-        .limit(1)
-      esRetiroSinReparacion = (tiempoSinRep && tiempoSinRep.length > 0) || false
-    }
-
     // Fetch cotizaciones linked to this order (only ENVIADA or ACEPTADA)
     let cotizaciones: any[] = []
     const { data: cotizacionesData } = await supabaseAdmin
@@ -130,7 +118,6 @@ export async function GET(
       fechaEntrega: orden.fecha_entrega,
       presupuesto: orden.presupuesto || null,
       presupuestoAprobadoPortal: orden.presupuesto_aprobado_portal || false,
-      esRetiroSinReparacion,
       publicToken: orden.public_token,
       cotizaciones,
       cliente: {

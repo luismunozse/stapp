@@ -98,6 +98,7 @@ const estadoLabels: Record<string, string> = {
   ESPERANDO_REPUESTO: "Esperando repuesto",
   REPARADO: "Listo para retirar",
   ENTREGADO: "Entregado",
+  ENTREGADO_SIN_REPARACION: "Retirado sin reparacion",
   CANCELADO: "Cancelado",
   SIN_REPARACION: "Sin reparacion",
 }
@@ -111,7 +112,7 @@ const estadoDescriptions: Record<string, string> = {
   ESPERANDO_REPUESTO: "Estamos esperando la llegada de un repuesto necesario.",
   REPARADO: "Tu equipo esta listo. Ya podes pasar a retirarlo.",
   ENTREGADO: "Equipo entregado. Gracias por confiar en nosotros.",
-  ENTREGADO_RETIRO: "El equipo fue retirado sin reparacion.",
+  ENTREGADO_SIN_REPARACION: "El equipo fue retirado sin reparacion.",
   CANCELADO: "La orden fue cancelada. Contactanos si tenes consultas.",
   SIN_REPARACION: "Lamentablemente no fue posible reparar el equipo.",
 }
@@ -125,6 +126,7 @@ const estadoColors: Record<string, { text: string; bg: string; border: string }>
   ESPERANDO_REPUESTO: { text: "text-purple-600 dark:text-purple-400", bg: "bg-purple-50 dark:bg-purple-950/40", border: "border-purple-200 dark:border-purple-800" },
   REPARADO: { text: "text-green-600 dark:text-green-400", bg: "bg-green-50 dark:bg-green-950/40", border: "border-green-300 dark:border-green-800" },
   ENTREGADO: { text: "text-green-700 dark:text-green-400", bg: "bg-green-50 dark:bg-green-950/40", border: "border-green-200 dark:border-green-800" },
+  ENTREGADO_SIN_REPARACION: { text: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-950/40", border: "border-amber-200 dark:border-amber-800" },
   CANCELADO: { text: "text-red-600 dark:text-red-400", bg: "bg-red-50 dark:bg-red-950/40", border: "border-red-200 dark:border-red-800" },
   SIN_REPARACION: { text: "text-red-600 dark:text-red-400", bg: "bg-red-50 dark:bg-red-950/40", border: "border-red-200 dark:border-red-800" },
 }
@@ -221,7 +223,6 @@ interface TrackingData {
   presupuesto?: number
   moneda?: string
   presupuestoAprobadoPortal?: boolean
-  esRetiroSinReparacion?: boolean
   cotizaciones?: {
     id: string
     numeroCotizacion: string
@@ -385,9 +386,9 @@ export function SeguimientoContent({ token }: { token: string }) {
   }
 
   const DeviceIcon = tipoDispositivoIcons[data.tipoDispositivo] || Package
-  const isRetiro = data.esRetiroSinReparacion === true
+  const isRetiro = data.estado === "ENTREGADO_SIN_REPARACION"
   const isTerminal = data.estado === "CANCELADO" || data.estado === "SIN_REPARACION"
-  const isCompleted = data.estado === "ENTREGADO"
+  const isCompleted = data.estado === "ENTREGADO" || data.estado === "ENTREGADO_SIN_REPARACION"
   const isReady = data.estado === "REPARADO"
   const estadoParaProgreso = data.estado === "ESPERANDO_REPUESTO" ? "EN_REPARACION" : data.estado
   const currentIndex = estadoFlow.indexOf(estadoParaProgreso)
@@ -484,7 +485,7 @@ export function SeguimientoContent({ token }: { token: string }) {
                   Retirado sin reparacion
                 </p>
                 <p className="text-sm text-muted-foreground mt-0.5">
-                  {estadoDescriptions.ENTREGADO_RETIRO}
+                  {estadoDescriptions.ENTREGADO_SIN_REPARACION}
                 </p>
               </div>
             </div>

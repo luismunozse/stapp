@@ -528,7 +528,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   // ESPERANDO_REPUESTO es un sub-estado de EN_REPARACION, mapear al mismo índice
   const estadoParaProgreso = orden.estado === "ESPERANDO_REPUESTO" ? "EN_REPARACION" : orden.estado
   const currentEstadoIndex = estadoFlow.indexOf(estadoParaProgreso)
-  const isRetiro = (orden as any).esRetiroSinReparacion === true
+  const isRetiro = orden.estado === "ENTREGADO_SIN_REPARACION"
   const progressPercentage = orden.estado === "CANCELADO" || orden.estado === "SIN_REPARACION"
     ? 0
     : Math.round(((currentEstadoIndex + 1) / estadoFlow.length) * 100)
@@ -598,13 +598,13 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {isAdmin && (orden.estado === "REPARADO" || orden.estado === "ENTREGADO") && !isRetiro && (
+              {isAdmin && (orden.estado === "REPARADO" || orden.estado === "ENTREGADO") && (
                 <DropdownMenuItem onClick={handleGenerarFactura} disabled={updating}>
                   <Receipt className="h-4 w-4 mr-2" />
                   Generar Factura
                 </DropdownMenuItem>
               )}
-              {isAdmin && (orden.estado === "ENTREGADO" || orden.estado === "REPARADO") && !orden.esReingreso && !isRetiro && (
+              {isAdmin && (orden.estado === "ENTREGADO" || orden.estado === "REPARADO") && !orden.esReingreso && (
                 <DropdownMenuItem onClick={handleReingreso} disabled={updating}>
                   <Shield className="h-4 w-4 mr-2" />
                   Re-ingreso por Garantia

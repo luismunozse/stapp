@@ -54,14 +54,14 @@ export function OrdenMobileCard({ orden, onDelete, onPrint, deleting, onClick }:
             </div>
             {/* SLA indicator */}
             {orden.fechaPrometida && new Date(orden.fechaPrometida) < new Date() &&
-             orden.estado !== "ENTREGADO" && orden.estado !== "CANCELADO" && orden.estado !== "SIN_REPARACION" && (
+             orden.estado !== "ENTREGADO" && orden.estado !== "ENTREGADO_SIN_REPARACION" && orden.estado !== "CANCELADO" && orden.estado !== "SIN_REPARACION" && (
               <div className="flex items-center gap-1 text-red-600 font-medium">
                 <AlertTriangle className="h-3 w-3" />
                 Vencida
               </div>
             )}
             {orden.fechaPrometida && new Date(orden.fechaPrometida) >= new Date() &&
-             orden.estado !== "ENTREGADO" && orden.estado !== "CANCELADO" && orden.estado !== "SIN_REPARACION" && (
+             orden.estado !== "ENTREGADO" && orden.estado !== "ENTREGADO_SIN_REPARACION" && orden.estado !== "CANCELADO" && orden.estado !== "SIN_REPARACION" && (
               <div className="flex items-center gap-1 text-amber-600">
                 <Clock className="h-3 w-3" />
                 {(() => {

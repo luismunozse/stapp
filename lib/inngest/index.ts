@@ -45,7 +45,6 @@ export async function queueNotification(params: {
       dispositivo: string
       estado: string
       estadoAnterior?: string
-      esRetiroSinReparacion?: boolean
       presupuesto?: number | null
       fechaCompletado?: string | null
     }

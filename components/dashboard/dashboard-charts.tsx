@@ -54,6 +54,7 @@ interface OrdenesData {
   ESPERANDO_REPUESTO: number
   REPARADO: number
   ENTREGADO: number
+  ENTREGADO_SIN_REPARACION: number
   CANCELADO: number
   SIN_REPARACION: number
 }

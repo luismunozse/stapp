@@ -17,6 +17,7 @@ export const ESTADOS_COMPLETADOS: EstadoOrden[] = ["REPARADO", "ENTREGADO"]
 export const ESTADOS_TERMINALES: EstadoOrden[] = [
   "REPARADO",
   "ENTREGADO",
+  "ENTREGADO_SIN_REPARACION",
   "CANCELADO",
   "SIN_REPARACION",
 ]

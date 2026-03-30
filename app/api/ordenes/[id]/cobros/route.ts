@@ -234,7 +234,7 @@ export async function DELETE(
       .eq("organization_id", organizationId!)
       .single()
 
-    if (ordenCheck?.estado === "ENTREGADO") {
+    if (ordenCheck?.estado === "ENTREGADO" || ordenCheck?.estado === "ENTREGADO_SIN_REPARACION") {
       return NextResponse.json(
         { error: "No se pueden anular cobros de órdenes ya entregadas" },
         { status: 400 }

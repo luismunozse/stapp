@@ -79,13 +79,14 @@ export async function GET(
       zonaHoraria: venta.organizations?.zona_horaria || "America/Argentina/Buenos_Aires",
     }
 
-    // Check format: ticket (58mm thermal) or standard A4
+    // Check format: ticket (58mm/80mm thermal) or standard A4
     const { searchParams } = new URL(request.url)
     const format = searchParams.get("format")
+    const ticketWidth = searchParams.get("width") === "80" ? 80 : 58
 
     // Generar PDF
     const pdfBuffer = format === "ticket"
-      ? await generateVentaTicketPDF(pdfData)
+      ? await generateVentaTicketPDF(pdfData, ticketWidth as 58 | 80)
       : await generateVentaPDF(pdfData)
 
     // Retornar PDF

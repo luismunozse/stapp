@@ -325,6 +325,7 @@ export default async function DashboardPage() {
     ESPERANDO_REPUESTO: 0,
     REPARADO: 0,
     ENTREGADO: 0,
+    ENTREGADO_SIN_REPARACION: 0,
     CANCELADO: 0,
     SIN_REPARACION: 0,
   }

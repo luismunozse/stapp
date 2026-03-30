@@ -1575,7 +1575,7 @@ export async function generateVentaPDF(data: VentaPDFData): Promise<Buffer> {
 // TICKET DE VENTA (58mm thermal printer)
 // ========================================
 
-export async function generateVentaTicketPDF(data: VentaPDFData): Promise<Buffer> {
+export async function generateVentaTicketPDF(data: VentaPDFData, paperWidth: 58 | 80 = 58): Promise<Buffer> {
   const safe = (val: unknown): string => {
     if (val === null || val === undefined) return ""
     if (typeof val === "string") return val.replace(/[\r\n]+/g, " ").trim()
@@ -1591,9 +1591,9 @@ export async function generateVentaTicketPDF(data: VentaPDFData): Promise<Buffer
     return formatCurrencyValue(amount, (data.moneda as CurrencyCode) || DEFAULT_CURRENCY)
   }
 
-  // 58mm = ~164pt (at 72dpi). Printable area ~48mm = ~136pt
-  const ticketWidth = 164
-  const margin = 10
+  // Convert mm to points (1mm = 2.835pt)
+  const ticketWidth = Math.round(paperWidth * 2.835)
+  const margin = paperWidth === 80 ? 14 : 10
   const contentWidth = ticketWidth - margin * 2
   const lineHeight = 11
   const smallLine = 9

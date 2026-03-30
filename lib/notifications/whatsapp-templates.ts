@@ -18,6 +18,7 @@ const estadoLabels: Record<EstadoOrden, string> = {
   ESPERANDO_REPUESTO: "esperando repuesto",
   REPARADO: "listo para retirar",
   ENTREGADO: "entregado",
+  ENTREGADO_SIN_REPARACION: "retirado sin reparacion",
   CANCELADO: "cancelado",
   SIN_REPARACION: "sin posibilidad de reparacion",
 }
@@ -52,10 +53,10 @@ export function getWhatsAppTemplates(ctx: NotificationContext): WhatsAppTemplate
     }
 
     // Plantilla de entrega completada con comprobante
-    if (ctx.orden.estado === "ENTREGADO") {
+    if (ctx.orden.estado === "ENTREGADO" || ctx.orden.estado === "ENTREGADO_SIN_REPARACION") {
       templates.push({
         id: "entrega_completada",
-        nombre: "Comprobante de entrega",
+        nombre: ctx.orden.estado === "ENTREGADO_SIN_REPARACION" ? "Comprobante de retiro" : "Comprobante de entrega",
         mensaje: generateEntregaCompletadaMessage(ctx),
       })
     }
@@ -271,6 +272,10 @@ function generateEstadoMessage(ctx: NotificationContext): string {
       mensaje +=
         "\n\nGracias por confiar en nosotros. Esperamos que su equipo funcione correctamente!"
       break
+    case "ENTREGADO_SIN_REPARACION":
+      mensaje +=
+        "\n\nSu equipo fue retirado sin reparacion. Gracias por habernos consultado."
+      break
     case "CANCELADO":
       mensaje +=
         "\n\nSi tiene alguna consulta o desea ingresar un nuevo servicio, no dude en contactarnos."
@@ -339,6 +344,20 @@ ${ctx.organizationName}`
 function generateEntregaCompletadaMessage(ctx: NotificationContext): string {
   const baseUrl = getBaseUrl(ctx)
   const pdfUrl = `${baseUrl}/api/ordenes/${ctx.orden!.id}/comprobante-entrega`
+  const esRetiro = ctx.orden!.estado === "ENTREGADO_SIN_REPARACION"
+
+  if (esRetiro) {
+    return `Hola ${ctx.cliente.nombre}, confirmamos el retiro de su ${ctx.orden!.dispositivo} sin reparacion.
+
+*Orden #${ctx.orden!.numeroOrden} - RETIRADO SIN REPARACION*
+
+Puede descargar su comprobante de retiro aqui:
+${pdfUrl}
+
+Gracias por habernos consultado.
+
+${ctx.organizationName}`
+  }
 
   return `Hola ${ctx.cliente.nombre}, confirmamos la entrega de su ${ctx.orden!.dispositivo}.
 

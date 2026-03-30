@@ -38,7 +38,7 @@ export async function GET(
         clientes (nombre)
       `)
       .eq("organization_id", kiosk.organization_id)
-      .not("estado", "in", '("ENTREGADO","CANCELADO","SIN_REPARACION")')
+      .not("estado", "in", '("ENTREGADO","ENTREGADO_SIN_REPARACION","CANCELADO","SIN_REPARACION")')
       .order("fecha_ingreso", { ascending: false })
       .limit(50)
 

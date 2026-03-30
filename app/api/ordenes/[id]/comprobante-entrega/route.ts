@@ -36,8 +36,12 @@ export async function GET(
       return NextResponse.json({ error: "No autorizado" }, { status: 403 })
     }
 
-    // Verificar que la orden fue entregada
-    if (orden.estado !== "ENTREGADO" || !orden.firma_cliente_entrega) {
+    // Verificar que la orden fue entregada (normal o sin reparación)
+    if (orden.estado !== "ENTREGADO" && orden.estado !== "ENTREGADO_SIN_REPARACION") {
+      return NextResponse.json({ error: "La orden no tiene datos de entrega" }, { status: 400 })
+    }
+
+    if (!orden.firma_cliente_entrega) {
       return NextResponse.json({ error: "La orden no tiene datos de entrega" }, { status: 400 })
     }
 
@@ -48,15 +52,7 @@ export async function GET(
       .eq("id", organizationId!)
       .single()
 
-    // Detectar si fue un retiro sin reparación (orden pasó por SIN_REPARACION antes de ENTREGADO)
-    const { data: tiempoSinRep } = await supabaseAdmin
-      .from("orden_tiempos_estado")
-      .select("id")
-      .eq("orden_id", id)
-      .eq("estado", "SIN_REPARACION")
-      .limit(1)
-
-    const esRetiroSinReparacion = (tiempoSinRep && tiempoSinRep.length > 0) || false
+    const esRetiroSinReparacion = orden.estado === "ENTREGADO_SIN_REPARACION"
 
     const cliente = orden.clientes as any
     const entregadoPor = orden.users as any
