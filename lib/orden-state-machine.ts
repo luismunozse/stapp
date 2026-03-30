@@ -18,7 +18,7 @@ export const TRANSICIONES_VALIDAS: Record<EstadoOrden, EstadoOrden[]> = {
   REPARADO: ["ENTREGADO", "EN_REPARACION"], // Puede volver a reparación si se detecta falla
   ENTREGADO: [], // Estado terminal
   CANCELADO: ["RECIBIDO"], // Puede reactivarse
-  SIN_REPARACION: ["RECIBIDO"], // Puede reactivarse
+  SIN_REPARACION: ["RECIBIDO", "ENTREGADO"], // Puede reactivarse o retirarse
 }
 
 /**

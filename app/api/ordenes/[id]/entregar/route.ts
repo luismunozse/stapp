@@ -47,13 +47,15 @@ export async function POST(
       return NextResponse.json({ error: "La orden ya fue entregada" }, { status: 400 })
     }
 
-    // Solo se puede entregar desde REPARADO
-    if (orden.estado !== "REPARADO") {
+    // Solo se puede entregar desde REPARADO o SIN_REPARACION (retiro)
+    if (orden.estado !== "REPARADO" && orden.estado !== "SIN_REPARACION") {
       return NextResponse.json(
-        { error: `No se puede entregar una orden en estado "${orden.estado}". Debe estar en estado "REPARADO".` },
+        { error: `No se puede entregar una orden en estado "${orden.estado}". Debe estar en estado "REPARADO" o "SIN_REPARACION".` },
         { status: 400 }
       )
     }
+
+    const esRetiro = orden.estado === "SIN_REPARACION"
 
     // Actualizar orden con datos de entrega
     const { data: updatedOrden, error: updateError } = await supabaseAdmin
@@ -110,6 +112,7 @@ export async function POST(
             dispositivo: orden.dispositivo,
             estado: "ENTREGADO",
             estadoAnterior: orden.estado,
+            esRetiroSinReparacion: esRetiro,
           },
         },
       }).catch(err => console.error("Error queueing notification:", err))

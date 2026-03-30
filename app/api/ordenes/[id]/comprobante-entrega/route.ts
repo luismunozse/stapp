@@ -48,6 +48,16 @@ export async function GET(
       .eq("id", organizationId!)
       .single()
 
+    // Detectar si fue un retiro sin reparación (orden pasó por SIN_REPARACION antes de ENTREGADO)
+    const { data: tiempoSinRep } = await supabaseAdmin
+      .from("orden_tiempos_estado")
+      .select("id")
+      .eq("orden_id", id)
+      .eq("estado", "SIN_REPARACION")
+      .limit(1)
+
+    const esRetiroSinReparacion = (tiempoSinRep && tiempoSinRep.length > 0) || false
+
     const cliente = orden.clientes as any
     const entregadoPor = orden.users as any
     const tipoDisp = orden.tipos_dispositivo as any
@@ -79,14 +89,16 @@ export async function GET(
       logoUrl: org?.logo_url,
       moneda: org?.moneda || "ARS",
       zonaHoraria: org?.zona_horaria || "America/Argentina/Buenos_Aires",
+      esRetiroSinReparacion,
     })
 
     const codigoDisplay = orden.codigo_orden || `${orden.numero_orden}`
+    const pdfPrefix = esRetiroSinReparacion ? "orden-retiro" : "comprobante-entrega"
 
     return new NextResponse(new Uint8Array(pdfBuffer), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="comprobante-entrega-${codigoDisplay}.pdf"`,
+        "Content-Disposition": `inline; filename="${pdfPrefix}-${codigoDisplay}.pdf"`,
       },
     })
   } catch (error) {

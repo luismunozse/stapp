@@ -2303,6 +2303,7 @@ interface ComprobanteEntregaPDFData {
   logoUrl?: string | null
   moneda?: string
   zonaHoraria?: string
+  esRetiroSinReparacion?: boolean
 }
 
 export async function generateComprobanteEntregaPDF(data: ComprobanteEntregaPDFData): Promise<Buffer> {
@@ -2355,8 +2356,9 @@ export async function generateComprobanteEntregaPDF(data: ComprobanteEntregaPDFD
   const grayColor = rgb(0.392, 0.455, 0.545) // #64748b
   const lightGray = rgb(0.886, 0.910, 0.941) // #e2e8f0
   const bgGray = rgb(0.973, 0.980, 0.988) // #f8fafc
-  const greenColor = rgb(0.134, 0.545, 0.373)
-  const greenBg = rgb(0.863, 0.949, 0.898)
+  const esRetiro = data.esRetiroSinReparacion || false
+  const accentColor = esRetiro ? rgb(0.800, 0.522, 0.082) : rgb(0.134, 0.545, 0.373) // amber vs green
+  const accentBg = esRetiro ? rgb(1.0, 0.965, 0.890) : rgb(0.863, 0.949, 0.898) // amber-bg vs green-bg
   const white = rgb(1, 1, 1)
 
   const margin = 40
@@ -2365,7 +2367,7 @@ export async function generateComprobanteEntregaPDF(data: ComprobanteEntregaPDFD
   const halfWidth = (contentWidth - cardGap) / 2
 
   // === BARRA DE ACENTO SUPERIOR ===
-  page.drawRectangle({ x: 0, y: height - 10, width, height: 10, color: greenColor })
+  page.drawRectangle({ x: 0, y: height - 10, width, height: 10, color: accentColor })
 
   let y = height - margin - 15
 
@@ -2411,10 +2413,10 @@ export async function generateComprobanteEntregaPDF(data: ComprobanteEntregaPDFD
     page.drawText(direccionEmpresa, { x: margin + logoWidth, y, size: 9, font: helvetica, color: grayColor })
   }
 
-  // === BADGE ENTREGA (lado derecho) ===
-  const badgeText = "ENTREGA"
+  // === BADGE ENTREGA/RETIRO (lado derecho) ===
+  const badgeText = esRetiro ? "RETIRO" : "ENTREGA"
   const badgeWidth = helveticaBold.widthOfTextAtSize(badgeText, 10) + 20
-  page.drawRectangle({ x: width - margin - badgeWidth, y: height - margin - 25, width: badgeWidth, height: 22, color: greenColor })
+  page.drawRectangle({ x: width - margin - badgeWidth, y: height - margin - 25, width: badgeWidth, height: 22, color: accentColor })
   page.drawText(badgeText, { x: width - margin - badgeWidth + 10, y: height - margin - 19, size: 10, font: helveticaBold, color: white })
 
   // Numero de orden grande
@@ -2425,9 +2427,9 @@ export async function generateComprobanteEntregaPDF(data: ComprobanteEntregaPDFD
   y = height - margin - 90
 
   // === TITULO ===
-  const titleText = "COMPROBANTE DE ENTREGA"
+  const titleText = esRetiro ? "ORDEN DE RETIRO - SIN REPARACION" : "COMPROBANTE DE ENTREGA"
   const titleWidth = helveticaBold.widthOfTextAtSize(titleText, 14)
-  page.drawText(titleText, { x: (width - titleWidth) / 2, y, size: 14, font: helveticaBold, color: greenColor })
+  page.drawText(titleText, { x: (width - titleWidth) / 2, y, size: 14, font: helveticaBold, color: accentColor })
   y -= 25
 
   // === GRID: CLIENTE | DISPOSITIVO ===
@@ -2455,18 +2457,18 @@ export async function generateComprobanteEntregaPDF(data: ComprobanteEntregaPDFD
   y -= cardHeight + 15
 
   // === FECHAS ===
-  page.drawRectangle({ x: margin, y: y - 35, width: contentWidth, height: 40, color: greenBg, borderColor: greenColor, borderWidth: 1 })
+  page.drawRectangle({ x: margin, y: y - 35, width: contentWidth, height: 40, color: accentBg, borderColor: accentColor, borderWidth: 1 })
   page.drawText("Ingreso:", { x: margin + 15, y: y - 10, size: 9, font: helveticaBold, color: grayColor })
   page.drawText(fechaIngreso, { x: margin + 65, y: y - 10, size: 10, font: helvetica, color: textColor })
-  page.drawText("Entrega:", { x: margin + 200, y: y - 10, size: 9, font: helveticaBold, color: grayColor })
-  page.drawText(fechaEntrega, { x: margin + 250, y: y - 10, size: 10, font: helveticaBold, color: greenColor })
-  page.drawText("Entregado por:", { x: margin + 15, y: y - 25, size: 9, font: helveticaBold, color: grayColor })
+  page.drawText(esRetiro ? "Retiro:" : "Entrega:", { x: margin + 200, y: y - 10, size: 9, font: helveticaBold, color: grayColor })
+  page.drawText(fechaEntrega, { x: margin + 250, y: y - 10, size: 10, font: helveticaBold, color: accentColor })
+  page.drawText(esRetiro ? "Entregado por:" : "Entregado por:", { x: margin + 15, y: y - 25, size: 9, font: helveticaBold, color: grayColor })
   page.drawText(entregadoPor, { x: margin + 100, y: y - 25, size: 10, font: helvetica, color: textColor })
 
   y -= 55
 
   // === PROBLEMA / DIAGNOSTICO ===
-  page.drawText("TRABAJO REALIZADO", { x: margin, y, size: 9, font: helveticaBold, color: primaryColor })
+  page.drawText(esRetiro ? "MOTIVO DE NO REPARACION" : "TRABAJO REALIZADO", { x: margin, y, size: 9, font: helveticaBold, color: primaryColor })
   y -= 12
 
   page.drawRectangle({ x: margin, y: y - 50, width: contentWidth, height: 55, color: bgGray, borderColor: lightGray, borderWidth: 1 })
@@ -2548,25 +2550,32 @@ export async function generateComprobanteEntregaPDF(data: ComprobanteEntregaPDFD
   const footerTop = 80
   page.drawRectangle({ x: margin, y: 25, width: contentWidth, height: footerTop - 20, color: bgGray })
 
-  page.drawText("TERMINOS DE ENTREGA", { x: margin + 10, y: footerTop - 5, size: 7, font: helveticaBold, color: grayColor })
-  const terminos = [
-    "• Al firmar este documento, el cliente confirma haber recibido el equipo en condiciones satisfactorias.",
-    "• La garantia del servicio aplica segun lo acordado. Consulte las condiciones especificas.",
-    "• Conserve este comprobante como prueba de entrega del equipo.",
-  ]
+  const terminosTitle = esRetiro ? "TERMINOS DE RETIRO" : "TERMINOS DE ENTREGA"
+  page.drawText(terminosTitle, { x: margin + 10, y: footerTop - 5, size: 7, font: helveticaBold, color: grayColor })
+  const terminos = esRetiro
+    ? [
+        "• El cliente retira el equipo sin reparar, en el estado en que se encuentra.",
+        "• Al firmar, el cliente exime al taller de toda responsabilidad sobre el equipo y su funcionamiento.",
+        "• Conserve este comprobante como constancia de retiro del equipo.",
+      ]
+    : [
+        "• Al firmar este documento, el cliente confirma haber recibido el equipo en condiciones satisfactorias.",
+        "• La garantia del servicio aplica segun lo acordado. Consulte las condiciones especificas.",
+        "• Conserve este comprobante como prueba de entrega del equipo.",
+      ]
   let termY = footerTop - 18
   terminos.forEach(t => {
     page.drawText(t, { x: margin + 10, y: termY, size: 6, font: helvetica, color: grayColor })
     termY -= 10
   })
 
-  page.drawText(`Orden ${ordenDisplay}`, { x: margin + 10, y: 30, size: 7, font: helveticaBold, color: greenColor })
+  page.drawText(`Orden ${ordenDisplay}`, { x: margin + 10, y: 30, size: 7, font: helveticaBold, color: accentColor })
 
   const fechaImpresion2 = formatDateTimeValue(new Date(), data.zonaHoraria || DEFAULT_TIMEZONE)
   page.drawText(`Impreso: ${fechaImpresion2}`, { x: width - margin - 90, y: 30, size: 6, font: helvetica, color: grayColor })
 
   // === BARRA INFERIOR ===
-  page.drawRectangle({ x: 0, y: 0, width, height: 8, color: greenColor })
+  page.drawRectangle({ x: 0, y: 0, width, height: 8, color: accentColor })
 
   const pdfBytes = await pdfDoc.save()
   return Buffer.from(pdfBytes)

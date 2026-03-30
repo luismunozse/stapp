@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { SignaturePad } from "@/components/firma/signature-pad"
-import { Loader2, PackageCheck, AlertTriangle } from "lucide-react"
+import { Loader2, PackageCheck, PackageX, AlertTriangle } from "lucide-react"
 
 interface EntregaDialogProps {
   open: boolean
@@ -31,6 +31,7 @@ interface EntregaDialogProps {
     pendienteCobro?: number
   }
   encargadoNombre: string
+  esRetiro?: boolean
 }
 
 export function EntregaDialog({
@@ -39,6 +40,7 @@ export function EntregaDialog({
   onSuccess,
   orden,
   encargadoNombre,
+  esRetiro = false,
 }: EntregaDialogProps) {
   const [loading, setLoading] = useState(false)
   const [firmaCliente, setFirmaCliente] = useState<string | null>(null)
@@ -125,8 +127,8 @@ export function EntregaDialog({
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <PackageCheck className="h-5 w-5" />
-            Entrega de Equipo
+            {esRetiro ? <PackageX className="h-5 w-5" /> : <PackageCheck className="h-5 w-5" />}
+            {esRetiro ? "Retiro de Equipo Sin Reparación" : "Entrega de Equipo"}
           </DialogTitle>
           <DialogDescription>
             Orden {codigoDisplay} - {orden.dispositivo}
@@ -134,8 +136,23 @@ export function EntregaDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Alerta/Bloqueo si no está cobrado */}
-          {orden.estadoCobro && orden.estadoCobro !== "COBRADO" && orden.pendienteCobro && orden.pendienteCobro > 0 && (
+          {/* Banner informativo de retiro sin reparación */}
+          {esRetiro && (
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-sm">
+              <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+              <div>
+                <p className="font-medium text-amber-800 dark:text-amber-300">
+                  Retiro sin reparación
+                </p>
+                <p className="text-amber-700 dark:text-amber-400 text-xs mt-0.5">
+                  El cliente retira el equipo sin reparar. Al firmar, confirma que recibe el equipo en el estado en que se encuentra, eximiendo al taller de responsabilidad sobre el mismo.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Alerta/Bloqueo si no está cobrado (solo para entregas normales) */}
+          {!esRetiro && orden.estadoCobro && orden.estadoCobro !== "COBRADO" && orden.pendienteCobro && orden.pendienteCobro > 0 && (
             <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-sm">
               <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
               <div>
@@ -223,8 +240,8 @@ export function EntregaDialog({
                 </>
               ) : (
                 <>
-                  <PackageCheck className="mr-2 h-4 w-4" />
-                  Confirmar Entrega
+                  {esRetiro ? <PackageX className="mr-2 h-4 w-4" /> : <PackageCheck className="mr-2 h-4 w-4" />}
+                  {esRetiro ? "Confirmar Retiro" : "Confirmar Entrega"}
                 </>
               )}
             </Button>

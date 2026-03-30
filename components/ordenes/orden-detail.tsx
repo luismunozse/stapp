@@ -1055,6 +1055,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             pendienteCobro: (orden.costoFinal || 0) - (orden.descuentoCobro || 0) - (orden.totalCobrado || 0),
           }}
           encargadoNombre={session?.user?.name || "Usuario"}
+          esRetiro={orden.estado === "SIN_REPARACION"}
         />
       )}
     </div>
