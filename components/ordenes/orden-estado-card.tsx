@@ -14,6 +14,7 @@ interface OrdenEstadoCardProps {
   fechaCompletado?: string | Date | null
   updating: boolean
   onUpdateEstado: (estado: EstadoOrden) => void
+  esRetiro?: boolean
 }
 
 function ElapsedTime({ since }: { since: string | Date }) {
@@ -41,6 +42,7 @@ export function OrdenEstadoCard({
   fechaCompletado,
   updating,
   onUpdateEstado,
+  esRetiro = false,
 }: OrdenEstadoCardProps) {
   const { formatDate } = useCurrency()
 
@@ -61,8 +63,8 @@ export function OrdenEstadoCard({
       </CardHeader>
       <CardContent className="space-y-3">
         {esTerminal ? (
-          <div className="text-sm font-medium text-center py-2 px-3 rounded-md bg-muted">
-            {ESTADO_LABELS[estado]}
+          <div className={`text-sm font-medium text-center py-2 px-3 rounded-md ${esRetiro ? "bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800" : "bg-muted"}`}>
+            {esRetiro ? "Retirado sin reparacion" : ESTADO_LABELS[estado]}
           </div>
         ) : (
           <Select

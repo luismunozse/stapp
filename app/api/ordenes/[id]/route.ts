@@ -79,10 +79,23 @@ export async function GET(
       )
     }
 
+    // Detectar si fue un retiro sin reparación
+    let esRetiroSinReparacion = false
+    if (orden.estado === "ENTREGADO") {
+      const { data: tiempoSinRep } = await supabaseAdmin
+        .from("orden_tiempos_estado")
+        .select("id")
+        .eq("orden_id", id)
+        .eq("estado", "SIN_REPARACION")
+        .limit(1)
+      esRetiroSinReparacion = (tiempoSinRep && tiempoSinRep.length > 0) || false
+    }
+
     const formatted = formatOrden(orden)
     return NextResponse.json({
       ...formatted,
       organizationName: (orden as any).organizations?.nombre_mostrar || (orden as any).organizations?.nombre || null,
+      esRetiroSinReparacion,
     }, {
       headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
     })

@@ -528,6 +528,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   // ESPERANDO_REPUESTO es un sub-estado de EN_REPARACION, mapear al mismo índice
   const estadoParaProgreso = orden.estado === "ESPERANDO_REPUESTO" ? "EN_REPARACION" : orden.estado
   const currentEstadoIndex = estadoFlow.indexOf(estadoParaProgreso)
+  const isRetiro = (orden as any).esRetiroSinReparacion === true
   const progressPercentage = orden.estado === "CANCELADO" || orden.estado === "SIN_REPARACION"
     ? 0
     : Math.round(((currentEstadoIndex + 1) / estadoFlow.length) * 100)
@@ -547,7 +548,14 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
               <h1 className="text-2xl font-bold">
                 Orden {orden.codigoOrden || `#${orden.numeroOrden}`}
               </h1>
-              <OrderStatusBadge status={orden.estado} showIcon />
+              {isRetiro ? (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                  <Package className="h-3 w-3" />
+                  Retirado sin reparacion
+                </span>
+              ) : (
+                <OrderStatusBadge status={orden.estado} showIcon />
+              )}
             </div>
             <p className="text-sm text-muted-foreground">
               Ingresado el {formatDate(orden.fechaIngreso)}
@@ -590,13 +598,13 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {isAdmin && (orden.estado === "REPARADO" || orden.estado === "ENTREGADO") && (
+              {isAdmin && (orden.estado === "REPARADO" || orden.estado === "ENTREGADO") && !isRetiro && (
                 <DropdownMenuItem onClick={handleGenerarFactura} disabled={updating}>
                   <Receipt className="h-4 w-4 mr-2" />
                   Generar Factura
                 </DropdownMenuItem>
               )}
-              {isAdmin && (orden.estado === "ENTREGADO" || orden.estado === "REPARADO") && !orden.esReingreso && (
+              {isAdmin && (orden.estado === "ENTREGADO" || orden.estado === "REPARADO") && !orden.esReingreso && !isRetiro && (
                 <DropdownMenuItem onClick={handleReingreso} disabled={updating}>
                   <Shield className="h-4 w-4 mr-2" />
                   Re-ingreso por Garantia
@@ -620,6 +628,16 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
         </div>
       </div>
 
+      {/* Banner de retiro sin reparación */}
+      {isRetiro && (
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-sm">
+          <Package className="h-4 w-4 text-amber-600 shrink-0" />
+          <span className="text-amber-800 dark:text-amber-300">
+            Retirado sin reparacion — El cliente retiro el equipo sin reparar.
+          </span>
+        </div>
+      )}
+
       {/* Banner de re-ingreso */}
       {orden.esReingreso && orden.ordenOrigenId && (
         <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-sm">
@@ -634,7 +652,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
       )}
 
       {/* Progress Bar */}
-      {orden.estado !== "CANCELADO" && orden.estado !== "SIN_REPARACION" && (
+      {orden.estado !== "CANCELADO" && orden.estado !== "SIN_REPARACION" && !isRetiro && (
         <div className="space-y-2">
           <div className="flex justify-between text-xs text-muted-foreground">
             <span>Progreso</span>
@@ -658,6 +676,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           fechaCompletado={orden.fechaCompletado}
           updating={updating}
           onUpdateEstado={handleUpdateEstado}
+          esRetiro={isRetiro}
         />
         <OrdenTecnicoCard
           tecnicoId={orden.tecnicoId}
@@ -915,8 +934,10 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             </TabsContent>
           </Tabs>
 
-          {/* Garantia */}
-          <GarantiaCard ordenId={ordenId} ordenEstado={orden.estado} />
+          {/* Garantia (no aplica para retiros sin reparación) */}
+          {!isRetiro && (
+            <GarantiaCard ordenId={ordenId} ordenEstado={orden.estado} />
+          )}
         </div>
 
         {/* Right Column - Management (hidden on mobile, shown above) */}
