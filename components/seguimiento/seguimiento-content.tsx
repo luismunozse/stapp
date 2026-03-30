@@ -111,6 +111,7 @@ const estadoDescriptions: Record<string, string> = {
   ESPERANDO_REPUESTO: "Estamos esperando la llegada de un repuesto necesario.",
   REPARADO: "Tu equipo esta listo. Ya podes pasar a retirarlo.",
   ENTREGADO: "Equipo entregado. Gracias por confiar en nosotros.",
+  ENTREGADO_RETIRO: "El equipo fue retirado sin reparacion.",
   CANCELADO: "La orden fue cancelada. Contactanos si tenes consultas.",
   SIN_REPARACION: "Lamentablemente no fue posible reparar el equipo.",
 }
@@ -220,6 +221,7 @@ interface TrackingData {
   presupuesto?: number
   moneda?: string
   presupuestoAprobadoPortal?: boolean
+  esRetiroSinReparacion?: boolean
   cotizaciones?: {
     id: string
     numeroCotizacion: string
@@ -383,6 +385,7 @@ export function SeguimientoContent({ token }: { token: string }) {
   }
 
   const DeviceIcon = tipoDispositivoIcons[data.tipoDispositivo] || Package
+  const isRetiro = data.esRetiroSinReparacion === true
   const isTerminal = data.estado === "CANCELADO" || data.estado === "SIN_REPARACION"
   const isCompleted = data.estado === "ENTREGADO"
   const isReady = data.estado === "REPARADO"
@@ -469,7 +472,25 @@ export function SeguimientoContent({ token }: { token: string }) {
       )}
 
       {/* ══════════ STATUS CARD ══════════ */}
-      {isTerminal ? (
+      {isRetiro ? (
+        <Card className="border border-amber-200 dark:border-amber-800">
+          <CardContent className="p-5">
+            <div className="flex items-center gap-4">
+              <div className="h-14 w-14 rounded-2xl bg-amber-50 dark:bg-amber-950/40 flex items-center justify-center shrink-0">
+                <Package className="h-7 w-7 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div>
+                <p className="font-bold text-lg text-amber-700 dark:text-amber-400">
+                  Retirado sin reparacion
+                </p>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  {estadoDescriptions.ENTREGADO_RETIRO}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : isTerminal ? (
         <Card className={`border ${colors.border}`}>
           <CardContent className="p-5">
             <div className="flex items-center gap-4">
@@ -571,7 +592,32 @@ export function SeguimientoContent({ token }: { token: string }) {
       )}
 
       {/* ══════════ STEPPER HORIZONTAL ══════════ */}
-      {!isTerminal && (
+      {isRetiro ? (
+        <Card>
+          <CardContent className="px-2 sm:px-3 py-4">
+            <div className="flex items-start justify-between">
+              {[
+                { key: "RECIBIDO", label: "Recibido", icon: Package },
+                { key: "DIAGNOSTICO", label: "Diagnostico", icon: Search },
+                { key: "SIN_REPARACION", label: "Sin reparacion", icon: XCircle },
+                { key: "RETIRADO", label: "Retirado", icon: Truck },
+              ].map((step, index, arr) => (
+                <div key={step.key} className="flex flex-col items-center relative flex-1">
+                  {index < arr.length - 1 && (
+                    <div className="absolute top-[11px] left-[calc(50%+11px)] right-[calc(-50%+11px)] h-[2px] bg-amber-500" />
+                  )}
+                  <div className="relative z-10 flex items-center justify-center h-6 w-6 rounded-full bg-amber-500 text-white">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                  </div>
+                  <p className="mt-1 text-center leading-tight text-amber-600 dark:text-amber-400 text-[9px] sm:text-[10px] font-medium">
+                    {step.label}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      ) : !isTerminal ? (
         <Card>
           <CardContent className="px-2 sm:px-3 py-4">
             <div className="flex items-start justify-between">
@@ -620,7 +666,7 @@ export function SeguimientoContent({ token }: { token: string }) {
             </div>
           </CardContent>
         </Card>
-      )}
+      ) : null}
 
       {/* ══════════ VISUAL TIMELINE ══════════ */}
       {timelineEvents && timelineEvents.length > 0 && (
@@ -694,14 +740,14 @@ export function SeguimientoContent({ token }: { token: string }) {
                 <DateItem label="Estimada" value={formatDate(data.fechaPrometida)} urgency={timeRemaining?.urgency} />
               )}
               {data.fechaCompletado && <DateItem label="Completado" value={formatDate(data.fechaCompletado)} highlight />}
-              {data.fechaEntrega && <DateItem label="Entregado" value={formatDate(data.fechaEntrega)} highlight />}
+              {data.fechaEntrega && <DateItem label={isRetiro ? "Retirado" : "Entregado"} value={formatDate(data.fechaEntrega)} highlight />}
             </div>
           </div>
         </CardContent>
       </Card>
 
       {/* ══════════ WARRANTY ══════════ */}
-      {warrantyData && (data.estado === "REPARADO" || data.estado === "ENTREGADO") && (
+      {warrantyData && !isRetiro && (data.estado === "REPARADO" || data.estado === "ENTREGADO") && (
         <WarrantyInfo garantia={warrantyData} />
       )}
 
