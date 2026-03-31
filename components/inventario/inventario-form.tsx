@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { X, ChevronDown, ChevronUp } from "lucide-react"
+import { X, ChevronDown, ChevronUp, Plus, Check, Loader2 } from "lucide-react"
 import type { Inventario } from "@/types"
 import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
 
@@ -64,6 +64,9 @@ export function InventarioForm({
   const [showStockConfig, setShowStockConfig] = useState(
     !!(item?.stockMinimo || item?.stockMaximo || item?.puntoReorden)
   )
+  const [showNewCategoria, setShowNewCategoria] = useState(false)
+  const [newCategoria, setNewCategoria] = useState("")
+  const [savingCategoria, setSavingCategoria] = useState(false)
 
   const {
     register,
@@ -157,6 +160,47 @@ export function InventarioForm({
       })
     }
   }, [item, reset])
+
+  const handleAddCategoria = async () => {
+    const nombre = newCategoria.trim()
+    if (!nombre || !tipoDispositivo) return
+    if (categoriasDisponibles.includes(nombre)) {
+      setValue("categoria", nombre, { shouldValidate: true, shouldDirty: true })
+      setShowNewCategoria(false)
+      setNewCategoria("")
+      return
+    }
+
+    setSavingCategoria(true)
+    try {
+      const tipo = tiposDispositivo.find(t => t.codigo === tipoDispositivo)
+      if (!tipo) return
+
+      const currentCats = tipo.config?.categoriasInventario || [...(categoriasPorTipo[tipoDispositivo] || categoriasPorTipo.TODOS)]
+      const updatedConfig = {
+        ...tipo.config,
+        categoriasInventario: [...currentCats, nombre],
+      }
+
+      const res = await fetch(`/api/tipos-dispositivo/${tipo.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ config: updatedConfig }),
+      })
+
+      if (!res.ok) throw new Error("Error al guardar categoría")
+
+      await refetchTipos()
+      setValue("categoria", nombre, { shouldValidate: true, shouldDirty: true })
+      setShowNewCategoria(false)
+      setNewCategoria("")
+    } catch (error) {
+      console.error("Error adding category:", error)
+      alert("Error al agregar categoría")
+    } finally {
+      setSavingCategoria(false)
+    }
+  }
 
   const onSubmit = async (data: InventarioFormData) => {
     setLoading(true)
@@ -260,22 +304,71 @@ export function InventarioForm({
 
             <div>
               <Label htmlFor="categoria">Categoría *</Label>
-              <Select
-                value={watch("categoria") || ""}
-                onValueChange={(value) => setValue("categoria", value, { shouldValidate: true, shouldDirty: true })}
-                disabled={!tipoDispositivo}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={tipoDispositivo ? "Seleccionar..." : "Elegí tipo primero"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {categoriasDisponibles.map((cat) => (
-                    <SelectItem key={cat} value={cat}>
-                      {cat}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {showNewCategoria ? (
+                <div className="flex gap-1.5">
+                  <Input
+                    value={newCategoria}
+                    onChange={(e) => setNewCategoria(e.target.value)}
+                    placeholder="Nueva categoría..."
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { e.preventDefault(); handleAddCategoria() }
+                      if (e.key === "Escape") { setShowNewCategoria(false); setNewCategoria("") }
+                    }}
+                    disabled={savingCategoria}
+                  />
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="shrink-0 h-9 w-9"
+                    onClick={handleAddCategoria}
+                    disabled={!newCategoria.trim() || savingCategoria}
+                  >
+                    {savingCategoria ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="shrink-0 h-9 w-9"
+                    onClick={() => { setShowNewCategoria(false); setNewCategoria("") }}
+                    disabled={savingCategoria}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex gap-1.5">
+                  <Select
+                    value={watch("categoria") || ""}
+                    onValueChange={(value) => setValue("categoria", value, { shouldValidate: true, shouldDirty: true })}
+                    disabled={!tipoDispositivo}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={tipoDispositivo ? "Seleccionar..." : "Elegí tipo primero"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categoriasDisponibles.map((cat) => (
+                        <SelectItem key={cat} value={cat}>
+                          {cat}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="outline"
+                    className="shrink-0 h-9 w-9"
+                    onClick={() => setShowNewCategoria(true)}
+                    disabled={!tipoDispositivo}
+                    title="Agregar categoría"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
               {errors.categoria && (
                 <p className="text-sm text-destructive mt-1">
                   {errors.categoria.message}
