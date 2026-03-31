@@ -67,6 +67,9 @@ export function InventarioForm({
   const [showNewCategoria, setShowNewCategoria] = useState(false)
   const [newCategoria, setNewCategoria] = useState("")
   const [savingCategoria, setSavingCategoria] = useState(false)
+  const [showNewTipo, setShowNewTipo] = useState(false)
+  const [newTipo, setNewTipo] = useState("")
+  const [savingTipo, setSavingTipo] = useState(false)
 
   const {
     register,
@@ -160,6 +163,56 @@ export function InventarioForm({
       })
     }
   }, [item, reset])
+
+  const handleAddTipo = async () => {
+    const nombre = newTipo.trim()
+    if (!nombre) return
+
+    // Check if already exists
+    const existing = tiposDispositivo.find(t => t.nombre.toLowerCase() === nombre.toLowerCase())
+    if (existing) {
+      setValue("tipoDispositivo", existing.codigo, { shouldValidate: true, shouldDirty: true })
+      setShowNewTipo(false)
+      setNewTipo("")
+      return
+    }
+
+    setSavingTipo(true)
+    try {
+      // Generate codigo and prefijo from name
+      const codigo = nombre
+        .toUpperCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^A-Z0-9]/g, "_")
+        .substring(0, 20)
+      const prefijoOrden = nombre
+        .toUpperCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^A-Z0-9]/g, "")
+        .substring(0, 3)
+
+      const res = await fetch("/api/tipos-dispositivo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ codigo, nombre, prefijoOrden: prefijoOrden || "OTR" }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || "Error al crear tipo")
+      }
+
+      await refetchTipos()
+      setValue("tipoDispositivo", codigo, { shouldValidate: true, shouldDirty: true })
+      setShowNewTipo(false)
+      setNewTipo("")
+    } catch (error) {
+      console.error("Error adding device type:", error)
+      alert(error instanceof Error ? error.message : "Error al agregar tipo")
+    } finally {
+      setSavingTipo(false)
+    }
+  }
 
   const handleAddCategoria = async () => {
     const nombre = newCategoria.trim()
@@ -274,22 +327,70 @@ export function InventarioForm({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label htmlFor="tipoDispositivo">Tipo *</Label>
-              <Select
-                value={tipoDispositivo || ""}
-                onValueChange={(value) => setValue("tipoDispositivo", value, { shouldValidate: true, shouldDirty: true })}
-                disabled={tiposLoading}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={tiposLoading ? "Cargando tipos..." : "Seleccionar..."} />
-                </SelectTrigger>
-                <SelectContent>
-                  {tiposDispositivo.map((tipo) => (
-                    <SelectItem key={tipo.id} value={tipo.codigo}>
-                      {tipo.nombre}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {showNewTipo ? (
+                <div className="flex gap-1.5">
+                  <Input
+                    value={newTipo}
+                    onChange={(e) => setNewTipo(e.target.value)}
+                    placeholder="Ej: Drone, Cafetera..."
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { e.preventDefault(); handleAddTipo() }
+                      if (e.key === "Escape") { setShowNewTipo(false); setNewTipo("") }
+                    }}
+                    disabled={savingTipo}
+                  />
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="shrink-0 h-9 w-9"
+                    onClick={handleAddTipo}
+                    disabled={!newTipo.trim() || savingTipo}
+                  >
+                    {savingTipo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="shrink-0 h-9 w-9"
+                    onClick={() => { setShowNewTipo(false); setNewTipo("") }}
+                    disabled={savingTipo}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex gap-1.5">
+                  <Select
+                    value={tipoDispositivo || ""}
+                    onValueChange={(value) => setValue("tipoDispositivo", value, { shouldValidate: true, shouldDirty: true })}
+                    disabled={tiposLoading}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={tiposLoading ? "Cargando tipos..." : "Seleccionar..."} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {tiposDispositivo.map((tipo) => (
+                        <SelectItem key={tipo.id} value={tipo.codigo}>
+                          {tipo.nombre}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="outline"
+                    className="shrink-0 h-9 w-9"
+                    onClick={() => setShowNewTipo(true)}
+                    title="Agregar tipo"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
               {errors.tipoDispositivo && (
                 <p className="text-sm text-destructive mt-1">
                   {errors.tipoDispositivo.message}
