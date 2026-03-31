@@ -44,6 +44,27 @@ function extractName(text: string): string | undefined {
   return undefined
 }
 
+// Extraer nombre de empresa/taller del mensaje
+function extractCompany(text: string): string | undefined {
+  const patterns = [
+    /(?:mi (?:taller|service|local|negocio|empresa|tienda) (?:se llama|es))\s+["']?([^"'\n,.]+)/i,
+    /(?:(?:taller|service|local|negocio|empresa|tienda))\s+["']([^"']+)["']/i,
+    /(?:tengo (?:un |el )?(?:taller|service|local|negocio|empresa|tienda))\s+(?:llamado |que se llama )?["']?([^"'\n,.]+)/i,
+    /(?:trabajo en|soy de)\s+["']?([A-ZÁÉÍÓÚÑa-záéíóúñ\s&]+?)(?:\s*[,.\n]|$)/i,
+  ]
+  for (const pattern of patterns) {
+    const match = text.match(pattern)
+    if (match) {
+      const name = match[1].trim()
+      // Evitar falsos positivos con palabras comunes
+      if (name.length > 2 && !["un", "una", "el", "la", "los", "las", "que", "con"].includes(name.toLowerCase())) {
+        return name
+      }
+    }
+  }
+  return undefined
+}
+
 interface ChatbotPanelProps {
   isOpen: boolean
   onClose: () => void
@@ -57,6 +78,14 @@ export function ChatbotPanel({ isOpen, onClose }: ChatbotPanelProps) {
   const [conversacionId, setConversacionId] = useState<string | null>(null)
   const [isClient, setIsClient] = useState(false)
   const [leadCaptured, setLeadCaptured] = useState(false)
+  const [capturedLeadData, setCapturedLeadData] = useState<{
+    nombre?: string
+    email?: string
+    telefono?: string
+    empresa?: string
+    interes?: string
+    planInteres?: string
+  }>({})
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Verificar que estamos en el cliente
@@ -94,17 +123,76 @@ export function ChatbotPanel({ isOpen, onClose }: ChatbotPanelProps) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
-  // Intentar capturar lead cuando se detectan datos de contacto
-  const tryCaptureLead = useCallback(
-    async (userText: string, convId: string) => {
-      if (leadCaptured) return
+  // Detectar interés en plan según el contenido del mensaje
+  const detectPlanInterest = useCallback((text: string): string | undefined => {
+    const msg = text.toLowerCase()
+    if (msg.includes("mensual") || msg.includes("por mes")) return "mensual"
+    if (msg.includes("anual") || msg.includes("por año")) return "anual"
+    if (msg.includes("premium") || msg.includes("plan")) return "premium"
+    return undefined
+  }, [])
 
+  // Detectar si hay intención de alta conversión (quiere comprar/probar)
+  const isHighIntent = useCallback((intencion?: string): boolean => {
+    const highIntentTypes = [
+      "solicitar_demo",
+      "preguntar_precio",
+      "comparar_planes",
+      "como_empezar",
+      "proporcionar_contacto",
+      "lead_calificado",
+    ]
+    return intencion ? highIntentTypes.includes(intencion) : false
+  }, [])
+
+  // Captura progresiva de leads: envía datos cada vez que detecta algo nuevo
+  const tryCaptureLead = useCallback(
+    async (userText: string, convId: string, intencion?: string) => {
       const email = extractEmail(userText)
       const phone = extractPhone(userText)
       const name = extractName(userText)
+      const company = extractCompany(userText)
+      const planInterest = detectPlanInterest(userText)
 
-      // Solo capturar si hay al menos email o teléfono
-      if (!email && !phone) return
+      // Construir datos nuevos solo con lo que se detectó ahora
+      const newData: typeof capturedLeadData = {}
+      if (name && !capturedLeadData.nombre) newData.nombre = name
+      if (email && !capturedLeadData.email) newData.email = email
+      if (phone && !capturedLeadData.telefono) newData.telefono = phone
+      if (company && !capturedLeadData.empresa) newData.empresa = company
+      if (planInterest && !capturedLeadData.planInteres) newData.planInteres = planInterest
+
+      // Determinar el interés basado en la intención
+      if (intencion && !capturedLeadData.interes) {
+        const interesMap: Record<string, string> = {
+          solicitar_demo: "Solicitud de demo",
+          preguntar_precio: "Consulta de precios",
+          comparar_planes: "Comparación de planes",
+          como_empezar: "Quiere empezar a usar STApp",
+          lead_calificado: "Tiene taller/negocio - Lead calificado",
+          pregunta_funcionalidad: "Consulta sobre funcionalidades",
+          pregunta_impresion: "Consulta sobre impresión",
+          pregunta_facturacion: "Consulta sobre facturación",
+          pregunta_mobile: "Consulta sobre app móvil",
+          pregunta_comunicaciones: "Consulta sobre WhatsApp/notificaciones",
+          pregunta_reportes: "Consulta sobre reportes",
+          pregunta_seguridad: "Consulta sobre seguridad",
+        }
+        if (interesMap[intencion]) newData.interes = interesMap[intencion]
+      }
+
+      // Si no hay datos nuevos, no hacer nada
+      if (Object.keys(newData).length === 0) return
+
+      // Merge con datos acumulados
+      const mergedData = { ...capturedLeadData, ...newData }
+
+      // Solo enviar al backend si tenemos al menos email o teléfono
+      if (!mergedData.email && !mergedData.telefono) {
+        // Guardar datos parciales (nombre, empresa) para enviar después cuando llegue email/teléfono
+        setCapturedLeadData(mergedData)
+        return
+      }
 
       try {
         const res = await fetch("/api/chatbot/capture-lead", {
@@ -113,21 +201,24 @@ export function ChatbotPanel({ isOpen, onClose }: ChatbotPanelProps) {
           body: JSON.stringify({
             sessionId,
             conversacionId: convId,
-            nombre: name || undefined,
-            email: email || undefined,
-            telefono: phone || undefined,
-            interes: "Consulta desde chatbot",
+            nombre: mergedData.nombre || undefined,
+            email: mergedData.email || undefined,
+            telefono: mergedData.telefono || undefined,
+            empresa: mergedData.empresa || undefined,
+            interes: mergedData.interes || "Consulta desde chatbot",
+            planInteres: mergedData.planInteres || undefined,
           }),
         })
 
         if (res.ok) {
+          setCapturedLeadData(mergedData)
           setLeadCaptured(true)
         }
       } catch (err) {
         console.error("Error capturing lead:", err)
       }
     },
-    [sessionId, leadCaptured]
+    [sessionId, capturedLeadData, detectPlanInterest]
   )
 
   const handleSendMessage = async () => {
@@ -176,14 +267,20 @@ export function ChatbotPanel({ isOpen, onClose }: ChatbotPanelProps) {
 
       setMessages((prev) => [...prev, assistantMessage])
 
-      // Intentar capturar lead si se detectó intención de contacto
-      if (
-        currentConvId &&
-        (data.intencion === "proporcionar_contacto" ||
+      // Captura progresiva de leads: siempre intentar extraer datos de cada mensaje
+      if (currentConvId) {
+        const hasContactInfo =
           extractEmail(userMessage.contenido) ||
-          extractPhone(userMessage.contenido))
-      ) {
-        tryCaptureLead(userMessage.contenido, currentConvId)
+          extractPhone(userMessage.contenido) ||
+          extractName(userMessage.contenido) ||
+          extractCompany(userMessage.contenido)
+        const hasHighIntent = isHighIntent(data.intencion)
+        const hasAnyIntent = data.intencion && data.intencion !== "saludo" && data.intencion !== "pregunta_general"
+
+        // Capturar datos si: tiene info de contacto, intención alta, o ya capturamos algo antes
+        if (hasContactInfo || hasHighIntent || hasAnyIntent || Object.keys(capturedLeadData).length > 0) {
+          tryCaptureLead(userMessage.contenido, currentConvId, data.intencion)
+        }
       }
     } catch (error) {
       console.error("Error sending message:", error)

@@ -171,7 +171,7 @@ export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Bu
   let cursor = pageH - 35
   let logoOffset = 0
 
-  // Logo
+  // Logo + Company info - vertically centered together
   let embeddedLogo: Awaited<ReturnType<typeof pdfDoc.embedPng>> | null = null
   let logoW = 0
   let logoH = 0
@@ -188,25 +188,36 @@ export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Bu
           embeddedLogo = await pdfDoc.embedJpg(bytes)
         if (embeddedLogo) {
           const s = embeddedLogo.scale(1)
-          const ratio = Math.min(55 / s.height, 55 / s.width)
+          const ratio = Math.min(50 / s.height, 50 / s.width)
           logoW = s.width * ratio
           logoH = s.height * ratio
-          page.drawImage(embeddedLogo, { x: marginL, y: cursor - logoH + 8, width: logoW, height: logoH })
           logoOffset = logoW + 12
         }
       }
     } catch { /* ignore logo errors */ }
   }
 
-  // Company name and info
-  page.drawText(empresaNombre, { x: marginL + logoOffset, y: cursor, size: 18, font: helveticaBold, color: dark })
-  cursor -= 14
+  // Calculate text block height: company name (18pt) + details line (8pt) + gap
+  const nameSize = 18
+  const detailSize = 8
   const companyDetails: string[] = []
   if (telefonoEmpresa) companyDetails.push(`Tel: ${telefonoEmpresa}`)
   if (direccionEmpresa) companyDetails.push(direccionEmpresa)
+  const textBlockH = nameSize + (companyDetails.length > 0 ? detailSize + 6 : 0)
+
+  // Vertically center logo with text block
+  const blockH = Math.max(logoH, textBlockH)
+  const logoY = cursor - (blockH - logoH) / 2 - logoH
+  const textTopY = cursor - (blockH - textBlockH) / 2
+
+  if (embeddedLogo) {
+    page.drawImage(embeddedLogo, { x: marginL, y: logoY, width: logoW, height: logoH })
+  }
+
+  // Company name and info - aligned to vertical center of logo
+  page.drawText(empresaNombre, { x: marginL + logoOffset, y: textTopY, size: nameSize, font: helveticaBold, color: dark })
   if (companyDetails.length > 0) {
-    page.drawText(companyDetails.join("  |  "), { x: marginL + logoOffset, y: cursor, size: 8, font: helvetica, color: textMuted })
-    cursor -= 10
+    page.drawText(companyDetails.join("  |  "), { x: marginL + logoOffset, y: textTopY - nameSize - 2, size: detailSize, font: helvetica, color: textMuted })
   }
 
   // COTIZACION badge + number (right side)
@@ -287,17 +298,13 @@ export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Bu
   cursor -= Math.max(clienteCardH, hasOrden ? 75 : clienteCardH) + 20
 
   // ====== ITEMS TABLE ======
-  page.drawText("DETALLE", { x: marginL, y: cursor, size: 11, font: helveticaBold, color: dark })
-  cursor -= 18
-
   // Table column positions (right edge for right-aligned columns)
   const colDesc = marginL + 10
-  const colDescW = 250
   const colCantR = marginL + 310
   const colUnitR = marginL + 400
   const colSubR = pageW - marginR - 10
 
-  // Table header
+  // Table header with integrated title
   const headerH = 24
   page.drawRectangle({ x: marginL, y: cursor - 4, width: contentWidth, height: headerH, color: accent })
   page.drawText("Descripcion", { x: colDesc, y: cursor + 2, size: 8, font: helveticaBold, color: white })

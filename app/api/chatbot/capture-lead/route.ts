@@ -44,37 +44,79 @@ export async function POST(request: Request) {
 
     // Verificar si ya existe un lead para esta conversación
     if (conversacion.lead_id) {
-      // Actualizar el lead existente con nueva información
+      // Actualizar el lead existente con nueva información (solo campos no vacíos)
+      const updateFields: Record<string, string | null> = {}
+      if (data.nombre) updateFields.nombre = data.nombre
+      if (data.email) updateFields.email = data.email
+      if (data.telefono) updateFields.telefono = data.telefono
+      if (data.empresa) updateFields.empresa = data.empresa
+      if (data.interes) updateFields.interes = data.interes
+      if (data.planInteres) updateFields.plan_interes = data.planInteres
+
+      if (Object.keys(updateFields).length === 0) {
+        return NextResponse.json({ success: true, leadId: conversacion.lead_id, message: "Sin datos nuevos" })
+      }
+
       const { data: leadExistente, error: updateError } = await supabaseAdmin
         .from("leads")
-        .update({
-          nombre: data.nombre || null,
-          email: data.email || null,
-          telefono: data.telefono || null,
-          empresa: data.empresa || null,
-          interes: data.interes || null,
-          plan_interes: data.planInteres || null,
-        })
+        .update(updateFields)
         .eq("id", conversacion.lead_id)
         .select()
         .single()
 
       if (updateError) throw updateError
 
-      // Notificar actualización si se agregaron datos nuevos
-      sendNewLeadNotification({
-        nombre: data.nombre,
-        email: data.email,
-        telefono: data.telefono,
-        empresa: data.empresa,
-        interes: data.interes,
-        origen: "Chatbot (actualización)",
-      }).catch((err) => console.error("[Lead] Error enviando notificación:", err))
-
       return NextResponse.json({
         success: true,
         leadId: leadExistente.id,
         message: "Lead actualizado correctamente",
+      })
+    }
+
+    // Buscar lead existente por email o teléfono (deduplicación)
+    let existingLead = null
+    if (data.email) {
+      const { data: byEmail } = await supabaseAdmin
+        .from("leads")
+        .select("id")
+        .eq("email", data.email)
+        .limit(1)
+        .single()
+      existingLead = byEmail
+    }
+    if (!existingLead && data.telefono) {
+      const { data: byPhone } = await supabaseAdmin
+        .from("leads")
+        .select("id")
+        .eq("telefono", data.telefono)
+        .limit(1)
+        .single()
+      existingLead = byPhone
+    }
+
+    if (existingLead) {
+      // Actualizar lead existente y vincular a esta conversación
+      const updateFields: Record<string, string | null> = {}
+      if (data.nombre) updateFields.nombre = data.nombre
+      if (data.email) updateFields.email = data.email
+      if (data.telefono) updateFields.telefono = data.telefono
+      if (data.empresa) updateFields.empresa = data.empresa
+      if (data.interes) updateFields.interes = data.interes
+      if (data.planInteres) updateFields.plan_interes = data.planInteres
+
+      if (Object.keys(updateFields).length > 0) {
+        await supabaseAdmin.from("leads").update(updateFields).eq("id", existingLead.id)
+      }
+
+      await supabaseAdmin
+        .from("chatbot_conversaciones")
+        .update({ lead_id: existingLead.id, lead_capturado: true })
+        .eq("id", data.conversacionId)
+
+      return NextResponse.json({
+        success: true,
+        leadId: existingLead.id,
+        message: "Lead existente vinculado y actualizado",
       })
     }
 
