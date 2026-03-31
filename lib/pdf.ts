@@ -105,35 +105,76 @@ export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Bu
   const fechaAprobacion = fmtDate(data.fechaAprobacion)
 
   const pdfDoc = await PDFLib.create()
-  const page = pdfDoc.addPage([595, 842]) // A4
-  const { width, height } = page.getSize()
   const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica)
   const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
 
   // Colors
-  const accent = rgb(0.388, 0.400, 0.945) // #6366f1
-  const dark = rgb(0.118, 0.106, 0.294)   // #1e1b4b
-  const textDark = rgb(0.118, 0.161, 0.231) // #1e293b
-  const textMuted = rgb(0.392, 0.455, 0.545) // #64748b
-  const border = rgb(0.886, 0.910, 0.941) // #e2e8f0
-  const bgLight = rgb(0.973, 0.980, 0.988) // #f8fafc
+  const accent = rgb(0.290, 0.310, 0.890)    // #4a4fe3 - slightly deeper indigo
+  const accentLight = rgb(0.925, 0.930, 0.985) // #ecedfc
+  const dark = rgb(0.098, 0.094, 0.259)       // #191842
+  const textDark = rgb(0.118, 0.161, 0.231)   // #1e293b
+  const textMuted = rgb(0.392, 0.455, 0.545)  // #64748b
+  const border = rgb(0.850, 0.875, 0.910)     // #d9dfe8
+  const bgLight = rgb(0.965, 0.973, 0.984)    // #f7f8fb
   const white = rgb(1, 1, 1)
-  const green = rgb(0.086, 0.627, 0.322) // #16a34a
-  const warnBg = rgb(0.996, 0.953, 0.780) // #fef3c7
-  const warnBorder = rgb(0.961, 0.620, 0.043) // #f59e0b
-  const warnText = rgb(0.573, 0.251, 0.055) // #92400e
-  const notesBg = rgb(0.945, 0.961, 0.976) // #f1f5f9
-  const notesText = rgb(0.278, 0.333, 0.412) // #475569
+  const green = rgb(0.086, 0.627, 0.322)      // #16a34a
+  const warnBg = rgb(1, 0.976, 0.922)         // #fff9eb
+  const warnBorder = rgb(0.933, 0.580, 0.027) // #ee9407
+  const warnText = rgb(0.573, 0.251, 0.055)   // #92400e
+  const notesBg = rgb(0.945, 0.961, 0.976)    // #f1f5f9
+  const notesText = rgb(0.278, 0.333, 0.412)  // #475569
 
-  const contentWidth = width - 80 // 40px padding each side
+  const pageW = 595
+  const pageH = 842
+  const marginL = 45
+  const marginR = 45
+  const contentWidth = pageW - marginL - marginR
+  const footerH = 55 // reserved for footer
+  const minY = footerH + 10
 
-  // Accent bar at top
-  page.drawRectangle({ x: 0, y: height - 8, width, height: 8, color: accent })
+  // Helper to right-align text
+  const drawTextRight = (pg: ReturnType<typeof pdfDoc.addPage>, text: string, x: number, y: number, size: number, font: typeof helvetica, color: ReturnType<typeof rgb>) => {
+    const w = font.widthOfTextAtSize(text, size)
+    pg.drawText(text, { x: x - w, y, size, font, color })
+  }
 
-  let cursor = height - 40 - 15
+  // Helper to center text
+  const drawTextCenter = (pg: ReturnType<typeof pdfDoc.addPage>, text: string, x: number, boxW: number, y: number, size: number, font: typeof helvetica, color: ReturnType<typeof rgb>) => {
+    const w = font.widthOfTextAtSize(text, size)
+    pg.drawText(text, { x: x + (boxW - w) / 2, y, size, font, color })
+  }
+
+  // Draw footer on a page
+  const drawFooter = (pg: ReturnType<typeof pdfDoc.addPage>, pageNum: number, totalPages: number) => {
+    pg.drawLine({ start: { x: marginL, y: 45 }, end: { x: pageW - marginR, y: 45 }, thickness: 0.5, color: border })
+    pg.drawText(
+      firmaAprobacion ? "Documento aprobado por el cliente" : "Gracias por su confianza",
+      { x: marginL, y: 32, size: 8, font: helvetica, color: textMuted }
+    )
+    const brandW = helveticaBold.widthOfTextAtSize(empresaNombre, 8)
+    pg.drawText(empresaNombre, { x: pageW - marginR - brandW, y: 32, size: 8, font: helveticaBold, color: accent })
+    if (totalPages > 1) {
+      const pgText = `Pagina ${String(pageNum)} de ${String(totalPages)}`
+      const pgW = helvetica.widthOfTextAtSize(pgText, 7)
+      pg.drawText(pgText, { x: (pageW - pgW) / 2, y: 20, size: 7, font: helvetica, color: textMuted })
+    }
+    // Bottom accent bar
+    pg.drawRectangle({ x: 0, y: 0, width: pageW, height: 5, color: accent })
+  }
+
+  // ====== PAGE 1 ======
+  let page = pdfDoc.addPage([pageW, pageH])
+
+  // Top accent bar
+  page.drawRectangle({ x: 0, y: pageH - 6, width: pageW, height: 6, color: accent })
+
+  let cursor = pageH - 35
   let logoOffset = 0
 
   // Logo
+  let embeddedLogo: Awaited<ReturnType<typeof pdfDoc.embedPng>> | null = null
+  let logoW = 0
+  let logoH = 0
   if (data.logoUrl) {
     try {
       const res = await fetch(data.logoUrl)
@@ -141,199 +182,303 @@ export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Bu
         const buf = await res.arrayBuffer()
         const bytes = new Uint8Array(buf)
         const ct = res.headers.get("content-type") || ""
-        let img
         if (ct.includes("png") || data.logoUrl.toLowerCase().includes(".png"))
-          img = await pdfDoc.embedPng(bytes)
+          embeddedLogo = await pdfDoc.embedPng(bytes)
         else if (ct.includes("jpeg") || ct.includes("jpg") || data.logoUrl.toLowerCase().includes(".jpg") || data.logoUrl.toLowerCase().includes(".jpeg"))
-          img = await pdfDoc.embedJpg(bytes)
-        if (img) {
-          const s = img.scale(1)
-          const ratio = Math.min(60 / s.height, 60 / s.width)
-          const w = s.width * ratio
-          const h = s.height * ratio
-          page.drawImage(img, { x: 40, y: cursor - h + 5, width: w, height: h })
-          logoOffset = w + 15
+          embeddedLogo = await pdfDoc.embedJpg(bytes)
+        if (embeddedLogo) {
+          const s = embeddedLogo.scale(1)
+          const ratio = Math.min(55 / s.height, 55 / s.width)
+          logoW = s.width * ratio
+          logoH = s.height * ratio
+          page.drawImage(embeddedLogo, { x: marginL, y: cursor - logoH + 8, width: logoW, height: logoH })
+          logoOffset = logoW + 12
         }
       }
     } catch { /* ignore logo errors */ }
   }
 
   // Company name and info
-  page.drawText(empresaNombre, { x: 40 + logoOffset, y: cursor, size: 20, font: helveticaBold, color: dark })
+  page.drawText(empresaNombre, { x: marginL + logoOffset, y: cursor, size: 18, font: helveticaBold, color: dark })
   cursor -= 14
-  if (telefonoEmpresa) {
-    page.drawText(`Tel: ${telefonoEmpresa}`, { x: 40 + logoOffset, y: cursor, size: 9, font: helvetica, color: textMuted })
-    cursor -= 11
-  }
-  if (direccionEmpresa) {
-    page.drawText(direccionEmpresa, { x: 40 + logoOffset, y: cursor, size: 9, font: helvetica, color: textMuted })
-    cursor -= 11
+  const companyDetails: string[] = []
+  if (telefonoEmpresa) companyDetails.push(`Tel: ${telefonoEmpresa}`)
+  if (direccionEmpresa) companyDetails.push(direccionEmpresa)
+  if (companyDetails.length > 0) {
+    page.drawText(companyDetails.join("  |  "), { x: marginL + logoOffset, y: cursor, size: 8, font: helvetica, color: textMuted })
+    cursor -= 10
   }
 
-  // COTIZACION badge (right side)
+  // COTIZACION badge + number (right side)
   const badgeText = "COTIZACION"
-  const badgeW = helveticaBold.widthOfTextAtSize(badgeText, 11) + 32
-  page.drawRectangle({ x: width - 40 - badgeW, y: height - 40 - 25, width: badgeW, height: 24, color: accent })
-  page.drawText(badgeText, { x: width - 40 - badgeW + 16, y: height - 40 - 19, size: 11, font: helveticaBold, color: white })
+  const badgeW = helveticaBold.widthOfTextAtSize(badgeText, 10) + 28
+  const badgeH = 22
+  const badgeX = pageW - marginR - badgeW
+  const badgeY = pageH - 38
+  // Rounded badge effect
+  page.drawRectangle({ x: badgeX, y: badgeY, width: badgeW, height: badgeH, color: accent })
+  drawTextCenter(page, badgeText, badgeX, badgeW, badgeY + 6, 10, helveticaBold, white)
 
-  // Cotizacion number (right)
-  const numW = helveticaBold.widthOfTextAtSize(cotizacionNumber, 16)
-  page.drawText(cotizacionNumber, { x: width - 40 - numW, y: height - 40 - 50, size: 16, font: helveticaBold, color: dark })
-  page.drawText(cotizacionDate, { x: width - 40 - 100, y: height - 40 - 65, size: 9, font: helvetica, color: textMuted })
+  // Number and date below badge
+  drawTextRight(page, cotizacionNumber, pageW - marginR, badgeY - 20, 16, helveticaBold, dark)
+  drawTextRight(page, cotizacionDate, pageW - marginR, badgeY - 34, 9, helvetica, textMuted)
+  if (fechaVencimiento) {
+    drawTextRight(page, `Vence: ${fechaVencimiento}`, pageW - marginR, badgeY - 47, 8, helvetica, warnText)
+  }
 
-  cursor = height - 40 - 90
-  const colW = (contentWidth - 10) / 2
+  // Separator line
+  cursor = pageH - 100
+  page.drawLine({ start: { x: marginL, y: cursor }, end: { x: pageW - marginR, y: cursor }, thickness: 0.5, color: border })
+  cursor -= 20
 
-  // Cliente card - dynamic height based on optional fields
-  const clienteExtraLines = (clienteEmail ? 1 : 0) + (clienteDireccion ? 1 : 0) + (sectorNombre ? 1 : 0)
-  const clienteCardH = 55 + clienteExtraLines * 15
-  page.drawRectangle({ x: 40, y: cursor - clienteCardH, width: colW, height: clienteCardH, color: bgLight, borderColor: border, borderWidth: 1 })
-  page.drawRectangle({ x: 40, y: cursor - clienteCardH, width: 4, height: clienteCardH, color: accent })
-  page.drawText("CLIENTE", { x: 54, y: cursor - 14, size: 10, font: helveticaBold, color: accent })
-  page.drawText("Nombre:", { x: 54, y: cursor - 32, size: 9, font: helvetica, color: textMuted })
-  page.drawText(clienteNombre.substring(0, 30), { x: 104, y: cursor - 32, size: 10, font: helveticaBold, color: textDark })
-  page.drawText("Telefono:", { x: 54, y: cursor - 47, size: 9, font: helvetica, color: textMuted })
-  page.drawText(clienteTelefono, { x: 104, y: cursor - 47, size: 9, font: helvetica, color: textDark })
-  let clienteY = cursor - 62
+  // ---- Info cards ----
+  const hasOrden = !!data.orden
+  const cardGap = 12
+  const cardW = hasOrden ? (contentWidth - cardGap) / 2 : contentWidth
+
+  // Calculate client card height
+  const clienteLines = 2 + (clienteEmail ? 1 : 0) + (clienteDireccion ? 1 : 0) + (sectorNombre ? 1 : 0)
+  const clienteCardH = 20 + clienteLines * 16
+
+  // Client card
+  page.drawRectangle({ x: marginL, y: cursor - clienteCardH, width: cardW, height: clienteCardH, color: bgLight, borderColor: border, borderWidth: 0.5 })
+  page.drawRectangle({ x: marginL, y: cursor - clienteCardH, width: 3, height: clienteCardH, color: accent })
+
+  let cy = cursor - 15
+  page.drawText("CLIENTE", { x: marginL + 14, y: cy, size: 9, font: helveticaBold, color: accent })
+  cy -= 16
+  page.drawText(clienteNombre.substring(0, 40), { x: marginL + 14, y: cy, size: 10, font: helveticaBold, color: textDark })
+  cy -= 15
+  if (clienteTelefono) {
+    page.drawText(`Tel: ${clienteTelefono}`, { x: marginL + 14, y: cy, size: 9, font: helvetica, color: textMuted })
+    cy -= 15
+  }
   if (clienteEmail) {
-    page.drawText("Email:", { x: 54, y: clienteY, size: 9, font: helvetica, color: textMuted })
-    page.drawText(clienteEmail.substring(0, 25), { x: 104, y: clienteY, size: 9, font: helvetica, color: textDark })
-    clienteY -= 15
+    page.drawText(clienteEmail.substring(0, 35), { x: marginL + 14, y: cy, size: 9, font: helvetica, color: textMuted })
+    cy -= 15
   }
   if (clienteDireccion) {
-    page.drawText("Dir:", { x: 54, y: clienteY, size: 9, font: helvetica, color: textMuted })
-    page.drawText(clienteDireccion.substring(0, 28), { x: 104, y: clienteY, size: 9, font: helvetica, color: textDark })
-    clienteY -= 15
+    page.drawText(clienteDireccion.substring(0, 40), { x: marginL + 14, y: cy, size: 9, font: helvetica, color: textMuted })
+    cy -= 15
   }
   if (sectorNombre) {
-    page.drawText("Sector:", { x: 54, y: clienteY, size: 9, font: helvetica, color: textMuted })
-    page.drawText(sectorNombre.substring(0, 28), { x: 104, y: clienteY, size: 10, font: helveticaBold, color: textDark })
+    page.drawText(`Sector: ${sectorNombre.substring(0, 30)}`, { x: marginL + 14, y: cy, size: 9, font: helveticaBold, color: notesText })
   }
 
   // Orden card (only if linked)
   if (data.orden) {
-    const ox = 40 + colW + 10
-    const ordenCardH = Math.max(clienteCardH, 85)
-    page.drawRectangle({ x: ox, y: cursor - ordenCardH, width: colW, height: ordenCardH, color: bgLight, borderColor: border, borderWidth: 1 })
-    page.drawRectangle({ x: ox, y: cursor - ordenCardH, width: 4, height: ordenCardH, color: accent })
-    page.drawText(`ORDEN #${safe(data.orden.numeroOrden)}`, { x: ox + 14, y: cursor - 14, size: 10, font: helveticaBold, color: accent })
-    page.drawText("Equipo:", { x: ox + 14, y: cursor - 32, size: 9, font: helvetica, color: textMuted })
-    page.drawText(safe(data.orden.dispositivo).substring(0, 25), { x: ox + 60, y: cursor - 32, size: 9, font: helvetica, color: textDark })
-    page.drawText("Problema:", { x: ox + 14, y: cursor - 47, size: 9, font: helvetica, color: textMuted })
-    page.drawText(safe(data.orden.problemaReportado).substring(0, 40), { x: ox + 68, y: cursor - 47, size: 9, font: helvetica, color: textDark })
+    const ox = marginL + cardW + cardGap
+    const ordenCardH = Math.max(clienteCardH, 75)
+    page.drawRectangle({ x: ox, y: cursor - ordenCardH, width: cardW, height: ordenCardH, color: bgLight, borderColor: border, borderWidth: 0.5 })
+    page.drawRectangle({ x: ox, y: cursor - ordenCardH, width: 3, height: ordenCardH, color: accent })
+
+    let oy = cursor - 15
+    page.drawText(`ORDEN #${safe(data.orden.numeroOrden)}`, { x: ox + 14, y: oy, size: 9, font: helveticaBold, color: accent })
+    oy -= 18
+    page.drawText("Equipo", { x: ox + 14, y: oy, size: 8, font: helvetica, color: textMuted })
+    oy -= 13
+    page.drawText(safe(data.orden.dispositivo).substring(0, 35), { x: ox + 14, y: oy, size: 9, font: helveticaBold, color: textDark })
+    oy -= 16
+    page.drawText("Problema reportado", { x: ox + 14, y: oy, size: 8, font: helvetica, color: textMuted })
+    oy -= 13
+    page.drawText(safe(data.orden.problemaReportado).substring(0, 45), { x: ox + 14, y: oy, size: 9, font: helvetica, color: textDark })
   }
 
-  cursor -= clienteCardH + 15
+  cursor -= Math.max(clienteCardH, hasOrden ? 75 : clienteCardH) + 20
 
-  // Items table
-  page.drawText("DETALLE DE SERVICIOS", { x: 40, y: cursor, size: 11, font: helveticaBold, color: dark })
-  cursor -= 5
-  page.drawLine({ start: { x: 40, y: cursor }, end: { x: width - 40, y: cursor }, thickness: 1, color: border })
-  cursor -= 20
+  // ====== ITEMS TABLE ======
+  page.drawText("DETALLE", { x: marginL, y: cursor, size: 11, font: helveticaBold, color: dark })
+  cursor -= 18
+
+  // Table column positions (right edge for right-aligned columns)
+  const colDesc = marginL + 10
+  const colDescW = 250
+  const colCantR = marginL + 310
+  const colUnitR = marginL + 400
+  const colSubR = pageW - marginR - 10
 
   // Table header
-  page.drawRectangle({ x: 40, y: cursor - 5, width: contentWidth, height: 22, color: accent })
-  page.drawText("Descripcion", { x: 50, y: cursor, size: 9, font: helveticaBold, color: white })
-  page.drawText("Cant.", { x: 310, y: cursor, size: 9, font: helveticaBold, color: white })
-  page.drawText("P. Unit.", { x: 380, y: cursor, size: 9, font: helveticaBold, color: white })
-  page.drawText("Subtotal", { x: 470, y: cursor, size: 9, font: helveticaBold, color: white })
-  cursor -= 25
+  const headerH = 24
+  page.drawRectangle({ x: marginL, y: cursor - 4, width: contentWidth, height: headerH, color: accent })
+  page.drawText("Descripcion", { x: colDesc, y: cursor + 2, size: 8, font: helveticaBold, color: white })
+  drawTextRight(page, "Cant.", colCantR, cursor + 2, 8, helveticaBold, white)
+  drawTextRight(page, "P. Unitario", colUnitR, cursor + 2, 8, helveticaBold, white)
+  drawTextRight(page, "Subtotal", colSubR, cursor + 2, 8, helveticaBold, white)
+  cursor -= headerH + 2
 
-  // Table rows
+  // Table rows with multi-page support
   const items = Array.isArray(data.items) ? data.items : []
+  const rowH = 22
+  let pageCount = 1
+  const pages = [page]
+
   for (let i = 0; i < items.length; i++) {
+    // Check if we need a new page
+    if (cursor - rowH < minY + 180) { // 180 reserved for totals/notes on last items
+      // Only add new page if there are more items AND we'd run out of space for totals
+      if (cursor - rowH < minY) {
+        pageCount++
+        page = pdfDoc.addPage([pageW, pageH])
+        pages.push(page)
+        page.drawRectangle({ x: 0, y: pageH - 4, width: pageW, height: 4, color: accent })
+        cursor = pageH - 30
+
+        // Re-draw table header on new page
+        page.drawRectangle({ x: marginL, y: cursor - 4, width: contentWidth, height: headerH, color: accent })
+        page.drawText("Descripcion", { x: colDesc, y: cursor + 2, size: 8, font: helveticaBold, color: white })
+        drawTextRight(page, "Cant.", colCantR, cursor + 2, 8, helveticaBold, white)
+        drawTextRight(page, "P. Unitario", colUnitR, cursor + 2, 8, helveticaBold, white)
+        drawTextRight(page, "Subtotal", colSubR, cursor + 2, 8, helveticaBold, white)
+        cursor -= headerH + 2
+      }
+    }
+
     const item = items[i]
     const unitPrice = Number(item.precioUnitario || item.precio_unitario) || 0
     const unidad = safe(item.unidad) || "Unidad"
-    const cantLabel = `${String(item.cantidad || 0)} ${unidad !== "Unidad" ? unidad : ""}`.trim()
+    const cantLabel = `${String(item.cantidad || 0)}${unidad !== "Unidad" ? ` ${unidad}` : ""}`.trim()
     const itemSubtotal = Number(item.subtotal) || 0
 
-    if (i % 2 === 1) {
-      page.drawRectangle({ x: 40, y: cursor - 5, width: contentWidth, height: 18, color: bgLight })
+    // Alternating row background
+    if (i % 2 === 0) {
+      page.drawRectangle({ x: marginL, y: cursor - 5, width: contentWidth, height: rowH, color: bgLight })
     }
-    page.drawText(safe(item.descripcion).substring(0, 40), { x: 50, y: cursor, size: 9, font: helvetica, color: textDark })
-    page.drawText(cantLabel, { x: 310, y: cursor, size: 9, font: helvetica, color: textDark })
-    page.drawText(fmtCurrency(unitPrice), { x: 380, y: cursor, size: 9, font: helvetica, color: textDark })
-    page.drawText(fmtCurrency(itemSubtotal), { x: 470, y: cursor, size: 9, font: helveticaBold, color: textDark })
-    cursor -= 18
-    page.drawLine({ start: { x: 40, y: cursor + 5 }, end: { x: width - 40, y: cursor + 5 }, thickness: 0.5, color: border })
 
-    if (cursor < 150) break // prevent overflow
+    // Description - allow longer text
+    const descText = safe(item.descripcion).substring(0, 55)
+    page.drawText(descText, { x: colDesc, y: cursor + 1, size: 9, font: helvetica, color: textDark })
+
+    // Item discount indicator
+    const itemDescTipo = safe(item.descuento_tipo || item.descuentoTipo)
+    const itemDescValor = Number(item.descuento_valor || item.descuentoValor) || 0
+    if (itemDescValor > 0) {
+      const discText = itemDescTipo === "porcentaje" ? `(-${String(itemDescValor)}%)` : `(-${fmtCurrency(itemDescValor)})`
+      page.drawText(discText, { x: colDesc, y: cursor - 9, size: 7, font: helvetica, color: green })
+    }
+
+    // Right-aligned numeric columns
+    drawTextRight(page, cantLabel, colCantR, cursor + 1, 9, helvetica, textDark)
+    drawTextRight(page, fmtCurrency(unitPrice), colUnitR, cursor + 1, 9, helvetica, textDark)
+    drawTextRight(page, fmtCurrency(itemSubtotal), colSubR, cursor + 1, 9, helveticaBold, textDark)
+
+    cursor -= rowH
+    // Row separator
+    page.drawLine({ start: { x: marginL, y: cursor + rowH / 2 - 2 }, end: { x: pageW - marginR, y: cursor + rowH / 2 - 2 }, thickness: 0.3, color: border })
   }
 
-  cursor -= 15
+  // Bottom border of table
+  page.drawLine({ start: { x: marginL, y: cursor + rowH / 2 - 2 }, end: { x: pageW - marginR, y: cursor + rowH / 2 - 2 }, thickness: 1, color: border })
+  cursor -= 18
 
-  // Totals box
-  const totalsX = width - 40 - 220
-  page.drawRectangle({ x: totalsX, y: cursor - 80, width: 220, height: 80, color: bgLight, borderColor: border, borderWidth: 1 })
+  // ====== TOTALS SECTION ======
+  const totalsW = 230
+  const totalsX = pageW - marginR - totalsW
 
-  let totY = cursor - 15
-  page.drawText("Subtotal", { x: totalsX + 15, y: totY, size: 9, font: helvetica, color: textMuted })
-  page.drawText(fmtCurrency(subtotalNum), { x: totalsX + 140, y: totY, size: 10, font: helvetica, color: textDark })
-  totY -= 15
+  // Calculate totals box height dynamically
+  let totalsLines = 2 // subtotal + total
+  if (descGlobalAmount > 0) totalsLines++
+  if (ivaPct > 0) totalsLines++
+  const totalsBoxH = totalsLines * 20 + 25
 
+  // Totals box with accent left border
+  page.drawRectangle({ x: totalsX, y: cursor - totalsBoxH, width: totalsW, height: totalsBoxH, color: bgLight, borderColor: border, borderWidth: 0.5 })
+
+  let totY = cursor - 16
+  const labelX = totalsX + 15
+  const valueX = totalsX + totalsW - 15
+
+  // Subtotal
+  page.drawText("Subtotal", { x: labelX, y: totY, size: 9, font: helvetica, color: textMuted })
+  drawTextRight(page, fmtCurrency(subtotalNum), valueX, totY, 10, helvetica, textDark)
+  totY -= 18
+
+  // Discount
   if (descGlobalAmount > 0) {
     const descLabel = descGlobalTipo === "porcentaje" ? `Descuento (${String(descGlobalValor)}%)` : "Descuento"
-    page.drawText(descLabel, { x: totalsX + 15, y: totY, size: 9, font: helvetica, color: textMuted })
-    page.drawText(`-${fmtCurrency(descGlobalAmount)}`, { x: totalsX + 140, y: totY, size: 10, font: helvetica, color: green })
-    totY -= 15
+    page.drawText(descLabel, { x: labelX, y: totY, size: 9, font: helvetica, color: textMuted })
+    drawTextRight(page, `-${fmtCurrency(descGlobalAmount)}`, valueX, totY, 10, helvetica, green)
+    totY -= 18
   }
 
+  // IVA
   if (ivaPct > 0) {
-    page.drawText(`IVA (${String(ivaPct)}%)`, { x: totalsX + 15, y: totY, size: 9, font: helvetica, color: textMuted })
-    page.drawText(fmtCurrency(ivaNum), { x: totalsX + 140, y: totY, size: 10, font: helvetica, color: textDark })
-    totY -= 15
+    page.drawText(`IVA (${String(ivaPct)}%)`, { x: labelX, y: totY, size: 9, font: helvetica, color: textMuted })
+    drawTextRight(page, fmtCurrency(ivaNum), valueX, totY, 10, helvetica, textDark)
+    totY -= 18
   }
 
-  page.drawLine({ start: { x: totalsX + 15, y: totY + 8 }, end: { x: totalsX + 205, y: totY + 8 }, thickness: 2, color: accent })
-  page.drawText("TOTAL", { x: totalsX + 15, y: totY - 5, size: 12, font: helveticaBold, color: dark })
-  page.drawText(fmtCurrency(totalNum), { x: totalsX + 120, y: totY - 5, size: 14, font: helveticaBold, color: accent })
+  // Total line separator
+  page.drawLine({ start: { x: labelX, y: totY + 10 }, end: { x: valueX, y: totY + 10 }, thickness: 1.5, color: accent })
 
-  cursor -= 95
+  // Total row with accent background
+  const totalRowH = 28
+  page.drawRectangle({ x: totalsX, y: cursor - totalsBoxH, width: totalsW, height: totalRowH, color: accent })
+  page.drawText("TOTAL", { x: labelX, y: cursor - totalsBoxH + 9, size: 12, font: helveticaBold, color: white })
+  drawTextRight(page, fmtCurrency(totalNum), valueX, cursor - totalsBoxH + 9, 13, helveticaBold, white)
 
-  // Validity banner
+  cursor -= totalsBoxH + 12
+
+  // ====== VALIDITY BANNER ======
   if (fechaVencimiento) {
-    page.drawRectangle({ x: 40, y: cursor - 25, width: contentWidth, height: 28, color: warnBg, borderColor: warnBorder, borderWidth: 1 })
-    page.drawRectangle({ x: 40, y: cursor - 25, width: 4, height: 28, color: warnBorder })
+    const bannerH = 26
+    page.drawRectangle({ x: marginL, y: cursor - bannerH, width: contentWidth, height: bannerH, color: warnBg, borderColor: warnBorder, borderWidth: 0.5 })
+    page.drawRectangle({ x: marginL, y: cursor - bannerH, width: 3, height: bannerH, color: warnBorder })
     const validText = `Cotizacion valida hasta el ${fechaVencimiento}`
     const validW = helvetica.widthOfTextAtSize(validText, 9)
-    page.drawText(validText, { x: 40 + (contentWidth - validW) / 2, y: cursor - 15, size: 9, font: helvetica, color: warnText })
-    cursor -= 35
+    page.drawText(validText, { x: marginL + (contentWidth - validW) / 2, y: cursor - bannerH + 9, size: 9, font: helveticaBold, color: warnText })
+    cursor -= bannerH + 8
   }
 
-  // Notas
+  // ====== NOTAS ======
   if (notas) {
-    page.drawRectangle({ x: 40, y: cursor - 45, width: contentWidth, height: 45, color: notesBg, borderColor: border, borderWidth: 1 })
-    page.drawText("OBSERVACIONES", { x: 52, y: cursor - 14, size: 9, font: helveticaBold, color: notesText })
-    page.drawText(notas.substring(0, 90), { x: 52, y: cursor - 30, size: 9, font: helvetica, color: textMuted })
-    cursor -= 55
-  }
-
-  // Terminos
-  if (terminos) {
-    const lines: string[] = []
-    let line = ""
-    for (const word of terminos.split(" ")) {
-      if (helvetica.widthOfTextAtSize(line + " " + word, 8) < contentWidth - 24) {
-        line += (line ? " " : "") + word
+    // Word-wrap notas
+    const notaLines: string[] = []
+    let nLine = ""
+    for (const word of notas.split(" ")) {
+      if (helvetica.widthOfTextAtSize(nLine + " " + word, 8) < contentWidth - 28) {
+        nLine += (nLine ? " " : "") + word
       } else {
-        lines.push(line)
-        line = word
+        notaLines.push(nLine)
+        nLine = word
       }
     }
-    if (line) lines.push(line)
-    const boxH = Math.max(35, lines.length * 12 + 22)
-    page.drawRectangle({ x: 40, y: cursor - boxH, width: contentWidth, height: boxH, color: notesBg, borderColor: border, borderWidth: 1 })
-    page.drawText("TERMINOS Y CONDICIONES", { x: 52, y: cursor - 14, size: 9, font: helveticaBold, color: notesText })
-    let lineY = cursor - 28
-    for (const l of lines.slice(0, 6)) {
-      page.drawText(l, { x: 52, y: lineY, size: 8, font: helvetica, color: textMuted })
-      lineY -= 12
+    if (nLine) notaLines.push(nLine)
+    const notaBoxH = Math.max(32, notaLines.length * 12 + 22)
+    page.drawRectangle({ x: marginL, y: cursor - notaBoxH, width: contentWidth, height: notaBoxH, color: notesBg, borderColor: border, borderWidth: 0.5 })
+    page.drawText("OBSERVACIONES", { x: marginL + 12, y: cursor - 14, size: 8, font: helveticaBold, color: notesText })
+    let nY = cursor - 28
+    for (const l of notaLines.slice(0, 4)) {
+      page.drawText(l, { x: marginL + 12, y: nY, size: 8, font: helvetica, color: textMuted })
+      nY -= 12
     }
-    cursor -= boxH + 10
+    cursor -= notaBoxH + 6
   }
 
-  // Firma (if approved)
+  // ====== TERMINOS ======
+  if (terminos) {
+    const tLines: string[] = []
+    let tLine = ""
+    for (const word of terminos.split(" ")) {
+      if (helvetica.widthOfTextAtSize(tLine + " " + word, 7.5) < contentWidth - 28) {
+        tLine += (tLine ? " " : "") + word
+      } else {
+        tLines.push(tLine)
+        tLine = word
+      }
+    }
+    if (tLine) tLines.push(tLine)
+    const tBoxH = Math.max(32, tLines.length * 11 + 22)
+    page.drawRectangle({ x: marginL, y: cursor - tBoxH, width: contentWidth, height: tBoxH, color: notesBg, borderColor: border, borderWidth: 0.5 })
+    page.drawText("TERMINOS Y CONDICIONES", { x: marginL + 12, y: cursor - 14, size: 8, font: helveticaBold, color: notesText })
+    let tY = cursor - 27
+    for (const l of tLines.slice(0, 8)) {
+      page.drawText(l, { x: marginL + 12, y: tY, size: 7.5, font: helvetica, color: textMuted })
+      tY -= 11
+    }
+    cursor -= tBoxH + 8
+  }
+
+  // ====== FIRMA (if approved) ======
   if (firmaAprobacion && firmaMime) {
     try {
       const sigBytes = Uint8Array.from(atob(firmaAprobacion), c => c.charCodeAt(0))
@@ -344,27 +489,22 @@ export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Bu
       const ratio = Math.min(120 / ss.width, 50 / ss.height)
       const sigW = ss.width * ratio
       const sigH = ss.height * ratio
-      page.drawImage(sigImg, { x: width - 40 - 90 - sigW / 2, y: cursor - sigH, width: sigW, height: sigH })
+      const sigX = pageW - marginR - 90 - sigW / 2
+      page.drawImage(sigImg, { x: sigX, y: cursor - sigH, width: sigW, height: sigH })
       cursor -= sigH + 5
     } catch { /* ignore sig errors */ }
-    page.drawLine({ start: { x: width - 40 - 180, y: cursor }, end: { x: width - 40, y: cursor }, thickness: 1, color: textMuted })
-    page.drawText("Firma del Cliente", { x: width - 40 - 130, y: cursor - 12, size: 8, font: helvetica, color: textMuted })
+    page.drawLine({ start: { x: pageW - marginR - 180, y: cursor }, end: { x: pageW - marginR, y: cursor }, thickness: 0.5, color: textMuted })
+    page.drawText("Firma del Cliente", { x: pageW - marginR - 130, y: cursor - 12, size: 8, font: helvetica, color: textMuted })
     if (fechaAprobacion) {
-      page.drawText(`Aprobado: ${fechaAprobacion}`, { x: width - 40 - 130, y: cursor - 22, size: 7, font: helvetica, color: textMuted })
+      page.drawText(`Aprobado: ${fechaAprobacion}`, { x: pageW - marginR - 130, y: cursor - 22, size: 7, font: helvetica, color: green })
     }
   }
 
-  // Footer
-  page.drawLine({ start: { x: 40, y: 40 }, end: { x: width - 40, y: 40 }, thickness: 1, color: border })
-  page.drawText(
-    firmaAprobacion ? "Documento aprobado por el cliente" : "Gracias por su confianza",
-    { x: 40, y: 28, size: 8, font: helvetica, color: textMuted }
-  )
-  const brandW = helveticaBold.widthOfTextAtSize(empresaNombre, 8)
-  page.drawText(empresaNombre, { x: width - 40 - brandW, y: 28, size: 8, font: helveticaBold, color: accent })
-
-  // Accent bar at bottom
-  page.drawRectangle({ x: 0, y: 0, width, height: 8, color: accent })
+  // ====== FOOTER on all pages ======
+  const totalPages = pages.length
+  for (let i = 0; i < pages.length; i++) {
+    drawFooter(pages[i], i + 1, totalPages)
+  }
 
   const pdfBytes = await pdfDoc.save()
   return Buffer.from(pdfBytes)

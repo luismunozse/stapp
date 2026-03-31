@@ -276,11 +276,14 @@ Todo incluido en el plan:
 CARACTERÍSTICAS PRINCIPALES:
 
 1. SERVICIO TÉCNICO:
-- Órdenes de Servicio: gestión de cada reparación de principio a fin con 10 estados (recibido, en diagnóstico, presupuestado, aprobado, en reparación, esperando repuesto, reparado, entregado, cancelado, sin reparación). Checklists personalizados por tipo de dispositivo (celular, computadora, tablet, consola, smartwatch, accesorios). Asignación de técnicos, seguimiento completo y numeración automática por organización
-- Cotizaciones y Presupuestos: sistema independiente de presupuestos con ítems detallados, descuentos (fijos o porcentuales), impuestos configurables (IVA), condiciones, términos y fecha de vencimiento. El cliente los aprueba online con firma digital desde un link único, sin necesidad de crear cuenta. Estados: borrador, enviada, aceptada, rechazada. Exportación a PDF y envío por WhatsApp
+- Órdenes de Servicio: gestión de cada reparación de principio a fin con 12 estados (recibido, en diagnóstico, presupuestado, aprobado, en reparación, esperando repuesto, reparado, entregado, sin reparación, entregado sin reparación, cancelado). Checklists personalizados por tipo de dispositivo (celular, computadora, tablet, consola, smartwatch, accesorios). Asignación de técnicos, seguimiento completo y numeración automática por organización. Actualización en tiempo real: los cambios en las órdenes se reflejan instantáneamente en todos los dispositivos conectados (Supabase Realtime). Problema reportado editable desde el detalle de la orden
+- Orden de Retiro (Sin Reparación): cuando un equipo no se puede reparar, se genera una orden de retiro especial. El cliente firma la recepción del equipo sin reparar y se genera un comprobante PDF de retiro. El estado pasa de "sin reparación" a "entregado sin reparación"
+- Impresión de Etiquetas: generación de etiquetas para identificar equipos con código de orden, cliente, dispositivo, problema reportado, fecha de ingreso y código QR que lleva al portal de seguimiento público. Compatibles con impresoras térmicas de 58mm (etiquetas de 60x40mm y 70x40mm)
+- Impresión de Órdenes: botón para generar e imprimir el PDF de la orden directamente desde el detalle
+- Cotizaciones y Presupuestos: sistema independiente de presupuestos con ítems detallados, descuentos (fijos o porcentuales), impuestos configurables (IVA), condiciones, términos y fecha de vencimiento. El cliente los aprueba o rechaza online con firma digital desde un link único, sin necesidad de crear cuenta. Si rechaza, puede indicar el motivo y la orden vuelve a diagnóstico automáticamente. Estados: borrador, enviada, aceptada, rechazada. Exportación a PDF y envío por WhatsApp
 - Fotos por Etapa: documentación visual en 5 etapas (ingreso, diagnóstico, componentes, reparación y entrega). Protección ante reclamos con evidencia fotográfica almacenada en la nube. Cámara integrada en la app móvil
-- Portal de Seguimiento Público: cada orden genera un link único que se comparte por WhatsApp. El cliente ve el estado en tiempo real, timeline visual, fotos, garantía, puede aprobar presupuestos y descargar el comprobante en PDF. No necesita cuenta ni instalar nada. El link expira automáticamente 30 días después de la entrega
-- Firma Digital: captura de firma del cliente en la entrega y en la aprobación de presupuestos. Respaldo legal ante cualquier reclamo
+- Portal de Seguimiento Público: cada orden genera un link único que se comparte por WhatsApp. El cliente ve el estado en tiempo real, timeline visual, fotos, garantía, puede aprobar o rechazar presupuestos y descargar el comprobante en PDF. No necesita cuenta ni instalar nada. El link expira automáticamente 30 días después de la entrega
+- Firma Digital: captura de firma del cliente en la entrega, en la aprobación de presupuestos y en la orden de retiro. Respaldo legal ante cualquier reclamo
 
 2. ADMINISTRACIÓN:
 - Gestión de Clientes: historial completo y automático de reparaciones, ventas, pagos y cuenta corriente (crédito/débito). Soporte para clientes individuales y empresas con sectores. Búsqueda por nombre, teléfono o DNI. Detección de duplicados por email. Importación masiva desde Excel/CSV
@@ -290,7 +293,7 @@ CARACTERÍSTICAS PRINCIPALES:
 - Cuenta Corriente: sistema de crédito/débito por cliente, historial de pagos, saldo pendiente y seguimiento de deudas
 
 3. VENTAS:
-- Punto de Venta: módulo completo para vender accesorios y repuestos. Ventas con garantía por producto, múltiples medios de pago, gestión de devoluciones, numeración automática y estados (completada, anulada). Exportación a PDF
+- Punto de Venta: módulo completo para vender accesorios y repuestos. Ventas con garantía por producto, múltiples medios de pago, gestión de devoluciones, numeración automática y estados (completada, anulada). Exportación a PDF. Soporte para impresoras térmicas (58mm/80mm) vía WebUSB: imprimí tickets de venta directamente desde el navegador sin instalar drivers. Compatible con las marcas más populares (Epson, Star Micronics, Bixolon, Citizen, Gprinter y más)
 - Proveedores: gestión de proveedores con datos de contacto, WhatsApp, dirección, sitio web y notas. Estado activo/inactivo
 - Equipo de Trabajo: técnicos, vendedores y administradores con roles diferenciados y permisos específicos. Métricas de rendimiento individuales por técnico (órdenes completadas, tiempos) y por vendedor (ventas realizadas). Cada técnico solo ve sus órdenes asignadas
 
@@ -359,7 +362,7 @@ VENTAJAS COMPETITIVAS vs Excel/Papel/Competencia:
 - No necesita instalación, funciona 100% en el navegador
 - Accesible desde cualquier dispositivo (PC, tablet, celular) incluso sin conexión
 - Tu cliente puede seguir su reparación online con un link (nadie más ofrece esto gratis)
-- Aprobación de presupuestos online con firma digital
+- Aprobación Y rechazo de presupuestos online con firma digital
 - Pantalla kiosco en tu local para que el cliente vea el estado sin preguntar
 - Kiosco de autoservicio para que el cliente ingrese su equipo solo
 - Multi-usuario con roles y permisos diferenciados
@@ -372,6 +375,10 @@ VENTAJAS COMPETITIVAS vs Excel/Papel/Competencia:
 - Actualizaciones automáticas sin costo adicional
 - Soporte en español argentino con asistente virtual (yo!) y sistema de tickets
 - Multi-moneda: soporte para pesos argentinos (ARS) y dólares (USD)
+- Actualización en tiempo real: todos los cambios se reflejan al instante en todos los dispositivos
+- Impresión de etiquetas con QR para identificar equipos en el taller
+- Soporte para impresoras térmicas: imprimí tickets y etiquetas directo desde el navegador sin drivers
+- Orden de retiro para equipos sin reparación con comprobante firmado
 
 CASOS DE USO TÍPICOS:
 - Service de celulares
@@ -485,6 +492,20 @@ function detectIntention(userMessage: string, assistantResponse: string): { tipo
     msg.includes("métricas")
   ) {
     return { tipo: "pregunta_reportes", confianza: 0.8 }
+  }
+
+  // Preguntas sobre impresión / etiquetas / impresoras
+  if (
+    msg.includes("imprimi") ||
+    msg.includes("impresora") ||
+    msg.includes("etiqueta") ||
+    msg.includes("ticket") ||
+    msg.includes("térmica") ||
+    msg.includes("termica") ||
+    msg.includes("label") ||
+    msg.includes("print")
+  ) {
+    return { tipo: "pregunta_impresion", confianza: 0.8 }
   }
 
   // Preguntas sobre facturación / cobros
