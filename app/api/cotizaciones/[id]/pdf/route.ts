@@ -93,10 +93,16 @@ export async function GET(
       zonaHoraria: org?.zona_horaria || "America/Argentina/Buenos_Aires",
     })
 
+    // Cache headers: immutable for ACEPTADA, no-cache for others
+    const cacheControl = cotizacion.estado === "ACEPTADA"
+      ? "public, max-age=86400, stale-while-revalidate=604800"
+      : "no-cache, no-store"
+
     return new NextResponse(new Uint8Array(pdfBuffer), {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="${cotizacion.numero_cotizacion}.pdf"`,
+        "Cache-Control": cacheControl,
       },
     })
   } catch (error) {

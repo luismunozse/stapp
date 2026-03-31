@@ -35,7 +35,10 @@ export async function GET(
         descuento_global_valor,
         iva_porcentaje,
         terminos,
+        motivo_rechazo,
         organization_id,
+        visto_at,
+        visto_count,
         ordenes_servicio (
           id,
           numero_orden,
@@ -56,6 +59,7 @@ export async function GET(
         )
       `)
       .eq("public_token", token)
+      .is("deleted_at", null)
       .single()
 
     if (dbError || !cotizacion) {
@@ -63,6 +67,17 @@ export async function GET(
         { error: "Cotizacion no encontrada" },
         { status: 404 }
       )
+    }
+
+    // Fire-and-forget: track read confirmation
+    if (cotizacion.estado === "ENVIADA") {
+      void supabaseAdmin
+        .from("cotizaciones")
+        .update({
+          visto_at: cotizacion.visto_at || new Date().toISOString(),
+          visto_count: (cotizacion.visto_count || 0) + 1,
+        })
+        .eq("id", cotizacion.id)
     }
 
     const orden = cotizacion.ordenes_servicio as any
@@ -97,6 +112,7 @@ export async function GET(
       descuentoGlobalValor: cotizacion.descuento_global_valor,
       ivaPorcentaje: cotizacion.iva_porcentaje,
       terminos: cotizacion.terminos,
+      motivoRechazo: cotizacion.motivo_rechazo || null,
       orden: orden ? {
         numeroOrden: orden.numero_orden,
         dispositivo: orden.dispositivo,

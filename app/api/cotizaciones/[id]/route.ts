@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { createAuditLogger } from "@/lib/audit"
 import { z } from "zod"
 
 const itemSchema = z.object({
@@ -22,6 +23,7 @@ const updateCotizacionSchema = z.object({
   descuentoGlobalTipo: z.enum(["porcentaje", "fijo"]).optional(),
   descuentoGlobalValor: z.number().min(0).optional(),
   ivaPorcentaje: z.number().min(0).max(100).optional(),
+  tipoCambio: z.number().positive().nullable().optional(),
   sectorId: z.string().nullable().optional(),
 })
 
@@ -112,6 +114,7 @@ export async function GET(
       `)
       .eq("id", id)
       .eq("organization_id", organizationId!)
+      .is("deleted_at", null)
       .single()
 
     if (dbError || !cotizacion) {
@@ -136,7 +139,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, role } = await requireAdmin()
+    const { error, organizationId, userId, role } = await requireAdmin()
     if (error) return error
 
     if (role !== "ADMIN") {
@@ -198,6 +201,7 @@ export async function PUT(
     if (data.descuentoGlobalTipo !== undefined) updateData.descuento_global_tipo = data.descuentoGlobalTipo
     if (data.descuentoGlobalValor !== undefined) updateData.descuento_global_valor = data.descuentoGlobalValor
     if (data.ivaPorcentaje !== undefined) updateData.iva_porcentaje = data.ivaPorcentaje
+    if (data.tipoCambio !== undefined) updateData.tipo_cambio = data.tipoCambio
     if (data.sectorId !== undefined) updateData.sector_id = data.sectorId
 
     // If updating items, recalculate totals with discounts/IVA
@@ -314,6 +318,14 @@ export async function PUT(
       .eq("id", id)
       .single()
 
+    // Audit log
+    const audit = createAuditLogger(organizationId!, userId!, request)
+    audit.update("cotizaciones", id, {}, {
+      estado: data.estado,
+      items_updated: !!data.items,
+      total: cotizacion?.total,
+    })
+
     return NextResponse.json(formatCotizacion(cotizacion))
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -335,7 +347,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, role } = await requireAdmin()
+    const { error, organizationId, userId, role } = await requireAdmin()
     if (error) return error
 
     if (role !== "ADMIN") {
@@ -369,9 +381,10 @@ export async function DELETE(
       )
     }
 
+    // Soft-delete
     const { error: deleteError } = await supabaseAdmin
       .from("cotizaciones")
-      .delete()
+      .update({ deleted_at: new Date().toISOString() })
       .eq("id", id)
 
     if (deleteError) {
@@ -400,6 +413,13 @@ export async function DELETE(
           .eq("id", cotizacion.orden_id)
       }
     }
+
+    // Audit log
+    const audit = createAuditLogger(organizationId!, userId!, request)
+    audit.delete("cotizaciones", id, {
+      numero_cotizacion: cotizacion.estado,
+      estado: cotizacion.estado,
+    })
 
     return NextResponse.json({ message: "Cotización eliminada" })
   } catch (error) {

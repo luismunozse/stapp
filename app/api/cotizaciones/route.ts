@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getNextQuoteNumber } from "@/lib/counters"
+import { parsePagination } from "@/lib/api-utils"
+import { createAuditLogger } from "@/lib/audit"
 import { randomBytes } from "crypto"
 import { z } from "zod"
 
@@ -25,6 +27,7 @@ const cotizacionSchema = z.object({
   descuentoGlobalTipo: z.enum(["porcentaje", "fijo"]).optional(),
   descuentoGlobalValor: z.number().min(0).optional(),
   ivaPorcentaje: z.number().min(0).max(100).optional(),
+  tipoCambio: z.number().positive().optional(),
 })
 
 function calcItemNeto(item: { cantidad: number; precioUnitario: number; descuentoTipo?: string; descuentoValor?: number }) {
@@ -60,6 +63,10 @@ function formatCotizacion(c: any) {
     descuentoGlobalValor: c.descuento_global_valor,
     ivaPorcentaje: c.iva_porcentaje,
     terminos: c.terminos,
+    vistoAt: c.visto_at || null,
+    vistoCount: c.visto_count || 0,
+    motivoRechazo: c.motivo_rechazo || null,
+    tipoCambio: c.tipo_cambio || null,
     clienteNombre: cliente?.nombre || null,
     clienteEmail: cliente?.email || null,
     ordenNumero: orden?.numero_orden || null,
@@ -117,6 +124,7 @@ export async function GET(request: Request) {
         `)
         .eq("orden_id", ordenId)
         .eq("ordenes_servicio.organization_id", organizationId!)
+        .is("deleted_at", null)
         .order("created_at", { ascending: false })
 
       if (estado) query = query.eq("estado", estado)
@@ -127,7 +135,9 @@ export async function GET(request: Request) {
       return NextResponse.json(cotizaciones?.map(formatCotizacion) || [])
     }
 
-    // Modo standalone: filtrar por organization_id con LEFT join
+    // Modo standalone: filtrar por organization_id con LEFT join + paginacion
+    const { page, limit, offset } = parsePagination(searchParams)
+
     let query = supabaseAdmin
       .from("cotizaciones")
       .select(`
@@ -139,28 +149,29 @@ export async function GET(request: Request) {
         clientes (*),
         sectores_cliente (id, nombre),
         items_cotizacion (*)
-      `)
+      `, { count: "exact" })
       .eq("organization_id", organizationId!)
+      .is("deleted_at", null)
       .order("created_at", { ascending: false })
 
-    if (estado) query = query.eq("estado", estado)
+    if (estado && estado !== "TODOS") query = query.eq("estado", estado)
+    if (search) query = query.ilike("numero_cotizacion", `%${search}%`)
 
-    const { data: cotizaciones, error: dbError } = await query
+    query = query.range(offset, offset + limit - 1)
+
+    const { data: cotizaciones, error: dbError, count } = await query
     if (dbError) throw dbError
 
-    let result = cotizaciones?.map(formatCotizacion) || []
+    const total = count || 0
+    const result = cotizaciones?.map(formatCotizacion) || []
 
-    // Search filter (client-side for now since we join multiple tables)
-    if (search) {
-      const s = search.toLowerCase()
-      result = result.filter(c =>
-        c.numeroCotizacion?.toLowerCase().includes(s) ||
-        c.cliente?.nombre?.toLowerCase().includes(s) ||
-        c.orden?.cliente?.nombre?.toLowerCase().includes(s)
-      )
-    }
-
-    return NextResponse.json(result)
+    return NextResponse.json({
+      data: result,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    })
   } catch (error) {
     console.error("Error fetching cotizaciones:", error)
     return NextResponse.json(
@@ -172,7 +183,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { error, organizationId, role } = await requireAdmin()
+    const { error, organizationId, userId, role } = await requireAdmin()
     if (error) return error
 
     if (role !== "ADMIN") {
@@ -290,6 +301,7 @@ export async function POST(request: Request) {
         subtotal: subtotalNeto,
         iva,
         total,
+        tipo_cambio: data.tipoCambio || null,
       })
       .select()
       .single()
@@ -334,6 +346,15 @@ export async function POST(request: Request) {
       `)
       .eq("id", cotizacion.id)
       .single()
+
+    // Audit log
+    const audit = createAuditLogger(organizationId!, userId!, request)
+    audit.create("cotizaciones", cotizacion.id, {
+      numero_cotizacion: numeroCotizacion,
+      total,
+      cliente_id: clienteIdForInsert,
+      items_count: items.length,
+    })
 
     return NextResponse.json(formatCotizacion(cotizacionCompleta), { status: 201 })
   } catch (error) {

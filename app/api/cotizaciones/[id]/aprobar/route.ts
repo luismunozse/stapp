@@ -25,6 +25,7 @@ export async function POST(
       .from("cotizaciones")
       .select(`*, ordenes_servicio!inner(organization_id)`)
       .eq("id", id)
+      .is("deleted_at", null)
       .single()
 
     if (fetchError || !cotizacion) {

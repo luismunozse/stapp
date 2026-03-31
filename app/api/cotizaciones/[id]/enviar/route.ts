@@ -34,6 +34,7 @@ export async function POST(
       `)
       .eq("id", id)
       .eq("organization_id", organizationId!)
+      .is("deleted_at", null)
       .single()
 
     if (fetchError || !cotizacion) {

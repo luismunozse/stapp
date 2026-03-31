@@ -19,6 +19,7 @@ import {
   Download,
   Share2,
   Link2,
+  Copy,
 } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { CotizacionForm } from "./cotizacion-form"
@@ -68,6 +69,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false }: Coti
   const [editingCotizacion, setEditingCotizacion] = useState<Cotizacion | null>(null)
   const [sendingId, setSendingId] = useState<string | null>(null)
   const [approvingCotizacion, setApprovingCotizacion] = useState<Cotizacion | null>(null)
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null)
   const { confirm, showError, showSuccess, showWarning } = useModal()
 
   const fetcher = (url: string) => fetch(url).then(res => res.json())
@@ -216,6 +218,25 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false }: Coti
     } catch (error) {
       console.error("Error downloading PDF:", error)
       alert("Error al descargar PDF")
+    }
+  }
+
+  const handleDuplicate = async (cotizacion: Cotizacion) => {
+    setDuplicatingId(cotizacion.id)
+    try {
+      const res = await fetch(`/api/cotizaciones/${cotizacion.id}/duplicar`, { method: "POST" })
+      if (!res.ok) {
+        const error = await res.json()
+        await showError(error.error || "Error al duplicar cotizacion")
+        return
+      }
+      const data = await res.json()
+      await showSuccess(`Cotizacion ${data.numeroCotizacion} creada como borrador`)
+      mutate()
+    } catch {
+      await showError("Error al duplicar cotizacion")
+    } finally {
+      setDuplicatingId(null)
     }
   }
 
@@ -390,6 +411,17 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false }: Coti
                           Rechazar
                         </Button>
                       </>
+                    )}
+                    {!readOnly && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleDuplicate(cotizacion)}
+                        disabled={duplicatingId === cotizacion.id}
+                      >
+                        <Copy className="mr-2 h-3 w-3" />
+                        {duplicatingId === cotizacion.id ? "Duplicando..." : "Duplicar"}
+                      </Button>
                     )}
                     {!readOnly && canDelete && (
                       <Button

@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { X, Plus, FileText, Calculator, Percent, DollarSign, Loader2 } from "lucide-react"
+import { X, Plus, FileText, Calculator, Percent, DollarSign, Loader2, BookOpen } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { ItemRow, calcItemNeto } from "./item-row"
 import { ClienteSelector } from "./cliente-selector"
@@ -65,6 +65,7 @@ export function CotizacionForm({
   const [descuentoGlobalTipo, setDescuentoGlobalTipo] = useState(initialData?.descuentoGlobalTipo || "porcentaje")
   const [descuentoGlobalValor, setDescuentoGlobalValor] = useState(initialData?.descuentoGlobalValor || 0)
   const [ivaPorcentaje, setIvaPorcentaje] = useState(initialData?.ivaPorcentaje ?? 0)
+  const [tipoCambio, setTipoCambio] = useState<number | null>((initialData as any)?.tipoCambio || null)
   const [clienteId, setClienteId] = useState<string | null>(initialData?.clienteId || null)
   const [clienteObj, setClienteObj] = useState<{ tipoCliente?: string | null; razonSocial?: string | null } | null>(null)
   const [selectedSectorId, setSelectedSectorId] = useState<string>(initialData?.sectorId || "")
@@ -72,6 +73,9 @@ export function CotizacionForm({
   const [nuevoSectorNombre, setNuevoSectorNombre] = useState("")
   const [crearSectorLoading, setCrearSectorLoading] = useState(false)
   const [configLoaded, setConfigLoaded] = useState(false)
+  const [templates, setTemplates] = useState<any[]>([])
+  const [templatesLoaded, setTemplatesLoaded] = useState(false)
+  const [showTemplates, setShowTemplates] = useState(false)
 
   const isEditing = !!initialData
   const isStandalone = !ordenId
@@ -163,6 +167,37 @@ export function CotizacionForm({
     setItems([...items, { descripcion: "", cantidad: 1, precioUnitario: 0, unidad: "Unidad", descuentoTipo: "porcentaje", descuentoValor: 0 }])
   }
 
+  const handleLoadTemplates = async () => {
+    if (!templatesLoaded) {
+      try {
+        const res = await fetch("/api/cotizacion-templates")
+        if (res.ok) {
+          const data = await res.json()
+          setTemplates(data)
+        }
+      } catch { /* ignore */ }
+      setTemplatesLoaded(true)
+    }
+    setShowTemplates(!showTemplates)
+  }
+
+  const applyTemplate = (template: any) => {
+    setItems(template.items.map((i: any) => ({
+      descripcion: i.descripcion,
+      cantidad: i.cantidad,
+      precioUnitario: i.precioUnitario,
+      unidad: i.unidad || "Unidad",
+      descuentoTipo: i.descuentoTipo || "porcentaje",
+      descuentoValor: i.descuentoValor || 0,
+    })))
+    if (template.notas) setNotas(template.notas)
+    if (template.terminos) setTerminos(template.terminos)
+    if (template.descuentoGlobalTipo) setDescuentoGlobalTipo(template.descuentoGlobalTipo)
+    if (template.descuentoGlobalValor) setDescuentoGlobalValor(template.descuentoGlobalValor)
+    if (template.ivaPorcentaje) setIvaPorcentaje(template.ivaPorcentaje)
+    setShowTemplates(false)
+  }
+
   // Calculations
   const subtotalBruto = items.reduce((sum, item) => sum + item.cantidad * item.precioUnitario, 0)
   const subtotalNeto = items.reduce((sum, item) => sum + calcItemNeto(item), 0)
@@ -224,6 +259,7 @@ export function CotizacionForm({
         descuentoGlobalTipo,
         descuentoGlobalValor,
         ivaPorcentaje,
+        tipoCambio: tipoCambio || undefined,
       }
 
       if (ordenId) payload.ordenId = ordenId
@@ -350,16 +386,54 @@ export function CotizacionForm({
             />
           ))}
 
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={addItem}
-            disabled={loading}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Agregar Item
-          </Button>
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={addItem}
+              disabled={loading}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Agregar Item
+            </Button>
+            {!isEditing && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleLoadTemplates}
+                disabled={loading}
+              >
+                <BookOpen className="mr-2 h-4 w-4" />
+                Cargar Plantilla
+              </Button>
+            )}
+          </div>
+
+          {/* Template selector */}
+          {showTemplates && (
+            <div className="border rounded-lg p-3 bg-muted/30 space-y-2">
+              <p className="text-sm font-medium">Seleccionar plantilla:</p>
+              {templates.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No hay plantillas guardadas</p>
+              ) : (
+                templates.map((t: any) => (
+                  <Button
+                    key={t.id}
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-start"
+                    onClick={() => applyTemplate(t)}
+                  >
+                    {t.nombre}
+                    <span className="ml-auto text-xs text-muted-foreground">{t.items.length} items</span>
+                  </Button>
+                ))
+              )}
+            </div>
+          )}
 
           {/* Descuento Global + IVA */}
           <div className="flex flex-col sm:flex-row sm:items-end gap-3 p-3 bg-muted/50 rounded-lg">
@@ -405,6 +479,19 @@ export function CotizacionForm({
                   <SelectItem value="27">27%</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div>
+              <Label className="text-sm">Tipo cambio USD (opcional)</Label>
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                placeholder="Ej: 1250"
+                value={tipoCambio ?? ""}
+                onChange={(e) => setTipoCambio(e.target.value ? parseFloat(e.target.value) : null)}
+                disabled={loading}
+                className="w-36 mt-1"
+              />
             </div>
           </div>
 

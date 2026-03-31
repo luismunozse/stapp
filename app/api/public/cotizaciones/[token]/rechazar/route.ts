@@ -1,0 +1,83 @@
+import { NextResponse } from "next/server"
+import { supabaseAdmin } from "@/lib/supabase"
+
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ token: string }> }
+) {
+  try {
+    const { token } = await params
+
+    if (!token || token.length !== 32) {
+      return NextResponse.json(
+        { error: "Token invalido" },
+        { status: 400 }
+      )
+    }
+
+    let motivo: string | null = null
+    try {
+      const body = await request.json()
+      motivo = body.motivo || null
+    } catch {
+      // Body is optional
+    }
+
+    // Find cotizacion
+    const { data: cotizacion, error: fetchError } = await supabaseAdmin
+      .from("cotizaciones")
+      .select("id, estado, orden_id, organization_id")
+      .eq("public_token", token)
+      .is("deleted_at", null)
+      .single()
+
+    if (fetchError || !cotizacion) {
+      return NextResponse.json(
+        { error: "Cotizacion no encontrada" },
+        { status: 404 }
+      )
+    }
+
+    if (cotizacion.estado !== "ENVIADA") {
+      return NextResponse.json(
+        { error: "Solo cotizaciones enviadas pueden ser rechazadas" },
+        { status: 400 }
+      )
+    }
+
+    // Update cotizacion
+    const { error: updateError } = await supabaseAdmin
+      .from("cotizaciones")
+      .update({
+        estado: "RECHAZADA",
+        motivo_rechazo: motivo,
+      })
+      .eq("id", cotizacion.id)
+
+    if (updateError) throw updateError
+
+    // If linked to an order in PRESUPUESTADO, revert
+    if (cotizacion.orden_id) {
+      const { data: orden } = await supabaseAdmin
+        .from("ordenes_servicio")
+        .select("id, estado")
+        .eq("id", cotizacion.orden_id)
+        .single()
+
+      if (orden && orden.estado === "PRESUPUESTADO") {
+        await supabaseAdmin
+          .from("ordenes_servicio")
+          .update({ estado: "EN_DIAGNOSTICO" })
+          .eq("id", cotizacion.orden_id)
+      }
+    }
+
+    return NextResponse.json({ message: "Cotizacion rechazada" })
+  } catch (error) {
+    console.error("Error rejecting cotizacion:", error)
+    return NextResponse.json(
+      { error: "Error al rechazar cotizacion" },
+      { status: 500 }
+    )
+  }
+}

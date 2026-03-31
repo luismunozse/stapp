@@ -31,6 +31,7 @@ export async function POST(
       .from("cotizaciones")
       .select("id, estado, orden_id, total")
       .eq("public_token", token)
+      .is("deleted_at", null)
       .single()
 
     if (fetchError || !cotizacion) {

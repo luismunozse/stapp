@@ -33,7 +33,9 @@ function extractPhone(text: string): string | undefined {
 }
 
 // Extraer nombre de frases como "me llamo X", "soy X", "mi nombre es X"
-function extractName(text: string): string | undefined {
+// También detecta respuestas cortas que son solo un nombre (1-3 palabras, capitalizadas)
+function extractName(text: string, lastAssistantMessage?: string): string | undefined {
+  // Patrones explícitos
   const patterns = [
     /(?:me llamo|mi nombre es|soy)\s+([A-ZÁÉÍÓÚÑa-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑa-záéíóúñ]+)?)/i,
   ]
@@ -41,6 +43,20 @@ function extractName(text: string): string | undefined {
     const match = text.match(pattern)
     if (match) return match[1].trim()
   }
+
+  // Si el último mensaje del asistente preguntó por el nombre y la respuesta es corta (1-3 palabras),
+  // asumir que es un nombre
+  if (lastAssistantMessage) {
+    const askedForName = /c[oó]mo te llam[aá]s|cu[aá]l es tu nombre|tu nombre|dec[ií]me tu nombre/i.test(lastAssistantMessage)
+    if (askedForName) {
+      const trimmed = text.trim()
+      // Solo palabras (sin números, sin @, sin caracteres especiales)
+      if (/^[A-ZÁÉÍÓÚÑa-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑa-záéíóúñ]+){0,2}$/.test(trimmed) && trimmed.length <= 50) {
+        return trimmed
+      }
+    }
+  }
+
   return undefined
 }
 
@@ -147,10 +163,10 @@ export function ChatbotPanel({ isOpen, onClose }: ChatbotPanelProps) {
 
   // Captura progresiva de leads: envía datos cada vez que detecta algo nuevo
   const tryCaptureLead = useCallback(
-    async (userText: string, convId: string, intencion?: string) => {
+    async (userText: string, convId: string, intencion?: string, lastAssistantMsg?: string) => {
       const email = extractEmail(userText)
       const phone = extractPhone(userText)
-      const name = extractName(userText)
+      const name = extractName(userText, lastAssistantMsg)
       const company = extractCompany(userText)
       const planInterest = detectPlanInterest(userText)
 
@@ -269,17 +285,23 @@ export function ChatbotPanel({ isOpen, onClose }: ChatbotPanelProps) {
 
       // Captura progresiva de leads: siempre intentar extraer datos de cada mensaje
       if (currentConvId) {
+        // Obtener el último mensaje del asistente ANTES de este (para contexto de nombre)
+        const previousAssistantMsgs = messages.filter((m) => m.tipo === "ASSISTANT")
+        const lastAssistantMsg = previousAssistantMsgs.length > 0
+          ? previousAssistantMsgs[previousAssistantMsgs.length - 1].contenido
+          : undefined
+
         const hasContactInfo =
           extractEmail(userMessage.contenido) ||
           extractPhone(userMessage.contenido) ||
-          extractName(userMessage.contenido) ||
+          extractName(userMessage.contenido, lastAssistantMsg) ||
           extractCompany(userMessage.contenido)
         const hasHighIntent = isHighIntent(data.intencion)
         const hasAnyIntent = data.intencion && data.intencion !== "saludo" && data.intencion !== "pregunta_general"
 
         // Capturar datos si: tiene info de contacto, intención alta, o ya capturamos algo antes
         if (hasContactInfo || hasHighIntent || hasAnyIntent || Object.keys(capturedLeadData).length > 0) {
-          tryCaptureLead(userMessage.contenido, currentConvId, data.intencion)
+          tryCaptureLead(userMessage.contenido, currentConvId, data.intencion, lastAssistantMsg)
         }
       }
     } catch (error) {

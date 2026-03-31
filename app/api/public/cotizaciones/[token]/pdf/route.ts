@@ -30,6 +30,7 @@ export async function GET(
         items_cotizacion (*)
       `)
       .eq("public_token", token)
+      .is("deleted_at", null)
       .single()
 
     if (dbError || !cotizacion) {

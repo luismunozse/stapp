@@ -42,6 +42,18 @@ export async function POST(request: Request) {
       )
     }
 
+    // Helper para enviar notificación sin bloquear
+    const notifyLead = (leadData: typeof data, origen: string) => {
+      sendNewLeadNotification({
+        nombre: leadData.nombre,
+        email: leadData.email,
+        telefono: leadData.telefono,
+        empresa: leadData.empresa,
+        interes: leadData.interes,
+        origen,
+      }).catch((err) => console.error("[Lead] Error enviando notificación:", err))
+    }
+
     // Verificar si ya existe un lead para esta conversación
     if (conversacion.lead_id) {
       // Actualizar el lead existente con nueva información (solo campos no vacíos)
@@ -65,6 +77,11 @@ export async function POST(request: Request) {
         .single()
 
       if (updateError) throw updateError
+
+      // Notificar si se agregó email o teléfono nuevo (dato de contacto importante)
+      if (updateFields.email || updateFields.telefono) {
+        notifyLead(data, "Chatbot (datos actualizados)")
+      }
 
       return NextResponse.json({
         success: true,
@@ -113,6 +130,9 @@ export async function POST(request: Request) {
         .update({ lead_id: existingLead.id, lead_capturado: true })
         .eq("id", data.conversacionId)
 
+      // Notificar que un lead existente volvió a chatear
+      notifyLead(data, "Chatbot (lead recurrente)")
+
       return NextResponse.json({
         success: true,
         leadId: existingLead.id,
@@ -148,14 +168,7 @@ export async function POST(request: Request) {
       .eq("id", data.conversacionId)
 
     // Enviar notificación por email al admin (no bloquear la respuesta)
-    sendNewLeadNotification({
-      nombre: data.nombre,
-      email: data.email,
-      telefono: data.telefono,
-      empresa: data.empresa,
-      interes: data.interes,
-      origen: "Chatbot",
-    }).catch((err) => console.error("[Lead] Error enviando notificación:", err))
+    notifyLead(data, "Chatbot")
 
     return NextResponse.json({
       success: true,

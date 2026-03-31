@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { SignaturePad } from "@/components/firma/signature-pad"
+import { Textarea } from "@/components/ui/textarea"
 import {
   FileText,
   Download,
@@ -94,6 +95,10 @@ export function CotizacionPublica({ token }: { token: string }) {
   const [approving, setApproving] = useState(false)
   const [approveError, setApproveError] = useState<string | null>(null)
   const [approved, setApproved] = useState(false)
+  const [showReject, setShowReject] = useState(false)
+  const [rejectMotivo, setRejectMotivo] = useState("")
+  const [rejecting, setRejecting] = useState(false)
+  const [rejected, setRejected] = useState(false)
 
   const formatDate = (dateStr: string | null | undefined) =>
     formatDateValue(dateStr, data?.zonaHoraria)
@@ -147,6 +152,32 @@ export function CotizacionPublica({ token }: { token: string }) {
       setApproveError("Error al aprobar la cotizacion")
     } finally {
       setApproving(false)
+    }
+  }
+
+  const handleReject = async () => {
+    setRejecting(true)
+    try {
+      const res = await fetch(`/api/public/cotizaciones/${token}/rechazar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ motivo: rejectMotivo || undefined }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        setApproveError(err.error || "Error al rechazar")
+        return
+      }
+      setRejected(true)
+      setShowReject(false)
+      const refreshRes = await fetch(`/api/public/cotizaciones/${token}`)
+      if (refreshRes.ok) {
+        setData(await refreshRes.json())
+      }
+    } catch {
+      setApproveError("Error al rechazar la cotizacion")
+    } finally {
+      setRejecting(false)
     }
   }
 
@@ -456,12 +487,17 @@ export function CotizacionPublica({ token }: { token: string }) {
       {/* Rechazada */}
       {data.estado === "RECHAZADA" && (
         <Card className="border-red-200 bg-red-50">
-          <CardContent className="flex items-center gap-3 py-4">
-            <XCircle className="h-6 w-6 text-red-600 flex-shrink-0" />
+          <CardContent className="flex items-start gap-3 py-4">
+            <XCircle className="h-6 w-6 text-red-600 flex-shrink-0 mt-0.5" />
             <div>
               <p className="font-medium text-red-800">Cotizacion rechazada</p>
-              <p className="text-sm text-red-600">
-                Esta cotizacion fue rechazada. Contacte al servicio tecnico si desea una nueva.
+              {(data as any).motivoRechazo && (
+                <p className="text-sm text-red-700 mt-1">
+                  Motivo: {(data as any).motivoRechazo}
+                </p>
+              )}
+              <p className="text-sm text-red-600 mt-1">
+                Contacte al servicio tecnico si desea una nueva cotizacion.
               </p>
             </div>
           </CardContent>
@@ -483,17 +519,74 @@ export function CotizacionPublica({ token }: { token: string }) {
           </Button>
         </a>
 
-        {/* Aprobar - solo si ENVIADA y no vencida */}
-        {data.estado === "ENVIADA" && !isExpired && !showApproval && (
-          <Button
-            className="w-full"
-            onClick={() => setShowApproval(true)}
-          >
-            <PenTool className="mr-2 h-4 w-4" />
-            Aprobar cotizacion
-          </Button>
+        {/* Aprobar/Rechazar - solo si ENVIADA y no vencida */}
+        {data.estado === "ENVIADA" && !isExpired && !showApproval && !showReject && (
+          <>
+            <Button
+              className="w-full"
+              onClick={() => setShowApproval(true)}
+            >
+              <PenTool className="mr-2 h-4 w-4" />
+              Aprobar cotizacion
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full text-red-600 hover:text-red-700 border-red-200 hover:bg-red-50"
+              onClick={() => setShowReject(true)}
+            >
+              <XCircle className="mr-2 h-4 w-4" />
+              Rechazar cotizacion
+            </Button>
+          </>
         )}
       </div>
+
+      {/* Panel de rechazo */}
+      {showReject && (
+        <Card className="border-red-200">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg text-red-700">Rechazar cotizacion</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Indique el motivo del rechazo (opcional).
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Textarea
+              placeholder="Motivo del rechazo..."
+              value={rejectMotivo}
+              onChange={(e) => setRejectMotivo(e.target.value)}
+              rows={3}
+              maxLength={500}
+              disabled={rejecting}
+            />
+            {approveError && (
+              <p className="text-sm text-red-500">{approveError}</p>
+            )}
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => { setShowReject(false); setApproveError(null) }}
+                disabled={rejecting}
+                className="flex-1"
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleReject}
+                disabled={rejecting}
+                className="flex-1"
+              >
+                {rejecting ? (
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Rechazando...</>
+                ) : (
+                  <><XCircle className="mr-2 h-4 w-4" />Confirmar rechazo</>
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Panel de aprobacion con firma */}
       {showApproval && (
