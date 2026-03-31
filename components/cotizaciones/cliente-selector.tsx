@@ -107,25 +107,37 @@ export function ClienteSelector({ value, onChange, disabled }: ClienteSelectorPr
   return (
     <div ref={containerRef} className="relative">
       <Label className="text-sm">Cliente</Label>
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Buscar cliente por nombre..."
-          value={search}
-          onChange={(e) => handleSearchChange(e.target.value)}
-          onFocus={() => { if (search.length >= 2) setOpen(true) }}
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar cliente por nombre..."
+            value={search}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            onFocus={() => { if (search.length >= 2) setOpen(true) }}
+            disabled={disabled}
+            className="pl-9"
+          />
+          {selected && (
+            <button
+              type="button"
+              onClick={handleClear}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground"
+            >
+              Cambiar
+            </button>
+          )}
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          onClick={() => setShowCreateForm(true)}
           disabled={disabled}
-          className="pl-9"
-        />
-        {selected && (
-          <button
-            type="button"
-            onClick={handleClear}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground"
-          >
-            Cambiar
-          </button>
-        )}
+          title="Crear nuevo cliente"
+        >
+          <UserPlus className="h-4 w-4" />
+        </Button>
       </div>
 
       {open && (search.length >= 2) && (
