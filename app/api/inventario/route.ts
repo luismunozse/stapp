@@ -14,6 +14,9 @@ const inventarioSchema = z.object({
   precioCompra: z.number().min(0),
   precioVenta: z.number().min(0),
   proveedor: z.string().optional(),
+  stockMinimo: z.number().int().min(0).nullable().optional(),
+  stockMaximo: z.number().int().min(0).nullable().optional(),
+  puntoReorden: z.number().int().min(0).nullable().optional(),
 })
 
 export async function GET(request: Request) {
@@ -46,11 +49,17 @@ export async function GET(request: Request) {
     const sortBy = sortMap[sortByParam] || "nombre"
     const sortOrder = searchParams.get("sortOrder") === "desc" ? false : true
 
+    const includeArchived = searchParams.get("includeArchived") === "true"
+
     let query = supabaseAdmin
       .from("inventario")
-      .select("id, codigo, nombre, descripcion, categoria, tipo_dispositivo, stock, precio_compra, precio_venta, proveedor, created_at", { count: "exact" })
+      .select("id, codigo, nombre, descripcion, categoria, tipo_dispositivo, stock, precio_compra, precio_venta, proveedor, stock_minimo, stock_maximo, punto_reorden, deleted_at, deleted_by, created_at", { count: "exact" })
       .eq("organization_id", organizationId!)
       .order(sortBy, { ascending: sortOrder })
+
+    if (!includeArchived) {
+      query = query.is("deleted_at", null)
+    }
 
     if (search) {
       query = query.or(
@@ -72,8 +81,10 @@ export async function GET(request: Request) {
         .select("umbral_stock_bajo")
         .eq("id", organizationId!)
         .single()
-      const threshold = org?.umbral_stock_bajo ?? 5
-      query = query.lt("stock", threshold)
+      const globalThreshold = org?.umbral_stock_bajo ?? 5
+      // Use global threshold as server filter. Items with custom stock_minimo
+      // are also highlighted on the frontend via per-item comparison.
+      query = query.lte("stock", globalThreshold)
     }
 
     // Aplicar paginación
@@ -128,6 +139,9 @@ export async function POST(request: Request) {
           precio_compra: data.precioCompra,
           precio_venta: data.precioVenta,
           proveedor: data.proveedor || null,
+          stock_minimo: data.stockMinimo ?? null,
+          stock_maximo: data.stockMaximo ?? null,
+          punto_reorden: data.puntoReorden ?? null,
           organization_id: organizationId!,
         })
         .select()

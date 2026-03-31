@@ -169,6 +169,11 @@ export interface Inventario {
   precioCompra: number
   precioVenta: number
   proveedor?: string | null
+  stockMinimo?: number | null
+  stockMaximo?: number | null
+  puntoReorden?: number | null
+  deletedAt?: string | null
+  deletedBy?: string | null
 }
 
 export interface Factura {

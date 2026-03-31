@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { X } from "lucide-react"
+import { X, ChevronDown, ChevronUp } from "lucide-react"
 import type { Inventario } from "@/types"
 import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
 
@@ -20,6 +20,9 @@ const inventarioSchema = z.object({
   stock: z.number().int().min(0),
   precioCompra: z.number().min(0),
   precioVenta: z.number().min(0),
+  stockMinimo: z.number().int().min(0).nullable().optional(),
+  stockMaximo: z.number().int().min(0).nullable().optional(),
+  puntoReorden: z.number().int().min(0).nullable().optional(),
 })
 
 type InventarioFormData = z.infer<typeof inventarioSchema>
@@ -58,6 +61,9 @@ export function InventarioForm({
   const { tipos: tiposDispositivo, loading: tiposLoading, error: tiposError, refetch: refetchTipos } = useTiposDispositivo({ incluirTodos: true })
   const [loading, setLoading] = useState(false)
   const [generatedCode, setGeneratedCode] = useState<string>("")
+  const [showStockConfig, setShowStockConfig] = useState(
+    !!(item?.stockMinimo || item?.stockMaximo || item?.puntoReorden)
+  )
 
   const {
     register,
@@ -76,6 +82,9 @@ export function InventarioForm({
           stock: item.stock,
           precioCompra: item.precioCompra,
           precioVenta: item.precioVenta,
+          stockMinimo: item.stockMinimo ?? null,
+          stockMaximo: item.stockMaximo ?? null,
+          puntoReorden: item.puntoReorden ?? null,
         }
       : {
           nombre: "",
@@ -84,6 +93,9 @@ export function InventarioForm({
           stock: 0,
           precioCompra: 0,
           precioVenta: 0,
+          stockMinimo: null,
+          stockMaximo: null,
+          puntoReorden: null,
         },
   })
 
@@ -91,7 +103,14 @@ export function InventarioForm({
   const tipoDispositivo = watch("tipoDispositivo")
 
   // Categorías disponibles según el tipo seleccionado
-  const categoriasDisponibles = tipoDispositivo ? (categoriasPorTipo[tipoDispositivo] || categoriasPorTipo.TODOS) : []
+  // Prioritize dynamic categories from device type config, fallback to hardcoded map
+  const categoriasDisponibles = (() => {
+    if (!tipoDispositivo) return []
+    const tipoConfig = tiposDispositivo.find(t => t.codigo === tipoDispositivo)
+    const dynamicCats = tipoConfig?.config?.categoriasInventario
+    if (dynamicCats && dynamicCats.length > 0) return dynamicCats
+    return categoriasPorTipo[tipoDispositivo] || categoriasPorTipo.TODOS
+  })()
 
   // Limpiar categoría cuando cambia el tipo
   useEffect(() => {
@@ -132,6 +151,9 @@ export function InventarioForm({
         stock: item.stock,
         precioCompra: item.precioCompra,
         precioVenta: item.precioVenta,
+        stockMinimo: item.stockMinimo ?? null,
+        stockMaximo: item.stockMaximo ?? null,
+        puntoReorden: item.puntoReorden ?? null,
       })
     }
   }, [item, reset])
@@ -311,6 +333,58 @@ export function InventarioForm({
                 </p>
               )}
             </div>
+          </div>
+
+          {/* Stock thresholds (collapsible) */}
+          <div>
+            <button
+              type="button"
+              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => setShowStockConfig(!showStockConfig)}
+            >
+              {showStockConfig ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              Configuración de stock
+            </button>
+            {showStockConfig && (
+              <div className="grid grid-cols-3 gap-3 mt-2">
+                <div>
+                  <Label htmlFor="stockMinimo">Stock Mínimo</Label>
+                  <Input
+                    id="stockMinimo"
+                    type="number"
+                    {...register("stockMinimo", {
+                      setValueAs: (v: string) => v === "" || v === null ? null : parseInt(v, 10),
+                    })}
+                    min={0}
+                    placeholder="Auto"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="stockMaximo">Stock Máximo</Label>
+                  <Input
+                    id="stockMaximo"
+                    type="number"
+                    {...register("stockMaximo", {
+                      setValueAs: (v: string) => v === "" || v === null ? null : parseInt(v, 10),
+                    })}
+                    min={0}
+                    placeholder="Sin límite"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="puntoReorden">Punto Reorden</Label>
+                  <Input
+                    id="puntoReorden"
+                    type="number"
+                    {...register("puntoReorden", {
+                      setValueAs: (v: string) => v === "" || v === null ? null : parseInt(v, 10),
+                    })}
+                    min={0}
+                    placeholder="Auto"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex gap-2 justify-end pt-2">

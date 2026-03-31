@@ -18,11 +18,12 @@ export async function GET() {
       movimientosVentaResult,
       movimientos30DiasResult,
     ] = await Promise.all([
-      // All inventory items
+      // All active inventory items (exclude archived)
       supabaseAdmin
         .from("inventario")
-        .select("id, codigo, nombre, categoria, tipo_dispositivo, stock, precio_compra, precio_venta, proveedor")
-        .eq("organization_id", organizationId!),
+        .select("id, codigo, nombre, categoria, tipo_dispositivo, stock, precio_compra, precio_venta, proveedor, stock_minimo, punto_reorden")
+        .eq("organization_id", organizationId!)
+        .is("deleted_at", null),
 
       // Sale movements last 90 days
       supabaseAdmin
@@ -112,23 +113,26 @@ export async function GET() {
       .filter(item => {
         const vendido = ventasPorItem[item.id] || 0
         const promedioDiario = vendido / diasPeriodo
-        const puntoReorden = promedioDiario * 14
-        return item.stock <= puntoReorden && promedioDiario > 0
+        // Use per-item punto_reorden if set, otherwise calculate from sales
+        const puntoReordenCalc = item.punto_reorden ?? Math.ceil(promedioDiario * 14)
+        return item.stock <= puntoReordenCalc && (promedioDiario > 0 || item.punto_reorden != null)
       })
       .map(item => {
         const vendido = ventasPorItem[item.id] || 0
         const promedioDiario = vendido / diasPeriodo
-        const puntoReorden = Math.ceil(promedioDiario * 14)
+        const puntoReordenCalc = item.punto_reorden ?? Math.ceil(promedioDiario * 14)
         const diasHastaAgotamiento = promedioDiario > 0 ? Math.round(item.stock / promedioDiario) : 999
-        const cantidadSugerida = Math.max(0, Math.ceil(puntoReorden * 2 - item.stock))
+        const cantidadSugerida = Math.max(0, Math.ceil(puntoReordenCalc * 2 - item.stock))
         return {
           id: item.id,
           nombre: item.nombre,
           codigo: item.codigo,
           stock: item.stock,
+          stockMinimo: item.stock_minimo,
+          puntoReordenCustom: item.punto_reorden,
           promedioDiario: Math.round(promedioDiario * 100) / 100,
           diasHastaAgotamiento,
-          puntoReorden,
+          puntoReorden: puntoReordenCalc,
           cantidadSugerida,
         }
       })

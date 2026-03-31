@@ -20,6 +20,7 @@ export async function GET(request: Request) {
       .from("inventario")
       .select("id, codigo, nombre, stock, precio_venta")
       .eq("organization_id", organizationId!)
+      .is("deleted_at", null)
       .gt("stock", 0)
       .order("nombre", { ascending: true })
       .limit(limit)

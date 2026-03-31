@@ -12,11 +12,13 @@ import {
   Plus,
   Search,
   Edit,
-  Trash2,
+  Archive,
   AlertCircle,
   Package,
   Upload,
   History,
+  ArchiveRestore,
+  Settings2,
 } from "lucide-react"
 import { InventarioForm } from "./inventario-form"
 import { MovimientosHistorial } from "./movimientos-historial"
@@ -67,6 +69,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   const [showImport, setShowImport] = useState(false)
   const [editingItem, setEditingItem] = useState<Inventario | null>(null)
   const [movimientosItem, setMovimientosItem] = useState<{ id: string; nombre: string } | null>(null)
+  const [includeArchived, setIncludeArchived] = useState(false)
 
   // Pagination
   const [page, setPage] = useState(1)
@@ -84,7 +87,14 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
       .catch(() => {})
   }, [])
 
-  const categoriasDisponibles = categoriasPorTipo[tipoDispositivo] || todasLasCategorias
+  // Prioritize dynamic categories from device type config, fallback to hardcoded map
+  const categoriasDisponibles = (() => {
+    if (!tipoDispositivo) return todasLasCategorias
+    const tipoConfig = tiposDispositivo.find(t => t.codigo === tipoDispositivo)
+    const dynamicCats = tipoConfig?.config?.categoriasInventario
+    if (dynamicCats && dynamicCats.length > 0) return dynamicCats
+    return categoriasPorTipo[tipoDispositivo] || todasLasCategorias
+  })()
 
   const handleSearchChange = useCallback((value: string) => {
     setSearch(value)
@@ -100,7 +110,10 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   const handleTipoChange = (nuevoTipo: TipoDispositivo | "") => {
     setTipoDispositivo(nuevoTipo)
     setPage(1)
-    const nuevasCategorias = categoriasPorTipo[nuevoTipo] || todasLasCategorias
+    // Check if current category is valid for the new type
+    const tipoConfig = tiposDispositivo.find(t => t.codigo === nuevoTipo)
+    const dynamicCats = tipoConfig?.config?.categoriasInventario
+    const nuevasCategorias = (dynamicCats && dynamicCats.length > 0) ? dynamicCats : (categoriasPorTipo[nuevoTipo] || todasLasCategorias)
     if (categoria && !nuevasCategorias.includes(categoria)) {
       setCategoria("")
     }
@@ -113,11 +126,12 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
     if (categoria) params.append("categoria", categoria)
     if (tipoDispositivo) params.append("tipoDispositivo", tipoDispositivo)
     if (bajoStock) params.append("bajoStock", "true")
+    if (includeArchived) params.append("includeArchived", "true")
     params.append("page", page.toString())
     params.append("limit", pageSize.toString())
     params.append("_r", refreshKey.toString())
     return `/api/inventario?${params.toString()}`
-  }, [debouncedSearch, categoria, tipoDispositivo, bajoStock, page, pageSize, refreshKey])
+  }, [debouncedSearch, categoria, tipoDispositivo, bajoStock, includeArchived, page, pageSize, refreshKey])
 
   // SWR for fetching with cache
   const { data, isLoading } = useSWR(apiUrl, fetcher, {
@@ -130,11 +144,11 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   const items: Inventario[] = data?.data || (Array.isArray(data) ? data : [])
   const total = data?.total || (Array.isArray(data) ? data.length : 0)
 
-  const handleDelete = async (id: string) => {
+  const handleArchive = async (id: string) => {
     const confirmed = await confirm({
-      title: "Eliminar Item",
-      description: "¿Estás seguro de eliminar este item del inventario?",
-      confirmText: "Eliminar",
+      title: "Archivar Item",
+      description: "¿Estás seguro de archivar este item? No aparecerá en búsquedas ni ventas, pero se conservan los movimientos e historial.",
+      confirmText: "Archivar",
       cancelText: "Cancelar",
       variant: "danger",
     })
@@ -147,7 +161,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
         setRefreshKey(k => k + 1)
       }
     } catch (error) {
-      console.error("Error deleting item:", error)
+      console.error("Error archiving item:", error)
     }
   }
 
@@ -209,6 +223,15 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
           >
             <AlertCircle className="h-4 w-4" />
             Bajo Stock
+          </Button>
+          <Button
+            variant={includeArchived ? "default" : "outline"}
+            size="sm"
+            className="gap-1.5"
+            onClick={() => { setIncludeArchived(!includeArchived); setPage(1) }}
+          >
+            <ArchiveRestore className="h-4 w-4" />
+            Archivados
           </Button>
           <ExportButton
             entity="inventario"
@@ -280,13 +303,15 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
         <>
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
             {items.map((item) => {
-              const esStockBajo = item.stock <= umbralStockBajo
+              const itemThreshold = item.stockMinimo ?? umbralStockBajo
+              const esStockBajo = item.stock <= itemThreshold
               const sinStock = item.stock === 0
               const margen = item.precioVenta - item.precioCompra
               const tipoNombre = tiposDispositivo.find((t) => t.codigo === item.tipoDispositivo)?.nombre || item.tipoDispositivo
+              const isArchived = !!item.deletedAt
 
               return (
-                <Card key={item.id} className={sinStock ? "border-destructive/30 bg-destructive/5" : ""}>
+                <Card key={item.id} className={`${sinStock && !isArchived ? "border-destructive/30 bg-destructive/5" : ""} ${isArchived ? "opacity-50" : ""}`}>
                   <CardContent className="p-4">
                     {/* Row 1: Name + Actions */}
                     <div className="flex items-start justify-between gap-2 mb-2">
@@ -295,25 +320,33 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                         <div className="text-xs text-muted-foreground">{item.codigo}</div>
                       </div>
                       <div className="flex items-center gap-0.5 shrink-0">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => {
-                            setEditingItem(item)
-                            setShowForm(true)
-                          }}
-                        >
-                          <Edit className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                          onClick={() => handleDelete(item.id)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        {isArchived ? (
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 text-muted-foreground">
+                            Archivado
+                          </Badge>
+                        ) : (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => {
+                                setEditingItem(item)
+                                setShowForm(true)
+                              }}
+                            >
+                              <Edit className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                              onClick={() => handleArchive(item.id)}
+                            >
+                              <Archive className="h-3.5 w-3.5" />
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </div>
 
@@ -340,12 +373,18 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                         }`}>
                           {item.stock}
                         </div>
-                        {esStockBajo && (
+                        {esStockBajo && !isArchived && (
                           <div className="flex items-center justify-center gap-0.5 mt-0.5">
                             <AlertCircle className="h-2.5 w-2.5 text-amber-600" />
                             <span className="text-[9px] text-amber-600 font-medium">
                               {sinStock ? "Sin stock" : "Bajo"}
                             </span>
+                          </div>
+                        )}
+                        {item.stockMinimo != null && !isArchived && (
+                          <div className="flex items-center justify-center gap-0.5 mt-0.5">
+                            <Settings2 className="h-2 w-2 text-muted-foreground" />
+                            <span className="text-[8px] text-muted-foreground">mín: {item.stockMinimo}</span>
                           </div>
                         )}
                       </div>

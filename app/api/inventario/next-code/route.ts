@@ -56,33 +56,18 @@ export async function GET(request: Request) {
     const tipoPrefijo = TIPO_PREFIJOS[tipoDispositivo] || tipoDispositivo.substring(0, 3).toUpperCase()
     const prefijo = `${catPrefijo}-${tipoPrefijo}-`
 
-    // Buscar TODOS los códigos con este prefijo para encontrar el número más alto
-    const { data: items, error: dbError } = await supabaseAdmin
-      .from("inventario")
-      .select("codigo")
-      .eq("organization_id", organizationId!)
-      .ilike("codigo", `${prefijo}%`)
+    // Use SQL function for efficient next-code generation (skips archived items)
+    const { data, error: rpcError } = await supabaseAdmin
+      .rpc("get_next_inventory_code", {
+        p_org_id: organizationId!,
+        p_prefix: prefijo,
+      })
 
-    if (dbError) {
-      throw dbError
+    if (rpcError) {
+      throw rpcError
     }
 
-    let maxNumber = 0
-
-    if (items && items.length > 0) {
-      for (const item of items) {
-        const match = item.codigo.match(/-(\d+)$/)
-        if (match) {
-          const num = parseInt(match[1], 10)
-          if (num > maxNumber) maxNumber = num
-        }
-      }
-    }
-
-    // Formatear con ceros a la izquierda (3 dígitos)
-    const codigo = `${prefijo}${(maxNumber + 1).toString().padStart(3, "0")}`
-
-    return NextResponse.json({ codigo })
+    return NextResponse.json({ codigo: data })
   } catch (error) {
     console.error("Error generating next code:", error)
     return NextResponse.json(

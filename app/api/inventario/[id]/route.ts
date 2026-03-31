@@ -14,6 +14,9 @@ const inventarioSchema = z.object({
   precioCompra: z.number().min(0).optional(),
   precioVenta: z.number().min(0).optional(),
   proveedor: z.string().optional(),
+  stockMinimo: z.number().int().min(0).nullable().optional(),
+  stockMaximo: z.number().int().min(0).nullable().optional(),
+  puntoReorden: z.number().int().min(0).nullable().optional(),
 })
 
 export async function GET(
@@ -31,6 +34,7 @@ export async function GET(
       .select("*")
       .eq("id", id)
       .eq("organization_id", organizationId!)
+      .is("deleted_at", null)
       .single()
 
     if (dbError || !item) {
@@ -62,12 +66,13 @@ export async function PUT(
     const body = await request.json()
     const data = inventarioSchema.parse(body)
 
-    // Verificar que el item pertenece a la organización
+    // Verificar que el item pertenece a la organización y no está archivado
     const { data: existingItem, error: fetchError } = await supabaseAdmin
       .from("inventario")
       .select("id, stock")
       .eq("id", id)
       .eq("organization_id", organizationId!)
+      .is("deleted_at", null)
       .single()
 
     if (fetchError || !existingItem) {
@@ -90,6 +95,9 @@ export async function PUT(
     if (data.precioCompra !== undefined) updateData.precio_compra = data.precioCompra
     if (data.precioVenta !== undefined) updateData.precio_venta = data.precioVenta
     if (data.proveedor !== undefined) updateData.proveedor = data.proveedor
+    if (data.stockMinimo !== undefined) updateData.stock_minimo = data.stockMinimo
+    if (data.stockMaximo !== undefined) updateData.stock_maximo = data.stockMaximo
+    if (data.puntoReorden !== undefined) updateData.punto_reorden = data.puntoReorden
 
     const { data: item, error: updateError } = await supabaseAdmin
       .from("inventario")
@@ -136,40 +144,33 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAdmin()
+    const { error, organizationId, userId } = await requireAdmin()
     if (error) return error
 
     const { id } = await params
 
-    // Verificar que el item pertenece a la organización
-    const { data: existingItem, error: fetchError } = await supabaseAdmin
+    // Soft-delete: set deleted_at instead of hard delete
+    const { data: item, error: updateError } = await supabaseAdmin
       .from("inventario")
-      .select("id")
+      .update({ deleted_at: new Date().toISOString(), deleted_by: userId })
       .eq("id", id)
       .eq("organization_id", organizationId!)
+      .is("deleted_at", null)
+      .select("id")
       .single()
 
-    if (fetchError || !existingItem) {
+    if (updateError || !item) {
       return NextResponse.json(
         { error: "Item no encontrado" },
         { status: 404 }
       )
     }
 
-    const { error: deleteError } = await supabaseAdmin
-      .from("inventario")
-      .delete()
-      .eq("id", id)
-
-    if (deleteError) {
-      throw deleteError
-    }
-
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("Error deleting inventario:", error)
+    console.error("Error archiving inventario:", error)
     return NextResponse.json(
-      { error: "Error al eliminar item" },
+      { error: "Error al archivar item" },
       { status: 500 }
     )
   }

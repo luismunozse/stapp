@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog"
 import { X, Plus, UserPlus, Camera, Upload, Trash2, Loader2, Lock, Grid3X3, ClipboardCheck, ChevronDown, ChevronUp } from "lucide-react"
 import { PatternLock } from "@/components/ui/pattern-lock"
+import { ClienteSelector } from "@/components/cotizaciones/cliente-selector"
 import { OrdenCreadaModal } from "./orden-creada-modal"
 import { compressImage } from "@/lib/image-compression"
 import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
@@ -129,7 +130,7 @@ interface OrdenCreadaData {
 export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
   const { offlineFetch } = useOffline()
   const [loading, setLoading] = useState(false)
-  const [clientes, setClientes] = useState<Cliente[]>([])
+  const [selectedClienteObj, setSelectedClienteObj] = useState<Cliente | null>(null)
   const [showClienteModal, setShowClienteModal] = useState(false)
   const [clienteLoading, setClienteLoading] = useState(false)
   const [fotos, setFotos] = useState<FotoPreview[]>([])
@@ -253,22 +254,6 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
     },
   })
 
-  const fetchClientes = async () => {
-    try {
-      const res = await fetch("/api/clientes?limit=100", { cache: "no-store" })
-      const data = await res.json()
-      const items = data.data ?? (Array.isArray(data) ? data : [])
-      setClientes(items)
-      return items
-    } catch (error) {
-      console.error("Error fetching clientes:", error)
-      return []
-    }
-  }
-
-  useEffect(() => {
-    fetchClientes()
-  }, [])
 
   // Fetch checklist template when device type changes
   useEffect(() => {
@@ -296,10 +281,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
 
   // Fetch sectors when client changes
   const clienteId = watch("clienteId")
-  const clienteSeleccionadoObj = useMemo(
-    () => clientes.find((c) => c.id === clienteId),
-    [clientes, clienteId]
-  )
+  const clienteSeleccionadoObj = selectedClienteObj?.id === clienteId ? selectedClienteObj : undefined
 
   const esClienteEmpresa = clienteSeleccionadoObj?.tipoCliente === "EMPRESA" || !!clienteSeleccionadoObj?.razonSocial
 
@@ -445,8 +427,8 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
 
       const nuevoCliente = await res.json()
 
-      setClientes(prev => [...prev, nuevoCliente])
       setValue("clienteId", nuevoCliente.id)
+      setSelectedClienteObj(nuevoCliente)
 
       setShowClienteModal(false)
       clienteForm.reset()
@@ -626,7 +608,6 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
 
       if (res.status === 202) {
         // Queued offline
-        const clienteSeleccionado = clientes.find(c => c.id === data.clienteId)
         alert("Orden guardada offline. Se sincronizará automáticamente cuando vuelva la conexión.")
         onSuccess?.()
         onClose()
@@ -671,8 +652,6 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
         console.warn("[CHECKLIST SAVE] SKIPPED - template:", !!checklistTemplate, "valores:", Object.keys(checklistValores).length)
       }
 
-      const clienteSeleccionado = clientes.find(c => c.id === data.clienteId)
-
       setOrdenCreada({
         id: nuevaOrden.id,
         numeroOrden: nuevaOrden.numeroOrden,
@@ -682,8 +661,8 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
         fechaPrometida: data.fechaPrometida || null,
         publicToken: nuevaOrden.publicToken || null,
         cliente: {
-          nombre: clienteSeleccionado?.nombre || "",
-          telefono: clienteSeleccionado?.telefono || "",
+          nombre: selectedClienteObj?.nombre || "",
+          telefono: selectedClienteObj?.telefono || "",
         },
         organizationName: nuevaOrden.organizationName || undefined,
       })
@@ -770,33 +749,13 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
 
           {currentStep === 1 && (<>
           <div>
-            <Label htmlFor="clienteId">Cliente *</Label>
-            <div className="flex gap-2">
-              <Select
-                value={watch("clienteId") || ""}
-                onValueChange={(value) => setValue("clienteId", value)}
-              >
-                <SelectTrigger className="flex-1">
-                  <SelectValue placeholder="Seleccionar cliente..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {clientes.map((cliente) => (
-                    <SelectItem key={cliente.id} value={cliente.id}>
-                      {cliente.nombre} - {cliente.telefono}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={() => setShowClienteModal(true)}
-                title="Crear nuevo cliente"
-              >
-                <UserPlus className="h-4 w-4" />
-              </Button>
-            </div>
+            <ClienteSelector
+              value={watch("clienteId") || null}
+              onChange={(id, cliente) => {
+                setValue("clienteId", id || "")
+                setSelectedClienteObj(cliente as Cliente | null)
+              }}
+            />
             {errors.clienteId && (
               <p className="text-sm text-destructive mt-1">
                 {errors.clienteId.message}
