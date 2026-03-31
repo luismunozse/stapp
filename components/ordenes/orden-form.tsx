@@ -17,7 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { X, Plus, Camera, Upload, Trash2, Loader2, Lock, Grid3X3, ClipboardCheck, ChevronDown, ChevronUp } from "lucide-react"
+import { X, Plus, UserPlus, Camera, Upload, Trash2, Loader2, Lock, Grid3X3, ClipboardCheck, ChevronDown, ChevronUp } from "lucide-react"
 import { PatternLock } from "@/components/ui/pattern-lock"
 import { OrdenCreadaModal } from "./orden-creada-modal"
 import { compressImage } from "@/lib/image-compression"
@@ -794,7 +794,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
                 onClick={() => setShowClienteModal(true)}
                 title="Crear nuevo cliente"
               >
-                <Plus className="h-4 w-4" />
+                <UserPlus className="h-4 w-4" />
               </Button>
             </div>
             {errors.clienteId && (
