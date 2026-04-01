@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ClipboardList, Users, Package, DollarSign, Shield, ShoppingCart, TrendingUp, CheckCircle } from "lucide-react"
+import { ClipboardList, Users, Package, DollarSign, Shield, ShoppingCart, TrendingUp, CheckCircle, AlertTriangle, Clock, Wrench } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
 import type { CurrencyCode } from "@/lib/currency"
 import { redirect } from "next/navigation"
@@ -239,9 +239,15 @@ export default async function DashboardPage() {
   let misVentasMesCount = 0
   let misOrdenesRecientes: any[] = []
 
+  let misSinDiagnostico = 0
+  let misEsperandoRepuesto = 0
+  let misVencidas: any[] = []
+  let avgDiasResolucion: number | null = null
+
   if (isTecnico) {
     const primerDiaMes = new Date(new Date().setDate(1))
-    const [activas, completadas, recientes] = await Promise.all([
+    const hoyIso = new Date().toISOString()
+    const [activas, completadas, recientes, sinDiagnostico, esperandoRepuesto, vencidas, completadasConFecha] = await Promise.all([
       supabaseAdmin
         .from("ordenes_servicio")
         .select("id", { count: "exact", head: true })
@@ -257,14 +263,63 @@ export default async function DashboardPage() {
         .gte("fecha_ingreso", primerDiaMes.toISOString()),
       supabaseAdmin
         .from("ordenes_servicio")
-        .select(`id, numero_orden, codigo_orden, dispositivo, estado, fecha_ingreso, clientes (nombre)`)
+        .select(`id, numero_orden, codigo_orden, dispositivo, estado, fecha_ingreso, fecha_prometida, clientes (nombre)`)
         .eq("organization_id", organizationId)
         .eq("tecnico_id", userId)
         .order("fecha_ingreso", { ascending: false })
         .limit(5),
+      supabaseAdmin
+        .from("ordenes_servicio")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", organizationId)
+        .eq("tecnico_id", userId)
+        .in("estado", ["RECIBIDO", "EN_DIAGNOSTICO"]),
+      supabaseAdmin
+        .from("ordenes_servicio")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", organizationId)
+        .eq("tecnico_id", userId)
+        .eq("estado", "ESPERANDO_REPUESTO"),
+      supabaseAdmin
+        .from("ordenes_servicio")
+        .select(`id, numero_orden, codigo_orden, dispositivo, estado, fecha_prometida, clientes (nombre)`)
+        .eq("organization_id", organizationId)
+        .eq("tecnico_id", userId)
+        .in("estado", ["RECIBIDO", "EN_DIAGNOSTICO", "PRESUPUESTADO", "APROBADO", "EN_REPARACION", "ESPERANDO_REPUESTO"])
+        .lt("fecha_prometida", hoyIso)
+        .not("fecha_prometida", "is", null)
+        .order("fecha_prometida", { ascending: true }),
+      supabaseAdmin
+        .from("ordenes_servicio")
+        .select("fecha_ingreso, fecha_completado")
+        .eq("organization_id", organizationId)
+        .eq("tecnico_id", userId)
+        .in("estado", ["REPARADO", "ENTREGADO"])
+        .not("fecha_completado", "is", null)
+        .gte("fecha_ingreso", primerDiaMes.toISOString()),
     ])
     misOrdenesActivas = activas.count || 0
     misOrdenesCompletadas = completadas.count || 0
+    misSinDiagnostico = sinDiagnostico.count || 0
+    misEsperandoRepuesto = esperandoRepuesto.count || 0
+    misVencidas = (vencidas.data || []).map((o: any) => ({
+      id: o.id,
+      numeroOrden: o.numero_orden,
+      codigoOrden: o.codigo_orden,
+      dispositivo: o.dispositivo,
+      estado: o.estado,
+      fechaPrometida: o.fecha_prometida,
+      cliente: o.clientes?.nombre || "Sin cliente",
+      diasAtraso: Math.floor((Date.now() - new Date(o.fecha_prometida).getTime()) / (1000 * 60 * 60 * 24)),
+    }))
+    const completadasConFechaData = completadasConFecha.data || []
+    if (completadasConFechaData.length > 0) {
+      const totalDias = completadasConFechaData.reduce((sum: number, o: any) => {
+        const dias = Math.floor((new Date(o.fecha_completado).getTime() - new Date(o.fecha_ingreso).getTime()) / (1000 * 60 * 60 * 24))
+        return sum + dias
+      }, 0)
+      avgDiasResolucion = Math.round(totalDias / completadasConFechaData.length)
+    }
     misOrdenesRecientes = (recientes.data || []).map((orden: any) => ({
       id: orden.id,
       numeroOrden: orden.numero_orden,
@@ -537,14 +592,34 @@ export default async function DashboardPage() {
       icon: ClipboardList,
       colorClass: "text-info-600 dark:text-info-500",
       bgClass: "bg-info-50 dark:bg-info-100/50",
+      href: "/ordenes",
+    },
+    {
+      title: "Sin Diagnóstico",
+      value: misSinDiagnostico.toString(),
+      description: "Requieren atención",
+      icon: AlertTriangle,
+      colorClass: misSinDiagnostico > 0 ? "text-warning-600 dark:text-warning-500" : "text-success-600 dark:text-success-500",
+      bgClass: misSinDiagnostico > 0 ? "bg-warning-50 dark:bg-warning-100/50" : "bg-success-50 dark:bg-success-100/50",
+      href: "/ordenes?estado=EN_DIAGNOSTICO",
+    },
+    {
+      title: "Esperando Repuesto",
+      value: misEsperandoRepuesto.toString(),
+      description: "En espera de piezas",
+      icon: Clock,
+      colorClass: misEsperandoRepuesto > 0 ? "text-orange-600 dark:text-orange-400" : "text-success-600 dark:text-success-500",
+      bgClass: misEsperandoRepuesto > 0 ? "bg-orange-50 dark:bg-orange-900/30" : "bg-success-50 dark:bg-success-100/50",
+      href: "/ordenes?estado=ESPERANDO_REPUESTO",
     },
     {
       title: "Completadas (Mes)",
       value: misOrdenesCompletadas.toString(),
-      description: "Reparadas/entregadas",
+      description: avgDiasResolucion !== null ? `Prom. ${avgDiasResolucion} día${avgDiasResolucion !== 1 ? "s" : ""}` : "Reparadas/entregadas",
       icon: CheckCircle,
       colorClass: "text-success-600 dark:text-success-500",
       bgClass: "bg-success-50 dark:bg-success-100/50",
+      href: "/ordenes",
     },
   ]
 
@@ -561,10 +636,10 @@ export default async function DashboardPage() {
 
       {/* Stats Cards */}
       <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-3">
-        {stats.map((stat) => {
+        {stats.map((stat: any) => {
           const Icon = stat.icon
-          return (
-            <Card key={stat.title} className="transition-shadow hover:shadow-md">
+          const card = (
+            <Card key={stat.title} className={`transition-shadow hover:shadow-md ${stat.href ? "cursor-pointer hover:border-primary/50" : ""}`}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
                 <CardTitle className="text-xs sm:text-sm font-medium text-foreground">
                   {stat.title}
@@ -581,6 +656,9 @@ export default async function DashboardPage() {
               </CardContent>
             </Card>
           )
+          return stat.href ? (
+            <Link key={stat.title} href={stat.href}>{card}</Link>
+          ) : card
         })}
       </div>
 
@@ -732,7 +810,47 @@ export default async function DashboardPage() {
                 </div>
               </div>
             )}
-            {isTecnico && ordenesPendientes === 0 && (
+            {/* Alertas específicas del técnico */}
+            {isTecnico && misVencidas.length > 0 && (
+              <div className="p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg">
+                <div className="flex items-center gap-2 text-red-700 dark:text-red-400 font-medium">
+                  <AlertTriangle className="h-4 w-4" />
+                  {misVencidas.length} orden{misVencidas.length > 1 ? "es" : ""} con fecha prometida vencida
+                </div>
+                <div className="mt-2 space-y-1">
+                  {misVencidas.slice(0, 3).map((o: any) => (
+                    <Link key={o.id} href={`/ordenes/${o.id}`} className="block text-sm text-red-600 dark:text-red-400 hover:underline">
+                      {o.codigoOrden || `#${o.numeroOrden}`} - {o.cliente}
+                      <span className="ml-1">({o.diasAtraso} día{o.diasAtraso !== 1 ? "s" : ""} de atraso)</span>
+                    </Link>
+                  ))}
+                  {misVencidas.length > 3 && (
+                    <p className="text-xs text-red-500">y {misVencidas.length - 3} más...</p>
+                  )}
+                </div>
+              </div>
+            )}
+            {isTecnico && misEsperandoRepuesto > 0 && (
+              <Link href="/ordenes?estado=ESPERANDO_REPUESTO" className="block">
+                <div className="p-3 bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 rounded-lg hover:bg-orange-100 dark:hover:bg-orange-900/40 transition-colors">
+                  <div className="flex items-center gap-2 text-orange-700 dark:text-orange-400">
+                    <Clock className="h-4 w-4" />
+                    {misEsperandoRepuesto} orden{misEsperandoRepuesto > 1 ? "es" : ""} esperando repuesto
+                  </div>
+                </div>
+              </Link>
+            )}
+            {isTecnico && misSinDiagnostico > 0 && (
+              <Link href="/ordenes?estado=RECIBIDO" className="block">
+                <div className="p-3 bg-warning-50 dark:bg-warning-100/40 border border-warning/30 dark:border-warning/20 rounded-lg hover:bg-warning-100 dark:hover:bg-warning-200/40 transition-colors">
+                  <div className="flex items-center gap-2 text-warning-700 dark:text-warning-500">
+                    <Wrench className="h-4 w-4" />
+                    {misSinDiagnostico} orden{misSinDiagnostico > 1 ? "es" : ""} sin diagnóstico
+                  </div>
+                </div>
+              </Link>
+            )}
+            {isTecnico && misVencidas.length === 0 && misEsperandoRepuesto === 0 && misSinDiagnostico === 0 && (
               <p className="text-sm text-muted-foreground">No hay alertas pendientes</p>
             )}
             {!isTecnico && ordenesPendientes === 0 && itemsBajoStock === 0 && garantiasPorVencer.length === 0 && garantiasVentaPorVencer.length === 0 && ordenesFechaVencida.length === 0 && ordenesPendienteCobro.length === 0 && (

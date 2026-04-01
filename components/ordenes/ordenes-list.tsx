@@ -28,6 +28,19 @@ import { OrdenMobileCard } from "./orden-mobile-card"
 import { Card, CardContent } from "@/components/ui/card"
 import { useCurrency } from "@/contexts/currency-context"
 import type { OrdenServicio, EstadoOrden } from "@/types"
+import { useSession } from "next-auth/react"
+
+function isUrgente(orden: OrdenServicio): boolean {
+  if (!orden.fechaPrometida) return false
+  return new Date(orden.fechaPrometida) < new Date()
+}
+
+function isProximaAVencer(orden: OrdenServicio): boolean {
+  if (!orden.fechaPrometida) return false
+  const manana = new Date()
+  manana.setDate(manana.getDate() + 1)
+  return new Date(orden.fechaPrometida) >= new Date() && new Date(orden.fechaPrometida) <= manana
+}
 
 // Fetcher para SWR
 const fetcher = (url: string) => fetch(url).then(res => res.json())
@@ -61,6 +74,8 @@ const estadoOptions = [
 export function OrdenesList() {
   const router = useRouter()
   const { formatPrice, formatDate } = useCurrency()
+  const { data: session } = useSession()
+  const isTecnico = session?.user?.role === "TECNICO"
   const [showForm, setShowForm] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
   const { confirm, showError } = useModal()
@@ -117,9 +132,27 @@ export function OrdenesList() {
   const [fechaHasta, setFechaHasta] = useState("")
   const [showFilters, setShowFilters] = useState(false)
 
+  const quickFilters = isTecnico ? [
+    { label: "Sin diagnóstico", value: "RECIBIDO" as EstadoOrden },
+    { label: "En reparación", value: "EN_REPARACION" as EstadoOrden },
+    { label: "Esperando repuesto", value: "ESPERANDO_REPUESTO" as EstadoOrden },
+    { label: "Listo para entregar", value: "REPARADO" as EstadoOrden },
+  ] : []
+
   // Sorting
   const [sortKey, setSortKey] = useState<string>("fechaIngreso")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
+  const [sortInitialized, setSortInitialized] = useState(false)
+
+  useEffect(() => {
+    if (!sortInitialized && session) {
+      if (isTecnico) {
+        setSortKey("fechaPrometida")
+        setSortDirection("asc")
+      }
+      setSortInitialized(true)
+    }
+  }, [session, isTecnico, sortInitialized])
 
   // Pagination
   const [page, setPage] = useState(1)
@@ -232,6 +265,11 @@ export function OrdenesList() {
     setPage(1)
   }
 
+  const applyQuickFilter = (value: EstadoOrden) => {
+    setEstado(estado === value ? "" : value)
+    setPage(1)
+  }
+
   const hasActiveFilters = search || estado || fechaDesde || fechaHasta
 
   const columns: Column<OrdenServicio>[] = [
@@ -258,9 +296,21 @@ export function OrdenesList() {
       sortable: true,
       className: "font-medium",
       render: (orden) => (
-        <span className="text-primary font-semibold">
-          {orden.codigoOrden || `#${orden.numeroOrden}`}
-        </span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-primary font-semibold">
+            {orden.codigoOrden || `#${orden.numeroOrden}`}
+          </span>
+          {isUrgente(orden) && (
+            <span className="inline-flex items-center rounded-full bg-red-100 dark:bg-red-900/40 px-1.5 py-0.5 text-[10px] font-medium text-red-700 dark:text-red-400">
+              Vencida
+            </span>
+          )}
+          {isProximaAVencer(orden) && (
+            <span className="inline-flex items-center rounded-full bg-orange-100 dark:bg-orange-900/40 px-1.5 py-0.5 text-[10px] font-medium text-orange-700 dark:text-orange-400">
+              Hoy
+            </span>
+          )}
+        </div>
       ),
     },
     {
@@ -343,19 +393,23 @@ export function OrdenesList() {
           >
             <Printer className="h-4 w-4" />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-muted-foreground hover:text-destructive"
-            onClick={(e) => handleDelete(e, orden)}
-            disabled={deleting === orden.id}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          {!isTecnico && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+              onClick={(e) => handleDelete(e, orden)}
+              disabled={deleting === orden.id}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       ),
     },
   ]
+
+  const visibleColumns = isTecnico ? columns.filter(c => c.key !== "tecnico") : columns
 
   return (
     <div className="space-y-4">
@@ -403,6 +457,25 @@ export function OrdenesList() {
           </Button>
         </div>
       </div>
+
+      {/* Quick filter chips - only for tecnico */}
+      {isTecnico && quickFilters.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {quickFilters.map((qf) => (
+            <button
+              key={qf.value}
+              onClick={() => applyQuickFilter(qf.value)}
+              className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium transition-colors border ${
+                estado === qf.value
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-background text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
+              }`}
+            >
+              {qf.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Filters Panel */}
       {showFilters && (
@@ -523,7 +596,7 @@ export function OrdenesList() {
       <div className="hidden sm:block">
         <DataTable
           data={ordenes}
-          columns={columns}
+          columns={visibleColumns}
           keyExtractor={(orden) => orden.id}
           loading={isLoading}
           emptyMessage="No hay órdenes registradas. Crea tu primera orden con el botón + Nueva"
