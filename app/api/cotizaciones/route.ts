@@ -101,7 +101,7 @@ function formatCotizacion(c: any) {
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, userId, role } = await requireAuth()
     if (error) return error
 
     const { searchParams } = new URL(request.url)
@@ -128,6 +128,7 @@ export async function GET(request: Request) {
         .order("created_at", { ascending: false })
 
       if (estado) query = query.eq("estado", estado)
+      if (role === "TECNICO") query = query.eq("created_by", userId!)
 
       const { data: cotizaciones, error: dbError } = await query
       if (dbError) throw dbError
@@ -156,6 +157,7 @@ export async function GET(request: Request) {
 
     if (estado && estado !== "TODOS") query = query.eq("estado", estado)
     if (search) query = query.ilike("numero_cotizacion", `%${search}%`)
+    if (role === "TECNICO") query = query.eq("created_by", userId!)
 
     query = query.range(offset, offset + limit - 1)
 
@@ -185,13 +187,6 @@ export async function POST(request: Request) {
   try {
     const { error, organizationId, userId, role } = await requireAuth()
     if (error) return error
-
-    if (role !== "ADMIN") {
-      return NextResponse.json(
-        { error: "Solo administradores pueden crear cotizaciones" },
-        { status: 403 }
-      )
-    }
 
     const body = await request.json()
     const data = cotizacionSchema.parse(body)
@@ -302,6 +297,7 @@ export async function POST(request: Request) {
         iva,
         total,
         tipo_cambio: data.tipoCambio || null,
+        created_by: userId,
       })
       .select()
       .single()
