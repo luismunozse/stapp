@@ -30,13 +30,15 @@ import { useCurrency } from "@/contexts/currency-context"
 import type { OrdenServicio, EstadoOrden } from "@/types"
 import { useSession } from "next-auth/react"
 
+const ESTADOS_FINALES = ["ENTREGADO", "ENTREGADO_SIN_REPARACION", "CANCELADO", "SIN_REPARACION"]
+
 function isUrgente(orden: OrdenServicio): boolean {
-  if (!orden.fechaPrometida) return false
+  if (!orden.fechaPrometida || ESTADOS_FINALES.includes(orden.estado)) return false
   return new Date(orden.fechaPrometida) < new Date()
 }
 
 function isProximaAVencer(orden: OrdenServicio): boolean {
-  if (!orden.fechaPrometida) return false
+  if (!orden.fechaPrometida || ESTADOS_FINALES.includes(orden.estado)) return false
   const manana = new Date()
   manana.setDate(manana.getDate() + 1)
   return new Date(orden.fechaPrometida) >= new Date() && new Date(orden.fechaPrometida) <= manana
@@ -441,16 +443,18 @@ export function OrdenesList() {
               </span>
             )}
           </Button>
-          <ExportButton
-            entity="ordenes"
-            filters={{
-              ...(estado && { estado }),
-              ...(fechaDesde && { desde: fechaDesde }),
-              ...(fechaHasta && { hasta: fechaHasta }),
-            }}
-            variant="outline"
-            size="sm"
-          />
+          {!isTecnico && (
+            <ExportButton
+              entity="ordenes"
+              filters={{
+                ...(estado && { estado }),
+                ...(fechaDesde && { desde: fechaDesde }),
+                ...(fechaHasta && { hasta: fechaHasta }),
+              }}
+              variant="outline"
+              size="sm"
+            />
+          )}
           <Button onClick={() => setShowForm(true)} size="sm" className="gap-1.5 ml-auto">
             <Plus className="h-4 w-4" />
             Nueva
@@ -652,6 +656,7 @@ export function OrdenesList() {
                   onPrint={handlePrint}
                   deleting={deleting === orden.id}
                   onClick={() => router.push(`/ordenes/${orden.id}`)}
+                  hideDelete={isTecnico}
                 />
               ))}
             </div>

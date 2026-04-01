@@ -66,6 +66,8 @@ export async function GET(request: Request) {
     const allowedSortColumns: Record<string, string> = {
       fechaIngreso: "fecha_ingreso",
       fecha_ingreso: "fecha_ingreso",
+      fechaPrometida: "fecha_prometida",
+      fecha_prometida: "fecha_prometida",
       numeroOrden: "numero_orden",
       numero_orden: "numero_orden",
       estado: "estado",

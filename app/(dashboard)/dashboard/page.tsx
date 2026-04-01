@@ -601,7 +601,7 @@ export default async function DashboardPage() {
       icon: AlertTriangle,
       colorClass: misSinDiagnostico > 0 ? "text-warning-600 dark:text-warning-500" : "text-success-600 dark:text-success-500",
       bgClass: misSinDiagnostico > 0 ? "bg-warning-50 dark:bg-warning-100/50" : "bg-success-50 dark:bg-success-100/50",
-      href: "/ordenes?estado=EN_DIAGNOSTICO",
+      href: "/ordenes?estado=RECIBIDO",
     },
     {
       title: "Esperando Repuesto",
@@ -635,7 +635,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-3">
+      <div className={`grid gap-3 sm:gap-4 grid-cols-2 ${isTecnico ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
         {stats.map((stat: any) => {
           const Icon = stat.icon
           const card = (
@@ -762,7 +762,7 @@ export default async function DashboardPage() {
                 </div>
               </Link>
             )}
-            {ordenesPendientes > 0 && (
+            {!isTecnico && ordenesPendientes > 0 && (
               <Link href="/ordenes?estado=pendientes" className="block">
                 <div className="p-3 bg-info-50 dark:bg-info-100/40 border border-info/30 dark:border-info/20 rounded-lg hover:bg-info-100 dark:hover:bg-info-200/40 transition-colors">
                   <div className="flex items-center gap-2 text-info-700 dark:text-info-500">

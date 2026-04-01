@@ -14,9 +14,10 @@ interface OrdenMobileCardProps {
   onPrint: (e: React.MouseEvent, orden: OrdenServicio) => void
   deleting: boolean
   onClick: () => void
+  hideDelete?: boolean
 }
 
-export function OrdenMobileCard({ orden, onDelete, onPrint, deleting, onClick }: OrdenMobileCardProps) {
+export function OrdenMobileCard({ orden, onDelete, onPrint, deleting, onClick, hideDelete }: OrdenMobileCardProps) {
   const { formatPrice, formatDate } = useCurrency()
 
   return (
@@ -94,15 +95,17 @@ export function OrdenMobileCard({ orden, onDelete, onPrint, deleting, onClick }:
           >
             <Printer className="h-4 w-4" />
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-10 w-10 text-muted-foreground hover:text-destructive"
-            onClick={(e) => onDelete(e, orden)}
-            disabled={deleting}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          {!hideDelete && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-10 w-10 text-muted-foreground hover:text-destructive"
+              onClick={(e) => onDelete(e, orden)}
+              disabled={deleting}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>
