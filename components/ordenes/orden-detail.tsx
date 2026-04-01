@@ -108,6 +108,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const [savingDiagnostico, setSavingDiagnostico] = useState(false)
 
   const isAdmin = session?.user?.role === "ADMIN"
+  const userRole = session?.user?.role
 
   const seguimientoUrl = orden?.publicToken
     ? `${typeof window !== "undefined" ? window.location.origin : ""}/seguimiento/${orden.publicToken}`
@@ -950,7 +951,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             <TabsContent value="cotizaciones" className="mt-4">
               <Card>
                 <CardContent className="p-6">
-                  <CotizacionList ordenId={ordenId} clienteEmail={orden.cliente?.email} readOnly={!isAdmin} />
+                  <CotizacionList ordenId={ordenId} clienteEmail={orden.cliente?.email} readOnly={!isAdmin && userRole !== "TECNICO"} />
                 </CardContent>
               </Card>
             </TabsContent>

@@ -173,7 +173,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { error, organizationId, userId } = await requireAuth()
+    const { error, organizationId, userId, role } = await requireAuth()
     if (error) return error
 
     // Verificar límite de órdenes del plan
@@ -224,6 +224,7 @@ export async function POST(request: Request) {
         metodo_pago_sena: data.metodoPagoSena || "EFECTIVO",
         metadata: data.metadata || {},
         sector_id: data.sectorId || null,
+        tecnico_id: role === "TECNICO" ? userId : (data.tecnicoId || null),
       })
       .select(`
         *,

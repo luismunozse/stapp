@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAdmin } from "@/lib/auth-utils"
+import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger } from "@/lib/audit"
 import { z } from "zod"
@@ -94,7 +94,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAdmin()
+    const { error, organizationId } = await requireAuth()
     if (error) return error
 
     const { id } = await params
@@ -139,7 +139,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role } = await requireAdmin()
+    const { error, organizationId, userId, role } = await requireAuth()
     if (error) return error
 
     if (role !== "ADMIN") {
@@ -347,7 +347,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role } = await requireAdmin()
+    const { error, organizationId, userId, role } = await requireAuth()
     if (error) return error
 
     if (role !== "ADMIN") {

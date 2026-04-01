@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAdmin } from "@/lib/auth-utils"
+import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getNextQuoteNumber } from "@/lib/counters"
 import { parsePagination } from "@/lib/api-utils"
@@ -101,7 +101,7 @@ function formatCotizacion(c: any) {
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAdmin()
+    const { error, organizationId } = await requireAuth()
     if (error) return error
 
     const { searchParams } = new URL(request.url)
@@ -183,7 +183,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { error, organizationId, userId, role } = await requireAdmin()
+    const { error, organizationId, userId, role } = await requireAuth()
     if (error) return error
 
     if (role !== "ADMIN") {
