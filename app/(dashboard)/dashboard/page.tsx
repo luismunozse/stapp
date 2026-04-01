@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ClipboardList, Users, Package, DollarSign, Shield, ShoppingCart, TrendingUp } from "lucide-react"
+import { ClipboardList, Users, Package, DollarSign, Shield, ShoppingCart, TrendingUp, CheckCircle } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
 import type { CurrencyCode } from "@/lib/currency"
 import { redirect } from "next/navigation"
@@ -525,7 +525,7 @@ export default async function DashboardPage() {
       title: "Completadas (Mes)",
       value: misOrdenesCompletadas.toString(),
       description: "Reparadas/entregadas",
-      icon: ClipboardList,
+      icon: CheckCircle,
       colorClass: "text-success-600 dark:text-success-500",
       bgClass: "bg-success-50 dark:bg-success-100/50",
     },
@@ -579,8 +579,8 @@ export default async function DashboardPage() {
         </DashboardCharts>
       )}
 
-      {/* Vendedor: solo órdenes recientes */}
-      {isVendedor && (
+      {/* Vendedor y Técnico: solo órdenes recientes */}
+      {(isVendedor || isTecnico) && (
         <OrdenesRecientes ordenes={ordenesRecientes} />
       )}
 
@@ -654,7 +654,7 @@ export default async function DashboardPage() {
                 </div>
               </Link>
             )}
-            {itemsBajoStock > 0 && (
+            {!isTecnico && itemsBajoStock > 0 && (
               <Link href="/inventario" className="block">
                 <div className="p-3 bg-warning-50 dark:bg-warning-100/40 border border-warning/30 dark:border-warning/20 rounded-lg hover:bg-warning-100 dark:hover:bg-warning-200/40 transition-colors">
                   <div className="flex items-center gap-2 text-warning-700 dark:text-warning-500">
@@ -712,10 +712,11 @@ export default async function DashboardPage() {
                 </div>
               </div>
             )}
-            {ordenesPendientes === 0 && itemsBajoStock === 0 && (isTecnico || (garantiasPorVencer.length === 0 && garantiasVentaPorVencer.length === 0 && ordenesFechaVencida.length === 0 && ordenesPendienteCobro.length === 0)) && (
-              <p className="text-sm text-muted-foreground">
-                No hay alertas pendientes
-              </p>
+            {isTecnico && ordenesPendientes === 0 && (
+              <p className="text-sm text-muted-foreground">No hay alertas pendientes</p>
+            )}
+            {!isTecnico && ordenesPendientes === 0 && itemsBajoStock === 0 && garantiasPorVencer.length === 0 && garantiasVentaPorVencer.length === 0 && ordenesFechaVencida.length === 0 && ordenesPendienteCobro.length === 0 && (
+              <p className="text-sm text-muted-foreground">No hay alertas pendientes</p>
             )}
           </CardContent>
         </Card>
