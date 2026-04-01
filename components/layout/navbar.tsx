@@ -48,7 +48,7 @@ type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; role
 const navItems: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/ordenes", label: "Órdenes", icon: ClipboardList },
-  { href: "/clientes", label: "Clientes", icon: Users, roles: ["ADMIN", "VENDEDOR"] },
+  { href: "/clientes", label: "Clientes", icon: Users, roles: ["ADMIN", "VENDEDOR", "TECNICO"] },
   { href: "/tecnicos", label: "Técnicos", icon: Wrench, roles: ["ADMIN"] },
   { href: "/vendedores", label: "Vendedores", icon: TrendingUp, roles: ["ADMIN"] },
   { href: "/ventas", label: "Ventas", icon: ShoppingCart, roles: ["ADMIN", "VENDEDOR"] },
@@ -66,7 +66,7 @@ const navItems: NavItem[] = [
 const bottomNavItems: NavItem[] = [
   { href: "/dashboard", label: "Inicio", icon: LayoutDashboard },
   { href: "/ordenes", label: "Órdenes", icon: ClipboardList },
-  { href: "/clientes", label: "Clientes", icon: Users, roles: ["ADMIN", "VENDEDOR"] },
+  { href: "/clientes", label: "Clientes", icon: Users, roles: ["ADMIN", "VENDEDOR", "TECNICO"] },
   { href: "/inventario", label: "Inventario", icon: Package, roles: ["ADMIN"] },
 ]
 

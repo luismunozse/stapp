@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth, requireAdminOrVendedor } from "@/lib/auth-utils"
+import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatCliente } from "@/lib/db-utils"
 import { enforcePlanLimit } from "@/lib/plan-limits"
@@ -81,7 +81,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { error, organizationId } = await requireAdminOrVendedor()
+    const { error, organizationId } = await requireAuth()
     if (error) return error
 
     // Verificar límite de clientes del plan
