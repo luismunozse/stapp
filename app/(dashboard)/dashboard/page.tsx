@@ -237,10 +237,11 @@ export default async function DashboardPage() {
   let misVentasHoyCount = 0
   let misVentasMesTotal = 0
   let misVentasMesCount = 0
+  let misOrdenesRecientes: any[] = []
 
   if (isTecnico) {
     const primerDiaMes = new Date(new Date().setDate(1))
-    const [activas, completadas] = await Promise.all([
+    const [activas, completadas, recientes] = await Promise.all([
       supabaseAdmin
         .from("ordenes_servicio")
         .select("id", { count: "exact", head: true })
@@ -254,9 +255,25 @@ export default async function DashboardPage() {
         .eq("tecnico_id", userId)
         .in("estado", ["REPARADO", "ENTREGADO"])
         .gte("fecha_ingreso", primerDiaMes.toISOString()),
+      supabaseAdmin
+        .from("ordenes_servicio")
+        .select(`id, numero_orden, codigo_orden, dispositivo, estado, fecha_ingreso, clientes (nombre)`)
+        .eq("organization_id", organizationId)
+        .eq("tecnico_id", userId)
+        .order("fecha_ingreso", { ascending: false })
+        .limit(5),
     ])
     misOrdenesActivas = activas.count || 0
     misOrdenesCompletadas = completadas.count || 0
+    misOrdenesRecientes = (recientes.data || []).map((orden: any) => ({
+      id: orden.id,
+      numeroOrden: orden.numero_orden,
+      codigoOrden: orden.codigo_orden,
+      cliente: orden.clientes?.nombre || "Sin cliente",
+      dispositivo: orden.dispositivo,
+      estado: orden.estado,
+      fechaIngreso: orden.fecha_ingreso,
+    }))
   }
 
   if (isVendedor) {
@@ -580,8 +597,11 @@ export default async function DashboardPage() {
       )}
 
       {/* Vendedor y Técnico: solo órdenes recientes */}
-      {(isVendedor || isTecnico) && (
+      {isVendedor && (
         <OrdenesRecientes ordenes={ordenesRecientes} />
+      )}
+      {isTecnico && (
+        <OrdenesRecientes ordenes={misOrdenesRecientes} />
       )}
 
       {/* Tercera fila: Alertas y Widget Dólar */}
