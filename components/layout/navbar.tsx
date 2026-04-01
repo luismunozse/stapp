@@ -54,7 +54,7 @@ const navItems: NavItem[] = [
   { href: "/ventas", label: "Ventas", icon: ShoppingCart, roles: ["ADMIN", "VENDEDOR"] },
   { href: "/pos", label: "POS", icon: Store, roles: ["ADMIN", "VENDEDOR"] },
   { href: "/cotizaciones", label: "Cotizaciones", icon: Receipt, roles: ["ADMIN"] },
-  { href: "/inventario", label: "Inventario", icon: Package },
+  { href: "/inventario", label: "Inventario", icon: Package, roles: ["ADMIN"] },
   { href: "/caja", label: "Caja", icon: Landmark, roles: ["ADMIN"] },
   { href: "/facturacion", label: "Facturación", icon: FileText, roles: ["ADMIN"] },
   { href: "/reportes", label: "Reportes", icon: BarChart3, roles: ["ADMIN", "VENDEDOR"] },
@@ -67,7 +67,7 @@ const bottomNavItems: NavItem[] = [
   { href: "/dashboard", label: "Inicio", icon: LayoutDashboard },
   { href: "/ordenes", label: "Órdenes", icon: ClipboardList },
   { href: "/clientes", label: "Clientes", icon: Users, roles: ["ADMIN", "VENDEDOR"] },
-  { href: "/inventario", label: "Inventario", icon: Package },
+  { href: "/inventario", label: "Inventario", icon: Package, roles: ["ADMIN"] },
 ]
 
 export function Navbar() {
