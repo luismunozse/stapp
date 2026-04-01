@@ -224,7 +224,7 @@ export async function POST(request: Request) {
         metodo_pago_sena: data.metodoPagoSena || "EFECTIVO",
         metadata: data.metadata || {},
         sector_id: data.sectorId || null,
-        tecnico_id: role === "TECNICO" ? userId : (data.tecnicoId || null),
+        tecnico_id: role === "TECNICO" ? userId : null,
       })
       .select(`
         *,
