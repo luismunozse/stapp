@@ -2,6 +2,9 @@
 const nextConfig = {
   reactStrictMode: true,
   serverExternalPackages: [],
+  outputFileTracingIncludes: {
+    '/api/**': ['./lib/fonts/**/*'],
+  },
   images: {
     formats: ['image/avif', 'image/webp'],
     remotePatterns: [

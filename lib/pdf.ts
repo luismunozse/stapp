@@ -1,10 +1,13 @@
 import { PDFDocument as PDFLib, rgb, StandardFonts } from "pdf-lib"
-import * as fontkit from "@pdf-lib/fontkit"
+import fontkitModule from "@pdf-lib/fontkit"
 import { readFile } from "fs/promises"
 import { join } from "path"
 import { formatCurrencyValue, type CurrencyCode, DEFAULT_CURRENCY } from "@/lib/currency"
 import { formatDateValue, formatDateTimeValue, DEFAULT_TIMEZONE } from "@/lib/timezone"
 import QRCode from "qrcode"
+
+// Compatibilidad: algunos bundlers ponen el default dentro de .default
+const fontkit = (fontkitModule as any).default || fontkitModule
 
 // Cache de fuentes para no leer archivos en cada generación
 let fontCache: { regular: Buffer; bold: Buffer } | null = null
