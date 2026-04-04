@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { DataTablePagination } from "@/components/ui/data-table"
+import { DataTable, DataTablePagination, type Column } from "@/components/ui/data-table"
 import {
   Plus,
   Search,
@@ -19,6 +19,8 @@ import {
   History,
   ArchiveRestore,
   Settings2,
+  LayoutGrid,
+  LayoutList,
 } from "lucide-react"
 import { InventarioForm } from "./inventario-form"
 import { MovimientosHistorial } from "./movimientos-historial"
@@ -70,6 +72,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   const [editingItem, setEditingItem] = useState<Inventario | null>(null)
   const [movimientosItem, setMovimientosItem] = useState<{ id: string; nombre: string } | null>(null)
   const [includeArchived, setIncludeArchived] = useState(false)
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
 
   // Pagination
   const [page, setPage] = useState(1)
@@ -165,6 +168,122 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
     }
   }
 
+  const listColumns: Column<Inventario>[] = useMemo(() => [
+    {
+      key: "nombre",
+      header: "Producto",
+      render: (item) => (
+        <div>
+          <div className="font-medium text-sm">{item.nombre}</div>
+          <div className="text-xs text-muted-foreground">{item.codigo}</div>
+        </div>
+      ),
+    },
+    {
+      key: "tipoDispositivo",
+      header: "Tipo",
+      hideOnMobile: true,
+      render: (item) => {
+        const nombre = tiposDispositivo.find((t) => t.codigo === item.tipoDispositivo)?.nombre || item.tipoDispositivo
+        return <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5">{nombre}</Badge>
+      },
+    },
+    {
+      key: "categoria",
+      header: "Categoría",
+      hideOnMobile: true,
+      render: (item) => <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5">{item.categoria}</Badge>,
+    },
+    {
+      key: "stock",
+      header: "Stock",
+      className: "text-center",
+      headerClassName: "text-center",
+      render: (item) => {
+        const itemThreshold = item.stockMinimo ?? umbralStockBajo
+        const esStockBajo = item.stock <= itemThreshold
+        const sinStock = item.stock === 0
+        return (
+          <div className="flex items-center justify-center gap-1">
+            <span className={`font-bold ${sinStock ? "text-destructive" : esStockBajo ? "text-amber-600" : ""}`}>
+              {item.stock}
+            </span>
+            {esStockBajo && <AlertCircle className="h-3 w-3 text-amber-600" />}
+          </div>
+        )
+      },
+    },
+    {
+      key: "precioCompra",
+      header: "Costo",
+      hideOnMobile: true,
+      className: "text-right",
+      headerClassName: "text-right",
+      render: (item) => <span className="text-muted-foreground">{formatPrice(item.precioCompra)}</span>,
+    },
+    {
+      key: "precioVenta",
+      header: "Venta",
+      className: "text-right",
+      headerClassName: "text-right",
+      render: (item) => <span className="font-medium">{formatPrice(item.precioVenta)}</span>,
+    },
+    {
+      key: "margen",
+      header: "Margen",
+      hideOnMobile: true,
+      className: "text-right",
+      headerClassName: "text-right",
+      render: (item) => {
+        const margen = item.precioVenta - item.precioCompra
+        return margen > 0 ? <span className="text-emerald-600 text-xs font-medium">+{formatPrice(margen)}</span> : <span className="text-muted-foreground text-xs">-</span>
+      },
+    },
+    {
+      key: "acciones",
+      header: "",
+      className: "text-right",
+      render: (item) => {
+        const isArchived = !!item.deletedAt
+        return (
+          <div className="flex items-center justify-end gap-0.5">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground"
+              onClick={(e) => { e.stopPropagation(); setMovimientosItem({ id: item.id, nombre: item.nombre }) }}
+            >
+              <History className="h-3.5 w-3.5" />
+            </Button>
+            {!isArchived && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={(e) => { e.stopPropagation(); setEditingItem(item); setShowForm(true) }}
+                >
+                  <Edit className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                  onClick={(e) => { e.stopPropagation(); handleArchive(item.id) }}
+                >
+                  <Archive className="h-3.5 w-3.5" />
+                </Button>
+              </>
+            )}
+            {isArchived && (
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 text-muted-foreground">Archivado</Badge>
+            )}
+          </div>
+        )
+      },
+    },
+  ], [tiposDispositivo, umbralStockBajo, formatPrice])
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-4">
@@ -249,6 +368,24 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
               <span className="sm:hidden">Importar</span>
             </Button>
           )}
+          <div className="flex items-center border rounded-md">
+            <Button
+              variant={viewMode === "grid" ? "default" : "ghost"}
+              size="sm"
+              className="h-8 w-8 p-0 rounded-r-none"
+              onClick={() => setViewMode("grid")}
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={viewMode === "list" ? "default" : "ghost"}
+              size="sm"
+              className="h-8 w-8 p-0 rounded-l-none"
+              onClick={() => setViewMode("list")}
+            >
+              <LayoutList className="h-4 w-4" />
+            </Button>
+          </div>
           <Button onClick={() => setShowForm(true)} className="gap-2">
             <Plus className="h-4 w-4" />
             Nuevo Item
@@ -301,145 +438,167 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
         </Card>
       ) : (
         <>
-          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-            {items.map((item) => {
-              const itemThreshold = item.stockMinimo ?? umbralStockBajo
-              const esStockBajo = item.stock <= itemThreshold
-              const sinStock = item.stock === 0
-              const margen = item.precioVenta - item.precioCompra
-              const tipoNombre = tiposDispositivo.find((t) => t.codigo === item.tipoDispositivo)?.nombre || item.tipoDispositivo
-              const isArchived = !!item.deletedAt
+          {viewMode === "list" ? (
+            <DataTable
+              data={items}
+              columns={listColumns}
+              keyExtractor={(item) => item.id}
+              rowClassName={(item) => {
+                const isArchived = !!item.deletedAt
+                const sinStock = item.stock === 0
+                return `${sinStock && !isArchived ? "bg-destructive/5" : ""} ${isArchived ? "opacity-50" : ""}`
+              }}
+              pagination={total > pageSize ? {
+                page,
+                pageSize,
+                total,
+                onPageChange: setPage,
+                onPageSizeChange: (size) => { setPageSize(size); setPage(1) },
+              } : undefined}
+            />
+          ) : (
+            <>
+              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                {items.map((item) => {
+                  const itemThreshold = item.stockMinimo ?? umbralStockBajo
+                  const esStockBajo = item.stock <= itemThreshold
+                  const sinStock = item.stock === 0
+                  const margen = item.precioVenta - item.precioCompra
+                  const tipoNombre = tiposDispositivo.find((t) => t.codigo === item.tipoDispositivo)?.nombre || item.tipoDispositivo
+                  const isArchived = !!item.deletedAt
 
-              return (
-                <Card key={item.id} className={`${sinStock && !isArchived ? "border-destructive/30 bg-destructive/5" : ""} ${isArchived ? "opacity-50" : ""}`}>
-                  <CardContent className="p-4">
-                    {/* Row 1: Name + Actions */}
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="font-semibold text-sm leading-tight truncate">{item.nombre}</div>
-                        <div className="text-xs text-muted-foreground">{item.codigo}</div>
-                      </div>
-                      <div className="flex items-center gap-0.5 shrink-0">
-                        {isArchived ? (
-                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 text-muted-foreground">
-                            Archivado
+                  return (
+                    <Card key={item.id} className={`${sinStock && !isArchived ? "border-destructive/30 bg-destructive/5" : ""} ${isArchived ? "opacity-50" : ""}`}>
+                      <CardContent className="p-4">
+                        {/* Row 1: Name + Actions */}
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="font-semibold text-sm leading-tight truncate">{item.nombre}</div>
+                            <div className="text-xs text-muted-foreground">{item.codigo}</div>
+                          </div>
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            {isArchived ? (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 text-muted-foreground">
+                                Archivado
+                              </Badge>
+                            ) : (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7"
+                                  onClick={() => {
+                                    setEditingItem(item)
+                                    setShowForm(true)
+                                  }}
+                                >
+                                  <Edit className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                  onClick={() => handleArchive(item.id)}
+                                >
+                                  <Archive className="h-3.5 w-3.5" />
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Row 2: Badges */}
+                        <div className="flex items-center gap-1.5 mb-3">
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5">
+                            {tipoNombre}
                           </Badge>
-                        ) : (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              onClick={() => {
-                                setEditingItem(item)
-                                setShowForm(true)
-                              }}
-                            >
-                              <Edit className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                              onClick={() => handleArchive(item.id)}
-                            >
-                              <Archive className="h-3.5 w-3.5" />
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Row 2: Badges */}
-                    <div className="flex items-center gap-1.5 mb-3">
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5">
-                        {tipoNombre}
-                      </Badge>
-                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5">
-                        {item.categoria}
-                      </Badge>
-                      {item.proveedor && (
-                        <span className="text-[10px] text-muted-foreground truncate">{item.proveedor}</span>
-                      )}
-                    </div>
-
-                    {/* Row 3: Stock + Price grid */}
-                    <div className="grid grid-cols-3 gap-2 rounded-lg bg-muted/50 p-2.5">
-                      {/* Stock */}
-                      <div className="text-center">
-                        <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">Stock</div>
-                        <div className={`text-lg font-bold leading-none ${
-                          sinStock ? "text-destructive" : esStockBajo ? "text-amber-600" : "text-foreground"
-                        }`}>
-                          {item.stock}
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5">
+                            {item.categoria}
+                          </Badge>
+                          {item.proveedor && (
+                            <span className="text-[10px] text-muted-foreground truncate">{item.proveedor}</span>
+                          )}
                         </div>
-                        {esStockBajo && !isArchived && (
-                          <div className="flex items-center justify-center gap-0.5 mt-0.5">
-                            <AlertCircle className="h-2.5 w-2.5 text-amber-600" />
-                            <span className="text-[9px] text-amber-600 font-medium">
-                              {sinStock ? "Sin stock" : "Bajo"}
-                            </span>
-                          </div>
-                        )}
-                        {item.stockMinimo != null && !isArchived && (
-                          <div className="flex items-center justify-center gap-0.5 mt-0.5">
-                            <Settings2 className="h-2 w-2 text-muted-foreground" />
-                            <span className="text-[8px] text-muted-foreground">mín: {item.stockMinimo}</span>
-                          </div>
-                        )}
-                      </div>
-                      {/* Costo */}
-                      <div className="text-center border-x border-border/50">
-                        <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">Costo</div>
-                        <div className="text-sm font-medium leading-none text-muted-foreground">
-                          {formatPrice(item.precioCompra)}
-                        </div>
-                      </div>
-                      {/* Venta */}
-                      <div className="text-center">
-                        <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">Venta</div>
-                        <div className="text-sm font-bold leading-none">
-                          {formatPrice(item.precioVenta)}
-                        </div>
-                        {margen > 0 && (
-                          <div className="text-[9px] text-emerald-600 font-medium mt-0.5">
-                            +{formatPrice(margen)}
-                          </div>
-                        )}
-                      </div>
-                    </div>
 
-                    {/* Row 4: Movimientos link */}
-                    <div className="flex justify-end mt-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
-                        onClick={() => setMovimientosItem({ id: item.id, nombre: item.nombre })}
-                      >
-                        <History className="mr-1 h-3 w-3" />
-                        Movimientos
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              )
-            })}
-          </div>
-          {total > pageSize && (
-            <div className="mt-4">
-              <DataTablePagination
-                page={page}
-                pageSize={pageSize}
-                total={total}
-                dataLength={items.length}
-                onPageChange={setPage}
-                onPageSizeChange={(size) => {
-                  setPageSize(size)
-                  setPage(1)
-                }}
-              />
-            </div>
+                        {/* Row 3: Stock + Price grid */}
+                        <div className="grid grid-cols-3 gap-2 rounded-lg bg-muted/50 p-2.5">
+                          {/* Stock */}
+                          <div className="text-center">
+                            <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">Stock</div>
+                            <div className={`text-lg font-bold leading-none ${
+                              sinStock ? "text-destructive" : esStockBajo ? "text-amber-600" : "text-foreground"
+                            }`}>
+                              {item.stock}
+                            </div>
+                            {esStockBajo && !isArchived && (
+                              <div className="flex items-center justify-center gap-0.5 mt-0.5">
+                                <AlertCircle className="h-2.5 w-2.5 text-amber-600" />
+                                <span className="text-[9px] text-amber-600 font-medium">
+                                  {sinStock ? "Sin stock" : "Bajo"}
+                                </span>
+                              </div>
+                            )}
+                            {item.stockMinimo != null && !isArchived && (
+                              <div className="flex items-center justify-center gap-0.5 mt-0.5">
+                                <Settings2 className="h-2 w-2 text-muted-foreground" />
+                                <span className="text-[8px] text-muted-foreground">mín: {item.stockMinimo}</span>
+                              </div>
+                            )}
+                          </div>
+                          {/* Costo */}
+                          <div className="text-center border-x border-border/50">
+                            <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">Costo</div>
+                            <div className="text-sm font-medium leading-none text-muted-foreground">
+                              {formatPrice(item.precioCompra)}
+                            </div>
+                          </div>
+                          {/* Venta */}
+                          <div className="text-center">
+                            <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">Venta</div>
+                            <div className="text-sm font-bold leading-none">
+                              {formatPrice(item.precioVenta)}
+                            </div>
+                            {margen > 0 && (
+                              <div className="text-[9px] text-emerald-600 font-medium mt-0.5">
+                                +{formatPrice(margen)}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Row 4: Movimientos link */}
+                        <div className="flex justify-end mt-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
+                            onClick={() => setMovimientosItem({ id: item.id, nombre: item.nombre })}
+                          >
+                            <History className="mr-1 h-3 w-3" />
+                            Movimientos
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+              </div>
+              {total > pageSize && (
+                <div className="mt-4">
+                  <DataTablePagination
+                    page={page}
+                    pageSize={pageSize}
+                    total={total}
+                    dataLength={items.length}
+                    onPageChange={setPage}
+                    onPageSizeChange={(size) => {
+                      setPageSize(size)
+                      setPage(1)
+                    }}
+                  />
+                </div>
+              )}
+            </>
           )}
         </>
       )}
