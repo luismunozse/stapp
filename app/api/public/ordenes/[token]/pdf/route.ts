@@ -119,6 +119,7 @@ export async function GET(
       firmaRecepcion: checklistData?.firma_cliente || null,
       firmaRecepcionMime: checklistData?.firma_mime || null,
       fotosIngreso: fotosData && fotosData.length > 0 ? fotosData : null,
+      soloCliente: true,
     }
 
     // Generar PDF
