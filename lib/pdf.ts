@@ -679,8 +679,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
 
   let y = height - margin - 10
 
-  // === HEADER: [Logo + Empresa] izquierda | [Orden + Fechas] derecha ===
-  let logoW = 0
+  // === LOGO CENTRADO (si existe) ===
   if (data.logoUrl) {
     try {
       const logoResponse = await fetch(data.logoUrl)
@@ -696,13 +695,13 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
         }
         if (logoImage) {
           const logoDims = logoImage.scale(1)
-          const maxLogoH = 40
-          const maxLogoW = 50
+          const maxLogoH = 50
+          const maxLogoW = 65
           const scale = Math.min(maxLogoH / logoDims.height, maxLogoW / logoDims.width)
           const sw = logoDims.width * scale
           const sh = logoDims.height * scale
-          page.drawImage(logoImage, { x: margin, y: y - sh + 5, width: sw, height: sh })
-          logoW = sw + 10
+          page.drawImage(logoImage, { x: (width - sw) / 2, y: y - sh + 5, width: sw, height: sh })
+          y -= sh + 4
         }
       }
     } catch (logoError) {
@@ -710,14 +709,13 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     }
   }
 
-  // Empresa (al lado del logo)
-  const empresaX = margin + logoW
-  page.drawText(empresaNombre, { x: empresaX, y, size: 13, font: helveticaBold, color: textColor })
+  // === HEADER: Empresa izquierda | Orden derecha ===
+  page.drawText(empresaNombre, { x: margin, y, size: 13, font: helveticaBold, color: textColor })
   const companyDetails: string[] = []
   if (telefonoEmpresa) companyDetails.push(`Tel: ${telefonoEmpresa}`)
   if (direccionEmpresa) companyDetails.push(direccionEmpresa)
   if (companyDetails.length > 0) {
-    page.drawText(companyDetails.join("  ·  "), { x: empresaX, y: y - 12, size: 7, font: helvetica, color: grayColor })
+    page.drawText(companyDetails.join("  ·  "), { x: margin, y: y - 12, size: 7, font: helvetica, color: grayColor })
   }
 
   // Orden a la derecha
