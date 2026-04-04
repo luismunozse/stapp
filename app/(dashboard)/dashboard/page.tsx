@@ -273,7 +273,7 @@ export default async function DashboardPage() {
         .select("id", { count: "exact", head: true })
         .eq("organization_id", organizationId)
         .eq("tecnico_id", userId)
-        .in("estado", ["RECIBIDO", "EN_DIAGNOSTICO"]),
+        .eq("estado", "RECIBIDO"),
       supabaseAdmin
         .from("ordenes_servicio")
         .select("id", { count: "exact", head: true })

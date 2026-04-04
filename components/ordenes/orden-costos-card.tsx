@@ -20,6 +20,7 @@ interface OrdenCostosCardProps {
   origenPresupuesto?: "cotizacion" | "manual" | null
   onUpdateField: (field: string, value: any) => void
   onCobrar?: () => void
+  readOnly?: boolean
 }
 
 export function OrdenCostosCard({
@@ -34,10 +35,12 @@ export function OrdenCostosCard({
   origenPresupuesto,
   onUpdateField,
   onCobrar,
+  readOnly,
 }: OrdenCostosCardProps) {
   const { formatPrice } = useCurrency()
   const pendienteReal = Math.max(0, (costoFinal || 0) - descuentoCobro - totalCobrado)
   const fromCotizacion = origenPresupuesto === "cotizacion"
+  const isLocked = fromCotizacion || readOnly
 
   return (
     <Card>
@@ -58,9 +61,9 @@ export function OrdenCostosCard({
               </Badge>
             )}
           </div>
-          {fromCotizacion ? (
+          {isLocked ? (
             <div className="flex items-center gap-2 h-9 px-3 rounded-md border bg-muted/50 text-sm">
-              <Lock className="h-3 w-3 text-muted-foreground" />
+              {fromCotizacion && <Lock className="h-3 w-3 text-muted-foreground" />}
               <span>{formatPrice(presupuesto || 0)}</span>
             </div>
           ) : (
@@ -88,9 +91,9 @@ export function OrdenCostosCard({
               </Badge>
             )}
           </div>
-          {fromCotizacion ? (
+          {isLocked ? (
             <div className="flex items-center gap-2 h-9 px-3 rounded-md border bg-muted/50 text-sm">
-              <Lock className="h-3 w-3 text-muted-foreground" />
+              {fromCotizacion && <Lock className="h-3 w-3 text-muted-foreground" />}
               <span>{formatPrice(costoFinal || 0)}</span>
             </div>
           ) : (
@@ -134,7 +137,7 @@ export function OrdenCostosCard({
                 {formatPrice(pendienteReal)}
               </span>
             </div>
-            {onCobrar && estado !== "CANCELADO" && estado !== "SIN_REPARACION" && (
+            {onCobrar && !readOnly && estado !== "CANCELADO" && estado !== "SIN_REPARACION" && (
               <Button
                 onClick={onCobrar}
                 className="w-full mt-3"

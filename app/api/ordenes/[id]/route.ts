@@ -127,6 +127,14 @@ export async function PUT(
       )
     }
 
+    // Técnicos solo pueden actualizar sus órdenes asignadas
+    if (role === "TECNICO" && orden.tecnico_id !== userId) {
+      return NextResponse.json(
+        { error: "No autorizado" },
+        { status: 403 }
+      )
+    }
+
     // Validar transición de estado (state machine)
     if (data.estado && data.estado !== orden.estado) {
       if (!esTransicionValida(orden.estado, data.estado)) {

@@ -618,40 +618,38 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             <Tag className="h-4 w-4 mr-2" />
             Etiqueta
           </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {isAdmin && (orden.estado === "REPARADO" || orden.estado === "ENTREGADO") && (
-                <DropdownMenuItem onClick={handleGenerarFactura} disabled={updating}>
-                  <Receipt className="h-4 w-4 mr-2" />
-                  Generar Factura
-                </DropdownMenuItem>
-              )}
-              {isAdmin && (orden.estado === "ENTREGADO" || orden.estado === "REPARADO") && !orden.esReingreso && (
-                <DropdownMenuItem onClick={handleReingreso} disabled={updating}>
-                  <Shield className="h-4 w-4 mr-2" />
-                  Re-ingreso por Garantia
-                </DropdownMenuItem>
-              )}
-              {isAdmin && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    className="text-destructive focus:text-destructive"
-                    onClick={handleDeleteOrden}
-                    disabled={deleting}
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Eliminar orden
+          {isAdmin && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {(orden.estado === "REPARADO" || orden.estado === "ENTREGADO") && (
+                  <DropdownMenuItem onClick={handleGenerarFactura} disabled={updating}>
+                    <Receipt className="h-4 w-4 mr-2" />
+                    Generar Factura
                   </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                )}
+                {(orden.estado === "ENTREGADO" || orden.estado === "REPARADO") && !orden.esReingreso && (
+                  <DropdownMenuItem onClick={handleReingreso} disabled={updating}>
+                    <Shield className="h-4 w-4 mr-2" />
+                    Re-ingreso por Garantia
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onClick={handleDeleteOrden}
+                  disabled={deleting}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Eliminar orden
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       </div>
 
@@ -710,6 +708,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           tecnicos={tecnicos}
           updating={updating}
           onAsignarTecnico={handleAsignarTecnico}
+          readOnly={userRole === "TECNICO"}
         />
       </div>
 
@@ -1027,6 +1026,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             origenPresupuesto={(orden as any).origenPresupuesto || null}
             onUpdateField={handleUpdateField}
             onCobrar={() => setShowCobrarDialog(true)}
+            readOnly={userRole === "TECNICO"}
           />
         </div>
       </div>
@@ -1061,6 +1061,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           origenPresupuesto={(orden as any).origenPresupuesto || null}
           onUpdateField={handleUpdateField}
           onCobrar={() => setShowCobrarDialog(true)}
+          readOnly={userRole === "TECNICO"}
         />
       </div>
 
