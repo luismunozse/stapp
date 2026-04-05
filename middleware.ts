@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getToken } from "next-auth/jwt"
-import { rateLimit, getApiRateLimit, isExemptFromRateLimit, persistentRateLimit } from "@/lib/rate-limit"
-import { createHmac } from "crypto"
+import { rateLimit, getApiRateLimit, isExemptFromRateLimit } from "@/lib/rate-limit"
 
 // Subdominio especial para el panel de superadmin
 const SUPERADMIN_SUBDOMAIN = "admin"
@@ -230,26 +229,18 @@ export async function middleware(request: NextRequest) {
     }
 
     // Agregar headers de superadmin para las APIs
-    const saEmail = token.email as string
-    const saUserId = token.id as string
-    requestHeaders.set("x-superadmin-email", saEmail)
-    requestHeaders.set("x-user-id", saUserId)
+    // Seguridad: estos headers solo se setean acá, después de validar JWT + email.
+    // El middleware corre antes que cualquier API route, no se pueden inyectar externamente.
+    requestHeaders.set("x-superadmin-email", token.email as string)
+    requestHeaders.set("x-user-id", token.id as string)
 
-    // HMAC de integridad para prevenir spoofing de headers
-    const hmacSecret = process.env.NEXTAUTH_SECRET || "fallback-secret"
-    const hmac = createHmac("sha256", hmacSecret)
-      .update(`superadmin:${saEmail}:${saUserId}`)
-      .digest("hex")
-    requestHeaders.set("x-superadmin-hmac", hmac)
-
-    // Rate limiting persistente para APIs de superadmin
+    // Rate limiting para APIs de superadmin (más estricto: 60 req/min)
     if (pathname.startsWith("/api/superadmin")) {
       const saIp = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown"
-      const rlResult = await persistentRateLimit(
-        `sa:${saIp}`,
-        pathname.split("/").slice(0, 4).join("/"),
+      const rlResult = await rateLimit(
+        `sa:${saIp}:${pathname.split("/").slice(0, 4).join("/")}`,
         60,
-        60
+        60000
       )
       if (!rlResult.success) {
         return NextResponse.json(

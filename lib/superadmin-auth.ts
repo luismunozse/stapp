@@ -1,7 +1,6 @@
 import { auth } from "@/lib/auth"
 import { NextResponse } from "next/server"
 import { headers } from "next/headers"
-import { createHmac } from "crypto"
 
 /**
  * Verifica si un email está en la lista de SUPERADMIN_EMAILS
@@ -11,17 +10,6 @@ export function isSuperadminEmail(email: string | null | undefined): boolean {
   const superadminEmails =
     process.env.SUPERADMIN_EMAILS?.split(",").map((e) => e.trim().toLowerCase()) || []
   return superadminEmails.includes(email.toLowerCase())
-}
-
-/**
- * Genera un HMAC de los headers de superadmin para verificar integridad.
- * Se genera en el middleware y se valida en requireSuperadmin().
- */
-export function generateSuperadminHmac(email: string, userId: string): string {
-  const secret = process.env.NEXTAUTH_SECRET || "fallback-secret"
-  return createHmac("sha256", secret)
-    .update(`superadmin:${email}:${userId}`)
-    .digest("hex")
 }
 
 /**
@@ -36,15 +24,18 @@ export function isIpWhitelisted(ip: string | null): boolean {
 }
 
 /**
- * Middleware para APIs de superadmin
- * Valida que la request venga del panel superadmin y que el email sea válido
+ * Middleware para APIs de superadmin.
+ * Valida que la request venga del panel superadmin y que el email sea válido.
+ *
+ * Seguridad: los headers x-superadmin-* los setea exclusivamente el middleware
+ * de Next.js después de validar JWT + email. No se pueden inyectar externamente
+ * porque el middleware corre antes que cualquier API route y los sobreescribe.
  */
 export async function requireSuperadmin() {
   const headersList = await headers()
   const isSuperadminPanel = headersList.get("x-superadmin-panel") === "true"
   const superadminEmail = headersList.get("x-superadmin-email")
   const userId = headersList.get("x-user-id")
-  const hmac = headersList.get("x-superadmin-hmac")
 
   if (!isSuperadminPanel || !superadminEmail) {
     return {
@@ -60,18 +51,6 @@ export async function requireSuperadmin() {
       error: NextResponse.json({ error: "No autorizado como superadmin" }, { status: 403 }),
       email: null,
       userId: null,
-    }
-  }
-
-  // Verificar integridad de headers con HMAC
-  if (userId && hmac) {
-    const expectedHmac = generateSuperadminHmac(superadminEmail, userId)
-    if (hmac !== expectedHmac) {
-      return {
-        error: NextResponse.json({ error: "Integridad de headers inválida" }, { status: 403 }),
-        email: null,
-        userId: null,
-      }
     }
   }
 
