@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { parsePagination } from "@/lib/api-utils"
-import type { SubscriptionsListResponse, SubscriptionListItem } from "@/types/superadmin"
+import type { SubscriptionListItem } from "@/types/superadmin"
 
 export async function GET(request: Request) {
   try {
@@ -14,7 +14,34 @@ export async function GET(request: Request) {
     const plan = searchParams.get("plan") || ""
     const dateFrom = searchParams.get("dateFrom") || ""
     const dateTo = searchParams.get("dateTo") || ""
+    const search = searchParams.get("search") || ""
+    const sortBy = searchParams.get("sortBy") || "created_at"
+    const sortDir = searchParams.get("sortDir") === "asc" ? true : false
     const { page, limit, offset } = parsePagination(searchParams)
+
+    // Si hay búsqueda, primero buscar organizaciones que coincidan
+    let orgIdsFilter: string[] | null = null
+    if (search.trim().length >= 2) {
+      const searchPattern = `%${search.trim()}%`
+      const { data: matchingOrgs } = await supabaseAdmin
+        .from("organizations")
+        .select("id")
+        .or(`nombre.ilike.${searchPattern},slug.ilike.${searchPattern},email.ilike.${searchPattern}`)
+        .limit(100)
+
+      orgIdsFilter = matchingOrgs?.map((o) => o.id) || []
+      if (orgIdsFilter.length === 0) {
+        // Sin resultados de búsqueda
+        const countsResult = await supabaseAdmin.rpc("get_subscription_counts")
+        return NextResponse.json({
+          subscriptions: [],
+          total: 0,
+          page,
+          limit,
+          counts: countsResult.data || { active: 0, trialing: 0, expiredTrials: 0, canceled: 0, past_due: 0 },
+        })
+      }
+    }
 
     // Query base para suscripciones
     let query = supabaseAdmin
@@ -39,18 +66,26 @@ export async function GET(request: Request) {
       `,
         { count: "exact" }
       )
-      .order("created_at", { ascending: false })
+
+    // Ordenamiento
+    const validSortColumns = ["created_at", "status", "trial_end", "current_period_end"]
+    const sortColumn = validSortColumns.includes(sortBy) ? sortBy : "created_at"
+    query = query.order(sortColumn, { ascending: sortDir, nullsFirst: false })
+
+    // Filtro de búsqueda por org
+    if (orgIdsFilter) {
+      query = query.in("organization_id", orgIdsFilter)
+    }
 
     // Filtro de estado
     if (status) {
       query = query.eq("status", status.toUpperCase())
     }
 
-    // Filtro de plan: "free" = trials sin pago, "premium" = pagos activos
+    // Filtro de plan
     if (plan === "premium") {
       query = query.eq("status", "ACTIVE").not("payment_provider", "is", null)
     } else if (plan === "free") {
-      // Free = trials (sin pago) o sin provider
       query = query.or("status.eq.TRIALING,payment_provider.is.null")
     }
 
@@ -72,10 +107,7 @@ export async function GET(request: Request) {
     // Obtener información de organizaciones
     const orgIds = subscriptions?.map((s) => s.organization_id) || []
 
-    let orgsMap: Record<
-      string,
-      { id: string; nombre: string; slug: string; activo: boolean }
-    > = {}
+    let orgsMap: Record<string, { id: string; nombre: string; slug: string; activo: boolean }> = {}
 
     if (orgIds.length > 0) {
       const { data: orgs } = await supabaseAdmin
@@ -88,11 +120,25 @@ export async function GET(request: Request) {
           acc[org.id] = org
           return acc
         },
-        {} as Record<
-          string,
-          { id: string; nombre: string; slug: string; activo: boolean }
-        >
+        {} as Record<string, { id: string; nombre: string; slug: string; activo: boolean }>
       )
+    }
+
+    // Indicador de engagement: orgs con ordenes en ultimos 7 dias
+    let engagementMap: Record<string, boolean> = {}
+    if (orgIds.length > 0) {
+      const sevenDaysAgo = new Date()
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+      const { data: recentOrders } = await supabaseAdmin
+        .from("ordenes_servicio")
+        .select("organization_id")
+        .in("organization_id", orgIds)
+        .gte("created_at", sevenDaysAgo.toISOString())
+
+      const activeOrgSet = new Set((recentOrders || []).map((o) => o.organization_id))
+      for (const id of orgIds) {
+        engagementMap[id] = activeOrgSet.has(id)
+      }
     }
 
     // Combinar datos
@@ -109,42 +155,19 @@ export async function GET(request: Request) {
         created_at: sub.created_at,
         organization: orgsMap[sub.organization_id] || null,
         plans: plansData || null,
+        hasRecentActivity: engagementMap[sub.organization_id] ?? false,
       }
     })
 
-    // Counts globales (independientes de filtros y paginación)
-    const [activeRes, trialingRes, expiredRes, canceledRes] = await Promise.all([
-      supabaseAdmin
-        .from("subscriptions")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "ACTIVE"),
-      supabaseAdmin
-        .from("subscriptions")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "TRIALING")
-        .gt("trial_end", new Date().toISOString()),
-      supabaseAdmin
-        .from("subscriptions")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "TRIALING")
-        .lte("trial_end", new Date().toISOString()),
-      supabaseAdmin
-        .from("subscriptions")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "CANCELED"),
-    ])
+    // Counts optimizados con un solo query (mejora 9)
+    const countsResult = await supabaseAdmin.rpc("get_subscription_counts")
 
     return NextResponse.json({
-      subscriptions: result as SubscriptionListItem[],
+      subscriptions: result,
       total: count || 0,
       page,
       limit,
-      counts: {
-        active: activeRes.count || 0,
-        trialing: trialingRes.count || 0,
-        expiredTrials: expiredRes.count || 0,
-        canceled: canceledRes.count || 0,
-      },
+      counts: countsResult.data || { active: 0, trialing: 0, expiredTrials: 0, canceled: 0, past_due: 0 },
     })
   } catch (error) {
     console.error("Error fetching subscriptions:", error)

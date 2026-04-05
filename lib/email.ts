@@ -784,3 +784,95 @@ export async function sendNewLeadNotification({
     }),
   })
 }
+
+// ============================================
+// ALERTA DIARIA - DIGEST
+// ============================================
+interface AlertDigestParams {
+  to: string
+  nombre: string
+  organizationName: string
+  slug: string
+  alertas: Array<{
+    tipo: string
+    titulo: string
+    detalle: string
+    cantidad: number
+    icono: string
+  }>
+  moneda: string
+}
+
+export async function sendAlertDigestEmail({
+  to,
+  nombre,
+  organizationName,
+  slug,
+  alertas,
+  moneda,
+}: AlertDigestParams) {
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
+  const dashboardUrl = `https://${slug}.${rootDomain}/dashboard`
+
+  const iconColors: Record<string, string> = {
+    INVENTARIO_BAJO: "#ef4444",
+    FECHA_VENCIDA: "#f59e0b",
+    DEUDA_PENDIENTE: "#f97316",
+  }
+
+  const iconEmojis: Record<string, string> = {
+    INVENTARIO_BAJO: "📦",
+    FECHA_VENCIDA: "⏰",
+    DEUDA_PENDIENTE: "💰",
+  }
+
+  const alertCards = alertas.map((alerta) => {
+    const color = iconColors[alerta.tipo] || "#6b7280"
+    const emoji = iconEmojis[alerta.tipo] || "🔔"
+    return `
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 12px;">
+        <tr>
+          <td style="background-color: ${color}10; padding: 16px 20px; border-radius: 10px; border-left: 4px solid ${color};">
+            <p style="margin: 0 0 4px 0; font-size: 15px; font-weight: 600; color: #1f2937;">
+              ${emoji} ${alerta.titulo}
+            </p>
+            <p class="text-muted" style="margin: 0; font-size: 13px; color: #6b7280;">
+              ${alerta.detalle}
+            </p>
+          </td>
+        </tr>
+      </table>
+    `
+  }).join("")
+
+  const content = `
+    <h1 class="text-heading" style="color: #1f2937; font-size: 22px; font-weight: 700; margin: 0 0 8px 0;">
+      Resumen de alertas
+    </h1>
+    <p class="text-body" style="color: #4b5563; font-size: 15px; margin: 0 0 24px 0;">
+      Hola ${nombre}, estas son las alertas pendientes en <strong>${organizationName}</strong>:
+    </p>
+
+    ${alertCards}
+
+    ${getButton(dashboardUrl, "Ver dashboard", "#3b82f6")}
+
+    ${getDivider()}
+
+    <p class="text-muted" style="color: #9ca3af; font-size: 13px; text-align: center; margin: 0;">
+      Revisá estas alertas para mantener tu taller al día.
+    </p>
+  `
+
+  return sendEmail({
+    to,
+    subject: `${alertas.length} alerta${alertas.length > 1 ? "s" : ""} en ${organizationName} - STApp`,
+    html: getBaseTemplate({
+      preheader: alertas.map((a) => a.titulo).join(" | "),
+      headerGradient: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+      content,
+      rootDomain,
+      footerText: "Recibís este resumen diario porque sos administrador del taller.",
+    }),
+  })
+}

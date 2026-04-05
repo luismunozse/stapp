@@ -1,21 +1,24 @@
 import { NextRequest, NextResponse } from "next/server"
+import { z } from "zod"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { safeParseBody } from "@/lib/api-utils"
+
+const trialExtensionSchema = z.object({
+  organizationId: z.string().min(1, "ID de organización requerido"),
+  dias: z.number().int().min(1, "Mínimo 1 día").max(90, "Máximo 90 días"),
+  motivo: z.string().max(500).optional(),
+})
 
 export async function POST(request: NextRequest) {
   try {
     const { error: authError, email } = await requireSuperadmin()
     if (authError) return authError
 
-    const body = await request.json()
-    const { organizationId, dias, motivo } = body
+    const parsed = await safeParseBody(request, trialExtensionSchema)
+    if ("error" in parsed) return parsed.error
 
-    if (!organizationId || !dias || dias < 1 || dias > 90) {
-      return NextResponse.json(
-        { error: "organizationId y dias (1-90) son requeridos" },
-        { status: 400 }
-      )
-    }
+    const { organizationId, dias, motivo } = parsed.data
 
     // Buscar suscripción actual
     const { data: sub, error: subError } = await supabaseAdmin
@@ -56,6 +59,22 @@ export async function POST(request: NextRequest) {
       extendido_por: email || "superadmin",
     })
 
+    // Registrar en historial de suscripción
+    await supabaseAdmin.from("subscription_history").insert({
+      subscription_id: sub.id,
+      organization_id: organizationId,
+      action: "TRIAL_EXTENDED",
+      previous_status: sub.status,
+      new_status: "TRIALING",
+      details: {
+        dias,
+        motivo,
+        previous_trial_end: sub.trial_end,
+        new_trial_end: newTrialEnd.toISOString(),
+      },
+      performed_by: email,
+    })
+
     // Audit log
     await supabaseAdmin.from("audit_logs").insert({
       organization_id: organizationId,
@@ -73,6 +92,27 @@ export async function POST(request: NextRequest) {
         previous_trial_end: sub.trial_end,
       },
     })
+
+    // Notificar al admin de la org
+    const { data: orgAdmins } = await supabaseAdmin
+      .from("users")
+      .select("id, organization_id")
+      .eq("organization_id", organizationId)
+      .eq("rol", "ADMIN")
+
+    if (orgAdmins && orgAdmins.length > 0) {
+      const notifications = orgAdmins.map((admin) => ({
+        organization_id: admin.organization_id,
+        user_id: admin.id,
+        title: "Período de prueba extendido",
+        body: `Tu prueba gratuita fue extendida ${dias} días hasta ${newTrialEnd.toLocaleDateString("es-AR")}`,
+        type: "SUBSCRIPTION",
+        icon: "clock",
+        action_url: "/configuracion",
+      }))
+
+      await supabaseAdmin.from("user_notifications").insert(notifications)
+    }
 
     return NextResponse.json({
       success: true,

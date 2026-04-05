@@ -14,6 +14,8 @@ import {
   Package,
   AlertTriangle,
   Megaphone,
+  DollarSign,
+  CalendarClock,
 } from "lucide-react"
 
 function getNotificationIcon(type: string) {
@@ -34,6 +36,11 @@ function getNotificationIcon(type: string) {
       return <AlertTriangle className="h-4 w-4 text-yellow-500" />
     case "BROADCAST":
       return <Megaphone className="h-4 w-4 text-primary" />
+    case "ALERTA_DIARIA":
+    case "FECHA_VENCIDA":
+      return <CalendarClock className="h-4 w-4 text-red-500" />
+    case "DEUDA_PENDIENTE":
+      return <DollarSign className="h-4 w-4 text-orange-500" />
     default:
       return <Bell className="h-4 w-4 text-muted-foreground" />
   }

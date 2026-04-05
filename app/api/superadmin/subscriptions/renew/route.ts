@@ -8,6 +8,7 @@ const renewSchema = z.object({
   organizationId: z.string().min(1, "ID de organización requerido"),
   billingPeriod: z.enum(["MONTHLY", "YEARLY"]).optional().default("MONTHLY"),
   months: z.number().int().min(1).max(36).optional(),
+  customEndDate: z.string().optional(), // ISO date string para fecha custom
 })
 
 export async function POST(request: Request) {
@@ -18,7 +19,7 @@ export async function POST(request: Request) {
     const parsed = await safeParseBody(request, renewSchema)
     if ("error" in parsed) return parsed.error
 
-    const { organizationId, billingPeriod, months } = parsed.data
+    const { organizationId, billingPeriod, months, customEndDate } = parsed.data
 
     const period: "MONTHLY" | "YEARLY" = billingPeriod
 
@@ -39,14 +40,26 @@ export async function POST(request: Request) {
 
     // Calcular fechas del período
     const now = new Date()
-    const periodEnd = new Date(now)
+    let periodEnd: Date
 
-    if (months) {
-      periodEnd.setMonth(periodEnd.getMonth() + months)
-    } else if (period === "YEARLY") {
-      periodEnd.setFullYear(periodEnd.getFullYear() + 1)
+    if (customEndDate) {
+      // Fecha custom
+      periodEnd = new Date(customEndDate)
+      if (isNaN(periodEnd.getTime()) || periodEnd <= now) {
+        return NextResponse.json(
+          { error: "La fecha custom debe ser posterior a hoy" },
+          { status: 400 }
+        )
+      }
     } else {
-      periodEnd.setMonth(periodEnd.getMonth() + 1)
+      periodEnd = new Date(now)
+      if (months) {
+        periodEnd.setMonth(periodEnd.getMonth() + months)
+      } else if (period === "YEARLY") {
+        periodEnd.setFullYear(periodEnd.getFullYear() + 1)
+      } else {
+        periodEnd.setMonth(periodEnd.getMonth() + 1)
+      }
     }
 
     // Verificar si ya existe una suscripción para esta org
@@ -57,11 +70,13 @@ export async function POST(request: Request) {
       .single()
 
     let subscriptionId: string
+    const previousStatus = existingSub?.status || null
 
     if (existingSub) {
       // Si la suscripción actual está activa y no ha vencido, extender desde la fecha de vencimiento
       let startDate = now
       if (
+        !customEndDate &&
         existingSub.status === "ACTIVE" &&
         existingSub.current_period_end &&
         new Date(existingSub.current_period_end) > now
@@ -75,7 +90,7 @@ export async function POST(request: Request) {
         } else {
           extendedEnd.setMonth(extendedEnd.getMonth() + 1)
         }
-        periodEnd.setTime(extendedEnd.getTime())
+        periodEnd = extendedEnd
       }
 
       // Actualizar suscripción existente
@@ -115,6 +130,22 @@ export async function POST(request: Request) {
       subscriptionId = newSub.id
     }
 
+    // Registrar en historial de suscripción
+    await supabaseAdmin.from("subscription_history").insert({
+      subscription_id: subscriptionId,
+      organization_id: organizationId,
+      action: previousStatus === "ACTIVE" ? "RENEWED" : "ACTIVATED",
+      previous_status: previousStatus,
+      new_status: "ACTIVE",
+      details: {
+        billing_period: period,
+        months: months || (period === "YEARLY" ? 12 : 1),
+        period_end: periodEnd.toISOString(),
+        custom_date: !!customEndDate,
+      },
+      performed_by: email,
+    })
+
     // Registrar en audit_logs
     await supabaseAdmin.from("audit_logs").insert({
       organization_id: organizationId,
@@ -128,9 +159,31 @@ export async function POST(request: Request) {
         months: months || (period === "YEARLY" ? 12 : 1),
         period_end: periodEnd.toISOString(),
         superadmin_email: email,
-        previous_status: existingSub?.status || null,
+        previous_status: previousStatus,
+        custom_date: !!customEndDate,
       },
     })
+
+    // Notificar al admin de la org (mejora 11)
+    const { data: orgAdmins } = await supabaseAdmin
+      .from("users")
+      .select("id, organization_id")
+      .eq("organization_id", organizationId)
+      .eq("rol", "ADMIN")
+
+    if (orgAdmins && orgAdmins.length > 0) {
+      const notifications = orgAdmins.map((admin) => ({
+        organization_id: admin.organization_id,
+        user_id: admin.id,
+        title: "Suscripción Premium activada",
+        body: `Tu plan Premium está activo hasta ${periodEnd.toLocaleDateString("es-AR")}`,
+        type: "SUBSCRIPTION",
+        icon: "credit-card",
+        action_url: "/configuracion",
+      }))
+
+      await supabaseAdmin.from("user_notifications").insert(notifications)
+    }
 
     return NextResponse.json({
       success: true,

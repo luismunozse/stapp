@@ -9,6 +9,7 @@ import { cleanupNotifications } from "./functions/cleanup-notifications"
 import { lifecycleEmails, calculateEngagement } from "./functions/lifecycle-emails"
 import { calculateFeatureUsage } from "./functions/feature-usage"
 import { trialManagement } from "./functions/trial-management"
+import { dailyAlerts } from "./functions/daily-alerts"
 
 // Exportar array de funciones para el handler
 export const functions = [
@@ -20,6 +21,7 @@ export const functions = [
   calculateEngagement,
   calculateFeatureUsage,
   trialManagement,
+  dailyAlerts,
 ]
 
 // Helper para enviar notificación (ejecución directa, sin Inngest)
