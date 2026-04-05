@@ -29,6 +29,7 @@ import {
   PanelLeft,
   ChevronsLeft,
   Mail,
+  BookOpen,
 } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import { cn } from "@/lib/utils"
@@ -278,6 +279,17 @@ export function Navbar() {
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
+                    <Link
+                      href="/ayuda/manual"
+                      className="flex justify-center items-center w-full h-9 rounded-md text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+                    >
+                      <BookOpen className="h-5 w-5" />
+                    </Link>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">Manual de uso</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -306,6 +318,13 @@ export function Navbar() {
             ) : (
               <>
                 <ThemeToggle variant="dropdown" />
+                <Link
+                  href="/ayuda/manual"
+                  className="flex items-center w-full px-4 py-2 text-sm font-medium rounded-md text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+                >
+                  <BookOpen className="mr-3 h-5 w-5" />
+                  Manual de uso
+                </Link>
                 <Button
                   variant="ghost"
                   className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
@@ -426,7 +445,15 @@ export function Navbar() {
               )
             })}
           </nav>
-          <div className="p-4 border-t border-border safe-bottom">
+          <div className="p-4 border-t border-border safe-bottom space-y-1">
+            <Link
+              href="/ayuda/manual"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex items-center px-3 py-3 text-sm font-medium rounded-lg text-foreground hover:bg-accent hover:text-accent-foreground transition-colors touch-target active:scale-[0.98]"
+            >
+              <BookOpen className="mr-3 h-5 w-5 flex-shrink-0" />
+              Manual de uso
+            </Link>
             <Button
               variant="ghost"
               className="w-full justify-start py-3 touch-target active:scale-[0.98]"
