@@ -41,6 +41,7 @@ import { GlobalSearch } from "@/components/shared/global-search"
 import { NotificationBell } from "@/components/notifications/notification-bell"
 import { useSidebar } from "@/components/layout/sidebar-context"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { UserAvatar } from "@/components/shared/user-avatar"
 
 type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; roles?: string[] }
 
@@ -233,6 +234,40 @@ export function Navbar() {
             "border-t border-sidebar-border transition-all duration-300",
             collapsed ? "p-2 space-y-1" : "p-4 space-y-2"
           )}>
+            {/* User info */}
+            {collapsed ? (
+              <TooltipProvider delayDuration={0}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Link href="/perfil" className="flex justify-center py-1">
+                      <UserAvatar
+                        src={session?.user?.avatar}
+                        nombre={session?.user?.name}
+                        size="sm"
+                      />
+                    </Link>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">{session?.user?.name || "Perfil"}</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ) : (
+              <Link href="/perfil" className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-sidebar-accent transition-colors">
+                <UserAvatar
+                  src={session?.user?.avatar}
+                  nombre={session?.user?.name}
+                  size="sm"
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-sidebar-foreground truncate">
+                    {session?.user?.name}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {session?.user?.role}
+                  </p>
+                </div>
+              </Link>
+            )}
+
             {collapsed ? (
               <TooltipProvider delayDuration={0}>
                 <Tooltip>
@@ -299,6 +334,13 @@ export function Navbar() {
       )}>
         <GlobalSearch />
         <NotificationBell />
+        <Link href="/perfil" className="hover:opacity-80 transition-opacity">
+          <UserAvatar
+            src={session?.user?.avatar}
+            nombre={session?.user?.name}
+            size="sm"
+          />
+        </Link>
       </div>
 
       {/* Mobile Header */}

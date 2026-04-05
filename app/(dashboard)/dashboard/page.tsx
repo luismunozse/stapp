@@ -179,7 +179,7 @@ const getDashboardData = unstable_cache(
       hace7Dias: hace7Dias.toISOString(),
     }
   },
-  ["dashboard-data"],
+  ["dashboard-data", "by-org"],
   { revalidate: 120, tags: ["dashboard"] }
 )
 

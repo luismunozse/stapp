@@ -243,6 +243,68 @@ export async function uploadSupportMessageAttachment(
 }
 
 /**
+ * Subir avatar de usuario
+ * Path: avatars/{orgId}/{userId}.{ext}
+ */
+export async function uploadAvatar(
+  orgId: string,
+  userId: string,
+  file: Buffer | Blob,
+  mime: string
+): Promise<UploadResult> {
+  const ext = getExtensionFromMime(mime)
+  const path = `${orgId}/${userId}.${ext}`
+
+  // Eliminar avatar anterior si existe (puede tener otra extensión)
+  const { data: existing } = await supabaseAdmin.storage
+    .from(STORAGE_BUCKETS.AVATARS)
+    .list(orgId, { search: userId })
+
+  if (existing && existing.length > 0) {
+    const paths = existing.map(f => `${orgId}/${f.name}`)
+    await supabaseAdmin.storage
+      .from(STORAGE_BUCKETS.AVATARS)
+      .remove(paths)
+  }
+
+  const { error } = await supabaseAdmin.storage
+    .from(STORAGE_BUCKETS.AVATARS)
+    .upload(path, file, {
+      contentType: mime,
+      upsert: true,
+    })
+
+  if (error) {
+    throw new Error(`Error uploading avatar: ${error.message}`)
+  }
+
+  const { data: urlData } = supabaseAdmin.storage
+    .from(STORAGE_BUCKETS.AVATARS)
+    .getPublicUrl(path)
+
+  return {
+    url: urlData.publicUrl,
+    path,
+  }
+}
+
+/**
+ * Eliminar avatar de usuario
+ */
+export async function deleteAvatar(orgId: string, userId: string): Promise<void> {
+  const { data: files } = await supabaseAdmin.storage
+    .from(STORAGE_BUCKETS.AVATARS)
+    .list(orgId, { search: userId })
+
+  if (files && files.length > 0) {
+    const paths = files.map(f => `${orgId}/${f.name}`)
+    await supabaseAdmin.storage
+      .from(STORAGE_BUCKETS.AVATARS)
+      .remove(paths)
+  }
+}
+
+/**
  * Obtener extensión de archivo desde MIME type
  */
 function getExtensionFromMime(mime: string): string {

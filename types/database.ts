@@ -125,6 +125,7 @@ export interface User {
   updated_at: string
   reset_token: string | null
   reset_token_expiry: string | null
+  avatar_url: string | null
 }
 
 export interface Cliente {

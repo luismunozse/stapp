@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 
 export async function GET(request: NextRequest) {
   const { error } = await requireSuperadmin()
@@ -46,7 +47,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const { error } = await requireSuperadmin()
+  const { error, email } = await requireSuperadmin()
   if (error) return error
 
   try {
@@ -65,6 +66,9 @@ export async function PATCH(request: NextRequest) {
       .single()
 
     if (dbError) throw dbError
+
+    const auditLogger = createSuperadminAuditLogger(email, request)
+    auditLogger.leadUpdate(id, updates).catch(() => {})
 
     return NextResponse.json(data)
   } catch (err) {

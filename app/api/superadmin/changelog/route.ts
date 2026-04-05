@@ -1,6 +1,25 @@
 import { NextRequest, NextResponse } from "next/server"
+import { z } from "zod"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
+import { safeParseBody } from "@/lib/api-utils"
+
+const createChangelogSchema = z.object({
+  titulo: z.string().min(1, "Titulo requerido").max(200),
+  descripcion: z.string().min(1, "Descripcion requerida").max(5000),
+  tipo: z.enum(["MEJORA", "FIX", "NUEVA_FUNCION", "CAMBIO"]).optional().default("MEJORA"),
+  importante: z.boolean().optional().default(false),
+})
+
+const updateChangelogSchema = z.object({
+  id: z.string().uuid("ID inválido"),
+  titulo: z.string().min(1).max(200).optional(),
+  descripcion: z.string().min(1).max(5000).optional(),
+  tipo: z.enum(["MEJORA", "FIX", "NUEVA_FUNCION", "CAMBIO"]).optional(),
+  importante: z.boolean().optional(),
+  publicado: z.boolean().optional(),
+})
 
 export async function GET() {
   try {
@@ -23,29 +42,30 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { error } = await requireSuperadmin()
+    const { error, email } = await requireSuperadmin()
     if (error) return error
 
-    const body = await request.json()
-    const { titulo, descripcion, tipo, importante } = body
+    const parsed = await safeParseBody(request, createChangelogSchema)
+    if ("error" in parsed) return parsed.error
 
-    if (!titulo || !descripcion) {
-      return NextResponse.json({ error: "Titulo y descripcion son requeridos" }, { status: 400 })
-    }
+    const { titulo, descripcion, tipo, importante } = parsed.data
 
     const { data, error: dbError } = await supabaseAdmin
       .from("changelog_entries")
       .insert({
         titulo,
         descripcion,
-        tipo: tipo || "MEJORA",
-        importante: importante || false,
+        tipo,
+        importante,
         publicado: false,
       })
       .select()
       .single()
 
     if (dbError) throw dbError
+
+    const auditLogger = createSuperadminAuditLogger(email, request)
+    auditLogger.changelogCreate(data.id, titulo).catch(() => {})
 
     return NextResponse.json(data)
   } catch (error) {
@@ -56,29 +76,31 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const { error } = await requireSuperadmin()
+    const { error, email } = await requireSuperadmin()
     if (error) return error
 
-    const body = await request.json()
-    const { id, ...updates } = body
+    const parsed = await safeParseBody(request, updateChangelogSchema)
+    if ("error" in parsed) return parsed.error
 
-    if (!id) {
-      return NextResponse.json({ error: "ID requerido" }, { status: 400 })
-    }
+    const { id, ...updates } = parsed.data
 
     // Si se publica, setear fecha_publicacion
+    const dbUpdates: Record<string, unknown> = { ...updates, updated_at: new Date().toISOString() }
     if (updates.publicado === true) {
-      updates.fecha_publicacion = new Date().toISOString()
+      dbUpdates.fecha_publicacion = new Date().toISOString()
     }
 
     const { data, error: dbError } = await supabaseAdmin
       .from("changelog_entries")
-      .update({ ...updates, updated_at: new Date().toISOString() })
+      .update(dbUpdates)
       .eq("id", id)
       .select()
       .single()
 
     if (dbError) throw dbError
+
+    const auditLogger = createSuperadminAuditLogger(email, request)
+    auditLogger.changelogUpdate(id, data.titulo || id, updates).catch(() => {})
 
     return NextResponse.json(data)
   } catch (error) {
@@ -89,7 +111,7 @@ export async function PATCH(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const { error } = await requireSuperadmin()
+    const { error, email } = await requireSuperadmin()
     if (error) return error
 
     const { searchParams } = new URL(request.url)
@@ -105,6 +127,9 @@ export async function DELETE(request: NextRequest) {
       .eq("id", id)
 
     if (dbError) throw dbError
+
+    const auditLogger = createSuperadminAuditLogger(email, request)
+    auditLogger.changelogDelete(id).catch(() => {})
 
     return NextResponse.json({ success: true })
   } catch (error) {

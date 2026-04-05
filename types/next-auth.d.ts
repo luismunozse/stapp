@@ -9,6 +9,7 @@ declare module "next-auth" {
       role: Rol
       organizationId: string
       isSuperadmin?: boolean
+      avatar?: string | null
     } & DefaultSession["user"]
     error?: string
   }
@@ -19,6 +20,7 @@ declare module "next-auth" {
     isSuperadmin?: boolean
     rememberMe?: boolean
     refreshToken?: string
+    avatar?: string | null
   }
 }
 
@@ -30,6 +32,7 @@ declare module "next-auth/jwt" {
     isSuperadmin?: boolean
     rememberMe?: boolean
     refreshToken?: string
+    avatar?: string | null
     error?: string
   }
 }

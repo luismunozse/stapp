@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getToken } from "next-auth/jwt"
-import { rateLimit, getApiRateLimit, isExemptFromRateLimit } from "@/lib/rate-limit"
+import { rateLimit, getApiRateLimit, isExemptFromRateLimit, persistentRateLimit } from "@/lib/rate-limit"
+import { createHmac } from "crypto"
 
 // Subdominio especial para el panel de superadmin
 const SUPERADMIN_SUBDOMAIN = "admin"
@@ -229,12 +230,38 @@ export async function middleware(request: NextRequest) {
     }
 
     // Agregar headers de superadmin para las APIs
-    requestHeaders.set("x-superadmin-email", token.email as string)
-    requestHeaders.set("x-user-id", token.id as string)
+    const saEmail = token.email as string
+    const saUserId = token.id as string
+    requestHeaders.set("x-superadmin-email", saEmail)
+    requestHeaders.set("x-user-id", saUserId)
 
-    // Solo permitir rutas de superadmin o APIs
+    // HMAC de integridad para prevenir spoofing de headers
+    const hmacSecret = process.env.NEXTAUTH_SECRET || "fallback-secret"
+    const hmac = createHmac("sha256", hmacSecret)
+      .update(`superadmin:${saEmail}:${saUserId}`)
+      .digest("hex")
+    requestHeaders.set("x-superadmin-hmac", hmac)
+
+    // Rate limiting persistente para APIs de superadmin
     if (pathname.startsWith("/api/superadmin")) {
-      // APIs de superadmin permitidas
+      const saIp = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown"
+      const rlResult = await persistentRateLimit(
+        `sa:${saIp}`,
+        pathname.split("/").slice(0, 4).join("/"),
+        60,
+        60
+      )
+      if (!rlResult.success) {
+        return NextResponse.json(
+          { error: "Demasiadas solicitudes" },
+          {
+            status: 429,
+            headers: {
+              "Retry-After": String(Math.ceil((rlResult.reset - Date.now()) / 1000)),
+            },
+          }
+        )
+      }
       return NextResponse.next({
         request: { headers: requestHeaders },
       })

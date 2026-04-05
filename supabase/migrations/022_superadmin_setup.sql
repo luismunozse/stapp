@@ -33,7 +33,7 @@ ON CONFLICT (organization_id) DO NOTHING;
 
 -- Crear usuario SuperAdmin
 -- Email: admin@stapp.com.ar
--- Password: Admin2026!
+-- IMPORTANTE: Cambiar la contraseña después del primer login
 INSERT INTO users (
   email,
   password,

@@ -2,6 +2,11 @@ import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 
+// Sanitizar input para prevenir inyección en patrones ilike
+function sanitizeSearchInput(input: string): string {
+  return input.replace(/[%_\\]/g, "\\$&")
+}
+
 export async function GET(request: Request) {
   try {
     const { error } = await requireSuperadmin()
@@ -10,14 +15,15 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const q = searchParams.get("q")?.trim() || ""
 
-    if (q.length < 2) {
+    if (q.length < 2 || q.length > 100) {
       return NextResponse.json(
-        { error: "La búsqueda debe tener al menos 2 caracteres" },
+        { error: "La búsqueda debe tener entre 2 y 100 caracteres" },
         { status: 400 }
       )
     }
 
-    const searchPattern = `%${q}%`
+    const sanitized = sanitizeSearchInput(q)
+    const searchPattern = `%${sanitized}%`
 
     // Search organizations, users, and tickets in parallel
     const [orgsResult, usersResult, ticketsResult] = await Promise.all([

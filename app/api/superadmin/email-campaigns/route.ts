@@ -1,10 +1,20 @@
 import { NextRequest, NextResponse } from "next/server"
+import { z } from "zod"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
+import { safeParseBody } from "@/lib/api-utils"
 
 const ENVIALOSIMPLE_API_URL = "https://backend.envialosimple.email/api/v1/mail/send"
 const EMAIL_FROM = process.env.EMAIL_FROM || "noreply@stapp.com.ar"
+
+const emailCampaignSchema = z.object({
+  segmentId: z.string().optional(),
+  organizationIds: z.array(z.string().uuid()).min(1, "Debe seleccionar al menos una organización"),
+  subject: z.string().min(1, "Asunto requerido").max(200),
+  htmlContent: z.string().min(1, "Contenido requerido").max(100000),
+  emailType: z.string().optional(),
+})
 
 // GET: Obtener segmentos disponibles y historial de campañas
 export async function GET() {
@@ -214,22 +224,10 @@ export async function POST(request: NextRequest) {
     const { error: authError, email: superadminEmail } = await requireSuperadmin()
     if (authError) return authError
 
-    const body = await request.json()
-    const { segmentId, organizationIds, subject, htmlContent, emailType } = body
+    const parsed = await safeParseBody(request, emailCampaignSchema)
+    if ("error" in parsed) return parsed.error
 
-    if (!subject || !htmlContent) {
-      return NextResponse.json(
-        { error: "Asunto y contenido son requeridos" },
-        { status: 400 }
-      )
-    }
-
-    if (!organizationIds || organizationIds.length === 0) {
-      return NextResponse.json(
-        { error: "Debe seleccionar al menos una organizacion" },
-        { status: 400 }
-      )
-    }
+    const { segmentId, organizationIds, subject, htmlContent, emailType } = parsed.data
 
     const apiKey = process.env.ENVIALOSIMPLE_API_KEY
     if (!apiKey) {

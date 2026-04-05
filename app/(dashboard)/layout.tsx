@@ -26,7 +26,7 @@ const getCachedAccessInfo = unstable_cache(
     ])
     return { accessResult, trialInfo }
   },
-  ["access-info"],
+  ["access-info", "by-org"],
   { revalidate: 60, tags: ["subscription"] }
 )
 

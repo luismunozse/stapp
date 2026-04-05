@@ -193,6 +193,16 @@ export async function PUT(
         : null
     }
 
+    // Auto-transicionar a PRESUPUESTADO cuando se define presupuesto en orden no presupuestada
+    if (
+      data.presupuesto != null &&
+      data.presupuesto > 0 &&
+      !data.estado &&
+      (orden.estado === "RECIBIDO" || orden.estado === "EN_DIAGNOSTICO")
+    ) {
+      updateData.estado = "PRESUPUESTADO"
+    }
+
     // Setear fecha_completado la primera vez que llega a REPARADO o ENTREGADO
     if ((data.estado === "REPARADO" || data.estado === "ENTREGADO" || data.estado === "ENTREGADO_SIN_REPARACION") && !orden.fecha_completado) {
       updateData.fecha_completado = new Date().toISOString()
@@ -217,7 +227,8 @@ export async function PUT(
     }
 
     // Registrar evento en orden_eventos para timeline público (fire-and-forget)
-    if (data.estado && data.estado !== orden.estado) {
+    const estadoFinal = updateData.estado
+    if (estadoFinal && estadoFinal !== orden.estado) {
       void (async () => {
         try {
           await supabaseAdmin.from("orden_eventos").insert({
@@ -225,8 +236,8 @@ export async function PUT(
             organization_id: organizationId!,
             tipo: "CAMBIO_ESTADO",
             estado_anterior: orden.estado,
-            estado_nuevo: data.estado,
-            descripcion: `Estado cambiado de ${orden.estado} a ${data.estado}`,
+            estado_nuevo: estadoFinal,
+            descripcion: `Estado cambiado de ${orden.estado} a ${estadoFinal}`,
             created_by: userId,
           })
         } catch (err) { console.error("Error inserting orden_evento:", err) }
@@ -273,7 +284,7 @@ export async function PUT(
     const org = orden.organizations as any
 
     // Notificación de cambio de estado
-    if (data.estado && data.estado !== orden.estado) {
+    if (estadoFinal && estadoFinal !== orden.estado) {
       queueNotification({
         organizationId: organizationId!,
         ordenId: id,
@@ -293,7 +304,7 @@ export async function PUT(
             id: id,
             numeroOrden: orden.numero_orden,
             dispositivo: orden.dispositivo,
-            estado: data.estado,
+            estado: estadoFinal,
             estadoAnterior: orden.estado,
           },
         },

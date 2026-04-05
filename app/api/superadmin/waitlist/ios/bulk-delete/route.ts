@@ -3,6 +3,7 @@ import { z } from "zod"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { safeParseBody } from "@/lib/api-utils"
+import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 
 const bulkDeleteSchema = z.object({
   ids: z.array(z.string().uuid("ID inválido")).min(1, "Debe seleccionar al menos un registro"),
@@ -10,7 +11,7 @@ const bulkDeleteSchema = z.object({
 
 export async function POST(request: Request) {
   try {
-    const { error: authError } = await requireSuperadmin()
+    const { error: authError, email } = await requireSuperadmin()
     if (authError) return authError
 
     const parsed = await safeParseBody(request, bulkDeleteSchema)
@@ -27,6 +28,9 @@ export async function POST(request: Request) {
     if (dbError) throw dbError
 
     const count = data?.length ?? 0
+
+    const auditLogger = createSuperadminAuditLogger(email, request)
+    auditLogger.waitlistBulkDelete(count, ids).catch(() => {})
 
     return NextResponse.json({ success: true, count })
   } catch (error) {

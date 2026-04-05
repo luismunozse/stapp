@@ -142,3 +142,44 @@ export function isExemptFromRateLimit(pathname: string): boolean {
   ]
   return exemptPaths.some((path) => pathname.startsWith(path))
 }
+
+/**
+ * Rate limiting persistente usando Supabase para rutas de superadmin.
+ * A diferencia del rate limit en memoria, este persiste entre deploys
+ * y es compartido entre todas las instancias serverless.
+ */
+export async function persistentRateLimit(
+  identifier: string,
+  endpoint: string,
+  maxRequests: number = 60,
+  windowSeconds: number = 60
+): Promise<RateLimitResult> {
+  try {
+    // Import dinámico para evitar dependencia circular
+    const { supabaseAdmin } = await import("@/lib/supabase")
+
+    const { data, error } = await supabaseAdmin.rpc("check_superadmin_rate_limit", {
+      p_identifier: identifier,
+      p_endpoint: endpoint,
+      p_max_requests: maxRequests,
+      p_window_seconds: windowSeconds,
+    })
+
+    if (error) {
+      // Si falla la DB, fallback al rate limit en memoria
+      console.error("Persistent rate limit error, falling back to in-memory:", error)
+      return rateLimit(`${identifier}:${endpoint}`, maxRequests, windowSeconds * 1000)
+    }
+
+    const result = data as { allowed: boolean; count: number; reset: number }
+    return {
+      success: result.allowed,
+      limit: maxRequests,
+      remaining: Math.max(0, maxRequests - result.count),
+      reset: result.reset * 1000,
+    }
+  } catch {
+    // Fallback a in-memory si algo falla
+    return rateLimit(`${identifier}:${endpoint}`, maxRequests, windowSeconds * 1000)
+  }
+}

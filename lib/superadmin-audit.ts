@@ -280,6 +280,77 @@ export function createSuperadminAuditLogger(email: string | null, request?: Requ
         ipAddress,
         userAgent,
       }),
+
+    changelogCreate: (entryId: string, titulo: string) =>
+      logSuperadminAudit({
+        email,
+        action: "CREATE",
+        entity: "changelog",
+        entityId: entryId,
+        description: `Entrada de changelog creada: "${titulo}"`,
+        metadata: { titulo },
+        ipAddress,
+        userAgent,
+      }),
+
+    changelogUpdate: (entryId: string, titulo: string, changes: Record<string, unknown>) =>
+      logSuperadminAudit({
+        email,
+        action: "UPDATE",
+        entity: "changelog",
+        entityId: entryId,
+        description: `Entrada de changelog actualizada: "${titulo}"`,
+        metadata: { titulo, changes },
+        ipAddress,
+        userAgent,
+      }),
+
+    changelogDelete: (entryId: string) =>
+      logSuperadminAudit({
+        email,
+        action: "DELETE",
+        entity: "changelog",
+        entityId: entryId,
+        description: `Entrada de changelog eliminada`,
+        metadata: {},
+        ipAddress,
+        userAgent,
+      }),
+
+    leadUpdate: (leadId: string, changes: Record<string, unknown>) =>
+      logSuperadminAudit({
+        email,
+        action: "UPDATE",
+        entity: "system",
+        entityId: leadId,
+        description: `Lead actualizado`,
+        metadata: { changes },
+        ipAddress,
+        userAgent,
+      }),
+
+    waitlistBulkDelete: (count: number, ids: string[]) =>
+      logSuperadminAudit({
+        email,
+        action: "DELETE",
+        entity: "waitlist",
+        description: `Eliminación masiva de waitlist: ${count} registros`,
+        metadata: { count, ids },
+        ipAddress,
+        userAgent,
+      }),
+
+    ticketMarkRead: (ticketId: string) =>
+      logSuperadminAudit({
+        email,
+        action: "UPDATE",
+        entity: "support_tickets",
+        entityId: ticketId,
+        description: `Ticket marcado como leído`,
+        metadata: {},
+        ipAddress,
+        userAgent,
+      }),
   }
 }
 

@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error } = await requireSuperadmin()
+    const { error, email } = await requireSuperadmin()
     if (error) return error
 
     const { id } = await params
@@ -32,6 +33,9 @@ export async function POST(
       .is("leido_at", null)
 
     if (updateError) throw updateError
+
+    const auditLogger = createSuperadminAuditLogger(email, request)
+    auditLogger.ticketMarkRead(id).catch(() => {})
 
     return NextResponse.json({ ok: true })
   } catch (error) {

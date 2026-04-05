@@ -136,6 +136,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               nombre,
               rol,
               organization_id,
+              avatar_url,
               organizations (
                 id,
                 activo
@@ -170,6 +171,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             isSuperadmin: isSuper,
             rememberMe: true,
             refreshToken: newRefreshToken,
+            avatar: fullUser.avatar_url || null,
           }
         }
 
@@ -216,6 +218,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             throw new Error(`REQUIRES_2FA:${gUser.id}`)
           }
 
+          // Forzar 2FA para superadmin con Google login
+          if (isGoogleSuper && !gUser.totp_enabled) {
+            throw new Error("SUPERADMIN_REQUIRES_2FA_SETUP")
+          }
+
           const rememberMe = credentials.rememberMe === "true"
           const refreshToken = await saveRefreshToken(gUser.id, rememberMe)
 
@@ -228,6 +235,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             isSuperadmin: isGoogleSuper,
             rememberMe,
             refreshToken,
+            avatar: gUser.avatar_url || null,
           }
         }
 
@@ -258,6 +266,18 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             reason: "Usuario no encontrado",
           }).catch(() => {})
           return null
+        }
+
+        // Verificar account lockout
+        if (user.locked_until && new Date(user.locked_until) > new Date()) {
+          logLoginEvent({
+            userId: user.id,
+            email: user.email,
+            success: false,
+            isSuperadmin: isSuperadminEmail(user.email),
+            reason: "Cuenta bloqueada por intentos fallidos",
+          }).catch(() => {})
+          throw new Error("ACCOUNT_LOCKED")
         }
 
         // Verificar que el email esté verificado
@@ -292,6 +312,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         )
 
         if (!isPasswordValid) {
+          // Incrementar intentos fallidos para account lockout
+          Promise.resolve(supabaseAdmin.rpc("handle_failed_login", { p_email: user.email })).catch(() => {})
           // Log login fallido - contraseña incorrecta
           logLoginEvent({
             userId: user.id,
@@ -309,7 +331,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           throw new Error(`REQUIRES_2FA:${user.id}`)
         }
 
-        // Log login exitoso
+        // Forzar 2FA para superadmin: si no tiene 2FA activado, exigir que lo configure
+        if (isSuper && !user.totp_enabled) {
+          throw new Error("SUPERADMIN_REQUIRES_2FA_SETUP")
+        }
+
+        // Resetear intentos fallidos y log login exitoso
+        Promise.resolve(supabaseAdmin.rpc("reset_failed_login", { p_email: user.email })).catch(() => {})
         logLoginEvent({
           userId: user.id,
           email: user.email,
@@ -332,6 +360,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           isSuperadmin: isSuper,
           rememberMe,
           refreshToken,
+          avatar: user.avatar_url || null,
         }
       },
     }),
@@ -346,6 +375,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.isSuperadmin = user.isSuperadmin
         token.rememberMe = user.rememberMe
         token.refreshToken = user.refreshToken
+        token.avatar = user.avatar
         // JWT expira en 1 día, pero se refresca automáticamente
         token.exp = Math.floor(Date.now() / 1000) + ONE_DAY
         token.iat = Math.floor(Date.now() / 1000)
@@ -384,6 +414,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.id = token.id as string
         session.user.organizationId = token.organizationId as string
         session.user.isSuperadmin = token.isSuperadmin as boolean
+        session.user.avatar = token.avatar as string | null
       }
 
       // Pasar error al cliente si existe

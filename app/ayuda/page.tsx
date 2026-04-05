@@ -246,6 +246,36 @@ export default function AyudaPage() {
         </div>
       </section>
 
+      {/* Manual CTA */}
+      {!searchQuery && (
+        <section className="pb-8">
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="max-w-3xl mx-auto">
+              <Link href="/ayuda/manual">
+                <Card className="group hover:shadow-lg transition-all cursor-pointer border-primary/20 bg-primary/5 hover:border-primary/40">
+                  <CardContent className="pt-6 pb-6">
+                    <div className="flex items-center gap-4">
+                      <div className="w-14 h-14 bg-primary/10 rounded-xl flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+                        <BookOpen className="h-7 w-7 text-primary" />
+                      </div>
+                      <div className="flex-1">
+                        <h2 className="text-xl font-bold text-foreground mb-1">
+                          Manual de Uso Completo
+                        </h2>
+                        <p className="text-sm text-muted-foreground">
+                          Guía detallada de todas las funciones de STApp para Administradores, Técnicos y Vendedores.
+                        </p>
+                      </div>
+                      <ChevronDown className="h-5 w-5 text-muted-foreground -rotate-90 group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* Categories Grid */}
       {!searchQuery && (
         <section className="pb-16">
