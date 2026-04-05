@@ -1,0 +1,150 @@
+"use client"
+
+import { useState } from "react"
+import useSWR from "swr"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { Trash2, TrendingUp, TrendingDown, Loader2 } from "lucide-react"
+import { useCurrency } from "@/contexts/currency-context"
+
+const METODO_LABELS: Record<string, string> = {
+  EFECTIVO: "Efectivo",
+  TRANSFERENCIA: "Transferencia",
+  TARJETA_DEBITO: "Tarjeta Débito",
+  TARJETA_CREDITO: "Tarjeta Crédito",
+  MERCADOPAGO: "MercadoPago",
+  OTRO: "Otro",
+}
+
+interface MovimientosManualesListProps {
+  fecha: string
+  refreshKey?: number
+}
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json())
+
+export function MovimientosManualesList({ fecha, refreshKey }: MovimientosManualesListProps) {
+  const { formatPrice } = useCurrency()
+  const { data, isLoading, mutate } = useSWR(
+    `/api/caja/movimientos?fecha=${fecha}&_=${refreshKey || 0}`,
+    fetcher,
+    { revalidateOnFocus: false }
+  )
+  const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+
+  const movimientos = data?.movimientos || []
+
+  const handleDelete = async () => {
+    if (!deleteId) return
+    setDeleteLoading(true)
+    try {
+      const res = await fetch(`/api/caja/movimientos/${deleteId}`, { method: "DELETE" })
+      if (!res.ok) throw new Error("Error al eliminar")
+      setDeleteId(null)
+      mutate()
+    } catch {
+      alert("Error al eliminar movimiento")
+    } finally {
+      setDeleteLoading(false)
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  if (movimientos.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-8 text-center text-muted-foreground">
+          No hay movimientos manuales en esta fecha
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <>
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">
+            Movimientos del día ({movimientos.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            {movimientos.map((m: any) => (
+              <div
+                key={m.id}
+                className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
+              >
+                <div className="flex items-start gap-2">
+                  {m.tipo === "INGRESO" ? (
+                    <TrendingUp className="h-4 w-4 mt-0.5 text-green-600" />
+                  ) : (
+                    <TrendingDown className="h-4 w-4 mt-0.5 text-red-600" />
+                  )}
+                  <div className="space-y-0.5">
+                    <div className="text-sm font-medium">{m.concepto}</div>
+                    <div className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Badge variant="outline" className="text-xs">
+                        {m.tipo === "INGRESO" ? "Ingreso" : "Egreso"}
+                      </Badge>
+                      {METODO_LABELS[m.metodoPago] || m.metodoPago}
+                      {" · "}
+                      {new Date(m.fecha).toLocaleTimeString("es-AR", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                      {m.usuarioNombre && ` · ${m.usuarioNombre}`}
+                    </div>
+                    {m.observaciones && (
+                      <div className="text-xs text-muted-foreground">{m.observaciones}</div>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`text-sm font-bold ${
+                      m.tipo === "INGRESO" ? "text-green-600" : "text-red-600"
+                    }`}
+                  >
+                    {m.tipo === "INGRESO" ? "+" : "-"}
+                    {formatPrice(m.monto)}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setDeleteId(m.id)}
+                    className="text-destructive hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <ConfirmDialog
+        open={!!deleteId}
+        onOpenChange={(open) => !open && setDeleteId(null)}
+        title="Eliminar Movimiento"
+        description="Esta acción eliminará el movimiento manual y no se puede deshacer."
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+        variant="danger"
+        loading={deleteLoading}
+        onConfirm={handleDelete}
+      />
+    </>
+  )
+}

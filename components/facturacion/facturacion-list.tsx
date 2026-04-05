@@ -16,6 +16,8 @@ import {
   Trash2,
   Ban,
   Eye,
+  LayoutList,
+  LayoutGrid,
 } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { PagoForm } from "./pago-form"
@@ -35,6 +37,7 @@ export function FacturacionList() {
   const [voidDialogOpen, setVoidDialogOpen] = useState(false)
   const [selectedFactura, setSelectedFactura] = useState<any>(null)
   const [actionLoading, setActionLoading] = useState(false)
+  const [viewMode, setViewMode] = useState<"detail" | "list">("detail")
 
   const fetcher = (url: string) => fetch(url).then(res => res.json())
   const apiUrl = useMemo(() => {
@@ -114,7 +117,7 @@ export function FacturacionList() {
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-4">
+      <div className="flex items-center gap-4">
         <Select
           value={estadoPago || "all"}
           onValueChange={(value) => setEstadoPago(value === "all" ? "" : value as EstadoPagoType)}
@@ -130,6 +133,24 @@ export function FacturacionList() {
             <SelectItem value="ANULADA">Anulada</SelectItem>
           </SelectContent>
         </Select>
+        <div className="flex border rounded-lg overflow-hidden ml-auto">
+          <Button
+            variant={viewMode === "detail" ? "default" : "ghost"}
+            size="sm"
+            className="rounded-none"
+            onClick={() => setViewMode("detail")}
+          >
+            <LayoutGrid className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={viewMode === "list" ? "default" : "ghost"}
+            size="sm"
+            className="rounded-none"
+            onClick={() => setViewMode("list")}
+          >
+            <LayoutList className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       {facturas.length === 0 ? (
@@ -138,7 +159,130 @@ export function FacturacionList() {
             No hay facturas registradas
           </CardContent>
         </Card>
+      ) : viewMode === "list" ? (
+        /* ========== VISTA LISTA ========== */
+        <Card>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50">
+                  <th className="text-left p-3 font-medium">Factura</th>
+                  <th className="text-left p-3 font-medium">Orden</th>
+                  <th className="text-left p-3 font-medium hidden sm:table-cell">Cliente</th>
+                  <th className="text-left p-3 font-medium hidden md:table-cell">Fecha</th>
+                  <th className="text-right p-3 font-medium">Total</th>
+                  <th className="text-right p-3 font-medium hidden sm:table-cell">Pendiente</th>
+                  <th className="text-center p-3 font-medium">Estado</th>
+                  <th className="text-center p-3 font-medium">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {facturas.map((factura) => {
+                  const pendiente = factura.total - (factura.montoAbonado || 0)
+                  const isExpanded = expandedFactura === factura.id
+                  const showingPagoForm = showPagoForm === factura.id
+
+                  return (
+                    <>
+                      <tr key={factura.id} className="border-b hover:bg-muted/30 transition-colors">
+                        <td className="p-3 font-medium">{factura.numeroFactura}</td>
+                        <td className="p-3 text-muted-foreground">
+                          {factura.orden.codigoOrden || `#${factura.orden.numeroOrden}`}
+                        </td>
+                        <td className="p-3 hidden sm:table-cell">{factura.orden.cliente.nombre}</td>
+                        <td className="p-3 hidden md:table-cell text-muted-foreground">{formatDate(factura.fecha)}</td>
+                        <td className="p-3 text-right font-medium">{formatPrice(factura.total)}</td>
+                        <td className="p-3 text-right hidden sm:table-cell">
+                          <span className={pendiente > 0 ? "text-red-600 font-medium" : "text-green-600"}>
+                            {formatPrice(pendiente)}
+                          </span>
+                        </td>
+                        <td className="p-3 text-center">
+                          <PaymentStatusBadge status={factura.estadoPago} showIcon />
+                        </td>
+                        <td className="p-3">
+                          <div className="flex items-center justify-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => window.open(`/api/facturacion/${factura.id}/pdf`, "_blank")}
+                              title="Ver PDF"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            {factura.estadoPago !== "PAGADO" && factura.estadoPago !== "ANULADA" && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setShowPagoForm(showingPagoForm ? null : factura.id)}
+                                title="Registrar pago"
+                              >
+                                <Plus className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {factura.pagos && factura.pagos.length > 0 && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => toggleExpanded(factura.id)}
+                                title="Historial de pagos"
+                              >
+                                {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                              </Button>
+                            )}
+                            {isAdmin && factura.estadoPago !== "ANULADA" && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleVoidClick(factura)}
+                                  title="Anular"
+                                >
+                                  <Ban className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDeleteClick(factura)}
+                                  title="Eliminar"
+                                  className="text-destructive hover:text-destructive"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                      {(showingPagoForm || isExpanded) && (
+                        <tr key={`${factura.id}-expanded`}>
+                          <td colSpan={8} className="p-3 bg-muted/20">
+                            {showingPagoForm && (
+                              <PagoForm
+                                facturaId={factura.id}
+                                total={factura.total}
+                                montoAbonado={factura.montoAbonado || 0}
+                                clienteId={factura.orden?.cliente?.id}
+                                onClose={() => setShowPagoForm(null)}
+                                onSuccess={() => {
+                                  setShowPagoForm(null)
+                                  mutate()
+                                }}
+                              />
+                            )}
+                            {isExpanded && factura.pagos && <PagosHistorial pagos={factura.pagos} />}
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       ) : (
+        /* ========== VISTA DETALLE (cards) ========== */
         <div className="space-y-4">
           {facturas.map((factura) => {
             const pendiente = factura.total - (factura.montoAbonado || 0)

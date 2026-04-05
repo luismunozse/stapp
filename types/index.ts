@@ -433,3 +433,48 @@ export interface SupportTicketAttachment {
   createdAt: string
 }
 
+// ========================================
+// Caja
+// ========================================
+
+export type EstadoCaja = "ABIERTA" | "CERRADA"
+export type TipoMovimientoCaja = "INGRESO" | "EGRESO"
+
+export interface SesionCaja {
+  id: string
+  estado: EstadoCaja
+  fecha: string
+  saldoInicial: number
+  totalIngresos: number | null
+  totalEgresos: number | null
+  totalIngresosEfectivo: number | null
+  totalEgresosEfectivo: number | null
+  conteoFisico: number | null
+  diferencia: number | null
+  observacionesCierre: string | null
+  usuarioApertura: { id: string; nombre: string }
+  usuarioCierre: { id: string; nombre: string } | null
+  openedAt: string
+  closedAt: string | null
+}
+
+export interface MovimientoCaja {
+  id: string
+  tipo: TipoMovimientoCaja
+  monto: number
+  metodoPago: string
+  concepto: string
+  observaciones: string | null
+  usuarioId: string | null
+  fecha: string
+}
+
+export interface ArqueoCaja {
+  saldoInicial: number
+  totalIngresosEfectivo: number
+  totalEgresosEfectivo: number
+  esperado: number
+  conteoFisico: number
+  diferencia: number
+}
+
