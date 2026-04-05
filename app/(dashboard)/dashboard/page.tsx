@@ -37,6 +37,7 @@ const getDashboardData = unstable_cache(
       ordenesRecientesResult,
       ventasHoyResult,
       ventasMesResult,
+      ventasUltimos7DiasResult,
       garantiasVentaPorVencerResult,
       ordenesPorTecnicoResult,
       ordenesPendienteCobroResult,
@@ -116,6 +117,15 @@ const getDashboardData = unstable_cache(
         .eq("estado", "COMPLETADA")
         .gte("created_at", primerDiaMes.toISOString()),
 
+      // Ventas últimos 7 días (para gráfica de ingresos)
+      supabaseAdmin
+        .from("ventas")
+        .select("total, created_at")
+        .eq("organization_id", organizationId)
+        .eq("estado", "COMPLETADA")
+        .gte("created_at", hace7Dias.toISOString())
+        .order("created_at", { ascending: true }),
+
       // Garantías de venta por vencer (próximos 7 días)
       supabaseAdmin
         .from("garantias_venta")
@@ -172,6 +182,7 @@ const getDashboardData = unstable_cache(
       ordenesRecientesResult,
       ventasHoyResult,
       ventasMesResult,
+      ventasUltimos7DiasResult,
       garantiasVentaPorVencerResult,
       ordenesPorTecnicoResult,
       ordenesPendienteCobroResult,
@@ -371,6 +382,7 @@ export default async function DashboardPage() {
     ordenesRecientesResult,
     ventasHoyResult,
     ventasMesResult,
+    ventasUltimos7DiasResult,
     garantiasVentaPorVencerResult,
     ordenesPorTecnicoResult,
     ordenesPendienteCobroResult,
@@ -384,7 +396,9 @@ export default async function DashboardPage() {
   const totalClientes = totalClientesResult.count || 0
   const itemsBajoStock = itemsBajoStockResult.count || 0
   const facturasData = ingresosMensualesResult.data as { total: number }[] | null
-  const ingresos = facturasData?.reduce((sum, f) => sum + (f.total || 0), 0) || 0
+  const ingresosFacturas = facturasData?.reduce((sum, f) => sum + (f.total || 0), 0) || 0
+  const ingresosVentasMes = (ventasMesResult.data as { total: number }[] | null)?.reduce((sum, v) => sum + (v.total || 0), 0) || 0
+  const ingresos = ingresosFacturas + ingresosVentasMes
   const garantiasPorVencer = garantiasPorVencerResult.data || []
 
   // Procesar órdenes por estado
@@ -416,11 +430,18 @@ export default async function DashboardPage() {
     const key = fecha.toISOString().split("T")[0]
     ingresosMap[key] = 0
   }
-  // Sumar los ingresos
+  // Sumar los ingresos de facturas
   ingresosUltimos7DiasResult.data?.forEach((factura: { total: number; fecha: string }) => {
     const key = new Date(factura.fecha).toISOString().split("T")[0]
     if (key in ingresosMap) {
       ingresosMap[key] += factura.total || 0
+    }
+  })
+  // Sumar los ingresos de ventas
+  ventasUltimos7DiasResult.data?.forEach((venta: { total: number; created_at: string }) => {
+    const key = new Date(venta.created_at).toISOString().split("T")[0]
+    if (key in ingresosMap) {
+      ingresosMap[key] += venta.total || 0
     }
   })
   const ingresosUltimos7Dias = Object.entries(ingresosMap).map(([fecha, total]) => ({
@@ -526,7 +547,7 @@ export default async function DashboardPage() {
     {
       title: "Ingresos del Mes",
       value: formatCurrency(ingresos, moneda),
-      description: "Facturas pagadas",
+      description: "Facturas y ventas",
       icon: DollarSign,
       colorClass: "text-purple-600 dark:text-purple-400",
       bgClass: "bg-purple-50 dark:bg-purple-900/30",

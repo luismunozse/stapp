@@ -9,6 +9,13 @@ export function GuidedTour() {
   const hasStarted = useRef(false)
 
   const startTour = useCallback(() => {
+    // Filtrar pasos cuyos elementos existen en el DOM (depende del rol del usuario)
+    const visibleSteps = tourSteps.filter(
+      (step) => !step.element || document.querySelector(step.element as string)
+    )
+
+    if (visibleSteps.length === 0) return
+
     const driverObj = driver({
       showProgress: true,
       showButtons: ["next", "previous", "close"],
@@ -16,7 +23,7 @@ export function GuidedTour() {
       prevBtnText: "Anterior",
       doneBtnText: "¡Entendido!",
       progressText: "{{current}} de {{total}}",
-      steps: tourSteps,
+      steps: visibleSteps,
       onDestroyStarted: () => {
         localStorage.setItem(TOUR_STORAGE_KEY, "true")
         driverObj.destroy()

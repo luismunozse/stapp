@@ -64,11 +64,41 @@ export const tourSteps: DriveStep[] = [
     },
   },
   {
+    element: "#nav-pos",
+    popover: {
+      title: "Punto de Venta (POS)",
+      description:
+        "Realizá ventas rápidas desde una interfaz tipo caja registradora, ideal para atención al mostrador.",
+      side: "right",
+      align: "start",
+    },
+  },
+  {
+    element: "#nav-cotizaciones",
+    popover: {
+      title: "Cotizaciones",
+      description:
+        "Creá presupuestos y cotizaciones para tus clientes antes de iniciar una reparación o venta.",
+      side: "right",
+      align: "start",
+    },
+  },
+  {
     element: "#nav-inventario",
     popover: {
       title: "Inventario",
       description:
         "Controlá el stock de repuestos, accesorios y productos. Gestioná precios y categorías.",
+      side: "right",
+      align: "start",
+    },
+  },
+  {
+    element: "#nav-caja",
+    popover: {
+      title: "Caja",
+      description:
+        "Gestioná los movimientos de caja diarios: aperturas, cierres, ingresos y egresos de efectivo.",
       side: "right",
       align: "start",
     },
@@ -94,11 +124,41 @@ export const tourSteps: DriveStep[] = [
     },
   },
   {
+    element: "#nav-emails",
+    popover: {
+      title: "Emails",
+      description:
+        "Configurá y gestioná los emails automáticos que se envían a tus clientes por cada etapa del servicio.",
+      side: "right",
+      align: "start",
+    },
+  },
+  {
     element: "#nav-soporte",
     popover: {
       title: "Soporte",
       description:
         "Reportá errores, enviá sugerencias o hacé consultas directamente al equipo de STApp.",
+      side: "right",
+      align: "start",
+    },
+  },
+  {
+    element: "#nav-proveedores",
+    popover: {
+      title: "Proveedores",
+      description:
+        "Administrá tus proveedores, sus datos de contacto y el historial de compras.",
+      side: "right",
+      align: "start",
+    },
+  },
+  {
+    element: "#nav-configuracion",
+    popover: {
+      title: "Configuración",
+      description:
+        "Personalizá tu taller: datos del negocio, métodos de pago, estados de órdenes y más.",
       side: "right",
       align: "start",
     },

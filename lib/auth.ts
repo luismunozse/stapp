@@ -382,6 +382,21 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         return token
       }
 
+      // Refrescar datos del usuario cuando se llama update() desde el cliente
+      if (trigger === "update" && token.id) {
+        const { data: freshUser } = await supabaseAdmin
+          .from("users")
+          .select("nombre, avatar_url")
+          .eq("id", token.id as string)
+          .single()
+
+        if (freshUser) {
+          token.name = freshUser.nombre
+          token.avatar = freshUser.avatar_url || null
+        }
+        return token
+      }
+
       // Verificar si necesita refresh (6 horas antes de expirar)
       const now = Math.floor(Date.now() / 1000)
       const exp = token.exp as number
