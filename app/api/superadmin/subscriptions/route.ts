@@ -107,12 +107,12 @@ export async function GET(request: Request) {
     // Obtener información de organizaciones
     const orgIds = subscriptions?.map((s) => s.organization_id) || []
 
-    let orgsMap: Record<string, { id: string; nombre: string; slug: string; activo: boolean }> = {}
+    let orgsMap: Record<string, { id: string; nombre: string; slug: string; activo: boolean; created_at: string }> = {}
 
     if (orgIds.length > 0) {
       const { data: orgs } = await supabaseAdmin
         .from("organizations")
-        .select("id, nombre, slug, activo")
+        .select("id, nombre, slug, activo, created_at")
         .in("id", orgIds)
 
       orgsMap = (orgs || []).reduce(
@@ -120,24 +120,39 @@ export async function GET(request: Request) {
           acc[org.id] = org
           return acc
         },
-        {} as Record<string, { id: string; nombre: string; slug: string; activo: boolean }>
+        {} as Record<string, { id: string; nombre: string; slug: string; activo: boolean; created_at: string }>
       )
     }
 
-    // Indicador de engagement: orgs con ordenes en ultimos 7 dias
-    let engagementMap: Record<string, boolean> = {}
-    if (orgIds.length > 0) {
-      const sevenDaysAgo = new Date()
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+    // Indicador de engagement: orgs con ordenes en últimos 7 días.
+    // Solo aplica a orgs con más de 7 días de antigüedad — una org nueva
+    // sin órdenes no es "en riesgo", simplemente acaba de empezar.
+    const sevenDaysAgo = new Date()
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+
+    // Filtrar solo orgs con más de 7 días
+    const matureOrgIds = orgIds.filter((id) => {
+      const org = orgsMap[id]
+      return org && new Date(org.created_at) < sevenDaysAgo
+    })
+
+    let engagementMap: Record<string, boolean | null> = {}
+    if (matureOrgIds.length > 0) {
       const { data: recentOrders } = await supabaseAdmin
         .from("ordenes_servicio")
         .select("organization_id")
-        .in("organization_id", orgIds)
+        .in("organization_id", matureOrgIds)
         .gte("created_at", sevenDaysAgo.toISOString())
 
       const activeOrgSet = new Set((recentOrders || []).map((o) => o.organization_id))
-      for (const id of orgIds) {
+      for (const id of matureOrgIds) {
         engagementMap[id] = activeOrgSet.has(id)
+      }
+    }
+    // Orgs nuevas (<7 días) no tienen indicador de engagement
+    for (const id of orgIds) {
+      if (!(id in engagementMap)) {
+        engagementMap[id] = null
       }
     }
 

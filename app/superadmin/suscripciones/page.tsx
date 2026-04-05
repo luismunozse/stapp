@@ -360,11 +360,11 @@ export default function SuscripcionesPage() {
             <div className="text-sm text-muted-foreground">{sub.organization?.slug}.stapp.com.ar</div>
           </div>
           {sub.hasRecentActivity === false && sub.status !== "CANCELED" && (
-            <span title="Sin actividad en 7 días" className="text-amber-500">
+            <span title="Sin actividad en 7+ días" className="text-amber-500">
               <AlertTriangle className="h-3.5 w-3.5" />
             </span>
           )}
-          {sub.hasRecentActivity && (
+          {sub.hasRecentActivity === true && (
             <span title="Activa en últimos 7 días" className="text-green-500">
               <Activity className="h-3.5 w-3.5" />
             </span>
