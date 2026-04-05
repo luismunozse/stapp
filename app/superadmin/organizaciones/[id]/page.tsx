@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useCallback, use } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -41,6 +41,8 @@ interface PageProps {
 export default function OrganizacionDetallePage({ params }: PageProps) {
   const { id } = use(params)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const activeTab = searchParams.get("tab") || "info"
   const { data, loading, fetchData } = useSuperadminFetch<OrgData>()
   const { mutate, loading: togglingStatus } = useSuperadminMutation()
 
@@ -154,7 +156,7 @@ export default function OrganizacionDetallePage({ params }: PageProps) {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="info">
+      <Tabs value={activeTab} onValueChange={(tab) => router.replace(`?tab=${tab}`, { scroll: false })}>
         <TabsList>
           <TabsTrigger value="info">Información</TabsTrigger>
           <TabsTrigger value="users">Usuarios ({users.length})</TabsTrigger>

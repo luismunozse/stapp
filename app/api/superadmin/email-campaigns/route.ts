@@ -262,62 +262,63 @@ export async function POST(request: NextRequest) {
     let sent = 0
     let failed = 0
     const campaignType = emailType || "CAMPAIGN_CUSTOM"
+    const lifecycleLogs: Array<{ organization_id: string; user_id: string; email_type: string; status: string; metadata: Record<string, unknown> }> = []
 
-    for (const admin of admins) {
-      if (!admin.email) continue
+    // Preparar todos los envíos
+    const emailTasks = admins
+      .filter((admin) => admin.email)
+      .map((admin) => {
+        const org = orgMap.get(admin.organization_id)
+        const personalizedHtml = htmlContent
+          .replace(/\{\{nombre\}\}/g, admin.nombre || "")
+          .replace(/\{\{organizacion\}\}/g, org?.nombre || "")
+          .replace(/\{\{slug\}\}/g, org?.slug || "")
 
-      const org = orgMap.get(admin.organization_id)
-      // Personalizar contenido
-      const personalizedHtml = htmlContent
-        .replace(/\{\{nombre\}\}/g, admin.nombre || "")
-        .replace(/\{\{organizacion\}\}/g, org?.nombre || "")
-        .replace(/\{\{slug\}\}/g, org?.slug || "")
+        return { admin, personalizedHtml }
+      })
 
-      try {
-        const response = await fetch(ENVIALOSIMPLE_API_URL, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            from: EMAIL_FROM,
-            to: admin.email,
-            subject,
-            html: personalizedHtml,
-          }),
-        })
+    // Enviar en batches de 5 con Promise.allSettled
+    const BATCH_SIZE = 5
+    for (let i = 0; i < emailTasks.length; i += BATCH_SIZE) {
+      const batch = emailTasks.slice(i, i + BATCH_SIZE)
+      const results = await Promise.allSettled(
+        batch.map(({ admin, personalizedHtml }) =>
+          fetch(ENVIALOSIMPLE_API_URL, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              from: EMAIL_FROM,
+              to: admin.email,
+              subject,
+              html: personalizedHtml,
+            }),
+          })
+        )
+      )
 
-        const status = response.ok ? "SENT" : "FAILED"
-        if (response.ok) sent++
+      for (let j = 0; j < results.length; j++) {
+        const result = results[j]
+        const { admin } = batch[j]
+        const status = result.status === "fulfilled" && result.value.ok ? "SENT" : "FAILED"
+        if (status === "SENT") sent++
         else failed++
 
-        // Log cada envío
-        await supabaseAdmin.from("lifecycle_emails").insert({
+        lifecycleLogs.push({
           organization_id: admin.organization_id,
           user_id: admin.id,
           email_type: campaignType,
           status,
-          metadata: {
-            subject,
-            segmentId: segmentId || null,
-            sentBy: superadminEmail,
-          },
-        })
-      } catch {
-        failed++
-        await supabaseAdmin.from("lifecycle_emails").insert({
-          organization_id: admin.organization_id,
-          user_id: admin.id,
-          email_type: campaignType,
-          status: "FAILED",
-          metadata: {
-            subject,
-            segmentId: segmentId || null,
-            sentBy: superadminEmail,
-          },
+          metadata: { subject, segmentId: segmentId || null, sentBy: superadminEmail },
         })
       }
+    }
+
+    // Batch insert de todos los lifecycle logs
+    if (lifecycleLogs.length > 0) {
+      await supabaseAdmin.from("lifecycle_emails").insert(lifecycleLogs)
     }
 
     // Audit log

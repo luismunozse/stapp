@@ -1,45 +1,30 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { useEffect, useCallback, use } from "react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, Package } from "lucide-react"
 import { PlanForm } from "../_components/plan-form"
-import { toast } from "sonner"
+import { useSuperadminFetch } from "@/hooks/use-superadmin-fetch"
 import type { PlanWithUsage } from "@/types/superadmin"
 
-export default function EditPlanPage() {
-  const params = useParams()
-  const router = useRouter()
-  const planId = params.id as string
+interface PageProps {
+  params: Promise<{ id: string }>
+}
 
-  const [plan, setPlan] = useState<PlanWithUsage | null>(null)
-  const [loading, setLoading] = useState(true)
+export default function EditPlanPage({ params }: PageProps) {
+  const { id: planId } = use(params)
+  const router = useRouter()
+  const { data, loading, fetchData } = useSuperadminFetch<{ plan: PlanWithUsage }>()
+
+  const loadPlan = useCallback(() => {
+    fetchData(`/api/superadmin/plans/${planId}`)
+  }, [planId, fetchData])
 
   useEffect(() => {
-    fetchPlan()
-  }, [planId])
-
-  const fetchPlan = async () => {
-    try {
-      const res = await fetch(`/api/superadmin/plans/${planId}`)
-      if (!res.ok) {
-        toast.error("Error al cargar el plan")
-        router.push("/superadmin/planes")
-        return
-      }
-
-      const data = await res.json()
-      setPlan(data.plan)
-    } catch (error) {
-      console.error("Error:", error)
-      alert("Error al cargar el plan")
-      router.push("/superadmin/planes")
-    } finally {
-      setLoading(false)
-    }
-  }
+    loadPlan()
+  }, [loadPlan])
 
   if (loading) {
     return (
@@ -49,13 +34,13 @@ export default function EditPlanPage() {
     )
   }
 
+  const plan = data?.plan
   if (!plan) {
     return null
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center gap-4">
         <Link href="/superadmin/planes">
           <Button variant="ghost" size="icon">
@@ -73,7 +58,6 @@ export default function EditPlanPage() {
         </div>
       </div>
 
-      {/* Form */}
       <PlanForm
         mode="edit"
         planId={planId}

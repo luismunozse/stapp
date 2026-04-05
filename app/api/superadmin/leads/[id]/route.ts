@@ -23,29 +23,26 @@ export async function GET(
       return NextResponse.json({ error: "Lead no encontrado" }, { status: 404 })
     }
 
-    // Obtener conversaciones vinculadas
-    const { data: conversaciones } = await supabaseAdmin
+    // Obtener conversaciones vinculadas con mensajes en un solo query (nested select)
+    const { data: conversacionesConMensajes } = await supabaseAdmin
       .from("chatbot_conversaciones")
-      .select("id, session_id, ip_address, user_agent, referrer, created_at, activa, lead_capturado")
+      .select(`
+        id, session_id, ip_address, user_agent, referrer, created_at, activa, lead_capturado,
+        chatbot_mensajes (id, tipo, contenido, modelo, tiempo_respuesta_ms, intencion_detectada, confianza, created_at)
+      `)
       .eq("lead_id", id)
       .order("created_at", { ascending: false })
 
-    // Obtener mensajes de cada conversación
-    const conversacionesConMensajes = await Promise.all(
-      (conversaciones || []).map(async (conv) => {
-        const { data: mensajes } = await supabaseAdmin
-          .from("chatbot_mensajes")
-          .select("id, tipo, contenido, modelo, tiempo_respuesta_ms, intencion_detectada, confianza, created_at")
-          .eq("conversacion_id", conv.id)
-          .order("created_at", { ascending: true })
-
-        return { ...conv, mensajes: mensajes || [] }
-      })
-    )
+    // Renombrar nested key para mantener compatibilidad con el frontend
+    const formattedConversaciones = (conversacionesConMensajes || []).map((conv) => ({
+      ...conv,
+      mensajes: (conv as any).chatbot_mensajes || [],
+      chatbot_mensajes: undefined,
+    }))
 
     return NextResponse.json({
       lead,
-      conversaciones: conversacionesConMensajes,
+      conversaciones: formattedConversaciones,
     })
   } catch (err) {
     console.error("Error fetching lead detail:", err)

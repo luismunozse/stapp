@@ -1,7 +1,21 @@
 import { NextRequest, NextResponse } from "next/server"
+import { z } from "zod"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
+import { safeParseBody } from "@/lib/api-utils"
+
+const updateLeadSchema = z.object({
+  id: z.string().min(1, "ID requerido"),
+  estado: z.enum(["NUEVO", "CONTACTADO", "CALIFICADO", "CONVERTIDO", "DESCARTADO"]).optional(),
+  nombre: z.string().max(200).optional(),
+  email: z.string().email().nullable().optional(),
+  telefono: z.string().max(50).nullable().optional(),
+  empresa: z.string().max(200).nullable().optional(),
+  notas: z.string().max(5000).nullable().optional(),
+  plan_interes: z.string().max(50).nullable().optional(),
+  interes: z.string().max(500).nullable().optional(),
+})
 
 export async function GET(request: NextRequest) {
   const { error } = await requireSuperadmin()
@@ -51,12 +65,10 @@ export async function PATCH(request: NextRequest) {
   if (error) return error
 
   try {
-    const body = await request.json()
-    const { id, ...updates } = body
+    const parsed = await safeParseBody(request, updateLeadSchema)
+    if ("error" in parsed) return parsed.error
 
-    if (!id) {
-      return NextResponse.json({ error: "ID requerido" }, { status: 400 })
-    }
+    const { id, ...updates } = parsed.data
 
     const { data, error: dbError } = await supabaseAdmin
       .from("leads")

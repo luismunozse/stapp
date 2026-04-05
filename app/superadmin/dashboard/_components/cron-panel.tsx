@@ -4,54 +4,10 @@ import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Play, Loader2, CheckCircle2, XCircle, Timer } from "lucide-react"
 import { toast } from "sonner"
-
-interface CronJob {
-  id: string
-  name: string
-  path: string
-  schedule: string
-  description: string
-}
-
-const CRON_JOBS: CronJob[] = [
-  {
-    id: "engagement",
-    name: "Engagement",
-    path: "/api/cron/engagement",
-    schedule: "2:00 AM",
-    description: "Calcula engagement score diario por taller",
-  },
-  {
-    id: "feature-usage",
-    name: "Feature Usage",
-    path: "/api/cron/feature-usage",
-    schedule: "3:00 AM",
-    description: "Calcula adopción de features por taller",
-  },
-  {
-    id: "trial-management",
-    name: "Trial Management",
-    path: "/api/cron/trial-management",
-    schedule: "8:00 AM",
-    description: "Auto-extiende trials y envía emails",
-  },
-  {
-    id: "recordatorios",
-    name: "Recordatorios",
-    path: "/api/cron/recordatorios",
-    schedule: "10:00 AM",
-    description: "Recuerda a clientes retirar equipos",
-  },
-  {
-    id: "lifecycle-emails",
-    name: "Lifecycle Emails",
-    path: "/api/cron/lifecycle-emails",
-    schedule: "11:00 AM",
-    description: "Welcome, tips, trial expiring, win-back",
-  },
-]
+import { CRON_JOBS, type CronJobDefinition } from "@/lib/cron-config"
 
 type CronStatus = "idle" | "running" | "success" | "error"
 
@@ -59,8 +15,9 @@ export function CronPanel() {
   const [statuses, setStatuses] = useState<Record<string, CronStatus>>({})
   const [results, setResults] = useState<Record<string, string>>({})
   const [runningAll, setRunningAll] = useState(false)
+  const [confirmRunAll, setConfirmRunAll] = useState(false)
 
-  const runCron = async (job: CronJob) => {
+  const runCron = async (job: CronJobDefinition) => {
     setStatuses(s => ({ ...s, [job.id]: "running" }))
     setResults(r => ({ ...r, [job.id]: "" }))
 
@@ -113,7 +70,7 @@ export function CronPanel() {
           <Button
             size="sm"
             variant="outline"
-            onClick={runAll}
+            onClick={() => setConfirmRunAll(true)}
             disabled={runningAll}
           >
             {runningAll ? (
@@ -123,6 +80,17 @@ export function CronPanel() {
             )}
             Ejecutar todos
           </Button>
+          <ConfirmDialog
+            open={confirmRunAll}
+            onOpenChange={setConfirmRunAll}
+            title="Ejecutar todos los crons"
+            description={`Se ejecutarán ${CRON_JOBS.length} tareas programadas secuencialmente. Esto puede tomar varios minutos.`}
+            onConfirm={() => {
+              setConfirmRunAll(false)
+              runAll()
+            }}
+            confirmText="Ejecutar todos"
+          />
         </div>
       </CardHeader>
       <CardContent>

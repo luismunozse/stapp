@@ -13,7 +13,23 @@ export async function GET(request: Request) {
     const status = searchParams.get("status") || ""
     const dateFrom = searchParams.get("dateFrom") || ""
     const dateTo = searchParams.get("dateTo") || ""
+    const search = searchParams.get("search") || ""
     const { page, limit, offset } = parsePagination(searchParams)
+
+    // Si hay búsqueda por org, encontrar IDs primero
+    let searchOrgIds: string[] | null = null
+    if (search.trim().length >= 2) {
+      const searchPattern = `%${search.trim()}%`
+      const { data: matchingOrgs } = await supabaseAdmin
+        .from("organizations")
+        .select("id")
+        .or(`nombre.ilike.${searchPattern},slug.ilike.${searchPattern}`)
+        .limit(100)
+      searchOrgIds = matchingOrgs?.map((o) => o.id) || []
+      if (searchOrgIds.length === 0) {
+        return NextResponse.json({ payments: [], total: 0, page, limit, totalAmount: 0 })
+      }
+    }
 
     // Query base para pagos
     let query = supabaseAdmin
@@ -36,6 +52,11 @@ export async function GET(request: Request) {
         { count: "exact" }
       )
       .order("paid_at", { ascending: false, nullsFirst: false })
+
+    // Filtro por búsqueda de org
+    if (searchOrgIds) {
+      query = query.in("organization_id", searchOrgIds)
+    }
 
     // Filtro de estado
     if (status) {

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
+import { z } from "zod"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
+import { safeParseBody } from "@/lib/api-utils"
+import { VALID_CRON_PATHS } from "@/lib/cron-config"
 
 // Importar las funciones de cron directamente
 import { GET as engagementCron } from "@/app/api/cron/engagement/route"
@@ -24,8 +27,10 @@ export async function POST(request: NextRequest) {
     const { error, email } = await requireSuperadmin()
     if (error) return error
 
-    const { path } = await request.json()
+    const parsed = await safeParseBody(request, z.object({ path: z.string().min(1) }))
+    if ("error" in parsed) return parsed.error
 
+    const { path } = parsed.data
     const handler = CRON_HANDLERS[path]
     if (!handler) {
       return NextResponse.json({ error: "Ruta de cron no válida" }, { status: 400 })

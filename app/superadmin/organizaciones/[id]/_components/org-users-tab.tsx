@@ -4,7 +4,8 @@ import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Users, CheckCircle, Loader2 } from "lucide-react"
+import { Users, CheckCircle, Loader2, Search } from "lucide-react"
+import { Input } from "@/components/ui/input"
 import { formatDate } from "@/lib/utils"
 import { toast } from "sonner"
 import type { OrganizationUser } from "@/types/superadmin"
@@ -16,6 +17,15 @@ interface OrgUsersTabProps {
 export function OrgUsersTab({ users: initialUsers }: OrgUsersTabProps) {
   const [users, setUsers] = useState(initialUsers)
   const [verifyingId, setVerifyingId] = useState<string | null>(null)
+  const [searchFilter, setSearchFilter] = useState("")
+
+  const filteredUsers = searchFilter
+    ? users.filter(
+        (u) =>
+          u.nombre.toLowerCase().includes(searchFilter.toLowerCase()) ||
+          u.email.toLowerCase().includes(searchFilter.toLowerCase())
+      )
+    : users
 
   async function handleVerifyEmail(userId: string) {
     setVerifyingId(userId)
@@ -54,7 +64,18 @@ export function OrgUsersTab({ users: initialUsers }: OrgUsersTabProps) {
           {users.length} usuarios registrados en esta organización
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
+        {users.length > 5 && (
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por nombre o email..."
+              value={searchFilter}
+              onChange={(e) => setSearchFilter(e.target.value)}
+              className="pl-9 max-w-sm"
+            />
+          </div>
+        )}
         <div className="rounded-lg border">
           <table className="w-full text-sm">
             <thead>
@@ -68,7 +89,7 @@ export function OrgUsersTab({ users: initialUsers }: OrgUsersTabProps) {
               </tr>
             </thead>
             <tbody>
-              {users.map((user) => (
+              {filteredUsers.map((user) => (
                 <tr key={user.id} className="border-b last:border-0">
                   <td className="p-3 font-medium">{user.nombre}</td>
                   <td className="p-3">{user.email}</td>

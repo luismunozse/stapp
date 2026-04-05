@@ -149,7 +149,7 @@ export default function PlanesPage() {
           ))}
         </div>
       ) : (
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {plans.map((plan) => (
           <Card key={plan.id} className={!plan.activo ? "opacity-60" : ""}>
             <CardHeader>

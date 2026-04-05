@@ -38,6 +38,7 @@ export async function GET(request: Request) {
         support_ticket_messages (id, autor_tipo, contenido, created_at, leido_at)
       `)
       .order("updated_at", { ascending: false })
+      .order("created_at", { referencedTable: "support_ticket_messages", ascending: false })
       .range(offset, offset + limit - 1)
 
     if (estado) {
@@ -62,11 +63,8 @@ export async function GET(request: Request) {
 
     const formatted = tickets?.map(t => {
       const mensajes = t.support_ticket_messages || []
-      const sorted = [...mensajes].sort(
-        (a: Record<string, unknown>, b: Record<string, unknown>) =>
-          new Date(b.created_at as string).getTime() - new Date(a.created_at as string).getTime()
-      )
-      const ultimo = sorted[0] as Record<string, unknown> | undefined
+      // Ya viene ordenado por created_at desc desde el query
+      const ultimo = (mensajes[0] || undefined) as Record<string, unknown> | undefined
       const noLeidos = mensajes.filter(
         (m: Record<string, unknown>) => m.autor_tipo === "USUARIO" && !m.leido_at
       ).length

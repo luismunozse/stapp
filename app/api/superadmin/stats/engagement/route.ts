@@ -2,6 +2,9 @@ import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 
+// Datos cambian 1x/día (cuando corre el cron de engagement). Cache 1h.
+export const revalidate = 3600
+
 export async function GET() {
   try {
     const { error } = await requireSuperadmin()

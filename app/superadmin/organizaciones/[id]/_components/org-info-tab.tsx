@@ -18,15 +18,21 @@ interface OrgInfoTabProps {
 export function OrgInfoTab({ organization, onUpdated }: OrgInfoTabProps) {
   const { mutate, loading: saving } = useSuperadminMutation()
 
-  const [formData, setFormData] = useState({
+  const initialData = {
     nombre: organization.nombre || "",
     nombre_mostrar: organization.nombre_mostrar || "",
     email: organization.email || "",
     telefono: organization.telefono || "",
     direccion: organization.direccion || "",
-  })
+  }
+
+  const [formData, setFormData] = useState(initialData)
+
+  const isDirty = JSON.stringify(formData) !== JSON.stringify(initialData)
+  const isValid = formData.nombre.trim().length >= 2
 
   const handleSave = async () => {
+    if (!isValid) return
     const result = await mutate(
       `/api/superadmin/organizations/${organization.id}`,
       {
@@ -101,7 +107,7 @@ export function OrgInfoTab({ organization, onUpdated }: OrgInfoTabProps) {
           <div className="text-sm text-muted-foreground">
             Creada: {formatDateTime(organization.created_at)}
           </div>
-          <Button onClick={handleSave} disabled={saving}>
+          <Button onClick={handleSave} disabled={saving || !isDirty || !isValid}>
             <Save className="h-4 w-4 mr-2" />
             {saving ? "Guardando..." : "Guardar cambios"}
           </Button>

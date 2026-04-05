@@ -1,11 +1,14 @@
 "use client"
 
-import { useParams } from "next/navigation"
+import { use } from "react"
 import { LeadDetailContent } from "./_components/lead-detail-content"
 
-export default function SuperadminLeadDetailPage() {
-  const params = useParams()
-  const id = params.id as string
+interface PageProps {
+  params: Promise<{ id: string }>
+}
+
+export default function SuperadminLeadDetailPage({ params }: PageProps) {
+  const { id } = use(params)
 
   return <LeadDetailContent leadId={id} />
 }

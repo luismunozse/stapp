@@ -2,6 +2,9 @@ import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 
+// Datos cambian 1x/día (cuando corre el cron de feature-usage). Cache 1h.
+export const revalidate = 3600
+
 const FEATURE_LABELS: Record<string, string> = {
   usa_ordenes: "Órdenes de servicio",
   usa_cotizaciones: "Cotizaciones",

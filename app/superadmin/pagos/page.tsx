@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { DataTable, Column } from "@/components/ui/data-table"
-import { Receipt, Eye, ExternalLink, DollarSign, Download } from "lucide-react"
+import { Receipt, Eye, ExternalLink, DollarSign, Download, Search } from "lucide-react"
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils"
 import { useSuperadminFetch } from "@/hooks/use-superadmin-fetch"
 import { useLastUpdated } from "@/hooks/use-last-updated"
@@ -38,6 +38,8 @@ export default function PagosPage() {
   const [statusFilter, setStatusFilter] = useState("")
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
+  const [searchInput, setSearchInput] = useState("")
+  const [searchQuery, setSearchQuery] = useState("")
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const [totalAmount, setTotalAmount] = useState(0)
@@ -52,6 +54,7 @@ export default function PagosPage() {
       ...(statusFilter && { status: statusFilter }),
       ...(dateFrom && { dateFrom }),
       ...(dateTo && { dateTo }),
+      ...(searchQuery && { search: searchQuery }),
     })
 
     const result = await fetchData(`/api/superadmin/payments?${params}`)
@@ -61,11 +64,20 @@ export default function PagosPage() {
       setTotalAmount(result.totalAmount || 0)
       markUpdated()
     }
-  }, [page, statusFilter, dateFrom, dateTo, fetchData])
+  }, [page, statusFilter, dateFrom, dateTo, searchQuery, fetchData])
 
   useEffect(() => {
     fetchPayments()
   }, [fetchPayments])
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchQuery(searchInput)
+      setPage(1)
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [searchInput])
 
   const handleExportCSV = () => {
     const csv = [
@@ -227,6 +239,15 @@ export default function PagosPage() {
       <Card>
         <CardHeader>
           <div className="flex flex-col lg:flex-row gap-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar organización..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                className="pl-9 w-[220px]"
+              />
+            </div>
             <Select
               value={statusFilter || "all"}
               onValueChange={(value) => {

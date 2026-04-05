@@ -165,16 +165,8 @@ export default function LogsPage() {
   useEffect(() => {
     const loadOrgs = async () => {
       try {
-        const superadminEmail = document.cookie
-          .split("; ")
-          .find((c) => c.startsWith("superadmin_email="))
-          ?.split("=")[1]
-        const res = await fetch("/api/superadmin/organizations?limit=500", {
-          headers: {
-            "x-superadmin-panel": "true",
-            "x-superadmin-email": superadminEmail || "",
-          },
-        })
+        // No necesita headers custom — el middleware los inyecta automáticamente
+        const res = await fetch("/api/superadmin/organizations?limit=500")
         if (res.ok) {
           const data = await res.json()
           setOrganizations(
@@ -268,17 +260,8 @@ export default function LogsPage() {
         ...(searchQuery && { search: searchQuery }),
       })
 
-      const superadminEmail = document.cookie
-        .split("; ")
-        .find((c) => c.startsWith("superadmin_email="))
-        ?.split("=")[1]
-
-      const response = await fetch(`/api/superadmin/audit-logs/export?${params}`, {
-        headers: {
-          "x-superadmin-panel": "true",
-          "x-superadmin-email": superadminEmail || "",
-        },
-      })
+      // No necesita headers custom — el middleware los inyecta automáticamente
+      const response = await fetch(`/api/superadmin/audit-logs/export?${params}`)
 
       if (response.ok) {
         const blob = await response.blob()
