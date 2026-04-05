@@ -695,8 +695,8 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
         }
         if (logoImage) {
           const logoDims = logoImage.scale(1)
-          const maxLogoH = 50
-          const maxLogoW = 65
+          const maxLogoH = 70
+          const maxLogoW = 90
           const scale = Math.min(maxLogoH / logoDims.height, maxLogoW / logoDims.width)
           const sw = logoDims.width * scale
           const sh = logoDims.height * scale
