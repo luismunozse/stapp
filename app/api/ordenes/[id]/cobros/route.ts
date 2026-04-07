@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { revalidateTag } from "next/cache"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
@@ -190,6 +191,9 @@ export async function POST(
       .eq("id", ordenId)
       .single()
 
+    // Invalidar cache del dashboard para que el ingreso se vea reflejado
+    revalidateTag("dashboard")
+
     return NextResponse.json({
       totalCobrado: parseFloat(ordenActualizada?.total_cobrado || "0"),
       estadoCobro: ordenActualizada?.estado_cobro,
@@ -271,6 +275,9 @@ export async function DELETE(
 
     // Recalcular estado de cobro (ignorará cobros anulados)
     await supabaseAdmin.rpc("recalcular_estado_cobro", { p_orden_id: ordenId })
+
+    // Invalidar cache del dashboard
+    revalidateTag("dashboard")
 
     return NextResponse.json({ message: "Cobro anulado correctamente" })
   } catch (err) {

@@ -71,6 +71,7 @@ export const STORAGE_BUCKETS = {
   APK_RELEASES: "apk-releases",
   SOPORTE_ATTACHMENTS: "soporte-attachments",
   AVATARS: "avatars",
+  COMPROBANTES_GASTOS: "comprobantes-gastos",
 } as const
 
 // Helper para obtener URL pública de un archivo

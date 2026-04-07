@@ -11,7 +11,15 @@ const broadcastSchema = z.object({
   target: z.enum(["all", "specific"]).default("all"),
   organizationIds: z.array(z.string().uuid()).optional(),
   roles: z.array(z.enum(["ADMIN", "TECNICO", "VENDEDOR"])).optional(),
-  actionUrl: z.string().url().nullable().optional(),
+  actionUrl: z
+    .string()
+    .max(2000)
+    .refine(
+      (v) => v.startsWith("/") || /^https?:\/\//.test(v),
+      "Debe ser una ruta relativa (/ruta) o una URL absoluta (https://...)"
+    )
+    .nullable()
+    .optional(),
 })
 
 export async function GET() {

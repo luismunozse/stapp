@@ -1,12 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Loader2, Plus } from "lucide-react"
+import { Loader2, Plus, Paperclip, X, FileText } from "lucide-react"
 
 const CONCEPTOS_INGRESO = [
   "Ingreso manual",
@@ -31,6 +31,16 @@ const METODOS = [
   { value: "OTRO", label: "Otro" },
 ]
 
+interface CategoriaGasto {
+  id: string
+  nombre: string
+  tipo: "FIJO" | "VARIABLE"
+  afectaRentabilidad: boolean
+  color: string | null
+  icono: string | null
+  activo: boolean
+}
+
 interface MovimientoManualFormProps {
   onCreated: () => void
 }
@@ -42,11 +52,59 @@ export function MovimientoManualForm({ onCreated }: MovimientoManualFormProps) {
   const [concepto, setConcepto] = useState("")
   const [conceptoCustom, setConceptoCustom] = useState("")
   const [observaciones, setObservaciones] = useState("")
+  const [categoriaId, setCategoriaId] = useState<string>("")
+  const [categorias, setCategorias] = useState<CategoriaGasto[]>([])
+  const [comprobanteUrl, setComprobanteUrl] = useState<string>("")
+  const [comprobanteFile, setComprobanteFile] = useState<File | null>(null)
+  const [uploadingComprobante, setUploadingComprobante] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
 
   const conceptos = tipo === "INGRESO" ? CONCEPTOS_INGRESO : CONCEPTOS_EGRESO
   const conceptoFinal = concepto === "_custom" ? conceptoCustom : concepto
+
+  // Cargar categorías al montar
+  useEffect(() => {
+    fetch("/api/categorias-gasto")
+      .then((r) => (r.ok ? r.json() : { categorias: [] }))
+      .then((d) => setCategorias(d.categorias || []))
+      .catch(() => setCategorias([]))
+  }, [])
+
+  // Agrupar categorías por tipo para el select
+  const categoriasFijas = categorias.filter((c) => c.tipo === "FIJO")
+  const categoriasVariables = categorias.filter((c) => c.tipo === "VARIABLE")
+
+  const categoriaSeleccionada = categorias.find((c) => c.id === categoriaId)
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setComprobanteFile(file)
+    setUploadingComprobante(true)
+    setError("")
+    try {
+      const fd = new FormData()
+      fd.append("file", file)
+      const res = await fetch("/api/caja/movimientos/upload-comprobante", {
+        method: "POST",
+        body: fd,
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Error al subir comprobante")
+      setComprobanteUrl(data.url)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al subir comprobante")
+      setComprobanteFile(null)
+    } finally {
+      setUploadingComprobante(false)
+    }
+  }
+
+  const handleRemoveComprobante = () => {
+    setComprobanteFile(null)
+    setComprobanteUrl("")
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -73,6 +131,8 @@ export function MovimientoManualForm({ onCreated }: MovimientoManualFormProps) {
           metodoPago,
           concepto: conceptoFinal,
           observaciones: observaciones || undefined,
+          categoriaGastoId: tipo === "EGRESO" && categoriaId ? categoriaId : null,
+          comprobanteUrl: comprobanteUrl || null,
         }),
       })
 
@@ -86,6 +146,9 @@ export function MovimientoManualForm({ onCreated }: MovimientoManualFormProps) {
       setConcepto("")
       setConceptoCustom("")
       setObservaciones("")
+      setCategoriaId("")
+      setComprobanteFile(null)
+      setComprobanteUrl("")
       onCreated()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al crear movimiento")
@@ -120,7 +183,7 @@ export function MovimientoManualForm({ onCreated }: MovimientoManualFormProps) {
                   variant={tipo === "INGRESO" ? "default" : "outline"}
                   size="sm"
                   className="flex-1"
-                  onClick={() => { setTipo("INGRESO"); setConcepto("") }}
+                  onClick={() => { setTipo("INGRESO"); setConcepto(""); setCategoriaId("") }}
                 >
                   Ingreso
                 </Button>
@@ -180,6 +243,123 @@ export function MovimientoManualForm({ onCreated }: MovimientoManualFormProps) {
               )}
             </div>
           </div>
+
+          {/* Categoría de gasto - solo para EGRESO */}
+          {tipo === "EGRESO" && (
+            <div>
+              <label className="text-sm font-medium">
+                Categoría de gasto
+                <span className="text-muted-foreground font-normal ml-1">(opcional, recomendado)</span>
+              </label>
+              <Select value={categoriaId || "_none"} onValueChange={(v) => setCategoriaId(v === "_none" ? "" : v)}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Sin categorizar" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">Sin categorizar</SelectItem>
+                  {categoriasFijas.length > 0 && (
+                    <>
+                      <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">Gastos fijos</div>
+                      {categoriasFijas.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          <span className="flex items-center gap-2">
+                            {c.color && (
+                              <span
+                                className="inline-block w-2 h-2 rounded-full"
+                                style={{ backgroundColor: c.color }}
+                              />
+                            )}
+                            {c.nombre}
+                            {!c.afectaRentabilidad && (
+                              <span className="text-xs text-muted-foreground">(no afecta resultado)</span>
+                            )}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
+                  {categoriasVariables.length > 0 && (
+                    <>
+                      <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">Gastos variables</div>
+                      {categoriasVariables.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          <span className="flex items-center gap-2">
+                            {c.color && (
+                              <span
+                                className="inline-block w-2 h-2 rounded-full"
+                                style={{ backgroundColor: c.color }}
+                              />
+                            )}
+                            {c.nombre}
+                            {!c.afectaRentabilidad && (
+                              <span className="text-xs text-muted-foreground">(no afecta resultado)</span>
+                            )}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
+              {categoriaSeleccionada && !categoriaSeleccionada.afectaRentabilidad && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Este movimiento sale de caja pero no se descuenta de la ganancia neta (ej: retiro del dueño).
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Comprobante - solo para EGRESO */}
+          {tipo === "EGRESO" && (
+            <div>
+              <label className="text-sm font-medium">
+                Comprobante
+                <span className="text-muted-foreground font-normal ml-1">(opcional, JPG/PNG/PDF, máx 5MB)</span>
+              </label>
+              {!comprobanteFile ? (
+                <div className="mt-1">
+                  <label className="flex items-center gap-2 px-3 py-2 border border-dashed rounded-md cursor-pointer hover:bg-muted/50 transition-colors w-fit">
+                    <Paperclip className="h-4 w-4" />
+                    <span className="text-sm">Adjuntar archivo</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,application/pdf"
+                      onChange={handleFileChange}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              ) : (
+                <div className="mt-1 flex items-center gap-2 p-2 border rounded-md bg-muted/30">
+                  {uploadingComprobante ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <FileText className="h-4 w-4" />
+                  )}
+                  <span className="text-sm flex-1 truncate">{comprobanteFile.name}</span>
+                  {comprobanteUrl && (
+                    <a
+                      href={comprobanteUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-primary hover:underline"
+                    >
+                      Ver
+                    </a>
+                  )}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={handleRemoveComprobante}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Observaciones */}
           <div>

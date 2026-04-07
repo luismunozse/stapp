@@ -9,6 +9,9 @@ const movimientoSchema = z.object({
   metodoPago: z.string().min(1, "El método de pago es requerido"),
   concepto: z.string().min(1, "El concepto es requerido"),
   observaciones: z.string().optional(),
+  categoriaGastoId: z.string().nullable().optional(),
+  afectaRentabilidad: z.boolean().optional(),
+  comprobanteUrl: z.string().url().nullable().optional(),
 })
 
 // GET - Lista movimientos manuales del día
@@ -24,7 +27,7 @@ export async function GET(request: Request) {
 
     const { data: movimientos } = await supabaseAdmin
       .from("movimientos_caja")
-      .select("*, users(id, nombre)")
+      .select("*, users(id, nombre), categorias_gasto(id, nombre, color, icono)")
       .eq("organization_id", organizationId!)
       .gte("fecha", fechaDesde)
       .lte("fecha", fechaHasta)
@@ -41,6 +44,18 @@ export async function GET(request: Request) {
         usuarioId: m.usuario_id,
         usuarioNombre: m.users?.nombre || null,
         fecha: m.fecha,
+        categoriaGastoId: m.categoria_gasto_id,
+        categoria: m.categorias_gasto
+          ? {
+              id: m.categorias_gasto.id,
+              nombre: m.categorias_gasto.nombre,
+              color: m.categorias_gasto.color,
+              icono: m.categorias_gasto.icono,
+            }
+          : null,
+        afectaRentabilidad: m.afecta_rentabilidad,
+        comprobanteUrl: m.comprobante_url,
+        esRecurrente: m.es_recurrente,
       })),
     })
   } catch (err) {
@@ -66,6 +81,18 @@ export async function POST(request: Request) {
       .eq("estado", "ABIERTA")
       .maybeSingle()
 
+    // Si vino categoriaGastoId pero no afectaRentabilidad explícito, heredar de la categoría
+    let afectaRentabilidad = parsed.afectaRentabilidad
+    if (parsed.categoriaGastoId && afectaRentabilidad === undefined) {
+      const { data: cat } = await supabaseAdmin
+        .from("categorias_gasto")
+        .select("afecta_rentabilidad")
+        .eq("id", parsed.categoriaGastoId)
+        .eq("organization_id", organizationId!)
+        .maybeSingle()
+      if (cat) afectaRentabilidad = cat.afecta_rentabilidad
+    }
+
     const { data: movimiento, error: insertError } = await supabaseAdmin
       .from("movimientos_caja")
       .insert({
@@ -77,6 +104,9 @@ export async function POST(request: Request) {
         concepto: parsed.concepto,
         observaciones: parsed.observaciones || null,
         usuario_id: userId!,
+        categoria_gasto_id: parsed.categoriaGastoId || null,
+        afecta_rentabilidad: afectaRentabilidad ?? true,
+        comprobante_url: parsed.comprobanteUrl || null,
       })
       .select("*")
       .single()

@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import { Trash2, TrendingUp, TrendingDown, Loader2 } from "lucide-react"
+import { Trash2, TrendingUp, TrendingDown, Loader2, Paperclip, Repeat } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 
 const METODO_LABELS: Record<string, string> = {
@@ -92,7 +92,54 @@ export function MovimientosManualesList({ fecha, refreshKey }: MovimientosManual
                     <TrendingDown className="h-4 w-4 mt-0.5 text-red-600" />
                   )}
                   <div className="space-y-0.5">
-                    <div className="text-sm font-medium">{m.concepto}</div>
+                    <div className="text-sm font-medium flex items-center gap-2 flex-wrap">
+                      {m.concepto}
+                      {m.categoria && (
+                        <Badge
+                          variant="secondary"
+                          className="text-xs font-normal gap-1"
+                          style={
+                            m.categoria.color
+                              ? {
+                                  backgroundColor: `${m.categoria.color}20`,
+                                  color: m.categoria.color,
+                                  borderColor: `${m.categoria.color}40`,
+                                }
+                              : undefined
+                          }
+                        >
+                          {m.categoria.color && (
+                            <span
+                              className="inline-block w-1.5 h-1.5 rounded-full"
+                              style={{ backgroundColor: m.categoria.color }}
+                            />
+                          )}
+                          {m.categoria.nombre}
+                        </Badge>
+                      )}
+                      {m.tipo === "EGRESO" && m.afectaRentabilidad === false && (
+                        <Badge variant="outline" className="text-xs font-normal">
+                          No afecta resultado
+                        </Badge>
+                      )}
+                      {m.esRecurrente && (
+                        <Badge variant="outline" className="text-xs font-normal gap-1">
+                          <Repeat className="h-2.5 w-2.5" />
+                          Recurrente
+                        </Badge>
+                      )}
+                      {m.comprobanteUrl && (
+                        <a
+                          href={m.comprobanteUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Ver comprobante"
+                          className="text-muted-foreground hover:text-primary"
+                        >
+                          <Paperclip className="h-3.5 w-3.5" />
+                        </a>
+                      )}
+                    </div>
                     <div className="text-xs text-muted-foreground flex items-center gap-1">
                       <Badge variant="outline" className="text-xs">
                         {m.tipo === "INGRESO" ? "Ingreso" : "Egreso"}

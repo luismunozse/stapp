@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     // Obtener plan Premium
     const { data: premiumPlan, error: planError } = await supabaseAdmin
       .from("plans")
-      .select("id")
+      .select("id, precio_mensual, precio_anual, moneda")
       .eq("tipo", "PREMIUM")
       .eq("activo", true)
       .single()
@@ -128,6 +128,39 @@ export async function POST(request: Request) {
 
       if (createError) throw createError
       subscriptionId = newSub.id
+    }
+
+    // Registrar pago en subscription_payments para que aparezca en /superadmin/pagos y dashboard
+    // Calcular monto en base al período / cantidad de meses
+    const meses = months || (period === "YEARLY" ? 12 : 1)
+    const precioMensual = Number(premiumPlan.precio_mensual) || 0
+    const precioAnual = Number(premiumPlan.precio_anual) || 0
+    let amount = 0
+    if (period === "YEARLY" && !months) {
+      amount = precioAnual
+    } else {
+      amount = precioMensual * meses
+    }
+
+    const { error: payInsertError } = await supabaseAdmin
+      .from("subscription_payments")
+      .insert({
+        subscription_id: subscriptionId,
+        organization_id: organizationId,
+        amount,
+        currency: premiumPlan.moneda || "ARS",
+        payment_provider: "MANUAL",
+        provider_payment_id: `manual-${Date.now()}`,
+        status: "SUCCEEDED",
+        paid_at: now.toISOString(),
+      })
+
+    if (payInsertError) {
+      console.error(
+        `[superadmin/renew] Error inserting subscription_payment for org ${organizationId}:`,
+        payInsertError
+      )
+      // No abortamos: la suscripción ya se renovó. Solo logueamos.
     }
 
     // Registrar en historial de suscripción

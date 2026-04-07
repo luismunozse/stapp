@@ -42,6 +42,8 @@ const getDashboardData = unstable_cache(
       ordenesPorTecnicoResult,
       ordenesPendienteCobroResult,
       ordenesFechaVencidaResult,
+      cobrosOrdenMesResult,
+      cobrosOrdenUltimos7DiasResult,
     ] = await Promise.all([
       supabaseAdmin
         .from("ordenes_servicio")
@@ -63,7 +65,7 @@ const getDashboardData = unstable_cache(
         .lt("stock", 5),
       supabaseAdmin
         .from("facturas")
-        .select("total, ordenes_servicio!inner(organization_id)")
+        .select("total, orden_id, ordenes_servicio!inner(organization_id)")
         .eq("ordenes_servicio.organization_id", organizationId)
         .eq("estado_pago", "PAGADO")
         .gte("fecha", primerDiaMes.toISOString()),
@@ -87,7 +89,7 @@ const getDashboardData = unstable_cache(
         .eq("organization_id", organizationId),
       supabaseAdmin
         .from("facturas")
-        .select("total, fecha, ordenes_servicio!inner(organization_id)")
+        .select("total, fecha, orden_id, ordenes_servicio!inner(organization_id)")
         .eq("ordenes_servicio.organization_id", organizationId)
         .eq("estado_pago", "PAGADO")
         .gte("fecha", hace7Dias.toISOString())
@@ -168,6 +170,21 @@ const getDashboardData = unstable_cache(
         .in("estado", ["RECIBIDO", "EN_DIAGNOSTICO", "PRESUPUESTADO", "APROBADO", "EN_REPARACION", "ESPERANDO_REPUESTO"])
         .lt("fecha_prometida", hoy.toISOString())
         .not("fecha_prometida", "is", null),
+      // Cobros directos a órdenes (sin factura) del mes actual
+      supabaseAdmin
+        .from("cobros_orden")
+        .select("monto, orden_id")
+        .eq("organization_id", organizationId)
+        .neq("anulado", true)
+        .gte("created_at", primerDiaMes.toISOString()),
+      // Cobros directos a órdenes últimos 7 días (para gráfica)
+      supabaseAdmin
+        .from("cobros_orden")
+        .select("monto, orden_id, created_at")
+        .eq("organization_id", organizationId)
+        .neq("anulado", true)
+        .gte("created_at", hace7Dias.toISOString())
+        .order("created_at", { ascending: true }),
     ])
 
     return {
@@ -187,6 +204,8 @@ const getDashboardData = unstable_cache(
       ordenesPorTecnicoResult,
       ordenesPendienteCobroResult,
       ordenesFechaVencidaResult,
+      cobrosOrdenMesResult,
+      cobrosOrdenUltimos7DiasResult,
       hace7Dias: hace7Dias.toISOString(),
     }
   },
@@ -387,6 +406,8 @@ export default async function DashboardPage() {
     ordenesPorTecnicoResult,
     ordenesPendienteCobroResult,
     ordenesFechaVencidaResult,
+    cobrosOrdenMesResult,
+    cobrosOrdenUltimos7DiasResult,
     hace7Dias,
   } = await getDashboardData(organizationId)
 
@@ -395,10 +416,18 @@ export default async function DashboardPage() {
   const ordenesPendientes = ordenesPendientesResult.count || 0
   const totalClientes = totalClientesResult.count || 0
   const itemsBajoStock = itemsBajoStockResult.count || 0
-  const facturasData = ingresosMensualesResult.data as { total: number }[] | null
-  const ingresosFacturas = facturasData?.reduce((sum, f) => sum + (f.total || 0), 0) || 0
-  const ingresosVentasMes = (ventasMesResult.data as { total: number }[] | null)?.reduce((sum, v) => sum + (v.total || 0), 0) || 0
-  const ingresos = ingresosFacturas + ingresosVentasMes
+  // Dedupe: si una orden ya tiene cobros directos en el período, no contar
+  // su factura (representan el mismo servicio). cobros_orden es la fuente
+  // de verdad porque refleja dinero efectivamente recibido.
+  const cobrosOrdenMesData = (cobrosOrdenMesResult.data as { monto: number; orden_id: string }[] | null) || []
+  const ordenesConCobroMes = new Set(cobrosOrdenMesData.map((c) => c.orden_id))
+  const facturasData = ingresosMensualesResult.data as { total: number; orden_id: string }[] | null
+  const ingresosFacturas = (facturasData || [])
+    .filter((f) => !ordenesConCobroMes.has(f.orden_id))
+    .reduce((sum, f) => sum + Number(f.total || 0), 0)
+  const ingresosVentasMes = (ventasMesResult.data as { total: number }[] | null)?.reduce((sum, v) => sum + Number(v.total || 0), 0) || 0
+  const ingresosCobrosOrdenMes = cobrosOrdenMesData.reduce((sum, c) => sum + Number(c.monto || 0), 0)
+  const ingresos = ingresosFacturas + ingresosVentasMes + ingresosCobrosOrdenMes
   const garantiasPorVencer = garantiasPorVencerResult.data || []
 
   // Procesar órdenes por estado
@@ -430,18 +459,29 @@ export default async function DashboardPage() {
     const key = fecha.toISOString().split("T")[0]
     ingresosMap[key] = 0
   }
-  // Sumar los ingresos de facturas
-  ingresosUltimos7DiasResult.data?.forEach((factura: { total: number; fecha: string }) => {
+  // Dedupe igual que arriba: ordenes con cobro directo en los últimos 7 días
+  const cobros7d = (cobrosOrdenUltimos7DiasResult.data as { monto: number; orden_id: string; created_at: string }[] | null) || []
+  const ordenesConCobro7d = new Set(cobros7d.map((c) => c.orden_id))
+  // Sumar los ingresos de facturas (excluyendo las que ya tienen cobro directo)
+  ingresosUltimos7DiasResult.data?.forEach((factura: { total: number; fecha: string; orden_id: string }) => {
+    if (ordenesConCobro7d.has(factura.orden_id)) return
     const key = new Date(factura.fecha).toISOString().split("T")[0]
     if (key in ingresosMap) {
-      ingresosMap[key] += factura.total || 0
+      ingresosMap[key] += Number(factura.total || 0)
     }
   })
   // Sumar los ingresos de ventas
   ventasUltimos7DiasResult.data?.forEach((venta: { total: number; created_at: string }) => {
     const key = new Date(venta.created_at).toISOString().split("T")[0]
     if (key in ingresosMap) {
-      ingresosMap[key] += venta.total || 0
+      ingresosMap[key] += Number(venta.total || 0)
+    }
+  })
+  // Sumar los cobros directos a órdenes (sin factura)
+  cobros7d.forEach((cobro) => {
+    const key = new Date(cobro.created_at).toISOString().split("T")[0]
+    if (key in ingresosMap) {
+      ingresosMap[key] += Number(cobro.monto || 0)
     }
   })
   const ingresosUltimos7Dias = Object.entries(ingresosMap).map(([fecha, total]) => ({

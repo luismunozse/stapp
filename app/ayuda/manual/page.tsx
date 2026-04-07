@@ -32,6 +32,7 @@ import {
   Bot,
   CreditCard,
   Monitor,
+  BookMarked,
 } from "lucide-react"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -52,6 +53,7 @@ interface ContentBlock {
   steps?: string[]
   tip?: string
   roles?: Role[]
+  seeAlso?: string[]
 }
 
 // ─── Data ────────────────────────────────────────────────────────────────────
@@ -93,6 +95,7 @@ const sections: ManualSection[] = [
         ],
         tip: "Podés cargar datos de ejemplo durante el onboarding para familiarizarte con el sistema antes de ingresar datos reales.",
         roles: ["ADMIN"],
+        seeAlso: ["configuracion", "inventario", "tecnicos"],
       },
       {
         subtitle: "Roles y permisos",
@@ -162,6 +165,7 @@ const sections: ManualSection[] = [
           "Hacé clic en \"Crear Orden\" — se asignará un número automático",
         ],
         tip: "Podés tomar fotos del equipo al momento de la recepción para documentar el estado inicial. Esto es útil ante reclamos.",
+        seeAlso: ["clientes", "configuracion"],
       },
       {
         subtitle: "Estados de una orden",
@@ -185,6 +189,7 @@ const sections: ManualSection[] = [
           "Indicá la cantidad necesaria",
           "El sistema verifica stock disponible, descuenta y registra el movimiento automáticamente",
         ],
+        seeAlso: ["inventario"],
       },
       {
         subtitle: "Fotos de la orden",
@@ -233,6 +238,7 @@ const sections: ManualSection[] = [
         subtitle: "Cuenta corriente",
         body: "STApp lleva el registro de saldos pendientes de cada cliente. Podés ver cuánto debe cada cliente y gestionar los pagos parciales asociados a sus facturas.",
         roles: ["ADMIN"],
+        seeAlso: ["facturacion", "caja", "glosario"],
       },
       {
         subtitle: "Comunicación por WhatsApp",
@@ -318,6 +324,7 @@ const sections: ManualSection[] = [
       {
         subtitle: "Movimientos de inventario",
         body: "Cada entrada y salida de stock queda registrada automáticamente. Podés ver el historial completo de movimientos de cada item: salidas por órdenes de servicio, ventas, ajustes manuales y entradas por compras.",
+        seeAlso: ["ordenes", "ventas", "proveedores"],
       },
       {
         subtitle: "Importación masiva",
@@ -357,6 +364,7 @@ const sections: ManualSection[] = [
       {
         subtitle: "Garantía de venta",
         body: "Al vender un producto, podés generar automáticamente una garantía de venta asociada. El período de garantía es configurable por item.",
+        seeAlso: ["garantias"],
       },
       {
         subtitle: "Anulación de ventas",
@@ -396,11 +404,14 @@ const sections: ManualSection[] = [
         steps: [
           "Andá a \"Cotizaciones\" y hacé clic en \"Nueva Cotización\"",
           "Seleccioná el cliente",
-          "Agregá los items con descripción, cantidad y precio unitario",
-          "El sistema calcula automáticamente subtotales e IVA (21%)",
+          "Agregá los items con descripción, cantidad y precio unitario (podés aplicar descuento por item)",
+          "Opcionalmente aplicá un descuento global (en monto fijo o porcentaje)",
+          "Elegí el porcentaje de IVA: 0%, 10.5%, 21% o 27% (según corresponda a tu actividad)",
+          "Si trabajás con dólares, podés definir un tipo de cambio USD para mostrar el equivalente",
           "Opcionalmente agregá notas o condiciones",
           "Guardá como borrador o enviá directamente al cliente",
         ],
+        tip: "El IVA en cotizaciones es configurable porque cada actividad y régimen fiscal usa una alícuota distinta. Si sos monotributista, dejalo en 0%.",
       },
       {
         subtitle: "Estados de cotización",
@@ -420,6 +431,7 @@ const sections: ManualSection[] = [
         subtitle: "Convertir a factura",
         body: "Una vez aceptada, podés convertir la cotización en factura con un solo clic, trasladando todos los items y montos automáticamente.",
         roles: ["ADMIN"],
+        seeAlso: ["facturacion"],
       },
       {
         subtitle: "Firma digital",
@@ -435,15 +447,15 @@ const sections: ManualSection[] = [
     content: [
       {
         subtitle: "Crear una factura",
-        body: "El módulo de facturación te permite generar facturas asociadas a órdenes de servicio o independientes.",
+        body: "El módulo de facturación te permite generar facturas internas asociadas a órdenes de servicio o independientes. Importante: STApp emite documentos no fiscales (comprobantes internos para tu control), no facturas electrónicas AFIP. Los precios se cargan finales (sin discriminación de IVA).",
         steps: [
           "Andá a \"Facturación\" y hacé clic en \"Nueva Factura\"",
           "Seleccioná el cliente",
-          "Agregá los conceptos con descripción, cantidad y precio",
-          "El sistema calcula IVA (21%) automáticamente",
+          "Agregá los conceptos con descripción, cantidad y precio final",
           "Asigná un número de factura (manual)",
           "Guardá la factura",
         ],
+        tip: "Si necesitás emitir facturas electrónicas válidas para AFIP, usá tu sistema fiscal habitual. STApp te sirve para llevar el control interno, los pagos parciales y la cuenta corriente del cliente.",
       },
       {
         subtitle: "Pagos parciales",
@@ -461,6 +473,7 @@ const sections: ManualSection[] = [
       {
         subtitle: "Asociar a orden de servicio",
         body: "Podés vincular una factura a una orden de servicio para mantener la trazabilidad completa: desde la recepción del equipo hasta el cobro.",
+        seeAlso: ["ordenes", "caja"],
       },
     ],
   },
@@ -471,16 +484,89 @@ const sections: ManualSection[] = [
     roles: ["ADMIN"],
     content: [
       {
-        subtitle: "Control de caja",
-        body: "El módulo de Caja te permite llevar el control de los ingresos y egresos diarios de tu taller, separados por método de pago (efectivo, transferencia, tarjeta).",
+        subtitle: "Cómo funciona la Caja",
+        body: "El módulo de Caja unifica en una sola vista todos los movimientos de dinero del día: cobros de órdenes, ventas del POS, pagos de facturas, depósitos a cuenta corriente y movimientos manuales (ingresos y egresos). Cada movimiento queda registrado con su método de pago (Efectivo, Transferencia, Tarjeta Débito, Tarjeta Crédito, MercadoPago, Cuenta Corriente u Otro). Podés navegar día por día con las flechas y usar el botón \"Hoy\" para volver al día actual.",
+        tip: "La Caja muestra siempre el dinero del día seleccionado. No es un saldo acumulado: es lo que entró y salió ese día.",
       },
       {
-        subtitle: "Cierre de caja",
-        body: "Al final de cada jornada, podés realizar el cierre de caja para verificar que los montos registrados coincidan con el efectivo y transferencias reales.",
+        subtitle: "Apertura de caja (sesión diaria)",
+        body: "Para llevar un control formal con arqueo, podés abrir una sesión de caja al comenzar la jornada. Solo puede haber una sesión abierta por organización a la vez. Al abrir, indicás el saldo inicial en efectivo (el dinero con el que arranca el cajón).",
+        steps: [
+          "Andá a la sección \"Caja\"",
+          "En el banner superior, hacé clic en \"Abrir Caja\"",
+          "Ingresá el saldo inicial en efectivo (puede ser 0 si arrancás sin fondo)",
+          "Confirmá — la sesión queda abierta y todos los movimientos del día se asocian a ella",
+        ],
+        tip: "Si trabajás con un fondo fijo (por ejemplo $10.000 para dar vuelto), ingresalo como saldo inicial. Esto te permite que el arqueo al cierre cuadre.",
       },
       {
-        subtitle: "Conciliación de pagos",
-        body: "La caja muestra un resumen de todos los cobros del día agrupados por método de pago, facilitando la conciliación bancaria y el control de efectivo.",
+        subtitle: "Movimientos manuales (ingresos y egresos)",
+        body: "Además de los cobros automáticos (órdenes, ventas, facturas), podés registrar movimientos manuales desde la pestaña \"Movimientos Manuales\". Sirven para asentar gastos del día (insumos, pago a proveedor, retiros) o ingresos extra que no provienen de una venta.",
+        steps: [
+          "Andá a Caja > pestaña \"Movimientos Manuales\"",
+          "Elegí Egreso o Ingreso",
+          "Ingresá el monto y seleccioná el método de pago",
+          "Elegí un concepto de la lista (o usá \"Otro\" para escribir uno personalizado)",
+          "Para egresos: opcionalmente asigná una categoría de gasto y adjuntá el comprobante (foto o PDF)",
+          "Hacé clic en \"Registrar Movimiento\"",
+        ],
+        tip: "Categorizar tus egresos es lo que permite que el Estado de Resultados muestre la ganancia neta correcta. Tomate el hábito de elegir categoría siempre que registres un gasto.",
+        seeAlso: ["reportes", "configuracion"],
+      },
+      {
+        subtitle: "Adjuntar comprobantes a los gastos",
+        body: "Cuando cargás un egreso, podés adjuntar la foto o el PDF de la factura/recibo (hasta 5 MB, formatos JPG, PNG, WEBP o PDF). El comprobante queda asociado al movimiento y se puede consultar más tarde desde la lista de movimientos. Es muy útil ante pedidos del contador o para validar gastos en blanco.",
+        tip: "Sacá la foto del ticket apenas lo recibís — si dejás los recibos para el final del día, suelen perderse o ilegibles.",
+      },
+      {
+        subtitle: "Cierre de caja con arqueo",
+        body: "Al final de la jornada cerrás la sesión haciendo un arqueo: el sistema calcula el efectivo esperado en el cajón (saldo inicial + ingresos en efectivo − egresos en efectivo) y vos ingresás el conteo físico real. STApp muestra automáticamente la diferencia (sobrante, faltante o caja cuadrada).",
+        steps: [
+          "En el banner de la caja abierta, hacé clic en \"Cerrar Caja\"",
+          "Revisá el resumen: saldo inicial, ingresos en efectivo, egresos en efectivo, total esperado",
+          "Contá el efectivo del cajón e ingresalo en \"Conteo físico\"",
+          "El sistema muestra la diferencia en tiempo real: verde (cuadrada), ámbar (sobrante), rojo (faltante)",
+          "Opcionalmente agregá observaciones (motivo del descuadre, notas del día, etc.)",
+          "Confirmá el cierre — la sesión queda cerrada y queda registrada en el historial",
+        ],
+        tip: "Una diferencia chica de centavos suele ser por redondeos. Una diferencia grande indica un movimiento que faltó cargar, un cobro mal asentado o efectivo que se retiró sin registrarlo como egreso. Investigá antes de cerrar.",
+      },
+      {
+        subtitle: "Historial de cierres",
+        body: "Desde la pestaña \"Historial de Cierres\" podés consultar todas las sesiones cerradas anteriormente: fecha, usuario que abrió y cerró, saldo inicial, totales, conteo físico, diferencia y observaciones. Útil para auditar discrepancias o ver patrones de caja.",
+      },
+      {
+        subtitle: "Filtros y exportación a CSV",
+        body: "En la pestaña \"Resumen\" podés filtrar los movimientos por método de pago y por tipo (cobro de orden, venta, ingreso/egreso manual, etc.) para conciliar más rápido. Con el botón \"Exportar\" generás un CSV del día seleccionado para abrir en Excel o pasarle al contador.",
+      },
+      {
+        subtitle: "Categorías de gasto",
+        body: "Antes de empezar a categorizar gastos, configurá tus categorías desde Configuración > Categorías de Gasto. Podés crear categorías Fijas (alquiler, sueldos, servicios) y Variables (insumos, mantenimiento, fletes), asignarles color y decidir si \"afectan el resultado\".",
+        steps: [
+          "Andá a Configuración > Categorías de Gasto",
+          "Hacé clic en \"Nueva\"",
+          "Ingresá el nombre, elegí Fijo o Variable y un color",
+          "Activá o desactivá \"Afecta el resultado\" según corresponda",
+          "Guardá — la categoría queda disponible al cargar movimientos manuales",
+        ],
+        tip: "Desactivá \"Afecta el resultado\" para movimientos que salen de caja pero no son gastos del negocio (retiros del dueño, transferencias entre cuentas propias, devoluciones). Así el Estado de Resultados no los toma como pérdida.",
+      },
+      {
+        subtitle: "Gastos recurrentes (plantillas mensuales)",
+        body: "Para los gastos que se repiten siempre (alquiler, sueldos, internet, ABL), podés configurar una plantilla en Configuración > Gastos Recurrentes en lugar de cargarlos a mano cada mes. Definís concepto, monto, frecuencia (semanal, mensual o anual), día del mes y categoría. STApp avisa cuando vencen y los podés generar con un clic.",
+        steps: [
+          "Andá a Configuración > Gastos Recurrentes",
+          "Hacé clic en \"Nuevo\" y completá: concepto, monto, método de pago, categoría, frecuencia y próximo vencimiento",
+          "Guardá — la plantilla queda activa",
+          "Cuando llega la fecha, el gasto aparece marcado como \"Vencido\" en ámbar",
+          "Hacé clic en \"Generar vencidos\" para crear automáticamente los movimientos de caja correspondientes",
+          "El sistema avanza la próxima fecha de vencimiento según la frecuencia",
+        ],
+        tip: "Podés pausar (sin eliminar) un gasto recurrente con el switch — útil para meses en que no corresponde (ej: aguinaldo, vacaciones).",
+      },
+      {
+        subtitle: "Órdenes reparadas sin cobrar",
+        body: "El resumen de caja muestra una lista destacada de órdenes que ya están reparadas o entregadas pero todavía tienen saldo pendiente de cobro. Te ayuda a no olvidarte de cobrar trabajos terminados.",
       },
     ],
   },
@@ -553,6 +639,21 @@ const sections: ManualSection[] = [
           "Valorización del inventario",
           "Métricas de clientes",
         ],
+      },
+      {
+        subtitle: "Estado de Resultados (rentabilidad)",
+        body: "El Estado de Resultados es el reporte de gestión más importante: te muestra cuánto realmente ganás. Calcula ingresos (ventas + servicios), costos de mercadería vendida (precio de compra al momento de la venta), ganancia bruta, gastos por categoría (fijos y variables) y ganancia neta final. Podés acceder desde Caja > pestaña \"Rentabilidad\" o desde Reportes.",
+        steps: [
+          "Elegí el período: mes actual, mes anterior, últimos 30 días o un rango personalizado",
+          "El reporte muestra: Ingresos totales, Costo de mercadería, Ganancia bruta y margen %",
+          "Debajo aparecen los gastos agrupados por categoría con su porcentaje sobre el total",
+          "Al final: Ganancia neta y margen neto %",
+          "Se compara automáticamente contra el período anterior equivalente (flecha de variación)",
+          "Podés exportar el reporte para tu archivo o tu contador",
+        ],
+        tip: "Para que la ganancia bruta sea precisa, los items del inventario deben tener cargado el precio de compra. STApp guarda un \"snapshot\" del costo al momento de cada venta, así los reportes históricos no se distorsionan si después actualizás los precios.",
+        roles: ["ADMIN"],
+        seeAlso: ["caja", "inventario", "glosario"],
       },
       {
         subtitle: "Reportes avanzados",
@@ -675,6 +776,7 @@ const sections: ManualSection[] = [
       {
         subtitle: "Plan y suscripción",
         body: "En Configuración > Billing podés ver tu plan actual, los días restantes de prueba, cambiar de plan y gestionar tu método de pago a través de MercadoPago.",
+        seeAlso: ["suscripcion"],
       },
     ],
   },
@@ -746,6 +848,78 @@ const sections: ManualSection[] = [
     ],
   },
   {
+    id: "glosario",
+    icon: BookMarked,
+    title: "Glosario",
+    roles: ["ADMIN", "TECNICO", "VENDEDOR"],
+    content: [
+      {
+        subtitle: "Arqueo de caja",
+        body: "Acción de contar el efectivo físico al cierre de la jornada y compararlo con el efectivo que el sistema esperaba (saldo inicial + ingresos en efectivo − egresos en efectivo). Si los dos números coinciden, la caja \"cuadra\". Si no, hay sobrante o faltante.",
+      },
+      {
+        subtitle: "Saldo inicial",
+        body: "Dinero en efectivo con el que arranca una sesión de caja. Suele ser el fondo fijo que se usa para dar vuelto. Si arrancás sin fondo, ingresá 0.",
+      },
+      {
+        subtitle: "Sobrante / Faltante",
+        body: "Diferencia entre el efectivo contado físicamente y el esperado por el sistema. Sobrante = hay más plata en el cajón de la que el sistema preveía (puede indicar un cobro no asentado). Faltante = hay menos (puede indicar un egreso no registrado o un retiro no asentado).",
+      },
+      {
+        subtitle: "Ganancia bruta vs Ganancia neta",
+        body: "Ganancia bruta = ingresos − costo de la mercadería vendida (lo que pagaste por los repuestos/productos). Ganancia neta = ganancia bruta − todos los gastos del negocio (alquiler, sueldos, servicios, insumos, etc.). La neta es lo que realmente \"te queda\".",
+      },
+      {
+        subtitle: "Margen bruto / margen neto",
+        body: "Porcentaje que representa la ganancia sobre los ingresos. Margen bruto = ganancia bruta ÷ ingresos × 100. Margen neto = ganancia neta ÷ ingresos × 100. Sirven para medir rentabilidad de forma comparable mes a mes.",
+      },
+      {
+        subtitle: "Costo de mercadería vendida (snapshot)",
+        body: "STApp guarda el precio de compra de cada item al momento exacto en que se vende. Esto se llama \"snapshot de costo\". Sirve para que los reportes históricos sigan siendo correctos aunque después actualices los precios de compra.",
+      },
+      {
+        subtitle: "Gasto fijo vs gasto variable",
+        body: "Fijos: se repiten todos los meses sin importar cuánto trabajes (alquiler, sueldos, internet, servicios). Variables: dependen de la actividad (insumos, mantenimiento, fletes, comisiones). Esta separación te ayuda a entender cuál es tu \"piso\" mensual para no perder plata.",
+      },
+      {
+        subtitle: "Categoría \"no afecta resultado\"",
+        body: "Categoría de gasto marcada para que sus movimientos salgan de caja pero no se descuenten de la ganancia neta. Se usa para cosas que no son gastos del negocio: retiros del dueño, transferencias entre cuentas propias, devoluciones a clientes.",
+      },
+      {
+        subtitle: "Gasto recurrente",
+        body: "Plantilla de un gasto que se repite con una frecuencia conocida (semanal, mensual, anual). Cuando llega su fecha de vencimiento, podés generarlo en caja con un clic en lugar de cargarlo a mano cada vez.",
+      },
+      {
+        subtitle: "Cuenta corriente",
+        body: "Sistema de saldo pendiente con un cliente. Si un cliente retira un equipo o compra un producto y no paga el total, queda con saldo en cuenta corriente que podrá ir cancelando con pagos parciales.",
+      },
+      {
+        subtitle: "Pago parcial",
+        body: "Cobro a cuenta de una factura, venta u orden. El estado pasa a \"Pagado parcial\" hasta que la suma de los pagos cubra el total, momento en que pasa a \"Pagado\".",
+      },
+      {
+        subtitle: "Estado de cobro de una orden",
+        body: "Indica si un trabajo terminado ya fue pagado: PENDIENTE (no se cobró nada), PARCIAL (se cobró algo pero falta saldo), PAGADO (cobrado en su totalidad).",
+      },
+      {
+        subtitle: "Documento no fiscal",
+        body: "Comprobante interno que emite STApp para tu control y para entregar al cliente como recibo. No reemplaza la factura electrónica de AFIP — para eso seguís usando tu sistema fiscal.",
+      },
+      {
+        subtitle: "PWA (Progressive Web App)",
+        body: "Forma de instalar STApp en tu celular o computadora desde el navegador, sin pasar por una tienda de aplicaciones. Funciona como una app nativa: tiene ícono, abre a pantalla completa y permite cierto uso offline.",
+      },
+      {
+        subtitle: "Multi-tenancy / aislamiento por organización",
+        body: "STApp es una sola plataforma usada por muchos talleres a la vez, pero los datos de cada uno están completamente aislados. Ningún taller puede ver datos de otro, ni siquiera por error técnico.",
+      },
+      {
+        subtitle: "2FA (autenticación en dos pasos)",
+        body: "Capa extra de seguridad para iniciar sesión: además de tu contraseña, te pide un código que se genera en una app de tu celular (Google Authenticator, Authy, etc.). Hace mucho más difícil que alguien acceda a tu cuenta aunque sepa tu contraseña.",
+      },
+    ],
+  },
+  {
     id: "suscripcion",
     icon: CreditCard,
     title: "Suscripción y pagos",
@@ -774,6 +948,8 @@ const sections: ManualSection[] = [
     ],
   },
 ]
+
+const sectionsById = new Map(sections.map((s) => [s.id, s]))
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -1119,6 +1295,30 @@ export default function ManualPage() {
                                               : role}
                                           </span>
                                         ))}
+                                      </div>
+                                    )}
+
+                                    {block.seeAlso && block.seeAlso.length > 0 && (
+                                      <div className="flex flex-wrap items-center gap-1.5 mt-3">
+                                        <span className="text-xs text-muted-foreground mr-1">
+                                          Ver también:
+                                        </span>
+                                        {block.seeAlso.map((id) => {
+                                          const target = sectionsById.get(id)
+                                          if (!target) return null
+                                          const Icon = target.icon
+                                          return (
+                                            <button
+                                              key={id}
+                                              type="button"
+                                              onClick={() => scrollToSection(id)}
+                                              className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs bg-muted hover:bg-primary/10 hover:text-primary transition-colors border"
+                                            >
+                                              <Icon className="h-3 w-3" />
+                                              {target.title}
+                                            </button>
+                                          )
+                                        })}
                                       </div>
                                     )}
                                   </div>
