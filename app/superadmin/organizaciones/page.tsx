@@ -14,6 +14,7 @@ import { useSuperadminFetch, useSuperadminMutation } from "@/hooks/use-superadmi
 import { useLastUpdated } from "@/hooks/use-last-updated"
 import { LastUpdated } from "@/components/superadmin/last-updated"
 import type { OrganizationListItem } from "@/types/superadmin"
+import { getEffectivePlanLabel, isEffectivelyPremium } from "@/lib/subscription-status"
 
 const PAGE_SIZE = 20
 
@@ -86,7 +87,7 @@ export default function OrganizacionesPage() {
           org.slug,
           org.email || "-",
           org.telefono || "-",
-          org.subscription?.plans?.nombre || "Free",
+          getEffectivePlanLabel(org.subscription),
           org.activo ? "Activa" : "Inactiva",
           org.created_at,
         ].join(",")
@@ -179,12 +180,8 @@ export default function OrganizacionesPage() {
       key: "subscription",
       header: "Plan",
       render: (org) => (
-        <Badge
-          variant={
-            org.subscription?.plans?.tipo === "PREMIUM" ? "default" : "secondary"
-          }
-        >
-          {org.subscription?.plans?.nombre || "Free"}
+        <Badge variant={isEffectivelyPremium(org.subscription) ? "default" : "secondary"}>
+          {getEffectivePlanLabel(org.subscription)}
         </Badge>
       ),
     },

@@ -34,11 +34,15 @@ export async function GET() {
         .from("users")
         .select("id", { count: "exact", head: true }),
 
-      // 3 - Suscripciones Premium activas
+      // 3 - Suscripciones Premium efectivas (mismo criterio que
+      // lib/subscription-status.ts:isEffectivelyPremium para mantener
+      // consistencia entre dashboard, /superadmin/suscripciones y
+      // /superadmin/organizaciones).
       supabaseAdmin
         .from("subscriptions")
         .select("id, plans!inner(tipo)", { count: "exact", head: true })
         .eq("status", "ACTIVE")
+        .not("payment_provider", "is", null)
         .eq("plans.tipo", "PREMIUM"),
 
       // 4 - Ingresos del mes actual
@@ -74,10 +78,13 @@ export async function GET() {
         .select("id, created_at")
         .gte("created_at", sixMonthsAgo.toISOString()),
 
-      // 9 - All active subscriptions with plan type (for plan distribution)
+      // 9 - All active subscriptions with plan type + payment provider
+      // (for plan distribution chart). Necesitamos payment_provider para
+      // distinguir Premium pagado de trials/free, mismo criterio que
+      // isEffectivelyPremium.
       supabaseAdmin
         .from("subscriptions")
-        .select("id, plans!inner(tipo)")
+        .select("id, payment_provider, plans!inner(tipo)")
         .eq("status", "ACTIVE"),
     ])
 
@@ -128,20 +135,22 @@ export async function GET() {
       orgGrowth6m.push({ month: label, count })
     }
 
-    // Build plan distribution
+    // Build plan distribution. Una sub cuenta como Premium SOLO si es
+    // efectivamente Premium (tipo PREMIUM + payment_provider != null);
+    // todo lo demás (incluyendo Premium en trial) cuenta como Free.
+    // Misma definición que lib/subscription-status.ts.
     const planDistData = planDistResult?.data || []
-    const premium = planDistData.filter(
-      (s: Record<string, unknown>) => {
-        const plans = Array.isArray(s.plans) ? s.plans[0] : s.plans
-        return (plans as Record<string, unknown>)?.tipo === "PREMIUM"
+    let premium = 0
+    let free = 0
+    for (const s of planDistData as Array<Record<string, unknown>>) {
+      const plans = Array.isArray(s.plans) ? s.plans[0] : s.plans
+      const tipo = (plans as Record<string, unknown> | null)?.tipo
+      if (tipo === "PREMIUM" && s.payment_provider != null) {
+        premium++
+      } else {
+        free++
       }
-    ).length
-    const free = planDistData.filter(
-      (s: Record<string, unknown>) => {
-        const plans = Array.isArray(s.plans) ? s.plans[0] : s.plans
-        return (plans as Record<string, unknown>)?.tipo !== "PREMIUM"
-      }
-    ).length
+    }
     const planDistribution = { free, premium }
 
     return NextResponse.json({

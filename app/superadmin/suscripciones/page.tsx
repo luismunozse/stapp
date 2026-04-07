@@ -46,6 +46,7 @@ import { useSuperadminFetch, useSuperadminMutation } from "@/hooks/use-superadmi
 import { useLastUpdated } from "@/hooks/use-last-updated"
 import { LastUpdated } from "@/components/superadmin/last-updated"
 import type { SubscriptionListItem } from "@/types/superadmin"
+import { getEffectivePlanLabel, isEffectivelyPremium } from "@/lib/subscription-status"
 import { toast } from "sonner"
 
 const PAGE_SIZE = 20
@@ -285,7 +286,7 @@ export default function SuscripcionesPage() {
         [
           `"${sub.organization?.nombre || "-"}"`,
           sub.organization?.slug || "-",
-          sub.plans?.nombre || "Free",
+          getEffectivePlanLabel(sub),
           sub.status,
           sub.payment_provider || "-",
           sub.billing_period || "-",
@@ -375,13 +376,11 @@ export default function SuscripcionesPage() {
     {
       key: "plans",
       header: "Plan",
-      render: (sub) => {
-        const isPaidPremium = sub.plans?.tipo === "PREMIUM" && sub.status === "ACTIVE" && !!sub.payment_provider
-        const isTrialPremium = sub.plans?.tipo === "PREMIUM" && sub.status === "TRIALING"
-        if (isPaidPremium) return <Badge variant="default">Premium</Badge>
-        if (isTrialPremium) return <Badge variant="secondary">Free (trial)</Badge>
-        return <Badge variant="secondary">{sub.plans?.nombre || "Free"}</Badge>
-      },
+      render: (sub) => (
+        <Badge variant={isEffectivelyPremium(sub) ? "default" : "secondary"}>
+          {getEffectivePlanLabel(sub)}
+        </Badge>
+      ),
     },
     {
       key: "status",

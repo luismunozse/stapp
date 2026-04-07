@@ -15,6 +15,28 @@ export async function GET(request: Request) {
     const plan = searchParams.get("plan") || ""
     const { page, limit, offset } = parsePagination(searchParams)
 
+    // ============================================================
+    // Filtro de plan: lo aplicamos ANTES de paginar para que `total`
+    // y la paginación sean correctos. La definición de "Premium efectivo"
+    // debe coincidir con lib/subscription-status.ts e isEffectivelyPremium:
+    //   tipo=PREMIUM AND status=ACTIVE AND payment_provider IS NOT NULL.
+    // Antes este filtro se aplicaba a los 20 resultados de la página, lo
+    // que rompía la paginación y devolvía conteos inconsistentes contra
+    // /superadmin/suscripciones.
+    // ============================================================
+    let premiumOrgIds: string[] | null = null
+    if (plan === "premium" || plan === "free") {
+      const { data: premiumSubs, error: premiumErr } = await supabaseAdmin
+        .from("subscriptions")
+        .select("organization_id, plans!inner(tipo)")
+        .eq("status", "ACTIVE")
+        .not("payment_provider", "is", null)
+        .eq("plans.tipo", "PREMIUM")
+
+      if (premiumErr) throw premiumErr
+      premiumOrgIds = (premiumSubs || []).map((s) => s.organization_id)
+    }
+
     // Query base para organizaciones
     let query = supabaseAdmin
       .from("organizations")
@@ -46,6 +68,28 @@ export async function GET(request: Request) {
       query = query.eq("activo", false)
     }
 
+    // Aplicar filtro de plan a nivel SQL
+    if (plan === "premium") {
+      if (!premiumOrgIds || premiumOrgIds.length === 0) {
+        return NextResponse.json({
+          organizations: [],
+          total: 0,
+          page,
+          limit,
+        } satisfies OrganizationsListResponse)
+      }
+      query = query.in("id", premiumOrgIds)
+    } else if (plan === "free") {
+      if (premiumOrgIds && premiumOrgIds.length > 0) {
+        // Excluir las orgs que califican como Premium efectivo
+        query = query.not(
+          "id",
+          "in",
+          `(${premiumOrgIds.map((id) => `"${id}"`).join(",")})`
+        )
+      }
+    }
+
     // Paginación
     query = query.range(offset, offset + limit - 1)
 
@@ -56,7 +100,7 @@ export async function GET(request: Request) {
     // Obtener suscripciones y conteo de usuarios para cada organización
     const orgIds = organizations?.map((o) => o.id) || []
 
-    let subscriptionsMap: Record<string, { id: string; status: string; plans: { id: string; nombre: string; tipo: string } | null }> = {}
+    let subscriptionsMap: Record<string, { id: string; status: string; payment_provider: string | null; plans: { id: string; nombre: string; tipo: string } | null }> = {}
     let usersCountMap: Record<string, number> = {}
 
     if (orgIds.length > 0) {
@@ -69,6 +113,7 @@ export async function GET(request: Request) {
             id,
             organization_id,
             status,
+            payment_provider,
             plans (
               id,
               nombre,
@@ -90,6 +135,7 @@ export async function GET(request: Request) {
           acc[sub.organization_id] = {
             id: sub.id,
             status: sub.status as string,
+            payment_provider: (sub.payment_provider as string | null) ?? null,
             plans: plansData ?? null,
           }
           return acc
@@ -106,23 +152,13 @@ export async function GET(request: Request) {
       )
     }
 
-    // Combinar datos
-    let result = (organizations || []).map((org) => ({
+    // Combinar datos. El filtro de plan ya se aplicó a nivel SQL más arriba
+    // (ver bloque premiumOrgIds), no hace falta filtrar en memoria acá.
+    const result = (organizations || []).map((org) => ({
       ...org,
       usersCount: usersCountMap[org.id] || 0,
       subscription: subscriptionsMap[org.id] || null,
     }))
-
-    // Filtro de plan (después de obtener suscripciones)
-    if (plan === "free") {
-      result = result.filter(
-        (org) => !org.subscription || org.subscription.plans?.tipo === "FREE"
-      )
-    } else if (plan === "premium") {
-      result = result.filter(
-        (org) => org.subscription?.plans?.tipo === "PREMIUM"
-      )
-    }
 
     const response: OrganizationsListResponse = {
       organizations: result as OrganizationsListResponse["organizations"],

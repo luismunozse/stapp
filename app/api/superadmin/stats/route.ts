@@ -39,12 +39,18 @@ export async function GET() {
         .from("users")
         .select("id", { count: "exact", head: true }),
 
-      // Suscripciones activas (PREMIUM)
+      // Suscripciones activas (PREMIUM efectivas).
+      // Misma definición que lib/subscription-status.ts:isEffectivelyPremium
+      // y que el filtro plan=premium en /api/superadmin/organizations.
+      // Antes este conteo aceptaba cualquier ACTIVE con plan_id != null,
+      // por lo que mostraba en el dashboard un número distinto al de
+      // /superadmin/suscripciones filtrado por Premium.
       supabaseAdmin
         .from("subscriptions")
-        .select("id", { count: "exact", head: true })
+        .select("id, plans!inner(tipo)", { count: "exact", head: true })
         .eq("status", "ACTIVE")
-        .not("plan_id", "is", null),
+        .not("payment_provider", "is", null)
+        .eq("plans.tipo", "PREMIUM"),
 
       // Ingresos del mes actual
       supabaseAdmin

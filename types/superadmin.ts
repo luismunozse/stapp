@@ -20,6 +20,7 @@ export interface OrganizationListItem {
   subscription: {
     id: string
     status: SubscriptionStatus
+    payment_provider: PaymentProvider | null
     plans: {
       id: string
       nombre: string
@@ -161,7 +162,7 @@ export interface AuditLogWithRelations {
 // Enums
 export type SubscriptionStatus = "ACTIVE" | "CANCELED" | "PAST_DUE" | "TRIALING"
 export type BillingPeriod = "MONTHLY" | "YEARLY"
-export type PaymentProvider = "MERCADOPAGO" | "REBILL"
+export type PaymentProvider = "MERCADOPAGO" | "REBILL" | "MANUAL"
 export type PaymentStatus = "PENDING" | "SUCCEEDED" | "FAILED" | "REFUNDED"
 export type PlanType = "FREE" | "PREMIUM"
 export type UserRole = "ADMIN" | "TECNICO" | "VENDEDOR"
