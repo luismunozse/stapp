@@ -192,7 +192,7 @@ export async function POST(
       .single()
 
     // Invalidar cache del dashboard para que el ingreso se vea reflejado
-    revalidateTag("dashboard")
+    revalidateTag("dashboard", "max")
 
     return NextResponse.json({
       totalCobrado: parseFloat(ordenActualizada?.total_cobrado || "0"),
@@ -277,7 +277,7 @@ export async function DELETE(
     await supabaseAdmin.rpc("recalcular_estado_cobro", { p_orden_id: ordenId })
 
     // Invalidar cache del dashboard
-    revalidateTag("dashboard")
+    revalidateTag("dashboard", "max")
 
     return NextResponse.json({ message: "Cobro anulado correctamente" })
   } catch (err) {
