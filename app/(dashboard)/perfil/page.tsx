@@ -1,6 +1,7 @@
 "use client"
 
 import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
 import { useState, useRef, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -23,6 +24,7 @@ interface ProfileData {
 
 export default function PerfilPage() {
   const { data: session, update } = useSession()
+  const router = useRouter()
   const [uploading, setUploading] = useState(false)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [profile, setProfile] = useState<ProfileData | null>(null)
@@ -30,7 +32,7 @@ export default function PerfilPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    fetch("/api/users/profile")
+    fetch("/api/users/profile", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => {
         setProfile(data)
@@ -100,11 +102,18 @@ export default function PerfilPage() {
   }
 
   const handleNameUpdated = async () => {
+    // 1. Refrescar el JWT del cliente para que useSession() devuelva el
+    //    nombre nuevo en componentes client-side (navbar, avatar, etc.).
     await update()
-    // Refrescar profile data
-    const res = await fetch("/api/users/profile")
+    // 2. Releer el perfil de la BD sin cache para refrescar el form.
+    const res = await fetch("/api/users/profile", { cache: "no-store" })
     const data = await res.json()
     setProfile(data)
+    // 3. Invalidar el Router Cache de Next para que TODOS los Server
+    //    Components (dashboard "Bienvenido X", PDFs, etc.) se re-rendericen
+    //    con el JWT nuevo en la próxima navegación. Sin esto, Next sirve
+    //    la versión RSC cacheada de visitas anteriores con el nombre viejo.
+    router.refresh()
   }
 
   if (loading) {
