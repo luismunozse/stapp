@@ -155,7 +155,6 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
       } catch {
         createdCliente = undefined
       }
-      console.log("[ClienteForm] onSuccess will be called with:", createdCliente)
       onSuccess(createdCliente)
     } catch (error) {
       console.error("Error saving cliente:", error)

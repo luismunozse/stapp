@@ -87,7 +87,6 @@ export function ClienteSelector({ value, onChange, disabled }: ClienteSelectorPr
     cliente?: Cliente,
     opts?: { queuedOffline?: boolean }
   ) => {
-    console.log("[ClienteSelector] handleClienteCreated called", { cliente, opts })
     setShowCreateForm(false)
     if (cliente && cliente.id) {
       // Auto-select the newly created client
@@ -108,18 +107,6 @@ export function ClienteSelector({ value, onChange, disabled }: ClienteSelectorPr
       await doSearch(search)
       setOpen(true)
     }
-  }
-
-  if (showCreateForm) {
-    return (
-      <div className="space-y-2">
-        <ClienteForm
-          open={showCreateForm}
-          onClose={() => setShowCreateForm(false)}
-          onSuccess={handleClienteCreated}
-        />
-      </div>
-    )
   }
 
   return (

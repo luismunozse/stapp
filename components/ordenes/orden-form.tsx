@@ -129,6 +129,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
     setValue,
     watch,
     trigger,
+    clearErrors,
   } = useForm<OrdenFormData>({
     resolver: zodResolver(ordenSchema),
     defaultValues: {
@@ -175,7 +176,8 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
 
     // If this field replaces the device name
     if (campo.usarComoDispositivo && typeof value === "string") {
-      setValue("dispositivo", value)
+      setValue("dispositivo", value, { shouldValidate: true })
+      if (value.trim()) clearErrors("dispositivo")
     }
 
     // Auto-fill brand based on keywords in value
@@ -191,7 +193,8 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
 
   // Clear fields when device type changes
   const handleTipoChange = (nuevoTipo: string) => {
-    setValue("tipoDispositivo", nuevoTipo)
+    setValue("tipoDispositivo", nuevoTipo, { shouldValidate: true })
+    if (nuevoTipo) clearErrors("tipoDispositivo")
     setAccesoriosSeleccionados([])
     setCamposExtraValues({})
     // If new type has a usarComoDispositivo field, clear dispositivo so it gets set by the field
@@ -652,8 +655,9 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
             <ClienteSelector
               value={watch("clienteId") || null}
               onChange={(id, cliente) => {
-                setValue("clienteId", id || "")
+                setValue("clienteId", id || "", { shouldValidate: !!id })
                 setSelectedClienteObj(cliente as Cliente | null)
+                if (id) clearErrors("clienteId")
               }}
             />
             {errors.clienteId && (
@@ -886,7 +890,8 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
                         const newValue = currentValue
                           ? `${currentValue}${currentValue.endsWith(".") || currentValue.endsWith("\n") ? " " : ". "}${problema}`
                           : problema
-                        setValue("problemaReportado", newValue)
+                        setValue("problemaReportado", newValue, { shouldValidate: true })
+                        if (newValue.trim()) clearErrors("problemaReportado")
                       }}
                       className="px-2 py-1 text-xs rounded-full border bg-background hover:bg-primary hover:text-primary-foreground transition-colors"
                     >
