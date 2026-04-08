@@ -72,7 +72,11 @@ export default function PerfilPage() {
       }
 
       setAvatarUrl(data.avatar_url)
-      await update()
+      try { await update() } catch {}
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("stapp:profile-updated"))
+      }
+      router.refresh()
       toast.success("Avatar actualizado")
     } catch {
       toast.error("Error al subir avatar")
@@ -92,8 +96,11 @@ export default function PerfilPage() {
       }
 
       setAvatarUrl(null)
-      await update()
-      toast.success("Avatar eliminado")
+      try { await update() } catch {}
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("stapp:profile-updated"))
+      }
+      router.refresh()
     } catch {
       toast.error("Error al eliminar avatar")
     } finally {
@@ -107,14 +114,23 @@ export default function PerfilPage() {
     const data = await res.json()
     setProfile(data)
 
-    // 2. Refrescar el JWT del cliente pasando EXPLÍCITAMENTE el nombre nuevo.
-    //    Sin pasar data, NextAuth v5 beta a veces no re-firma el cookie.
-    //    Pasando data, el JWT callback recibe `session = { name }` y actualiza
-    //    token.name de forma confiable, sin depender de read-after-write a la BD.
-    await update({ name: newName ?? data.nombre })
+    // 2. Intentar refrescar el JWT del cliente. NextAuth v5 beta no es del
+    //    todo confiable acá, así que no dependemos solo de esto.
+    try {
+      await update({ name: newName ?? data.nombre })
+    } catch {
+      // ignore
+    }
 
-    // 3. Invalidar el Router Cache de Next para que los Server Components
-    //    (dashboard, etc.) se re-rendericen con el cookie actualizado.
+    // 3. Disparar evento custom para que el navbar (que ahora lee el nombre
+    //    de su propio fetch a /api/users/profile) lo refresque inmediatamente
+    //    sin esperar al focus o a un reload.
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("stapp:profile-updated"))
+    }
+
+    // 4. Invalidar el Router Cache de Next para que los Server Components
+    //    (dashboard, etc.) se re-rendericen.
     router.refresh()
   }
 

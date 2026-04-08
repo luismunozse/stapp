@@ -81,6 +81,43 @@ export function Navbar() {
   const menuRef = useRef<HTMLDivElement>(null)
   const { collapsed, toggle } = useSidebar()
 
+  // El nombre y avatar los leemos directo del API en vez de session.user,
+  // porque NextAuth v5 beta no refresca confiablemente useSession() después
+  // de un update(). Acá nos aseguramos de mostrar siempre el valor actual
+  // de la BD. Refrescamos en mount, en focus y al recibir un evento custom
+  // disparado desde /perfil después de un cambio.
+  const [liveName, setLiveName] = useState<string | null>(null)
+  const [liveAvatar, setLiveAvatar] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    const fetchProfile = async () => {
+      try {
+        const res = await fetch("/api/users/profile", { cache: "no-store" })
+        if (!res.ok) return
+        const data = await res.json()
+        if (cancelled) return
+        setLiveName(data.nombre || null)
+        setLiveAvatar(data.avatarUrl || null)
+      } catch {
+        // Silencioso: si falla, caemos al fallback de session.user.name
+      }
+    }
+    fetchProfile()
+    const onFocus = () => fetchProfile()
+    const onProfileUpdate = () => fetchProfile()
+    window.addEventListener("focus", onFocus)
+    window.addEventListener("stapp:profile-updated", onProfileUpdate)
+    return () => {
+      cancelled = true
+      window.removeEventListener("focus", onFocus)
+      window.removeEventListener("stapp:profile-updated", onProfileUpdate)
+    }
+  }, [])
+
+  const displayName = liveName ?? session?.user?.name ?? null
+  const displayAvatar = liveAvatar ?? session?.user?.avatar ?? null
+
   // Hooks de accesibilidad para menú móvil
   useFocusTrap(menuRef, mobileMenuOpen)
   useEscapeKey(() => setMobileMenuOpen(false), mobileMenuOpen)
@@ -242,25 +279,25 @@ export function Navbar() {
                   <TooltipTrigger asChild>
                     <Link href="/perfil" className="flex justify-center py-1">
                       <UserAvatar
-                        src={session?.user?.avatar}
-                        nombre={session?.user?.name}
+                        src={displayAvatar}
+                        nombre={displayName}
                         size="sm"
                       />
                     </Link>
                   </TooltipTrigger>
-                  <TooltipContent side="right">{session?.user?.name || "Perfil"}</TooltipContent>
+                  <TooltipContent side="right">{displayName || "Perfil"}</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             ) : (
               <Link href="/perfil" className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-sidebar-accent transition-colors">
                 <UserAvatar
-                  src={session?.user?.avatar}
-                  nombre={session?.user?.name}
+                  src={displayAvatar}
+                  nombre={displayName}
                   size="sm"
                 />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-sidebar-foreground truncate">
-                    {session?.user?.name}
+                    {displayName}
                   </p>
                   <p className="text-xs text-muted-foreground truncate">
                     {session?.user?.role}
@@ -355,8 +392,8 @@ export function Navbar() {
         <NotificationBell />
         <Link href="/perfil" className="hover:opacity-80 transition-opacity">
           <UserAvatar
-            src={session?.user?.avatar}
-            nombre={session?.user?.name}
+            src={displayAvatar}
+            nombre={displayName}
             size="sm"
           />
         </Link>
