@@ -9,7 +9,7 @@ const broadcastSchema = z.object({
   title: z.string().min(1, "Titulo requerido").max(200),
   message: z.string().min(1, "Mensaje requerido").max(5000),
   target: z.enum(["all", "specific"]).default("all"),
-  organizationIds: z.array(z.string().uuid()).optional(),
+  organizationIds: z.array(z.string().min(1)).optional(),
   roles: z.array(z.enum(["ADMIN", "TECNICO", "VENDEDOR"])).optional(),
   actionUrl: z
     .string()
