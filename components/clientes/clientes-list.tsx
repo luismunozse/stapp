@@ -5,7 +5,8 @@ import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DataTable, DataTablePagination, type Column } from "@/components/ui/data-table"
-import { Plus, Search, Phone, Mail, Edit, Trash2, User, Building2, Upload, PiggyBank, DollarSign, MessageCircle, MoreHorizontal } from "lucide-react"
+import { Plus, Search, Phone, Mail, Edit, Trash2, User, Building2, Upload, PiggyBank, DollarSign, MoreHorizontal } from "lucide-react"
+import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { ClienteForm } from "./cliente-form"
 import { CuentaCorrienteDialog } from "@/components/clientes/cuenta-corriente-dialog"
 import { CobrarMultipleDialog } from "@/components/ordenes/cobrar-multiple-dialog"
@@ -266,7 +267,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
                 className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
                 onClick={(e) => { e.stopPropagation(); setWhatsappCliente(cliente) }}
               >
-                <MessageCircle className="h-4 w-4 text-green-600" />
+                <WhatsAppIcon className="h-4 w-4 text-green-600" />
                 Enviar WhatsApp
               </button>
               <button

@@ -27,6 +27,8 @@ import {
   ShoppingCart,
   Eye,
   BookmarkPlus,
+  LayoutGrid,
+  LayoutList,
 } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { CotizacionForm } from "@/components/cotizaciones/cotizacion-form"
@@ -103,6 +105,16 @@ export default function CotizacionesPage() {
   const [debouncedSearch, setDebouncedSearch] = useState("")
   const [estadoFilter, setEstadoFilter] = useState("TODOS")
   const [page, setPage] = useState(1)
+  const [viewMode, setViewMode] = useState<"cards" | "list">("cards")
+
+  // Persistir preferencia de vista
+  useEffect(() => {
+    const saved = typeof window !== "undefined" ? localStorage.getItem("cotizaciones-view-mode") : null
+    if (saved === "list" || saved === "cards") setViewMode(saved)
+  }, [])
+  useEffect(() => {
+    if (typeof window !== "undefined") localStorage.setItem("cotizaciones-view-mode", viewMode)
+  }, [viewMode])
   const { confirm, showError, showSuccess, showWarning } = useModal()
 
   // Debounce search 300ms
@@ -327,6 +339,26 @@ export default function CotizacionesPage() {
             <SelectItem value="RECHAZADA">Rechazada</SelectItem>
           </SelectContent>
         </Select>
+        <div className="flex border rounded-lg overflow-hidden">
+          <Button
+            variant={viewMode === "cards" ? "default" : "ghost"}
+            size="sm"
+            className="rounded-none"
+            onClick={() => setViewMode("cards")}
+            title="Vista de tarjetas"
+          >
+            <LayoutGrid className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={viewMode === "list" ? "default" : "ghost"}
+            size="sm"
+            className="rounded-none"
+            onClick={() => setViewMode("list")}
+            title="Vista de lista"
+          >
+            <LayoutList className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       {/* Form */}
@@ -386,6 +418,150 @@ export default function CotizacionesPage() {
             {total} cotizacion{total !== 1 ? "es" : ""} encontrada{total !== 1 ? "s" : ""}
           </div>
 
+          {viewMode === "list" ? (
+            /* ========== VISTA LISTA ========== */
+            <Card>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/50">
+                      <th className="text-left p-3 font-medium">Numero</th>
+                      <th className="text-left p-3 font-medium">Estado</th>
+                      <th className="text-left p-3 font-medium hidden sm:table-cell">Cliente</th>
+                      <th className="text-left p-3 font-medium hidden md:table-cell">Orden</th>
+                      <th className="text-left p-3 font-medium hidden md:table-cell">Fecha</th>
+                      <th className="text-right p-3 font-medium">Total</th>
+                      <th className="text-center p-3 font-medium">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cotizaciones.map((cotizacion) => {
+                      const config = estadoConfig[cotizacion.estado] || estadoConfig.BORRADOR
+                      const Icon = config.icon
+                      const canEdit = cotizacion.estado === "BORRADOR"
+                      const canSend = ["BORRADOR", "ENVIADA"].includes(cotizacion.estado)
+                      const canDelete = cotizacion.estado !== "ACEPTADA"
+                      return (
+                        <tr key={cotizacion.id} className="border-b hover:bg-muted/30 transition-colors">
+                          <td className="p-3 font-medium">{cotizacion.numeroCotizacion}</td>
+                          <td className="p-3">
+                            <Badge className={config.color}>
+                              <Icon className="mr-1 h-3 w-3" />
+                              {config.label}
+                            </Badge>
+                          </td>
+                          <td className="p-3 hidden sm:table-cell">{cotizacion.clienteNombre || "-"}</td>
+                          <td className="p-3 hidden md:table-cell text-muted-foreground">
+                            {cotizacion.ordenNumero ? `#${cotizacion.ordenNumero}` : "-"}
+                          </td>
+                          <td className="p-3 hidden md:table-cell text-muted-foreground">
+                            {formatDate(cotizacion.createdAt)}
+                          </td>
+                          <td className="p-3 text-right font-medium">{formatPrice(cotizacion.total)}</td>
+                          <td className="p-3">
+                            <div className="flex items-center justify-center gap-1 flex-wrap">
+                              {canEdit && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setEditingCotizacion(cotizacion)}
+                                  title="Editar"
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                              )}
+                              {canSend && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleSend(cotizacion)}
+                                  disabled={sendingId === cotizacion.id || !cotizacion.clienteEmail}
+                                  title={!cotizacion.clienteEmail ? "Sin email del cliente" : "Enviar por email"}
+                                >
+                                  <Send className="h-4 w-4" />
+                                </Button>
+                              )}
+                              {cotizacion.estado === "ENVIADA" && (
+                                <>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-green-600 hover:text-green-700"
+                                    onClick={() => setApprovingCotizacion(cotizacion)}
+                                    title="Aprobar con firma"
+                                  >
+                                    <PenTool className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-red-600 hover:text-red-700"
+                                    onClick={() => handleUpdateEstado(cotizacion.id, "RECHAZADA")}
+                                    title="Rechazar"
+                                  >
+                                    <XCircle className="h-4 w-4" />
+                                  </Button>
+                                </>
+                              )}
+                              {cotizacion.estado === "ACEPTADA" && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-green-600 hover:text-green-700"
+                                  onClick={() => setConvertingCotizacion(cotizacion)}
+                                  title="Convertir a venta"
+                                >
+                                  <ShoppingCart className="h-4 w-4" />
+                                </Button>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDownloadPDF(cotizacion)}
+                                title="Descargar PDF"
+                              >
+                                <Download className="h-4 w-4" />
+                              </Button>
+                              {cotizacion.publicToken && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleShare(cotizacion)}
+                                  title="Compartir link"
+                                >
+                                  <Link2 className="h-4 w-4" />
+                                </Button>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDuplicate(cotizacion)}
+                                disabled={duplicatingId === cotizacion.id}
+                                title="Duplicar"
+                              >
+                                <Copy className="h-4 w-4" />
+                              </Button>
+                              {canDelete && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-destructive hover:text-destructive"
+                                  onClick={() => handleDelete(cotizacion.id)}
+                                  title="Eliminar"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          ) : (
           <div className="space-y-3">
             {cotizaciones.map((cotizacion) => {
               const config = estadoConfig[cotizacion.estado] || estadoConfig.BORRADOR
@@ -588,6 +764,7 @@ export default function CotizacionesPage() {
               )
             })}
           </div>
+          )}
 
           {/* Pagination */}
           {totalPages > 1 && (

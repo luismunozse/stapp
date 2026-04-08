@@ -138,13 +138,35 @@ export async function GET(request: Request) {
 
     let engagementMap: Record<string, boolean | null> = {}
     if (matureOrgIds.length > 0) {
-      const { data: recentOrders } = await supabaseAdmin
-        .from("ordenes_servicio")
-        .select("organization_id")
-        .in("organization_id", matureOrgIds)
-        .gte("created_at", sevenDaysAgo.toISOString())
+      // Considerar actividad como cualquier orden, venta o cliente nuevo en 7 días.
+      // Limitar explícitamente para no chocar con el cap default de 1000 filas
+      // de PostgREST: orgs con tráfico alto podrían dejar fuera a otras orgs.
+      const [ordersRes, ventasRes, clientesRes] = await Promise.all([
+        supabaseAdmin
+          .from("ordenes_servicio")
+          .select("organization_id")
+          .in("organization_id", matureOrgIds)
+          .gte("created_at", sevenDaysAgo.toISOString())
+          .limit(50000),
+        supabaseAdmin
+          .from("ventas")
+          .select("organization_id")
+          .in("organization_id", matureOrgIds)
+          .gte("created_at", sevenDaysAgo.toISOString())
+          .limit(50000),
+        supabaseAdmin
+          .from("clientes")
+          .select("organization_id")
+          .in("organization_id", matureOrgIds)
+          .gte("created_at", sevenDaysAgo.toISOString())
+          .limit(50000),
+      ])
 
-      const activeOrgSet = new Set((recentOrders || []).map((o) => o.organization_id))
+      const activeOrgSet = new Set<string>()
+      for (const o of ordersRes.data || []) activeOrgSet.add(o.organization_id)
+      for (const v of ventasRes.data || []) activeOrgSet.add(v.organization_id)
+      for (const c of clientesRes.data || []) activeOrgSet.add(c.organization_id)
+
       for (const id of matureOrgIds) {
         engagementMap[id] = activeOrgSet.has(id)
       }
@@ -170,7 +192,10 @@ export async function GET(request: Request) {
         created_at: sub.created_at,
         organization: orgsMap[sub.organization_id] || null,
         plans: plansData || null,
-        hasRecentActivity: engagementMap[sub.organization_id] ?? false,
+        // null = org nueva (<7 días) → no se muestra ni warning ni indicador.
+        // Importante NO usar `?? false` porque colapsa null en false y dispara
+        // el warning amber para todas las orgs recién creadas.
+        hasRecentActivity: engagementMap[sub.organization_id] ?? null,
       }
     })
 

@@ -2,7 +2,8 @@
 
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { User, Building2, Phone, Mail, MapPin, Edit, Trash2, MessageCircle, PiggyBank, DollarSign, MoreHorizontal } from "lucide-react"
+import { User, Building2, Phone, Mail, MapPin, Edit, Trash2, PiggyBank, DollarSign, MoreHorizontal } from "lucide-react"
+import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import type { Cliente } from "@/types"
 import { useCurrency } from "@/contexts/currency-context"
@@ -81,7 +82,7 @@ export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCue
                     className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
                     onClick={(e) => onWhatsApp(e, cliente)}
                   >
-                    <MessageCircle className="h-4 w-4 text-green-600" />
+                    <WhatsAppIcon className="h-4 w-4 text-green-600" />
                     Enviar WhatsApp
                   </button>
                 )}

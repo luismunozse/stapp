@@ -58,6 +58,7 @@ const ESTADO_LABELS_MAP: Record<string, string> = {
   ENTREGADO: "Entregado",
   CANCELADO: "Cancelado",
   SIN_REPARACION: "Sin Reparación",
+  ENTREGADO_SIN_REPARACION: "Retirado sin Reparación",
 }
 
 const estadoOptions = [
@@ -71,6 +72,7 @@ const estadoOptions = [
   { value: "ENTREGADO", label: "Entregado" },
   { value: "CANCELADO", label: "Cancelado" },
   { value: "SIN_REPARACION", label: "Sin Reparación" },
+  { value: "ENTREGADO_SIN_REPARACION", label: "Retirado sin Reparación" },
 ]
 
 export function OrdenesList() {
