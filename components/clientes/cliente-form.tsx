@@ -42,7 +42,7 @@ interface ClienteFormProps {
   cliente?: Cliente | null
   open: boolean
   onClose: () => void
-  onSuccess: () => void
+  onSuccess: (cliente?: Cliente, opts?: { queuedOffline?: boolean }) => void
 }
 
 export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormProps) {
@@ -138,8 +138,8 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
           }))
 
       if (res.status === 202) {
-        await showInfo("Cliente guardado offline. Se sincronizará automáticamente.")
-        onSuccess()
+        await showInfo("Cliente guardado offline. Se sincronizará automáticamente cuando vuelva la conexión. No podrá asignarse a la operación actual hasta entonces.")
+        onSuccess(undefined, { queuedOffline: true })
         return
       }
 
@@ -149,7 +149,13 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
         return
       }
 
-      onSuccess()
+      let createdCliente: Cliente | undefined
+      try {
+        createdCliente = await res.json()
+      } catch {
+        createdCliente = undefined
+      }
+      onSuccess(createdCliente)
     } catch (error) {
       console.error("Error saving cliente:", error)
       await showError("Error al guardar cliente")

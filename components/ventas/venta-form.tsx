@@ -321,6 +321,10 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
       setValue("clienteNombre", nuevoCliente.nombre)
       setValue("clienteTelefono", nuevoCliente.telefono)
 
+      // Limpiar buscador y cerrar dropdown para que el cliente quede visible como seleccionado
+      setSearchCliente("")
+      setShowClienteSearch(false)
+
       // Cerrar modal y resetear formulario
       setShowClienteModal(false)
       clienteForm.reset()

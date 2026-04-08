@@ -21,7 +21,7 @@ export async function GET(
       .in("estado_cobro", ["PENDIENTE", "PARCIAL"])
       .not("costo_final", "is", null)
       .gt("costo_final", 0)
-      .order("created_at", { ascending: false })
+      .order("fecha_ingreso", { ascending: false })
 
     if (dbError) throw dbError
 

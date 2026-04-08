@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
-import { inngest } from "@/lib/inngest/client"
+import { queueNotification } from "@/lib/notifications/queue"
 import { z } from "zod"
 
 const aprobarSchema = z.object({
@@ -26,11 +26,15 @@ export async function POST(
     const body = await request.json()
     const data = aprobarSchema.parse(body)
 
-    // Find cotizacion by public token (include orden_id and total)
+    // Find cotizacion by public token (include orden_id and total).
+    // Defensa: filtrar `public_token IS NOT NULL` evita que un registro
+    // legacy con token null pueda matchear accidentalmente si por algún
+    // motivo el query recibiera un valor falsy que pasara el length check.
     const { data: cotizacion, error: fetchError } = await supabaseAdmin
       .from("cotizaciones")
       .select("id, estado, orden_id, total")
       .eq("public_token", token)
+      .not("public_token", "is", null)
       .is("deleted_at", null)
       .single()
 
@@ -96,29 +100,26 @@ export async function POST(
         const org = orden.organizations as unknown as Record<string, unknown>
         const cliente = orden.clientes as unknown as Record<string, unknown>
 
-        inngest.send({
-          name: "notification/send",
-          data: {
-            organizationId: orden.organization_id,
-            ordenId: orden.id,
-            clienteId: orden.cliente_id,
-            tipo: "CAMBIO_ESTADO",
-            context: {
-              organizationName: (org?.nombre_mostrar as string) || (org?.nombre as string) || "",
-              cliente: {
-                id: cliente?.id as string,
-                nombre: cliente?.nombre as string,
-                email: cliente?.email as string | null,
-                telefono: cliente?.telefono as string,
-              },
-              orden: {
-                id: orden.id,
-                numeroOrden: orden.numero_orden,
-                dispositivo: orden.dispositivo,
-                estado: "APROBADO",
-                estadoAnterior: "PRESUPUESTADO",
-                presupuesto: cotizacion.total,
-              },
+        queueNotification({
+          organizationId: orden.organization_id,
+          ordenId: orden.id,
+          clienteId: orden.cliente_id,
+          tipo: "CAMBIO_ESTADO",
+          context: {
+            organizationName: (org?.nombre_mostrar as string) || (org?.nombre as string) || "",
+            cliente: {
+              id: cliente?.id as string,
+              nombre: cliente?.nombre as string,
+              email: cliente?.email as string | null,
+              telefono: cliente?.telefono as string,
+            },
+            orden: {
+              id: orden.id,
+              numeroOrden: orden.numero_orden,
+              dispositivo: orden.dispositivo,
+              estado: "APROBADO",
+              estadoAnterior: "PRESUPUESTADO",
+              presupuesto: cotizacion.total,
             },
           },
         }).catch(err => console.error("Error sending notification:", err))

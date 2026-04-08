@@ -11,13 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { DatePicker } from "@/components/ui/date-picker"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { X, Plus, UserPlus, Camera, Upload, Trash2, Loader2, Lock, Grid3X3, ClipboardCheck, ChevronDown, ChevronUp } from "lucide-react"
+import { X, Plus, Camera, Upload, Trash2, Loader2, Lock, Grid3X3, ClipboardCheck, ChevronDown, ChevronUp } from "lucide-react"
 import { PatternLock } from "@/components/ui/pattern-lock"
 import { ClienteSelector } from "@/components/cotizaciones/cliente-selector"
 import { OrdenCreadaModal } from "./orden-creada-modal"
@@ -60,35 +54,6 @@ const FALLBACK_CONFIG: TipoDispositivoConfig = {
   marcas: [],
 }
 
-const clienteSchemaIndividual = z.object({
-  nombre: z.string()
-    .min(1, "El nombre es requerido")
-    .regex(/^[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s]+$/, "El nombre solo debe contener letras"),
-  telefono: z.string()
-    .min(1, "El teléfono es requerido")
-    .regex(/^\d{10}$/, "El teléfono debe tener exactamente 10 dígitos"),
-  email: z.string().email("Email inválido").optional().or(z.literal("")),
-  direccion: z.string().optional(),
-  dni: z.string()
-    .regex(/^(\d{7,8})?$/, "El DNI debe tener 7 u 8 dígitos")
-    .optional()
-    .or(z.literal("")),
-  razonSocial: z.string().optional(),
-  cuit: z.string().optional(),
-})
-
-const clienteSchemaEmpresa = z.object({
-  nombre: z.string().min(1, "El nombre es requerido"),
-  telefono: z.string()
-    .min(1, "El teléfono es requerido")
-    .regex(/^\d{10}$/, "El teléfono debe tener exactamente 10 dígitos"),
-  email: z.string().email("Email inválido").optional().or(z.literal("")),
-  direccion: z.string().optional(),
-  dni: z.string().optional().or(z.literal("")),
-  razonSocial: z.string().min(1, "La razón social es requerida"),
-  cuit: z.string().optional().or(z.literal("")),
-})
-
 const ordenSchema = z.object({
   clienteId: z.string().min(1, "El cliente es requerido"),
   dispositivo: z.string().min(1, "El dispositivo es requerido"),
@@ -105,7 +70,6 @@ const ordenSchema = z.object({
 })
 
 type OrdenFormData = z.infer<typeof ordenSchema>
-type ClienteFormData = z.infer<typeof clienteSchemaIndividual>
 
 interface OrdenFormProps {
   onClose: () => void
@@ -131,8 +95,6 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
   const { offlineFetch } = useOffline()
   const [loading, setLoading] = useState(false)
   const [selectedClienteObj, setSelectedClienteObj] = useState<Cliente | null>(null)
-  const [showClienteModal, setShowClienteModal] = useState(false)
-  const [clienteLoading, setClienteLoading] = useState(false)
   const [fotos, setFotos] = useState<FotoPreview[]>([])
   const [accesoriosSeleccionados, setAccesoriosSeleccionados] = useState<string[]>([])
   const [otroAccesorio, setOtroAccesorio] = useState("")
@@ -146,7 +108,6 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
   const [camposExtraValues, setCamposExtraValues] = useState<Record<string, any>>({})
   const [selectedSectorId, setSelectedSectorId] = useState<string>("")
   const [sectoresCliente, setSectoresCliente] = useState<Array<{ id: string; nombre: string }>>([])
-  const [nuevoClienteTipo, setNuevoClienteTipo] = useState<"INDIVIDUAL" | "EMPRESA">("INDIVIDUAL")
   const [nuevoSectorNombre, setNuevoSectorNombre] = useState("")
   const [crearSectorLoading, setCrearSectorLoading] = useState(false)
   const [checklistTemplate, setChecklistTemplate] = useState<any>(null)
@@ -241,19 +202,6 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
       setValue("dispositivo", "")
     }
   }
-
-  const clienteForm = useForm<ClienteFormData>({
-    defaultValues: {
-      nombre: "",
-      telefono: "",
-      email: "",
-      direccion: "",
-      dni: "",
-      razonSocial: "",
-      cuit: "",
-    },
-  })
-
 
   // Fetch checklist template when device type changes
   useEffect(() => {
@@ -390,54 +338,6 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
     if (otroAccesorio.trim()) {
       setAccesoriosSeleccionados((prev) => [...prev, otroAccesorio.trim()])
       setOtroAccesorio("")
-    }
-  }
-
-  const handleCreateCliente = async (data: ClienteFormData) => {
-    // Validate with the right schema based on tipo
-    const schema = nuevoClienteTipo === "EMPRESA" ? clienteSchemaEmpresa : clienteSchemaIndividual
-    const result = schema.safeParse(data)
-    if (!result.success) {
-      // Set errors manually
-      for (const issue of result.error.issues) {
-        const field = issue.path[0] as keyof ClienteFormData
-        clienteForm.setError(field, { message: issue.message })
-      }
-      return
-    }
-
-    setClienteLoading(true)
-    try {
-      const res = await fetch("/api/clientes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...result.data,
-          tipoCliente: nuevoClienteTipo,
-          razonSocial: nuevoClienteTipo === "EMPRESA" ? result.data.razonSocial : undefined,
-          cuit: nuevoClienteTipo === "EMPRESA" ? result.data.cuit : undefined,
-        }),
-      })
-
-      if (!res.ok) {
-        const error = await res.json()
-        alert(error.error || "Error al crear cliente")
-        return
-      }
-
-      const nuevoCliente = await res.json()
-
-      setValue("clienteId", nuevoCliente.id)
-      setSelectedClienteObj(nuevoCliente)
-
-      setShowClienteModal(false)
-      clienteForm.reset()
-      setNuevoClienteTipo("INDIVIDUAL")
-    } catch (error) {
-      console.error("Error creating cliente:", error)
-      alert("Error al crear cliente")
-    } finally {
-      setClienteLoading(false)
     }
   }
 
@@ -1507,161 +1407,6 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
           </div>
         </form>
       </CardContent>
-
-      {/* Modal para crear nuevo cliente */}
-      <Dialog open={showClienteModal} onOpenChange={setShowClienteModal}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Nuevo Cliente</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={clienteForm.handleSubmit(handleCreateCliente)} className="space-y-4">
-            {/* Tipo de cliente toggle */}
-            <div>
-              <Label>Tipo de Cliente</Label>
-              <div className="flex gap-2 mt-1">
-                <button
-                  type="button"
-                  onClick={() => { setNuevoClienteTipo("INDIVIDUAL"); clienteForm.clearErrors() }}
-                  className={`flex-1 py-2 px-3 text-sm rounded-lg border transition-colors ${
-                    nuevoClienteTipo === "INDIVIDUAL"
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "hover:bg-muted"
-                  }`}
-                >
-                  Individual
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setNuevoClienteTipo("EMPRESA"); clienteForm.clearErrors() }}
-                  className={`flex-1 py-2 px-3 text-sm rounded-lg border transition-colors ${
-                    nuevoClienteTipo === "EMPRESA"
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "hover:bg-muted"
-                  }`}
-                >
-                  Empresa
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <Label htmlFor="cliente-nombre">
-                {nuevoClienteTipo === "EMPRESA" ? "Nombre de contacto *" : "Nombre *"}
-              </Label>
-              <Input
-                id="cliente-nombre"
-                {...clienteForm.register("nombre")}
-                placeholder={nuevoClienteTipo === "EMPRESA" ? "Nombre del contacto principal" : "Nombre completo"}
-              />
-              {clienteForm.formState.errors.nombre && (
-                <p className="text-sm text-destructive mt-1">
-                  {clienteForm.formState.errors.nombre.message}
-                </p>
-              )}
-            </div>
-
-            {/* Campos empresa */}
-            {nuevoClienteTipo === "EMPRESA" && (
-              <>
-                <div>
-                  <Label htmlFor="cliente-razon-social">Razon Social *</Label>
-                  <Input
-                    id="cliente-razon-social"
-                    {...clienteForm.register("razonSocial")}
-                    placeholder="Ej: Municipalidad de Cordoba"
-                  />
-                  {clienteForm.formState.errors.razonSocial && (
-                    <p className="text-sm text-destructive mt-1">
-                      {clienteForm.formState.errors.razonSocial.message}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <Label htmlFor="cliente-cuit">CUIT</Label>
-                  <Input
-                    id="cliente-cuit"
-                    {...clienteForm.register("cuit")}
-                    placeholder="30-12345678-9"
-                  />
-                </div>
-              </>
-            )}
-
-            <div>
-              <Label htmlFor="cliente-telefono">Telefono *</Label>
-              <Input
-                id="cliente-telefono"
-                {...clienteForm.register("telefono")}
-                placeholder="1123456789"
-                maxLength={10}
-              />
-              {clienteForm.formState.errors.telefono && (
-                <p className="text-sm text-destructive mt-1">
-                  {clienteForm.formState.errors.telefono.message}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <Label htmlFor="cliente-email">Email</Label>
-              <Input
-                id="cliente-email"
-                type="email"
-                {...clienteForm.register("email")}
-                placeholder="cliente@email.com"
-              />
-              {clienteForm.formState.errors.email && (
-                <p className="text-sm text-destructive mt-1">
-                  {clienteForm.formState.errors.email.message}
-                </p>
-              )}
-            </div>
-
-            {nuevoClienteTipo === "INDIVIDUAL" && (
-              <div>
-                <Label htmlFor="cliente-dni">DNI</Label>
-                <Input
-                  id="cliente-dni"
-                  {...clienteForm.register("dni")}
-                  placeholder="12345678"
-                  maxLength={8}
-                />
-                {clienteForm.formState.errors.dni && (
-                  <p className="text-sm text-destructive mt-1">
-                    {clienteForm.formState.errors.dni.message}
-                  </p>
-                )}
-              </div>
-            )}
-
-            <div>
-              <Label htmlFor="cliente-direccion">Direccion</Label>
-              <Input
-                id="cliente-direccion"
-                {...clienteForm.register("direccion")}
-                placeholder="Direccion completa"
-              />
-            </div>
-
-            <div className="flex gap-2 justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setShowClienteModal(false)
-                  clienteForm.reset()
-                  setNuevoClienteTipo("INDIVIDUAL")
-                }}
-              >
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={clienteLoading}>
-                {clienteLoading ? "Creando..." : "Crear Cliente"}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
 
       {/* Modal de orden creada con WhatsApp */}
       <OrdenCreadaModal

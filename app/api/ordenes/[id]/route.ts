@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger, diffObjects } from "@/lib/audit"
-import { queueNotification } from "@/lib/inngest"
+import { queueNotification } from "@/lib/notifications/queue"
 import { formatOrden } from "@/lib/db-utils"
 import { esTransicionValida, getMensajeTransicionInvalida, validarCamposRequeridos } from "@/lib/orden-state-machine"
 import { z } from "zod"
@@ -279,7 +279,7 @@ export async function PUT(
     const changes = diffObjects(orden, updatedOrden)
     await audit.update("ordenes_servicio", id, changes.before, changes.after)
 
-    // Notificaciones via Inngest (background)
+    // Notificaciones al cliente
     const cliente = orden.clientes as any
     const org = orden.organizations as any
 

@@ -1,6 +1,28 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getToken } from "next-auth/jwt"
-import { rateLimit, getApiRateLimit, isExemptFromRateLimit } from "@/lib/rate-limit"
+import {
+  rateLimit,
+  getApiRateLimit,
+  isExemptFromRateLimit,
+  extractPublicToken,
+} from "@/lib/rate-limit"
+
+// Hashea un string con SHA-256 usando Web Crypto (compatible con Edge Runtime,
+// donde `node:crypto` no está disponible). Devuelve los primeros 16 hex chars,
+// suficientes como key opaca de rate-limit (no necesita resistencia de colisión
+// completa).
+async function hashTokenForKey(token: string): Promise<string> {
+  const buf = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(token)
+  )
+  const bytes = new Uint8Array(buf)
+  let hex = ""
+  for (let i = 0; i < 8; i++) {
+    hex += bytes[i].toString(16).padStart(2, "0")
+  }
+  return hex
+}
 
 // Subdominio especial para el panel de superadmin
 const SUPERADMIN_SUBDOMAIN = "admin"
@@ -51,7 +73,6 @@ function isPublicPath(pathname: string): boolean {
     "/tenant-not-found",
     "/api/auth",
     "/api/public",
-    "/api/inngest",
     "/api/cron",
     "/api/mercadopago/webhook",
     "/api/rebill/webhook",
@@ -152,6 +173,35 @@ export async function middleware(request: NextRequest) {
           },
         }
       )
+    }
+
+    // Rate limit ADICIONAL por public_token para endpoints sin auth.
+    // El rate limit por IP de arriba protege contra una sola IP abusando;
+    // este protege contra brute-force/scraping de un token específico desde
+    // múltiples IPs (botnet). Hasheamos el token antes de usarlo como key
+    // para no guardar el secreto en memoria.
+    const publicToken = extractPublicToken(pathname)
+    if (publicToken) {
+      const tokenHash = await hashTokenForKey(publicToken)
+      // 40 requests por token cada 5 minutos. Suficiente para que un cliente
+      // real cargue la página varias veces y consulte recursos relacionados,
+      // pero corta cualquier intento de scraping/brute-force agresivo.
+      const tokenResult = await rateLimit(`pt:${tokenHash}`, 40, 5 * 60 * 1000)
+      if (!tokenResult.success) {
+        return NextResponse.json(
+          { error: "Demasiadas solicitudes para este recurso." },
+          {
+            status: 429,
+            headers: {
+              "Retry-After": String(Math.ceil((tokenResult.reset - Date.now()) / 1000)),
+              "X-RateLimit-Limit": String(tokenResult.limit),
+              "X-RateLimit-Remaining": "0",
+              "X-RateLimit-Reset": String(tokenResult.reset),
+              "X-RateLimit-Scope": "public-token",
+            },
+          }
+        )
+      }
     }
   }
 

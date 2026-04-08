@@ -1,6 +1,7 @@
 import { createCipheriv, createDecipheriv, randomBytes, createHash } from "crypto"
 import * as OTPAuth from "otpauth"
 import bcrypt from "bcryptjs"
+import { supabaseAdmin } from "@/lib/supabase"
 
 const ALGORITHM = "aes-256-gcm"
 const ISSUER = "STApp"
@@ -103,4 +104,69 @@ export async function verifyBackupCode(
     }
   }
   return { valid: false, index: -1 }
+}
+
+/**
+ * Verifica un código 2FA (TOTP o backup) para un usuario, server-side.
+ *
+ * Importante: esta función es la ÚNICA fuente de verdad para validación de 2FA
+ * durante el login. Antes existía un endpoint público `/api/auth/2fa/validate`
+ * que respondía al cliente "valid: true" y luego el cliente reenviaba el login
+ * con `skip2FA=true` — el servidor no tenía pruebas de que el código se hubiera
+ * verificado, lo que permitía bypasear 2FA conociendo email+password. Ahora la
+ * verificación corre dentro de `authorize()` de NextAuth, sin trust en el cliente.
+ *
+ * Si el código matchea como backup code, lo CONSUME (lo elimina de la lista
+ * en BD) para que no pueda reusarse.
+ *
+ * Devuelve `valid: false` si:
+ *  - el usuario no existe
+ *  - no tiene 2FA activado
+ *  - el código no matchea ni TOTP ni ningún backup code
+ */
+export async function verifyUserTotpCode(
+  userId: string,
+  code: string
+): Promise<{ valid: boolean; backupCodeUsed?: boolean; remainingBackupCodes?: number }> {
+  const { data: user, error } = await supabaseAdmin
+    .from("users")
+    .select("totp_secret, totp_enabled, totp_backup_codes")
+    .eq("id", userId)
+    .single()
+
+  if (error || !user || !user.totp_enabled || !user.totp_secret) {
+    return { valid: false }
+  }
+
+  const trimmed = code.trim()
+  if (!trimmed) return { valid: false }
+
+  const secret = decryptSecret(user.totp_secret)
+
+  // 1) Intentar TOTP (6 dígitos)
+  if (/^\d{6}$/.test(trimmed)) {
+    if (verifyTOTP(secret, trimmed)) {
+      return { valid: true }
+    }
+  }
+
+  // 2) Intentar backup code (consumir si matchea)
+  if (user.totp_backup_codes && user.totp_backup_codes.length > 0) {
+    const { valid, index } = await verifyBackupCode(trimmed, user.totp_backup_codes)
+    if (valid) {
+      const updatedCodes = [...user.totp_backup_codes]
+      updatedCodes.splice(index, 1)
+      await supabaseAdmin
+        .from("users")
+        .update({ totp_backup_codes: updatedCodes })
+        .eq("id", userId)
+      return {
+        valid: true,
+        backupCodeUsed: true,
+        remainingBackupCodes: updatedCodes.length,
+      }
+    }
+  }
+
+  return { valid: false }
 }

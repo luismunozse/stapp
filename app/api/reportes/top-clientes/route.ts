@@ -50,10 +50,11 @@ export async function GET(request: NextRequest) {
       const m = metricsMap.get(orden.cliente_id) || { totalOrdenes: 0, totalGastado: 0, ultimaVisita: null }
       m.totalOrdenes++
 
-      const facturas = (orden as any).facturas || []
+      const facturasRaw = (orden as any).facturas
+      const facturas = Array.isArray(facturasRaw) ? facturasRaw : facturasRaw ? [facturasRaw] : []
       for (const f of facturas) {
         if (f.estado_pago === "PAGADO") {
-          m.totalGastado += f.total || 0
+          m.totalGastado += Number(f.total) || 0
         }
       }
 

@@ -35,7 +35,7 @@ Sistema completo de gestión para servicios técnicos de celulares y computadora
 - **Next.js API Routes** - Endpoints REST
 - **Supabase** - PostgreSQL + Storage + RLS
 - **NextAuth.js v5** - Autenticación
-- **Inngest** - Background jobs y cron
+- **Vercel Cron** - Tareas programadas
 - **Resend** - Servicio de emails
 
 ## Requisitos
@@ -127,8 +127,7 @@ stapp/
 │   ├── storage.ts        # Funciones de Storage
 │   ├── counters.ts       # Contadores atómicos
 │   ├── audit.ts          # Sistema de auditoría
-│   ├── notifications/    # Sistema de notificaciones
-│   └── inngest/          # Background jobs
+│   └── notifications/    # Sistema de notificaciones (queue + envío directo)
 ├── supabase/
 │   └── migrations/       # SQL migrations
 ├── types/                # Tipos TypeScript
@@ -155,9 +154,8 @@ stapp/
 - Políticas de seguridad por organización
 
 ### Background Jobs
-- Inngest para procesamiento asíncrono
-- Envío de emails en background
-- Cron jobs para recordatorios diarios
+- Notificaciones enviadas directamente vía `queueNotification` (fire-and-forget)
+- Vercel Cron para recordatorios diarios y mantenimiento
 
 ## Características para Argentina
 

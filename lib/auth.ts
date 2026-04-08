@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs"
 import { randomBytes } from "crypto"
 import { verifyGoogleIdToken } from "@/lib/google"
 import { logLoginEvent, logLogoutEvent } from "@/lib/superadmin-audit"
+import { verifyUserTotpCode } from "@/lib/totp"
 
 type Rol = "ADMIN" | "TECNICO" | "VENDEDOR"
 
@@ -115,7 +116,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         rememberMe: { label: "Recordarme", type: "text" },
         pwaRefreshToken: { label: "PWA Refresh Token", type: "text" },
         totpCode: { label: "Codigo 2FA", type: "text" },
-        skip2FA: { label: "Skip 2FA check", type: "text" },
         googleIdToken: { label: "Google ID Token", type: "text" },
       },
       authorize: async (credentials) => {
@@ -213,9 +213,22 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             return null
           }
 
-          // Verificar 2FA
-          if (gUser.totp_enabled && credentials.skip2FA !== "true") {
-            throw new Error(`REQUIRES_2FA:${gUser.id}`)
+          // Verificar 2FA. La validación es server-side: si el usuario tiene
+          // 2FA activado, exigimos un `totpCode` válido en este mismo request.
+          // No confiamos en ningún flag del cliente — antes se trustaba
+          // `skip2FA: "true"` y eso permitía bypass conociendo email+password.
+          if (gUser.totp_enabled) {
+            const providedCode = credentials.totpCode
+              ? String(credentials.totpCode)
+              : ""
+            if (!providedCode) {
+              // Aún no envió código: pedir el segundo factor
+              throw new Error(`REQUIRES_2FA:${gUser.id}`)
+            }
+            const totpResult = await verifyUserTotpCode(gUser.id, providedCode)
+            if (!totpResult.valid) {
+              throw new Error("INVALID_2FA_CODE")
+            }
           }
 
           // Forzar 2FA para superadmin con Google login
@@ -325,10 +338,31 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           return null
         }
 
-        // Verificar si tiene 2FA activado
-        if (user.totp_enabled && credentials.skip2FA !== "true") {
-          // Lanzar error especial para que el frontend muestre el paso de 2FA
-          throw new Error(`REQUIRES_2FA:${user.id}`)
+        // Verificar si tiene 2FA activado. La verificación corre server-side
+        // dentro de este authorize(): si el usuario tiene 2FA, exigimos que el
+        // cliente envíe un `totpCode` válido en este mismo request. Antes se
+        // trustaba el flag `skip2FA: "true"` enviado por el cliente, lo que
+        // permitía bypasear 2FA conociendo email+password.
+        if (user.totp_enabled) {
+          const providedCode = credentials.totpCode
+            ? String(credentials.totpCode)
+            : ""
+          if (!providedCode) {
+            // Lanzar error especial para que el frontend muestre el paso de 2FA
+            throw new Error(`REQUIRES_2FA:${user.id}`)
+          }
+          const totpResult = await verifyUserTotpCode(user.id, providedCode)
+          if (!totpResult.valid) {
+            // Loguear como intento fallido (cuenta correcta, segundo factor inválido)
+            logLoginEvent({
+              userId: user.id,
+              email: user.email,
+              success: false,
+              isSuperadmin: isSuper,
+              reason: "Código 2FA inválido",
+            }).catch(() => {})
+            throw new Error("INVALID_2FA_CODE")
+          }
         }
 
         // Forzar 2FA para superadmin: si no tiene 2FA activado, exigir que lo configure

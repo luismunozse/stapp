@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
-import { queueNotification } from "@/lib/inngest"
+import { queueNotification } from "@/lib/notifications/queue"
 import { z } from "zod"
 
 const garantiaSchema = z.object({
@@ -173,7 +173,7 @@ export async function POST(request: Request) {
       throw createError
     }
 
-    // Enviar notificación via Inngest
+    // Enviar notificación al cliente
     const cliente = orden.clientes as any
     const org = orden.organizations as any
 

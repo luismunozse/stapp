@@ -102,7 +102,6 @@ export function getApiRateLimit(pathname: string): RateLimitConfig {
   if (
     pathname.startsWith("/api/mercadopago/webhook") ||
     pathname.startsWith("/api/rebill/webhook") ||
-    pathname.startsWith("/api/inngest") ||
     pathname.startsWith("/api/cron") ||
     pathname.startsWith("/api/whatsapp/webhook")
   ) {
@@ -120,11 +119,41 @@ export function getApiRateLimit(pathname: string): RateLimitConfig {
 
   // APIs públicas
   if (pathname.startsWith("/api/public")) {
-    return { max: 30, windowMs: 60000 }
+    // /api/public/tenant: lookup liviano usado al cargar el login del subdomain.
+    // Lo dejamos un poco más permisivo para no romper UX en redes con NAT.
+    if (pathname.startsWith("/api/public/tenant")) {
+      return { max: 60, windowMs: 60000 }
+    }
+    // Endpoints accedidos mediante public_token (cotizaciones, órdenes, kiosco):
+    // sin auth, usados por clientes finales. 20 req/min por IP es suficiente
+    // para uso normal y bloquea brute-force razonable. Además aplicamos un
+    // throttle adicional POR TOKEN en el middleware (ver applyPerTokenLimit).
+    return { max: 20, windowMs: 60000 }
   }
 
   // APIs autenticadas por defecto
   return { max: 120, windowMs: 60000 }
+}
+
+/**
+ * Extrae el public_token de un path tipo /api/public/{recurso}/{token}/...
+ *
+ * Devuelve null si el path no matchea uno de los recursos públicos
+ * conocidos. Usado para aplicar un rate limit ADICIONAL por token
+ * (defensa contra brute-force / scraping de un token específico).
+ *
+ * Reconoce: cotizaciones, ordenes, kiosco.
+ */
+export function extractPublicToken(pathname: string): string | null {
+  const m = pathname.match(
+    /^\/api\/public\/(?:cotizaciones|ordenes|kiosco)\/([^/?]+)/
+  )
+  if (!m) return null
+  const token = m[1]
+  // Sanity: los tokens reales tienen >= 16 chars hex/base64url. Si vienen
+  // cosas raras (rutas malformadas) no las trackeamos como token.
+  if (token.length < 12) return null
+  return token
 }
 
 /**
@@ -134,7 +163,6 @@ export function isExemptFromRateLimit(pathname: string): boolean {
   const exemptPaths = [
     "/api/mercadopago/webhook",
     "/api/rebill/webhook",
-    "/api/inngest",
     "/api/cron",
     "/api/auth/session",
     "/api/auth/csrf",

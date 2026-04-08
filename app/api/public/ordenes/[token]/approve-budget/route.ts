@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin, STORAGE_BUCKETS } from "@/lib/supabase"
-import { inngest } from "@/lib/inngest/client"
+import { queueNotification } from "@/lib/notifications/queue"
 import { z } from "zod"
 import { getOrderByPublicToken } from "@/lib/public-token"
 
@@ -86,29 +86,26 @@ export async function POST(
     const org = orden.organizations as unknown as Record<string, unknown>
     const cliente = orden.clientes as unknown as Record<string, unknown>
 
-    inngest.send({
-      name: "notification/send",
-      data: {
-        organizationId: orden.organization_id,
-        ordenId: orden.id,
-        clienteId: orden.cliente_id,
-        tipo: "CAMBIO_ESTADO",
-        context: {
-          organizationName: (org?.nombre_mostrar as string) || (org?.nombre as string) || "",
-          cliente: {
-            id: cliente?.id as string,
-            nombre: cliente?.nombre as string,
-            email: cliente?.email as string | null,
-            telefono: cliente?.telefono as string,
-          },
-          orden: {
-            id: orden.id,
-            numeroOrden: orden.numero_orden,
-            dispositivo: orden.dispositivo,
-            estado: "APROBADO",
-            estadoAnterior: "PRESUPUESTADO",
-            presupuesto: orden.presupuesto,
-          },
+    queueNotification({
+      organizationId: orden.organization_id,
+      ordenId: orden.id,
+      clienteId: orden.cliente_id,
+      tipo: "CAMBIO_ESTADO",
+      context: {
+        organizationName: (org?.nombre_mostrar as string) || (org?.nombre as string) || "",
+        cliente: {
+          id: cliente?.id as string,
+          nombre: cliente?.nombre as string,
+          email: cliente?.email as string | null,
+          telefono: cliente?.telefono as string,
+        },
+        orden: {
+          id: orden.id,
+          numeroOrden: orden.numero_orden,
+          dispositivo: orden.dispositivo,
+          estado: "APROBADO",
+          estadoAnterior: "PRESUPUESTADO",
+          presupuesto: orden.presupuesto,
         },
       },
     }).catch(err => console.error("Error sending notification:", err))

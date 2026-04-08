@@ -8,12 +8,28 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Shield, ArrowLeft } from "lucide-react"
 
 interface TwoFactorVerifyProps {
-  userId: string
-  onVerified: () => void
+  /**
+   * ID del usuario que está verificando 2FA. Se mantiene por compatibilidad
+   * pero ya no se usa internamente — la validación corre server-side dentro
+   * de authorize() durante el signIn().
+   */
+  userId?: string
+  /**
+   * Callback con el código que el usuario ingresó. El padre debe pasarlo
+   * a `signIn("credentials", { ..., totpCode: code })` para que el server
+   * lo valide. Si la validación falla, el padre debe llamar a
+   * `setExternalError("Codigo invalido")`.
+   */
+  onVerified: (code: string) => Promise<void> | void
   onCancel: () => void
+  /**
+   * Error externo seteado por el padre cuando el server rechaza el código
+   * (p.ej. recibe `INVALID_2FA_CODE` del signIn). Se muestra en el componente.
+   */
+  externalError?: string
 }
 
-export function TwoFactorVerify({ userId, onVerified, onCancel }: TwoFactorVerifyProps) {
+export function TwoFactorVerify({ onVerified, onCancel, externalError }: TwoFactorVerifyProps) {
   const [code, setCode] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
@@ -24,32 +40,28 @@ export function TwoFactorVerify({ userId, onVerified, onCancel }: TwoFactorVerif
     inputRef.current?.focus()
   }, [useBackupCode])
 
+  // Si el padre nos pasa un error (p.ej. el server rechazó el código),
+  // lo mostramos y limpiamos el input para que el usuario reintente.
+  useEffect(() => {
+    if (externalError) {
+      setError(externalError)
+      setCode("")
+      setLoading(false)
+      inputRef.current?.focus()
+    }
+  }, [externalError])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
     setLoading(true)
 
     try {
-      const res = await fetch("/api/auth/2fa/validate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, code: code.trim() }),
-      })
-
-      const data = await res.json()
-
-      if (res.ok && data.valid) {
-        if (data.backupCodeUsed && data.remainingBackupCodes !== undefined) {
-          // Informar que se uso un backup code
-          console.log(`Backup code usado. Quedan ${data.remainingBackupCodes} codigos.`)
-        }
-        onVerified()
-      } else {
-        setError(data.error || "Codigo invalido")
-      }
+      // Delegamos la verificación al padre, que llamará a signIn con el
+      // código. La validación real ocurre server-side en authorize().
+      await onVerified(code.trim())
     } catch {
       setError("Error de conexion. Intenta de nuevo.")
-    } finally {
       setLoading(false)
     }
   }

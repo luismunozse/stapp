@@ -11,10 +11,6 @@
     },
     "app/api/cron/**/*.ts": {
       "maxDuration": 60
-    },
-    "app/api/inngest/route.ts": {
-      "maxDuration": 60,
-      "includeFiles": "node_modules/@sparticuz/chromium/**"
     }
   },
   "crons": [

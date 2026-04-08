@@ -158,32 +158,86 @@ export async function getPreApproval(preApprovalId: string) {
   return await getPreApprovalApi().get({ id: preApprovalId })
 }
 
-// Verificar firma del webhook (IPN)
+/**
+ * Resultado detallado de la verificación de firma de webhook.
+ *
+ * El motivo de devolver detalle (en vez de un boolean) es que en producción
+ * tuvimos un caso donde un pago real no se registró y no había forma de
+ * saber si fue por firma inválida, secret faltante o porque MP nunca
+ * disparó la notificación. Ahora cada intento queda persistido en
+ * webhook_events junto con `signature_valid` y un mensaje legible.
+ */
+export interface WebhookSignatureResult {
+  valid: boolean
+  reason: string
+  /** True si no había secret configurado y se aceptó el webhook por defecto */
+  bypassedNoSecret?: boolean
+}
+
+/**
+ * Verificar firma del webhook IPN de MercadoPago.
+ *
+ * Doc oficial: https://www.mercadopago.com.ar/developers/es/docs/your-integrations/notifications/webhooks
+ *
+ * Importante:
+ *  - MP firma `id:<dataId>;request-id:<requestId>;ts:<ts>;`
+ *  - El `dataId` que MP usa para firmar viene en el QUERY STRING de la URL
+ *    (`?data.id=...&type=payment`), NO necesariamente en el body.
+ *    Antes leíamos `body.data?.id` y eso podía no coincidir, generando
+ *    falsos negativos. Ahora aceptamos un `dataId` que el caller debe
+ *    extraer del query primero, body como fallback.
+ *  - MP recomienda lowercase del id antes de firmar cuando contiene letras.
+ */
 export function verifyWebhookSignature(
   xSignature: string | null,
   xRequestId: string | null,
-  dataId: string
-): boolean {
-  if (!xSignature || !xRequestId) return false
-
-  const crypto = require("crypto")
+  dataId: string | null
+): WebhookSignatureResult {
   const secret = process.env.MERCADOPAGO_WEBHOOK_SECRET
 
   if (!secret) {
-    console.warn("No MERCADOPAGO_WEBHOOK_SECRET configured")
-    return true // En desarrollo, permitir sin verificación
+    // Fail-closed en producción: si por error de deploy falta el secret,
+    // NO aceptar webhooks sin verificar (un atacante podría inyectar
+    // notificaciones falsas y disparar lógica de pagos).
+    // En dev/test sí permitimos el bypass para poder testear local.
+    if (process.env.NODE_ENV === "production") {
+      console.error(
+        "[mp-webhook] CRITICAL: MERCADOPAGO_WEBHOOK_SECRET no configurado en producción - rechazando webhook"
+      )
+      return {
+        valid: false,
+        reason: "missing_secret_in_production",
+      }
+    }
+
+    console.warn(
+      "[mp-webhook] MERCADOPAGO_WEBHOOK_SECRET no configurado - aceptando sin verificar (solo dev)"
+    )
+    return {
+      valid: true,
+      reason: "no_secret_configured",
+      bypassedNoSecret: true,
+    }
   }
 
-  // Extraer ts y v1 de x-signature
+  if (!xSignature) return { valid: false, reason: "missing_x_signature" }
+  if (!xRequestId) return { valid: false, reason: "missing_x_request_id" }
+  if (!dataId) return { valid: false, reason: "missing_data_id" }
+
   const parts = xSignature.split(",")
-  const ts = parts.find((p) => p.startsWith("ts="))?.split("=")[1]
-  const v1 = parts.find((p) => p.startsWith("v1="))?.split("=")[1]
+  const ts = parts.find((p) => p.trim().startsWith("ts="))?.split("=")[1]?.trim()
+  const v1 = parts.find((p) => p.trim().startsWith("v1="))?.split("=")[1]?.trim()
 
-  if (!ts || !v1) return false
+  if (!ts) return { valid: false, reason: "x_signature_missing_ts" }
+  if (!v1) return { valid: false, reason: "x_signature_missing_v1" }
 
-  // Crear string para verificar
-  const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`
+  const crypto = require("crypto")
+  // MP indica lowercase para ids alfanuméricos
+  const normalizedId = String(dataId).toLowerCase()
+  const manifest = `id:${normalizedId};request-id:${xRequestId};ts:${ts};`
   const hmac = crypto.createHmac("sha256", secret).update(manifest).digest("hex")
 
-  return hmac === v1
+  if (hmac === v1) return { valid: true, reason: "ok" }
+
+  return { valid: false, reason: "hmac_mismatch" }
 }

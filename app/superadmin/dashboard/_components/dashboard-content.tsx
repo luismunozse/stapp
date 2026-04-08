@@ -20,6 +20,7 @@ import { formatCurrency, formatDate } from "@/lib/utils"
 import { useSuperadminFetch } from "@/hooks/use-superadmin-fetch"
 import { DashboardCharts } from "./dashboard-charts"
 import { CronPanel } from "./cron-panel"
+import { AnomaliesWidget } from "./anomalies-widget"
 
 interface RecentOrganization {
   id: string
@@ -175,6 +176,9 @@ export function DashboardContent() {
           </Button>
         </div>
       </div>
+
+      {/* Widget de anomalías de facturación. Se auto-oculta si no hay nada. */}
+      <AnomaliesWidget />
 
       {data && data.failedQueries > 0 && (
         <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg text-sm text-amber-800 dark:text-amber-200">

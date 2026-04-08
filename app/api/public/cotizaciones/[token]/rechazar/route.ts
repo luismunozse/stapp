@@ -23,11 +23,14 @@ export async function POST(
       // Body is optional
     }
 
-    // Find cotizacion
+    // Find cotizacion. `not("public_token", "is", null)` es defensa adicional
+    // contra registros legacy con token null (el length check arriba ya rechaza
+    // tokens vacíos, pero esto blinda contra cualquier sorpresa de Supabase).
     const { data: cotizacion, error: fetchError } = await supabaseAdmin
       .from("cotizaciones")
       .select("id, estado, orden_id, organization_id")
       .eq("public_token", token)
+      .not("public_token", "is", null)
       .is("deleted_at", null)
       .single()
 

@@ -46,8 +46,8 @@ interface NotificationParams {
 }
 
 /**
- * Enviar notificación directamente (sin Inngest)
- * Se ejecuta como fire-and-forget desde las API routes
+ * Enviar notificación directamente.
+ * Se ejecuta como fire-and-forget desde las API routes.
  */
 export async function sendNotificationDirect(params: NotificationParams) {
   const { organizationId, ordenId, garantiaId, clienteId, tipo, context } = params

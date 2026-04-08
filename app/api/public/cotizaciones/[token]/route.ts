@@ -15,6 +15,9 @@ export async function GET(
       )
     }
 
+    // `not("public_token", "is", null)` blinda contra registros legacy
+    // con token null. La query principal usa `eq("public_token", token)`
+    // más abajo; ambos filtros son complementarios.
     const { data: cotizacion, error: dbError } = await supabaseAdmin
       .from("cotizaciones")
       .select(`
@@ -59,6 +62,7 @@ export async function GET(
         )
       `)
       .eq("public_token", token)
+      .not("public_token", "is", null)
       .is("deleted_at", null)
       .single()
 

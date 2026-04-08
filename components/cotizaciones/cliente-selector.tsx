@@ -83,9 +83,26 @@ export function ClienteSelector({ value, onChange, disabled }: ClienteSelectorPr
     onChange(null, null)
   }
 
-  const handleClienteCreated = async () => {
+  const handleClienteCreated = async (
+    cliente?: Cliente,
+    opts?: { queuedOffline?: boolean }
+  ) => {
     setShowCreateForm(false)
-    // Re-search to find the newly created client
+    if (cliente && cliente.id) {
+      // Auto-select the newly created client
+      setSelected(cliente)
+      setSearch(cliente.nombre)
+      setResults([])
+      setOpen(false)
+      onChange(cliente.id, cliente)
+      return
+    }
+    if (opts?.queuedOffline) {
+      // El cliente quedó encolado offline: no hay id real todavía, no se puede
+      // asignar al formulario actual. El ClienteForm ya mostró el aviso.
+      return
+    }
+    // Fallback defensivo: si no llegó el cliente y no fue offline, refrescar la búsqueda.
     if (search.length >= 2) {
       await doSearch(search)
       setOpen(true)

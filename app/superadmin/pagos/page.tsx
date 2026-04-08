@@ -14,6 +14,8 @@ import { useSuperadminFetch } from "@/hooks/use-superadmin-fetch"
 import { useLastUpdated } from "@/hooks/use-last-updated"
 import { LastUpdated } from "@/components/superadmin/last-updated"
 import type { PaymentWithOrg } from "@/types/superadmin"
+import { ReconcileMpCard } from "./_components/reconcile-mp-card"
+import { WebhookEventsCard } from "./_components/webhook-events-card"
 
 const PAGE_SIZE = 20
 
@@ -235,6 +237,14 @@ export default function PagosPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Herramientas de diagnóstico/reconciliación.
+          Aparecen siempre arriba para que el operador pueda actuar
+          rápido cuando un pago real no impactó. */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <ReconcileMpCard onReconciled={fetchPayments} />
+        <WebhookEventsCard />
+      </div>
 
       <Card>
         <CardHeader>

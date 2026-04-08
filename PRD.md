@@ -338,7 +338,7 @@ Organization (Multi-tenant)
 | Next.js API Routes | Endpoints REST |
 | Supabase | PostgreSQL + Storage + RLS |
 | NextAuth.js v5 | Autenticación |
-| Inngest | Background jobs y cron |
+| Vercel Cron | Tareas programadas |
 | bcryptjs | Hash de contraseñas |
 | Resend | Servicio de emails |
 | Zod | Validación de datos |
@@ -464,10 +464,6 @@ NEXTAUTH_URL=           # URL de la aplicación
 RESEND_API_KEY=         # API key de Resend
 RESEND_DOMAIN=          # Dominio verificado en Resend
 
-# Background Jobs
-INNGEST_EVENT_KEY=      # Inngest event key
-INNGEST_SIGNING_KEY=    # Inngest signing key
-
 # Cron
 CRON_SECRET=            # Token para autenticar cron jobs
 
@@ -528,25 +524,13 @@ CREATE POLICY tenant_isolation ON ordenes_servicio
 
 ### 13.2 Jobs en Background (Implementado)
 
-Cola asíncrona con Inngest:
-
-```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   API       │────▶│   Inngest   │────▶│   Function  │
-│  (Next.js)  │     │   (Queue)   │     │  (Handler)  │
-└─────────────┘     └─────────────┘     └─────────────┘
-                                              │
-                                    ┌─────────┴─────────┐
-                                    │                   │
-                              ┌─────▼─────┐      ┌─────▼─────┐
-                              │  Resend   │      │   Cron    │
-                              │  (Email)  │      │  (Daily)  │
-                              └───────────┘      └───────────┘
-```
+Las notificaciones se envían directamente desde las API routes vía
+`queueNotification` (fire-and-forget). Las tareas programadas corren con
+**Vercel Cron** sobre `app/api/cron/*`.
 
 **Jobs implementados:**
-- Envío de emails (notificaciones, cotizaciones)
-- Cron de recordatorios diarios
+- Envío de emails (notificaciones, cotizaciones) — directo
+- Recordatorios diarios y mantenimiento — Vercel Cron
 
 ### 13.3 Almacenamiento de Archivos (Implementado)
 
@@ -615,13 +599,10 @@ lib/
 ├── storage.ts      # Upload/download de archivos
 ├── counters.ts     # Contadores atómicos
 ├── audit.ts        # Sistema de auditoría
-├── notifications/  # Sistema de notificaciones
-│   ├── index.ts    # NotificationService
-│   ├── types.ts    # Tipos
-│   └── templates/  # Templates de email/WhatsApp
-└── inngest/        # Background jobs
-    ├── client.ts   # Cliente Inngest
-    └── functions/  # Funciones de background
+└── notifications/  # Sistema de notificaciones
+    ├── queue.ts        # queueNotification (fire-and-forget)
+    ├── send-direct.ts  # Envío directo (email/WhatsApp/in-app)
+    └── templates/      # Templates de email/WhatsApp
 ```
 
 ---
@@ -632,7 +613,7 @@ lib/
 - [x] Migrar a PostgreSQL en producción (Supabase)
 - [x] Implementar RLS (Row Level Security)
 - [x] Migrar fotos/logos a Object Storage (Supabase Storage)
-- [x] Implementar cola de jobs (Inngest)
+- [x] Tareas programadas (Vercel Cron)
 - [x] Agregar índices compuestos para performance
 - [x] Implementar contadores por organización
 - [x] Agregar auditoría básica (AuditLog)

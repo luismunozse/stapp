@@ -1,49 +1,117 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { verifyWebhookSignature } from "@/lib/mercadopago"
+import { beginWebhookEvent, finishWebhookEvent } from "@/lib/webhook-log"
 
 export async function POST(request: NextRequest) {
+  // Capturamos el body como texto primero para poder parsearlo y loguearlo
+  // aunque venga roto. Si MP nos manda algo no-JSON queremos saberlo.
+  let bodyText = ""
+  let body: any = null
   try {
-    const body = await request.json()
-    const xSignature = request.headers.get("x-signature")
-    const xRequestId = request.headers.get("x-request-id")
+    bodyText = await request.text()
+    body = bodyText ? JSON.parse(bodyText) : {}
+  } catch (parseErr) {
+    console.error("[mp-webhook] body no es JSON válido:", bodyText.slice(0, 200))
+    // Logueamos igual el intento
+    const log = await beginWebhookEvent({
+      provider: "MERCADOPAGO",
+      payload: { raw: bodyText.slice(0, 1000) },
+      headers: collectHeaders(request),
+    })
+    await finishWebhookEvent(log, {
+      status: "ERROR",
+      httpStatus: 400,
+      errorMessage: "invalid_json_body",
+    })
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
+  }
 
-    // Verificar firma (en producción)
-    if (process.env.NODE_ENV === "production") {
-      const isValid = verifyWebhookSignature(
-        xSignature,
-        xRequestId,
-        body.data?.id || ""
-      )
+  const xSignature = request.headers.get("x-signature")
+  const xRequestId = request.headers.get("x-request-id")
 
-      if (!isValid) {
-        console.error("Invalid MercadoPago webhook signature")
-        return NextResponse.json({ error: "Invalid signature" }, { status: 401 })
-      }
-    }
+  // MP firma usando data.id del query string. Body como fallback.
+  const url = new URL(request.url)
+  const dataIdFromQuery =
+    url.searchParams.get("data.id") ||
+    url.searchParams.get("id") ||
+    null
+  const dataIdFromBody =
+    body?.data?.id != null ? String(body.data.id) : null
+  const dataIdForSig = dataIdFromQuery || dataIdFromBody
 
+  // Verificación de firma. En desarrollo (sin secret) se acepta con
+  // bypassedNoSecret=true. Antes esto se silenciaba con `return true`,
+  // ahora dejamos rastro en webhook_events para diagnosticar después.
+  const sigCheck = verifyWebhookSignature(xSignature, xRequestId, dataIdForSig)
+
+  // Iniciar registro del evento ANTES de cualquier procesamiento o rechazo,
+  // para que cualquier intento (incluso uno con firma inválida) quede auditado.
+  const log = await beginWebhookEvent({
+    provider: "MERCADOPAGO",
+    eventType: body?.type ?? null,
+    providerEventId: dataIdForSig,
+    providerRequestId: xRequestId,
+    payload: body,
+    headers: collectHeaders(request),
+    signatureValid: sigCheck.valid,
+  })
+
+  // En producción exigimos firma válida. En dev (sin secret) se acepta.
+  if (!sigCheck.valid) {
+    console.error(
+      `[mp-webhook] Firma inválida (${sigCheck.reason}) para data.id=${dataIdForSig}`
+    )
+    await finishWebhookEvent(log, {
+      status: "INVALID_SIGNATURE",
+      httpStatus: 401,
+      errorMessage: `signature_${sigCheck.reason}`,
+    })
+    return NextResponse.json(
+      { error: "Invalid signature", reason: sigCheck.reason },
+      { status: 401 }
+    )
+  }
+
+  try {
     const { type, data } = body
+
+    let result: HandleResult = { status: "SKIPPED", reason: "unknown_event_type" }
 
     switch (type) {
       case "payment":
-        await handlePaymentNotification(data.id)
+        result = await handlePaymentNotification(String(data?.id || ""))
         break
 
       case "subscription_preapproval":
-        await handlePreApprovalNotification(data.id)
+        result = await handlePreApprovalNotification(String(data?.id || ""))
         break
 
       case "subscription_authorized_payment":
-        await handleAuthorizedPayment(data.id)
+        result = await handlePaymentNotification(String(data?.id || ""))
         break
 
       default:
-        console.log(`Unhandled MercadoPago event type: ${type}`)
+        console.log(`[mp-webhook] Unhandled event type: ${type}`)
+        result = { status: "SKIPPED", reason: `unhandled_event_${type}` }
     }
 
-    return NextResponse.json({ received: true })
+    await finishWebhookEvent(log, {
+      status: result.status === "PROCESSED" ? "PROCESSED" : "SKIPPED",
+      httpStatus: 200,
+      organizationId: result.organizationId ?? null,
+      subscriptionPaymentId: result.subscriptionPaymentId ?? null,
+      errorMessage: result.reason ?? null,
+    })
+
+    return NextResponse.json({ received: true, result })
   } catch (error) {
-    console.error("Error processing MercadoPago webhook:", error)
+    console.error("[mp-webhook] Error procesando webhook:", error)
+    await finishWebhookEvent(log, {
+      status: "ERROR",
+      httpStatus: 500,
+      error,
+    })
     return NextResponse.json(
       { error: "Webhook handler failed" },
       { status: 500 }
@@ -51,7 +119,44 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function handlePaymentNotification(paymentId: string) {
+function collectHeaders(req: NextRequest): Record<string, string> {
+  return {
+    "x-signature": req.headers.get("x-signature") || "",
+    "x-request-id": req.headers.get("x-request-id") || "",
+    "content-type": req.headers.get("content-type") || "",
+    "user-agent": req.headers.get("user-agent") || "",
+  }
+}
+
+// ============================================================
+// Handlers de eventos
+// ============================================================
+
+export interface HandleResult {
+  status: "PROCESSED" | "SKIPPED"
+  reason?: string
+  organizationId?: string | null
+  subscriptionPaymentId?: string | null
+}
+
+/**
+ * Procesa una notificación de pago de MercadoPago.
+ *
+ * Esta función está EXPORTADA porque también la usa el endpoint de
+ * reconciliación manual /api/superadmin/payments/reconcile-mp:
+ * cuando un pago real no impactó por la razón que sea, el superadmin
+ * pega el Payment ID y se vuelve a correr esta lógica con idempotencia.
+ *
+ * Idempotencia: si el (provider_payment_id, payment_provider) ya existe
+ * en subscription_payments, retornamos sin tocar la suscripción.
+ */
+export async function handlePaymentNotification(
+  paymentId: string
+): Promise<HandleResult> {
+  if (!paymentId) {
+    return { status: "SKIPPED", reason: "missing_payment_id" }
+  }
+
   // Obtener detalles del pago desde MercadoPago
   const response = await fetch(
     `https://api.mercadopago.com/v1/payments/${paymentId}`,
@@ -76,13 +181,13 @@ async function handlePaymentNotification(paymentId: string) {
     externalRef = JSON.parse(payment.external_reference || "{}")
   } catch {
     console.error(`[MP webhook] Invalid external_reference for payment ${paymentId}:`, payment.external_reference)
-    return
+    return { status: "SKIPPED", reason: "invalid_external_reference" }
   }
 
   const organizationId = externalRef.organization_id
   if (!organizationId) {
     console.error(`[MP webhook] No organization_id in external_reference for payment ${paymentId}`)
-    return
+    return { status: "SKIPPED", reason: "missing_organization_id" }
   }
 
   // Validar que la organización exista y esté activa
@@ -94,13 +199,21 @@ async function handlePaymentNotification(paymentId: string) {
 
   if (orgError || !org || org.activo === false) {
     console.error(`[MP webhook] Organization ${organizationId} not found or inactive (payment ${paymentId})`, orgError)
-    return
+    return {
+      status: "SKIPPED",
+      reason: "org_not_found_or_inactive",
+      organizationId,
+    }
   }
 
   // Solo procesar pagos aprobados
   if (payment.status !== "approved") {
     console.log(`[MP webhook] Payment ${paymentId} status: ${payment.status} - ignorando`)
-    return
+    return {
+      status: "SKIPPED",
+      reason: `payment_status_${payment.status}`,
+      organizationId,
+    }
   }
 
   // Idempotencia: si ya registramos este pago, salir temprano (MP reintenta múltiples veces)
@@ -113,7 +226,12 @@ async function handlePaymentNotification(paymentId: string) {
 
   if (existingPayment) {
     console.log(`[MP webhook] Payment ${paymentId} ya registrado (id=${existingPayment.id}) - skip`)
-    return
+    return {
+      status: "SKIPPED",
+      reason: "already_processed",
+      organizationId,
+      subscriptionPaymentId: existingPayment.id,
+    }
   }
 
   // Obtener plan Premium
@@ -135,7 +253,7 @@ async function handlePaymentNotification(paymentId: string) {
 
   const { data: existingSub } = await supabaseAdmin
     .from("subscriptions")
-    .select("id, status, current_period_end")
+    .select("id, status, current_period_end, payment_provider")
     .eq("organization_id", organizationId)
     .maybeSingle()
 
@@ -194,7 +312,7 @@ async function handlePaymentNotification(paymentId: string) {
   const paidAtIso = isNaN(paidAt.getTime()) ? new Date().toISOString() : paidAt.toISOString()
 
   // Registrar pago - chequeando errores
-  const { error: payInsertError } = await supabaseAdmin
+  const { data: insertedPayment, error: payInsertError } = await supabaseAdmin
     .from("subscription_payments")
     .insert({
       subscription_id: subscription.id,
@@ -206,6 +324,8 @@ async function handlePaymentNotification(paymentId: string) {
       status: "SUCCEEDED",
       paid_at: paidAtIso,
     })
+    .select("id")
+    .single()
 
   if (payInsertError) {
     console.error(`[MP webhook] Error inserting subscription_payment for org ${organizationId} (payment ${paymentId}):`, payInsertError)
@@ -213,10 +333,21 @@ async function handlePaymentNotification(paymentId: string) {
   }
 
   console.log(`[MP webhook] MercadoPago payment ${paymentId} processed for org ${organizationId}`)
+
+  return {
+    status: "PROCESSED",
+    organizationId,
+    subscriptionPaymentId: insertedPayment?.id ?? null,
+  }
 }
 
-async function handlePreApprovalNotification(preApprovalId: string) {
-  // Obtener detalles de la suscripción
+async function handlePreApprovalNotification(
+  preApprovalId: string
+): Promise<HandleResult> {
+  if (!preApprovalId) {
+    return { status: "SKIPPED", reason: "missing_preapproval_id" }
+  }
+
   const response = await fetch(
     `https://api.mercadopago.com/preapproval/${preApprovalId}`,
     {
@@ -227,23 +358,22 @@ async function handlePreApprovalNotification(preApprovalId: string) {
   )
 
   if (!response.ok) {
-    console.error("Error fetching preapproval:", await response.text())
-    return
+    console.error("[MP webhook] Error fetching preapproval:", await response.text())
+    return { status: "SKIPPED", reason: "preapproval_fetch_error" }
   }
 
   const preApproval = await response.json()
 
-  let externalRef
+  let externalRef: { organization_id?: string }
   try {
     externalRef = JSON.parse(preApproval.external_reference || "{}")
   } catch {
-    return
+    return { status: "SKIPPED", reason: "invalid_external_reference" }
   }
 
   const organizationId = externalRef.organization_id
-  if (!organizationId) return
+  if (!organizationId) return { status: "SKIPPED", reason: "missing_organization_id" }
 
-  // Mapear estado
   const statusMap: Record<string, "ACTIVE" | "CANCELED" | "PAST_DUE"> = {
     authorized: "ACTIVE",
     paused: "PAST_DUE",
@@ -260,12 +390,8 @@ async function handlePreApprovalNotification(preApprovalId: string) {
     })
     .eq("organization_id", organizationId)
 
-  console.log(`PreApproval ${preApprovalId} updated to ${status}`)
-}
-
-async function handleAuthorizedPayment(paymentId: string) {
-  // Manejar pagos automáticos de suscripción
-  await handlePaymentNotification(paymentId)
+  console.log(`[MP webhook] PreApproval ${preApprovalId} updated to ${status}`)
+  return { status: "PROCESSED", organizationId }
 }
 
 // GET para verificación de webhook (algunos proveedores lo requieren)

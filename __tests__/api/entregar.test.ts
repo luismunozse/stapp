@@ -15,7 +15,7 @@ vi.mock("@/lib/audit", () => ({
   diffObjects: vi.fn().mockReturnValue({ before: {}, after: {} }),
 }))
 
-vi.mock("@/lib/inngest", () => ({
+vi.mock("@/lib/notifications/queue", () => ({
   queueNotification: vi.fn().mockResolvedValue(undefined),
 }))
 

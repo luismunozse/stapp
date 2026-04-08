@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger, diffObjects } from "@/lib/audit"
-import { queueNotification } from "@/lib/inngest"
+import { queueNotification } from "@/lib/notifications/queue"
 import { z } from "zod"
 
 const entregarSchema = z.object({

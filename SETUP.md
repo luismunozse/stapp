@@ -134,9 +134,8 @@ npm run dev
 - URLs públicas con políticas de acceso
 
 ### Background Jobs
-- **Inngest** para procesamiento asíncrono
-- Envío de emails en background
-- Cron jobs para recordatorios
+- Notificaciones directas vía `queueNotification` (fire-and-forget)
+- **Vercel Cron** para tareas programadas (recordatorios, mantenimiento)
 
 ## Características PWA
 

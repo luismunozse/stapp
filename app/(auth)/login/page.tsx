@@ -64,6 +64,7 @@ function LoginForm() {
   // Estado para 2FA
   const [requires2FA, setRequires2FA] = useState(false)
   const [pending2FAUserId, setPending2FAUserId] = useState<string | null>(null)
+  const [twoFAError, setTwoFAError] = useState("")
 
   // Estado para tenant/subdominio
   const [tenantSlug, setTenantSlug] = useState<string | null>(null)
@@ -178,27 +179,41 @@ function LoginForm() {
     }
   }
 
-  // Callback cuando 2FA es verificado exitosamente
-  const handle2FAVerified = async () => {
+  // Callback cuando el usuario envió el código 2FA.
+  // La validación REAL del código corre server-side dentro de authorize()
+  // (ver lib/auth.ts → verifyUserTotpCode). Si el server rechaza el código,
+  // signIn devuelve `error: "INVALID_2FA_CODE"` y mostramos el error en el
+  // modal para que el usuario reintente sin perder el contexto.
+  const handle2FAVerified = async (totpCode: string) => {
     setLoading(true)
-    setRequires2FA(false)
-    setPending2FAUserId(null)
+    setTwoFAError("")
 
     try {
-      // Re-intentar login con skip2FA para completar la sesion
       const result = await signIn("credentials", {
         email,
         password,
         rememberMe: rememberMe.toString(),
-        skip2FA: "true",
+        totpCode,
         redirect: false,
       })
 
       if (result?.error) {
+        if (result.error.includes("INVALID_2FA_CODE")) {
+          // Mantener el modal abierto y mostrar error
+          setTwoFAError("Código inválido. Verificá e intentá de nuevo.")
+          setLoading(false)
+          return
+        }
         setError("Error al completar la sesion")
+        setRequires2FA(false)
+        setPending2FAUserId(null)
         setLoading(false)
         return
       }
+
+      // Login exitoso, limpiar estado de 2FA
+      setRequires2FA(false)
+      setPending2FAUserId(null)
 
       // Continuar con la logica normal post-login
       if (tenantSlug) {
@@ -337,12 +352,14 @@ function LoginForm() {
           <ThemeToggle variant="icon" />
         </div>
         <TwoFactorVerify
-          userId={pending2FAUserId}
+          userId={pending2FAUserId ?? undefined}
           onVerified={handle2FAVerified}
+          externalError={twoFAError}
           onCancel={() => {
             setRequires2FA(false)
             setPending2FAUserId(null)
             setError("")
+            setTwoFAError("")
           }}
         />
       </div>

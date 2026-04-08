@@ -58,7 +58,7 @@ describe("rate-limit", () => {
     })
 
     it("retorna límites altos para webhooks", () => {
-      const config = getApiRateLimit("/api/inngest")
+      const config = getApiRateLimit("/api/cron")
       expect(config.max).toBe(1000)
     })
 
@@ -69,8 +69,8 @@ describe("rate-limit", () => {
   })
 
   describe("isExemptFromRateLimit()", () => {
-    it("exime webhooks de Inngest", () => {
-      expect(isExemptFromRateLimit("/api/inngest")).toBe(true)
+    it("exime webhooks de cron", () => {
+      expect(isExemptFromRateLimit("/api/cron")).toBe(true)
     })
 
     it("exime sesión de auth", () => {
