@@ -227,12 +227,17 @@ export default async function DashboardPage() {
   const isTecnico = userRole === "TECNICO"
 
   // Obtener la última versión vista por el usuario (sin caché, es por usuario)
+  // También leemos `nombre` directo de la BD en vez de confiar en session.user.name,
+  // porque el JWT cookie no siempre se refresca después de un cambio de nombre
+  // (NextAuth v5 beta + auto-refresh path no actualiza name) y queremos que el
+  // "Bienvenido, X" del dashboard refleje siempre el nombre actual.
   const { data: userData } = await supabaseAdmin
     .from("users")
-    .select("last_seen_version")
+    .select("last_seen_version, nombre")
     .eq("id", session.user.id)
     .single()
   const lastSeenVersion: string | null = userData?.last_seen_version ?? null
+  const currentUserName: string = userData?.nombre || session.user?.name || "Usuario"
 
   // Obtener moneda de la organización y estado de onboarding
   const { data: orgData } = await supabaseAdmin
@@ -691,7 +696,7 @@ export default async function DashboardPage() {
       <div>
         <h1 className="text-headline">Dashboard</h1>
         <p className="text-muted-foreground">
-          Bienvenido, {session.user?.name || "Usuario"}
+          Bienvenido, {currentUserName}
         </p>
       </div>
 

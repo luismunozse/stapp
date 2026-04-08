@@ -101,18 +101,20 @@ export default function PerfilPage() {
     }
   }
 
-  const handleNameUpdated = async () => {
-    // 1. Refrescar el JWT del cliente para que useSession() devuelva el
-    //    nombre nuevo en componentes client-side (navbar, avatar, etc.).
-    await update()
-    // 2. Releer el perfil de la BD sin cache para refrescar el form.
+  const handleNameUpdated = async (newName?: string) => {
+    // 1. Releer el perfil de la BD sin cache (es la fuente de verdad).
     const res = await fetch("/api/users/profile", { cache: "no-store" })
     const data = await res.json()
     setProfile(data)
-    // 3. Invalidar el Router Cache de Next para que TODOS los Server
-    //    Components (dashboard "Bienvenido X", PDFs, etc.) se re-rendericen
-    //    con el JWT nuevo en la próxima navegación. Sin esto, Next sirve
-    //    la versión RSC cacheada de visitas anteriores con el nombre viejo.
+
+    // 2. Refrescar el JWT del cliente pasando EXPLÍCITAMENTE el nombre nuevo.
+    //    Sin pasar data, NextAuth v5 beta a veces no re-firma el cookie.
+    //    Pasando data, el JWT callback recibe `session = { name }` y actualiza
+    //    token.name de forma confiable, sin depender de read-after-write a la BD.
+    await update({ name: newName ?? data.nombre })
+
+    // 3. Invalidar el Router Cache de Next para que los Server Components
+    //    (dashboard, etc.) se re-rendericen con el cookie actualizado.
     router.refresh()
   }
 

@@ -14,7 +14,7 @@ interface PersonalInfoProps {
   initialName: string
   email: string
   role: string
-  onNameUpdated: () => void
+  onNameUpdated: (newName: string) => void
 }
 
 export function PersonalInfo({ initialName, email, role, onNameUpdated }: PersonalInfoProps) {
@@ -45,7 +45,10 @@ export function PersonalInfo({ initialName, email, role, onNameUpdated }: Person
       }
 
       toast.success("Nombre actualizado")
-      onNameUpdated()
+      // Pasamos el nombre nuevo al padre para que pueda usarlo
+      // explícitamente al llamar update() de NextAuth (más confiable que
+      // depender del refetch de la sesión sin args).
+      onNameUpdated(nombre.trim())
       // Invalidar el router cache para que los Server Components que leen
       // session.user.name (ej. dashboard "Bienvenido, X") se re-rendericen
       // con el nombre nuevo en la próxima navegación. Sin esto, Next.js

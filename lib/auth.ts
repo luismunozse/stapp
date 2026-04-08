@@ -400,7 +400,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
   callbacks: {
-    jwt: async ({ token, user, trigger }) => {
+    jwt: async ({ token, user, trigger, session }) => {
       // Login inicial
       if (user && user.id) {
         token.role = user.role
@@ -416,17 +416,37 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         return token
       }
 
-      // Refrescar datos del usuario cuando se llama update() desde el cliente
+      // Refrescar datos del usuario cuando se llama update() desde el cliente.
+      // Soportamos dos formas:
+      //   1. update({ name, avatar }) — usa los datos pasados directamente.
+      //      Esto evita una ida a la BD y es más confiable porque no depende
+      //      de que el cliente y el server vean el mismo estado de la BD en
+      //      el mismo instante (read-after-write).
+      //   2. update() sin args — refetch desde la BD como fallback.
       if (trigger === "update" && token.id) {
-        const { data: freshUser } = await supabaseAdmin
-          .from("users")
-          .select("nombre, avatar_url")
-          .eq("id", token.id as string)
-          .single()
+        const sessionData = session as { name?: string; avatar?: string | null } | undefined
 
-        if (freshUser) {
-          token.name = freshUser.nombre
-          token.avatar = freshUser.avatar_url || null
+        if (sessionData?.name) {
+          token.name = sessionData.name
+        }
+        if (sessionData && "avatar" in sessionData) {
+          token.avatar = sessionData.avatar ?? null
+        }
+
+        // Si no vino data explícita (o vino incompleta), refetch desde BD
+        if (!sessionData?.name) {
+          const { data: freshUser } = await supabaseAdmin
+            .from("users")
+            .select("nombre, avatar_url")
+            .eq("id", token.id as string)
+            .single()
+
+          if (freshUser) {
+            token.name = freshUser.nombre
+            if (!sessionData || !("avatar" in sessionData)) {
+              token.avatar = freshUser.avatar_url || null
+            }
+          }
         }
         return token
       }
@@ -446,6 +466,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           // Extender el JWT sin rotar el refresh token
           token.exp = Math.floor(Date.now() / 1000) + ONE_DAY
           token.iat = Math.floor(Date.now() / 1000)
+
+          // Aprovechar el refresh para sincronizar nombre y avatar desde la BD.
+          // Esto cubre el caso en que el usuario actualizó su perfil pero el
+          // trigger "update" de useSession() no llegó a re-firmar el cookie:
+          // el JWT termina sincronizándose solo dentro de las próximas 6 horas
+          // sin requerir re-login.
+          token.name = (validUser as { nombre?: string }).nombre || token.name
 
           console.log(`[Auth] JWT extended for user ${validUser.id}`)
         } else {
