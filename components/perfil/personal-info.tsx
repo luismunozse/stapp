@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -17,6 +18,7 @@ interface PersonalInfoProps {
 }
 
 export function PersonalInfo({ initialName, email, role, onNameUpdated }: PersonalInfoProps) {
+  const router = useRouter()
   const [nombre, setNombre] = useState(initialName)
   const [saving, setSaving] = useState(false)
 
@@ -44,6 +46,11 @@ export function PersonalInfo({ initialName, email, role, onNameUpdated }: Person
 
       toast.success("Nombre actualizado")
       onNameUpdated()
+      // Invalidar el router cache para que los Server Components que leen
+      // session.user.name (ej. dashboard "Bienvenido, X") se re-rendericen
+      // con el nombre nuevo en la próxima navegación. Sin esto, Next.js
+      // sirve el RSC cacheado de la visita anterior con el nombre viejo.
+      router.refresh()
     } catch {
       toast.error("Error al actualizar")
     } finally {

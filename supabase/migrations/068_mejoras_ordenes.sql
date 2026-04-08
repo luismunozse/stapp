@@ -140,13 +140,16 @@ RETURNS TRIGGER AS $$
 BEGIN
   -- Cerrar el tiempo del estado anterior
   IF OLD.estado IS DISTINCT FROM NEW.estado THEN
+    -- Cast explícito a text: orden_tiempos_estado.estado es TEXT mientras
+    -- ordenes_servicio.estado es el enum estado_orden, y Postgres no tiene
+    -- cast implícito entre ambos en operadores de comparación.
     UPDATE orden_tiempos_estado
     SET fin = NOW()
-    WHERE orden_id = NEW.id AND estado = OLD.estado AND fin IS NULL;
+    WHERE orden_id = NEW.id AND estado = OLD.estado::text AND fin IS NULL;
 
     -- Abrir nuevo registro de tiempo para el nuevo estado
     INSERT INTO orden_tiempos_estado (orden_id, organization_id, estado, inicio)
-    VALUES (NEW.id, NEW.organization_id, NEW.estado, NOW());
+    VALUES (NEW.id, NEW.organization_id, NEW.estado::text, NOW());
 
     -- Si el nuevo estado es ENTREGADO, expirar el token público en 30 días
     IF NEW.estado = 'ENTREGADO' THEN
@@ -168,8 +171,11 @@ CREATE TRIGGER trg_orden_cambio_estado_tiempo
   EXECUTE FUNCTION registrar_cambio_estado_tiempo();
 
 -- Backfill: crear registro inicial para órdenes existentes que no están en estado terminal
+-- Usa fecha_ingreso (siempre seteada por DEFAULT NOW() en 001_schema.sql) — la tabla
+-- ordenes_servicio no tiene columna created_at.
 INSERT INTO orden_tiempos_estado (orden_id, organization_id, estado, inicio)
-SELECT id, organization_id, estado, COALESCE(fecha_ingreso, created_at)
+SELECT id, organization_id, estado, fecha_ingreso
 FROM ordenes_servicio
 WHERE estado NOT IN ('ENTREGADO', 'CANCELADO', 'SIN_REPARACION')
+  AND fecha_ingreso IS NOT NULL
 ON CONFLICT DO NOTHING;
