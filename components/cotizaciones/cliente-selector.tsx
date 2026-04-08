@@ -87,6 +87,7 @@ export function ClienteSelector({ value, onChange, disabled }: ClienteSelectorPr
     cliente?: Cliente,
     opts?: { queuedOffline?: boolean }
   ) => {
+    console.log("[ClienteSelector] handleClienteCreated called", { cliente, opts })
     setShowCreateForm(false)
     if (cliente && cliente.id) {
       // Auto-select the newly created client
