@@ -207,6 +207,12 @@ export function ClienteSelector({ value, onChange, disabled }: ClienteSelectorPr
           )}
         </div>
       )}
+
+      <ClienteForm
+        open={showCreateForm}
+        onClose={() => setShowCreateForm(false)}
+        onSuccess={handleClienteCreated}
+      />
     </div>
   )
 }
