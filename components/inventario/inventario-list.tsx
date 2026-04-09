@@ -23,6 +23,9 @@ import {
   LayoutList,
 } from "lucide-react"
 import { InventarioForm } from "./inventario-form"
+import { InventarioStats } from "./inventario-stats"
+import { InventarioBulkBar } from "./inventario-bulk-bar"
+import { QuickStockAdjust } from "./quick-stock-adjust"
 import { MovimientosHistorial } from "./movimientos-historial"
 import { ImportModal } from "@/components/import/import-modal"
 import { ExportButton } from "@/components/export/export-button"
@@ -72,13 +75,51 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   const [editingItem, setEditingItem] = useState<Inventario | null>(null)
   const [movimientosItem, setMovimientosItem] = useState<{ id: string; nombre: string } | null>(null)
   const [includeArchived, setIncludeArchived] = useState(false)
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
+  // Default a "list": es la vista que escala con catálogos grandes.
+  // La preferencia se persiste en localStorage.
+  const [viewMode, setViewMode] = useState<"grid" | "list">("list")
+
+  // Hidratar preferencia desde localStorage
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const saved = localStorage.getItem("inventario-view-mode")
+    if (saved === "grid" || saved === "list") setViewMode(saved)
+  }, [])
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("inventario-view-mode", viewMode)
+    }
+  }, [viewMode])
 
   // Pagination
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [umbralStockBajo, setUmbralStockBajo] = useState(5)
   const [refreshKey, setRefreshKey] = useState(0)
+
+  // Sorting (controlado por DataTable)
+  const [sortBy, setSortBy] = useState<string>("nombre")
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
+
+  const handleSort = useCallback((key: string) => {
+    setSortBy((prev) => {
+      if (prev === key) {
+        setSortOrder((dir) => (dir === "asc" ? "desc" : "asc"))
+        return prev
+      }
+      setSortOrder("asc")
+      return key
+    })
+    setPage(1)
+  }, [])
+
+  // Selección masiva (bulk actions)
+  const [selectedKeys, setSelectedKeys] = useState<string[]>([])
+
+  // Limpiar selección si cambian filtros o página (los ids ya no están visibles)
+  useEffect(() => {
+    setSelectedKeys([])
+  }, [debouncedSearch, categoria, tipoDispositivo, bajoStock, includeArchived, page, sortBy, sortOrder])
 
   // Fetch configurable stock threshold
   useEffect(() => {
@@ -132,9 +173,11 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
     if (includeArchived) params.append("includeArchived", "true")
     params.append("page", page.toString())
     params.append("limit", pageSize.toString())
+    params.append("sortBy", sortBy)
+    params.append("sortOrder", sortOrder)
     params.append("_r", refreshKey.toString())
     return `/api/inventario?${params.toString()}`
-  }, [debouncedSearch, categoria, tipoDispositivo, bajoStock, includeArchived, page, pageSize, refreshKey])
+  }, [debouncedSearch, categoria, tipoDispositivo, bajoStock, includeArchived, page, pageSize, sortBy, sortOrder, refreshKey])
 
   // SWR for fetching with cache
   const { data, isLoading } = useSWR(apiUrl, fetcher, {
@@ -172,6 +215,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
     {
       key: "nombre",
       header: "Producto",
+      sortable: true,
       render: (item) => (
         <div>
           <div className="font-medium text-sm">{item.nombre}</div>
@@ -197,18 +241,30 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
     {
       key: "stock",
       header: "Stock",
+      sortable: true,
       className: "text-center",
       headerClassName: "text-center",
       render: (item) => {
         const itemThreshold = item.stockMinimo ?? umbralStockBajo
         const esStockBajo = item.stock <= itemThreshold
         const sinStock = item.stock === 0
+        if (item.deletedAt) {
+          // Items archivados: solo mostrar el número, sin popover de ajuste
+          return (
+            <div className="flex items-center justify-center gap-1">
+              <span className="font-bold">{item.stock}</span>
+            </div>
+          )
+        }
         return (
-          <div className="flex items-center justify-center gap-1">
-            <span className={`font-bold ${sinStock ? "text-destructive" : esStockBajo ? "text-amber-600" : ""}`}>
-              {item.stock}
-            </span>
-            {esStockBajo && <AlertCircle className="h-3 w-3 text-amber-600" />}
+          <div className="flex items-center justify-center">
+            <QuickStockAdjust
+              itemId={item.id}
+              currentStock={item.stock}
+              esStockBajo={esStockBajo}
+              sinStock={sinStock}
+              onAdjusted={() => setRefreshKey((k) => k + 1)}
+            />
           </div>
         )
       },
@@ -216,6 +272,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
     {
       key: "precioCompra",
       header: "Costo",
+      sortable: true,
       hideOnMobile: true,
       className: "text-right",
       headerClassName: "text-right",
@@ -224,6 +281,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
     {
       key: "precioVenta",
       header: "Venta",
+      sortable: true,
       className: "text-right",
       headerClassName: "text-right",
       render: (item) => <span className="font-medium">{formatPrice(item.precioVenta)}</span>,
@@ -286,6 +344,11 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
 
   return (
     <div className="space-y-4">
+      <InventarioStats
+        refreshKey={refreshKey}
+        onFilterSinStock={() => { setBajoStock(true); setPage(1) }}
+        onFilterBajoStock={() => { setBajoStock(true); setPage(1) }}
+      />
       <div className="flex flex-col gap-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
           <div className="relative sm:col-span-2 lg:col-span-2">
@@ -428,6 +491,16 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
         />
       )}
 
+      {selectedKeys.length > 0 && viewMode === "list" && (
+        <InventarioBulkBar
+          selectedCount={selectedKeys.length}
+          selectedIds={selectedKeys}
+          categoriasDisponibles={categoriasDisponibles}
+          onClear={() => setSelectedKeys([])}
+          onSuccess={() => setRefreshKey((k) => k + 1)}
+        />
+      )}
+
       {isLoading ? (
         <div className="text-center py-8">Cargando...</div>
       ) : items.length === 0 ? (
@@ -443,6 +516,12 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
               data={items}
               columns={listColumns}
               keyExtractor={(item) => item.id}
+              sortKey={sortBy}
+              sortDirection={sortOrder}
+              onSort={handleSort}
+              selectable
+              selectedKeys={selectedKeys}
+              onSelectionChange={setSelectedKeys}
               rowClassName={(item) => {
                 const isArchived = !!item.deletedAt
                 const sinStock = item.stock === 0

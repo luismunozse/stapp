@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
+import { TIPOS_BASE_CONFIG, DEFAULT_TIPO_CONFIG } from "@/lib/tipos-dispositivo-defaults"
 
 const tipoDispositivoSchema = z.object({
   codigo: z
@@ -22,29 +23,7 @@ const tipoDispositivoSchema = z.object({
   config: z.any().optional(),
 })
 
-const DEFAULT_CONFIG = {
-  campos: {
-    imei: { visible: true, label: "Número de Serie", placeholder: "S/N del equipo" },
-    password: { visible: false },
-    color: { visible: true },
-    marca: { visible: true },
-  },
-  camposExtra: [],
-  accesorios: [
-    { id: "cable_poder", label: "Cable de poder" },
-    { id: "cargador", label: "Cargador/Fuente" },
-    { id: "cable_datos", label: "Cable de datos" },
-    { id: "control_remoto", label: "Control remoto" },
-    { id: "manual", label: "Manual" },
-    { id: "caja_original", label: "Caja original" },
-  ],
-  problemasComunes: [
-    "No enciende", "No funciona correctamente", "Hace ruido extraño",
-    "Se apaga solo", "Error en pantalla/display", "No conecta a red/WiFi",
-    "Mantenimiento preventivo", "Revisión general",
-  ],
-  marcas: [],
-}
+const DEFAULT_CONFIG = DEFAULT_TIPO_CONFIG
 
 function formatTipoDispositivo(tipo: any) {
   return {
@@ -68,6 +47,7 @@ const TIPOS_BASE = [
   { codigo: "CONSOLA", nombre: "Consola", prefijo_orden: "CONS", orden: 4 },
   { codigo: "SMARTWATCH", nombre: "Smartwatch", prefijo_orden: "SW", orden: 5 },
   { codigo: "ACCESORIOS", nombre: "Accesorios", prefijo_orden: "ACC", orden: 6 },
+  { codigo: "IMPRESORA", nombre: "Impresora", prefijo_orden: "IMP", orden: 7 },
   { codigo: "TODOS", nombre: "Todos los dispositivos", prefijo_orden: "ORD", orden: 99 },
 ]
 
@@ -80,7 +60,7 @@ async function ensureTiposExist(organizationId: string) {
 
   if (count && count > 0) return
 
-  // No tiene tipos, crear los base
+  // No tiene tipos, crear los base con su config preestablecida
   const rows = TIPOS_BASE.map((t) => ({
     organization_id: organizationId,
     codigo: t.codigo,
@@ -88,6 +68,7 @@ async function ensureTiposExist(organizationId: string) {
     prefijo_orden: t.prefijo_orden,
     es_base: true,
     orden: t.orden,
+    config: TIPOS_BASE_CONFIG[t.codigo] ?? DEFAULT_TIPO_CONFIG,
   }))
 
   await supabaseAdmin
