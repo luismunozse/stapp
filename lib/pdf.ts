@@ -726,10 +726,10 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   // Header height fijo al texto — el logo se desborda hacia arriba sin empujar contenido
   const headerH = headerTextH
 
-  // Draw logo centered, vertically centered in header
+  // Draw logo centered, shifted up so it overflows into top margin instead of overlapping text
   if (embeddedLogo) {
     const logoX = (width - logoSW) / 2
-    const logoY = y - (headerH / 2) - (logoSH / 2)
+    const logoY = y - (headerH / 2) - (logoSH / 2) + 12
     page.drawImage(embeddedLogo, { x: logoX, y: logoY, width: logoSW, height: logoSH })
   }
 
