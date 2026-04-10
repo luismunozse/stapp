@@ -685,31 +685,37 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
 
   let y = height - margin + 6
 
-  // === HEADER: Logo centrado, datos escalonados abajo ===
+  // === HEADER: Logo centrado superpuesto, datos a los lados ===
+  // El logo ocupa el centro, los datos de empresa van a la izquierda
+  // y la orden a la derecha, compartiendo las mismas líneas verticales.
 
-  // 1. Logo centrado
+  // Calcular alto total del header (3 líneas de texto: nombre, tel, dirección)
+  const headerTextH = 36 // ~12 + 11 + 11 + gaps
+  const logoMaxH = 48
+  const logoMaxW = 56
+
+  // Embed logo primero para saber su tamaño
+  let logoSW = 0
+  let logoSH = 0
+  let embeddedLogo: any = null
+
   if (data.logoUrl) {
     try {
       const logoResponse = await fetch(data.logoUrl)
       if (logoResponse.ok) {
         const logoArrayBuffer = await logoResponse.arrayBuffer()
         const logoBytes = new Uint8Array(logoArrayBuffer)
-        let logoImage
         const contentType = logoResponse.headers.get("content-type") || ""
         if (contentType.includes("png") || data.logoUrl.toLowerCase().includes(".png")) {
-          logoImage = await pdfDoc.embedPng(logoBytes)
+          embeddedLogo = await pdfDoc.embedPng(logoBytes)
         } else if (contentType.includes("jpeg") || contentType.includes("jpg") || data.logoUrl.toLowerCase().includes(".jpg") || data.logoUrl.toLowerCase().includes(".jpeg")) {
-          logoImage = await pdfDoc.embedJpg(logoBytes)
+          embeddedLogo = await pdfDoc.embedJpg(logoBytes)
         }
-        if (logoImage) {
-          const logoDims = logoImage.scale(1)
-          const maxLogoH = 50
-          const maxLogoW = 60
-          const scale = Math.min(maxLogoH / logoDims.height, maxLogoW / logoDims.width)
-          const sw = logoDims.width * scale
-          const sh = logoDims.height * scale
-          page.drawImage(logoImage, { x: (width - sw) / 2, y: y - sh, width: sw, height: sh })
-          y -= sh + 4
+        if (embeddedLogo) {
+          const logoDims = embeddedLogo.scale(1)
+          const scale = Math.min(logoMaxH / logoDims.height, logoMaxW / logoDims.width)
+          logoSW = logoDims.width * scale
+          logoSH = logoDims.height * scale
         }
       }
     } catch (logoError) {
@@ -717,39 +723,53 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     }
   }
 
-  // 2. Nombre empresa (izquierda) + Orden (derecha) — misma línea
-  page.drawText(empresaNombre, { x: margin, y, size: 12, font: helveticaBold, color: textColor })
+  // Header total height = max between logo and text block
+  const headerH = Math.max(logoSH, headerTextH)
+
+  // Draw logo centered, vertically centered in header
+  if (embeddedLogo) {
+    const logoX = (width - logoSW) / 2
+    const logoY = y - (headerH / 2) - (logoSH / 2)
+    page.drawImage(embeddedLogo, { x: logoX, y: logoY, width: logoSW, height: logoSH })
+  }
+
+  // Left zone: empresa datos (escalonados), right zone: orden datos
+  // Ambos centrados verticalmente en la misma franja que el logo
+  const textStartY = y - (headerH / 2) + (headerTextH / 2)
+
+  // Línea 1: Nombre empresa | # Orden
+  page.drawText(empresaNombre, { x: margin, y: textStartY, size: 12, font: helveticaBold, color: textColor })
 
   const ordenText = `#${String(numeroOrden).padStart(4, "0")}`
   const ordenTextWidth = helveticaBold.widthOfTextAtSize(ordenText, 16)
-  page.drawText(ordenText, { x: width - margin - ordenTextWidth, y: y + 1, size: 16, font: helveticaBold, color: textColor })
-  y -= 12
+  page.drawText(ordenText, { x: width - margin - ordenTextWidth, y: textStartY + 1, size: 16, font: helveticaBold, color: textColor })
 
-  // 3. Teléfono (izquierda) + Badge RECEPCIÓN (derecha)
+  // Línea 2: Teléfono | Badge RECEPCIÓN
+  const line2Y = textStartY - 13
   if (telefonoEmpresa) {
-    page.drawText(`Tel: ${telefonoEmpresa}`, { x: margin, y, size: 7.5, font: helvetica, color: grayColor })
+    page.drawText(`Tel: ${telefonoEmpresa}`, { x: margin, y: line2Y, size: 7.5, font: helvetica, color: grayColor })
   }
   const badgeText = "RECEPCIÓN"
   const badgeWidth = helveticaBold.widthOfTextAtSize(badgeText, 6) + 12
-  page.drawRectangle({ x: width - margin - badgeWidth, y: y - 2, width: badgeWidth, height: 12, color: primaryColor })
-  page.drawText(badgeText, { x: width - margin - badgeWidth + 6, y: y + 1.5, size: 6, font: helveticaBold, color: white })
-  y -= 11
+  page.drawRectangle({ x: width - margin - badgeWidth, y: line2Y - 2, width: badgeWidth, height: 12, color: primaryColor })
+  page.drawText(badgeText, { x: width - margin - badgeWidth + 6, y: line2Y + 1.5, size: 6, font: helveticaBold, color: white })
 
-  // 4. Dirección + ciudad (izquierda) + Fechas (derecha)
+  // Línea 3: Dirección completa | Fechas
+  const line3Y = line2Y - 12
   const locationParts: string[] = []
   if (direccionEmpresa) locationParts.push(direccionEmpresa)
   if (ciudadEmpresa) locationParts.push(ciudadEmpresa)
   if (codigoPostalEmpresa) locationParts.push(`CP ${codigoPostalEmpresa}`)
   if (provinciaEmpresa) locationParts.push(provinciaEmpresa)
   if (locationParts.length > 0) {
-    page.drawText(locationParts.join(", "), { x: margin, y, size: 7.5, font: helvetica, color: grayColor })
+    page.drawText(locationParts.join(", "), { x: margin, y: line3Y, size: 7.5, font: helvetica, color: grayColor })
   }
 
   const fechasText = `Ingreso: ${fechaIngreso}` + (fechaPrometida ? `  |  Entrega est.: ${fechaPrometida}` : "")
   const fechasW = helvetica.widthOfTextAtSize(fechasText, 6.5)
-  page.drawText(fechasText, { x: width - margin - fechasW, y, size: 6.5, font: helvetica, color: grayColor })
+  page.drawText(fechasText, { x: width - margin - fechasW, y: line3Y, size: 6.5, font: helvetica, color: grayColor })
 
-  y -= 8
+  y -= headerH + 4
   // Línea separadora + título
   page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 0.75, color: primaryColor })
   y -= 11
