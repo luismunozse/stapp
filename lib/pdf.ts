@@ -691,8 +691,8 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
 
   // Calcular alto total del header (3 líneas de texto: nombre, tel, dirección)
   const headerTextH = 36 // ~12 + 11 + 11 + gaps
-  const logoMaxH = 55 // Logo más grande que el texto, domina el header
-  const logoMaxW = 120 // no limitar ancho para que logos cuadrados escalen al alto completo
+  const logoMaxH = 70
+  const logoMaxW = 120
 
   // Embed logo primero para saber su tamaño
   let logoSW = 0
@@ -723,8 +723,8 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     }
   }
 
-  // Header total height = max between logo and text block
-  const headerH = Math.max(logoSH, headerTextH)
+  // Header height fijo al texto — el logo se desborda hacia arriba sin empujar contenido
+  const headerH = headerTextH
 
   // Draw logo centered, vertically centered in header
   if (embeddedLogo) {
