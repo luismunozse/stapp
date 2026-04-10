@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ClipboardList, Users, Package, DollarSign, Shield, ShoppingCart, TrendingUp, CheckCircle, AlertTriangle, Clock, Wrench } from "lucide-react"
-import { formatCurrency } from "@/lib/utils"
+import { formatCurrency, cn } from "@/lib/utils"
 import type { CurrencyCode } from "@/lib/currency"
 import { redirect } from "next/navigation"
 import Link from "next/link"
@@ -566,20 +566,14 @@ export default async function DashboardPage() {
   // Stats filtrados por rol
   const adminStats = [
     {
-      title: "Órdenes Totales",
-      value: totalOrdenes.toString(),
-      description: `${ordenesPendientes} pendientes`,
+      title: "Órdenes Pendientes",
+      value: ordenesPendientes.toString(),
+      description: `${totalOrdenes} totales`,
       icon: ClipboardList,
       colorClass: "text-info-600 dark:text-info-500",
       bgClass: "bg-info-50 dark:bg-info-100/50",
-    },
-    {
-      title: "Clientes",
-      value: totalClientes.toString(),
-      description: "Total registrados",
-      icon: Users,
-      colorClass: "text-success-600 dark:text-success-500",
-      bgClass: "bg-success-50 dark:bg-success-100/50",
+      urgent: ordenesPendientes > 0,
+      href: "/ordenes",
     },
     {
       title: "Bajo Stock",
@@ -588,6 +582,16 @@ export default async function DashboardPage() {
       icon: Package,
       colorClass: "text-warning-600 dark:text-warning-500",
       bgClass: "bg-warning-50 dark:bg-warning-100/50",
+      urgent: itemsBajoStock > 0,
+      href: "/inventario",
+    },
+    {
+      title: "Clientes",
+      value: totalClientes.toString(),
+      description: "Total registrados",
+      icon: Users,
+      colorClass: "text-success-600 dark:text-success-500",
+      bgClass: "bg-success-50 dark:bg-success-100/50",
     },
     {
       title: "Ingresos del Mes",
@@ -704,10 +708,18 @@ export default async function DashboardPage() {
       <div className={`grid gap-3 sm:gap-4 grid-cols-2 ${isTecnico ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
         {stats.map((stat: any) => {
           const Icon = stat.icon
+          const isUrgent = stat.urgent
           const card = (
-            <Card key={stat.title} className={`transition-shadow hover:shadow-md ${stat.href ? "cursor-pointer hover:border-primary/50" : ""}`}>
+            <Card key={stat.title} className={cn(
+              "transition-shadow hover:shadow-md",
+              stat.href && "cursor-pointer hover:border-primary/50",
+              isUrgent && "border-l-4 border-l-warning shadow-sm ring-1 ring-warning/10"
+            )}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-                <CardTitle className="text-xs sm:text-sm font-medium text-foreground">
+                <CardTitle className={cn(
+                  "text-xs sm:text-sm font-medium",
+                  isUrgent ? "text-foreground font-semibold" : "text-foreground"
+                )}>
                   {stat.title}
                 </CardTitle>
                 <div className={`p-1.5 sm:p-2 rounded-lg ${stat.bgClass}`}>
@@ -715,7 +727,10 @@ export default async function DashboardPage() {
                 </div>
               </CardHeader>
               <CardContent className="p-3 sm:p-6 pt-0">
-                <div className="text-lg sm:text-2xl font-bold text-foreground">{stat.value}</div>
+                <div className={cn(
+                  "text-lg sm:text-2xl font-bold",
+                  isUrgent ? "text-warning-700 dark:text-warning-400" : "text-foreground"
+                )}>{stat.value}</div>
                 <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">
                   {stat.description}
                 </p>

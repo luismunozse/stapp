@@ -33,12 +33,14 @@ export function CajaSessionBanner({ sesion, loading, onAbrir, onCerrar }: CajaSe
 
   if (!sesion) {
     return (
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-lg border-2 border-dashed border-muted-foreground/30 bg-muted/50">
-        <div className="flex items-center gap-2">
-          <Lock className="h-5 w-5 text-muted-foreground" />
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-lg border-2 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-full bg-amber-100 dark:bg-amber-900/50">
+            <Lock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+          </div>
           <div>
-            <span className="font-medium">Caja cerrada</span>
-            <p className="text-xs text-muted-foreground">No hay sesión de caja abierta</p>
+            <span className="font-semibold text-amber-800 dark:text-amber-300">Caja cerrada</span>
+            <p className="text-xs text-amber-600 dark:text-amber-400">Abrí la caja para registrar movimientos del día</p>
           </div>
         </div>
         <Button onClick={onAbrir} className="w-full sm:w-auto">

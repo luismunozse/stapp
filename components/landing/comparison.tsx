@@ -135,7 +135,7 @@ export function Comparison() {
             className="text-center max-w-3xl mx-auto mb-10"
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-100px" }}
+            viewport={{ once: true, margin: "0px" }}
             transition={{ duration: 0.6 }}
           >
             <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
@@ -151,7 +151,7 @@ export function Comparison() {
             className="hidden md:block max-w-4xl mx-auto"
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-50px" }}
+            viewport={{ once: true, margin: "0px" }}
             transition={{ duration: 0.5 }}
           >
             <div className="rounded-xl border overflow-hidden bg-card shadow-sm">
@@ -214,7 +214,7 @@ export function Comparison() {
                 className="rounded-xl border bg-card p-4 shadow-sm"
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-30px" }}
+                viewport={{ once: true, margin: "0px" }}
                 transition={{ duration: 0.4, delay: index * 0.05 }}
               >
                 <h3 className="font-semibold text-sm text-foreground mb-3">

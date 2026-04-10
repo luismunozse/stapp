@@ -300,28 +300,26 @@ export function OrdenesList() {
       sortable: true,
       className: "font-medium",
       render: (orden) => (
-        <div className="flex items-center gap-1.5">
-          <span className="text-primary font-semibold">
-            {orden.codigoOrden || `#${orden.numeroOrden}`}
-          </span>
-          {isUrgente(orden) && (
-            <span className="inline-flex items-center rounded-full bg-red-100 dark:bg-red-900/40 px-1.5 py-0.5 text-[10px] font-medium text-red-700 dark:text-red-400">
-              Vencida
-            </span>
-          )}
-          {isProximaAVencer(orden) && (
-            <span className="inline-flex items-center rounded-full bg-orange-100 dark:bg-orange-900/40 px-1.5 py-0.5 text-[10px] font-medium text-orange-700 dark:text-orange-400">
-              Hoy
-            </span>
-          )}
-        </div>
+        <span className="text-primary font-semibold">
+          {orden.codigoOrden || `#${orden.numeroOrden}`}
+        </span>
       ),
     },
     {
       key: "estado",
       header: "Estado",
       sortable: true,
-      render: (orden) => <OrderStatusBadge status={orden.estado} showIcon />,
+      render: (orden) => (
+        <div className="flex flex-col gap-0.5">
+          <OrderStatusBadge status={orden.estado} showIcon />
+          {isUrgente(orden) && (
+            <span className="text-[10px] font-medium text-red-600 dark:text-red-400">Vencida</span>
+          )}
+          {isProximaAVencer(orden) && (
+            <span className="text-[10px] font-medium text-orange-600 dark:text-orange-400">Vence hoy</span>
+          )}
+        </div>
+      ),
     },
     {
       key: "cliente",
@@ -610,6 +608,13 @@ export function OrdenesList() {
           sortDirection={sortDirection}
           onSort={handleSort}
           onRowClick={(orden) => router.push(`/ordenes/${orden.id}`)}
+          rowClassName={(orden) =>
+            isUrgente(orden)
+              ? "border-l-3 border-l-red-400 dark:border-l-red-500 bg-red-50/30 dark:bg-red-950/10"
+              : isProximaAVencer(orden)
+                ? "border-l-3 border-l-orange-400 dark:border-l-orange-500 bg-orange-50/30 dark:bg-orange-950/10"
+                : ""
+          }
           pagination={{
             page,
             pageSize,

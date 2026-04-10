@@ -30,8 +30,9 @@ import {
   ChevronsLeft,
   Mail,
   BookOpen,
+  ChevronDown,
 } from "lucide-react"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { cn } from "@/lib/utils"
 import { BusinessLogo } from "@/components/shared/business-logo"
 import { useFocusTrap } from "@/hooks/use-focus-trap"
@@ -45,6 +46,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { UserAvatar } from "@/components/shared/user-avatar"
 
 type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; roles?: string[] }
+
+type NavSection = { label: string; items: NavItem[] }
 
 // roles = undefined means visible to all roles
 const navItems: NavItem[] = [
@@ -62,6 +65,49 @@ const navItems: NavItem[] = [
   { href: "/reportes", label: "Reportes", icon: BarChart3, roles: ["ADMIN", "VENDEDOR"] },
   { href: "/emails", label: "Emails", icon: Mail, roles: ["ADMIN"] },
   { href: "/soporte", label: "Soporte", icon: Headset },
+]
+
+// Grouped nav sections for desktop sidebar
+const navSections: NavSection[] = [
+  {
+    label: "",
+    items: [
+      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    ],
+  },
+  {
+    label: "Operaciones",
+    items: [
+      { href: "/ordenes", label: "Órdenes", icon: ClipboardList },
+      { href: "/clientes", label: "Clientes", icon: Users, roles: ["ADMIN", "VENDEDOR", "TECNICO"] },
+      { href: "/tecnicos", label: "Técnicos", icon: Wrench, roles: ["ADMIN"] },
+      { href: "/vendedores", label: "Vendedores", icon: TrendingUp, roles: ["ADMIN"] },
+      { href: "/cotizaciones", label: "Cotizaciones", icon: Receipt, roles: ["ADMIN", "TECNICO"] },
+      { href: "/inventario", label: "Inventario", icon: Package, roles: ["ADMIN"] },
+    ],
+  },
+  {
+    label: "Ventas",
+    items: [
+      { href: "/ventas", label: "Ventas", icon: ShoppingCart, roles: ["ADMIN", "VENDEDOR"] },
+      { href: "/pos", label: "POS", icon: Store, roles: ["ADMIN", "VENDEDOR"] },
+    ],
+  },
+  {
+    label: "Finanzas",
+    items: [
+      { href: "/caja", label: "Caja", icon: Landmark, roles: ["ADMIN"] },
+      { href: "/facturacion", label: "Facturación", icon: FileText, roles: ["ADMIN"] },
+      { href: "/reportes", label: "Reportes", icon: BarChart3, roles: ["ADMIN", "VENDEDOR"] },
+    ],
+  },
+  {
+    label: "Gestión",
+    items: [
+      { href: "/emails", label: "Emails", icon: Mail, roles: ["ADMIN"] },
+      { href: "/soporte", label: "Soporte", icon: Headset },
+    ],
+  },
 ]
 
 // Items principales para el bottom nav (los 4 más usados)
@@ -144,6 +190,43 @@ export function Navbar() {
     ] : [])
   ]
 
+  // Build grouped sections filtered by role, adding Proveedores and Configuración to Gestión
+  const filteredSections = navSections.map(section => ({
+    ...section,
+    items: section.items.filter(item => !item.roles || item.roles.includes(userRole)),
+  })).filter(section => section.items.length > 0)
+
+  // Add extra items to Gestión section
+  const extraGestionItems: NavItem[] = [
+    ...(userRole === "ADMIN" || userRole === "VENDEDOR" ? [{ href: "/proveedores", label: "Proveedores", icon: Store }] : []),
+    ...(isAdmin ? [{ href: "/configuracion", label: "Configuración", icon: Settings }] : []),
+  ]
+  const gestionSection = filteredSections.find(s => s.label === "Gestión")
+  if (gestionSection) {
+    gestionSection.items.push(...extraGestionItems)
+  } else if (extraGestionItems.length > 0) {
+    filteredSections.push({ label: "Gestión", items: extraGestionItems })
+  }
+
+  // Collapsible sections state - persisted in localStorage
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({})
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      const saved = localStorage.getItem("stapp-sidebar-sections")
+      if (saved) setCollapsedSections(JSON.parse(saved))
+    } catch {}
+  }, [])
+
+  const toggleSection = useCallback((label: string) => {
+    setCollapsedSections(prev => {
+      const next = { ...prev, [label]: !prev[label] }
+      try { localStorage.setItem("stapp-sidebar-sections", JSON.stringify(next)) } catch {}
+      return next
+    })
+  }, [])
+
   // Logout que redirige al login del mismo dominio/subdominio
   const handleLogout = async () => {
     await signOut({ redirect: false })
@@ -220,47 +303,82 @@ export function Navbar() {
           {/* Navigation */}
           <TooltipProvider delayDuration={0}>
             <nav className={cn(
-              "flex-1 py-4 space-y-1 overflow-y-auto scrollbar-thin transition-all duration-300",
-              collapsed ? "px-2" : "px-3"
+              "flex-1 py-4 overflow-y-auto scrollbar-thin transition-all duration-300",
+              collapsed ? "px-2 space-y-1" : "px-3 space-y-0.5"
             )}>
-              {allNavItems.map((item) => {
-                const Icon = item.icon
-                const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
-
-                const linkContent = (
-                  <Link
-                    key={item.href}
-                    id={`nav-${item.href.replace("/", "")}`}
-                    href={item.href}
-                    className={cn(
-                      "flex items-center text-sm font-medium rounded-lg transition-colors",
-                      collapsed ? "justify-center px-2 py-2" : "px-3 py-2",
-                      isActive
-                        ? "bg-primary text-primary-foreground"
-                        : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                    )}
-                  >
-                    <Icon className={cn("h-5 w-5 shrink-0", !collapsed && "mr-3")} />
-                    {!collapsed && (
-                      <span className="truncate">{item.label}</span>
-                    )}
-                  </Link>
+              {filteredSections.map((section) => {
+                const isSectionCollapsed = section.label && collapsedSections[section.label]
+                const hasActiveChild = section.items.some(
+                  item => pathname === item.href || pathname.startsWith(item.href + "/")
                 )
 
-                if (collapsed) {
-                  return (
-                    <Tooltip key={item.href}>
-                      <TooltipTrigger asChild>
-                        {linkContent}
-                      </TooltipTrigger>
-                      <TooltipContent side="right" sideOffset={8}>
-                        {item.label}
-                      </TooltipContent>
-                    </Tooltip>
-                  )
-                }
+                return (
+                  <div key={section.label || "_top"} className={section.label ? "mt-3 first:mt-0" : ""}>
+                    {/* Section header */}
+                    {section.label && !collapsed && (
+                      <button
+                        onClick={() => toggleSection(section.label)}
+                        className={cn(
+                          "flex items-center justify-between w-full px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-md transition-colors",
+                          hasActiveChild && isSectionCollapsed
+                            ? "text-primary"
+                            : "text-sidebar-foreground/50 hover:text-sidebar-foreground/70"
+                        )}
+                      >
+                        <span>{section.label}</span>
+                        <ChevronDown className={cn(
+                          "h-3 w-3 transition-transform duration-200",
+                          isSectionCollapsed && "-rotate-90"
+                        )} />
+                      </button>
+                    )}
 
-                return linkContent
+                    {/* Section items */}
+                    {(!isSectionCollapsed || collapsed || !section.label) && (
+                      <div className="space-y-0.5">
+                        {section.items.map((item) => {
+                          const Icon = item.icon
+                          const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
+
+                          const linkContent = (
+                            <Link
+                              key={item.href}
+                              id={`nav-${item.href.replace("/", "")}`}
+                              href={item.href}
+                              className={cn(
+                                "flex items-center text-sm font-medium rounded-lg transition-colors",
+                                collapsed ? "justify-center px-2 py-2" : "px-3 py-2",
+                                isActive
+                                  ? "bg-primary text-primary-foreground"
+                                  : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                              )}
+                            >
+                              <Icon className={cn("h-5 w-5 shrink-0", !collapsed && "mr-3")} />
+                              {!collapsed && (
+                                <span className="truncate">{item.label}</span>
+                              )}
+                            </Link>
+                          )
+
+                          if (collapsed) {
+                            return (
+                              <Tooltip key={item.href}>
+                                <TooltipTrigger asChild>
+                                  {linkContent}
+                                </TooltipTrigger>
+                                <TooltipContent side="right" sideOffset={8}>
+                                  {item.label}
+                                </TooltipContent>
+                              </Tooltip>
+                            )
+                          }
+
+                          return <div key={item.href}>{linkContent}</div>
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )
               })}
             </nav>
           </TooltipProvider>

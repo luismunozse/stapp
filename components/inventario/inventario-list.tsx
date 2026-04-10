@@ -276,7 +276,16 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
       hideOnMobile: true,
       className: "text-right",
       headerClassName: "text-right",
-      render: (item) => <span className="text-muted-foreground">{formatPrice(item.precioCompra)}</span>,
+      render: (item) => (
+        item.precioCompra === 0 ? (
+          <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400" title="Costo en $0 — el margen puede no ser real">
+            <AlertCircle className="h-3.5 w-3.5" />
+            {formatPrice(0)}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">{formatPrice(item.precioCompra)}</span>
+        )
+      ),
     },
     {
       key: "precioVenta",
@@ -294,6 +303,9 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
       headerClassName: "text-right",
       render: (item) => {
         const margen = item.precioVenta - item.precioCompra
+        if (item.precioCompra === 0 && item.precioVenta > 0) {
+          return <span className="text-amber-500 text-xs font-medium" title="Sin costo cargado">~{formatPrice(margen)}</span>
+        }
         return margen > 0 ? <span className="text-emerald-600 text-xs font-medium">+{formatPrice(margen)}</span> : <span className="text-muted-foreground text-xs">-</span>
       },
     },

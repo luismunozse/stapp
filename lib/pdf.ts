@@ -675,11 +675,13 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const halfWidth = (contentWidth - cardGap) / 2
 
   // === BARRA DE ACENTO SUPERIOR ===
-  page.drawRectangle({ x: 0, y: height - 6, width, height: 6, color: primaryColor })
+  page.drawRectangle({ x: 0, y: height - 4, width, height: 4, color: primaryColor })
 
-  let y = height - margin - 10
+  let y = height - margin + 6
 
-  // === LOGO CENTRADO (si existe) ===
+  // === HEADER COMPACTO: Logo + Empresa | Orden + Fechas (una sola franja) ===
+  let logoEndX = margin // X donde termina el logo (para posicionar texto empresa)
+
   if (data.logoUrl) {
     try {
       const logoResponse = await fetch(data.logoUrl)
@@ -695,13 +697,13 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
         }
         if (logoImage) {
           const logoDims = logoImage.scale(1)
-          const maxLogoH = 70
-          const maxLogoW = 90
+          const maxLogoH = 36
+          const maxLogoW = 36
           const scale = Math.min(maxLogoH / logoDims.height, maxLogoW / logoDims.width)
           const sw = logoDims.width * scale
           const sh = logoDims.height * scale
-          page.drawImage(logoImage, { x: (width - sw) / 2, y: y - sh + 5, width: sw, height: sh })
-          y -= sh + 4
+          page.drawImage(logoImage, { x: margin, y: y - sh, width: sw, height: sh })
+          logoEndX = margin + sw + 8
         }
       }
     } catch (logoError) {
@@ -709,42 +711,38 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     }
   }
 
-  // === HEADER: Empresa izquierda | Orden derecha ===
-  page.drawText(empresaNombre, { x: margin, y, size: 13, font: helveticaBold, color: textColor })
+  // Empresa a la izquierda (al lado del logo)
+  page.drawText(empresaNombre, { x: logoEndX, y: y - 10, size: 11, font: helveticaBold, color: textColor })
   const companyDetails: string[] = []
   if (telefonoEmpresa) companyDetails.push(`Tel: ${telefonoEmpresa}`)
   if (direccionEmpresa) companyDetails.push(direccionEmpresa)
   if (companyDetails.length > 0) {
-    page.drawText(companyDetails.join("  ·  "), { x: margin, y: y - 12, size: 7, font: helvetica, color: grayColor })
+    page.drawText(companyDetails.join("  ·  "), { x: logoEndX, y: y - 21, size: 7, font: helvetica, color: grayColor })
   }
 
-  // Orden a la derecha
+  // Orden a la derecha (misma línea)
   const ordenText = `#${String(numeroOrden).padStart(4, "0")}`
-  const ordenTextWidth = helveticaBold.widthOfTextAtSize(ordenText, 18)
-  page.drawText(ordenText, { x: width - margin - ordenTextWidth, y, size: 18, font: helveticaBold, color: textColor })
+  const ordenTextWidth = helveticaBold.widthOfTextAtSize(ordenText, 16)
+  page.drawText(ordenText, { x: width - margin - ordenTextWidth, y: y - 8, size: 16, font: helveticaBold, color: textColor })
 
   const badgeText = "RECEPCIÓN"
-  const badgeWidth = helveticaBold.widthOfTextAtSize(badgeText, 7) + 14
-  page.drawRectangle({ x: width - margin - badgeWidth, y: y - 16, width: badgeWidth, height: 14, color: primaryColor })
-  page.drawText(badgeText, { x: width - margin - badgeWidth + 7, y: y - 12, size: 7, font: helveticaBold, color: white })
+  const badgeWidth = helveticaBold.widthOfTextAtSize(badgeText, 6) + 12
+  page.drawRectangle({ x: width - margin - badgeWidth, y: y - 22, width: badgeWidth, height: 12, color: primaryColor })
+  page.drawText(badgeText, { x: width - margin - badgeWidth + 6, y: y - 18.5, size: 6, font: helveticaBold, color: white })
 
-  // Fechas debajo del badge
-  page.drawText(`Ingreso: ${fechaIngreso}`, { x: width - margin - 85, y: y - 30, size: 7, font: helvetica, color: grayColor })
-  if (fechaPrometida) {
-    const fpText = `Entrega est.: ${fechaPrometida}`
-    const fpW = helveticaBold.widthOfTextAtSize(fpText, 7) + 10
-    page.drawRectangle({ x: width - margin - fpW, y: y - 43, width: fpW, height: 12, color: yellowBg, borderColor: yellowBorder, borderWidth: 0.5 })
-    page.drawText(fpText, { x: width - margin - fpW + 5, y: y - 40, size: 7, font: helveticaBold, color: brownColor })
-  }
+  // Fechas compactas debajo del badge
+  const fechasText = `Ingreso: ${fechaIngreso}` + (fechaPrometida ? `  |  Entrega est.: ${fechaPrometida}` : "")
+  const fechasW = helvetica.widthOfTextAtSize(fechasText, 6.5)
+  page.drawText(fechasText, { x: width - margin - fechasW, y: y - 32, size: 6.5, font: helvetica, color: grayColor })
 
-  y -= 50
-  // Línea separadora + título
-  page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 1, color: primaryColor })
-  y -= 13
+  y -= 38
+  // Línea separadora + título en la misma línea
+  page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 0.75, color: primaryColor })
+  y -= 11
   const titleText = "COMPROBANTE DE RECEPCIÓN"
-  const titleWidth = helveticaBold.widthOfTextAtSize(titleText, 11)
-  page.drawText(titleText, { x: (width - titleWidth) / 2, y, size: 11, font: helveticaBold, color: primaryColor })
-  y -= 12
+  const titleWidth = helveticaBold.widthOfTextAtSize(titleText, 9)
+  page.drawText(titleText, { x: (width - titleWidth) / 2, y, size: 9, font: helveticaBold, color: primaryColor })
+  y -= 10
 
   // === GRID: CLIENTE | DISPOSITIVO (compacto) ===
   let clienteLines = 2
@@ -1080,7 +1078,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
         const qrImage = await pdfDoc.embedPng(qrBytes)
         page.drawImage(qrImage, { x: margin, y: y - qrSize, width: qrSize, height: qrSize })
         page.drawText("Escanea para ver el estado", { x: margin, y: y - qrSize - 10, size: 6, font: helvetica, color: grayColor })
-        page.drawText("de tu reparacion", { x: margin, y: y - qrSize - 18, size: 6, font: helvetica, color: grayColor })
+        page.drawText("de tu reparación", { x: margin, y: y - qrSize - 18, size: 6, font: helvetica, color: grayColor })
       } catch (qrError) {
         console.error("Error generating QR:", qrError)
       }
@@ -1123,7 +1121,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
         const qrImage = await pdfDoc.embedPng(qrBytes)
         page.drawImage(qrImage, { x: margin, y: y - qrSize, width: qrSize, height: qrSize })
         page.drawText("Escanea para ver el estado", { x: margin + qrSize + 10, y: y - 20, size: 7, font: helvetica, color: grayColor })
-        page.drawText("de tu reparacion", { x: margin + qrSize + 10, y: y - 30, size: 7, font: helvetica, color: grayColor })
+        page.drawText("de tu reparación", { x: margin + qrSize + 10, y: y - 30, size: 7, font: helvetica, color: grayColor })
       } catch (qrError) {
         console.error("Error generating QR:", qrError)
       }

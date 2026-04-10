@@ -26,7 +26,7 @@ export function FAQ({ faqs }: FAQProps) {
             className="text-center max-w-3xl mx-auto mb-6"
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-100px" }}
+            viewport={{ once: true, margin: "0px" }}
             transition={{ duration: 0.6 }}
           >
             <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
@@ -45,7 +45,7 @@ export function FAQ({ faqs }: FAQProps) {
                 className="border-b"
                 initial={{ opacity: 0, x: -20 }}
                 whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true, margin: "-50px" }}
+                viewport={{ once: true, margin: "0px" }}
                 transition={{ duration: 0.4, delay: index * 0.1 }}
               >
                 <m.button

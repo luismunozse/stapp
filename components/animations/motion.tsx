@@ -106,7 +106,7 @@ export function FadeInUp({
   className = "",
   delay = 0,
   once = true,
-  amount = 0.3
+  amount = 0.1
 }: MotionWrapperProps) {
   const ref = useRef(null)
   const isInView = useInView(ref, { once, amount })
@@ -133,7 +133,7 @@ export function FadeInDown({
   className = "",
   delay = 0,
   once = true,
-  amount = 0.3
+  amount = 0.1
 }: MotionWrapperProps) {
   const ref = useRef(null)
   const isInView = useInView(ref, { once, amount })
@@ -160,7 +160,7 @@ export function FadeInLeft({
   className = "",
   delay = 0,
   once = true,
-  amount = 0.3
+  amount = 0.1
 }: MotionWrapperProps) {
   const ref = useRef(null)
   const isInView = useInView(ref, { once, amount })
@@ -187,7 +187,7 @@ export function FadeInRight({
   className = "",
   delay = 0,
   once = true,
-  amount = 0.3
+  amount = 0.1
 }: MotionWrapperProps) {
   const ref = useRef(null)
   const isInView = useInView(ref, { once, amount })
@@ -214,7 +214,7 @@ export function ScaleIn({
   className = "",
   delay = 0,
   once = true,
-  amount = 0.3
+  amount = 0.1
 }: MotionWrapperProps) {
   const ref = useRef(null)
   const isInView = useInView(ref, { once, amount })
@@ -241,7 +241,7 @@ export function BounceIn({
   className = "",
   delay = 0,
   once = true,
-  amount = 0.3
+  amount = 0.1
 }: MotionWrapperProps) {
   const ref = useRef(null)
   const isInView = useInView(ref, { once, amount })

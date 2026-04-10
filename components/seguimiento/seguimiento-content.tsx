@@ -91,29 +91,29 @@ function TimelineSkeleton() {
 
 const estadoLabels: Record<string, string> = {
   RECIBIDO: "Recibido",
-  EN_DIAGNOSTICO: "En diagnostico",
+  EN_DIAGNOSTICO: "En diagnóstico",
   PRESUPUESTADO: "Presupuestado",
   APROBADO: "Aprobado",
-  EN_REPARACION: "En reparacion",
+  EN_REPARACION: "En reparación",
   ESPERANDO_REPUESTO: "Esperando repuesto",
   REPARADO: "Listo para retirar",
   ENTREGADO: "Entregado",
-  ENTREGADO_SIN_REPARACION: "Retirado sin reparacion",
+  ENTREGADO_SIN_REPARACION: "Retirado sin reparación",
   CANCELADO: "Cancelado",
-  SIN_REPARACION: "Sin reparacion",
+  SIN_REPARACION: "Sin reparación",
 }
 
 const estadoDescriptions: Record<string, string> = {
   RECIBIDO: "Tu equipo fue recibido en el taller. Pronto comenzaremos a revisarlo.",
-  EN_DIAGNOSTICO: "Un tecnico esta evaluando tu equipo para determinar la falla.",
-  PRESUPUESTADO: "Ya tenemos el presupuesto de la reparacion. Esperamos tu aprobacion.",
-  APROBADO: "Presupuesto aprobado. Tu equipo entrara en reparacion a la brevedad.",
-  EN_REPARACION: "Nuestro tecnico esta trabajando en tu equipo.",
+  EN_DIAGNOSTICO: "Un técnico está evaluando tu equipo para determinar la falla.",
+  PRESUPUESTADO: "Ya tenemos el presupuesto de la reparación. Esperamos tu aprobación.",
+  APROBADO: "Presupuesto aprobado. Tu equipo entrará en reparación a la brevedad.",
+  EN_REPARACION: "Nuestro técnico está trabajando en tu equipo.",
   ESPERANDO_REPUESTO: "Estamos esperando la llegada de un repuesto necesario.",
-  REPARADO: "Tu equipo esta listo. Ya podes pasar a retirarlo.",
-  ENTREGADO: "Equipo entregado. Gracias por confiar en nosotros.",
-  ENTREGADO_SIN_REPARACION: "El equipo fue retirado sin reparacion.",
-  CANCELADO: "La orden fue cancelada. Contactanos si tenes consultas.",
+  REPARADO: "Tu equipo está listo. Ya podés pasar a retirarlo.",
+  ENTREGADO: "Equipo entregado. ¡Gracias por confiar en nosotros!",
+  ENTREGADO_SIN_REPARACION: "El equipo fue retirado sin reparación.",
+  CANCELADO: "La orden fue cancelada. Contactanos si tenés consultas.",
   SIN_REPARACION: "Lamentablemente no fue posible reparar el equipo.",
 }
 
@@ -267,11 +267,11 @@ function getTimeRemaining(fechaPrometida: string): { text: string; urgency: "nor
   const diffMs = target.getTime() - now.getTime()
   const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
 
-  if (diffDays < 0) return { text: `${Math.abs(diffDays)} dia${Math.abs(diffDays) !== 1 ? "s" : ""} de atraso`, urgency: "overdue" }
+  if (diffDays < 0) return { text: `${Math.abs(diffDays)} día${Math.abs(diffDays) !== 1 ? "s" : ""} de atraso`, urgency: "overdue" }
   if (diffDays === 0) return { text: "Hoy", urgency: "soon" }
-  if (diffDays === 1) return { text: "Manana", urgency: "soon" }
-  if (diffDays <= 3) return { text: `${diffDays} dias`, urgency: "soon" }
-  return { text: `${diffDays} dias`, urgency: "normal" }
+  if (diffDays === 1) return { text: "Mañana", urgency: "soon" }
+  if (diffDays <= 3) return { text: `${diffDays} días`, urgency: "soon" }
+  return { text: `${diffDays} días`, urgency: "normal" }
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -379,7 +379,7 @@ export function SeguimientoContent({ token }: { token: string }) {
         </div>
         <h2 className="text-2xl font-bold">Orden no encontrada</h2>
         <p className="text-muted-foreground mt-2 max-w-sm mx-auto">
-          El enlace de seguimiento no es valido o la orden ya no existe.
+          El enlace de seguimiento no es válido o la orden ya no existe.
         </p>
       </div>
     )
@@ -437,7 +437,7 @@ export function SeguimientoContent({ token }: { token: string }) {
             )}
             <div>
               <h1 className="text-base font-bold leading-tight">
-                {data.organizacion.nombre || "Servicio Tecnico"}
+                {data.organizacion.nombre || "Servicio Técnico"}
               </h1>
               <p className="text-[11px] text-primary-foreground/60">Seguimiento de orden</p>
             </div>
@@ -468,7 +468,7 @@ export function SeguimientoContent({ token }: { token: string }) {
       {/* ══════════ GREETING ══════════ */}
       {data.cliente?.nombre && (
         <p className="text-sm text-muted-foreground px-1">
-          Hola <span className="font-semibold text-foreground">{data.cliente.nombre.split(" ")[0]}</span>, aca podes ver el estado de tu equipo.
+          Hola <span className="font-semibold text-foreground">{data.cliente.nombre.split(" ")[0]}</span>, acá podés ver el estado de tu equipo.
         </p>
       )}
 
@@ -482,7 +482,7 @@ export function SeguimientoContent({ token }: { token: string }) {
               </div>
               <div>
                 <p className="font-bold text-lg text-amber-700 dark:text-amber-400">
-                  Retirado sin reparacion
+                  Retirado sin reparación
                 </p>
                 <p className="text-sm text-muted-foreground mt-0.5">
                   {estadoDescriptions.ENTREGADO_SIN_REPARACION}

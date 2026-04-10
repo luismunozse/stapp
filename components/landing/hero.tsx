@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/card"
 import {
   ArrowRight,
   CheckCircle,
+  ChevronDown,
   ClipboardList,
   LayoutDashboard,
   Package,
@@ -595,7 +596,7 @@ export function Hero() {
 
   return (
     <LazyMotion features={domAnimation}>
-      <section className="relative pt-24 pb-8 sm:pt-28 sm:pb-12 lg:pt-32 lg:pb-16 overflow-hidden">
+      <section className="relative pt-24 pb-4 sm:pt-28 sm:pb-6 lg:pt-32 lg:pb-8 overflow-hidden">
         {/* Background gradient */}
         <div className="absolute inset-0 bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-background dark:via-background dark:to-background" />
 
@@ -712,6 +713,24 @@ export function Hero() {
               <MockupSlider />
             </m.div>
           </div>
+
+          {/* Scroll indicator */}
+          <m.a
+            href="#features"
+            className="flex flex-col items-center gap-1 mt-6 sm:mt-8 text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1.2, duration: 0.5 }}
+            aria-label="Ver más contenido"
+          >
+            <span className="text-xs font-medium">Descubrí más</span>
+            <m.div
+              animate={{ y: [0, 6, 0] }}
+              transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+            >
+              <ChevronDown className="w-5 h-5" />
+            </m.div>
+          </m.a>
         </div>
       </section>
     </LazyMotion>

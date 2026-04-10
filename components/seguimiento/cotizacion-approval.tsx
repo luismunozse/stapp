@@ -160,7 +160,7 @@ export function CotizacionApproval({
           <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-3" />
           <p className="font-semibold text-lg">Presupuesto aprobado</p>
           <p className="text-sm text-muted-foreground mt-1">
-            El taller ha sido notificado y comenzara la reparacion.
+            El taller ha sido notificado y comenzará la reparación.
           </p>
         </CardContent>
       </Card>
@@ -308,9 +308,9 @@ export function CotizacionApproval({
           <div className="flex items-center gap-3 p-3 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/30">
             <CalendarClock className="h-5 w-5 text-amber-600 shrink-0" />
             <div>
-              <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Cotizacion vencida</p>
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Cotización vencida</p>
               <p className="text-xs text-amber-600 dark:text-amber-400">
-                Contacta al servicio tecnico para una nueva cotizacion.
+                Contactá al servicio técnico para una nueva cotización.
               </p>
             </div>
           </div>

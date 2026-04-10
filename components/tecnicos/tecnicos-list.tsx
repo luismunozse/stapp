@@ -17,6 +17,7 @@ import {
   Trash2,
   Eye,
 } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { TecnicoForm } from "./tecnico-form"
 import { useModal } from "@/contexts/modal-context"
 
@@ -141,10 +142,27 @@ export function TecnicosList() {
                         <Wrench className="h-4 w-4 sm:h-6 sm:w-6 text-primary" />
                       </div>
                       <div className="min-w-0">
-                        <CardTitle className="text-sm sm:text-lg truncate">{tecnico.nombre}</CardTitle>
+                        <TooltipProvider delayDuration={300}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <CardTitle className="text-sm sm:text-lg truncate">{tecnico.nombre}</CardTitle>
+                            </TooltipTrigger>
+                            <TooltipContent side="top">
+                              <p className="font-medium">{tecnico.nombre}</p>
+                              <p className="text-xs text-muted-foreground">{tecnico.email}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                         <div className="flex items-center gap-1.5 text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1">
                           <Mail className="h-3 w-3 sm:h-4 sm:w-4 shrink-0" />
-                          <span className="truncate">{tecnico.email}</span>
+                          <TooltipProvider delayDuration={300}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="truncate">{tecnico.email}</span>
+                              </TooltipTrigger>
+                              <TooltipContent side="bottom">{tecnico.email}</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                         </div>
                       </div>
                     </div>

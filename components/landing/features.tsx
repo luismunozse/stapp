@@ -175,14 +175,14 @@ const categories = [
 export function Features() {
   return (
     <LazyMotion features={domAnimation}>
-      <section id="features" className="py-12 sm:py-16 bg-muted/30">
+      <section id="features" className="pt-8 pb-12 sm:pt-10 sm:pb-16 bg-muted/30">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           {/* Header */}
           <m.div
             className="text-center max-w-3xl mx-auto mb-10"
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-100px" }}
+            viewport={{ once: true, margin: "0px" }}
             transition={{ duration: 0.6 }}
           >
             <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
@@ -227,7 +227,7 @@ export function Features() {
                       className="bg-card rounded-xl p-6 shadow-sm border hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 group h-full transition-colors"
                       initial={{ opacity: 0, y: 30 }}
                       whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true, margin: "-50px" }}
+                      viewport={{ once: true, margin: "0px" }}
                       transition={{ duration: 0.5, delay: index * 0.1 }}
                       whileHover={{
                         y: -8,
