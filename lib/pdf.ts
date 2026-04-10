@@ -691,8 +691,8 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
 
   // Calcular alto total del header (3 líneas de texto: nombre, tel, dirección)
   const headerTextH = 36 // ~12 + 11 + 11 + gaps
-  const logoMaxH = 48
-  const logoMaxW = 56
+  const logoMaxH = headerTextH // Logo ocupa exactamente el alto de las 3 líneas de texto
+  const logoMaxW = 80 // ancho generoso para logos horizontales
 
   // Embed logo primero para saber su tamaño
   let logoSW = 0
