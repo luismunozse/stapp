@@ -101,7 +101,7 @@ export async function GET(
     return new NextResponse(new Uint8Array(pdfBuffer), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${cotizacion.numero_cotizacion}.pdf"`,
+        "Content-Disposition": `inline; filename="${cotizacion.numero_cotizacion}.pdf"`,
         "Cache-Control": cacheControl,
       },
     })

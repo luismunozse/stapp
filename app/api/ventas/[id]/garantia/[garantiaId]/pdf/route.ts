@@ -123,7 +123,7 @@ export async function GET(
     return new NextResponse(new Uint8Array(pdfBuffer), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="garantia-${garantia.numero_garantia}.pdf"`,
+        "Content-Disposition": `inline; filename="garantia-${garantia.numero_garantia}.pdf"`,
         "Cache-Control": "private, max-age=3600",
       },
     })

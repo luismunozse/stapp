@@ -427,17 +427,11 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
       if (!res.ok) throw new Error("Error al generar PDF")
       const blob = await res.blob()
       const url = window.URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = `orden-${orden?.codigoOrden || orden?.numeroOrden}.pdf`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
+      window.open(url, "_blank")
     } catch (error) {
       await alert({
         title: "Error",
-        description: "No se pudo descargar el PDF",
+        description: "No se pudo abrir el PDF",
         variant: "error",
       })
     } finally {

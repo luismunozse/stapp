@@ -328,7 +328,7 @@ export async function GET(
     return new NextResponse(new Uint8Array(pdfBuffer), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="devolucion-${numeroDevolucion}.pdf"`,
+        "Content-Disposition": `inline; filename="devolucion-${numeroDevolucion}.pdf"`,
         "Cache-Control": "private, max-age=3600",
       },
     })

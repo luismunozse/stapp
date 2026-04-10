@@ -680,6 +680,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   let y = height - margin + 6
 
   // === HEADER COMPACTO: Logo + Empresa | Orden + Fechas (una sola franja) ===
+  const headerH = 40 // Altura fija del bloque header
   let logoEndX = margin // X donde termina el logo (para posicionar texto empresa)
 
   if (data.logoUrl) {
@@ -697,13 +698,15 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
         }
         if (logoImage) {
           const logoDims = logoImage.scale(1)
-          const maxLogoH = 36
-          const maxLogoW = 36
+          const maxLogoH = headerH
+          const maxLogoW = 55
           const scale = Math.min(maxLogoH / logoDims.height, maxLogoW / logoDims.width)
           const sw = logoDims.width * scale
           const sh = logoDims.height * scale
-          page.drawImage(logoImage, { x: margin, y: y - sh, width: sw, height: sh })
-          logoEndX = margin + sw + 8
+          // Centrar logo verticalmente en la franja
+          const logoY = y - (headerH / 2) - (sh / 2)
+          page.drawImage(logoImage, { x: margin, y: logoY, width: sw, height: sh })
+          logoEndX = margin + sw + 10
         }
       }
     } catch (logoError) {
@@ -711,31 +714,33 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     }
   }
 
-  // Empresa a la izquierda (al lado del logo)
-  page.drawText(empresaNombre, { x: logoEndX, y: y - 10, size: 11, font: helveticaBold, color: textColor })
+  // Empresa a la izquierda — centrar verticalmente el bloque nombre+detalle en la franja
   const companyDetails: string[] = []
   if (telefonoEmpresa) companyDetails.push(`Tel: ${telefonoEmpresa}`)
   if (direccionEmpresa) companyDetails.push(direccionEmpresa)
+  const empresaBlockH = companyDetails.length > 0 ? 22 : 11 // alto del bloque texto empresa
+  const empresaTopY = y - (headerH / 2) + (empresaBlockH / 2) - 2
+  page.drawText(empresaNombre, { x: logoEndX, y: empresaTopY, size: 11, font: helveticaBold, color: textColor })
   if (companyDetails.length > 0) {
-    page.drawText(companyDetails.join("  ·  "), { x: logoEndX, y: y - 21, size: 7, font: helvetica, color: grayColor })
+    page.drawText(companyDetails.join("  ·  "), { x: logoEndX, y: empresaTopY - 13, size: 7, font: helvetica, color: grayColor })
   }
 
-  // Orden a la derecha (misma línea)
+  // Orden a la derecha — alineada al mismo centro vertical
   const ordenText = `#${String(numeroOrden).padStart(4, "0")}`
   const ordenTextWidth = helveticaBold.widthOfTextAtSize(ordenText, 16)
-  page.drawText(ordenText, { x: width - margin - ordenTextWidth, y: y - 8, size: 16, font: helveticaBold, color: textColor })
+  page.drawText(ordenText, { x: width - margin - ordenTextWidth, y: empresaTopY + 1, size: 16, font: helveticaBold, color: textColor })
 
   const badgeText = "RECEPCIÓN"
   const badgeWidth = helveticaBold.widthOfTextAtSize(badgeText, 6) + 12
-  page.drawRectangle({ x: width - margin - badgeWidth, y: y - 22, width: badgeWidth, height: 12, color: primaryColor })
-  page.drawText(badgeText, { x: width - margin - badgeWidth + 6, y: y - 18.5, size: 6, font: helveticaBold, color: white })
+  page.drawRectangle({ x: width - margin - badgeWidth, y: empresaTopY - 14, width: badgeWidth, height: 12, color: primaryColor })
+  page.drawText(badgeText, { x: width - margin - badgeWidth + 6, y: empresaTopY - 10.5, size: 6, font: helveticaBold, color: white })
 
   // Fechas compactas debajo del badge
   const fechasText = `Ingreso: ${fechaIngreso}` + (fechaPrometida ? `  |  Entrega est.: ${fechaPrometida}` : "")
   const fechasW = helvetica.widthOfTextAtSize(fechasText, 6.5)
-  page.drawText(fechasText, { x: width - margin - fechasW, y: y - 32, size: 6.5, font: helvetica, color: grayColor })
+  page.drawText(fechasText, { x: width - margin - fechasW, y: empresaTopY - 25, size: 6.5, font: helvetica, color: grayColor })
 
-  y -= 38
+  y -= headerH + 2
   // Línea separadora + título en la misma línea
   page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 0.75, color: primaryColor })
   y -= 11

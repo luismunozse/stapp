@@ -129,16 +129,10 @@ export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps
 
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = `orden-${orden.codigoOrden || orden.numeroOrden}.pdf`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
+      window.open(url, "_blank")
     } catch (error) {
-      console.error("Error downloading PDF:", error)
-      alert("Error al descargar el PDF")
+      console.error("Error opening PDF:", error)
+      alert("Error al abrir el PDF")
     } finally {
       setDownloading(false)
     }
@@ -232,7 +226,7 @@ export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps
             )}
           </div>
 
-          {/* Descargar PDF, Imprimir, Etiqueta */}
+          {/* Ver PDF, Imprimir, Etiqueta */}
           <div className="flex gap-2">
             <Button
               variant="outline"

@@ -102,16 +102,10 @@ export function VentaCreadaModal({ open, onClose, venta }: VentaCreadaModalProps
 
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = `venta-${venta.numeroVenta}.pdf`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
+      window.open(url, "_blank")
     } catch (error) {
-      console.error("Error downloading PDF:", error)
-      alert("Error al descargar el PDF")
+      console.error("Error opening PDF:", error)
+      alert("Error al abrir el PDF")
     } finally {
       setDownloading(false)
     }
@@ -163,7 +157,7 @@ export function VentaCreadaModal({ open, onClose, venta }: VentaCreadaModalProps
             )}
           </div>
 
-          {/* Descargar PDF */}
+          {/* Ver PDF */}
           <Button
             variant="outline"
             className="w-full"
@@ -175,7 +169,7 @@ export function VentaCreadaModal({ open, onClose, venta }: VentaCreadaModalProps
             ) : (
               <FileText className="mr-2 h-4 w-4" />
             )}
-            Descargar Comprobante PDF
+            Ver Comprobante PDF
           </Button>
 
           {/* Enviar ticket como imagen por WhatsApp */}

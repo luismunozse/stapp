@@ -230,20 +230,14 @@ export default function CotizacionesPage() {
     try {
       const res = await fetch(`/api/cotizaciones/${cotizacion.id}/pdf`)
       if (!res.ok) {
-        await showError("Error al descargar PDF")
+        await showError("Error al abrir PDF")
         return
       }
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = `${cotizacion.numeroCotizacion}.pdf`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      window.open(url, "_blank")
     } catch {
-      await showError("Error al descargar PDF")
+      await showError("Error al abrir PDF")
     }
   }
 

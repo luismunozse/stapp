@@ -203,21 +203,15 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false }: Coti
     try {
       const res = await fetch(`/api/cotizaciones/${cotizacion.id}/pdf`)
       if (!res.ok) {
-        alert("Error al descargar PDF")
+        alert("Error al abrir PDF")
         return
       }
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = `${cotizacion.numeroCotizacion}.pdf`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      window.open(url, "_blank")
     } catch (error) {
-      console.error("Error downloading PDF:", error)
-      alert("Error al descargar PDF")
+      console.error("Error opening PDF:", error)
+      alert("Error al abrir PDF")
     }
   }
 
@@ -438,7 +432,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false }: Coti
                       size="sm"
                       variant="ghost"
                       onClick={() => handleDownloadPDF(cotizacion)}
-                      title="Descargar PDF"
+                      title="Ver PDF"
                     >
                       <Download className="mr-2 h-3 w-3" />
                       PDF
