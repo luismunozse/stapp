@@ -64,6 +64,7 @@ const ordenSchema = z.object({
   problemaReportado: z.string().min(1, "El problema es requerido"),
   accesorios: z.string().optional(),
   codigoAccesoDispositivo: z.string().optional(),
+  telefonoContacto: z.string().optional(),
   presupuesto: z.union([z.number().positive(), z.nan(), z.undefined()]).optional(),
   fechaPrometida: z.string().optional(),
   observaciones: z.string().optional(),
@@ -88,6 +89,7 @@ interface OrdenCreadaData {
     nombre: string
     telefono: string
   }
+  telefonoContacto?: string | null
   organizationName?: string
 }
 
@@ -499,6 +501,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
         sena: presupuestoAceptado && sena ? sena : undefined,
         metodoPagoSena: presupuestoAceptado && sena ? metodoPagoSena : undefined,
         observaciones: data.observaciones || undefined,
+        telefonoContacto: data.telefonoContacto || undefined,
         metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
         sectorId: selectedSectorId || undefined,
       }
@@ -567,6 +570,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
           nombre: selectedClienteObj?.nombre || "",
           telefono: selectedClienteObj?.telefono || "",
         },
+        telefonoContacto: data.telefonoContacto || null,
         organizationName: nuevaOrden.organizationName || undefined,
       })
       setShowOrdenCreadaModal(true)
@@ -1137,6 +1141,23 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
               Solo si es necesario para realizar pruebas
             </p>
           </div>}
+
+          {/* Teléfono de contacto alternativo */}
+          <div>
+            <Label htmlFor="telefonoContacto">Teléfono de contacto</Label>
+            <Input
+              id="telefonoContacto"
+              {...register("telefonoContacto")}
+              placeholder={selectedClienteObj?.telefono || "Número alternativo"}
+              type="tel"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              {watch("tipoDispositivo") === "CELULAR"
+                ? "El cliente deja su celular — ingresá un número alternativo para contactarlo"
+                : "Número alternativo para notificaciones y seguimiento (opcional)"
+              }
+            </p>
+          </div>
 
           {/* Observaciones */}
           <div>

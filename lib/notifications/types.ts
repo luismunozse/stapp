@@ -54,6 +54,7 @@ export interface NotificationContext {
     nombre: string
     email?: string | null
     telefono: string
+    telefonoContacto?: string | null
   }
   orden?: {
     id: string

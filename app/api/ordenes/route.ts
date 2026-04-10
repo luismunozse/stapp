@@ -41,6 +41,7 @@ const ordenSchema = z.object({
   metodoPagoSena: z.string().optional(),
   metadata: z.record(z.any()).optional(),
   sectorId: z.string().optional(),
+  telefonoContacto: z.string().optional(),
 })
 
 export async function GET(request: Request) {
@@ -227,6 +228,7 @@ export async function POST(request: Request) {
         metadata: data.metadata || {},
         sector_id: data.sectorId || null,
         tecnico_id: role === "TECNICO" ? userId : null,
+        telefono_contacto: data.telefonoContacto || null,
       })
       .select(`
         *,

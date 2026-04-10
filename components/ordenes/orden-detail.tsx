@@ -179,10 +179,11 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   }
 
   const handleShareWhatsApp = () => {
-    if (!seguimientoUrl || !orden?.cliente?.telefono) return
+    const contactPhone = orden?.telefonoContacto || orden?.cliente?.telefono
+    if (!seguimientoUrl || !contactPhone) return
     const codigoDisplay = orden.codigoOrden || `#${orden.numeroOrden}`
-    const message = `Hola ${orden.cliente.nombre}, desde acá podés seguir el estado de tu equipo (Orden ${codigoDisplay}):\n${seguimientoUrl}`
-    const phone = orden.cliente.telefono.replace(/\D/g, "")
+    const message = `Hola ${orden.cliente?.nombre}, desde acá podés seguir el estado de tu equipo (Orden ${codigoDisplay}):\n${seguimientoUrl}`
+    const phone = contactPhone.replace(/\D/g, "")
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank")
   }
 
@@ -577,6 +578,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                 nombre: orden.cliente!.nombre,
                 email: orden.cliente!.email,
                 telefono: orden.cliente!.telefono,
+                telefonoContacto: orden.telefonoContacto,
               },
             }}
           />

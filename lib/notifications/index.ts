@@ -211,7 +211,7 @@ export class NotificationService {
     }
 
     const whatsappUrl = generateWhatsAppUrl(
-      context.cliente.telefono,
+      context.cliente.telefonoContacto || context.cliente.telefono,
       template.mensaje
     )
 
@@ -253,7 +253,7 @@ export class NotificationService {
         destinatario:
           params.channel === "EMAIL"
             ? params.context.cliente.email || ""
-            : params.context.cliente.telefono,
+            : params.context.cliente.telefonoContacto || params.context.cliente.telefono,
         asunto: params.subject || null,
         contenido: params.content,
         error_message: params.error || null,

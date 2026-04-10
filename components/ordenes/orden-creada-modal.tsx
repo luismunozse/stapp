@@ -52,6 +52,7 @@ interface OrdenCreadaData {
     nombre: string
     telefono: string
   }
+  telefonoContacto?: string | null
   organizationName?: string
 }
 
@@ -182,7 +183,7 @@ export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps
 
   const handleOpenWhatsApp = () => {
     if (!orden) return
-    const url = generateWhatsAppUrl(orden.cliente.telefono, mensaje)
+    const url = generateWhatsAppUrl(orden.telefonoContacto || orden.cliente.telefono, mensaje)
     window.open(url, "_blank")
   }
 

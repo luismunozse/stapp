@@ -80,7 +80,7 @@ export function WhatsAppDialog({ context, onClose }: WhatsAppDialogProps) {
   }
 
   const handleSend = async () => {
-    const url = generateWhatsAppUrl(context.cliente.telefono, customMessage)
+    const url = generateWhatsAppUrl(context.cliente.telefonoContacto || context.cliente.telefono, customMessage)
     try {
       const { Capacitor } = await import("@capacitor/core")
       if (Capacitor.isNativePlatform()) {
@@ -103,7 +103,7 @@ export function WhatsAppDialog({ context, onClose }: WhatsAppDialogProps) {
       const res = await fetch("/api/whatsapp/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phoneNumber: context.cliente.telefono, message: customMessage }),
+        body: JSON.stringify({ phoneNumber: context.cliente.telefonoContacto || context.cliente.telefono, message: customMessage }),
       })
 
       const data = await res.json()

@@ -59,6 +59,7 @@ export function formatOrden(orden: any) {
     imei: orden.imei,
     accesorios: orden.accesorios,
     codigoAccesoDispositivo: orden.password_dispositivo,
+    telefonoContacto: orden.telefono_contacto,
     // Campos existentes
     problemaReportado: orden.problema_reportado,
     estado: orden.estado,

@@ -119,6 +119,7 @@ export interface OrdenServicio {
   imei?: string | null
   accesorios?: string | null
   codigoAccesoDispositivo?: string | null
+  telefonoContacto?: string | null
   problemaReportado: string
   estado: EstadoOrden
   presupuesto?: number | null
