@@ -48,7 +48,7 @@ export async function GET(
     // Obtener datos de la organizacion
     const { data: org } = await supabaseAdmin
       .from("organizations")
-      .select("nombre, telefono, direccion, logo_url, moneda, zona_horaria")
+      .select("nombre, telefono, direccion, ciudad, provincia, codigo_postal, logo_url, moneda, zona_horaria")
       .eq("id", organizationId!)
       .single()
 
@@ -82,6 +82,9 @@ export async function GET(
       nombreEmpresa: org?.nombre,
       telefonoEmpresa: org?.telefono,
       direccionEmpresa: org?.direccion,
+      ciudadEmpresa: org?.ciudad,
+      provinciaEmpresa: org?.provincia,
+      codigoPostalEmpresa: org?.codigo_postal,
       logoUrl: org?.logo_url,
       moneda: org?.moneda || "ARS",
       zonaHoraria: org?.zona_horaria || "America/Argentina/Buenos_Aires",

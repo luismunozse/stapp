@@ -25,6 +25,9 @@ export async function GET() {
         email,
         telefono,
         direccion,
+        ciudad,
+        provincia,
+        codigo_postal,
         moneda,
         zona_horaria,
         umbral_stock_bajo,
@@ -70,6 +73,9 @@ export async function GET() {
       email: organization.email,
       telefono: organization.telefono,
       direccion: organization.direccion,
+      ciudad: organization.ciudad || "",
+      provincia: organization.provincia || "",
+      codigoPostal: organization.codigo_postal || "",
       moneda: organization.moneda || "ARS",
       zonaHoraria: organization.zona_horaria || "America/Argentina/Buenos_Aires",
       umbralStockBajo: organization.umbral_stock_bajo ?? 5,
@@ -101,7 +107,7 @@ export async function PUT(request: Request) {
         { status: 413 }
       )
     }
-    const { logoData, logoMime, nombreEmpresa, telefono, direccion, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, pais } = body
+    const { logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, pais } = body
 
     const updateData: Record<string, any> = {}
 
@@ -111,6 +117,15 @@ export async function PUT(request: Request) {
     }
     if (direccion !== undefined) {
       updateData.direccion = direccion || null
+    }
+    if (ciudad !== undefined) {
+      updateData.ciudad = ciudad || null
+    }
+    if (provincia !== undefined) {
+      updateData.provincia = provincia || null
+    }
+    if (codigoPostal !== undefined) {
+      updateData.codigo_postal = codigoPostal || null
     }
 
     // Si hay nuevo logo en base64, subirlo a Storage
@@ -200,7 +215,7 @@ export async function PUT(request: Request) {
       updateData.pais = pais
     }
 
-    const selectCols = "id, logo_url, logo_path, nombre_mostrar, telefono, direccion, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, pais"
+    const selectCols = "id, logo_url, logo_path, nombre_mostrar, telefono, direccion, ciudad, provincia, codigo_postal, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, pais"
     const selectColsFull = selectCols + ", recepcion_terminos"
 
     // Solo actualizar si hay cambios
@@ -219,6 +234,9 @@ export async function PUT(request: Request) {
         nombreEmpresa: org?.nombre_mostrar,
         telefono: org?.telefono,
         direccion: org?.direccion,
+        ciudad: org?.ciudad || "",
+        provincia: org?.provincia || "",
+        codigoPostal: org?.codigo_postal || "",
         moneda: org?.moneda || "ARS",
         zonaHoraria: org?.zona_horaria || "America/Argentina/Buenos_Aires",
         umbralStockBajo: org?.umbral_stock_bajo ?? 5,
@@ -266,6 +284,9 @@ export async function PUT(request: Request) {
       nombreEmpresa: organization.nombre_mostrar,
       telefono: organization.telefono,
       direccion: organization.direccion,
+      ciudad: organization.ciudad || "",
+      provincia: organization.provincia || "",
+      codigoPostal: organization.codigo_postal || "",
       moneda: organization.moneda || "ARS",
       zonaHoraria: organization.zona_horaria || "America/Argentina/Buenos_Aires",
       umbralStockBajo: organization.umbral_stock_bajo ?? 5,

@@ -38,6 +38,9 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
   const [nombreEmpresa, setNombreEmpresa] = useState("Servicio Técnico")
   const [telefono, setTelefono] = useState("")
   const [direccion, setDireccion] = useState("")
+  const [ciudad, setCiudad] = useState("")
+  const [provincia, setProvincia] = useState("")
+  const [codigoPostal, setCodigoPostal] = useState("")
   const [moneda, setMoneda] = useState("ARS")
   const [zonaHoraria, setZonaHoraria] = useState("America/Argentina/Buenos_Aires")
   const [pais, setPais] = useState("AR")
@@ -61,6 +64,9 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
         setNombreEmpresa(data.nombreEmpresa || "Servicio Técnico")
         setTelefono(data.telefono || "")
         setDireccion(data.direccion || "")
+        setCiudad(data.ciudad || "")
+        setProvincia(data.provincia || "")
+        setCodigoPostal(data.codigoPostal || "")
         setPais(data.pais || "AR")
         setMoneda(data.moneda || "ARS")
         setZonaHoraria(data.zonaHoraria || "America/Argentina/Buenos_Aires")
@@ -152,7 +158,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
       const res = await fetch("/api/configuracion", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, pais }),
+        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, pais }),
       })
 
       if (res.ok) {
@@ -315,12 +321,44 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
               id="direccion"
               value={direccion}
               onChange={(e) => setDireccion(e.target.value)}
-              placeholder="Av. Principal 123, Ciudad"
+              placeholder="Av. Principal 123"
               disabled={!allowEdit}
             />
             <p className="text-xs sm:text-sm text-muted-foreground mt-1">
               Se mostrará en los comprobantes PDF
             </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <Label htmlFor="ciudad" className="text-sm">Ciudad</Label>
+              <Input
+                id="ciudad"
+                value={ciudad}
+                onChange={(e) => setCiudad(e.target.value)}
+                placeholder="Córdoba"
+                disabled={!allowEdit}
+              />
+            </div>
+            <div>
+              <Label htmlFor="provincia" className="text-sm">Provincia / Estado</Label>
+              <Input
+                id="provincia"
+                value={provincia}
+                onChange={(e) => setProvincia(e.target.value)}
+                placeholder="Córdoba"
+                disabled={!allowEdit}
+              />
+            </div>
+            <div>
+              <Label htmlFor="codigoPostal" className="text-sm">Código Postal</Label>
+              <Input
+                id="codigoPostal"
+                value={codigoPostal}
+                onChange={(e) => setCodigoPostal(e.target.value)}
+                placeholder="5000"
+                disabled={!allowEdit}
+              />
+            </div>
           </div>
         </CardContent>
       </Card>

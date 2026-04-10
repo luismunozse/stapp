@@ -573,6 +573,9 @@ interface OrdenPDFData {
   nombreEmpresa?: string
   telefonoEmpresa?: string
   direccionEmpresa?: string
+  ciudadEmpresa?: string | null
+  provinciaEmpresa?: string | null
+  codigoPostalEmpresa?: string | null
   logoUrl?: string | null
   moneda?: string
   zonaHoraria?: string
@@ -617,9 +620,12 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   }
 
   // Extraer datos de forma segura
-  const empresaNombre = safe(data.nombreEmpresa) || "Servicio Tecnico"
+  const empresaNombre = safe(data.nombreEmpresa) || "Servicio Técnico"
   const telefonoEmpresa = safe(data.telefonoEmpresa)
   const direccionEmpresa = safe(data.direccionEmpresa)
+  const ciudadEmpresa = safe(data.ciudadEmpresa)
+  const provinciaEmpresa = safe(data.provinciaEmpresa)
+  const codigoPostalEmpresa = safe(data.codigoPostalEmpresa)
   const numeroOrden = safe(data.numeroOrden)
   const fechaIngreso = formatDatePDF(data.fechaIngreso)
   const fechaPrometida = formatDatePDF(data.fechaPrometida)
@@ -680,7 +686,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   let y = height - margin + 6
 
   // === HEADER COMPACTO: Logo + Empresa | Orden + Fechas (una sola franja) ===
-  const headerH = 40 // Altura fija del bloque header
+  const headerH = 52 // Altura del bloque header
   let logoEndX = margin // X donde termina el logo (para posicionar texto empresa)
 
   if (data.logoUrl) {
@@ -699,7 +705,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
         if (logoImage) {
           const logoDims = logoImage.scale(1)
           const maxLogoH = headerH
-          const maxLogoW = 55
+          const maxLogoW = 70
           const scale = Math.min(maxLogoH / logoDims.height, maxLogoW / logoDims.width)
           const sw = logoDims.width * scale
           const sh = logoDims.height * scale
@@ -717,7 +723,13 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   // Empresa a la izquierda — centrar verticalmente el bloque nombre+detalle en la franja
   const companyDetails: string[] = []
   if (telefonoEmpresa) companyDetails.push(`Tel: ${telefonoEmpresa}`)
-  if (direccionEmpresa) companyDetails.push(direccionEmpresa)
+  // Build location string: "Dirección, Ciudad (CP), Provincia"
+  const locationParts: string[] = []
+  if (direccionEmpresa) locationParts.push(direccionEmpresa)
+  if (ciudadEmpresa) locationParts.push(ciudadEmpresa)
+  if (codigoPostalEmpresa) locationParts.push(`CP ${codigoPostalEmpresa}`)
+  if (provinciaEmpresa) locationParts.push(provinciaEmpresa)
+  if (locationParts.length > 0) companyDetails.push(locationParts.join(", "))
   const empresaBlockH = companyDetails.length > 0 ? 22 : 11 // alto del bloque texto empresa
   const empresaTopY = y - (headerH / 2) + (empresaBlockH / 2) - 2
   page.drawText(empresaNombre, { x: logoEndX, y: empresaTopY, size: 11, font: helveticaBold, color: textColor })
@@ -2625,6 +2637,9 @@ interface ComprobanteEntregaPDFData {
   nombreEmpresa?: string
   telefonoEmpresa?: string | null
   direccionEmpresa?: string | null
+  ciudadEmpresa?: string | null
+  provinciaEmpresa?: string | null
+  codigoPostalEmpresa?: string | null
   logoUrl?: string | null
   moneda?: string
   zonaHoraria?: string
@@ -2648,9 +2663,12 @@ export async function generateComprobanteEntregaPDF(data: ComprobanteEntregaPDFD
   }
 
   // Extraer datos
-  const empresaNombre = safe(data.nombreEmpresa) || "Servicio Tecnico"
+  const empresaNombre = safe(data.nombreEmpresa) || "Servicio Técnico"
   const telefonoEmpresa = safe(data.telefonoEmpresa)
   const direccionEmpresa = safe(data.direccionEmpresa)
+  const ciudadEmpresa = safe(data.ciudadEmpresa)
+  const provinciaEmpresa = safe(data.provinciaEmpresa)
+  const codigoPostalEmpresa = safe(data.codigoPostalEmpresa)
   const numeroOrden = data.numeroOrden
   const codigoOrden = safe(data.codigoOrden)
   const fechaIngreso = formatDatePDF(data.fechaIngreso)
@@ -2733,8 +2751,13 @@ export async function generateComprobanteEntregaPDF(data: ComprobanteEntregaPDFD
     page.drawText(`Tel: ${telefonoEmpresa}`, { x: margin + logoWidth, y, size: 9, font: helvetica, color: grayColor })
     y -= 11
   }
-  if (direccionEmpresa) {
-    page.drawText(direccionEmpresa, { x: margin + logoWidth, y, size: 9, font: helvetica, color: grayColor })
+  const entregaLocationParts: string[] = []
+  if (direccionEmpresa) entregaLocationParts.push(direccionEmpresa)
+  if (ciudadEmpresa) entregaLocationParts.push(ciudadEmpresa)
+  if (codigoPostalEmpresa) entregaLocationParts.push(`CP ${codigoPostalEmpresa}`)
+  if (provinciaEmpresa) entregaLocationParts.push(provinciaEmpresa)
+  if (entregaLocationParts.length > 0) {
+    page.drawText(entregaLocationParts.join(", "), { x: margin + logoWidth, y, size: 9, font: helvetica, color: grayColor })
   }
 
   // === BADGE ENTREGA/RETIRO (lado derecho) ===
