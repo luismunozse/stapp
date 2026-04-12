@@ -7,15 +7,17 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowLeft, Plus, Trash2, Search } from "lucide-react"
+import { ArrowLeft, Plus, Trash2 } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 
 interface OCItem {
-  inventarioId: string
-  nombre: string
-  codigo: string
+  tempId: string
+  descripcion: string
   cantidadPedida: number
   precioUnitario: number
+  // Optional: when coming from inventory (e.g. "Generar OC")
+  inventarioId?: string
+  codigo?: string
 }
 
 interface Props {
@@ -25,46 +27,36 @@ interface Props {
   initialProveedorId?: string | null
 }
 
+let tempIdCounter = 0
+function nextTempId() {
+  return `tmp-${++tempIdCounter}-${Date.now()}`
+}
+
 export function OrdenCompraForm({ onClose, onCreated, initialItems, initialProveedorId }: Props) {
   const [proveedorId, setProveedorId] = useState<string>(initialProveedorId || "")
   const [proveedores, setProveedores] = useState<any[]>([])
   const [fechaEsperada, setFechaEsperada] = useState("")
   const [notas, setNotas] = useState("")
-  const [items, setItems] = useState<OCItem[]>(initialItems || [])
+  const [items, setItems] = useState<OCItem[]>(
+    initialItems?.map(i => ({ ...i, tempId: i.tempId || nextTempId() })) || []
+  )
   const [loading, setLoading] = useState(false)
-  const [invSearch, setInvSearch] = useState("")
-  const [invResults, setInvResults] = useState<any[]>([])
   const { formatPrice } = useCurrency()
 
   useEffect(() => {
     fetch("/api/proveedores").then(r => r.json()).then(d => setProveedores(d.data || d || []))
   }, [])
 
-  useEffect(() => {
-    if (!invSearch || invSearch.length < 2) { setInvResults([]); return }
-    const t = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/inventario/search?q=${encodeURIComponent(invSearch)}&limit=8`)
-        if (res.ok) setInvResults(await res.json())
-      } catch { /* ignore */ }
-    }, 300)
-    return () => clearTimeout(t)
-  }, [invSearch])
-
-  const addItem = (inv: any) => {
-    if (items.some(i => i.inventarioId === inv.id)) return
+  const addItem = () => {
     setItems([...items, {
-      inventarioId: inv.id,
-      nombre: inv.nombre,
-      codigo: inv.codigo,
+      tempId: nextTempId(),
+      descripcion: "",
       cantidadPedida: 1,
       precioUnitario: 0,
     }])
-    setInvSearch("")
-    setInvResults([])
   }
 
-  const updateItem = (index: number, field: string, value: number) => {
+  const updateItem = (index: number, field: string, value: string | number) => {
     const newItems = [...items]
     newItems[index] = { ...newItems[index], [field]: value }
     setItems(newItems)
@@ -78,6 +70,9 @@ export function OrdenCompraForm({ onClose, onCreated, initialItems, initialProve
 
   const handleSubmit = async () => {
     if (items.length === 0) { alert("Agregá al menos un item"); return }
+    const emptyDesc = items.some(i => !i.descripcion.trim())
+    if (emptyDesc) { alert("Completá la descripción de todos los ítems"); return }
+
     setLoading(true)
     try {
       const res = await fetch("/api/ordenes-compra", {
@@ -88,9 +83,10 @@ export function OrdenCompraForm({ onClose, onCreated, initialItems, initialProve
           fechaRecepcionEsperada: fechaEsperada || null,
           notas: notas || null,
           items: items.map(i => ({
-            inventarioId: i.inventarioId,
+            descripcion: i.descripcion,
             cantidadPedida: i.cantidadPedida,
             precioUnitario: i.precioUnitario,
+            inventarioId: i.inventarioId || null,
           })),
         }),
       })
@@ -143,98 +139,91 @@ export function OrdenCompraForm({ onClose, onCreated, initialItems, initialProve
           </div>
         </div>
 
-        {/* Search & add items */}
-        <div>
-          <Label>Agregar productos</Label>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar producto por nombre o código..."
-              value={invSearch}
-              onChange={e => setInvSearch(e.target.value)}
-              className="pl-9"
-            />
-            {invResults.length > 0 && (
-              <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md max-h-48 overflow-y-auto">
-                {invResults.map((inv) => (
-                  <button
-                    key={inv.id}
-                    type="button"
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-accent flex justify-between"
-                    onClick={() => addItem(inv)}
-                  >
-                    <div>
-                      <span className="font-medium">{inv.nombre}</span>
-                      <span className="ml-2 text-xs text-muted-foreground">{inv.codigo}</span>
-                    </div>
-                    <span className="text-xs text-muted-foreground">Stock: {inv.stock}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
         {/* Items table */}
-        {items.length > 0 && (
-          <div className="border rounded-lg overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50">
-                <tr>
-                  <th className="text-left px-3 py-2 font-medium">Producto</th>
-                  <th className="text-center px-3 py-2 font-medium w-24">Cantidad</th>
-                  <th className="text-right px-3 py-2 font-medium w-32">Costo unit.</th>
-                  <th className="text-right px-3 py-2 font-medium w-28">Subtotal</th>
-                  <th className="w-10"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item, idx) => (
-                  <tr key={item.inventarioId} className="border-t">
-                    <td className="px-3 py-2">
-                      <div className="font-medium">{item.nombre}</div>
-                      <div className="text-xs text-muted-foreground">{item.codigo}</div>
-                    </td>
-                    <td className="px-3 py-2">
-                      <Input
-                        type="number"
-                        min={1}
-                        value={item.cantidadPedida}
-                        onChange={e => updateItem(idx, "cantidadPedida", parseInt(e.target.value) || 1)}
-                        className="h-8 text-center"
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <Input
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        value={item.precioUnitario}
-                        onChange={e => updateItem(idx, "precioUnitario", parseFloat(e.target.value) || 0)}
-                        className="h-8 text-right"
-                      />
-                    </td>
-                    <td className="px-3 py-2 text-right font-medium">
-                      {formatPrice(item.cantidadPedida * item.precioUnitario)}
-                    </td>
-                    <td className="px-1 py-2">
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => removeItem(idx)}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="border-t bg-muted/30">
-                  <td colSpan={3} className="px-3 py-2 text-right font-medium">Total</td>
-                  <td className="px-3 py-2 text-right font-bold">{formatPrice(total)}</td>
-                  <td></td>
-                </tr>
-              </tfoot>
-            </table>
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <Label>Ítems</Label>
+            <Button variant="outline" size="sm" onClick={addItem}>
+              <Plus className="mr-1 h-3.5 w-3.5" /> Agregar ítem
+            </Button>
           </div>
-        )}
+
+          {items.length === 0 ? (
+            <div className="border rounded-lg p-8 text-center text-muted-foreground">
+              <p className="text-sm">No hay ítems. Agregá los productos que querés pedir.</p>
+              <Button variant="outline" size="sm" className="mt-3" onClick={addItem}>
+                <Plus className="mr-1 h-3.5 w-3.5" /> Agregar ítem
+              </Button>
+            </div>
+          ) : (
+            <div className="border rounded-lg overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="text-left px-3 py-2 font-medium">Descripción</th>
+                    <th className="text-center px-3 py-2 font-medium w-24">Cantidad</th>
+                    <th className="text-right px-3 py-2 font-medium w-32">Costo unit.</th>
+                    <th className="text-right px-3 py-2 font-medium w-28">Subtotal</th>
+                    <th className="w-10"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item, idx) => (
+                    <tr key={item.tempId} className="border-t">
+                      <td className="px-3 py-2">
+                        <Input
+                          placeholder="Ej: Pantalla Samsung A55, Flex carga iPhone 13..."
+                          value={item.descripcion}
+                          onChange={e => updateItem(idx, "descripcion", e.target.value)}
+                          className="h-8"
+                        />
+                        {item.inventarioId && item.codigo && (
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            Vinculado: {item.codigo}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2">
+                        <Input
+                          type="number"
+                          min={1}
+                          value={item.cantidadPedida}
+                          onChange={e => updateItem(idx, "cantidadPedida", parseInt(e.target.value) || 1)}
+                          className="h-8 text-center"
+                        />
+                      </td>
+                      <td className="px-3 py-2">
+                        <Input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={item.precioUnitario}
+                          onChange={e => updateItem(idx, "precioUnitario", parseFloat(e.target.value) || 0)}
+                          className="h-8 text-right"
+                        />
+                      </td>
+                      <td className="px-3 py-2 text-right font-medium">
+                        {formatPrice(item.cantidadPedida * item.precioUnitario)}
+                      </td>
+                      <td className="px-1 py-2">
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => removeItem(idx)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t bg-muted/30">
+                    <td colSpan={3} className="px-3 py-2 text-right font-medium">Total</td>
+                    <td className="px-3 py-2 text-right font-bold">{formatPrice(total)}</td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </div>
 
         {/* Actions */}
         <div className="flex justify-end gap-3">

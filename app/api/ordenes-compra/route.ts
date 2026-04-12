@@ -5,9 +5,10 @@ import { parsePagination } from "@/lib/api-utils"
 import { z } from "zod"
 
 const itemSchema = z.object({
-  inventarioId: z.string().min(1),
+  descripcion: z.string().min(1, "La descripción es requerida"),
   cantidadPedida: z.number().int().positive(),
   precioUnitario: z.number().min(0),
+  inventarioId: z.string().min(1).nullable().optional(),
 })
 
 const createSchema = z.object({
@@ -30,7 +31,7 @@ export async function GET(request: Request) {
     let query = supabaseAdmin
       .from("ordenes_compra")
       .select(
-        "*, proveedores:proveedor_id(id, nombre), users:created_by(id, nombre), items_orden_compra(id, inventario_id, cantidad_pedida, cantidad_recibida, precio_unitario, subtotal, inventario:inventario_id(id, codigo, nombre))",
+        "*, proveedores:proveedor_id(id, nombre), users:created_by(id, nombre), items_orden_compra(id, descripcion, inventario_id, cantidad_pedida, cantidad_recibida, precio_unitario, subtotal, inventario:inventario_id(id, codigo, nombre))",
         { count: "exact" }
       )
       .eq("organization_id", organizationId!)
@@ -103,7 +104,8 @@ export async function POST(request: Request) {
       .insert(
         items.map((item) => ({
           orden_compra_id: oc.id,
-          inventario_id: item.inventarioId,
+          descripcion: item.descripcion,
+          inventario_id: item.inventarioId || null,
           cantidad_pedida: item.cantidadPedida,
           precio_unitario: item.precioUnitario,
           subtotal: item.subtotal,
@@ -143,6 +145,7 @@ function formatOC(oc: any) {
     updatedAt: oc.updated_at,
     items: oc.items_orden_compra?.map((i: any) => ({
       id: i.id,
+      descripcion: i.descripcion,
       inventarioId: i.inventario_id,
       inventario: i.inventario ? { id: i.inventario.id, codigo: i.inventario.codigo, nombre: i.inventario.nombre } : null,
       cantidadPedida: i.cantidad_pedida,

@@ -50,10 +50,20 @@ interface Cotizacion {
   }[]
 }
 
+interface RepuestoOrden {
+  id: string
+  inventarioId?: string | null
+  inventario?: { id: string; nombre: string; stock: number } | null
+  nombre?: string
+  cantidad: number
+  precioUnitario: number
+}
+
 interface CotizacionListProps {
   ordenId: string
   clienteEmail?: string | null
   readOnly?: boolean
+  repuestos?: RepuestoOrden[]
 }
 
 const estadoConfig: Record<string, { label: string; icon: typeof Clock; color: string }> = {
@@ -63,9 +73,10 @@ const estadoConfig: Record<string, { label: string; icon: typeof Clock; color: s
   RECHAZADA: { label: "Rechazada", icon: XCircle, color: "bg-red-100 text-red-800" },
 }
 
-export function CotizacionList({ ordenId, clienteEmail, readOnly = false }: CotizacionListProps) {
+export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repuestos = [] }: CotizacionListProps) {
   const { formatPrice, formatDate } = useCurrency()
   const [showForm, setShowForm] = useState(false)
+  const [prefillFromRepuestos, setPrefillFromRepuestos] = useState(false)
   const [editingCotizacion, setEditingCotizacion] = useState<Cotizacion | null>(null)
   const [sendingId, setSendingId] = useState<string | null>(null)
   const [approvingCotizacion, setApprovingCotizacion] = useState<Cotizacion | null>(null)
@@ -246,21 +257,44 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false }: Coti
           Cotizaciones ({cotizaciones.length})
         </h3>
         {!readOnly && !showForm && !editingCotizacion && (
-          <Button size="sm" onClick={() => setShowForm(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Nueva Cotización
-          </Button>
+          <div className="flex gap-2">
+            {repuestos.length > 0 && (
+              <Button size="sm" variant="outline" onClick={() => { setPrefillFromRepuestos(true); setShowForm(true) }}>
+                <Plus className="mr-2 h-4 w-4" />
+                Desde Repuestos
+              </Button>
+            )}
+            <Button size="sm" onClick={() => { setPrefillFromRepuestos(false); setShowForm(true) }}>
+              <Plus className="mr-2 h-4 w-4" />
+              Nueva Cotización
+            </Button>
+          </div>
         )}
       </div>
 
       {showForm && (
         <CotizacionForm
           ordenId={ordenId}
-          onClose={() => setShowForm(false)}
+          onClose={() => { setShowForm(false); setPrefillFromRepuestos(false) }}
           onSuccess={() => {
             setShowForm(false)
+            setPrefillFromRepuestos(false)
             mutate()
           }}
+          {...(prefillFromRepuestos && repuestos.length > 0 ? {
+            initialData: {
+              id: "",
+              items: repuestos.map(r => ({
+                descripcion: r.inventario?.nombre || r.nombre || "",
+                cantidad: r.cantidad,
+                precioUnitario: r.precioUnitario,
+                unidad: "Unidad",
+                descuentoTipo: "porcentaje",
+                descuentoValor: 0,
+                inventarioId: r.inventarioId || null,
+              })),
+            },
+          } : {})}
         />
       )}
 

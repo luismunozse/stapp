@@ -17,6 +17,7 @@ import { hasValidAccess, getTrialInfo, getSubscriptionInfo } from "@/lib/subscri
 import { supabaseAdmin } from "@/lib/supabase"
 import { redirect } from "next/navigation"
 import { unstable_cache } from "next/cache"
+import { connection } from "next/server"
 
 // Cachear verificación de acceso por 1 minuto para mejorar performance
 const getCachedAccessInfo = unstable_cache(
@@ -32,19 +33,16 @@ const getCachedAccessInfo = unstable_cache(
   { revalidate: 60, tags: ["subscription"] }
 )
 
-// Cachear banner global por 60s — cambios del superadmin se ven en ~1 min
-const getMaintenanceBanner = unstable_cache(
-  async () => {
-    const { data } = await supabaseAdmin
-      .from("maintenance_banner")
-      .select("active, message, severity")
-      .eq("id", "global")
-      .maybeSingle()
-    return data
-  },
-  ["maintenance-banner"],
-  { revalidate: 60, tags: ["maintenance-banner"] }
-)
+// Query directo sin cache — es un single-row lookup por PK, ultra rápido
+async function getMaintenanceBanner() {
+  await connection()
+  const { data } = await supabaseAdmin
+    .from("maintenance_banner")
+    .select("active, message, severity")
+    .eq("id", "global")
+    .maybeSingle()
+  return data
+}
 
 export default async function DashboardLayout({
   children,

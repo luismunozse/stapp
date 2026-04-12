@@ -7,6 +7,7 @@ const recibirSchema = z.object({
   items: z.array(z.object({
     itemId: z.string().min(1),
     cantidadRecibida: z.number().int().positive(),
+    inventarioId: z.string().min(1).nullable().optional(),
   })).min(1),
 })
 

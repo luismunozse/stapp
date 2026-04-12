@@ -225,33 +225,50 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
       sortable: true,
       render: (item) => (
         <div className="flex items-center gap-2">
-          <div className="h-7 w-7 shrink-0 rounded overflow-hidden bg-muted/50 flex items-center justify-center border">
+          <div className="h-9 w-9 shrink-0 rounded overflow-hidden bg-muted/50 flex items-center justify-center border">
             {item.imagenUrl ? (
-              <img src={item.imagenUrl} alt={item.nombre} className="h-full w-full object-cover" loading="lazy" />
+              <img
+                src={item.imagenUrl}
+                alt={item.nombre}
+                className="h-full w-full object-cover"
+                loading="lazy"
+              />
             ) : (
-              <Package className="h-3.5 w-3.5 text-muted-foreground/50" />
+              <Package className="h-4 w-4 text-muted-foreground/50" />
             )}
           </div>
           <div className="min-w-0">
-            <div className="font-medium text-xs leading-tight truncate max-w-[160px]">{item.nombre}</div>
-            <div className="text-[10px] text-muted-foreground">{item.codigo}</div>
+            <div className="font-medium text-sm truncate">{item.nombre}</div>
+            <div className="text-xs text-muted-foreground">{item.codigo}</div>
           </div>
         </div>
       ),
     },
     {
-      key: "tipoCategoria",
-      header: "Tipo / Cat.",
+      key: "tipoDispositivo",
+      header: "Tipo",
       hideOnMobile: true,
       render: (item) => {
         const nombre = tiposDispositivo.find((t) => t.codigo === item.tipoDispositivo)?.nombre || item.tipoDispositivo
-        return (
-          <div className="flex flex-col gap-0.5">
-            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 w-fit">{nombre}</Badge>
-            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 w-fit">{item.categoria}</Badge>
-          </div>
-        )
+        return <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5">{nombre}</Badge>
       },
+    },
+    {
+      key: "categoria",
+      header: "Categoría",
+      hideOnMobile: true,
+      render: (item) => <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5">{item.categoria}</Badge>,
+    },
+    {
+      key: "proveedor",
+      header: "Proveedor",
+      hideOnTablet: true,
+      render: (item) =>
+        item.proveedor ? (
+          <span className="text-xs text-muted-foreground truncate block max-w-[140px]">{item.proveedor}</span>
+        ) : (
+          <span className="text-xs text-muted-foreground/50">—</span>
+        ),
     },
     {
       key: "stock",
@@ -289,31 +306,43 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
       },
     },
     {
-      key: "precios",
-      header: "Venta / Costo",
+      key: "precioCompra",
+      header: "Costo",
       sortable: true,
+      hideOnMobile: true,
+      className: "text-right",
+      headerClassName: "text-right",
+      render: (item) => (
+        item.precioCompra === 0 ? (
+          <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400" title="Costo en $0 — el margen puede no ser real">
+            <AlertCircle className="h-3.5 w-3.5" />
+            {formatPrice(0)}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">{formatPrice(item.precioCompra)}</span>
+        )
+      ),
+    },
+    {
+      key: "precioVenta",
+      header: "Venta",
+      sortable: true,
+      className: "text-right",
+      headerClassName: "text-right",
+      render: (item) => <span className="font-medium">{formatPrice(item.precioVenta)}</span>,
+    },
+    {
+      key: "margen",
+      header: "Margen",
+      hideOnMobile: true,
       className: "text-right",
       headerClassName: "text-right",
       render: (item) => {
         const margen = item.precioVenta - item.precioCompra
-        return (
-          <div className="flex flex-col items-end">
-            <span className="font-medium text-sm">{formatPrice(item.precioVenta)}</span>
-            <div className="flex items-center gap-1">
-              {item.precioCompra === 0 ? (
-                <span className="text-[10px] text-amber-600 dark:text-amber-400 inline-flex items-center gap-0.5">
-                  <AlertCircle className="h-2.5 w-2.5" />
-                  sin costo
-                </span>
-              ) : (
-                <span className="text-[10px] text-muted-foreground">{formatPrice(item.precioCompra)}</span>
-              )}
-              {margen > 0 && item.precioCompra > 0 && (
-                <span className="text-[10px] text-emerald-600 font-medium">+{formatPrice(margen)}</span>
-              )}
-            </div>
-          </div>
-        )
+        if (item.precioCompra === 0 && item.precioVenta > 0) {
+          return <span className="text-amber-500 text-xs font-medium" title="Sin costo cargado">~{formatPrice(margen)}</span>
+        }
+        return margen > 0 ? <span className="text-emerald-600 text-xs font-medium">+{formatPrice(margen)}</span> : <span className="text-muted-foreground text-xs">-</span>
       },
     },
     {
@@ -323,27 +352,46 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
       render: (item) => {
         const isArchived = !!item.deletedAt
         return (
-          <div className="flex items-center justify-end gap-0">
-            {!isArchived ? (
+          <div className="flex items-center justify-end gap-0.5">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground"
+              title="Analytics"
+              onClick={(e) => { e.stopPropagation(); setAnalyticsItem({ id: item.id, nombre: item.nombre }) }}
+            >
+              <TrendingUp className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground"
+              title="Movimientos"
+              onClick={(e) => { e.stopPropagation(); setMovimientosItem({ id: item.id, nombre: item.nombre }) }}
+            >
+              <History className="h-3.5 w-3.5" />
+            </Button>
+            {!isArchived && (
               <>
-                <Button variant="ghost" size="icon" className="h-6 w-6" title="Editar"
-                  onClick={(e) => { e.stopPropagation(); setEditingItem(item); setShowForm(true) }}>
-                  <Edit className="h-3 w-3" />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={(e) => { e.stopPropagation(); setEditingItem(item); setShowForm(true) }}
+                >
+                  <Edit className="h-3.5 w-3.5" />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground" title="Analytics"
-                  onClick={(e) => { e.stopPropagation(); setAnalyticsItem({ id: item.id, nombre: item.nombre }) }}>
-                  <TrendingUp className="h-3 w-3" />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground" title="Movimientos"
-                  onClick={(e) => { e.stopPropagation(); setMovimientosItem({ id: item.id, nombre: item.nombre }) }}>
-                  <History className="h-3 w-3" />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" title="Archivar"
-                  onClick={(e) => { e.stopPropagation(); handleArchive(item.id) }}>
-                  <Archive className="h-3 w-3" />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                  onClick={(e) => { e.stopPropagation(); handleArchive(item.id) }}
+                >
+                  <Archive className="h-3.5 w-3.5" />
                 </Button>
               </>
-            ) : (
+            )}
+            {isArchived && (
               <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 text-muted-foreground">Archivado</Badge>
             )}
           </div>

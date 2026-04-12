@@ -78,7 +78,7 @@ export function CotizacionForm({
   const [templatesLoaded, setTemplatesLoaded] = useState(false)
   const [showTemplates, setShowTemplates] = useState(false)
 
-  const isEditing = !!initialData
+  const isEditing = !!initialData?.id
   const isStandalone = !ordenId
 
   // Fetch org config for defaults (only for new cotizaciones)

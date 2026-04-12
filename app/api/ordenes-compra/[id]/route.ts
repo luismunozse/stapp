@@ -27,7 +27,7 @@ export async function GET(
         proveedores:proveedor_id(id, nombre),
         users:created_by(id, nombre),
         items_orden_compra(
-          id, inventario_id, cantidad_pedida, cantidad_recibida, precio_unitario, subtotal,
+          id, descripcion, inventario_id, cantidad_pedida, cantidad_recibida, precio_unitario, subtotal,
           inventario:inventario_id(id, codigo, nombre, stock, stock_reservado)
         )
       `)
@@ -171,6 +171,7 @@ function formatOC(oc: any) {
     updatedAt: oc.updated_at,
     items: oc.items_orden_compra?.map((i: any) => ({
       id: i.id,
+      descripcion: i.descripcion,
       inventarioId: i.inventario_id,
       inventario: i.inventario ? {
         id: i.inventario.id,
