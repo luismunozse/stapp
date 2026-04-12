@@ -167,6 +167,7 @@ export interface Inventario {
   tipoDispositivoId?: string | null
   tipoDispositivoCustom?: TipoDispositivoCustom | null
   stock: number
+  stockReservado: number
   precioCompra: number
   precioVenta: number
   proveedor?: string | null

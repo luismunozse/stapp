@@ -14,6 +14,7 @@ const itemSchema = z.object({
   unidad: z.string().optional(),
   descuentoTipo: z.enum(["porcentaje", "fijo"]).optional(),
   descuentoValor: z.number().min(0).optional(),
+  inventarioId: z.string().nullable().optional(),
 })
 
 const cotizacionSchema = z.object({
@@ -95,6 +96,7 @@ function formatCotizacion(c: any) {
       unidad: i.unidad,
       descuentoTipo: i.descuento_tipo,
       descuentoValor: i.descuento_valor,
+      inventarioId: i.inventario_id ?? null,
     })),
   }
 }
@@ -319,6 +321,7 @@ export async function POST(request: Request) {
           unidad: item.unidad || "Unidad",
           descuento_tipo: item.descuentoTipo || "porcentaje",
           descuento_valor: item.descuentoValor || 0,
+          inventario_id: item.inventarioId || null,
         }))
       )
 

@@ -173,6 +173,7 @@ export function formatInventario(item: any) {
     categoria: item.categoria,
     tipoDispositivo: item.tipo_dispositivo,
     stock: item.stock,
+    stockReservado: item.stock_reservado ?? 0,
     precioCompra: item.precio_compra,
     precioVenta: item.precio_venta,
     proveedor: proveedorNombre,

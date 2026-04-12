@@ -65,6 +65,16 @@ export async function POST(
 
     if (updateError) throw updateError
 
+    // Reserve inventory for items linked to inventario
+    try {
+      await supabaseAdmin.rpc("reservar_items_cotizacion", {
+        p_cotizacion_id: cotizacion.id,
+        p_user_id: "system-public",
+      })
+    } catch (reserveErr) {
+      console.error("Error reserving stock for cotizacion:", reserveErr)
+    }
+
     // If cotizacion is linked to an order in PRESUPUESTADO, transition it to APROBADO
     if (cotizacion.orden_id) {
       const { data: orden } = await supabaseAdmin

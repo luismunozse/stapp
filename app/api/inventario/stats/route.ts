@@ -22,7 +22,7 @@ export async function GET() {
     // Para una org con miles de SKUs esto sigue siendo barato (una columna).
     const { data: items, error: dbError } = await supabaseAdmin
       .from("inventario")
-      .select("stock, precio_compra, precio_venta, stock_minimo")
+      .select("stock, stock_reservado, precio_compra, precio_venta, stock_minimo")
       .eq("organization_id", organizationId!)
       .is("deleted_at", null)
 

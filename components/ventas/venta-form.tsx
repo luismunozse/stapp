@@ -79,6 +79,7 @@ interface Inventario {
   codigo: string
   nombre: string
   stock: number
+  stockReservado: number
   precioVenta: number
 }
 
@@ -574,7 +575,9 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
                                       <span className="ml-2 text-xs text-muted-foreground">{inv.codigo}</span>
                                     </div>
                                     <div className="flex items-center gap-3 text-xs">
-                                      <span className="text-muted-foreground">Stock: {inv.stock}</span>
+                                      <span className="text-muted-foreground">
+                                        Stock: {inv.stock}{inv.stockReservado > 0 ? ` (disp. ${inv.stock - inv.stockReservado})` : ""}
+                                      </span>
                                       <span className="font-medium">{formatPrice(inv.precioVenta)}</span>
                                     </div>
                                   </div>

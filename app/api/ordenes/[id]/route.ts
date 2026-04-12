@@ -244,6 +244,18 @@ export async function PUT(
           })
         } catch (err) { console.error("Error inserting orden_evento:", err) }
       })()
+
+      // Release reserved stock when order is cancelled
+      if (estadoFinal === "CANCELADO") {
+        void (async () => {
+          try {
+            await supabaseAdmin.rpc("liberar_reservas_orden", {
+              p_orden_id: id,
+              p_user_id: userId,
+            })
+          } catch (err) { console.error("Error releasing order reservations:", err) }
+        })()
+      }
     }
 
     if (data.presupuesto !== undefined && data.presupuesto !== null && data.presupuesto !== orden.presupuesto) {

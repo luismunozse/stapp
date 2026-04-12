@@ -21,12 +21,14 @@ import {
   Settings2,
   LayoutGrid,
   LayoutList,
+  TrendingUp,
 } from "lucide-react"
 import { InventarioForm } from "./inventario-form"
 import { InventarioStats } from "./inventario-stats"
 import { InventarioBulkBar } from "./inventario-bulk-bar"
 import { QuickStockAdjust } from "./quick-stock-adjust"
 import { MovimientosHistorial } from "./movimientos-historial"
+import { InventarioAnalyticsModal } from "./inventario-analytics-modal"
 import { ImportModal } from "@/components/import/import-modal"
 import { ExportButton } from "@/components/export/export-button"
 import { useCurrency } from "@/contexts/currency-context"
@@ -74,6 +76,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   const [showImport, setShowImport] = useState(false)
   const [editingItem, setEditingItem] = useState<Inventario | null>(null)
   const [movimientosItem, setMovimientosItem] = useState<{ id: string; nombre: string } | null>(null)
+  const [analyticsItem, setAnalyticsItem] = useState<{ id: string; nombre: string } | null>(null)
   const [includeArchived, setIncludeArchived] = useState(false)
   // Default a "list": es la vista que escala con catálogos grandes.
   // La preferencia se persiste en localStorage.
@@ -295,6 +298,23 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
       },
     },
     {
+      key: "stockReservado",
+      header: "Reserv.",
+      hideOnMobile: true,
+      className: "text-center",
+      headerClassName: "text-center",
+      render: (item) => {
+        if (!item.stockReservado) return <span className="text-muted-foreground/50">—</span>
+        const disponible = item.stock - item.stockReservado
+        return (
+          <div className="flex flex-col items-center">
+            <span className="text-xs font-medium text-amber-600 dark:text-amber-400">{item.stockReservado}</span>
+            <span className="text-[10px] text-muted-foreground">disp: {disponible}</span>
+          </div>
+        )
+      },
+    },
+    {
       key: "precioCompra",
       header: "Costo",
       sortable: true,
@@ -346,6 +366,16 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
               variant="ghost"
               size="icon"
               className="h-7 w-7 text-muted-foreground"
+              title="Analytics"
+              onClick={(e) => { e.stopPropagation(); setAnalyticsItem({ id: item.id, nombre: item.nombre }) }}
+            >
+              <TrendingUp className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground"
+              title="Movimientos"
               onClick={(e) => { e.stopPropagation(); setMovimientosItem({ id: item.id, nombre: item.nombre }) }}
             >
               <History className="h-3.5 w-3.5" />
@@ -528,6 +558,15 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
         />
       )}
 
+      {analyticsItem && (
+        <InventarioAnalyticsModal
+          open={!!analyticsItem}
+          onOpenChange={(open) => { if (!open) setAnalyticsItem(null) }}
+          inventarioId={analyticsItem.id}
+          inventarioNombre={analyticsItem.nombre}
+        />
+      )}
+
       {selectedKeys.length > 0 && viewMode === "list" && (
         <InventarioBulkBar
           selectedCount={selectedKeys.length}
@@ -673,6 +712,11 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                                 <span className="text-[8px] text-muted-foreground">mín: {item.stockMinimo}</span>
                               </div>
                             )}
+                            {item.stockReservado > 0 && !isArchived && (
+                              <div className="text-[9px] text-amber-600 dark:text-amber-400 mt-0.5">
+                                {item.stockReservado} reserv. · {item.stock - item.stockReservado} disp.
+                              </div>
+                            )}
                           </div>
                           {/* Costo */}
                           <div className="text-center border-x border-border/50">
@@ -695,8 +739,17 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                           </div>
                         </div>
 
-                        {/* Row 4: Movimientos link */}
-                        <div className="flex justify-end mt-2">
+                        {/* Row 4: Actions */}
+                        <div className="flex justify-end gap-1 mt-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
+                            onClick={() => setAnalyticsItem({ id: item.id, nombre: item.nombre })}
+                          >
+                            <TrendingUp className="mr-1 h-3 w-3" />
+                            Analytics
+                          </Button>
                           <Button
                             variant="ghost"
                             size="sm"

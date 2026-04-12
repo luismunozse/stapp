@@ -54,6 +54,15 @@ export async function GET(request: Request) {
     const tecnicoId = searchParams.get("tecnicoId") || ""
     const search = searchParams.get("search") || ""
 
+    // Filtros adicionales
+    const tipoDispositivo = searchParams.get("tipoDispositivo") || ""
+    const marca = searchParams.get("marca") || ""
+    const estadoCobro = searchParams.get("estadoCobro") || ""
+    const conPresupuesto = searchParams.get("conPresupuesto") || ""
+    const conSena = searchParams.get("conSena") || ""
+    const sinTecnico = searchParams.get("sinTecnico") || ""
+    const vencimiento = searchParams.get("vencimiento") || "" // "vencidas" | "venceHoy"
+
     // Paginación
     const page = parseInt(searchParams.get("page") || "1")
     const limit = Math.min(parseInt(searchParams.get("limit") || "20"), 100) // Max 100
@@ -62,6 +71,8 @@ export async function GET(request: Request) {
     // Fechas
     const fechaDesde = searchParams.get("fechaDesde") || ""
     const fechaHasta = searchParams.get("fechaHasta") || ""
+    const fechaPrometidaDesde = searchParams.get("fechaPrometidaDesde") || ""
+    const fechaPrometidaHasta = searchParams.get("fechaPrometidaHasta") || ""
 
     // Sorting (whitelist de columnas permitidas)
     const allowedSortColumns: Record<string, string> = {
@@ -111,6 +122,54 @@ export async function GET(request: Request) {
 
     if (fechaHasta) {
       query = query.lte("fecha_ingreso", `${fechaHasta}T23:59:59`)
+    }
+
+    if (fechaPrometidaDesde) {
+      query = query.gte("fecha_prometida", `${fechaPrometidaDesde}T00:00:00`)
+    }
+
+    if (fechaPrometidaHasta) {
+      query = query.lte("fecha_prometida", `${fechaPrometidaHasta}T23:59:59`)
+    }
+
+    if (tipoDispositivo) {
+      query = query.eq("tipo_dispositivo", tipoDispositivo)
+    }
+
+    if (marca) {
+      query = query.ilike("marca", `%${marca}%`)
+    }
+
+    if (estadoCobro) {
+      query = query.eq("estado_cobro", estadoCobro)
+    }
+
+    if (conPresupuesto === "si") {
+      query = query.not("presupuesto", "is", null).gt("presupuesto", 0)
+    } else if (conPresupuesto === "no") {
+      query = query.or("presupuesto.is.null,presupuesto.eq.0")
+    }
+
+    if (conSena === "si") {
+      query = query.gt("sena", 0)
+    } else if (conSena === "no") {
+      query = query.or("sena.is.null,sena.eq.0")
+    }
+
+    if (sinTecnico === "true") {
+      query = query.is("tecnico_id", null)
+    }
+
+    if (vencimiento === "vencidas") {
+      const now = new Date().toISOString()
+      query = query.lt("fecha_prometida", now)
+        .not("estado", "in", "(ENTREGADO,ENTREGADO_SIN_REPARACION,CANCELADO,SIN_REPARACION)")
+    } else if (vencimiento === "venceHoy") {
+      const hoy = new Date()
+      const inicioHoy = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()).toISOString()
+      const finHoy = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate(), 23, 59, 59).toISOString()
+      query = query.gte("fecha_prometida", inicioHoy).lte("fecha_prometida", finHoy)
+        .not("estado", "in", "(ENTREGADO,ENTREGADO_SIN_REPARACION,CANCELADO,SIN_REPARACION)")
     }
 
     if (search) {

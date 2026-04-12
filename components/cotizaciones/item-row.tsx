@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect, useRef } from "react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import {
@@ -9,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Trash2, Percent, DollarSign } from "lucide-react"
+import { Trash2, Percent, DollarSign, Package, X } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 
 const UNIDADES = [
@@ -29,9 +30,10 @@ interface ItemRowProps {
     unidad?: string
     descuentoTipo?: string
     descuentoValor?: number
+    inventarioId?: string | null
   }
   index: number
-  onUpdate: (index: number, field: string, value: string | number) => void
+  onUpdate: (index: number, field: string, value: string | number | null) => void
   onRemove: (index: number) => void
   disabled?: boolean
 }
@@ -48,6 +50,44 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled }: ItemRowPr
   const { formatPrice } = useCurrency()
   const bruto = item.cantidad * item.precioUnitario
   const neto = calcItemNeto(item)
+  const [invSearch, setInvSearch] = useState("")
+  const [invResults, setInvResults] = useState<any[]>([])
+  const [showInvSearch, setShowInvSearch] = useState(false)
+  const searchRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!invSearch || invSearch.length < 2) { setInvResults([]); return }
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/inventario/search?q=${encodeURIComponent(invSearch)}&limit=5`)
+        if (res.ok) setInvResults(await res.json())
+      } catch { /* ignore */ }
+    }, 300)
+    return () => clearTimeout(t)
+  }, [invSearch])
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setShowInvSearch(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClick)
+    return () => document.removeEventListener("mousedown", handleClick)
+  }, [])
+
+  const selectInvItem = (inv: any) => {
+    onUpdate(index, "descripcion", inv.nombre)
+    onUpdate(index, "precioUnitario", Number(inv.precioVenta))
+    onUpdate(index, "inventarioId", inv.id)
+    setShowInvSearch(false)
+    setInvSearch("")
+    setInvResults([])
+  }
+
+  const clearInvLink = () => {
+    onUpdate(index, "inventarioId", null)
+  }
   const hasDiscount = (item.descuentoValor || 0) > 0
 
   return (
@@ -55,13 +95,38 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled }: ItemRowPr
       {/* Mobile Layout */}
       <div className="sm:hidden space-y-2 py-3 border-b">
         <div className="flex justify-between items-start gap-2">
-          <Input
-            placeholder="Descripción del item"
-            value={item.descripcion}
-            onChange={(e) => onUpdate(index, "descripcion", e.target.value)}
-            disabled={disabled}
-            className="flex-1"
-          />
+          <div className="flex-1 relative" ref={showInvSearch ? searchRef : undefined}>
+            {showInvSearch ? (
+              <div>
+                <Input
+                  placeholder="Buscar producto..."
+                  value={invSearch}
+                  onChange={(e) => setInvSearch(e.target.value)}
+                  autoFocus
+                />
+                {invResults.length > 0 && (
+                  <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md max-h-40 overflow-y-auto">
+                    {invResults.map((inv) => (
+                      <button key={inv.id} type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-accent" onClick={() => selectInvItem(inv)}>
+                        <span className="font-medium">{inv.nombre}</span>
+                        <span className="ml-1 text-xs text-muted-foreground">Stock: {inv.stock}{inv.stockReservado > 0 ? ` (disp. ${inv.stock - inv.stockReservado})` : ""}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <Input
+                placeholder="Descripción del item"
+                value={item.descripcion}
+                onChange={(e) => onUpdate(index, "descripcion", e.target.value)}
+                disabled={disabled}
+              />
+            )}
+          </div>
+          <Button type="button" variant={item.inventarioId ? "secondary" : "outline"} size="icon" className="h-8 w-8 shrink-0" onClick={() => item.inventarioId ? clearInvLink() : setShowInvSearch(!showInvSearch)} disabled={disabled} title={item.inventarioId ? "Desvincular producto" : "Buscar en inventario"}>
+            {item.inventarioId ? <X className="h-3.5 w-3.5" /> : <Package className="h-3.5 w-3.5" />}
+          </Button>
           <Button
             type="button"
             variant="ghost"
@@ -151,13 +216,44 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled }: ItemRowPr
 
       {/* Desktop Layout */}
       <div className="hidden sm:grid grid-cols-16 gap-2 items-center py-2 border-b" style={{ gridTemplateColumns: "4fr 1fr 1.5fr 1.5fr 1.5fr 2fr 0.5fr" }}>
-        <div>
-          <Input
-            placeholder="Descripción del item"
-            value={item.descripcion}
-            onChange={(e) => onUpdate(index, "descripcion", e.target.value)}
-            disabled={disabled}
-          />
+        <div className="relative" ref={!showInvSearch ? undefined : searchRef}>
+          <div className="flex gap-1">
+            {showInvSearch ? (
+              <Input
+                placeholder="Buscar producto..."
+                value={invSearch}
+                onChange={(e) => setInvSearch(e.target.value)}
+                autoFocus
+                className="flex-1"
+              />
+            ) : (
+              <Input
+                placeholder="Descripción del item"
+                value={item.descripcion}
+                onChange={(e) => onUpdate(index, "descripcion", e.target.value)}
+                disabled={disabled}
+                className="flex-1"
+              />
+            )}
+            <Button type="button" variant={item.inventarioId ? "secondary" : "ghost"} size="icon" className="h-10 w-8 shrink-0" onClick={() => item.inventarioId ? clearInvLink() : setShowInvSearch(!showInvSearch)} disabled={disabled} title={item.inventarioId ? "Desvincular producto" : "Buscar en inventario"}>
+              {item.inventarioId ? <X className="h-3.5 w-3.5" /> : <Package className="h-3.5 w-3.5" />}
+            </Button>
+          </div>
+          {showInvSearch && invResults.length > 0 && (
+            <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md max-h-48 overflow-y-auto">
+              {invResults.map((inv) => (
+                <button key={inv.id} type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-accent flex justify-between" onClick={() => selectInvItem(inv)}>
+                  <div>
+                    <span className="font-medium">{inv.nombre}</span>
+                    <span className="ml-2 text-xs text-muted-foreground">{inv.codigo}</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Stock: {inv.stock}{inv.stockReservado > 0 ? ` (disp. ${inv.stock - inv.stockReservado})` : ""} · {formatPrice(inv.precioVenta)}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <div>
           <Select

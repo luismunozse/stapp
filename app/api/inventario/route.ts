@@ -57,7 +57,7 @@ export async function GET(request: Request) {
     let query = supabaseAdmin
       .from("inventario")
       .select(
-        "id, codigo, nombre, descripcion, categoria, tipo_dispositivo, stock, precio_compra, precio_venta, proveedor, proveedor_id, imagen_url, imagen_path, stock_minimo, stock_maximo, punto_reorden, deleted_at, deleted_by, created_at, proveedores:proveedor_id(id, nombre)",
+        "id, codigo, nombre, descripcion, categoria, tipo_dispositivo, stock, stock_reservado, precio_compra, precio_venta, proveedor, proveedor_id, imagen_url, imagen_path, stock_minimo, stock_maximo, punto_reorden, deleted_at, deleted_by, created_at, proveedores:proveedor_id(id, nombre)",
         { count: "exact" }
       )
       .eq("organization_id", organizationId!)
@@ -68,9 +68,13 @@ export async function GET(request: Request) {
     }
 
     if (search) {
-      query = query.or(
-        `nombre.ilike.%${search}%,codigo.ilike.%${search}%,descripcion.ilike.%${search}%,proveedor.ilike.%${search}%`
-      )
+      if (search.trim().length >= 3) {
+        query = query.textSearch("search_vector", search, { type: "plain", config: "spanish" })
+      } else {
+        query = query.or(
+          `nombre.ilike.%${search}%,codigo.ilike.%${search}%`
+        )
+      }
     }
 
     if (categoria) {

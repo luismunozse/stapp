@@ -77,6 +77,16 @@ export async function POST(
 
     if (updateError) throw updateError
 
+    // Consume reserved stock: deduct from physical stock + release reservation
+    try {
+      await supabaseAdmin.rpc("consumir_reservas_orden", {
+        p_orden_id: id,
+        p_user_id: userId,
+      })
+    } catch (consumeErr) {
+      console.error("Error consuming order reservations on delivery:", consumeErr)
+    }
+
     // Registrar auditoría
     const audit = createAuditLogger(organizationId!, userId!, request)
     const changes = diffObjects(orden, updatedOrden)

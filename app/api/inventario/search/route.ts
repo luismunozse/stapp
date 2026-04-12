@@ -18,7 +18,7 @@ export async function GET(request: Request) {
 
     let query = supabaseAdmin
       .from("inventario")
-      .select("id, codigo, nombre, stock, precio_venta")
+      .select("id, codigo, nombre, stock, stock_reservado, precio_venta")
       .eq("organization_id", organizationId!)
       .is("deleted_at", null)
       .gt("stock", 0)
@@ -26,7 +26,11 @@ export async function GET(request: Request) {
       .limit(limit)
 
     if (q.trim()) {
-      query = query.or(`nombre.ilike.%${q}%,codigo.ilike.%${q}%`)
+      if (q.trim().length >= 3) {
+        query = query.textSearch("search_vector", q, { type: "plain", config: "spanish" })
+      } else {
+        query = query.or(`nombre.ilike.%${q}%,codigo.ilike.%${q}%`)
+      }
     }
 
     const { data: items, error: dbError } = await query
@@ -40,6 +44,7 @@ export async function GET(request: Request) {
       codigo: item.codigo,
       nombre: item.nombre,
       stock: item.stock,
+      stockReservado: item.stock_reservado ?? 0,
       precioVenta: item.precio_venta,
     }))
 

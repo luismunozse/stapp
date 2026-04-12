@@ -60,6 +60,16 @@ export async function POST(
 
     if (updateError) throw updateError
 
+    // Reserve inventory for items linked to inventario
+    try {
+      await supabaseAdmin.rpc("reservar_items_cotizacion", {
+        p_cotizacion_id: id,
+        p_user_id: "system",
+      })
+    } catch (reserveErr) {
+      console.error("Error reserving stock for cotizacion:", reserveErr)
+    }
+
     return NextResponse.json({
       id: updatedCotizacion.id,
       ordenId: updatedCotizacion.orden_id,

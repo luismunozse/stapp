@@ -161,6 +161,17 @@ export async function POST(
 
     const ventaId = rpcResult?.ventaId || rpcResult
 
+    // Release reservations since stock was already deducted by crear_venta_atomica
+    try {
+      await supabaseAdmin.rpc("liberar_items_cotizacion", {
+        p_cotizacion_id: id,
+        p_user_id: userId,
+        p_motivo: "Reserva consumida por conversión a venta",
+      })
+    } catch (releaseErr) {
+      console.error("Error releasing cotizacion reservations after sale:", releaseErr)
+    }
+
     // Get venta number for response
     const { data: venta } = await supabaseAdmin
       .from("ventas")

@@ -134,14 +134,41 @@ export function OrdenesList() {
   const [estado, setEstado] = useState<EstadoOrden | "">("")
   const [fechaDesde, setFechaDesde] = useState("")
   const [fechaHasta, setFechaHasta] = useState("")
+  const [tecnicoIdFilter, setTecnicoIdFilter] = useState("")
+  const [tipoDispositivoFilter, setTipoDispositivoFilter] = useState("")
+  const [marcaFilter, setMarcaFilter] = useState("")
+  const [estadoCobroFilter, setEstadoCobroFilter] = useState("")
+  const [conPresupuestoFilter, setConPresupuestoFilter] = useState("")
+  const [conSenaFilter, setConSenaFilter] = useState("")
+  const [fechaPrometidaDesde, setFechaPrometidaDesde] = useState("")
+  const [fechaPrometidaHasta, setFechaPrometidaHasta] = useState("")
   const [showFilters, setShowFilters] = useState(false)
 
-  const quickFilters = isTecnico ? [
+  // Quick filter for vencimiento (separate from estado quick filters)
+  const [quickFilterActive, setQuickFilterActive] = useState("")
+
+  // Fetch técnicos for filter dropdown
+  const { data: tecnicosData } = useSWR(!isTecnico ? "/api/tecnicos" : null, fetcher)
+  const tecnicos: { id: string; nombre: string }[] = tecnicosData || []
+
+  // Fetch tipos de dispositivo for filter dropdown
+  const { data: tiposData } = useSWR("/api/tipos-dispositivo", fetcher)
+  const tiposDispositivo: { id: string; nombre: string; codigo: string }[] = tiposData || []
+
+  const tecnicoQuickFilters = isTecnico ? [
     { label: "Sin diagnóstico", value: "RECIBIDO" as EstadoOrden },
     { label: "En reparación", value: "EN_REPARACION" as EstadoOrden },
     { label: "Esperando repuesto", value: "ESPERANDO_REPUESTO" as EstadoOrden },
     { label: "Listo para entregar", value: "REPARADO" as EstadoOrden },
   ] : []
+
+  type QuickFilterKey = "vencidas" | "venceHoy" | "pendientesCobro" | "sinTecnico"
+  const generalQuickFilters: { label: string; value: QuickFilterKey }[] = [
+    { label: "Vencidas", value: "vencidas" },
+    { label: "Vence hoy", value: "venceHoy" },
+    { label: "Pendientes de cobro", value: "pendientesCobro" },
+    ...(!isTecnico ? [{ label: "Sin técnico", value: "sinTecnico" as QuickFilterKey }] : []),
+  ]
 
   // Sorting
   const [sortKey, setSortKey] = useState<string>("fechaIngreso")
@@ -181,12 +208,25 @@ export function OrdenesList() {
     if (estado) params.append("estado", estado)
     if (fechaDesde) params.append("fechaDesde", fechaDesde)
     if (fechaHasta) params.append("fechaHasta", fechaHasta)
+    if (tecnicoIdFilter) params.append("tecnicoId", tecnicoIdFilter)
+    if (tipoDispositivoFilter) params.append("tipoDispositivo", tipoDispositivoFilter)
+    if (marcaFilter) params.append("marca", marcaFilter)
+    if (estadoCobroFilter) params.append("estadoCobro", estadoCobroFilter)
+    if (conPresupuestoFilter) params.append("conPresupuesto", conPresupuestoFilter)
+    if (conSenaFilter) params.append("conSena", conSenaFilter)
+    if (fechaPrometidaDesde) params.append("fechaPrometidaDesde", fechaPrometidaDesde)
+    if (fechaPrometidaHasta) params.append("fechaPrometidaHasta", fechaPrometidaHasta)
+    // Quick filters that map to backend params
+    if (quickFilterActive === "vencidas") params.append("vencimiento", "vencidas")
+    if (quickFilterActive === "venceHoy") params.append("vencimiento", "venceHoy")
+    if (quickFilterActive === "pendientesCobro") params.append("estadoCobro", "PENDIENTE")
+    if (quickFilterActive === "sinTecnico") params.append("sinTecnico", "true")
     params.append("page", page.toString())
     params.append("limit", pageSize.toString())
     params.append("sortBy", sortKey)
     params.append("sortOrder", sortDirection)
     return `/api/ordenes?${params.toString()}`
-  }, [debouncedSearch, estado, fechaDesde, fechaHasta, page, pageSize, sortKey, sortDirection])
+  }, [debouncedSearch, estado, fechaDesde, fechaHasta, tecnicoIdFilter, tipoDispositivoFilter, marcaFilter, estadoCobroFilter, conPresupuestoFilter, conSenaFilter, fechaPrometidaDesde, fechaPrometidaHasta, quickFilterActive, page, pageSize, sortKey, sortDirection])
 
   // SWR para fetching con caché
   const { data, error, isLoading, mutate } = useSWR(apiUrl, fetcher, {
@@ -266,6 +306,15 @@ export function OrdenesList() {
     setEstado("")
     setFechaDesde("")
     setFechaHasta("")
+    setTecnicoIdFilter("")
+    setTipoDispositivoFilter("")
+    setMarcaFilter("")
+    setEstadoCobroFilter("")
+    setConPresupuestoFilter("")
+    setConSenaFilter("")
+    setFechaPrometidaDesde("")
+    setFechaPrometidaHasta("")
+    setQuickFilterActive("")
     setPage(1)
   }
 
@@ -274,7 +323,12 @@ export function OrdenesList() {
     setPage(1)
   }
 
-  const hasActiveFilters = search || estado || fechaDesde || fechaHasta
+  const applyGeneralQuickFilter = (value: QuickFilterKey) => {
+    setQuickFilterActive(quickFilterActive === value ? "" : value)
+    setPage(1)
+  }
+
+  const hasActiveFilters = search || estado || fechaDesde || fechaHasta || tecnicoIdFilter || tipoDispositivoFilter || marcaFilter || estadoCobroFilter || conPresupuestoFilter || conSenaFilter || fechaPrometidaDesde || fechaPrometidaHasta || quickFilterActive
 
   const columns: Column<OrdenServicio>[] = [
     {
@@ -450,6 +504,10 @@ export function OrdenesList() {
                 ...(estado && { estado }),
                 ...(fechaDesde && { desde: fechaDesde }),
                 ...(fechaHasta && { hasta: fechaHasta }),
+                ...(tecnicoIdFilter && { tecnicoId: tecnicoIdFilter }),
+                ...(tipoDispositivoFilter && { tipoDispositivo: tipoDispositivoFilter }),
+                ...(marcaFilter && { marca: marcaFilter }),
+                ...(estadoCobroFilter && { estadoCobro: estadoCobroFilter }),
               }}
               variant="outline"
               size="sm"
@@ -462,77 +520,223 @@ export function OrdenesList() {
         </div>
       </div>
 
-      {/* Quick filter chips - only for tecnico */}
-      {isTecnico && quickFilters.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {quickFilters.map((qf) => (
-            <button
-              key={qf.value}
-              onClick={() => applyQuickFilter(qf.value)}
-              className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium transition-colors border ${
-                estado === qf.value
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-background text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
-              }`}
-            >
-              {qf.label}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Quick filter chips */}
+      <div className="flex flex-wrap gap-2">
+        {/* Estado quick filters for tecnico */}
+        {isTecnico && tecnicoQuickFilters.map((qf) => (
+          <button
+            key={qf.value}
+            onClick={() => applyQuickFilter(qf.value)}
+            className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium transition-colors border ${
+              estado === qf.value
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-background text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
+            }`}
+          >
+            {qf.label}
+          </button>
+        ))}
+        {/* General quick filters for all roles */}
+        {generalQuickFilters.map((qf) => (
+          <button
+            key={qf.value}
+            onClick={() => applyGeneralQuickFilter(qf.value)}
+            className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium transition-colors border ${
+              quickFilterActive === qf.value
+                ? qf.value === "vencidas" ? "bg-red-500 text-white border-red-500"
+                  : qf.value === "venceHoy" ? "bg-orange-500 text-white border-orange-500"
+                  : "bg-primary text-primary-foreground border-primary"
+                : "bg-background text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
+            }`}
+          >
+            {qf.label}
+          </button>
+        ))}
+      </div>
 
       {/* Filters Panel */}
       {showFilters && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:flex md:flex-wrap items-center gap-3 p-4 bg-muted/30 rounded-lg border">
-          <Select
-            value={estado || "all"}
-            onValueChange={(value) => {
-              setEstado(value === "all" ? "" : value as EstadoOrden)
-              setPage(1)
-            }}
-          >
-            <SelectTrigger className="w-full sm:w-auto sm:min-w-[180px]">
-              <SelectValue placeholder="Todos los estados" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos los estados</SelectItem>
-              {estadoOptions.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <DatePicker
-            placeholder="Desde"
-            value={fechaDesde}
-            onChange={(value) => {
-              setFechaDesde(value)
-              setPage(1)
-            }}
-          />
-
-          <DatePicker
-            placeholder="Hasta"
-            value={fechaHasta}
-            onChange={(value) => {
-              setFechaHasta(value)
-              setPage(1)
-            }}
-          />
-
-          {hasActiveFilters && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={clearFilters}
-              className="gap-1 text-muted-foreground w-full sm:w-auto"
+        <div className="space-y-3 p-4 bg-muted/30 rounded-lg border">
+          {/* Row 1: Estado, Técnico, Tipo dispositivo */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            <Select
+              value={estado || "all"}
+              onValueChange={(value) => {
+                setEstado(value === "all" ? "" : value as EstadoOrden)
+                setPage(1)
+              }}
             >
-              <X className="h-4 w-4" />
-              Limpiar
-            </Button>
-          )}
+              <SelectTrigger>
+                <SelectValue placeholder="Todos los estados" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los estados</SelectItem>
+                {estadoOptions.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {!isTecnico && (
+              <Select
+                value={tecnicoIdFilter || "all"}
+                onValueChange={(value) => {
+                  setTecnicoIdFilter(value === "all" ? "" : value)
+                  setPage(1)
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos los técnicos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los técnicos</SelectItem>
+                  {tecnicos.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+
+            <Select
+              value={tipoDispositivoFilter || "all"}
+              onValueChange={(value) => {
+                setTipoDispositivoFilter(value === "all" ? "" : value)
+                setPage(1)
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Todos los tipos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los tipos</SelectItem>
+                {tiposDispositivo.map((t) => (
+                  <SelectItem key={t.id || t.codigo} value={t.codigo}>
+                    {t.nombre}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Input
+              placeholder="Filtrar por marca..."
+              value={marcaFilter}
+              onChange={(e) => {
+                setMarcaFilter(e.target.value)
+                setPage(1)
+              }}
+              className="h-9"
+            />
+          </div>
+
+          {/* Row 2: Estado cobro, Presupuesto, Seña, Fechas ingreso */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            <Select
+              value={estadoCobroFilter || "all"}
+              onValueChange={(value) => {
+                setEstadoCobroFilter(value === "all" ? "" : value)
+                setPage(1)
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Estado de cobro" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los cobros</SelectItem>
+                <SelectItem value="PENDIENTE">Pendiente</SelectItem>
+                <SelectItem value="PARCIAL">Parcial</SelectItem>
+                <SelectItem value="COBRADO">Cobrado</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={conPresupuestoFilter || "all"}
+              onValueChange={(value) => {
+                setConPresupuestoFilter(value === "all" ? "" : value)
+                setPage(1)
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Presupuesto" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Con/sin presupuesto</SelectItem>
+                <SelectItem value="si">Con presupuesto</SelectItem>
+                <SelectItem value="no">Sin presupuesto</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={conSenaFilter || "all"}
+              onValueChange={(value) => {
+                setConSenaFilter(value === "all" ? "" : value)
+                setPage(1)
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Seña" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Con/sin seña</SelectItem>
+                <SelectItem value="si">Con seña</SelectItem>
+                <SelectItem value="no">Sin seña</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <DatePicker
+              placeholder="Ingreso desde"
+              value={fechaDesde}
+              onChange={(value) => {
+                setFechaDesde(value)
+                setPage(1)
+              }}
+            />
+          </div>
+
+          {/* Row 3: Fechas */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            <DatePicker
+              placeholder="Ingreso hasta"
+              value={fechaHasta}
+              onChange={(value) => {
+                setFechaHasta(value)
+                setPage(1)
+              }}
+            />
+
+            <DatePicker
+              placeholder="Prometida desde"
+              value={fechaPrometidaDesde}
+              onChange={(value) => {
+                setFechaPrometidaDesde(value)
+                setPage(1)
+              }}
+            />
+
+            <DatePicker
+              placeholder="Prometida hasta"
+              value={fechaPrometidaHasta}
+              onChange={(value) => {
+                setFechaPrometidaHasta(value)
+                setPage(1)
+              }}
+            />
+
+            {hasActiveFilters && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearFilters}
+                className="gap-1 text-muted-foreground h-9"
+              >
+                <X className="h-4 w-4" />
+                Limpiar filtros
+              </Button>
+            )}
+          </div>
         </div>
       )}
 

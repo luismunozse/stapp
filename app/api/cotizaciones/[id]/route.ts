@@ -12,6 +12,7 @@ const itemSchema = z.object({
   unidad: z.string().optional(),
   descuentoTipo: z.enum(["porcentaje", "fijo"]).optional(),
   descuentoValor: z.number().min(0).optional(),
+  inventarioId: z.string().nullable().optional(),
 })
 
 const updateCotizacionSchema = z.object({
@@ -85,6 +86,7 @@ function formatCotizacion(c: any) {
       unidad: i.unidad,
       descuentoTipo: i.descuento_tipo,
       descuentoValor: i.descuento_valor,
+      inventarioId: i.inventario_id ?? null,
     })),
   }
 }
@@ -249,6 +251,7 @@ export async function PUT(
             unidad: item.unidad || "Unidad",
             descuento_tipo: item.descuentoTipo || "porcentaje",
             descuento_valor: item.descuentoValor || 0,
+            inventario_id: item.inventarioId || null,
           }))
         )
     }
@@ -261,6 +264,19 @@ export async function PUT(
 
     if (updateError) {
       throw updateError
+    }
+
+    // If changing to RECHAZADA from ACEPTADA, release reservations
+    if (data.estado === "RECHAZADA" && existing.estado === "ACEPTADA") {
+      try {
+        await supabaseAdmin.rpc("liberar_items_cotizacion", {
+          p_cotizacion_id: id,
+          p_user_id: userId,
+          p_motivo: "Cotización rechazada",
+        })
+      } catch (releaseErr) {
+        console.error("Error releasing stock reservations:", releaseErr)
+      }
     }
 
     // Si cambió a ENVIADA y está vinculada a una orden, transicionar a PRESUPUESTADO

@@ -26,6 +26,7 @@ interface CotizacionItem {
   unidad?: string
   descuentoTipo?: string
   descuentoValor?: number
+  inventarioId?: string | null
 }
 
 interface CotizacionFormProps {
@@ -151,7 +152,7 @@ export function CotizacionForm({
     }
   }
 
-  const updateItem = (index: number, field: string, value: string | number) => {
+  const updateItem = (index: number, field: string, value: string | number | null) => {
     const newItems = [...items]
     newItems[index] = { ...newItems[index], [field]: value }
     setItems(newItems)
@@ -164,7 +165,7 @@ export function CotizacionForm({
   }
 
   const addItem = () => {
-    setItems([...items, { descripcion: "", cantidad: 1, precioUnitario: 0, unidad: "Unidad", descuentoTipo: "porcentaje", descuentoValor: 0 }])
+    setItems([...items, { descripcion: "", cantidad: 1, precioUnitario: 0, unidad: "Unidad", descuentoTipo: "porcentaje", descuentoValor: 0, inventarioId: null }])
   }
 
   const handleLoadTemplates = async () => {
@@ -252,6 +253,7 @@ export function CotizacionForm({
           unidad: item.unidad || "Unidad",
           descuentoTipo: item.descuentoTipo || "porcentaje",
           descuentoValor: item.descuentoValor || 0,
+          inventarioId: item.inventarioId || null,
         })),
         notas: notas || undefined,
         fechaVencimiento: fechaVencimiento || undefined,
