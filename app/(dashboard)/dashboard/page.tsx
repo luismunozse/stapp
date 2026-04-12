@@ -36,6 +36,8 @@ const getDashboardData = unstable_cache(
       ingresosUltimos7DiasResult,
       ordenesRecientesResult,
       ventasHoyResult,
+      facturasHoyResult,
+      cobrosOrdenHoyResult,
       ventasMesResult,
       ventasUltimos7DiasResult,
       garantiasVentaPorVencerResult,
@@ -109,6 +111,20 @@ const getDashboardData = unstable_cache(
         .select("id, total")
         .eq("organization_id", organizationId)
         .eq("estado", "COMPLETADA")
+        .gte("created_at", new Date(new Date().setHours(0, 0, 0, 0)).toISOString()),
+      // Facturas pagadas hoy
+      supabaseAdmin
+        .from("facturas")
+        .select("total, orden_id, ordenes_servicio!inner(organization_id)")
+        .eq("ordenes_servicio.organization_id", organizationId)
+        .eq("estado_pago", "PAGADO")
+        .gte("fecha", new Date(new Date().setHours(0, 0, 0, 0)).toISOString()),
+      // Cobros directos a órdenes de hoy
+      supabaseAdmin
+        .from("cobros_orden")
+        .select("monto, orden_id")
+        .eq("organization_id", organizationId)
+        .neq("anulado", true)
         .gte("created_at", new Date(new Date().setHours(0, 0, 0, 0)).toISOString()),
 
       // Ventas del mes
@@ -198,6 +214,8 @@ const getDashboardData = unstable_cache(
       ingresosUltimos7DiasResult,
       ordenesRecientesResult,
       ventasHoyResult,
+      facturasHoyResult,
+      cobrosOrdenHoyResult,
       ventasMesResult,
       ventasUltimos7DiasResult,
       garantiasVentaPorVencerResult,
@@ -405,6 +423,8 @@ export default async function DashboardPage() {
     ingresosUltimos7DiasResult,
     ordenesRecientesResult,
     ventasHoyResult,
+    facturasHoyResult,
+    cobrosOrdenHoyResult,
     ventasMesResult,
     ventasUltimos7DiasResult,
     garantiasVentaPorVencerResult,
@@ -554,10 +574,17 @@ export default async function DashboardPage() {
     diasAtraso: Math.floor((Date.now() - new Date(o.fecha_prometida).getTime()) / (1000 * 60 * 60 * 24)),
   }))
 
-  // Procesar ventas
+  // Procesar ingresos de hoy (ventas + facturas + cobros de órdenes)
   const ventasHoyData = ventasHoyResult.data as { total: number }[] | null
   const ventasHoyTotal = ventasHoyData?.reduce((sum, v) => sum + (v.total || 0), 0) || 0
-  const ventasHoyCount = ventasHoyData?.length || 0
+  const cobrosOrdenHoyData = (cobrosOrdenHoyResult.data as { monto: number; orden_id: string }[] | null) || []
+  const ordenesConCobroHoy = new Set(cobrosOrdenHoyData.map((c) => c.orden_id))
+  const facturasHoyData = facturasHoyResult.data as { total: number; orden_id: string }[] | null
+  const ingresosFacturasHoy = (facturasHoyData || [])
+    .filter((f) => !ordenesConCobroHoy.has(f.orden_id))
+    .reduce((sum, f) => sum + Number(f.total || 0), 0)
+  const ingresosCobrosOrdenHoy = cobrosOrdenHoyData.reduce((sum, c) => sum + Number(c.monto || 0), 0)
+  const ingresosHoyTotal = ventasHoyTotal + ingresosFacturasHoy + ingresosCobrosOrdenHoy
   const ventasMesData = ventasMesResult.data as { total: number }[] | null
   const ventasMesTotal = ventasMesData?.reduce((sum, v) => sum + (v.total || 0), 0) || 0
   const ventasMesCount = ventasMesData?.length || 0
@@ -602,10 +629,10 @@ export default async function DashboardPage() {
       bgClass: "bg-purple-50 dark:bg-purple-900/30",
     },
     {
-      title: "Ventas Hoy",
-      value: formatCurrency(ventasHoyTotal, moneda),
-      description: `${ventasHoyCount} venta${ventasHoyCount !== 1 ? "s" : ""}`,
-      icon: ShoppingCart,
+      title: "Ingresos Hoy",
+      value: formatCurrency(ingresosHoyTotal, moneda),
+      description: "Ventas, servicios y cobros",
+      icon: DollarSign,
       colorClass: "text-emerald-600 dark:text-emerald-400",
       bgClass: "bg-emerald-50 dark:bg-emerald-900/30",
     },
