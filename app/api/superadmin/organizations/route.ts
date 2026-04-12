@@ -109,6 +109,19 @@ export async function GET(request: Request) {
       query = query.in("id", noActivityOrgIds)
     }
 
+    // Filtro "trial_expired": orgs en TRIALING con trial_end en el pasado
+    let trialExpiredOrgIds: string[] | null = null
+    if (plan === "trial_expired") {
+      const { data: expiredSubs } = await supabaseAdmin
+        .from("subscriptions")
+        .select("organization_id")
+        .eq("status", "TRIALING")
+        .not("trial_end", "is", null)
+        .lt("trial_end", new Date().toISOString())
+
+      trialExpiredOrgIds = (expiredSubs || []).map((s) => s.organization_id)
+    }
+
     // Aplicar filtro de plan a nivel SQL
     if (plan === "premium") {
       if (!premiumOrgIds || premiumOrgIds.length === 0) {
@@ -129,6 +142,16 @@ export async function GET(request: Request) {
           `(${premiumOrgIds.map((id) => `"${id}"`).join(",")})`
         )
       }
+    } else if (plan === "trial_expired") {
+      if (!trialExpiredOrgIds || trialExpiredOrgIds.length === 0) {
+        return NextResponse.json({
+          organizations: [],
+          total: 0,
+          page,
+          limit,
+        } satisfies OrganizationsListResponse)
+      }
+      query = query.in("id", trialExpiredOrgIds)
     }
 
     // Paginación

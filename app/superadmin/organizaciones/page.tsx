@@ -523,8 +523,9 @@ export default function OrganizacionesPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos los planes</SelectItem>
-                  <SelectItem value="free">Free</SelectItem>
-                  <SelectItem value="premium">Premium</SelectItem>
+                  <SelectItem value="free">Free / Trial</SelectItem>
+                  <SelectItem value="premium">Premium (pago)</SelectItem>
+                  <SelectItem value="trial_expired">Trial expirado</SelectItem>
                 </SelectContent>
               </Select>
             </div>
