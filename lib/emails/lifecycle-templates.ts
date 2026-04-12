@@ -132,6 +132,7 @@ export type LifecycleEmailType =
   | "WELCOME"
   | "TIP_DAY_3"
   | "TIP_DAY_7"
+  | "TIP_DAY_14"
   | "TRIAL_EXPIRING_5"
   | "TRIAL_EXPIRING_1"
   | "TRIAL_EXPIRED"
@@ -228,6 +229,33 @@ export function getLifecycleEmail(type: LifecycleEmailType, data: LifecycleEmail
             ${tipCard("📈", "Reportes y métricas", "Analizá tu taller: órdenes por mes, ingresos, técnicos más productivos y más.")}
 
             ${button(appUrl, "Explorar más funciones")}
+          `,
+        }),
+      }
+
+    case "TIP_DAY_14":
+      return {
+        subject: "¿Ya exploraste todo lo que STApp puede hacer por tu taller?",
+        html: baseTemplate({
+          preheader: `${data.nombre}, hay funcionalidades que quizás todavía no probaste`,
+          content: `
+            <h1 class="text-heading" style="color: #1f2937; font-size: 24px; font-weight: 700; text-align: center; margin: 0 0 16px 0;">
+              Llevás 2 semanas con STApp
+            </h1>
+            <p class="text-body" style="color: #4b5563; font-size: 16px; text-align: center; margin: 0 0 24px 0;">
+              Hola <strong>${data.nombre}</strong>, ¿estás aprovechando al máximo tu período de prueba? Estas funcionalidades pueden hacer la diferencia en tu día a día:
+            </p>
+
+            ${tipCard("💰", "Cotizaciones con aprobación online", "Enviá presupuestos profesionales que tu cliente aprueba o rechaza con firma digital desde su celular, sin crear cuenta.")}
+            ${tipCard("📊", "17 reportes avanzados", "Analizá ingresos, rendimiento de técnicos, fallas comunes, rentabilidad y más. Exportá todo a Excel.")}
+            ${tipCard("💬", "Notificaciones por WhatsApp", "Avisale a tu cliente automáticamente cuando su equipo está listo para retirar o cuando hay un presupuesto nuevo.")}
+            ${tipCard("🖥️", "Modo Kiosco", "Mostrá en una pantalla del local el estado de las reparaciones para que tus clientes no pregunten.")}
+
+            <p class="text-body" style="color: #4b5563; font-size: 15px; text-align: center; margin: 0 0 8px 0;">
+              Todavía tenés tiempo de probar todo gratis. ¡No te lo pierdas!
+            </p>
+
+            ${button(appUrl, "Explorar funcionalidades")}
           `,
         }),
       }

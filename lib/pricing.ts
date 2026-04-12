@@ -37,7 +37,7 @@ const FALLBACK_ALL_PLANS: AllPlansPrices = {
     ars: { monthly: 10999, yearly: 105590 },
     usd: { monthly: 8, yearly: 77 },
     limits: {
-      ordenes: 30,
+      ordenes: 500,
       tecnicos: 1,
       clientes: null,
       vendedores: 2,

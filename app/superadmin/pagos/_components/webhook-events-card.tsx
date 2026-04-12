@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Webhook, RefreshCw, Loader2 } from "lucide-react"
+import { Webhook, RefreshCw, Loader2, AlertTriangle } from "lucide-react"
 import { useSuperadminFetch } from "@/hooks/use-superadmin-fetch"
 import { formatDateTime } from "@/lib/utils"
 
@@ -33,6 +33,8 @@ interface WebhookEvent {
 interface EventsResponse {
   events: WebhookEvent[]
   total: number
+  errorsLast24h: number
+  pendingManualReview: number
 }
 
 const STATUS_VARIANT: Record<
@@ -51,13 +53,19 @@ export function WebhookEventsCard() {
   const [events, setEvents] = useState<WebhookEvent[]>([])
   const [providerFilter, setProviderFilter] = useState("")
   const [statusFilter, setStatusFilter] = useState("")
+  const [errorsLast24h, setErrorsLast24h] = useState(0)
+  const [pendingManualReview, setPendingManualReview] = useState(0)
 
   const load = useCallback(async () => {
     const params = new URLSearchParams({ limit: "20" })
     if (providerFilter) params.set("provider", providerFilter)
     if (statusFilter) params.set("status", statusFilter)
     const result = await fetchData(`/api/superadmin/webhook-events?${params}`)
-    if (result) setEvents(result.events || [])
+    if (result) {
+      setEvents(result.events || [])
+      setErrorsLast24h(result.errorsLast24h ?? 0)
+      setPendingManualReview(result.pendingManualReview ?? 0)
+    }
   }, [providerFilter, statusFilter, fetchData])
 
   useEffect(() => {
@@ -85,6 +93,19 @@ export function WebhookEventsCard() {
           buscalo acá: vas a ver si llegó, si la firma era válida y por
           qué se aplicó o no.
         </p>
+        {(errorsLast24h > 0 || pendingManualReview > 0) && (
+          <div className="flex items-center gap-2 p-2 rounded-md bg-red-50 border border-red-200 dark:bg-red-950 dark:border-red-800">
+            <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400 shrink-0" />
+            <p className="text-xs text-red-700 dark:text-red-300">
+              {errorsLast24h > 0 && (
+                <span className="font-semibold">{errorsLast24h} error{errorsLast24h !== 1 ? "es" : ""} en las últimas 24h. </span>
+              )}
+              {pendingManualReview > 0 && (
+                <span className="font-semibold">{pendingManualReview} webhook{pendingManualReview !== 1 ? "s" : ""} requiere{pendingManualReview !== 1 ? "n" : ""} intervención manual.</span>
+              )}
+            </p>
+          </div>
+        )}
         <div className="flex gap-2 pt-2">
           <Select
             value={providerFilter || "all"}

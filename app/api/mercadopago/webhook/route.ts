@@ -107,11 +107,77 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true, result })
   } catch (error) {
     console.error("[mp-webhook] Error procesando webhook:", error)
+
+    // Contar reintentos previos de este mismo evento para detectar fallos recurrentes
+    const eventId = dataIdForSig
+    let retryCount = 0
+    let requiresManualReview = false
+
+    if (eventId) {
+      const { count } = await supabaseAdmin
+        .from("webhook_events")
+        .select("id", { count: "exact", head: true })
+        .eq("provider_event_id", String(eventId))
+        .eq("status", "ERROR")
+
+      retryCount = (count ?? 0) + 1 // +1 por el error actual
+
+      // Si superó 3 reintentos, marcar como requiere intervención manual
+      if (retryCount >= 3) {
+        requiresManualReview = true
+        console.error(
+          `[mp-webhook] Payment ${eventId} falló ${retryCount} veces. ` +
+          `Marcado como requiere intervención manual.`
+        )
+      }
+    }
+
     await finishWebhookEvent(log, {
       status: "ERROR",
       httpStatus: 500,
       error,
     })
+
+    // Actualizar retry_count y requires_manual_review en el evento
+    if (log.id) {
+      try {
+        await supabaseAdmin
+          .from("webhook_events")
+          .update({
+            retry_count: retryCount,
+            requires_manual_review: requiresManualReview,
+          })
+          .eq("id", log.id)
+      } catch {
+        // ignorar errores de actualización de tracking
+      }
+    }
+
+    // Notificar al superadmin si es un fallo recurrente (3+ reintentos)
+    if (requiresManualReview) {
+      try {
+        const adminEmail = process.env.SUPERADMIN_EMAIL || "admin@stapp.com.ar"
+        const apiKey = process.env.ENVIALOSIMPLE_API_KEY
+        if (apiKey) {
+          await fetch("https://backend.envialosimple.email/api/v1/mail/send", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              from: process.env.EMAIL_FROM || "noreply@stapp.com.ar",
+              to: adminEmail,
+              subject: `[ALERTA] Webhook MercadoPago falla ${retryCount}x — payment ${eventId}`,
+              html: `<p>El webhook para payment_id <strong>${eventId}</strong> falló <strong>${retryCount}</strong> veces.</p>
+                     <p><strong>Error:</strong> ${error instanceof Error ? error.message : String(error)}</p>
+                     <p>Requiere intervención manual desde el panel de SuperAdmin → Pagos.</p>`,
+            }),
+          }).catch(() => {})
+        }
+      } catch (notifErr) {
+        // No bloquear el webhook por un error de notificación
+        console.error("[mp-webhook] Error enviando alerta:", notifErr)
+      }
+    }
+
     return NextResponse.json(
       { error: "Webhook handler failed" },
       { status: 500 }
@@ -240,9 +306,7 @@ export async function handlePaymentNotification(
   }
 
   // Resolver el plan del pago.
-  // Prioridad: plan_id del external_reference > plan_slug > fallback a 'profesional'.
-  // El fallback existe para pagos viejos (antes de la migración 107) que no
-  // tenían plan_id en external_reference.
+  // Prioridad: plan_id > plan_slug > plan de la suscripción activa > 'profesional' > cualquier PREMIUM.
   let targetPlan: { id: string; slug: string | null } | null = null
 
   if (externalRef.plan_id) {
@@ -261,6 +325,19 @@ export async function handlePaymentNotification(
       .eq("slug", externalRef.plan_slug)
       .maybeSingle()
     if (data) targetPlan = data
+  }
+
+  // Fallback: plan asignado a la suscripción activa de la org
+  if (!targetPlan) {
+    const { data: activeSub } = await supabaseAdmin
+      .from("subscriptions")
+      .select("plan_id, plans(id, slug)")
+      .eq("organization_id", organizationId)
+      .maybeSingle()
+    if (activeSub?.plans) {
+      const p = activeSub.plans as unknown as { id: string; slug: string | null }
+      targetPlan = { id: p.id, slug: p.slug }
+    }
   }
 
   // Fallback: plan Profesional (antes era el único PREMIUM)
@@ -287,9 +364,22 @@ export async function handlePaymentNotification(
   }
 
   if (!targetPlan) {
-    console.error(`[MP webhook] No target plan found (payment ${paymentId})`)
-    throw new Error("Target plan not found")
+    console.error(
+      `[MP webhook] No target plan found for payment ${paymentId}, ` +
+      `org=${organizationId}, ref_plan_id=${externalRef.plan_id ?? "none"}, ` +
+      `ref_plan_slug=${externalRef.plan_slug ?? "none"}`
+    )
+    return {
+      status: "SKIPPED",
+      reason: "plan_not_found",
+      organizationId,
+    }
   }
+
+  console.log(
+    `[MP webhook] Resolved plan: id=${targetPlan.id}, slug=${targetPlan.slug} ` +
+    `for payment ${paymentId}, org=${organizationId}`
+  )
 
   const premiumPlan = targetPlan
 

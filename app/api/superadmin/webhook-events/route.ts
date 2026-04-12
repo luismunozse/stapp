@@ -76,6 +76,20 @@ export async function GET(request: Request) {
     )
   }
 
+  // Contar errores en las últimas 24h y webhooks pendientes de revisión manual
+  const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  const [errorsRes, manualReviewRes] = await Promise.all([
+    supabaseAdmin
+      .from("webhook_events")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "ERROR")
+      .gte("received_at", since24h),
+    supabaseAdmin
+      .from("webhook_events")
+      .select("id", { count: "exact", head: true })
+      .eq("requires_manual_review", true),
+  ])
+
   return NextResponse.json({
     events: (events || []).map((e) => ({
       ...e,
@@ -84,5 +98,7 @@ export async function GET(request: Request) {
     total: count || 0,
     page,
     limit,
+    errorsLast24h: errorsRes.count ?? 0,
+    pendingManualReview: manualReviewRes.count ?? 0,
   })
 }

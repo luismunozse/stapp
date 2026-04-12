@@ -52,7 +52,7 @@ export async function GET(request: Request) {
   try {
     const now = new Date()
     const results = {
-      welcome: 0, tipDay3: 0, tipDay7: 0,
+      welcome: 0, tipDay3: 0, tipDay7: 0, tipDay14: 0,
       trialExpiring5: 0, trialExpiring1: 0, trialExpired: 0,
       winBack7: 0, winBack30: 0, milestones: 0,
     }
@@ -110,6 +110,8 @@ export async function GET(request: Request) {
         if (await trySend(org, "TIP_DAY_3")) results.tipDay3++
       } else if (orgAge === 7) {
         if (await trySend(org, "TIP_DAY_7")) results.tipDay7++
+      } else if (orgAge === 14) {
+        if (await trySend(org, "TIP_DAY_14")) results.tipDay14++
       }
     }
 

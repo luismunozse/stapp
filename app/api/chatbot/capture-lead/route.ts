@@ -42,6 +42,45 @@ export async function POST(request: Request) {
       )
     }
 
+    // Si no viene nombre, intentar extraerlo del historial de la conversación
+    if (!data.nombre) {
+      const { data: mensajes } = await supabaseAdmin
+        .from("chatbot_mensajes")
+        .select("tipo, contenido")
+        .eq("conversacion_id", data.conversacionId)
+        .eq("tipo", "USER")
+        .order("created_at", { ascending: true })
+        .limit(20)
+
+      if (mensajes) {
+        const namePatterns = [
+          /(?:me llamo|mi nombre es|soy)\s+([A-ZÁÉÍÓÚÑa-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑa-záéíóúñ]+)?)/i,
+        ]
+        for (const msg of mensajes) {
+          for (const pattern of namePatterns) {
+            const match = msg.contenido.match(pattern)
+            if (match) {
+              data.nombre = match[1].trim()
+              break
+            }
+          }
+          if (data.nombre) break
+        }
+      }
+
+      // Fallback: usar la parte local del email como nombre legible
+      if (!data.nombre && data.email) {
+        const localPart = data.email.split("@")[0]
+        // Convertir "juan.perez" o "juan_perez" a "Juan Perez"
+        const formatted = localPart
+          .replace(/[._-]/g, " ")
+          .replace(/\b\w/g, (c) => c.toUpperCase())
+        if (formatted.length >= 2) {
+          data.nombre = formatted
+        }
+      }
+    }
+
     // Helper para enviar notificación sin bloquear
     const notifyLead = (leadData: typeof data, origen: string) => {
       sendNewLeadNotification({

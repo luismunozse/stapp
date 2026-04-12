@@ -136,6 +136,12 @@ export async function POST(request: Request) {
     })
   }
 
+  console.log(
+    `[reconcile-mp] Iniciando reconciliación: paymentId=${paymentId}, ` +
+    `orgId=${organizationId ?? "unknown"}, mp_status=${mpPayment?.status}, ` +
+    `mp_amount=${mpPayment?.transaction_amount}, superadmin=${email}`
+  )
+
   // 4. Re-ejecutar la lógica del webhook. Logueamos como un evento
   //    con event_type='manual_reconciliation' para que se distinga
   //    de los webhooks reales en el panel.
@@ -149,6 +155,26 @@ export async function POST(request: Request) {
 
   try {
     const result = await handlePaymentNotification(paymentId)
+
+    // Si el plan no se encontró, devolver 400 en vez de 500
+    if (result.status === "SKIPPED" && result.reason === "plan_not_found") {
+      await finishWebhookEvent(log, {
+        status: "SKIPPED",
+        httpStatus: 400,
+        organizationId: result.organizationId ?? organizationId,
+        errorMessage: "No se encontró un plan válido para asignar a esta organización",
+      })
+      return NextResponse.json(
+        {
+          error: "plan_not_found",
+          message:
+            "No se encontró un plan Premium válido para esta organización. " +
+            "Verificá que exista al menos un plan activo con tipo PREMIUM en la tabla plans.",
+          organizationId: result.organizationId,
+        },
+        { status: 400 }
+      )
+    }
 
     await finishWebhookEvent(log, {
       status: result.status === "PROCESSED" ? "PROCESSED" : "SKIPPED",
