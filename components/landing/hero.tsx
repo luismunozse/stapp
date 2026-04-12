@@ -588,9 +588,10 @@ export function Hero() {
 
   const benefits = [
     "Órdenes ilimitadas",
-    "Seguimiento online para clientes",
+    "Caja y finanzas",
     "Punto de venta incluido",
-    "15+ reportes avanzados",
+    "Seguimiento online",
+    "Asistente IA 24/7",
     "30 días gratis",
   ]
 
@@ -642,7 +643,8 @@ export function Hero() {
                 transition={{ duration: 0.5, delay: 0.2 }}
               >
                 Dejá de anotar en papeles, de olvidarte qué equipo era de quién,
-                y de perseguir cobros. Organizá todo tu taller desde el celular.
+                y de perseguir cobros. Órdenes, caja, inventario, ventas, finanzas
+                y más — organizá todo tu taller desde el celular.
               </m.p>
 
               {/* Benefits */}

@@ -84,6 +84,7 @@ export async function logSuperadminAudit(params: SuperadminAuditParams): Promise
         performer_email: params.email || null,
         is_superadmin_action: true,
       } as Json,
+      description: params.description || null,
       ip_address: params.ipAddress || null,
       user_agent: params.userAgent || null,
     })

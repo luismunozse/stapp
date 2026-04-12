@@ -14,8 +14,7 @@ export async function GET() {
     const last30Days = new Date(today)
     last30Days.setDate(last30Days.getDate() - 30)
 
-    // Obtener stats agregadas con una sola query via RPC
-    const [statsRes, recentSecurityRes] = await Promise.all([
+    const [statsRes, recentSecurityRes, alertConfigRes] = await Promise.all([
       supabaseAdmin.rpc("audit_log_stats", {
         p_today: today.toISOString(),
         p_last_7_days: last7Days.toISOString(),
@@ -28,6 +27,12 @@ export async function GET() {
         .in("action", ["LOGIN_FAILED", "LOGIN", "LOGOUT"])
         .order("created_at", { ascending: false })
         .limit(20),
+      // Config de alertas
+      supabaseAdmin
+        .from("audit_alert_config")
+        .select("*")
+        .eq("id", "default")
+        .single(),
     ])
 
     if (statsRes.error) throw statsRes.error
@@ -42,26 +47,44 @@ export async function GET() {
       actionDistribution: Record<string, number>
       entityDistribution: Record<string, number>
       topUsers: Array<{ userId: string; actionCount: number }>
+      hourlyDistribution: Array<{ hour: number; count: number }>
+      dailyDistribution: Array<{ date: string; count: number }>
+      highActivityUsers: Array<{ userId: string; count: number }>
+      storageEstimate: { totalRows: number; oldestRecord: string; newestRecord: string }
     }
 
-    // Resolver emails de top users
+    // Resolver emails de top users y high activity users
     const topUsers = (stats.topUsers || []).map((u) => ({
       ...u,
       email: null as string | null,
     }))
 
-    const topUserIds = topUsers.map((u) => u.userId).filter(Boolean)
-    if (topUserIds.length > 0) {
+    const highActivityUsers = (stats.highActivityUsers || []).map((u) => ({
+      ...u,
+      email: null as string | null,
+    }))
+
+    const allUserIds = [
+      ...topUsers.map((u) => u.userId),
+      ...highActivityUsers.map((u) => u.userId),
+    ].filter(Boolean)
+
+    const uniqueUserIds = [...new Set(allUserIds)]
+
+    if (uniqueUserIds.length > 0) {
       const { data: usersData } = await supabaseAdmin
         .from("users")
         .select("id, email")
-        .in("id", topUserIds)
+        .in("id", uniqueUserIds)
 
       const usersMap = new Map(
         (usersData || []).map((u) => [u.id, u.email])
       )
 
       for (const user of topUsers) {
+        user.email = usersMap.get(user.userId) || null
+      }
+      for (const user of highActivityUsers) {
         user.email = usersMap.get(user.userId) || null
       }
     }
@@ -84,10 +107,21 @@ export async function GET() {
       }
     })
 
+    // Alert config (con defaults si no existe)
+    const alertConfig = alertConfigRes.data || {
+      user_activity_threshold: 100,
+      user_activity_window_hours: 1,
+      failed_login_threshold: 5,
+      failed_login_window_hours: 24,
+      retention_days: 90,
+    }
+
     return NextResponse.json({
       ...stats,
       securityEvents,
       topUsers,
+      highActivityUsers,
+      alertConfig,
     })
   } catch (error) {
     console.error("Error fetching audit stats:", error)

@@ -19,7 +19,7 @@ import { FAQPageJsonLd, HowToJsonLd, UseCasesListJsonLd } from "@/components/seo
 export const metadata: Metadata = {
   title: "Software de Gestión para Servicio Técnico | Reparación de Celulares y Electrónica",
   description:
-    "STApp es el software #1 para talleres de reparación de celulares y servicio técnico en Argentina. Gestión de órdenes de trabajo, clientes, inventario de repuestos, facturación electrónica y notificaciones WhatsApp. Probá 30 días gratis sin tarjeta.",
+    "STApp es el software #1 para talleres de reparación de celulares y servicio técnico en Argentina. Órdenes de trabajo, caja diaria, inventario, punto de venta, finanzas, cotizaciones, leads, reportes avanzados, asistente IA y notificaciones WhatsApp. Probá 30 días gratis sin tarjeta.",
   keywords: [
     "software servicio técnico",
     "gestión taller reparación",
@@ -38,11 +38,19 @@ export const metadata: Metadata = {
     "software gestión taller electrónica argentina",
     "mejor software servicio técnico",
     "sistema de reparaciones gratis",
+    "caja diaria taller",
+    "control de gastos taller",
+    "punto de venta reparaciones",
+    "dashboard taller celulares",
+    "leads servicio técnico",
+    "asistente IA taller",
+    "órdenes de compra repuestos",
+    "gestión financiera taller",
   ],
   openGraph: {
     title: "STApp - El Mejor Software para Talleres de Reparación de Celulares",
     description:
-      "Gestión completa para tu taller: órdenes de trabajo, clientes, inventario, facturación y WhatsApp. Usado por +500 talleres en Argentina. 30 días gratis.",
+      "Gestión completa para tu taller: órdenes, caja, inventario, ventas, finanzas, leads, cotizaciones, reportes y asistente IA. Usado por +500 talleres en Argentina. 30 días gratis.",
     url: "https://stapp.com.ar",
   },
   alternates: {
@@ -110,6 +118,21 @@ const faqData = [
     question: "\u00bfPueden agregar funciones que necesito?",
     answer:
       "\u00a1Claro! Estamos en constante mejora bas\u00e1ndonos en el feedback de nuestros usuarios. Pod\u00e9s enviar sugerencias desde el sistema de soporte dentro de la app y muchas funciones nuevas nacen de las ideas de nuestros clientes.",
+  },
+  {
+    question: "\u00bfSTApp tiene control de caja y finanzas?",
+    answer:
+      "S\u00ed. STApp incluye caja diaria con apertura y cierre, control de movimientos de efectivo, gesti\u00f3n de gastos por categor\u00eda, gastos recurrentes (alquiler, servicios, sueldos) y un dashboard anal\u00edtico con los KPIs de tu taller en tiempo real. Tambi\u00e9n pod\u00e9s gestionar \u00f3rdenes de compra a proveedores vinculadas directamente al inventario.",
+  },
+  {
+    question: "\u00bfQu\u00e9 es Santi, el asistente de IA?",
+    answer:
+      "Santi es tu asistente virtual integrado dentro de STApp, disponible 24/7. Pod\u00e9s preguntarle c\u00f3mo usar cualquier funci\u00f3n, pedirle ayuda para resolver problemas, o que te gu\u00ede paso a paso. Es como tener soporte t\u00e9cnico instant\u00e1neo sin esperar.",
+  },
+  {
+    question: "\u00bfPuedo captar leads y darles seguimiento?",
+    answer:
+      "S\u00ed. STApp incluye un m\u00f3dulo de captaci\u00f3n de leads donde pod\u00e9s registrar consultas y potenciales clientes. Hac\u00e9 seguimiento de cada lead hasta convertirlo en una orden de trabajo real, sin que se te escape ninguna oportunidad.",
   },
 ]
 

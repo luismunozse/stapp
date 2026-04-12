@@ -31,6 +31,7 @@ export async function GET(request: Request) {
         entity,
         entity_id,
         changes,
+        description,
         ip_address,
         user_agent,
         created_at
@@ -140,7 +141,8 @@ export async function GET(request: Request) {
             : null,
         // Extraer performer email para acciones de superadmin
         performer_email: (changes?.performer_email as string) || null,
-        description: (changes?.description as string) || (changes?.action_description as string) || null,
+        // Preferir columna description, fallback a JSONB para registros antiguos
+        description: log.description || (changes?.description as string) || (changes?.action_description as string) || null,
       }
     })
 

@@ -28,14 +28,120 @@ interface AuditLogParams {
     before?: Record<string, unknown>
     after?: Record<string, unknown>
   }
+  description?: string
   ipAddress?: string
   userAgent?: string
+}
+
+// Labels amigables para entidades
+const ENTITY_DISPLAY: Record<string, string> = {
+  ordenes_servicio: "orden de servicio",
+  clientes: "cliente",
+  inventario: "producto",
+  proveedores: "proveedor",
+  cotizaciones: "cotización",
+  facturas: "factura",
+  garantias: "garantía",
+  users: "usuario",
+  checklist_templates: "checklist",
+  ventas: "venta",
+  devoluciones_venta: "devolución",
+  movimientos_inventario: "movimiento de inventario",
+}
+
+// Campos con labels amigables para diffs
+const FIELD_DISPLAY: Record<string, string> = {
+  estado: "estado",
+  nombre: "nombre",
+  email: "email",
+  telefono: "teléfono",
+  direccion: "dirección",
+  precio: "precio",
+  total: "total",
+  subtotal: "subtotal",
+  cantidad: "cantidad",
+  descripcion: "descripción",
+  rol: "rol",
+  activo: "activo",
+  prioridad: "prioridad",
+  diagnostico: "diagnóstico",
+  observaciones: "observaciones",
+  marca: "marca",
+  modelo: "modelo",
+  tipo_equipo: "tipo de equipo",
+  fecha_entrega: "fecha de entrega",
+  metodo_pago: "método de pago",
+}
+
+/**
+ * Genera una descripción legible del cambio para la columna description
+ */
+function generateDescription(
+  action: AuditAction,
+  entity: AuditEntity,
+  entityId: string,
+  changes?: { before?: Record<string, unknown>; after?: Record<string, unknown> }
+): string {
+  const entityLabel = ENTITY_DISPLAY[entity] || entity
+
+  if (action === "CREATE") {
+    const name = changes?.after?.nombre || changes?.after?.nombre_completo || changes?.after?.titulo || ""
+    return `Creó ${entityLabel}${name ? ` "${name}"` : ""} #${entityId.slice(-6)}`
+  }
+
+  if (action === "DELETE") {
+    const name = changes?.before?.nombre || changes?.before?.nombre_completo || ""
+    return `Eliminó ${entityLabel}${name ? ` "${name}"` : ""} #${entityId.slice(-6)}`
+  }
+
+  // UPDATE — mostrar campos que cambiaron
+  if (action === "UPDATE" && changes?.before && changes?.after) {
+    const changedFields: string[] = []
+    const before = changes.before
+    const after = changes.after
+
+    for (const key of Object.keys(after)) {
+      if (JSON.stringify(before[key]) !== JSON.stringify(after[key])) {
+        const label = FIELD_DISPLAY[key] || key
+        const oldVal = before[key]
+        const newVal = after[key]
+
+        // Para campos de estado, mostrar transición
+        if (key === "estado" && typeof oldVal === "string" && typeof newVal === "string") {
+          changedFields.push(`${label} de '${oldVal}' a '${newVal}'`)
+        } else if (typeof newVal === "boolean") {
+          changedFields.push(`${label} a ${newVal ? "sí" : "no"}`)
+        } else {
+          changedFields.push(label)
+        }
+      }
+    }
+
+    if (changedFields.length === 0) {
+      return `Actualizó ${entityLabel} #${entityId.slice(-6)}`
+    }
+
+    if (changedFields.length <= 2) {
+      return `Cambió ${changedFields.join(" y ")} en ${entityLabel} #${entityId.slice(-6)}`
+    }
+
+    return `Actualizó ${changedFields.length} campos en ${entityLabel} #${entityId.slice(-6)}`
+  }
+
+  return `${action} en ${entityLabel} #${entityId.slice(-6)}`
 }
 
 /**
  * Registrar un log de auditoría
  */
 export async function logAudit(params: AuditLogParams): Promise<void> {
+  const desc = params.description || generateDescription(
+    params.action,
+    params.entity,
+    params.entityId,
+    params.changes
+  )
+
   const { error } = await supabaseAdmin.from("audit_logs").insert({
     organization_id: params.organizationId,
     user_id: params.userId,
@@ -43,6 +149,7 @@ export async function logAudit(params: AuditLogParams): Promise<void> {
     entity: params.entity,
     entity_id: params.entityId,
     changes: params.changes as Json,
+    description: desc,
     ip_address: params.ipAddress || null,
     user_agent: params.userAgent || null,
   })
@@ -75,46 +182,55 @@ export function createAuditLogger(
   }
 
   return {
-    create: (entity: AuditEntity, entityId: string, data: Record<string, unknown>) =>
-      logAudit({
+    create: (entity: AuditEntity, entityId: string, data: Record<string, unknown>) => {
+      const changes = { after: data }
+      return logAudit({
         organizationId,
         userId,
         action: "CREATE",
         entity,
         entityId,
-        changes: { after: data },
+        changes,
+        description: generateDescription("CREATE", entity, entityId, changes),
         ipAddress,
         userAgent,
-      }),
+      })
+    },
 
     update: (
       entity: AuditEntity,
       entityId: string,
       before: Record<string, unknown>,
       after: Record<string, unknown>
-    ) =>
-      logAudit({
+    ) => {
+      const changes = { before, after }
+      return logAudit({
         organizationId,
         userId,
         action: "UPDATE",
         entity,
         entityId,
-        changes: { before, after },
+        changes,
+        description: generateDescription("UPDATE", entity, entityId, changes),
         ipAddress,
         userAgent,
-      }),
+      })
+    },
 
-    delete: (entity: AuditEntity, entityId: string, data: Record<string, unknown>) =>
-      logAudit({
+    delete: (entity: AuditEntity, entityId: string, data: Record<string, unknown>) => {
+      const changes = { before: data }
+      return logAudit({
         organizationId,
         userId,
         action: "DELETE",
         entity,
         entityId,
-        changes: { before: data },
+        changes,
+        description: generateDescription("DELETE", entity, entityId, changes),
         ipAddress,
         userAgent,
-      }),
+      })
+    },
   }
 }
 
