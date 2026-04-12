@@ -23,10 +23,10 @@ export async function GET() {
         .select("id, nombre, slug, activo, created_at")
         .eq("activo", true),
 
-      // 1 - Suscripciones con plan
+      // 1 - Suscripciones con plan y trial_end
       supabaseAdmin
         .from("subscriptions")
-        .select("organization_id, status, plans(tipo)")
+        .select("organization_id, status, trial_end, plans(tipo)")
         .in("status", ["ACTIVE", "TRIALING"]),
 
       // 2 - Lifecycle emails enviados últimos 30 días
@@ -67,6 +67,13 @@ export async function GET() {
         .select("organization_id, engagement_score, fecha, ordenes_creadas, ventas_realizadas, usuarios_activos")
         .gte("fecha", thirtyDaysAgo.toISOString().split("T")[0])
         .order("fecha", { ascending: false }),
+
+      // 8 - Trials vencidos sin conversión (últimos 30 días)
+      supabaseAdmin
+        .from("subscriptions")
+        .select("organization_id, trial_end, organizations(nombre, slug)")
+        .eq("status", "TRIALING")
+        .lt("trial_end", now.toISOString()),
     ])
 
     const safeData = <T,>(result: PromiseSettledResult<{ data: T[] | null }>): T[] => {
@@ -76,14 +83,15 @@ export async function GET() {
       return []
     }
 
-    const orgs = safeData<{ id: string; nombre: string; slug: string; activo: boolean; created_at: string }>(results[0] as any)
-    const subs = safeData<{ organization_id: string; status: string; plans: { tipo: string } | { tipo: string }[] }>(results[1] as any)
-    const lifecycleData = safeData<{ email_type: string; status: string; sent_at: string }>(results[2] as any)
-    const churned = safeData<{ organization_id: string; canceled_at: string; organizations: { nombre: string; slug: string } }>(results[3] as any)
-    const ordenes = safeData<{ organization_id: string; estado: string; created_at: string; updated_at: string }>(results[4] as any)
-    const ventas = safeData<{ organization_id: string; created_at: string }>(results[5] as any)
-    const clientesNuevos = safeData<{ organization_id: string; created_at: string }>(results[6] as any)
-    const engagementData = safeData<{ organization_id: string; engagement_score: number; fecha: string; ordenes_creadas: number; ventas_realizadas: number; usuarios_activos: number }>(results[7] as any)
+    const orgs = safeData<{ id: string; nombre: string; slug: string; activo: boolean; created_at: string }>(results[0] as never)
+    const subs = safeData<{ organization_id: string; status: string; trial_end: string | null; plans: { tipo: string } | { tipo: string }[] }>(results[1] as never)
+    const lifecycleData = safeData<{ email_type: string; status: string; sent_at: string }>(results[2] as never)
+    const churned = safeData<{ organization_id: string; canceled_at: string; organizations: { nombre: string; slug: string } }>(results[3] as never)
+    const ordenes = safeData<{ organization_id: string; estado: string; created_at: string; updated_at: string }>(results[4] as never)
+    const ventas = safeData<{ organization_id: string; created_at: string }>(results[5] as never)
+    const clientesNuevos = safeData<{ organization_id: string; created_at: string }>(results[6] as never)
+    const engagementData = safeData<{ organization_id: string; engagement_score: number; fecha: string; ordenes_creadas: number; ventas_realizadas: number; usuarios_activos: number }>(results[7] as never)
+    const expiredTrials = safeData<{ organization_id: string; trial_end: string; organizations: { nombre: string; slug: string } }>(results[8] as never)
 
     const subMap = new Map(subs.map(s => [s.organization_id, s]))
 
@@ -115,7 +123,6 @@ export async function GET() {
       const m = orgMetrics[o.organization_id]
       if (!m) continue
       m.ordenes30d++
-      // Última actividad
       const actDate = o.updated_at || o.created_at
       if (!m.ultimaActividad || actDate > m.ultimaActividad) {
         m.ultimaActividad = actDate
@@ -152,16 +159,10 @@ export async function GET() {
 
     // Calcular engagement score real por org
     function calculateScore(m: typeof orgMetrics[string]): number {
-      // Basado en actividad de 7 días
-      // Órdenes creadas (max 30 pts) - indicador principal para servicio técnico
       const ordenesScore = Math.min(m.ordenes7d * 5, 30)
-      // Órdenes completadas (max 20 pts)
       const completadasScore = Math.min(m.ordenesCompletadas7d * 5, 20)
-      // Ventas (max 20 pts)
       const ventasScore = Math.min(m.ventas7d * 5, 20)
-      // Clientes nuevos (max 15 pts)
       const clientesScore = Math.min(m.clientesNuevos7d * 5, 15)
-      // Actividad reciente (max 15 pts) - si hubo actividad en los últimos 3 días
       let recienteScore = 0
       if (m.ultimaActividad) {
         const diasSinActividad = Math.floor((now.getTime() - new Date(m.ultimaActividad).getTime()) / (1000 * 60 * 60 * 24))
@@ -169,7 +170,6 @@ export async function GET() {
         else if (diasSinActividad <= 3) recienteScore = 10
         else if (diasSinActividad <= 7) recienteScore = 5
       }
-
       return Math.min(100, ordenesScore + completadasScore + ventasScore + clientesScore + recienteScore)
     }
 
@@ -180,10 +180,8 @@ export async function GET() {
       const planType = sub ? (Array.isArray(sub.plans) ? sub.plans[0]?.tipo : (sub.plans as { tipo: string })?.tipo) : "FREE"
       const score = metrics ? calculateScore(metrics) : 0
 
-      // Determinar riesgo basado en score Y actividad
       let riesgo: "alto" | "medio" | "bajo" = "bajo"
       if (score === 0) {
-        // Sin actividad, pero verificar si es org nueva (menos de 7 días)
         const orgAge = Math.floor((now.getTime() - new Date(org.created_at).getTime()) / (1000 * 60 * 60 * 24))
         riesgo = orgAge < 7 ? "medio" : "alto"
       } else if (score < 20) {
@@ -196,20 +194,23 @@ export async function GET() {
         slug: org.slug,
         plan: planType || "FREE",
         subscriptionStatus: sub?.status || "NONE",
+        trialEnd: sub?.trial_end || null,
         avgEngagement7d: score,
         ordenes7d: metrics?.ordenes7d || 0,
         ventas7d: metrics?.ventas7d || 0,
+        ordenes30d: metrics?.ordenes30d || 0,
+        ventas30d: metrics?.ventas30d || 0,
+        ultimaActividad: metrics?.ultimaActividad || null,
         usuariosActivos: Math.max(metrics?.ordenes7d || 0, metrics?.ventas7d || 0) > 0 ? 1 : 0,
         createdAt: org.created_at,
         riesgo,
       }
     })
 
-    // Engagement trend: usar datos pre-calculados si existen, sino construir de datos reales
+    // Engagement trend
     let trend: Array<{ fecha: string; avgScore: number; totalOrdenes: number; orgsActivas: number }> = []
 
     if (engagementData.length > 0) {
-      // Usar datos pre-calculados de la tabla organization_engagement
       const engagementTrend: Record<string, { totalScore: number; count: number; ordenes: number }> = {}
       for (const e of engagementData) {
         if (!engagementTrend[e.fecha]) {
@@ -229,7 +230,6 @@ export async function GET() {
         }))
         .sort((a, b) => a.fecha.localeCompare(b.fecha))
     } else {
-      // Construir trend de datos reales agrupando por día
       const dailyOrdenes: Record<string, { count: number; orgIds: Set<string> }> = {}
       for (const o of ordenes) {
         const fecha = o.created_at.split("T")[0]
@@ -257,6 +257,11 @@ export async function GET() {
         }))
         .sort((a, b) => a.fecha.localeCompare(b.fecha))
     }
+
+    // Último cálculo de engagement
+    const lastCalculatedAt = engagementData.length > 0
+      ? engagementData[0].fecha
+      : null
 
     // Lifecycle emails stats
     const emailStats: Record<string, { sent: number; failed: number }> = {}
@@ -287,6 +292,7 @@ export async function GET() {
         avgEngagement,
         churnRate,
         churnedThisMonth: churned.length,
+        lastCalculatedAt,
       },
       organizations: orgList.sort((a, b) => a.avgEngagement7d - b.avgEngagement7d),
       trend,
@@ -296,6 +302,7 @@ export async function GET() {
         nombre: (c.organizations as { nombre: string })?.nombre || "Unknown",
         canceledAt: c.canceled_at,
       })),
+      trialsExpiredWithoutConversion: expiredTrials.length,
     })
   } catch (error) {
     console.error("Error fetching engagement stats:", error)
