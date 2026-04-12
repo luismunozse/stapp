@@ -68,6 +68,8 @@ interface Pago {
   cuotas?: number | null
   recargoPorcentaje?: number | null
   montoOriginal?: number | null
+  costoFinancieroPorcentaje?: number | null
+  costoFinancieroMonto?: number | null
 }
 
 interface DevolucionItem {
@@ -453,24 +455,41 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Resumen financiero */}
-          <div className="grid grid-cols-3 gap-2 sm:gap-4 p-3 bg-muted rounded-lg">
-            <div>
-              <div className="text-xs text-muted-foreground">Total</div>
-              <div className="font-bold text-base sm:text-lg">{formatPrice(venta.total)}</div>
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground">Abonado</div>
-              <div className="font-medium text-base sm:text-lg text-green-600">
-                {formatPrice(venta.montoAbonado || 0)}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground">Pendiente</div>
-              <div className="font-medium text-base sm:text-lg text-red-600">
-                {formatPrice(venta.total - (venta.montoAbonado || 0))}
-              </div>
-            </div>
-          </div>
+          {(() => {
+            const totalCostoFinanciero = (venta.pagos || []).reduce(
+              (sum: number, p: Pago) => sum + (p.costoFinancieroMonto || 0), 0
+            )
+            return (
+              <>
+                <div className="grid grid-cols-3 gap-2 sm:gap-4 p-3 bg-muted rounded-lg">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Total</div>
+                    <div className="font-bold text-base sm:text-lg">{formatPrice(venta.total)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Abonado</div>
+                    <div className="font-medium text-base sm:text-lg text-green-600">
+                      {formatPrice(venta.montoAbonado || 0)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Pendiente</div>
+                    <div className="font-medium text-base sm:text-lg text-red-600">
+                      {formatPrice(venta.total - (venta.montoAbonado || 0))}
+                    </div>
+                  </div>
+                </div>
+                {totalCostoFinanciero > 0 && (
+                  <div className="flex items-center justify-between p-2 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg text-sm">
+                    <span className="text-muted-foreground">Costo terminales:</span>
+                    <span className="text-red-600 font-medium">-{formatPrice(totalCostoFinanciero)}</span>
+                    <span className="text-muted-foreground">Ingreso real:</span>
+                    <span className="font-bold">{formatPrice((venta.montoAbonado || 0) - totalCostoFinanciero)}</span>
+                  </div>
+                )}
+              </>
+            )
+          })()}
 
           {/* Botón registrar pago si hay pendiente */}
           {venta.estadoPago !== "PAGADO" && venta.estadoPago !== "ANULADA" && venta.estado !== "ANULADA" && (

@@ -7,14 +7,12 @@ export async function GET(request: Request) {
     const { error, organizationId, userId, role } = await requireAuth()
     if (error) return error
 
-    const now = new Date()
-    const inicioHoy = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    const finHoy = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59)
-    const finManana = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 23, 59, 59)
+    const { searchParams } = new URL(request.url)
+    const desde = searchParams.get("desde") || ""
+    const hasta = searchParams.get("hasta") || ""
 
     const estadosFinales = ["ENTREGADO", "ENTREGADO_SIN_REPARACION", "CANCELADO", "SIN_REPARACION"]
 
-    // Query all non-final orders that have fecha_prometida
     let query = supabaseAdmin
       .from("ordenes_servicio")
       .select(`
@@ -40,17 +38,39 @@ export async function GET(request: Request) {
       query = query.eq("tecnico_id", userId!)
     }
 
+    // Filter by date range if provided (for calendar month view)
+    if (desde) {
+      query = query.gte("fecha_prometida", `${desde}T00:00:00`)
+    }
+    if (hasta) {
+      query = query.lte("fecha_prometida", `${hasta}T23:59:59`)
+    }
+
     const { data: ordenes, error: dbError } = await query
 
     if (dbError) throw dbError
 
-    const vencidas: any[] = []
-    const hoy: any[] = []
-    const manana: any[] = []
+    const now = new Date()
+    const inicioHoy = new Date(now.getFullYear(), now.getMonth(), now.getDate())
 
-    for (const orden of ordenes || []) {
+    let totalVencidas = 0
+    let totalHoy = 0
+
+    const items = (ordenes || []).map((orden) => {
       const fechaP = new Date(orden.fecha_prometida)
-      const item = {
+      const finHoy = new Date(inicioHoy)
+      finHoy.setHours(23, 59, 59)
+
+      let urgencia: "vencida" | "hoy" | "futuro" = "futuro"
+      if (fechaP < inicioHoy) {
+        urgencia = "vencida"
+        totalVencidas++
+      } else if (fechaP <= finHoy) {
+        urgencia = "hoy"
+        totalHoy++
+      }
+
+      return {
         id: orden.id,
         numeroOrden: orden.numero_orden,
         codigoOrden: orden.codigo_orden,
@@ -61,6 +81,7 @@ export async function GET(request: Request) {
         fechaPrometida: orden.fecha_prometida,
         fechaIngreso: orden.fecha_ingreso,
         presupuesto: orden.presupuesto,
+        urgencia,
         cliente: orden.clientes ? {
           id: (orden.clientes as any).id,
           nombre: (orden.clientes as any).nombre,
@@ -71,21 +92,13 @@ export async function GET(request: Request) {
           nombre: (orden.users as any).nombre,
         } : null,
       }
-
-      if (fechaP < inicioHoy) {
-        vencidas.push(item)
-      } else if (fechaP >= inicioHoy && fechaP <= finHoy) {
-        hoy.push(item)
-      } else if (fechaP > finHoy && fechaP <= finManana) {
-        manana.push(item)
-      }
-    }
+    })
 
     return NextResponse.json({
-      vencidas,
-      hoy,
-      manana,
-      totalUrgentes: vencidas.length + hoy.length,
+      ordenes: items,
+      totalVencidas,
+      totalHoy,
+      totalUrgentes: totalVencidas + totalHoy,
     }, {
       headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
     })

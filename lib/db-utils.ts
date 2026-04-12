@@ -273,6 +273,8 @@ export function formatPagoVenta(p: any) {
     cuotas: p.cuotas,
     recargoPorcentaje: p.recargo_porcentaje ? parseFloat(p.recargo_porcentaje) : null,
     montoOriginal: p.monto_original ? parseFloat(p.monto_original) : null,
+    costoFinancieroPorcentaje: p.costo_financiero_porcentaje ? parseFloat(p.costo_financiero_porcentaje) : null,
+    costoFinancieroMonto: p.costo_financiero_monto ? parseFloat(p.costo_financiero_monto) : null,
   }
 }
 

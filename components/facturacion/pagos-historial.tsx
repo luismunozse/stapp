@@ -12,6 +12,8 @@ interface Pago {
   cuotas?: number | null
   recargoPorcentaje?: number | null
   montoOriginal?: number | null
+  costoFinancieroPorcentaje?: number | null
+  costoFinancieroMonto?: number | null
 }
 
 interface PagosHistorialProps {
@@ -61,6 +63,12 @@ export function PagosHistorial({ pagos }: PagosHistorialProps) {
             {pago.montoOriginal && pago.recargoPorcentaje && pago.recargoPorcentaje > 0 && (
               <div className="text-xs text-muted-foreground">
                 Sin recargo: {formatPrice(pago.montoOriginal)}
+              </div>
+            )}
+            {pago.costoFinancieroMonto != null && pago.costoFinancieroMonto > 0 && (
+              <div className="text-xs text-red-500">
+                Costo terminal ({pago.costoFinancieroPorcentaje}%): -{formatPrice(pago.costoFinancieroMonto)}
+                {" · "}Ingreso real: {formatPrice(pago.monto - pago.costoFinancieroMonto)}
               </div>
             )}
             {pago.referencia && (

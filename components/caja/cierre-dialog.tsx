@@ -21,6 +21,7 @@ interface CierreDialogProps {
   saldoInicial: number
   totalIngresosEfectivo: number
   totalEgresosEfectivo: number
+  totalCostosFinancieros?: number
   onSuccess: () => void
 }
 
@@ -31,6 +32,7 @@ export function CierreDialog({
   saldoInicial,
   totalIngresosEfectivo,
   totalEgresosEfectivo,
+  totalCostosFinancieros = 0,
   onSuccess,
 }: CierreDialogProps) {
   const { formatPrice } = useCurrency()
@@ -105,6 +107,18 @@ export function CierreDialog({
               <span>Efectivo esperado</span>
               <span>{formatPrice(esperado)}</span>
             </div>
+            {totalCostosFinancieros > 0 && (
+              <div className="border-t pt-2 mt-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-red-500">Costo terminales (tarjetas)</span>
+                  <span className="font-medium text-red-500">-{formatPrice(totalCostosFinancieros)}</span>
+                </div>
+                <div className="flex justify-between text-sm mt-1">
+                  <span className="font-medium">Ingreso real del día</span>
+                  <span className="font-bold">{formatPrice(esperado - totalCostosFinancieros)}</span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Conteo físico */}

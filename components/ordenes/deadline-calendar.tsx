@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import useSWR from "swr"
-import { CalendarClock, AlertTriangle, Clock, ArrowRight, ChevronRight } from "lucide-react"
+import { CalendarClock, ChevronRight, ChevronLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -14,6 +14,8 @@ import {
 import { OrderStatusBadge } from "@/components/ui/badge"
 import { useCurrency } from "@/contexts/currency-context"
 import Link from "next/link"
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, addMonths, subMonths, isSameMonth, isSameDay, isToday } from "date-fns"
+import { es } from "date-fns/locale"
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
@@ -28,104 +30,101 @@ interface CompromisoOrden {
   fechaPrometida: string
   fechaIngreso: string
   presupuesto?: number
+  urgencia: "vencida" | "hoy" | "futuro"
   cliente: { id: string; nombre: string; telefono?: string } | null
   tecnico: { id: string; nombre: string } | null
 }
 
-interface CompromisosData {
-  vencidas: CompromisoOrden[]
-  hoy: CompromisoOrden[]
-  manana: CompromisoOrden[]
+interface CompromisosResponse {
+  ordenes: CompromisoOrden[]
+  totalVencidas: number
+  totalHoy: number
   totalUrgentes: number
 }
 
-function OrdenRow({ orden, tipo, formatDate, onClose }: {
-  orden: CompromisoOrden
-  tipo: "vencida" | "hoy" | "manana"
-  formatDate: (d: Date | string | null | undefined) => string
-  onClose: () => void
-}) {
-  const codigo = orden.codigoOrden || `#${orden.numeroOrden}`
-
-  return (
-    <Link
-      href={`/ordenes/${orden.id}`}
-      onClick={onClose}
-      className="group flex items-center gap-3 p-3 rounded-lg border transition-colors hover:bg-accent/50"
-    >
-      {/* Indicator */}
-      <div className={`shrink-0 w-1 h-12 rounded-full ${
-        tipo === "vencida" ? "bg-red-500" :
-        tipo === "hoy" ? "bg-orange-500" :
-        "bg-blue-500"
-      }`} />
-
-      {/* Content */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-0.5">
-          <span className="font-semibold text-sm text-primary">{codigo}</span>
-          <OrderStatusBadge status={orden.estado} className="text-[10px] px-1.5 py-0" />
-        </div>
-        <p className="text-sm truncate">{orden.dispositivo}{orden.marca ? ` - ${orden.marca}` : ""}</p>
-        <div className="flex items-center gap-2 mt-0.5">
-          <span className="text-xs text-muted-foreground truncate">
-            {orden.cliente?.nombre || "Sin cliente"}
-          </span>
-          {orden.tecnico && (
-            <>
-              <span className="text-xs text-muted-foreground">·</span>
-              <span className="text-xs text-muted-foreground truncate">{orden.tecnico.nombre}</span>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Date + arrow */}
-      <div className="shrink-0 flex items-center gap-2">
-        <span className={`text-xs font-medium ${
-          tipo === "vencida" ? "text-red-600 dark:text-red-400" :
-          tipo === "hoy" ? "text-orange-600 dark:text-orange-400" :
-          "text-blue-600 dark:text-blue-400"
-        }`}>
-          {formatDate(orden.fechaPrometida)}
-        </span>
-        <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-      </div>
-    </Link>
-  )
-}
-
-function SectionHeader({ icon: Icon, title, count, colorClass }: {
-  icon: React.ComponentType<{ className?: string }>
-  title: string
-  count: number
-  colorClass: string
-}) {
-  return (
-    <div className="flex items-center gap-2 mb-2">
-      <div className={`flex items-center justify-center w-6 h-6 rounded-full ${colorClass}`}>
-        <Icon className="h-3.5 w-3.5" />
-      </div>
-      <h3 className="text-sm font-semibold">{title}</h3>
-      <span className={`ml-auto text-xs font-medium px-2 py-0.5 rounded-full ${colorClass}`}>
-        {count}
-      </span>
-    </div>
-  )
-}
+const WEEKDAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
 
 export function DeadlineCalendar() {
   const [open, setOpen] = useState(false)
+  const [currentMonth, setCurrentMonth] = useState(new Date())
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const { formatDate } = useCurrency()
 
-  const { data, isLoading } = useSWR<CompromisosData>(
+  // Calculate range for API query — include previous month's vencidas
+  const monthStart = startOfMonth(currentMonth)
+  const monthEnd = endOfMonth(currentMonth)
+  const apiDesde = format(startOfMonth(subMonths(currentMonth, 6)), "yyyy-MM-dd")
+  const apiHasta = format(monthEnd, "yyyy-MM-dd")
+
+  const { data, isLoading } = useSWR<CompromisosResponse>(
+    open ? `/api/ordenes/compromisos?desde=${apiDesde}&hasta=${apiHasta}` : null,
+    fetcher,
+    { revalidateOnFocus: true, refreshInterval: 60000 }
+  )
+
+  // Also fetch urgentes count for badge (always active)
+  const { data: badgeData } = useSWR<CompromisosResponse>(
     "/api/ordenes/compromisos",
     fetcher,
     { revalidateOnFocus: true, refreshInterval: 60000 }
   )
 
-  const totalUrgentes = data?.totalUrgentes || 0
-  const hasVencidas = (data?.vencidas?.length || 0) > 0
+  const totalUrgentes = badgeData?.totalUrgentes || 0
+  const hasVencidas = (badgeData?.totalVencidas || 0) > 0
+
+  // Group orders by date
+  const ordersByDate = useMemo(() => {
+    if (!data?.ordenes) return new Map<string, CompromisoOrden[]>()
+    const map = new Map<string, CompromisoOrden[]>()
+    for (const orden of data.ordenes) {
+      const key = format(new Date(orden.fechaPrometida), "yyyy-MM-dd")
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(orden)
+    }
+    return map
+  }, [data])
+
+  // Vencidas that don't fall in the current month (accumulated)
+  const vencidasPrevias = useMemo(() => {
+    if (!data?.ordenes) return []
+    return data.ordenes.filter(o => {
+      const d = new Date(o.fechaPrometida)
+      return o.urgencia === "vencida" && d < monthStart
+    })
+  }, [data, monthStart])
+
+  // Build calendar grid
+  const calendarDays = useMemo(() => {
+    const start = startOfWeek(monthStart, { weekStartsOn: 1 })
+    const end = endOfWeek(monthEnd, { weekStartsOn: 1 })
+    const days: Date[] = []
+    let day = start
+    while (day <= end) {
+      days.push(day)
+      day = addDays(day, 1)
+    }
+    return days
+  }, [monthStart, monthEnd])
+
+  // Orders for selected date
+  const selectedOrders = useMemo(() => {
+    if (!selectedDate) return []
+    if (selectedDate.getTime() === 0) return vencidasPrevias // Special: vencidas button
+    const key = format(selectedDate, "yyyy-MM-dd")
+    return ordersByDate.get(key) || []
+  }, [selectedDate, ordersByDate, vencidasPrevias])
+
+  const getDotsForDay = (day: Date) => {
+    const key = format(day, "yyyy-MM-dd")
+    const orders = ordersByDate.get(key)
+    if (!orders || orders.length === 0) return null
+
+    const hasVencida = orders.some(o => o.urgencia === "vencida")
+    const hasHoy = orders.some(o => o.urgencia === "hoy")
+    const hasFuturo = orders.some(o => o.urgencia === "futuro")
+
+    return { hasVencida, hasHoy, hasFuturo, count: orders.length }
+  }
 
   return (
     <>
@@ -148,128 +147,204 @@ export function DeadlineCalendar() {
         )}
       </Button>
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col">
-          <DialogHeader>
+      <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setSelectedDate(null) }}>
+        <DialogContent className="sm:max-w-[540px] max-h-[90vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="px-5 pt-5 pb-3">
             <DialogTitle className="flex items-center gap-2">
               <CalendarClock className="h-5 w-5 text-primary" />
               Compromisos de entrega
             </DialogTitle>
             <DialogDescription>
-              Reparaciones comprometidas para hoy, mañana y vencidas
+              Fechas prometidas de reparaciones activas
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto -mx-6 px-6 space-y-5">
-            {isLoading ? (
-              <div className="space-y-3">
-                {[...Array(4)].map((_, i) => (
-                  <div key={i} className="h-16 bg-muted animate-pulse rounded-lg" />
+          <div className="flex-1 overflow-y-auto">
+            {/* Calendar */}
+            <div className="px-5 pb-3">
+              {/* Month navigation */}
+              <div className="flex items-center justify-between mb-3">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <h3 className="text-sm font-semibold capitalize">
+                  {format(currentMonth, "MMMM yyyy", { locale: es })}
+                </h3>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+
+              {/* Weekday headers */}
+              <div className="grid grid-cols-7 mb-1">
+                {WEEKDAYS.map((d) => (
+                  <div key={d} className="text-center text-xs font-medium text-muted-foreground py-1">
+                    {d}
+                  </div>
                 ))}
               </div>
-            ) : !data || (data.vencidas.length === 0 && data.hoy.length === 0 && data.manana.length === 0) ? (
-              <div className="py-12 text-center">
-                <CalendarClock className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
-                <p className="text-sm text-muted-foreground">No hay compromisos pendientes</p>
-                <p className="text-xs text-muted-foreground/60 mt-1">Las órdenes con fecha prometida aparecerán aquí</p>
+
+              {/* Day grid */}
+              {isLoading ? (
+                <div className="grid grid-cols-7 gap-px">
+                  {Array.from({ length: 35 }).map((_, i) => (
+                    <div key={i} className="h-10 bg-muted/30 animate-pulse rounded" />
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-7 gap-px">
+                  {calendarDays.map((day) => {
+                    const inMonth = isSameMonth(day, currentMonth)
+                    const today = isToday(day)
+                    const dots = getDotsForDay(day)
+                    const isSelected = selectedDate && selectedDate.getTime() !== 0 && isSameDay(day, selectedDate)
+
+                    return (
+                      <button
+                        key={day.toISOString()}
+                        onClick={() => {
+                          if (dots) setSelectedDate(day)
+                          else setSelectedDate(null)
+                        }}
+                        className={`
+                          relative flex flex-col items-center justify-center h-10 rounded-lg text-sm transition-colors
+                          ${!inMonth ? "text-muted-foreground/30" : ""}
+                          ${today && !isSelected ? "bg-accent font-semibold" : ""}
+                          ${isSelected ? "bg-primary text-primary-foreground font-semibold" : ""}
+                          ${inMonth && !today && !isSelected ? "hover:bg-accent/50" : ""}
+                          ${dots ? "cursor-pointer" : "cursor-default"}
+                        `}
+                      >
+                        <span className="text-xs">{format(day, "d")}</span>
+                        {/* Dots indicator */}
+                        {dots && (
+                          <div className="flex items-center gap-0.5 mt-0.5">
+                            {dots.hasVencida && <span className="w-1.5 h-1.5 rounded-full bg-red-500" />}
+                            {dots.hasHoy && <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />}
+                            {dots.hasFuturo && <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />}
+                            {dots.count > 1 && (
+                              <span className={`text-[8px] font-bold ml-0.5 ${isSelected ? "text-primary-foreground" : "text-muted-foreground"}`}>
+                                {dots.count}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* Legend + vencidas previas button */}
+              <div className="flex items-center justify-between mt-3 pt-3 border-t">
+                <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-red-500" />
+                    Vencida
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-orange-500" />
+                    Hoy
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-blue-500" />
+                    Futuro
+                  </span>
+                </div>
+                {vencidasPrevias.length > 0 && (
+                  <button
+                    onClick={() => setSelectedDate(new Date(0))}
+                    className={`text-[11px] font-medium px-2 py-0.5 rounded-full transition-colors ${
+                      selectedDate?.getTime() === 0
+                        ? "bg-red-500 text-white"
+                        : "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900"
+                    }`}
+                  >
+                    {vencidasPrevias.length} vencida{vencidasPrevias.length !== 1 ? "s" : ""} anteriores
+                  </button>
+                )}
               </div>
-            ) : (
-              <>
-                {/* Vencidas */}
-                {data.vencidas.length > 0 && (
-                  <div>
-                    <SectionHeader
-                      icon={AlertTriangle}
-                      title="Vencidas"
-                      count={data.vencidas.length}
-                      colorClass="bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400"
-                    />
-                    <div className="space-y-2">
-                      {data.vencidas.map((orden) => (
-                        <OrdenRow
-                          key={orden.id}
-                          orden={orden}
-                          tipo="vencida"
-                          formatDate={formatDate}
-                          onClose={() => setOpen(false)}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
+            </div>
 
-                {/* Hoy */}
-                {data.hoy.length > 0 && (
-                  <div>
-                    <SectionHeader
-                      icon={Clock}
-                      title="Hoy"
-                      count={data.hoy.length}
-                      colorClass="bg-orange-100 text-orange-600 dark:bg-orange-950 dark:text-orange-400"
-                    />
-                    <div className="space-y-2">
-                      {data.hoy.map((orden) => (
-                        <OrdenRow
-                          key={orden.id}
-                          orden={orden}
-                          tipo="hoy"
-                          formatDate={formatDate}
-                          onClose={() => setOpen(false)}
-                        />
-                      ))}
-                    </div>
+            {/* Selected day detail */}
+            {selectedDate && selectedOrders.length > 0 && (
+              <div className="border-t bg-muted/20">
+                <div className="px-5 py-3">
+                  <h4 className="text-sm font-semibold mb-2">
+                    {selectedDate.getTime() === 0
+                      ? "Órdenes vencidas (meses anteriores)"
+                      : format(selectedDate, "EEEE d 'de' MMMM", { locale: es })
+                    }
+                    <span className="ml-2 text-xs font-normal text-muted-foreground">
+                      ({selectedOrders.length} {selectedOrders.length === 1 ? "orden" : "órdenes"})
+                    </span>
+                  </h4>
+                  <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                    {selectedOrders.map((orden) => (
+                      <Link
+                        key={orden.id}
+                        href={`/ordenes/${orden.id}`}
+                        onClick={() => setOpen(false)}
+                        className="group flex items-center gap-3 p-2.5 rounded-lg border bg-card transition-colors hover:bg-accent/50"
+                      >
+                        <div className={`shrink-0 w-1 h-10 rounded-full ${
+                          orden.urgencia === "vencida" ? "bg-red-500" :
+                          orden.urgencia === "hoy" ? "bg-orange-500" :
+                          "bg-blue-500"
+                        }`} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="font-semibold text-xs text-primary">
+                              {orden.codigoOrden || `#${orden.numeroOrden}`}
+                            </span>
+                            <OrderStatusBadge status={orden.estado} className="text-[9px] px-1.5 py-0" />
+                          </div>
+                          <p className="text-xs truncate">
+                            {orden.dispositivo}{orden.marca ? ` - ${orden.marca}` : ""}
+                          </p>
+                          <span className="text-[11px] text-muted-foreground truncate">
+                            {orden.cliente?.nombre || "Sin cliente"}
+                            {orden.tecnico ? ` · ${orden.tecnico.nombre}` : ""}
+                          </span>
+                        </div>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </Link>
+                    ))}
                   </div>
-                )}
-
-                {/* Mañana */}
-                {data.manana.length > 0 && (
-                  <div>
-                    <SectionHeader
-                      icon={ArrowRight}
-                      title="Mañana"
-                      count={data.manana.length}
-                      colorClass="bg-blue-100 text-blue-600 dark:bg-blue-950 dark:text-blue-400"
-                    />
-                    <div className="space-y-2">
-                      {data.manana.map((orden) => (
-                        <OrdenRow
-                          key={orden.id}
-                          orden={orden}
-                          tipo="manana"
-                          formatDate={formatDate}
-                          onClose={() => setOpen(false)}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </>
+                </div>
+              </div>
             )}
           </div>
 
-          {/* Footer summary */}
-          {data && (data.vencidas.length > 0 || data.hoy.length > 0 || data.manana.length > 0) && (
-            <div className="flex items-center justify-between pt-3 border-t -mx-6 px-6">
-              <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                {data.vencidas.length > 0 && (
-                  <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-red-500" />
-                    {data.vencidas.length} vencida{data.vencidas.length !== 1 ? "s" : ""}
-                  </span>
-                )}
-                {data.hoy.length > 0 && (
-                  <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-orange-500" />
-                    {data.hoy.length} hoy
-                  </span>
-                )}
-                {data.manana.length > 0 && (
-                  <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-blue-500" />
-                    {data.manana.length} mañana
-                  </span>
-                )}
-              </div>
+          {/* Footer */}
+          <div className="flex items-center justify-between px-5 py-3 border-t">
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              {data && (
+                <span>{data.ordenes.length} compromiso{data.ordenes.length !== 1 ? "s" : ""} activo{data.ordenes.length !== 1 ? "s" : ""}</span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs h-7"
+                onClick={() => {
+                  setCurrentMonth(new Date())
+                  setSelectedDate(null)
+                }}
+              >
+                Hoy
+              </Button>
               <Link
                 href="/ordenes"
                 onClick={() => setOpen(false)}
@@ -278,7 +353,7 @@ export function DeadlineCalendar() {
                 Ver todas
               </Link>
             </div>
-          )}
+          </div>
         </DialogContent>
       </Dialog>
     </>

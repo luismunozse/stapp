@@ -10,6 +10,8 @@ export interface MovimientoUnificado {
   referenciaNumero?: string | null
   observaciones: string | null
   esEgreso?: boolean
+  costoFinancieroMonto?: number | null
+  costoFinancieroPorcentaje?: number | null
 }
 
 interface FetchMovimientosOptions {
@@ -41,6 +43,7 @@ export async function fetchMovimientosDia(
     .from("pagos_parciales")
     .select(`
       monto, metodo_pago, fecha, factura_id, observaciones,
+      costo_financiero_porcentaje, costo_financiero_monto,
       facturas!inner(
         id, numero_factura,
         ordenes_servicio!inner(organization_id, numero_orden)
@@ -56,6 +59,7 @@ export async function fetchMovimientosDia(
     .from("pagos_venta")
     .select(`
       monto, metodo_pago, fecha, venta_id, observaciones,
+      costo_financiero_porcentaje, costo_financiero_monto,
       ventas!inner(organization_id, numero_venta)
     `)
     .eq("ventas.organization_id", organizationId)
@@ -112,6 +116,8 @@ export async function fetchMovimientosDia(
       referenciaId: p.factura_id,
       referenciaNumero: numFactura || (numOrden ? `ORD-${String(numOrden).padStart(4, "0")}` : null),
       observaciones: p.observaciones,
+      costoFinancieroMonto: p.costo_financiero_monto ? parseFloat(p.costo_financiero_monto) : null,
+      costoFinancieroPorcentaje: p.costo_financiero_porcentaje ? parseFloat(p.costo_financiero_porcentaje) : null,
     })
   }
 
@@ -126,6 +132,8 @@ export async function fetchMovimientosDia(
       referenciaId: p.venta_id,
       referenciaNumero: numVenta ? `V-${String(numVenta).padStart(4, "0")}` : null,
       observaciones: p.observaciones,
+      costoFinancieroMonto: p.costo_financiero_monto ? parseFloat(p.costo_financiero_monto) : null,
+      costoFinancieroPorcentaje: p.costo_financiero_porcentaje ? parseFloat(p.costo_financiero_porcentaje) : null,
     })
   }
 
@@ -185,6 +193,7 @@ export function computeTotales(movimientos: MovimientoUnificado[]) {
   let totalEgresos = 0
   let totalIngresosEfectivo = 0
   let totalEgresosEfectivo = 0
+  let totalCostosFinancieros = 0
 
   for (const m of movimientos) {
     const montoConSigno = m.esEgreso ? -m.monto : m.monto
@@ -206,9 +215,15 @@ export function computeTotales(movimientos: MovimientoUnificado[]) {
       totalIngresos += m.monto
       if (m.metodoPago === "EFECTIVO") totalIngresosEfectivo += m.monto
     }
+
+    // Acumular costos financieros
+    if (m.costoFinancieroMonto && m.costoFinancieroMonto > 0) {
+      totalCostosFinancieros += m.costoFinancieroMonto
+    }
   }
 
   const totalDia = totalIngresos - totalEgresos
+  const ingresoReal = totalDia - totalCostosFinancieros
 
   return {
     totalDia,
@@ -218,5 +233,7 @@ export function computeTotales(movimientos: MovimientoUnificado[]) {
     totalEgresos,
     totalIngresosEfectivo,
     totalEgresosEfectivo,
+    totalCostosFinancieros,
+    ingresoReal,
   }
 }

@@ -623,7 +623,7 @@ export default async function DashboardPage() {
     {
       title: "Ingresos del Mes",
       value: formatCurrency(ingresos, moneda),
-      description: "Facturas y ventas",
+      description: "Ventas, servicios y cobros",
       icon: DollarSign,
       colorClass: "text-purple-600 dark:text-purple-400",
       bgClass: "bg-purple-50 dark:bg-purple-900/30",
@@ -637,12 +637,13 @@ export default async function DashboardPage() {
       bgClass: "bg-emerald-50 dark:bg-emerald-900/30",
     },
     {
-      title: "Ventas del Mes",
-      value: formatCurrency(ventasMesTotal, moneda),
-      description: `${ventasMesCount} ventas completadas`,
-      icon: TrendingUp,
-      colorClass: "text-cyan-600 dark:text-cyan-400",
-      bgClass: "bg-cyan-50 dark:bg-cyan-900/30",
+      title: "Cobros Pendientes",
+      value: formatCurrency(totalDeudaPendiente, moneda),
+      description: `${ordenesPendienteCobro.length} orden${ordenesPendienteCobro.length !== 1 ? "es" : ""} sin cobrar`,
+      icon: AlertTriangle,
+      colorClass: "text-red-600 dark:text-red-400",
+      bgClass: "bg-red-50 dark:bg-red-900/30",
+      urgent: ordenesPendienteCobro.length > 0,
     },
   ]
 

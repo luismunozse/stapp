@@ -173,6 +173,7 @@ export default function CajaPage() {
           saldoInicial={sesionActual.saldoInicial}
           totalIngresosEfectivo={data?.totalIngresosEfectivo || 0}
           totalEgresosEfectivo={data?.totalEgresosEfectivo || 0}
+          totalCostosFinancieros={data?.totalCostosFinancieros || 0}
           onSuccess={handleSessionChange}
         />
       )}

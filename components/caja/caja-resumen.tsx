@@ -58,6 +58,8 @@ interface CajaResumenProps {
     porTipo: Record<string, { count: number; total: number; items?: Array<{ referenciaId: string; referenciaNumero?: string | null; monto: number }> }>
     totalIngresos: number
     totalEgresos: number
+    totalCostosFinancieros?: number
+    ingresoReal?: number
     sinCobrar: { count: number; ordenes: any[] }
   } | null
   filtroMetodo: string
@@ -96,6 +98,15 @@ export function CajaResumen({
                 </span>
               )}
             </div>
+            {data.totalCostosFinancieros != null && data.totalCostosFinancieros > 0 && (
+              <div className="mt-2 p-2 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg inline-block">
+                <div className="text-xs text-muted-foreground">Costo terminales</div>
+                <div className="text-sm font-medium text-red-600">-{formatPrice(data.totalCostosFinancieros)}</div>
+                <div className="text-xs text-muted-foreground">
+                  Ingreso real: <span className="font-semibold text-foreground">{formatPrice(data.ingresoReal ?? data.totalDia)}</span>
+                </div>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -253,13 +264,26 @@ export function CajaResumen({
                 const tipoInfo = TIPO_LABELS[mov.tipo] || { label: mov.tipo, icon: DollarSign, color: "text-gray-600" }
                 const Icon = tipoInfo.icon
                 const MetodoIcon = METODO_ICONS[mov.metodoPago] || DollarSign
+                const movLink = mov.tipo === "COBRO_ORDEN" ? `/ordenes/${mov.referenciaId}` :
+                  mov.tipo === "PAGO_VENTA" ? `/ventas/${mov.referenciaId}` :
+                  mov.tipo === "PAGO_FACTURA" ? `/facturacion/${mov.referenciaId}` : null
+                const displayName = mov.referenciaNumero
+                  ? `${tipoInfo.label} · ${mov.referenciaNumero}`
+                  : (mov.referencia || tipoInfo.label)
+
                 return (
                   <div key={i} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                     <div className="flex items-start gap-2">
                       <Icon className={`h-4 w-4 mt-0.5 ${tipoInfo.color}`} />
                       <div className="space-y-0.5">
                         <div className="text-sm font-medium">
-                          {mov.referencia || tipoInfo.label}
+                          {movLink ? (
+                            <Link href={movLink} className="hover:underline text-primary">
+                              {displayName}
+                            </Link>
+                          ) : (
+                            displayName
+                          )}
                         </div>
                         <div className="text-xs text-muted-foreground flex items-center gap-1">
                           <MetodoIcon className="h-3 w-3" />
@@ -272,9 +296,17 @@ export function CajaResumen({
                         )}
                       </div>
                     </div>
-                    <div className={`text-sm font-bold ${mov.esEgreso ? "text-red-600" : "text-green-600"}`}>
-                      {mov.esEgreso ? "-" : "+"}
-                      {formatPrice(mov.monto)}
+                    <div className="text-right">
+                      <div className={`text-sm font-bold ${mov.esEgreso ? "text-red-600" : "text-green-600"}`}>
+                        {mov.esEgreso ? "-" : "+"}
+                        {formatPrice(mov.monto)}
+                      </div>
+                      {mov.costoFinancieroMonto > 0 && (
+                        <div className="text-xs text-red-500">
+                          Terminal: -{formatPrice(mov.costoFinancieroMonto)}
+                          <span className="text-muted-foreground ml-1">({mov.costoFinancieroPorcentaje}%)</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )

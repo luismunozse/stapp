@@ -41,6 +41,7 @@ export async function GET(request: Request) {
       costoProductos: number
       costoRepuestos: number
       gastos: number
+      costosFinancieros: number
       gananciaBruta: number
       gananciaNeta: number
     }
@@ -60,6 +61,7 @@ export async function GET(request: Request) {
         costoProductos: 0,
         costoRepuestos: 0,
         gastos: 0,
+        costosFinancieros: 0,
         gananciaBruta: 0,
         gananciaNeta: 0,
       }
@@ -142,6 +144,39 @@ export async function GET(request: Request) {
       }
     }
 
+    // 4. Costos financieros (comisiones de terminales)
+    const { data: pagosVentaCF } = await supabaseAdmin
+      .from("pagos_venta")
+      .select("costo_financiero_monto, fecha, ventas!inner(organization_id)")
+      .eq("ventas.organization_id", organizationId!)
+      .not("costo_financiero_monto", "is", null)
+      .gt("costo_financiero_monto", 0)
+      .gte("fecha", desdeISO)
+      .lte("fecha", hastaISO)
+
+    for (const p of pagosVentaCF || []) {
+      const key = keyFor(p.fecha)
+      const bucket = buckets[key]
+      if (!bucket) continue
+      bucket.costosFinancieros += parseFloat(p.costo_financiero_monto || "0")
+    }
+
+    const { data: pagosParcialCF } = await supabaseAdmin
+      .from("pagos_parciales")
+      .select("costo_financiero_monto, fecha, facturas!inner(ordenes_servicio!inner(organization_id))")
+      .eq("facturas.ordenes_servicio.organization_id", organizationId!)
+      .not("costo_financiero_monto", "is", null)
+      .gt("costo_financiero_monto", 0)
+      .gte("fecha", desdeISO)
+      .lte("fecha", hastaISO)
+
+    for (const p of pagosParcialCF || []) {
+      const key = keyFor(p.fecha)
+      const bucket = buckets[key]
+      if (!bucket) continue
+      bucket.costosFinancieros += parseFloat(p.costo_financiero_monto || "0")
+    }
+
     // Calcular totales derivados por mes
     const porMes = Object.entries(buckets)
       .sort(([a], [b]) => a.localeCompare(b))
@@ -149,7 +184,7 @@ export async function GET(request: Request) {
         b.ingresos = b.ingresosVentas + b.ingresosServicios + b.ingresosOtros
         b.costos = b.costoProductos + b.costoRepuestos
         b.gananciaBruta = b.ingresos - b.costos
-        b.gananciaNeta = b.gananciaBruta - b.gastos
+        b.gananciaNeta = b.gananciaBruta - b.gastos - b.costosFinancieros
         return {
           mes: b.mes,
           mesCompleto: b.mesCompleto,
