@@ -266,6 +266,22 @@ export async function PUT(
       throw updateError
     }
 
+    // Sync presupuesto on linked order when items/totals change
+    if (data.items && updateData.total != null) {
+      const { data: cotForSync } = await supabaseAdmin
+        .from("cotizaciones")
+        .select("orden_id")
+        .eq("id", id)
+        .single()
+
+      if (cotForSync?.orden_id) {
+        await supabaseAdmin
+          .from("ordenes_servicio")
+          .update({ presupuesto: updateData.total })
+          .eq("id", cotForSync.orden_id)
+      }
+    }
+
     // If changing to RECHAZADA from ACEPTADA, release reservations
     if (data.estado === "RECHAZADA" && existing.estado === "ACEPTADA") {
       try {

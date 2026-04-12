@@ -330,6 +330,14 @@ export async function POST(request: Request) {
       throw itemsError
     }
 
+    // Auto-fill presupuesto on the linked order
+    if (data.ordenId) {
+      await supabaseAdmin
+        .from("ordenes_servicio")
+        .update({ presupuesto: total })
+        .eq("id", data.ordenId)
+    }
+
     // Get complete cotizacion
     const { data: cotizacionCompleta } = await supabaseAdmin
       .from("cotizaciones")
