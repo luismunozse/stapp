@@ -348,6 +348,11 @@ export function SeguimientoContent({ token }: { token: string }) {
         { event: "*", schema: "public", table: "orden_eventos", filter: `orden_id=eq.${data.id}` },
         () => { fetchData() }
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "repuestos_orden", filter: `orden_id=eq.${data.id}` },
+        () => { fetchData() }
+      )
       .subscribe()
 
     channelRef.current = channel

@@ -229,6 +229,11 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
         { event: "*", schema: "public", table: "orden_eventos", filter: `orden_id=eq.${ordenId}` },
         () => { fetchOrden() }
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "repuestos_orden", filter: `orden_id=eq.${ordenId}` },
+        () => { fetchOrden() }
+      )
       .subscribe()
 
     channelRef.current = channel
