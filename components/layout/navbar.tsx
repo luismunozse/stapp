@@ -399,25 +399,6 @@ export function Navbar() {
           </TooltipProvider>
 
           {!collapsed && <ApkDownloadBanner variant="sidebar" />}
-
-          {/* Footer */}
-          <div className={cn(
-            "border-t border-sidebar-border transition-all duration-300",
-            collapsed ? "p-2 space-y-1" : "p-4 space-y-2"
-          )}>
-            {collapsed ? (
-              <TooltipProvider delayDuration={0}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div><ThemeToggle variant="icon" /></div>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">Cambiar tema</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            ) : (
-              <ThemeToggle variant="dropdown" />
-            )}
-          </div>
         </div>
       </aside>
 
@@ -428,6 +409,7 @@ export function Navbar() {
         <GlobalSearch />
         <DeadlineCalendar />
         <NotificationBell />
+        <ThemeToggle variant="icon" />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="hover:opacity-80 transition-opacity rounded-full focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2">

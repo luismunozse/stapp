@@ -49,20 +49,21 @@ export function FinanzasView() {
       <Tabs defaultValue="resumen" className="space-y-4">
         <div className="overflow-x-auto">
           <TabsList className="inline-flex w-auto min-w-full sm:grid sm:grid-cols-4 sm:w-full">
-            <TabsTrigger value="resumen" className="gap-2">
-              <LayoutDashboard className="h-4 w-4" />
+            <TabsTrigger value="resumen" className="gap-1 sm:gap-2 text-xs sm:text-sm">
+              <LayoutDashboard className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               <span>Resumen</span>
             </TabsTrigger>
-            <TabsTrigger value="estado-resultados" className="gap-2">
-              <FileBarChart className="h-4 w-4" />
-              <span>Estado de Resultados</span>
+            <TabsTrigger value="estado-resultados" className="gap-1 sm:gap-2 text-xs sm:text-sm">
+              <FileBarChart className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">Estado de Resultados</span>
+              <span className="sm:hidden">Resultados</span>
             </TabsTrigger>
-            <TabsTrigger value="ingresos" className="gap-2">
-              <TrendingUp className="h-4 w-4" />
+            <TabsTrigger value="ingresos" className="gap-1 sm:gap-2 text-xs sm:text-sm">
+              <TrendingUp className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               <span>Ingresos</span>
             </TabsTrigger>
-            <TabsTrigger value="gastos" className="gap-2">
-              <Receipt className="h-4 w-4" />
+            <TabsTrigger value="gastos" className="gap-1 sm:gap-2 text-xs sm:text-sm">
+              <Receipt className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               <span>Gastos</span>
             </TabsTrigger>
           </TabsList>

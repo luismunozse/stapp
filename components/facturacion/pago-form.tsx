@@ -133,7 +133,7 @@ export function PagoForm({
       <CardContent>
         {/* Resumen financiero */}
         <div className="mb-5 p-3 bg-muted rounded-lg">
-          <div className="grid grid-cols-3 gap-2 text-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
             <div>
               <span className="text-muted-foreground">Total</span>
               <div className="font-semibold">{formatPrice(total)}</div>

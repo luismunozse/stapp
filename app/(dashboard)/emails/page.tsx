@@ -11,10 +11,10 @@ export default function EmailsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold">Emails</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold">Emails</h1>
+          <p className="text-sm text-muted-foreground">
             Envía emails individuales a clientes, técnicos o vendedores
           </p>
         </div>

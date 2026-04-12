@@ -65,12 +65,12 @@ export const OrdenesPorTecnicoChart = memo(function OrdenesPorTecnicoChart({ dat
             <YAxis
               type="category"
               dataKey="nombre"
-              tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+              tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
               tickLine={false}
               axisLine={false}
-              width={140}
+              width={90}
               tickFormatter={(value) =>
-                value.length > 20 ? `${value.substring(0, 20)}...` : value
+                value.length > 12 ? `${value.substring(0, 12)}...` : value
               }
             />
             <Tooltip

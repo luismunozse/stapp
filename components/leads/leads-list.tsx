@@ -112,31 +112,31 @@ export function LeadsList() {
               <table className="w-full">
                 <thead className="bg-muted">
                   <tr>
-                    <th className="text-left p-4 font-medium">Nombre</th>
-                    <th className="text-left p-4 font-medium">Contacto</th>
-                    <th className="text-left p-4 font-medium">Interés</th>
-                    <th className="text-left p-4 font-medium">Estado</th>
-                    <th className="text-left p-4 font-medium">Fecha</th>
-                    <th className="text-left p-4 font-medium"></th>
+                    <th className="text-left p-3 font-medium text-sm">Nombre</th>
+                    <th className="text-left p-3 font-medium text-sm">Contacto</th>
+                    <th className="text-left p-3 font-medium text-sm">Interés</th>
+                    <th className="text-left p-3 font-medium text-sm">Estado</th>
+                    <th className="text-left p-3 font-medium text-sm">Fecha</th>
+                    <th className="text-left p-3 font-medium text-sm"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {leads.map((lead) => (
                     <tr key={lead.id} className="border-t hover:bg-muted/50">
-                      <td className="p-4 font-medium">{lead.nombre || "Sin nombre"}</td>
-                      <td className="p-4">
+                      <td className="p-3 font-medium">{lead.nombre || "Sin nombre"}</td>
+                      <td className="p-3">
                         <div className="text-sm">
-                          {lead.email && <div>{lead.email}</div>}
+                          {lead.email && <div className="truncate max-w-[200px]">{lead.email}</div>}
                           {lead.telefono && <div>{lead.telefono}</div>}
                           {!lead.email && !lead.telefono && <div className="text-muted-foreground">Sin contacto</div>}
                         </div>
                       </td>
-                      <td className="p-4">
+                      <td className="p-3">
                         {lead.plan_interes && (
                           <Badge variant="outline">{lead.plan_interes}</Badge>
                         )}
                       </td>
-                      <td className="p-4">{getEstadoBadge(lead.estado)}</td>
+                      <td className="p-3">{getEstadoBadge(lead.estado)}</td>
                       <td className="p-4 text-sm text-muted-foreground">
                         {formatDate(lead.created_at)}
                       </td>

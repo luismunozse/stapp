@@ -229,7 +229,7 @@ export function CajaResumen({
             <CardTitle className="text-base">Detalle de Movimientos</CardTitle>
             <div className="flex flex-wrap gap-2">
               <Select value={filtroMetodo || "all"} onValueChange={(v) => onFiltroMetodoChange(v === "all" ? "" : v)}>
-                <SelectTrigger className="w-[160px] h-8 text-xs">
+                <SelectTrigger className="w-full sm:w-[160px] h-8 text-xs">
                   <SelectValue placeholder="Método" />
                 </SelectTrigger>
                 <SelectContent>
@@ -240,7 +240,7 @@ export function CajaResumen({
                 </SelectContent>
               </Select>
               <Select value={filtroTipo || "all"} onValueChange={(v) => onFiltroTipoChange(v === "all" ? "" : v)}>
-                <SelectTrigger className="w-[160px] h-8 text-xs">
+                <SelectTrigger className="w-full sm:w-[160px] h-8 text-xs">
                   <SelectValue placeholder="Tipo" />
                 </SelectTrigger>
                 <SelectContent>

@@ -70,14 +70,14 @@ export const OrdenesPorEstadoChart = memo(function OrdenesPorEstadoChart({ data 
         <CardTitle className="text-sm sm:text-base">Órdenes por Estado</CardTitle>
       </CardHeader>
       <CardContent className="p-3 sm:p-6 pt-0">
-        <ResponsiveContainer width="100%" height={240}>
+        <ResponsiveContainer width="100%" height={220}>
           <PieChart>
             <Pie
               data={chartData}
               cx="50%"
-              cy="50%"
-              innerRadius={50}
-              outerRadius={75}
+              cy="45%"
+              innerRadius={40}
+              outerRadius={65}
               paddingAngle={2}
               dataKey="value"
             >
@@ -100,7 +100,7 @@ export const OrdenesPorEstadoChart = memo(function OrdenesPorEstadoChart({ data 
               layout="horizontal"
               verticalAlign="bottom"
               align="center"
-              wrapperStyle={{ fontSize: "11px", color: "hsl(var(--foreground))" }}
+              wrapperStyle={{ fontSize: "10px", color: "hsl(var(--foreground))", lineHeight: "18px" }}
             />
           </PieChart>
         </ResponsiveContainer>

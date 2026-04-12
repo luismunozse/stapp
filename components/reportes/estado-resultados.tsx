@@ -509,7 +509,7 @@ function SummaryCard({
         <div className="flex items-start justify-between">
           <div className="space-y-1">
             <p className="text-xs text-muted-foreground">{label}</p>
-            <p className={`text-2xl font-bold ${color}`}>{value}</p>
+            <p className={`text-xl sm:text-2xl font-bold ${color}`}>{value}</p>
             {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
             {deltaText && (
               <p className={`text-xs flex items-center gap-0.5 ${deltaColor}`}>

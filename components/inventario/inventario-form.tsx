@@ -484,7 +484,7 @@ export function InventarioForm({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label htmlFor="tipoDispositivo">Tipo *</Label>
               {showNewTipo ? (
@@ -638,7 +638,7 @@ export function InventarioForm({
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <Label htmlFor="stock">Stock *</Label>
               <Input
@@ -727,7 +727,7 @@ export function InventarioForm({
               Configuración de stock
             </button>
             {showStockConfig && (
-              <div className="grid grid-cols-3 gap-3 mt-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2">
                 <div>
                   <Label htmlFor="stockMinimo">Stock Mínimo</Label>
                   <Input

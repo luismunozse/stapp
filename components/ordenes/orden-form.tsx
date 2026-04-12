@@ -980,13 +980,13 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
                       value={sena || ""}
                       onChange={(e) => setSena(e.target.value ? Number(e.target.value) : undefined)}
                       placeholder="0.00"
-                      className="w-40"
+                      className="w-28 sm:w-40"
                     />
                   </div>
                   {sena && sena > 0 && (
                     <div className="mt-2">
                       <Label className="text-xs text-muted-foreground">Método de pago de la seña</Label>
-                      <div className="flex gap-1.5 mt-1">
+                      <div className="flex flex-wrap gap-1.5 mt-1">
                         {[
                           { value: "EFECTIVO", label: "Efectivo" },
                           { value: "TRANSFERENCIA", label: "Transfer." },
@@ -1408,16 +1408,16 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
           )}
           </>)}
 
-          <div className="flex gap-2 justify-between">
+          <div className="flex flex-wrap gap-2 justify-between">
             <div>
               {currentStep > 1 && (
-                <Button type="button" variant="outline" onClick={handlePrevStep}>
+                <Button type="button" variant="outline" onClick={handlePrevStep} className="text-sm">
                   Anterior
                 </Button>
               )}
             </div>
             <div className="flex gap-2">
-              <Button type="button" variant="outline" onClick={onClose}>
+              <Button type="button" variant="outline" onClick={onClose} className="text-sm">
                 Cancelar
               </Button>
               {currentStep < totalSteps ? (

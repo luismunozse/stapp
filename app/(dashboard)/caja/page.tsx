@@ -71,10 +71,10 @@ export default function CajaPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold">Caja Diaria</h1>
-          <p className="text-muted-foreground">Resumen de ingresos y egresos del día</p>
+          <h1 className="text-2xl sm:text-3xl font-bold">Caja Diaria</h1>
+          <p className="text-sm text-muted-foreground">Resumen de ingresos y egresos del día</p>
         </div>
         <ExportButton fecha={fecha} />
       </div>
@@ -90,7 +90,7 @@ export default function CajaPage() {
       )}
 
       {/* Selector de fecha */}
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
         <Button variant="outline" size="icon" onClick={() => cambiarDia(-1)}>
           <ChevronLeft className="h-4 w-4" />
         </Button>

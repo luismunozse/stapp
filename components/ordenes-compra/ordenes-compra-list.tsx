@@ -178,9 +178,9 @@ export function OrdenesCompraList() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
         <Select value={estadoFilter} onValueChange={setEstadoFilter}>
-          <SelectTrigger className="w-[160px]">
+          <SelectTrigger className="w-full sm:w-[160px]">
             <SelectValue placeholder="Todos los estados" />
           </SelectTrigger>
           <SelectContent>

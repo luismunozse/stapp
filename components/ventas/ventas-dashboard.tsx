@@ -158,7 +158,7 @@ export function VentasDashboard() {
                         </div>
                         <div className="flex items-center gap-3 shrink-0">
                           <Badge variant="secondary" className="text-[10px]">{p.cantidad} uds</Badge>
-                          <span className="font-medium w-20 text-right">{formatPrice(p.totalVentas)}</span>
+                          <span className="font-medium text-right text-xs sm:text-sm">{formatPrice(p.totalVentas)}</span>
                         </div>
                       </div>
                     ))}
@@ -188,7 +188,7 @@ export function VentasDashboard() {
                         </div>
                         <div className="flex items-center gap-3 shrink-0">
                           <Badge variant="secondary" className="text-[10px]">{v.count} ventas</Badge>
-                          <span className="font-medium w-20 text-right">{formatPrice(v.total)}</span>
+                          <span className="font-medium text-right text-xs sm:text-sm">{formatPrice(v.total)}</span>
                         </div>
                       </div>
                     ))}
@@ -199,7 +199,7 @@ export function VentasDashboard() {
           </div>
 
           {/* Third Row: Payment Methods + Discounts + Cancellation */}
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium">Métodos de Pago</CardTitle>

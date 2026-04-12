@@ -771,7 +771,7 @@ export function OrdenesList() {
                   onValueChange={(value) => handleBulkEstado(value as EstadoOrden)}
                   disabled={bulkUpdating}
                 >
-                  <SelectTrigger className="h-8 w-auto min-w-[180px] text-xs">
+                  <SelectTrigger className="h-8 w-full sm:w-auto sm:min-w-[180px] text-xs">
                     <SelectValue placeholder="Cambiar estado a..." />
                   </SelectTrigger>
                   <SelectContent>

@@ -115,7 +115,7 @@ export function InventarioAnalytics({ open, onOpenChange }: Props) {
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-1 border-b pb-1">
+            <div className="flex flex-wrap gap-1 border-b pb-1">
               {TABS.map(tab => {
                 const Icon = tab.icon
                 return (
