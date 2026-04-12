@@ -12,7 +12,8 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { SignaturePad } from "@/components/firma/signature-pad"
-import { Loader2, PackageCheck, PackageX, AlertTriangle } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Loader2, PackageCheck, PackageX, AlertTriangle, Shield } from "lucide-react"
 
 interface EntregaDialogProps {
   open: boolean
@@ -50,6 +51,9 @@ export function EntregaDialog({
   const [notasEntrega, setNotasEntrega] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [entregarSinCobro, setEntregarSinCobro] = useState(false)
+  const [conGarantia, setConGarantia] = useState(!esRetiro)
+  const [diasGarantia, setDiasGarantia] = useState(30)
+  const [notasGarantia, setNotasGarantia] = useState("")
 
   const tienePendiente = orden.estadoCobro && orden.estadoCobro !== "COBRADO" && (orden.pendienteCobro || 0) > 0
 
@@ -66,15 +70,6 @@ export function EntregaDialog({
   }
 
   const handleConfirmar = async () => {
-    if (!firmaCliente || !firmaClienteMime) {
-      setError("La firma del cliente es requerida")
-      return
-    }
-    if (!firmaEncargado || !firmaEncargadoMime) {
-      setError("La firma del encargado es requerida")
-      return
-    }
-
     setLoading(true)
     setError(null)
 
@@ -83,11 +78,15 @@ export function EntregaDialog({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          firmaClienteEntrega: firmaCliente,
-          firmaClienteMime: firmaClienteMime,
-          firmaEncargadoEntrega: firmaEncargado,
-          firmaEncargadoMime: firmaEncargadoMime,
+          firmaClienteEntrega: firmaCliente || null,
+          firmaClienteMime: firmaClienteMime || null,
+          firmaEncargadoEntrega: firmaEncargado || null,
+          firmaEncargadoMime: firmaEncargadoMime || null,
           notasEntrega: notasEntrega || null,
+          ...(conGarantia && !esRetiro ? {
+            diasGarantia,
+            notasGarantia: notasGarantia || null,
+          } : {}),
         }),
       })
 
@@ -116,6 +115,9 @@ export function EntregaDialog({
       setNotasEntrega("")
       setError(null)
       setEntregarSinCobro(false)
+      setConGarantia(!esRetiro)
+      setDiasGarantia(30)
+      setNotasGarantia("")
       onClose()
     }
   }
@@ -185,7 +187,7 @@ export function EntregaDialog({
           <div className="space-y-4">
             <div>
               <Label className="text-sm font-medium mb-2 block">
-                Firma del Cliente (quien recibe)
+                Firma del Cliente (opcional)
               </Label>
               <SignaturePad
                 onSignatureChange={handleFirmaClienteChange}
@@ -195,7 +197,7 @@ export function EntregaDialog({
 
             <div>
               <Label className="text-sm font-medium mb-2 block">
-                Firma del Encargado ({encargadoNombre})
+                Firma del Encargado - {encargadoNombre} (opcional)
               </Label>
               <SignaturePad
                 onSignatureChange={handleFirmaEncargadoChange}
@@ -203,6 +205,53 @@ export function EntregaDialog({
               />
             </div>
           </div>
+
+          {/* Garantía (solo para entregas normales, no retiros) */}
+          {!esRetiro && (
+            <div className="space-y-3 p-3 rounded-lg border">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={conGarantia}
+                  onChange={(e) => setConGarantia(e.target.checked)}
+                  disabled={loading}
+                  className="rounded"
+                />
+                <span className="flex items-center gap-2 font-medium text-sm">
+                  <Shield className="h-4 w-4" />
+                  Incluir garantía
+                </span>
+              </label>
+              {conGarantia && (
+                <div className="space-y-2 pl-6">
+                  <div>
+                    <Label htmlFor="dias-garantia" className="text-sm">Días de garantía</Label>
+                    <Input
+                      id="dias-garantia"
+                      type="number"
+                      min="1"
+                      value={diasGarantia}
+                      onChange={(e) => setDiasGarantia(parseInt(e.target.value) || 30)}
+                      disabled={loading}
+                      className="mt-1 w-32"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="notas-garantia" className="text-sm">Condiciones (opcional)</Label>
+                    <Textarea
+                      id="notas-garantia"
+                      value={notasGarantia}
+                      onChange={(e) => setNotasGarantia(e.target.value)}
+                      placeholder="Condiciones o alcance de la garantía..."
+                      rows={2}
+                      disabled={loading}
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           <div>
             <Label htmlFor="notas-entrega">Notas de entrega (opcional)</Label>
@@ -231,7 +280,7 @@ export function EntregaDialog({
             </Button>
             <Button
               onClick={handleConfirmar}
-              disabled={loading || !firmaCliente || !firmaEncargado || (!esRetiro && !!tienePendiente && !entregarSinCobro)}
+              disabled={loading || (!esRetiro && !!tienePendiente && !entregarSinCobro)}
             >
               {loading ? (
                 <>

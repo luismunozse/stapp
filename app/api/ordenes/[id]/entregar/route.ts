@@ -6,11 +6,13 @@ import { queueNotification } from "@/lib/notifications/queue"
 import { z } from "zod"
 
 const entregarSchema = z.object({
-  firmaClienteEntrega: z.string().min(1, "Firma del cliente requerida"),
-  firmaClienteMime: z.string().min(1, "Tipo de firma del cliente requerido"),
-  firmaEncargadoEntrega: z.string().min(1, "Firma del encargado requerida"),
-  firmaEncargadoMime: z.string().min(1, "Tipo de firma del encargado requerido"),
+  firmaClienteEntrega: z.string().optional().nullable(),
+  firmaClienteMime: z.string().optional().nullable(),
+  firmaEncargadoEntrega: z.string().optional().nullable(),
+  firmaEncargadoMime: z.string().optional().nullable(),
   notasEntrega: z.string().optional().nullable(),
+  diasGarantia: z.number().int().positive().optional(),
+  notasGarantia: z.string().optional().nullable(),
 })
 
 export async function POST(
@@ -64,10 +66,10 @@ export async function POST(
       .update({
         estado: nuevoEstado,
         fecha_entrega: new Date().toISOString(),
-        firma_cliente_entrega: data.firmaClienteEntrega,
-        firma_cliente_entrega_mime: data.firmaClienteMime,
-        firma_encargado_entrega: data.firmaEncargadoEntrega,
-        firma_encargado_entrega_mime: data.firmaEncargadoMime,
+        firma_cliente_entrega: data.firmaClienteEntrega || null,
+        firma_cliente_entrega_mime: data.firmaClienteMime || null,
+        firma_encargado_entrega: data.firmaEncargadoEntrega || null,
+        firma_encargado_entrega_mime: data.firmaEncargadoMime || null,
         entregado_por_user_id: userId,
         notas_entrega: data.notasEntrega,
       })
@@ -76,6 +78,23 @@ export async function POST(
       .single()
 
     if (updateError) throw updateError
+
+    // Create warranty if requested (only for normal deliveries, not returns)
+    if (data.diasGarantia && !esRetiro) {
+      const fechaInicio = new Date()
+      const fechaVencimiento = new Date()
+      fechaVencimiento.setDate(fechaVencimiento.getDate() + data.diasGarantia)
+
+      await supabaseAdmin
+        .from("garantias")
+        .insert({
+          orden_id: id,
+          dias_validez: data.diasGarantia,
+          fecha_inicio: fechaInicio.toISOString(),
+          fecha_vencimiento: fechaVencimiento.toISOString(),
+          notas: data.notasGarantia || null,
+        })
+    }
 
     // Consume reserved stock: deduct from physical stock + release reservation
     try {

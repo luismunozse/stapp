@@ -33,7 +33,8 @@ const severityIcons: Record<Severity, typeof Wrench> = {
 }
 
 export function MaintenanceBanner({ message, severity = "WARNING" }: MaintenanceBannerProps) {
-  const [isDismissed, setIsDismissed] = useState(true)
+  const [isDismissed, setIsDismissed] = useState(false)
+  const [mounted, setMounted] = useState(false)
 
   // Key per message hash so cambios del superadmin resetean el dismiss
   const dismissKey = `${BANNER_DISMISS_KEY_PREFIX}${message}`
@@ -46,10 +47,9 @@ export function MaintenanceBanner({ message, severity = "WARNING" }: Maintenance
       // Critical banners no se pueden ocultar
       if (hoursSince < DISMISS_DURATION_HOURS && severity !== "CRITICAL") {
         setIsDismissed(true)
-        return
       }
     }
-    setIsDismissed(false)
+    setMounted(true)
   }, [dismissKey, severity])
 
   const handleDismiss = () => {
@@ -57,7 +57,7 @@ export function MaintenanceBanner({ message, severity = "WARNING" }: Maintenance
     setIsDismissed(true)
   }
 
-  if (isDismissed) return null
+  if (!mounted || isDismissed) return null
 
   const Icon = severityIcons[severity]
   const isCritical = severity === "CRITICAL"
