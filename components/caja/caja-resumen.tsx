@@ -55,7 +55,7 @@ interface CajaResumenProps {
     totalDia: number
     movimientos: any[]
     porMetodo: Record<string, number>
-    porTipo: Record<string, { count: number; total: number }>
+    porTipo: Record<string, { count: number; total: number; items?: Array<{ referenciaId: string; referenciaNumero?: string | null; monto: number }> }>
     totalIngresos: number
     totalEgresos: number
     sinCobrar: { count: number; ordenes: any[] }
@@ -137,16 +137,35 @@ export function CajaResumen({
               {Object.entries(data.porTipo).map(([tipo, info]) => {
                 const tipoInfo = TIPO_LABELS[tipo] || { label: tipo, icon: DollarSign, color: "text-gray-600" }
                 const Icon = tipoInfo.icon
+                const linkBase = tipo === "COBRO_ORDEN" ? "/ordenes/" :
+                  tipo === "PAGO_VENTA" ? "/ventas/" :
+                  tipo === "PAGO_FACTURA" ? "/facturacion/" : null
                 return (
-                  <div key={tipo} className="flex items-center justify-between p-2 bg-muted/50 rounded">
-                    <div className="flex items-center gap-2">
-                      <Icon className={`h-4 w-4 ${tipoInfo.color}`} />
-                      <span className="text-sm">{tipoInfo.label}</span>
-                      <Badge variant="outline" className="text-xs">{info.count}</Badge>
+                  <div key={tipo} className="p-2 bg-muted/50 rounded space-y-1">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Icon className={`h-4 w-4 ${tipoInfo.color}`} />
+                        <span className="text-sm">{tipoInfo.label}</span>
+                        <Badge variant="outline" className="text-xs">{info.count}</Badge>
+                      </div>
+                      <span className={`font-medium ${tipo === "EGRESO_MANUAL" ? "text-red-600" : ""}`}>
+                        {tipo === "EGRESO_MANUAL" ? "-" : ""}{formatPrice(info.total)}
+                      </span>
                     </div>
-                    <span className={`font-medium ${tipo === "EGRESO_MANUAL" ? "text-red-600" : ""}`}>
-                      {tipo === "EGRESO_MANUAL" ? "-" : ""}{formatPrice(info.total)}
-                    </span>
+                    {linkBase && info.items && info.items.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 pl-6">
+                        {info.items.map((item, idx) => (
+                          <Link
+                            key={`${item.referenciaId}-${idx}`}
+                            href={`${linkBase}${item.referenciaId}`}
+                            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                          >
+                            {item.referenciaNumero || item.referenciaId.slice(0, 8)}
+                            <span className="text-muted-foreground">{formatPrice(item.monto)}</span>
+                          </Link>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )
               })}

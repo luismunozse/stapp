@@ -28,6 +28,7 @@ interface EstadoResultadosData {
   costos: { productos: number; repuestos: number; total: number }
   gananciaBruta: number
   margenBruto: number
+  costosFinancieros?: { ventas: number; servicios: number; total: number }
   gastos: {
     fijos: number
     variables: number
@@ -164,6 +165,9 @@ export function EstadoResultados() {
           ["Gastos fijos", `-${fmt(data.gastos.fijos)}`],
           ["Gastos variables", `-${fmt(data.gastos.variables)}`],
           [{ content: "Total gastos operativos", styles: { fontStyle: "bold" } }, { content: `-${fmt(data.gastos.total)}`, styles: { fontStyle: "bold" } }],
+          ...(data.costosFinancieros && data.costosFinancieros.total > 0 ? [
+            ["Costo terminales (cuotas)", `-${fmt(data.costosFinancieros.total)}`],
+          ] : []),
           [
             {
               content: "GANANCIA NETA",
@@ -366,6 +370,16 @@ export function EstadoResultados() {
                 <Row label="Gastos fijos" value={`-${formatPrice(data.gastos.fijos)}`} muted />
                 <Row label="Gastos variables" value={`-${formatPrice(data.gastos.variables)}`} muted />
                 <Row label="Total gastos" value={`-${formatPrice(data.gastos.total)}`} bold muted />
+                {data.costosFinancieros && data.costosFinancieros.total > 0 && (
+                  <>
+                    <Divider />
+                    <Row label="Costo terminales (ventas)" value={`-${formatPrice(data.costosFinancieros.ventas)}`} muted />
+                    {data.costosFinancieros.servicios > 0 && (
+                      <Row label="Costo terminales (servicios)" value={`-${formatPrice(data.costosFinancieros.servicios)}`} muted />
+                    )}
+                    <Row label="Total costos financieros" value={`-${formatPrice(data.costosFinancieros.total)}`} bold muted />
+                  </>
+                )}
                 <Divider />
                 <Row
                   label="GANANCIA NETA"

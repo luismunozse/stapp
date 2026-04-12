@@ -26,6 +26,7 @@ import {
   Receipt,
   Landmark,
   HelpCircle,
+  User,
   PanelLeft,
   ChevronsLeft,
   Mail,
@@ -47,6 +48,13 @@ import { useSidebar } from "@/components/layout/sidebar-context"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { UserAvatar } from "@/components/shared/user-avatar"
 import { DeadlineCalendar } from "@/components/ordenes/deadline-calendar"
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu"
 
 type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; roles?: string[] }
 
@@ -397,40 +405,6 @@ export function Navbar() {
             "border-t border-sidebar-border transition-all duration-300",
             collapsed ? "p-2 space-y-1" : "p-4 space-y-2"
           )}>
-            {/* User info */}
-            {collapsed ? (
-              <TooltipProvider delayDuration={0}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Link href="/perfil" className="flex justify-center py-1">
-                      <UserAvatar
-                        src={displayAvatar}
-                        nombre={displayName}
-                        size="sm"
-                      />
-                    </Link>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">{displayName || "Perfil"}</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            ) : (
-              <Link href="/perfil" className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-sidebar-accent transition-colors">
-                <UserAvatar
-                  src={displayAvatar}
-                  nombre={displayName}
-                  size="sm"
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-sidebar-foreground truncate">
-                    {displayName}
-                  </p>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {session?.user?.role}
-                  </p>
-                </div>
-              </Link>
-            )}
-
             {collapsed ? (
               <TooltipProvider delayDuration={0}>
                 <Tooltip>
@@ -439,71 +413,9 @@ export function Navbar() {
                   </TooltipTrigger>
                   <TooltipContent side="right">Cambiar tema</TooltipContent>
                 </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Link
-                      href="/ayuda/manual"
-                      className="flex justify-center items-center w-full h-9 rounded-md text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
-                    >
-                      <BookOpen className="h-5 w-5" />
-                    </Link>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">Manual de uso</TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="w-full text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                      onClick={() => window.dispatchEvent(new Event("start-tour"))}
-                    >
-                      <HelpCircle className="h-5 w-5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">Tour guiado</TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="w-full text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                      onClick={handleLogout}
-                    >
-                      <LogOut className="h-5 w-5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="right">Cerrar Sesion</TooltipContent>
-                </Tooltip>
               </TooltipProvider>
             ) : (
-              <>
-                <ThemeToggle variant="dropdown" />
-                <Link
-                  href="/ayuda/manual"
-                  className="flex items-center w-full px-4 py-2 text-sm font-medium rounded-md text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
-                >
-                  <BookOpen className="mr-3 h-5 w-5" />
-                  Manual de uso
-                </Link>
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                  onClick={() => window.dispatchEvent(new Event("start-tour"))}
-                >
-                  <HelpCircle className="mr-3 h-5 w-5" />
-                  Tour guiado
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                  onClick={handleLogout}
-                >
-                  <LogOut className="mr-3 h-5 w-5" />
-                  Cerrar Sesion
-                </Button>
-              </>
+              <ThemeToggle variant="dropdown" />
             )}
           </div>
         </div>
@@ -516,13 +428,51 @@ export function Navbar() {
         <GlobalSearch />
         <DeadlineCalendar />
         <NotificationBell />
-        <Link href="/perfil" className="hover:opacity-80 transition-opacity">
-          <UserAvatar
-            src={displayAvatar}
-            nombre={displayName}
-            size="sm"
-          />
-        </Link>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="hover:opacity-80 transition-opacity rounded-full focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2">
+              <UserAvatar
+                src={displayAvatar}
+                nombre={displayName}
+                size="sm"
+              />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <div className="px-3 py-2">
+              <p className="text-sm font-medium truncate">{displayName}</p>
+              <p className="text-xs text-muted-foreground truncate">{session?.user?.role}</p>
+            </div>
+            <DropdownMenuSeparator />
+            <Link href="/perfil">
+              <DropdownMenuItem className="cursor-pointer">
+                <User className="mr-2 h-4 w-4" />
+                Mi perfil
+              </DropdownMenuItem>
+            </Link>
+            <Link href="/ayuda/manual">
+              <DropdownMenuItem className="cursor-pointer">
+                <BookOpen className="mr-2 h-4 w-4" />
+                Manual de uso
+              </DropdownMenuItem>
+            </Link>
+            <DropdownMenuItem
+              className="cursor-pointer"
+              onClick={() => window.dispatchEvent(new Event("start-tour"))}
+            >
+              <HelpCircle className="mr-2 h-4 w-4" />
+              Tour guiado
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="cursor-pointer text-destructive focus:text-destructive"
+              onClick={handleLogout}
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              Cerrar Sesión
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Mobile Header */}

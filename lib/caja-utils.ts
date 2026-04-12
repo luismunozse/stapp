@@ -172,9 +172,15 @@ export async function fetchMovimientosDia(
 /**
  * Calcula totales a partir de una lista de movimientos unificados
  */
+export interface TipoDetalle {
+  count: number
+  total: number
+  items: Array<{ referenciaId: string; referenciaNumero?: string | null; monto: number }>
+}
+
 export function computeTotales(movimientos: MovimientoUnificado[]) {
   const porMetodo: Record<string, number> = {}
-  const porTipo: Record<string, { count: number; total: number }> = {}
+  const porTipo: Record<string, TipoDetalle> = {}
   let totalIngresos = 0
   let totalEgresos = 0
   let totalIngresosEfectivo = 0
@@ -184,9 +190,14 @@ export function computeTotales(movimientos: MovimientoUnificado[]) {
     const montoConSigno = m.esEgreso ? -m.monto : m.monto
     porMetodo[m.metodoPago] = (porMetodo[m.metodoPago] || 0) + montoConSigno
 
-    if (!porTipo[m.tipo]) porTipo[m.tipo] = { count: 0, total: 0 }
+    if (!porTipo[m.tipo]) porTipo[m.tipo] = { count: 0, total: 0, items: [] }
     porTipo[m.tipo].count++
     porTipo[m.tipo].total += m.monto
+    porTipo[m.tipo].items.push({
+      referenciaId: m.referenciaId,
+      referenciaNumero: m.referenciaNumero,
+      monto: m.monto,
+    })
 
     if (m.esEgreso) {
       totalEgresos += m.monto
