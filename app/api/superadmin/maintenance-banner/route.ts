@@ -69,7 +69,7 @@ export async function PUT(request: Request) {
   }
 
   // Invalidar cache del layout dashboard para que los cambios se vean inmediatamente
-  revalidateTag("maintenance-banner")
+  revalidateTag("maintenance-banner", "max")
 
   return NextResponse.json(data)
 }
