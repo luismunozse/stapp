@@ -9,6 +9,7 @@ const renewSchema = z.object({
   billingPeriod: z.enum(["MONTHLY", "YEARLY"]).optional().default("MONTHLY"),
   months: z.number().int().min(1).max(36).optional(),
   customEndDate: z.string().optional(), // ISO date string para fecha custom
+  planSlug: z.string().optional(), // Default: 'profesional'
 })
 
 export async function POST(request: Request) {
@@ -19,19 +20,33 @@ export async function POST(request: Request) {
     const parsed = await safeParseBody(request, renewSchema)
     if ("error" in parsed) return parsed.error
 
-    const { organizationId, billingPeriod, months, customEndDate } = parsed.data
+    const { organizationId, billingPeriod, months, customEndDate, planSlug } = parsed.data
 
     const period: "MONTHLY" | "YEARLY" = billingPeriod
+    const targetSlug = planSlug || "profesional"
 
-    // Obtener plan Premium
-    const { data: premiumPlan, error: planError } = await supabaseAdmin
+    // Obtener plan por slug (default: profesional)
+    let { data: premiumPlan } = await supabaseAdmin
       .from("plans")
       .select("id, precio_mensual, precio_anual, moneda")
-      .eq("tipo", "PREMIUM")
+      .eq("slug", targetSlug)
       .eq("activo", true)
-      .single()
+      .maybeSingle()
 
-    if (planError || !premiumPlan) {
+    // Fallback: si no se encuentra por slug, tomar el PREMIUM activo con mayor tier_order
+    if (!premiumPlan) {
+      const { data: fallbackPlan } = await supabaseAdmin
+        .from("plans")
+        .select("id, precio_mensual, precio_anual, moneda")
+        .eq("tipo", "PREMIUM")
+        .eq("activo", true)
+        .order("tier_order", { ascending: false, nullsFirst: false })
+        .limit(1)
+        .maybeSingle()
+      premiumPlan = fallbackPlan
+    }
+
+    if (!premiumPlan) {
       return NextResponse.json(
         { error: "No se encontró un plan Premium activo" },
         { status: 404 }
@@ -100,6 +115,7 @@ export async function POST(request: Request) {
           plan_id: premiumPlan.id,
           status: "ACTIVE",
           billing_period: period,
+          payment_provider: "MANUAL",
           current_period_start: startDate.toISOString(),
           current_period_end: periodEnd.toISOString(),
           cancel_at_period_end: false,
@@ -119,6 +135,7 @@ export async function POST(request: Request) {
           plan_id: premiumPlan.id,
           status: "ACTIVE",
           billing_period: period,
+          payment_provider: "MANUAL",
           current_period_start: now.toISOString(),
           current_period_end: periodEnd.toISOString(),
           cancel_at_period_end: false,

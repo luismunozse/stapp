@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -9,9 +9,20 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { X, ChevronDown, ChevronUp, Plus, Check, Loader2 } from "lucide-react"
+import { X, ChevronDown, ChevronUp, Plus, Check, Loader2, ImagePlus, Trash2, Package } from "lucide-react"
 import type { Inventario } from "@/types"
 import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
+import { compressImage } from "@/lib/image-compression"
+import useSWR from "swr"
+
+interface ProveedorLite {
+  id: string
+  nombre: string
+  activo?: boolean
+}
+
+const proveedoresFetcher = (url: string): Promise<ProveedorLite[]> =>
+  fetch(url).then((res) => res.json())
 
 const inventarioSchema = z.object({
   nombre: z.string().min(1, "El nombre es requerido"),
@@ -20,6 +31,7 @@ const inventarioSchema = z.object({
   stock: z.number().int().min(0),
   precioCompra: z.number().min(0),
   precioVenta: z.number().min(0),
+  proveedorId: z.string().min(1).nullable().optional(),
   stockMinimo: z.number().int().min(0).nullable().optional(),
   stockMaximo: z.number().int().min(0).nullable().optional(),
   puntoReorden: z.number().int().min(0).nullable().optional(),
@@ -71,6 +83,19 @@ export function InventarioForm({
   const [newTipo, setNewTipo] = useState("")
   const [savingTipo, setSavingTipo] = useState(false)
 
+  // Imagen: el estado vive fuera de react-hook-form porque es multipart upload.
+  // `imagenPreview` muestra preview inmediato; `pendingFile` es lo que se sube al submit.
+  const [imagenPreview, setImagenPreview] = useState<string | null>(item?.imagenUrl || null)
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
+  const [removeExistingImage, setRemoveExistingImage] = useState(false)
+  const [uploadingImage, setUploadingImage] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Proveedores
+  const { data: proveedores = [] } = useSWR<ProveedorLite[]>("/api/proveedores", proveedoresFetcher, {
+    revalidateOnFocus: false,
+  })
+
   const {
     register,
     handleSubmit,
@@ -88,6 +113,7 @@ export function InventarioForm({
           stock: item.stock,
           precioCompra: item.precioCompra,
           precioVenta: item.precioVenta,
+          proveedorId: item.proveedorId ?? null,
           stockMinimo: item.stockMinimo ?? null,
           stockMaximo: item.stockMaximo ?? null,
           puntoReorden: item.puntoReorden ?? null,
@@ -99,6 +125,7 @@ export function InventarioForm({
           stock: 0,
           precioCompra: 0,
           precioVenta: 0,
+          proveedorId: null,
           stockMinimo: null,
           stockMaximo: null,
           puntoReorden: null,
@@ -157,10 +184,14 @@ export function InventarioForm({
         stock: item.stock,
         precioCompra: item.precioCompra,
         precioVenta: item.precioVenta,
+        proveedorId: item.proveedorId ?? null,
         stockMinimo: item.stockMinimo ?? null,
         stockMaximo: item.stockMaximo ?? null,
         puntoReorden: item.puntoReorden ?? null,
       })
+      setImagenPreview(item.imagenUrl || null)
+      setPendingFile(null)
+      setRemoveExistingImage(false)
     }
   }, [item, reset])
 
@@ -255,6 +286,51 @@ export function InventarioForm({
     }
   }
 
+  const handleImagePick = async (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      alert("Seleccioná una imagen válida (JPG, PNG o WebP)")
+      return
+    }
+    try {
+      const compressed = await compressImage(file)
+      setPendingFile(compressed)
+      setRemoveExistingImage(false)
+      const reader = new FileReader()
+      reader.onloadend = () => setImagenPreview(reader.result as string)
+      reader.readAsDataURL(compressed)
+    } catch (err) {
+      console.error("Error comprimiendo imagen:", err)
+      alert("Error al procesar la imagen")
+    }
+  }
+
+  const handleImageRemove = () => {
+    setPendingFile(null)
+    setImagenPreview(null)
+    setRemoveExistingImage(!!item?.imagenUrl)
+    if (fileInputRef.current) fileInputRef.current.value = ""
+  }
+
+  // Sube la imagen pendiente (si hay) al endpoint dedicado. Requiere itemId.
+  const uploadPendingImage = async (itemId: string) => {
+    if (!pendingFile) return
+    setUploadingImage(true)
+    try {
+      const formData = new FormData()
+      formData.append("file", pendingFile)
+      const res = await fetch(`/api/inventario/${itemId}/imagen`, {
+        method: "POST",
+        body: formData,
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || "Error al subir imagen")
+      }
+    } finally {
+      setUploadingImage(false)
+    }
+  }
+
   const onSubmit = async (data: InventarioFormData) => {
     setLoading(true)
     try {
@@ -267,7 +343,6 @@ export function InventarioForm({
             ...data,
             codigo: generatedCode,
             descripcion: "",
-            proveedor: "",
           }
 
       const res = await fetch(url, {
@@ -286,6 +361,27 @@ export function InventarioForm({
         }
         alert(errorData.error || "Error al guardar item")
         return
+      }
+
+      const savedItem = await res.json()
+      const savedId = savedItem?.id || item?.id
+      if (!savedId) {
+        throw new Error("No se pudo obtener el id del item guardado")
+      }
+
+      // Manejo de imagen:
+      //  - Si el usuario pidió quitar la existente, llamar DELETE
+      //  - Si hay archivo pendiente, subirlo
+      if (removeExistingImage && !pendingFile) {
+        await fetch(`/api/inventario/${savedId}/imagen`, { method: "DELETE" }).catch(() => {})
+      }
+      if (pendingFile) {
+        try {
+          await uploadPendingImage(savedId)
+        } catch (err) {
+          console.error("Error subiendo imagen:", err)
+          alert("El item se guardó pero hubo un error al subir la imagen")
+        }
       }
 
       onSuccess()
@@ -309,19 +405,65 @@ export function InventarioForm({
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div>
-            <Label htmlFor="nombre">Nombre *</Label>
-            <Input
-              id="nombre"
-              {...register("nombre")}
-              placeholder="Ej: Batería iPhone 12"
-              autoFocus
-            />
-            {errors.nombre && (
-              <p className="text-sm text-destructive mt-1">
-                {errors.nombre.message}
-              </p>
-            )}
+          {/* Fila con imagen + nombre */}
+          <div className="flex gap-4 items-start">
+            <div className="shrink-0">
+              <Label className="mb-1 block">Imagen</Label>
+              <div className="relative h-24 w-24 rounded-lg border-2 border-dashed border-border bg-muted/30 overflow-hidden flex items-center justify-center group">
+                {imagenPreview ? (
+                  <>
+                    <img
+                      src={imagenPreview}
+                      alt="Preview"
+                      className="h-full w-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleImageRemove}
+                      className="absolute top-1 right-1 h-5 w-5 rounded-full bg-destructive/90 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Quitar imagen"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </>
+                ) : (
+                  <Package className="h-8 w-8 text-muted-foreground/50" />
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="absolute inset-0 opacity-0 cursor-pointer"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) handleImagePick(file)
+                  }}
+                  title="Seleccionar imagen"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="mt-1 text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1"
+              >
+                <ImagePlus className="h-3 w-3" />
+                {imagenPreview ? "Cambiar" : "Subir foto"}
+              </button>
+            </div>
+            <div className="flex-1">
+              <Label htmlFor="nombre">Nombre *</Label>
+              <Input
+                id="nombre"
+                {...register("nombre")}
+                placeholder="Ej: Batería iPhone 12"
+                autoFocus
+              />
+              {errors.nombre && (
+                <p className="text-sm text-destructive mt-1">
+                  {errors.nombre.message}
+                </p>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -529,6 +671,33 @@ export function InventarioForm({
             </div>
           </div>
 
+          {/* Proveedor */}
+          <div>
+            <Label htmlFor="proveedor">Proveedor</Label>
+            <Select
+              value={watch("proveedorId") || "none"}
+              onValueChange={(value) =>
+                setValue("proveedorId", value === "none" ? null : value, {
+                  shouldDirty: true,
+                })
+              }
+            >
+              <SelectTrigger id="proveedor">
+                <SelectValue placeholder="Sin proveedor" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Sin proveedor</SelectItem>
+                {proveedores
+                  .filter((p) => p.activo !== false)
+                  .map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.nombre}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           {/* Stock thresholds (collapsible) */}
           <div>
             <button
@@ -585,8 +754,8 @@ export function InventarioForm({
             <Button type="button" variant="outline" onClick={onClose}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={loading || (!item && !generatedCode)}>
-              {loading ? "Guardando..." : "Guardar"}
+            <Button type="submit" disabled={loading || uploadingImage || (!item && !generatedCode)}>
+              {uploadingImage ? "Subiendo imagen..." : loading ? "Guardando..." : "Guardar"}
             </Button>
           </div>
         </form>

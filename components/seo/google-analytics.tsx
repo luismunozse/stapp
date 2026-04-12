@@ -2,11 +2,23 @@
 
 import Script from "next/script"
 
-const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID
-const GOOGLE_ADS_ID = process.env.NEXT_PUBLIC_GOOGLE_ADS_ID
+const isValidId = (id: string | undefined, prefix: string) =>
+  !!id && id.startsWith(prefix) && !/X{3,}/i.test(id)
+
+const GA_MEASUREMENT_ID = isValidId(process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID, "G-")
+  ? process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID
+  : undefined
+
+const GOOGLE_ADS_ID = isValidId(process.env.NEXT_PUBLIC_GOOGLE_ADS_ID, "AW-")
+  ? process.env.NEXT_PUBLIC_GOOGLE_ADS_ID
+  : undefined
 
 export function GoogleAnalytics() {
-  if (!GA_MEASUREMENT_ID) return null
+  if (!GA_MEASUREMENT_ID && !GOOGLE_ADS_ID) return null
+
+  // El src de gtag.js debe contener un ID real para que Google detecte la etiqueta.
+  // Preferimos GA si existe; si no, usamos el ID de Google Ads.
+  const primaryId = GA_MEASUREMENT_ID || GOOGLE_ADS_ID
 
   return (
     <>
@@ -29,7 +41,7 @@ export function GoogleAnalytics() {
       </Script>
 
       <Script
-        src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
+        src={`https://www.googletagmanager.com/gtag/js?id=${primaryId}`}
         strategy="afterInteractive"
       />
       <Script id="google-analytics" strategy="afterInteractive">
@@ -37,10 +49,10 @@ export function GoogleAnalytics() {
           window.dataLayer = window.dataLayer || [];
           function gtag(){dataLayer.push(arguments);}
           gtag('js', new Date());
-          gtag('config', '${GA_MEASUREMENT_ID}', {
+          ${GA_MEASUREMENT_ID ? `gtag('config', '${GA_MEASUREMENT_ID}', {
             page_title: document.title,
             page_location: window.location.href,
-          });
+          });` : ''}
           ${GOOGLE_ADS_ID ? `gtag('config', '${GOOGLE_ADS_ID}');` : ''}
         `}
       </Script>

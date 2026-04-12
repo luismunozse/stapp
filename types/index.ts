@@ -170,6 +170,9 @@ export interface Inventario {
   precioCompra: number
   precioVenta: number
   proveedor?: string | null
+  proveedorId?: string | null
+  imagenUrl?: string | null
+  imagenPath?: string | null
   stockMinimo?: number | null
   stockMaximo?: number | null
   puntoReorden?: number | null

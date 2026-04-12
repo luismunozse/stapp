@@ -3,11 +3,12 @@
 import { useState, useEffect } from "react"
 import { signOut } from "next-auth/react"
 
-import { Clock, AlertTriangle, CreditCard, LogOut, Sparkles, Check, CheckCircle2, ArrowRight } from "lucide-react"
+import { Clock, AlertTriangle, CreditCard, LogOut, Check, X, CheckCircle2, ArrowRight, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { BusinessLogo } from "@/components/shared/business-logo"
 import { UpgradeModal } from "@/components/billing/upgrade-modal"
+import { cn } from "@/lib/utils"
 
 interface SubscriptionRequiredViewProps {
   reason?: "trial_expired" | "canceled" | "past_due"
@@ -20,44 +21,106 @@ const reasonMessages = {
   trial_expired: {
     icon: Clock,
     title: "Tu período de prueba ha terminado",
-    description: "Han pasado 30 días desde que comenzaste a usar STApp. Para continuar accediendo a todas las funcionalidades, necesitas activar tu suscripción.",
+    description: "Han pasado 30 días desde que comenzaste a usar STApp. Elegí un plan para continuar.",
     color: "text-yellow-500",
   },
   canceled: {
     icon: AlertTriangle,
     title: "Tu suscripción fue cancelada",
-    description: "Tu suscripción ha sido cancelada. Para volver a acceder a STApp, necesitas reactivar tu plan.",
+    description: "Tu suscripción ha sido cancelada. Para volver a acceder a STApp, elegí un plan.",
     color: "text-red-500",
   },
   past_due: {
     icon: CreditCard,
     title: "Pago pendiente",
-    description: "No pudimos procesar tu último pago. Por favor, actualiza tu método de pago para continuar usando STApp.",
+    description: "No pudimos procesar tu último pago. Elegí un plan para continuar.",
     color: "text-orange-500",
   },
 }
 
-const premiumFeatures = [
-  "Órdenes ilimitadas",
-  "Técnicos y vendedores ilimitados",
-  "Clientes ilimitados",
-  "Reportes avanzados",
-  "Exportación de datos",
-  "Notificaciones WhatsApp",
-  "Logo personalizado",
-  "5GB de almacenamiento",
-  "Soporte prioritario",
+interface PlanCardData {
+  slug: string
+  name: string
+  description: string
+  recommended?: boolean
+  features: { text: string; included: boolean }[]
+  ctaVariant: "outline" | "default"
+  priceMultiplier: number // fallback si no hay precios reales
+}
+
+const planCards: PlanCardData[] = [
+  {
+    slug: "emprendedor",
+    name: "Emprendedor",
+    description: "Para talleres que recién arrancan",
+    priceMultiplier: 0.55,
+    features: [
+      { text: "30 órdenes/mes", included: true },
+      { text: "1 técnico", included: true },
+      { text: "Clientes ilimitados", included: true },
+      { text: "1GB almacenamiento", included: true },
+      { text: "Punto de venta", included: true },
+      { text: "Reportes avanzados", included: false },
+      { text: "Notificaciones WhatsApp", included: false },
+      { text: "Portal de seguimiento", included: false },
+    ],
+    ctaVariant: "outline",
+  },
+  {
+    slug: "profesional",
+    name: "Profesional",
+    description: "Todo lo que tu taller necesita",
+    priceMultiplier: 1,
+    recommended: true,
+    features: [
+      { text: "Órdenes ilimitadas", included: true },
+      { text: "Técnicos ilimitados", included: true },
+      { text: "Clientes ilimitados", included: true },
+      { text: "5GB almacenamiento", included: true },
+      { text: "Punto de venta completo", included: true },
+      { text: "15+ reportes avanzados", included: true },
+      { text: "Notificaciones WhatsApp", included: true },
+      { text: "Portal de seguimiento", included: true },
+    ],
+    ctaVariant: "default",
+  },
+  {
+    slug: "taller-plus",
+    name: "Taller+",
+    description: "Para talleres con alto volumen",
+    priceMultiplier: 1.8,
+    features: [
+      { text: "Todo de Profesional", included: true },
+      { text: "20GB almacenamiento", included: true },
+      { text: "Soporte dedicado", included: true },
+      { text: "Onboarding personalizado", included: true },
+      { text: "Backup descargable", included: true },
+    ],
+    ctaVariant: "outline",
+  },
 ]
+
+function formatArs(n: number): string {
+  return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
+}
+
+function roundToNice(n: number): number {
+  if (n < 1000) return Math.round(n / 100) * 100
+  return Math.round(n / 500) * 500
+}
 
 export function SubscriptionRequiredView({
   reason = "trial_expired",
-  planNombre,
   hasAccess = false,
   daysRemaining = 0,
 }: SubscriptionRequiredViewProps) {
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false)
-  const [pricesArs, setPricesArs] = useState({ monthly: 19999, yearly: 191990 })
-  const [pricesUsd, setPricesUsd] = useState({ monthly: 14, yearly: 134 })
+  const [selectedPlanSlug, setSelectedPlanSlug] = useState<string>("profesional")
+  // Map de slug → { monthly, yearly } en ARS. Se llena desde la API.
+  const [allPrices, setAllPrices] = useState<Record<string, { monthly: number; yearly: number }>>({})
+  // Base: precio Profesional (para fallback con multiplier)
+  const [baseProfesionalPrice, setBaseProfesionalPrice] = useState({ monthly: 19999, yearly: 191990 })
+
   const message = hasAccess ? null : reasonMessages[reason]
   const Icon = message?.icon || CheckCircle2
 
@@ -65,19 +128,49 @@ export function SubscriptionRequiredView({
     fetch("/api/subscriptions")
       .then((res) => res.json())
       .then((data) => {
-        const plan = data.plans?.find((p: any) => p.tipo === "PREMIUM")
-        if (plan) {
-          setPricesArs({ monthly: Number(plan.precio_mensual), yearly: Number(plan.precio_anual) })
-          if (plan.precio_mensual_usd) {
-            setPricesUsd({ monthly: Number(plan.precio_mensual_usd), yearly: Number(plan.precio_anual_usd) })
+        const plansList: any[] = data.plans || []
+        const prices: Record<string, { monthly: number; yearly: number }> = {}
+        for (const p of plansList) {
+          if (!p.slug) continue
+          prices[p.slug] = {
+            monthly: Number(p.precio_mensual),
+            yearly: Number(p.precio_anual),
           }
+        }
+        setAllPrices(prices)
+        // Capturar precio base del plan profesional
+        const profesional = plansList.find((p) => p.slug === "profesional") ||
+                            plansList.find((p) => p.tipo === "PREMIUM")
+        if (profesional) {
+          setBaseProfesionalPrice({
+            monthly: Number(profesional.precio_mensual),
+            yearly: Number(profesional.precio_anual),
+          })
         }
       })
       .catch(() => {})
   }, [])
 
-  const formatArs = (n: number) => n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
-  const savingsPercent = Math.round(((pricesArs.monthly * 12 - pricesArs.yearly) / (pricesArs.monthly * 12)) * 100)
+  const getPlanPrice = (card: PlanCardData): number => {
+    if (allPrices[card.slug]) {
+      return allPrices[card.slug].monthly
+    }
+    // Fallback: derivar del precio base con multiplier
+    if (card.priceMultiplier === 1) return baseProfesionalPrice.monthly
+    return roundToNice(baseProfesionalPrice.monthly * card.priceMultiplier)
+  }
+
+  const handleSelectPlan = (slug: string) => {
+    if (slug === "taller-plus") {
+      window.open(
+        "https://wa.me/5491112345678?text=Hola,%20quiero%20activar%20el%20plan%20Taller%2B",
+        "_blank"
+      )
+      return
+    }
+    setSelectedPlanSlug(slug)
+    setUpgradeModalOpen(true)
+  }
 
   const handleLogout = async () => {
     await signOut({ redirect: false })
@@ -98,7 +191,7 @@ export function SubscriptionRequiredView({
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 container max-w-4xl mx-auto py-12 px-4">
+      <main className="flex-1 container max-w-6xl mx-auto py-8 px-4">
         {hasAccess ? (
           <div className="text-center mb-8">
             <div className="inline-flex p-4 rounded-full bg-green-100 dark:bg-green-950 mb-4 text-green-600">
@@ -108,12 +201,12 @@ export function SubscriptionRequiredView({
             <p className="text-muted-foreground max-w-xl mx-auto mb-2">
               Tenés {daysRemaining} día{daysRemaining !== 1 ? "s" : ""} de prueba restantes. Aprovechá para conocer todas las funcionalidades.
             </p>
-            <Button size="lg" className="mt-4" onClick={() => window.location.href = "/dashboard"}>
+            <Button size="lg" className="mt-4" onClick={() => (window.location.href = "/dashboard")}>
               Ir a mi taller
               <ArrowRight className="h-4 w-4 ml-2" />
             </Button>
             <p className="text-sm text-muted-foreground mt-6">
-              ¿Querés acceso permanente? Suscribite al plan Premium:
+              ¿Querés acceso permanente? Elegí un plan:
             </p>
           </div>
         ) : (
@@ -126,93 +219,107 @@ export function SubscriptionRequiredView({
           </div>
         )}
 
-        <div className="grid md:grid-cols-2 gap-6">
-          {/* Plan Card */}
-          <Card className="border-2 border-primary">
-            <CardHeader className="text-center pb-2">
-              <div className="inline-flex items-center justify-center gap-2 text-primary mb-2">
-                <Sparkles className="h-5 w-5" />
-                <span className="text-sm font-medium">RECOMENDADO</span>
-              </div>
-              <CardTitle className="text-2xl">Plan Premium</CardTitle>
-              <CardDescription>Todo lo que necesitas para tu negocio</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="text-center">
-                <div className="text-4xl font-bold">${formatArs(pricesArs.monthly)}</div>
-                <div className="text-sm text-muted-foreground">ARS / mes</div>
-                <div className="text-xs text-muted-foreground mt-0.5">🇦🇷 Argentina</div>
-                <div className="text-sm text-green-600 mt-1">
-                  o ${formatArs(pricesArs.yearly)}/año (ahorra {savingsPercent}%)
-                </div>
-                <div className="mt-3 pt-3 border-t border-dashed">
-                  <p className="text-xs text-muted-foreground mb-1">Latinoamérica y el mundo</p>
-                  <div className="text-2xl font-bold">USD ${pricesUsd.monthly}</div>
-                  <div className="text-sm text-muted-foreground">/mes</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">Tarjeta internacional</div>
-                </div>
-              </div>
+        {/* 3-tier plan grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto items-start">
+          {planCards.map((card) => {
+            const priceArs = getPlanPrice(card)
+            return (
+              <Card
+                key={card.slug}
+                className={cn(
+                  "relative border-2 transition-colors flex flex-col",
+                  card.recommended
+                    ? "border-primary shadow-xl md:-mt-4 md:pb-6"
+                    : "border-border/50 shadow-sm hover:border-border"
+                )}
+              >
+                {card.recommended && (
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2">
+                    <span className="bg-primary text-primary-foreground text-xs font-bold px-4 py-1.5 rounded-full inline-flex items-center gap-1.5 whitespace-nowrap">
+                      <Zap className="w-3 h-3" />
+                      Más popular
+                    </span>
+                  </div>
+                )}
+                <CardContent className="p-6 flex flex-col flex-1">
+                  <div className="text-center mb-5 pt-1">
+                    <h3 className="text-xl font-bold text-foreground">{card.name}</h3>
+                    <p className="text-sm text-muted-foreground">{card.description}</p>
+                  </div>
 
-              <ul className="space-y-2">
-                {premiumFeatures.map((feature) => (
-                  <li key={feature} className="flex items-center gap-2 text-sm">
-                    <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
-                    {feature}
-                  </li>
-                ))}
-              </ul>
+                  <div className="text-center mb-6">
+                    <div className="flex items-baseline justify-center gap-1">
+                      <span
+                        className={cn(
+                          "font-bold text-foreground",
+                          card.recommended ? "text-4xl" : "text-3xl"
+                        )}
+                      >
+                        ${formatArs(priceArs)}
+                      </span>
+                      <span className="text-muted-foreground text-sm">/mes</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">ARS</p>
+                  </div>
 
-              <Button className="w-full" size="lg" onClick={() => setUpgradeModalOpen(true)}>
-                <CreditCard className="h-4 w-4 mr-2" />
-                Activar suscripción
-              </Button>
-            </CardContent>
-          </Card>
+                  <Button
+                    className={cn("w-full mb-5", card.recommended && "shadow-lg")}
+                    size="lg"
+                    variant={card.ctaVariant}
+                    onClick={() => handleSelectPlan(card.slug)}
+                  >
+                    {card.slug === "taller-plus" ? (
+                      "Contactar Ventas"
+                    ) : (
+                      <>
+                        <CreditCard className="h-4 w-4 mr-2" />
+                        Activar {card.name}
+                      </>
+                    )}
+                  </Button>
 
-          {/* Info Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Preguntas frecuentes</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <h4 className="font-medium mb-1">¿Qué pasa con mis datos?</h4>
-                <p className="text-sm text-muted-foreground">
-                  Tus datos están seguros. Una vez que actives tu suscripción, podrás acceder a toda tu información sin perder nada.
-                </p>
-              </div>
-              <div>
-                <h4 className="font-medium mb-1">¿Puedo pagar con tarjeta?</h4>
-                <p className="text-sm text-muted-foreground">
-                  Sí, aceptamos tarjetas de crédito y débito. En Argentina a través de MercadoPago, y para otros países con tarjeta internacional.
-                </p>
-              </div>
-              <div>
-                <h4 className="font-medium mb-1">¿Puedo cancelar en cualquier momento?</h4>
-                <p className="text-sm text-muted-foreground">
-                  Sí, puedes cancelar tu suscripción cuando quieras. Seguirás teniendo acceso hasta el final del período pagado.
-                </p>
-              </div>
-              <div>
-                <h4 className="font-medium mb-1">¿Necesito ayuda?</h4>
-                <p className="text-sm text-muted-foreground">
-                  Contáctanos por WhatsApp y te ayudaremos con cualquier duda sobre tu suscripción.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+                  <ul className="space-y-2 border-t pt-4 flex-1">
+                    {card.features.map((feature) => (
+                      <li
+                        key={feature.text}
+                        className={cn(
+                          "flex items-start gap-2 text-sm",
+                          !feature.included && "text-muted-foreground/50"
+                        )}
+                      >
+                        {feature.included ? (
+                          <Check className="w-4 h-4 flex-shrink-0 text-green-500 mt-0.5" />
+                        ) : (
+                          <X className="w-4 h-4 flex-shrink-0 text-muted-foreground/40 mt-0.5" />
+                        )}
+                        <span className={cn(!feature.included && "line-through")}>
+                          {feature.text}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
+
+        <div className="text-center text-sm text-muted-foreground mt-8 space-y-1">
+          <p>Tus datos están seguros — no los perdés al cambiar de plan.</p>
+          <p>Podés cancelar en cualquier momento. Sin cargos ocultos.</p>
         </div>
       </main>
 
       {/* Footer */}
       <footer className="p-4 border-t text-center text-sm text-muted-foreground">
-        <p>¿Tienes preguntas? Contáctanos y te ayudamos.</p>
+        <p>¿Tenés preguntas? Contactanos y te ayudamos.</p>
       </footer>
 
       {/* Modal de pago */}
       <UpgradeModal
         open={upgradeModalOpen}
         onClose={() => setUpgradeModalOpen(false)}
+        planSlug={selectedPlanSlug}
       />
     </div>
   )

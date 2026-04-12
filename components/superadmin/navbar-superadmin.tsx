@@ -26,6 +26,7 @@ import {
   Puzzle,
   MessageCircle,
   UserSearch,
+  Wrench,
 } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import { cn } from "@/lib/utils"
@@ -48,6 +49,7 @@ const navItems = [
   { href: "/superadmin/feature-usage", label: "Feature Usage", icon: Puzzle },
   { href: "/superadmin/email-campaigns", label: "Campañas Email", icon: MailCheck },
   { href: "/superadmin/broadcast", label: "Broadcast", icon: Megaphone },
+  { href: "/superadmin/maintenance-banner", label: "Mantenimiento", icon: Wrench },
   { href: "/superadmin/changelog", label: "Changelog", icon: Newspaper },
   { href: "/superadmin/waitlist", label: "Waitlist iOS", icon: Smartphone },
   { href: "/superadmin/logs", label: "Auditoría", icon: FileText },

@@ -1,10 +1,14 @@
 import { supabaseAdmin } from "@/lib/supabase"
 
+export type PlanSlug = "free" | "emprendedor" | "profesional" | "taller-plus" | string
+
 export interface SubscriptionInfo {
   id: string
   planId: string
   planNombre: string
   planTipo: "FREE" | "PREMIUM"
+  planSlug: PlanSlug
+  tierOrder: number
   status: "ACTIVE" | "CANCELED" | "PAST_DUE" | "TRIALING"
   billingPeriod: "MONTHLY" | "YEARLY" | null
   paymentProvider: "MERCADOPAGO" | "REBILL" | null
@@ -19,6 +23,7 @@ export interface SubscriptionInfo {
     storageMb: number | null
   }
   features: string[]
+  featureFlags: Record<string, boolean>
 }
 
 export interface TrialInfo {
@@ -56,12 +61,15 @@ export async function getSubscriptionInfo(
         id,
         nombre,
         tipo,
+        slug,
+        tier_order,
         limite_ordenes,
         limite_tecnicos,
         limite_clientes,
         limite_vendedores,
         limite_storage_mb,
-        features
+        features,
+        feature_flags
       )
     `)
     .eq("organization_id", organizationId)
@@ -78,6 +86,8 @@ export async function getSubscriptionInfo(
     planId: plan.id,
     planNombre: plan.nombre,
     planTipo: plan.tipo,
+    planSlug: plan.slug || (plan.tipo === "PREMIUM" ? "profesional" : "free"),
+    tierOrder: plan.tier_order ?? 0,
     status: data.status,
     billingPeriod: data.billing_period,
     paymentProvider: data.payment_provider,
@@ -92,6 +102,7 @@ export async function getSubscriptionInfo(
       storageMb: plan.limite_storage_mb,
     },
     features: plan.features || [],
+    featureFlags: (plan.feature_flags as Record<string, boolean>) || {},
   }
 }
 
@@ -198,14 +209,50 @@ export async function checkPlanLimit(
 
   const allowed = current < limit
 
+  // Sugerencia de upgrade dinámica según el plan actual
+  const currentSlug = subscription?.planSlug || "free"
+  const upgradeTarget =
+    currentSlug === "emprendedor" ? "Profesional" : "un plan superior"
+
   return {
     allowed,
     current,
     limit,
     message: allowed
       ? undefined
-      : `Has alcanzado el límite de ${limit} ${limitType} de tu plan. Actualiza a Premium para continuar.`,
+      : `Has alcanzado el límite de ${limit} ${limitType} de tu plan. Actualizá a ${upgradeTarget} para continuar.`,
   }
+}
+
+// Retorna el slug del plan actual de la organización
+export async function getPlanSlug(organizationId: string): Promise<PlanSlug> {
+  const subscription = await getSubscriptionInfo(organizationId)
+  if (!subscription) return "free"
+  return subscription.planSlug
+}
+
+// Verifica si el plan actual tiene una feature específica habilitada
+// Usado para feature gating granular (reportes, whatsapp, kiosco, etc)
+export async function hasPlanFeature(
+  organizationId: string,
+  featureKey: string
+): Promise<boolean> {
+  const subscription = await getSubscriptionInfo(organizationId)
+  if (!subscription) return false
+
+  // Si el trial expiró, no hay acceso a ninguna feature
+  if (subscription.status === "TRIALING") {
+    const trialEnd = subscription.trialEnd ? new Date(subscription.trialEnd) : null
+    if (!trialEnd || trialEnd < new Date()) return false
+  }
+
+  // Si el status es CANCELED o PAST_DUE, no hay acceso
+  if (subscription.status === "CANCELED" || subscription.status === "PAST_DUE") {
+    return false
+  }
+
+  // Chequear el flag específico en el JSONB del plan
+  return subscription.featureFlags?.[featureKey] === true
 }
 
 // Obtener todos los planes disponibles

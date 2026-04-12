@@ -22,8 +22,11 @@ export async function GET() {
       isPremium: premium,
       planTipo: subscription?.planTipo || "FREE",
       planNombre: subscription?.planNombre || "Free",
+      planSlug: subscription?.planSlug || "free",
+      tierOrder: subscription?.tierOrder || 0,
       status: subscription?.status || "ACTIVE",
       features: subscription?.features || [],
+      featureFlags: subscription?.featureFlags || {},
       limits: subscription?.limits || {
         ordenes: 50,
         tecnicos: 2,

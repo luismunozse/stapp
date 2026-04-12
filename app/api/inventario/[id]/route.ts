@@ -14,6 +14,8 @@ const inventarioSchema = z.object({
   precioCompra: z.number().min(0).optional(),
   precioVenta: z.number().min(0).optional(),
   proveedor: z.string().optional(),
+  // Nota: los ids del schema usan cuid, no uuid.
+  proveedorId: z.string().min(1).nullable().optional(),
   stockMinimo: z.number().int().min(0).nullable().optional(),
   stockMaximo: z.number().int().min(0).nullable().optional(),
   puntoReorden: z.number().int().min(0).nullable().optional(),
@@ -31,7 +33,7 @@ export async function GET(
 
     const { data: item, error: dbError } = await supabaseAdmin
       .from("inventario")
-      .select("*")
+      .select("*, proveedores:proveedor_id(id, nombre)")
       .eq("id", id)
       .eq("organization_id", organizationId!)
       .is("deleted_at", null)
@@ -95,6 +97,7 @@ export async function PUT(
     if (data.precioCompra !== undefined) updateData.precio_compra = data.precioCompra
     if (data.precioVenta !== undefined) updateData.precio_venta = data.precioVenta
     if (data.proveedor !== undefined) updateData.proveedor = data.proveedor
+    if (data.proveedorId !== undefined) updateData.proveedor_id = data.proveedorId
     if (data.stockMinimo !== undefined) updateData.stock_minimo = data.stockMinimo
     if (data.stockMaximo !== undefined) updateData.stock_maximo = data.stockMaximo
     if (data.puntoReorden !== undefined) updateData.punto_reorden = data.puntoReorden
@@ -103,7 +106,7 @@ export async function PUT(
       .from("inventario")
       .update(updateData)
       .eq("id", id)
-      .select()
+      .select("*, proveedores:proveedor_id(id, nombre)")
       .single()
 
     if (updateError) {

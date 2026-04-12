@@ -160,6 +160,11 @@ export function formatRepuesto(repuesto: any) {
 export function formatInventario(item: any) {
   if (!item) return null
 
+  // Resolver nombre del proveedor: si viene el join (proveedores), usarlo.
+  // Si no, caer al texto libre legacy (columna `proveedor`).
+  const proveedorJoin = item.proveedores || item.proveedor_rel
+  const proveedorNombre = proveedorJoin?.nombre ?? item.proveedor ?? null
+
   return {
     id: item.id,
     codigo: item.codigo,
@@ -170,7 +175,10 @@ export function formatInventario(item: any) {
     stock: item.stock,
     precioCompra: item.precio_compra,
     precioVenta: item.precio_venta,
-    proveedor: item.proveedor,
+    proveedor: proveedorNombre,
+    proveedorId: item.proveedor_id ?? null,
+    imagenUrl: item.imagen_url ?? null,
+    imagenPath: item.imagen_path ?? null,
     stockMinimo: item.stock_minimo ?? null,
     stockMaximo: item.stock_maximo ?? null,
     puntoReorden: item.punto_reorden ?? null,

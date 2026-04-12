@@ -43,6 +43,55 @@ export async function uploadOrderPhoto(
 }
 
 /**
+ * Subir imagen de un item de inventario
+ * Path: fotos-inventario/{orgId}/{itemId}/{uuid}.{ext}
+ */
+export async function uploadInventarioImage(
+  orgId: string,
+  itemId: string,
+  file: Buffer | Blob,
+  mime: string
+): Promise<UploadResult> {
+  const ext = getExtensionFromMime(mime)
+  const fileName = `${uuidv4()}.${ext}`
+  const path = `${orgId}/${itemId}/${fileName}`
+
+  const { error } = await supabaseAdmin.storage
+    .from(STORAGE_BUCKETS.FOTOS_INVENTARIO)
+    .upload(path, file, {
+      contentType: mime,
+      upsert: false,
+    })
+
+  if (error) {
+    throw new Error(`Error uploading inventario image: ${error.message}`)
+  }
+
+  const { data: urlData } = supabaseAdmin.storage
+    .from(STORAGE_BUCKETS.FOTOS_INVENTARIO)
+    .getPublicUrl(path)
+
+  return {
+    url: urlData.publicUrl,
+    path,
+  }
+}
+
+/**
+ * Eliminar imagen de inventario por path exacto.
+ * Se usa al reemplazar la imagen de un item o al borrarlo físicamente.
+ */
+export async function deleteInventarioImage(path: string): Promise<void> {
+  if (!path) return
+  await supabaseAdmin.storage
+    .from(STORAGE_BUCKETS.FOTOS_INVENTARIO)
+    .remove([path])
+    .catch((err) => {
+      console.error("Error deleting inventario image:", err)
+    })
+}
+
+/**
  * Subir logo de organización
  * Path: logos/{orgId}/logo.{ext}
  */

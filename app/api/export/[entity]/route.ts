@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
-import { isPremium } from "@/lib/subscriptions"
+import { hasPlanFeature } from "@/lib/subscriptions"
 import { supabaseAdmin } from "@/lib/supabase"
 import {
   arrayToCSV,
@@ -33,13 +33,14 @@ export async function GET(
     const { error, organizationId } = await requireAuth()
     if (error) return error
 
-    // Verificar que es Premium
-    const premium = await isPremium(organizationId!)
-    if (!premium) {
+    // Verificar feature data_export
+    const hasFeature = await hasPlanFeature(organizationId!, "data_export")
+    if (!hasFeature) {
       return NextResponse.json(
         {
-          error: "La exportación de datos requiere plan Premium",
-          code: "PREMIUM_REQUIRED",
+          error: "La exportación de datos requiere el plan Profesional",
+          code: "FEATURE_REQUIRED",
+          feature: "data_export",
         },
         { status: 403 }
       )

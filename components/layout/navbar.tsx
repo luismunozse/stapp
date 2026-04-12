@@ -31,6 +31,7 @@ import {
   Mail,
   BookOpen,
   ChevronDown,
+  Wallet,
 } from "lucide-react"
 import { useState, useEffect, useRef, useCallback } from "react"
 import { cn } from "@/lib/utils"
@@ -61,6 +62,7 @@ const navItems: NavItem[] = [
   { href: "/cotizaciones", label: "Cotizaciones", icon: Receipt, roles: ["ADMIN", "TECNICO"] },
   { href: "/inventario", label: "Inventario", icon: Package, roles: ["ADMIN"] },
   { href: "/caja", label: "Caja", icon: Landmark, roles: ["ADMIN"] },
+  { href: "/finanzas", label: "Finanzas", icon: Wallet, roles: ["ADMIN"] },
   { href: "/facturacion", label: "Facturación", icon: FileText, roles: ["ADMIN"] },
   { href: "/reportes", label: "Reportes", icon: BarChart3, roles: ["ADMIN", "VENDEDOR"] },
   { href: "/emails", label: "Emails", icon: Mail, roles: ["ADMIN"] },
@@ -96,6 +98,7 @@ const navSections: NavSection[] = [
   {
     label: "Finanzas",
     items: [
+      { href: "/finanzas", label: "Finanzas", icon: Wallet, roles: ["ADMIN"] },
       { href: "/caja", label: "Caja", icon: Landmark, roles: ["ADMIN"] },
       { href: "/facturacion", label: "Facturación", icon: FileText, roles: ["ADMIN"] },
       { href: "/reportes", label: "Reportes", icon: BarChart3, roles: ["ADMIN", "VENDEDOR"] },

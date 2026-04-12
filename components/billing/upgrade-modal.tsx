@@ -18,12 +18,15 @@ type PaymentMethod = "mercadopago" | "rebill"
 interface UpgradeModalProps {
   open: boolean
   onClose: () => void
+  /** Slug del plan seleccionado. Default: 'profesional' */
+  planSlug?: string
 }
 
-export function UpgradeModal({ open, onClose }: UpgradeModalProps) {
+export function UpgradeModal({ open, onClose, planSlug = "profesional" }: UpgradeModalProps) {
   const [billingPeriod, setBillingPeriod] = useState<"MONTHLY" | "YEARLY">("MONTHLY")
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("mercadopago")
   const [loading, setLoading] = useState(false)
+  const [planName, setPlanName] = useState("Profesional")
   const [pricesArs, setPricesArs] = useState({ MONTHLY: 19999, YEARLY: 191990 })
   const [pricesUsd, setPricesUsd] = useState({ MONTHLY: 14, YEARLY: 134 })
 
@@ -32,22 +35,29 @@ export function UpgradeModal({ open, onClose }: UpgradeModalProps) {
     fetch("/api/subscriptions")
       .then((res) => res.json())
       .then((data) => {
-        const premiumPlan = data.plans?.find((p: any) => p.tipo === "PREMIUM")
-        if (premiumPlan) {
+        // Primero intentar buscar por slug exacto
+        const plansList: any[] = data.plans || []
+        let targetPlan = plansList.find((p) => p.slug === planSlug)
+        // Fallback: cualquier PREMIUM (compat pre-migración)
+        if (!targetPlan) {
+          targetPlan = plansList.find((p) => p.tipo === "PREMIUM")
+        }
+        if (targetPlan) {
+          if (targetPlan.nombre) setPlanName(targetPlan.nombre)
           setPricesArs({
-            MONTHLY: Number(premiumPlan.precio_mensual),
-            YEARLY: Number(premiumPlan.precio_anual),
+            MONTHLY: Number(targetPlan.precio_mensual),
+            YEARLY: Number(targetPlan.precio_anual),
           })
-          if (premiumPlan.precio_mensual_usd) {
+          if (targetPlan.precio_mensual_usd) {
             setPricesUsd({
-              MONTHLY: Number(premiumPlan.precio_mensual_usd),
-              YEARLY: Number(premiumPlan.precio_anual_usd),
+              MONTHLY: Number(targetPlan.precio_mensual_usd),
+              YEARLY: Number(targetPlan.precio_anual_usd),
             })
           }
         }
       })
       .catch(() => {})
-  }, [open])
+  }, [open, planSlug])
 
   const formatPriceArs = (price: number) => {
     return price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
@@ -86,7 +96,7 @@ export function UpgradeModal({ open, onClose }: UpgradeModalProps) {
         const response = await fetch("/api/mercadopago/preference", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ billingPeriod }),
+          body: JSON.stringify({ billingPeriod, planSlug }),
         })
 
         const data = await response.json()
@@ -100,7 +110,7 @@ export function UpgradeModal({ open, onClose }: UpgradeModalProps) {
         const response = await fetch("/api/rebill/checkout", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ billingPeriod }),
+          body: JSON.stringify({ billingPeriod, planSlug }),
         })
 
         const data = await response.json()
@@ -140,10 +150,10 @@ export function UpgradeModal({ open, onClose }: UpgradeModalProps) {
               <div className="p-1.5 rounded-lg bg-primary/10">
                 <Crown className="h-5 w-5 text-primary" />
               </div>
-              <DialogTitle className="text-xl">Activar Plan Premium</DialogTitle>
+              <DialogTitle className="text-xl">Activar Plan {planName}</DialogTitle>
             </div>
             <DialogDescription className="text-sm">
-              Desbloquea todo el potencial de STApp sin límites
+              Desbloqueá todo el potencial de STApp
             </DialogDescription>
           </DialogHeader>
         </div>

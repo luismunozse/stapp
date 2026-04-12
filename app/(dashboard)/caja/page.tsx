@@ -18,7 +18,6 @@ import { MovimientoManualForm } from "@/components/caja/movimiento-manual-form"
 import { MovimientosManualesList } from "@/components/caja/movimientos-manuales-list"
 import { HistorialCierres } from "@/components/caja/historial-cierres"
 import { ExportButton } from "@/components/caja/export-button"
-import { EstadoResultados } from "@/components/reportes/estado-resultados"
 
 export default function CajaPage() {
   const { data: session } = useSession()
@@ -120,7 +119,6 @@ export default function CajaPage() {
           <TabsList>
             <TabsTrigger value="resumen">Resumen</TabsTrigger>
             {isAdmin && <TabsTrigger value="movimientos">Movimientos Manuales</TabsTrigger>}
-            {isAdmin && <TabsTrigger value="rentabilidad">Rentabilidad</TabsTrigger>}
             {isAdmin && <TabsTrigger value="historial">Historial de Cierres</TabsTrigger>}
           </TabsList>
 
@@ -145,12 +143,6 @@ export default function CajaPage() {
                 />
                 <MovimientosManualesList fecha={fecha} refreshKey={movRefreshKey} />
               </div>
-            </TabsContent>
-          )}
-
-          {isAdmin && (
-            <TabsContent value="rentabilidad">
-              <EstadoResultados />
             </TabsContent>
           )}
 

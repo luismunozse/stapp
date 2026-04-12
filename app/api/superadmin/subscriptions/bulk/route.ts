@@ -79,12 +79,25 @@ export async function POST(request: Request) {
     if (action === "activate") {
       const period = billingPeriod || "MONTHLY"
 
-      const { data: premiumPlan } = await supabaseAdmin
+      // Buscar por slug (default: profesional), con fallback a cualquier PREMIUM
+      let { data: premiumPlan } = await supabaseAdmin
         .from("plans")
         .select("id")
-        .eq("tipo", "PREMIUM")
+        .eq("slug", "profesional")
         .eq("activo", true)
-        .single()
+        .maybeSingle()
+
+      if (!premiumPlan) {
+        const { data: fallbackPlan } = await supabaseAdmin
+          .from("plans")
+          .select("id")
+          .eq("tipo", "PREMIUM")
+          .eq("activo", true)
+          .order("tier_order", { ascending: false, nullsFirst: false })
+          .limit(1)
+          .maybeSingle()
+        premiumPlan = fallbackPlan
+      }
 
       if (!premiumPlan) {
         return NextResponse.json({ error: "No se encontró plan Premium activo" }, { status: 404 })
@@ -110,6 +123,7 @@ export async function POST(request: Request) {
             plan_id: premiumPlan.id,
             status: "ACTIVE",
             billing_period: period,
+            payment_provider: "MANUAL",
             current_period_start: now.toISOString(),
             current_period_end: periodEnd.toISOString(),
             cancel_at_period_end: false,

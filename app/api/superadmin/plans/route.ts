@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
-import type { PlanWithUsage, CreatePlanInput } from "@/types/superadmin"
+import type { PlanWithUsage } from "@/types/superadmin"
 
 // Schema de validación para crear plan
 const createPlanSchema = z.object({
@@ -10,6 +10,12 @@ const createPlanSchema = z.object({
   tipo: z.enum(["FREE", "PREMIUM"], {
     errorMap: () => ({ message: "Tipo debe ser FREE o PREMIUM" }),
   }),
+  slug: z
+    .string()
+    .min(2, "Slug debe tener al menos 2 caracteres")
+    .max(50)
+    .regex(/^[a-z0-9-]+$/, "Slug solo puede contener minúsculas, números y guiones"),
+  tier_order: z.number().int().min(0).default(0),
   descripcion: z.string().max(500).nullable(),
   precio_mensual: z.number().min(0, "Precio mensual debe ser mayor o igual a 0"),
   precio_anual: z.number().min(0, "Precio anual debe ser mayor o igual a 0"),
@@ -20,6 +26,7 @@ const createPlanSchema = z.object({
   limite_vendedores: z.number().positive("Límite debe ser positivo").nullable(),
   limite_storage_mb: z.number().positive("Límite debe ser positivo").nullable(),
   features: z.array(z.string()).default([]),
+  feature_flags: z.record(z.boolean()).default({}),
 }).refine(
   (data) => {
     // Si es FREE, precios deben ser 0
@@ -94,24 +101,43 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const data: CreatePlanInput = validation.data
+    const data = validation.data
 
-    // Verificar que no exista ya un plan del mismo tipo activo
-    const { data: existingPlan } = await supabaseAdmin
+    // Validar slug único (antes era: un único plan por tipo)
+    // Ahora permitimos múltiples planes PREMIUM diferenciados por slug.
+    const { data: existingBySlug } = await supabaseAdmin
       .from("plans")
-      .select("id, nombre, tipo")
-      .eq("tipo", data.tipo)
-      .eq("activo", true)
-      .is("deleted_at", null)
-      .single()
+      .select("id, nombre, slug")
+      .eq("slug", data.slug)
+      .maybeSingle()
 
-    if (existingPlan) {
+    if (existingBySlug) {
       return NextResponse.json(
         {
-          error: `Ya existe un plan ${data.tipo} activo: "${existingPlan.nombre}". Desactívalo primero.`,
+          error: `Ya existe un plan con slug "${data.slug}": "${existingBySlug.nombre}". El slug debe ser único.`,
         },
         { status: 400 }
       )
+    }
+
+    // Solo puede haber 1 plan FREE activo (regla de negocio)
+    if (data.tipo === "FREE") {
+      const { data: existingFree } = await supabaseAdmin
+        .from("plans")
+        .select("id, nombre")
+        .eq("tipo", "FREE")
+        .eq("activo", true)
+        .is("deleted_at", null)
+        .maybeSingle()
+
+      if (existingFree) {
+        return NextResponse.json(
+          {
+            error: `Ya existe un plan FREE activo: "${existingFree.nombre}". Desactívalo primero.`,
+          },
+          { status: 400 }
+        )
+      }
     }
 
     // Configurar el email del superadmin para el trigger de auditoría
@@ -126,6 +152,8 @@ export async function POST(request: NextRequest) {
       .insert({
         nombre: data.nombre,
         tipo: data.tipo,
+        slug: data.slug,
+        tier_order: data.tier_order,
         descripcion: data.descripcion,
         precio_mensual: data.precio_mensual,
         precio_anual: data.precio_anual,
@@ -136,6 +164,7 @@ export async function POST(request: NextRequest) {
         limite_vendedores: data.limite_vendedores,
         limite_storage_mb: data.limite_storage_mb,
         features: data.features,
+        feature_flags: data.feature_flags,
         activo: true,
       })
       .select()

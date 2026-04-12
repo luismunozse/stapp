@@ -8,7 +8,7 @@ import { Switch } from "@/components/ui/switch"
 import { Check, X, Globe, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { m, LazyMotion, domAnimation } from "@/components/animations/motion"
-import type { PlanPrices } from "@/lib/pricing"
+import type { PlanPrices, AllPlansPrices } from "@/lib/pricing"
 
 interface PlanFeature {
   text: string
@@ -18,18 +18,21 @@ interface PlanFeature {
 
 interface Plan {
   name: string
+  slug: string
   description: string
   priceMultiplier: number
   badge?: string
   recommended?: boolean
   features: PlanFeature[]
   cta: string
+  ctaHref: string
   ctaVariant: "outline" | "default"
 }
 
 const plans: Plan[] = [
   {
     name: "Emprendedor",
+    slug: "emprendedor",
     description: "Para talleres que recién arrancan",
     priceMultiplier: 0.55,
     features: [
@@ -45,10 +48,12 @@ const plans: Plan[] = [
       { text: "Notificaciones WhatsApp", included: false },
     ],
     cta: "Comenzar Gratis",
+    ctaHref: "/registro?plan=emprendedor",
     ctaVariant: "outline",
   },
   {
     name: "Profesional",
+    slug: "profesional",
     description: "Todo lo que tu taller necesita",
     priceMultiplier: 1,
     badge: "Más popular",
@@ -70,10 +75,12 @@ const plans: Plan[] = [
       { text: "Soporte prioritario", included: true },
     ],
     cta: "Comenzar Gratis",
+    ctaHref: "/registro?plan=profesional",
     ctaVariant: "default",
   },
   {
     name: "Taller+",
+    slug: "taller-plus",
     description: "Para talleres con alto volumen",
     priceMultiplier: 1.8,
     features: [
@@ -86,6 +93,7 @@ const plans: Plan[] = [
       { text: "Acceso API", included: true, highlight: "Próximamente" },
     ],
     cta: "Contactar Ventas",
+    ctaHref: "https://wa.me/5491112345678?text=Hola,%20me%20interesa%20el%20plan%20Taller%2B",
     ctaVariant: "outline",
   },
 ]
@@ -102,16 +110,41 @@ function roundToNice(n: number): number {
 
 interface PricingSectionProps {
   prices: PlanPrices
+  allPlans?: AllPlansPrices
 }
 
-export function PricingSection({ prices }: PricingSectionProps) {
+export function PricingSection({ prices, allPlans }: PricingSectionProps) {
   const [annual, setAnnual] = useState(false)
 
+  // Base: precios del plan Profesional (el del medio)
   const basePriceArs = annual ? Math.round(prices.ars.yearly / 12) : prices.ars.monthly
   const basePriceUsd = annual ? parseFloat((prices.usd.yearly / 12).toFixed(1)) : prices.usd.monthly
   const savingsPercent = Math.round(
     ((prices.ars.monthly * 12 - prices.ars.yearly) / (prices.ars.monthly * 12)) * 100
   )
+
+  // Helper: obtener precio de un plan.
+  // Si hay allPlans en la DB, usa el precio real. Si no, fallback a multiplier.
+  const getPlanPrice = (plan: Plan): { ars: number; usd: number } => {
+    if (allPlans && allPlans[plan.slug]) {
+      const dbPlan = allPlans[plan.slug]
+      const ars = annual
+        ? Math.round(dbPlan.ars.yearly / 12)
+        : dbPlan.ars.monthly
+      const usd = annual
+        ? parseFloat((dbPlan.usd.yearly / 12).toFixed(1))
+        : dbPlan.usd.monthly
+      return { ars, usd }
+    }
+    // Fallback: derivar del precio base con multiplier
+    const ars = plan.priceMultiplier === 1
+      ? basePriceArs
+      : roundToNice(basePriceArs * plan.priceMultiplier)
+    const usd = plan.priceMultiplier === 1
+      ? basePriceUsd
+      : Math.round(basePriceUsd * plan.priceMultiplier)
+    return { ars, usd }
+  }
 
   return (
     <LazyMotion features={domAnimation}>
@@ -164,16 +197,11 @@ export function PricingSection({ prices }: PricingSectionProps) {
           {/* Plans grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto items-start">
             {plans.map((plan, index) => {
-              const priceArs = plan.priceMultiplier === 1
-                ? basePriceArs
-                : roundToNice(basePriceArs * plan.priceMultiplier)
-              const priceUsd = plan.priceMultiplier === 1
-                ? basePriceUsd
-                : Math.round(basePriceUsd * plan.priceMultiplier)
+              const { ars: priceArs, usd: priceUsd } = getPlanPrice(plan)
 
               return (
                 <m.div
-                  key={plan.name}
+                  key={plan.slug}
                   className={cn(
                     "relative rounded-2xl bg-card border-2 p-6 sm:p-8 transition-colors flex flex-col",
                     plan.recommended
@@ -205,7 +233,7 @@ export function PricingSection({ prices }: PricingSectionProps) {
                   <div className="text-center mb-2">
                     <div className="flex items-baseline justify-center gap-1">
                       <m.span
-                        key={`${plan.name}-${priceArs}`}
+                        key={`${plan.slug}-${priceArs}`}
                         initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ type: "spring", stiffness: 300, damping: 20 }}
@@ -224,7 +252,7 @@ export function PricingSection({ prices }: PricingSectionProps) {
                   {/* Price USD */}
                   <div className="text-center mb-6">
                     <m.div
-                      key={`usd-${plan.name}-${priceUsd}`}
+                      key={`usd-${plan.slug}-${priceUsd}`}
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       className="flex items-center justify-center gap-1.5 text-muted-foreground"
@@ -235,7 +263,7 @@ export function PricingSection({ prices }: PricingSectionProps) {
                   </div>
 
                   {/* CTA */}
-                  <Link href="/registro" className="block mb-6">
+                  <Link href={plan.ctaHref} className="block mb-6">
                     <m.div
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}

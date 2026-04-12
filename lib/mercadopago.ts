@@ -1,5 +1,5 @@
 import { MercadoPagoConfig, Preference, PreApproval } from "mercadopago"
-import { getPremiumPrices } from "@/lib/pricing"
+import { getPlanBySlug, type PlanDetails } from "@/lib/pricing"
 
 // Lazy initialization to avoid errors during build
 let _client: MercadoPagoConfig | null = null
@@ -31,19 +31,15 @@ function getPreApprovalApi(): PreApproval {
   return _preApprovalApi
 }
 
-// Obtener precios dinámicos desde la base de datos
-async function getMPPrices() {
-  const prices = await getPremiumPrices()
-  return {
-    MONTHLY: {
-      amount: Math.round(prices.ars.monthly * 100), // en centavos
-      currency: "ARS",
-    },
-    YEARLY: {
-      amount: Math.round(prices.ars.yearly * 100), // en centavos
-      currency: "ARS",
-    },
+// Obtiene el plan desde la DB y arma los precios para MP.
+// Default: plan Profesional si no se especifica.
+async function resolvePlan(planSlug?: string): Promise<PlanDetails> {
+  const slug = planSlug || "profesional"
+  const plan = await getPlanBySlug(slug)
+  if (!plan) {
+    throw new Error(`Plan not found for slug: ${slug}`)
   }
+  return plan
 }
 
 // Crear preferencia de pago único (para suscripción manual)
@@ -55,6 +51,7 @@ export async function createPaymentPreference({
   successUrl,
   failureUrl,
   pendingUrl,
+  planSlug,
 }: {
   organizationId: string
   organizationName: string
@@ -63,23 +60,26 @@ export async function createPaymentPreference({
   successUrl: string
   failureUrl: string
   pendingUrl: string
+  planSlug?: string
 }) {
-  const mpPrices = await getMPPrices()
-  const price = billingPeriod === "YEARLY" ? mpPrices.YEARLY : mpPrices.MONTHLY
+  const plan = await resolvePlan(planSlug)
+  const unitPrice =
+    billingPeriod === "YEARLY" ? plan.ars.yearly : plan.ars.monthly
+
   const title =
     billingPeriod === "YEARLY"
-      ? "Plan Premium Anual - Servicio Técnico"
-      : "Plan Premium Mensual - Servicio Técnico"
+      ? `Plan ${plan.nombre} Anual - Servicio Técnico`
+      : `Plan ${plan.nombre} Mensual - Servicio Técnico`
 
   const preference = await getPreferenceApi().create({
     body: {
       items: [
         {
-          id: `premium-${billingPeriod.toLowerCase()}`,
+          id: `${plan.slug}-${billingPeriod.toLowerCase()}`,
           title,
           quantity: 1,
-          unit_price: price.amount / 100, // MP espera precio sin centavos
-          currency_id: price.currency,
+          unit_price: unitPrice,
+          currency_id: "ARS",
         },
       ],
       payer: {
@@ -95,6 +95,8 @@ export async function createPaymentPreference({
         organization_id: organizationId,
         organization_name: organizationName,
         billing_period: billingPeriod,
+        plan_id: plan.id,
+        plan_slug: plan.slug,
       }),
       notification_url: `${process.env.NEXTAUTH_URL}/api/mercadopago/webhook`,
       statement_descriptor: "SERVICIO TECNICO",
@@ -111,31 +113,36 @@ export async function createSubscription({
   email,
   billingPeriod,
   backUrl,
+  planSlug,
 }: {
   organizationId: string
   organizationName: string
   email: string
   billingPeriod: "MONTHLY" | "YEARLY"
   backUrl: string
+  planSlug?: string
 }) {
-  const mpPrices = await getMPPrices()
-  const price = billingPeriod === "YEARLY" ? mpPrices.YEARLY : mpPrices.MONTHLY
+  const plan = await resolvePlan(planSlug)
+  const unitPrice =
+    billingPeriod === "YEARLY" ? plan.ars.yearly : plan.ars.monthly
   const frequency = billingPeriod === "YEARLY" ? 12 : 1
 
   const preApproval = await getPreApprovalApi().create({
     body: {
-      reason: `Plan Premium - ${organizationName}`,
+      reason: `Plan ${plan.nombre} - ${organizationName}`,
       auto_recurring: {
         frequency,
         frequency_type: "months",
-        transaction_amount: price.amount / 100,
-        currency_id: price.currency,
+        transaction_amount: unitPrice,
+        currency_id: "ARS",
       },
       back_url: backUrl,
       payer_email: email,
       external_reference: JSON.stringify({
         organization_id: organizationId,
         billing_period: billingPeriod,
+        plan_id: plan.id,
+        plan_slug: plan.slug,
       }),
     },
   })

@@ -65,6 +65,7 @@ export function createSupabaseClient(accessToken?: string) {
 // Storage buckets
 export const STORAGE_BUCKETS = {
   FOTOS_ORDENES: "fotos-ordenes",
+  FOTOS_INVENTARIO: "fotos-inventario",
   LOGOS: "logos",
   FIRMAS: "firmas",
   CSV_IMPORTS: "csv-imports",

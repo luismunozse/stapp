@@ -26,31 +26,33 @@ export async function enforcePlanLimit(
   return null // Permitir la operación
 }
 
-// Mensajes de error para cada tipo de límite
+// Mensajes de error genéricos por tipo de límite.
+// Se mantienen genéricos ("tu plan") porque ahora hay varios planes.
+// El mensaje dinámico con nombre del plan destino se construye en checkPlanLimit.
 export const LIMIT_MESSAGES = {
   ordenes: {
     title: "Límite de órdenes alcanzado",
-    description: "Has alcanzado el límite mensual de órdenes de tu plan Free.",
-    action: "Actualiza a Premium para crear órdenes ilimitadas.",
+    description: "Has alcanzado el límite mensual de órdenes de tu plan.",
+    action: "Actualizá tu plan para crear órdenes ilimitadas.",
   },
   tecnicos: {
     title: "Límite de técnicos alcanzado",
-    description: "Has alcanzado el límite de técnicos de tu plan Free.",
-    action: "Actualiza a Premium para agregar técnicos ilimitados.",
+    description: "Has alcanzado el límite de técnicos de tu plan.",
+    action: "Actualizá tu plan para agregar técnicos ilimitados.",
   },
   clientes: {
     title: "Límite de clientes alcanzado",
-    description: "Has alcanzado el límite de clientes de tu plan Free.",
-    action: "Actualiza a Premium para agregar clientes ilimitados.",
+    description: "Has alcanzado el límite de clientes de tu plan.",
+    action: "Actualizá tu plan para agregar clientes ilimitados.",
   },
   vendedores: {
     title: "Límite de vendedores alcanzado",
-    description: "Has alcanzado el límite de vendedores de tu plan Free.",
-    action: "Actualiza a Premium para agregar vendedores ilimitados.",
+    description: "Has alcanzado el límite de vendedores de tu plan.",
+    action: "Actualizá tu plan para agregar vendedores ilimitados.",
   },
   storage: {
     title: "Límite de almacenamiento alcanzado",
     description: "Has alcanzado el límite de almacenamiento de tu plan.",
-    action: "Actualiza a Premium para obtener más espacio de almacenamiento.",
+    action: "Actualizá tu plan para obtener más espacio de almacenamiento.",
   },
 }

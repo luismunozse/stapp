@@ -217,9 +217,23 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
       header: "Producto",
       sortable: true,
       render: (item) => (
-        <div>
-          <div className="font-medium text-sm">{item.nombre}</div>
-          <div className="text-xs text-muted-foreground">{item.codigo}</div>
+        <div className="flex items-center gap-2">
+          <div className="h-9 w-9 shrink-0 rounded overflow-hidden bg-muted/50 flex items-center justify-center border">
+            {item.imagenUrl ? (
+              <img
+                src={item.imagenUrl}
+                alt={item.nombre}
+                className="h-full w-full object-cover"
+                loading="lazy"
+              />
+            ) : (
+              <Package className="h-4 w-4 text-muted-foreground/50" />
+            )}
+          </div>
+          <div className="min-w-0">
+            <div className="font-medium text-sm truncate">{item.nombre}</div>
+            <div className="text-xs text-muted-foreground">{item.codigo}</div>
+          </div>
         </div>
       ),
     },
@@ -237,6 +251,17 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
       header: "Categoría",
       hideOnMobile: true,
       render: (item) => <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5">{item.categoria}</Badge>,
+    },
+    {
+      key: "proveedor",
+      header: "Proveedor",
+      hideOnTablet: true,
+      render: (item) =>
+        item.proveedor ? (
+          <span className="text-xs text-muted-foreground truncate block max-w-[140px]">{item.proveedor}</span>
+        ) : (
+          <span className="text-xs text-muted-foreground/50">—</span>
+        ),
     },
     {
       key: "stock",
@@ -559,7 +584,20 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                   const isArchived = !!item.deletedAt
 
                   return (
-                    <Card key={item.id} className={`${sinStock && !isArchived ? "border-destructive/30 bg-destructive/5" : ""} ${isArchived ? "opacity-50" : ""}`}>
+                    <Card key={item.id} className={`overflow-hidden ${sinStock && !isArchived ? "border-destructive/30 bg-destructive/5" : ""} ${isArchived ? "opacity-50" : ""}`}>
+                      {/* Hero image */}
+                      <div className="aspect-[16/9] w-full bg-muted/40 flex items-center justify-center border-b">
+                        {item.imagenUrl ? (
+                          <img
+                            src={item.imagenUrl}
+                            alt={item.nombre}
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <Package className="h-10 w-10 text-muted-foreground/40" />
+                        )}
+                      </div>
                       <CardContent className="p-4">
                         {/* Row 1: Name + Actions */}
                         <div className="flex items-start justify-between gap-2 mb-2">

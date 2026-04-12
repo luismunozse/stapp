@@ -6,6 +6,7 @@ import { z } from "zod"
 
 const preferenceSchema = z.object({
   billingPeriod: z.enum(["MONTHLY", "YEARLY"]).optional(),
+  planSlug: z.string().optional(),
 })
 
 export async function POST(request: NextRequest) {
@@ -14,7 +15,7 @@ export async function POST(request: NextRequest) {
     if (error) return error
 
     const body = await request.json()
-    const { billingPeriod = "MONTHLY" } = preferenceSchema.parse(body)
+    const { billingPeriod = "MONTHLY", planSlug } = preferenceSchema.parse(body)
 
     // Obtener datos de la organización
     const { data: org, error: orgError } = await supabaseAdmin
@@ -41,6 +42,7 @@ export async function POST(request: NextRequest) {
       successUrl: `${baseUrl}/configuracion/billing?mp_success=true`,
       failureUrl: `${baseUrl}/configuracion/billing?mp_failure=true`,
       pendingUrl: `${baseUrl}/configuracion/billing?mp_pending=true`,
+      planSlug,
     })
 
     return NextResponse.json({

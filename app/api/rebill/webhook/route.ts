@@ -206,17 +206,54 @@ async function handlePaymentEvent(data: any): Promise<RebillHandlerResult> {
     }
   }
 
-  // Obtener plan Premium
-  const { data: premiumPlan } = await supabaseAdmin
-    .from("plans")
-    .select("id")
-    .eq("tipo", "PREMIUM")
-    .single()
+  // Resolver plan: plan_id del metadata > plan_slug > fallback profesional
+  let targetPlan: { id: string; slug: string | null } | null = null
 
-  if (!premiumPlan) {
-    console.error("[rebill-webhook] Premium plan not found")
-    return { processed: false, reason: "premium_plan_not_found", organizationId }
+  if (metadata.plan_id) {
+    const { data } = await supabaseAdmin
+      .from("plans")
+      .select("id, slug")
+      .eq("id", metadata.plan_id)
+      .maybeSingle()
+    if (data) targetPlan = data
   }
+
+  if (!targetPlan && metadata.plan_slug) {
+    const { data } = await supabaseAdmin
+      .from("plans")
+      .select("id, slug")
+      .eq("slug", metadata.plan_slug)
+      .maybeSingle()
+    if (data) targetPlan = data
+  }
+
+  if (!targetPlan) {
+    const { data } = await supabaseAdmin
+      .from("plans")
+      .select("id, slug")
+      .eq("slug", "profesional")
+      .maybeSingle()
+    if (data) targetPlan = data
+  }
+
+  if (!targetPlan) {
+    const { data } = await supabaseAdmin
+      .from("plans")
+      .select("id, slug")
+      .eq("tipo", "PREMIUM")
+      .eq("activo", true)
+      .order("tier_order", { ascending: false, nullsFirst: false })
+      .limit(1)
+      .maybeSingle()
+    if (data) targetPlan = data
+  }
+
+  if (!targetPlan) {
+    console.error("[rebill-webhook] No target plan found")
+    return { processed: false, reason: "target_plan_not_found", organizationId }
+  }
+
+  const premiumPlan = targetPlan
 
   // Calcular período
   const billingPeriod = metadata.billing_period || "MONTHLY"

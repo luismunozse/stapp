@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
-import { isPremium } from "@/lib/subscriptions"
+import { hasPlanFeature } from "@/lib/subscriptions"
 
 export async function GET(request: Request) {
   try {
     const { error, organizationId } = await requireAuth()
     if (error) return error
 
-    const premium = await isPremium(organizationId!)
-    if (!premium) {
+    const hasFeature = await hasPlanFeature(organizationId!, "data_export")
+    if (!hasFeature) {
       return NextResponse.json(
-        { error: "Requiere plan Premium", code: "PREMIUM_REQUIRED" },
+        { error: "La exportación de reportes requiere el plan Profesional", code: "FEATURE_REQUIRED", feature: "data_export" },
         { status: 403 }
       )
     }

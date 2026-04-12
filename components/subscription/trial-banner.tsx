@@ -8,12 +8,13 @@ import { cn } from "@/lib/utils"
 
 interface TrialBannerProps {
   daysRemaining: number
+  planNombre?: string
 }
 
 const BANNER_DISMISS_KEY = "trial-banner-dismissed"
 const DISMISS_DURATION_HOURS = 24
 
-export function TrialBanner({ daysRemaining }: TrialBannerProps) {
+export function TrialBanner({ daysRemaining, planNombre = "Profesional" }: TrialBannerProps) {
   const [isDismissed, setIsDismissed] = useState(true) // Start hidden to prevent flash
   const isUrgent = daysRemaining <= 7
   const isCritical = daysRemaining <= 3
@@ -54,10 +55,10 @@ export function TrialBanner({ daysRemaining }: TrialBannerProps) {
         <Clock className="h-4 w-4 shrink-0" />
         <span>
           {daysRemaining === 0
-            ? "Tu prueba gratuita termina hoy"
+            ? `Tu prueba del plan ${planNombre} termina hoy`
             : daysRemaining === 1
-            ? "Tu prueba gratuita termina mañana"
-            : `Te quedan ${daysRemaining} días de prueba gratuita`}
+            ? `Tu prueba del plan ${planNombre} termina mañana`
+            : `Estás probando el plan ${planNombre} — te quedan ${daysRemaining} días`}
         </span>
         <Link href="/configuracion/billing">
           <Button

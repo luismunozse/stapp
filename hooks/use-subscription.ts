@@ -6,14 +6,13 @@ interface SubscriptionStatus {
   isPremium: boolean
   planTipo: "FREE" | "PREMIUM"
   planNombre: string
+  planSlug: string
+  tierOrder: number
   features: string[]
+  featureFlags: Record<string, boolean>
 }
 
-interface UseSubscriptionReturn {
-  isPremium: boolean
-  planTipo: "FREE" | "PREMIUM"
-  planNombre: string
-  features: string[]
+interface UseSubscriptionReturn extends SubscriptionStatus {
   loading: boolean
   error: string | null
   refetch: () => Promise<void>
@@ -28,7 +27,10 @@ export function useSubscription(): UseSubscriptionReturn {
     isPremium: false,
     planTipo: "FREE",
     planNombre: "Free",
+    planSlug: "free",
+    tierOrder: 0,
     features: [],
+    featureFlags: {},
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -50,7 +52,10 @@ export function useSubscription(): UseSubscriptionReturn {
         isPremium: data.isPremium,
         planTipo: data.planTipo || "FREE",
         planNombre: data.planNombre || "Free",
+        planSlug: data.planSlug || "free",
+        tierOrder: data.tierOrder || 0,
         features: data.features || [],
+        featureFlags: data.featureFlags || {},
       })
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error desconocido")
@@ -59,7 +64,10 @@ export function useSubscription(): UseSubscriptionReturn {
         isPremium: false,
         planTipo: "FREE",
         planNombre: "Free",
+        planSlug: "free",
+        tierOrder: 0,
         features: [],
+        featureFlags: {},
       })
     } finally {
       setLoading(false)
@@ -85,4 +93,19 @@ export function useSubscription(): UseSubscriptionReturn {
 export function useIsPremium(): { isPremium: boolean; loading: boolean } {
   const { isPremium, loading } = useSubscription()
   return { isPremium, loading }
+}
+
+/**
+ * Hook para chequear si el plan actual tiene una feature específica.
+ * Usado para feature gating granular en el cliente (esconder/bloquear UI).
+ */
+export function useHasFeature(featureKey: string): {
+  hasFeature: boolean
+  loading: boolean
+} {
+  const { featureFlags, loading } = useSubscription()
+  return {
+    hasFeature: featureFlags?.[featureKey] === true,
+    loading,
+  }
 }

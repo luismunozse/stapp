@@ -5,6 +5,7 @@ import { TrialBanner } from "@/components/subscription/trial-banner"
 import { PolicyChangeModal } from "@/components/subscription/policy-change-modal"
 import { SkipLinks } from "@/components/shared/skip-links"
 import { ApkDownloadBanner } from "@/components/shared/apk-download-banner"
+import { MaintenanceBanner } from "@/components/shared/maintenance-banner"
 import { SampleDataBannerWrapper } from "@/components/onboarding/sample-data-banner-wrapper"
 import { GuidedTour } from "@/components/guided-tour"
 import { OfflineProvider } from "@/contexts/offline-context"
@@ -12,7 +13,7 @@ import { OfflineBanner } from "@/components/offline/offline-banner"
 import { SyncStatusIndicator } from "@/components/offline/sync-status-indicator"
 import { auth } from "@/lib/auth"
 import { isSuperadminEmail } from "@/lib/superadmin-auth"
-import { hasValidAccess, getTrialInfo } from "@/lib/subscriptions"
+import { hasValidAccess, getTrialInfo, getSubscriptionInfo } from "@/lib/subscriptions"
 import { supabaseAdmin } from "@/lib/supabase"
 import { redirect } from "next/navigation"
 import { unstable_cache } from "next/cache"
@@ -20,14 +21,29 @@ import { unstable_cache } from "next/cache"
 // Cachear verificación de acceso por 1 minuto para mejorar performance
 const getCachedAccessInfo = unstable_cache(
   async (organizationId: string) => {
-    const [accessResult, trialInfo] = await Promise.all([
+    const [accessResult, trialInfo, subscription] = await Promise.all([
       hasValidAccess(organizationId),
       getTrialInfo(organizationId),
+      getSubscriptionInfo(organizationId),
     ])
-    return { accessResult, trialInfo }
+    return { accessResult, trialInfo, planNombre: subscription?.planNombre || "Profesional" }
   },
   ["access-info", "by-org"],
   { revalidate: 60, tags: ["subscription"] }
+)
+
+// Cachear banner global por 60s — cambios del superadmin se ven en ~1 min
+const getMaintenanceBanner = unstable_cache(
+  async () => {
+    const { data } = await supabaseAdmin
+      .from("maintenance_banner")
+      .select("active, message, severity")
+      .eq("id", "global")
+      .maybeSingle()
+    return data
+  },
+  ["maintenance-banner"],
+  { revalidate: 60, tags: ["maintenance-banner"] }
 )
 
 export default async function DashboardLayout({
@@ -47,7 +63,7 @@ export default async function DashboardLayout({
   const superadmin = isSuperadminEmail(session.user.email)
 
   // Verificar acceso válido con caché (trial no expirado o suscripción activa)
-  const { accessResult, trialInfo } = await getCachedAccessInfo(organizationId)
+  const { accessResult, trialInfo, planNombre } = await getCachedAccessInfo(organizationId)
 
   if (!accessResult.hasAccess && !superadmin) {
     // Redirigir a página de trial expirado/bloqueo
@@ -64,6 +80,11 @@ export default async function DashboardLayout({
   const hasSampleData = orgData?.has_sample_data || false
   const showTrialBanner = trialInfo.isInTrial && !trialInfo.isPaid
 
+  // Banner de mantenimiento global (gestionado por superadmin)
+  const maintenanceBanner = await getMaintenanceBanner()
+  const showMaintenanceBanner =
+    !!maintenanceBanner?.active && !!maintenanceBanner?.message?.trim()
+
   return (
     <SidebarProvider>
       <OfflineProvider>
@@ -71,17 +92,24 @@ export default async function DashboardLayout({
           <SkipLinks />
           <OfflineBanner />
           <Navbar />
+          {/* Banner de mantenimiento (gestionado por superadmin) */}
+          {showMaintenanceBanner && maintenanceBanner && (
+            <MaintenanceBanner
+              message={maintenanceBanner.message}
+              severity={maintenanceBanner.severity as "INFO" | "WARNING" | "CRITICAL"}
+            />
+          )}
           {/* Banner de trial si está en período de prueba */}
-          {showTrialBanner && (
-            <TrialBanner daysRemaining={trialInfo.daysRemaining} />
+          {!showMaintenanceBanner && showTrialBanner && (
+            <TrialBanner daysRemaining={trialInfo.daysRemaining} planNombre={planNombre} />
           )}
           {/* Banner de datos de ejemplo */}
           {hasSampleData && <SampleDataBannerWrapper />}
           {/* Banner de descarga APK para móvil (no se muestra en app nativa) */}
-          {!showTrialBanner && !hasSampleData && <ApkDownloadBanner variant="top" />}
+          {!showMaintenanceBanner && !showTrialBanner && !hasSampleData && <ApkDownloadBanner variant="top" />}
           <SidebarMain
             className={
-              showTrialBanner
+              showMaintenanceBanner || showTrialBanner
                 ? "pt-[calc(3.5rem+2.5rem+env(safe-area-inset-top,0px))] lg:pt-10"
                 : "pt-[calc(3.5rem+env(safe-area-inset-top,0px))] lg:pt-0"
             }

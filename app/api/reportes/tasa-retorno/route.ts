@@ -1,16 +1,19 @@
 import { NextResponse } from "next/server"
 import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
-import { isPremium } from "@/lib/subscriptions"
+import { hasPlanFeature } from "@/lib/subscriptions"
 
 export async function GET() {
   try {
     const { error, organizationId } = await requireAdminOrVendedor()
     if (error) return error
 
-    const premium = await isPremium(organizationId!)
-    if (!premium) {
-      return NextResponse.json({ error: "Requiere plan Premium", code: "PREMIUM_REQUIRED" }, { status: 403 })
+    const hasFeature = await hasPlanFeature(organizationId!, "advanced_reports")
+    if (!hasFeature) {
+      return NextResponse.json(
+        { error: "Este reporte requiere el plan Profesional", code: "FEATURE_REQUIRED", feature: "advanced_reports" },
+        { status: 403 }
+      )
     }
 
     const seisAtras = new Date()

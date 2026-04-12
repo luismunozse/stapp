@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
-import { isPremium } from "@/lib/subscriptions"
+import { hasPlanFeature } from "@/lib/subscriptions"
 
 export async function GET() {
   try {
@@ -26,9 +26,12 @@ export async function POST(request: Request) {
     const { error, organizationId } = await requireAdmin()
     if (error) return error
 
-    const premium = await isPremium(organizationId!)
-    if (!premium) {
-      return NextResponse.json({ error: "Requiere plan Premium", code: "PREMIUM_REQUIRED" }, { status: 403 })
+    const hasFeature = await hasPlanFeature(organizationId!, "kiosk_mode")
+    if (!hasFeature) {
+      return NextResponse.json(
+        { error: "El modo kiosco requiere el plan Profesional", code: "FEATURE_REQUIRED", feature: "kiosk_mode" },
+        { status: 403 }
+      )
     }
 
     const body = await request.json()

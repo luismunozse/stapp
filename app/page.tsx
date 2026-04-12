@@ -12,7 +12,7 @@ import { DownloadApp } from "@/components/landing/download-app"
 import { Footer } from "@/components/landing/footer"
 import { ChatbotButton } from "@/components/chatbot/chatbot-button"
 import { WhatsAppButton } from "@/components/landing/whatsapp-button"
-import { getPremiumPrices } from "@/lib/pricing"
+import { getPremiumPrices, getAllPlanPrices } from "@/lib/pricing"
 import { SkipLinks } from "@/components/shared/skip-links"
 import { FAQPageJsonLd, HowToJsonLd, UseCasesListJsonLd } from "@/components/seo/json-ld"
 
@@ -114,7 +114,11 @@ const faqData = [
 ]
 
 export default async function Home() {
-  const [session, prices] = await Promise.all([auth(), getPremiumPrices()])
+  const [session, prices, allPlans] = await Promise.all([
+    auth(),
+    getPremiumPrices(),
+    getAllPlanPrices(),
+  ])
 
   // Si el usuario est\u00e1 autenticado, redirigir a su subdominio de tenant
   if (session) {
@@ -145,7 +149,7 @@ export default async function Home() {
         <Hero />
         <Features />
         <Comparison />
-        <PricingSection prices={prices} />
+        <PricingSection prices={prices} allPlans={allPlans} />
         <FAQ faqs={faqData} />
         <DownloadApp />
         <Footer />

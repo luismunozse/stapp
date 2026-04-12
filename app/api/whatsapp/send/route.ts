@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
-import { isPremium } from "@/lib/subscriptions"
+import { hasPlanFeature } from "@/lib/subscriptions"
 import { decrypt } from "@/lib/whatsapp/encryption"
 import { sendTextMessage } from "@/lib/whatsapp/client"
 import { z } from "zod"
@@ -16,9 +16,12 @@ export async function POST(request: Request) {
     const { error, organizationId } = await requireAuth()
     if (error) return error
 
-    const premium = await isPremium(organizationId!)
-    if (!premium) {
-      return NextResponse.json({ error: "Requiere plan Premium", code: "PREMIUM_REQUIRED" }, { status: 403 })
+    const hasFeature = await hasPlanFeature(organizationId!, "whatsapp_notifications")
+    if (!hasFeature) {
+      return NextResponse.json(
+        { error: "Las notificaciones por WhatsApp requieren el plan Profesional", code: "FEATURE_REQUIRED", feature: "whatsapp_notifications" },
+        { status: 403 }
+      )
     }
 
     const body = await request.json()

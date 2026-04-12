@@ -176,7 +176,12 @@ export async function handlePaymentNotification(
   const payment = await response.json()
 
   // Extraer external_reference
-  let externalRef: { organization_id?: string; billing_period?: string }
+  let externalRef: {
+    organization_id?: string
+    billing_period?: string
+    plan_id?: string
+    plan_slug?: string
+  }
   try {
     externalRef = JSON.parse(payment.external_reference || "{}")
   } catch {
@@ -234,17 +239,59 @@ export async function handlePaymentNotification(
     }
   }
 
-  // Obtener plan Premium
-  const { data: premiumPlan, error: planError } = await supabaseAdmin
-    .from("plans")
-    .select("id")
-    .eq("tipo", "PREMIUM")
-    .single()
+  // Resolver el plan del pago.
+  // Prioridad: plan_id del external_reference > plan_slug > fallback a 'profesional'.
+  // El fallback existe para pagos viejos (antes de la migración 107) que no
+  // tenían plan_id en external_reference.
+  let targetPlan: { id: string; slug: string | null } | null = null
 
-  if (planError || !premiumPlan) {
-    console.error(`[MP webhook] Premium plan not found (payment ${paymentId})`, planError)
-    throw new Error("Premium plan not found")
+  if (externalRef.plan_id) {
+    const { data } = await supabaseAdmin
+      .from("plans")
+      .select("id, slug")
+      .eq("id", externalRef.plan_id)
+      .maybeSingle()
+    if (data) targetPlan = data
   }
+
+  if (!targetPlan && externalRef.plan_slug) {
+    const { data } = await supabaseAdmin
+      .from("plans")
+      .select("id, slug")
+      .eq("slug", externalRef.plan_slug)
+      .maybeSingle()
+    if (data) targetPlan = data
+  }
+
+  // Fallback: plan Profesional (antes era el único PREMIUM)
+  if (!targetPlan) {
+    const { data } = await supabaseAdmin
+      .from("plans")
+      .select("id, slug")
+      .eq("slug", "profesional")
+      .maybeSingle()
+    if (data) targetPlan = data
+  }
+
+  // Ultimo fallback: cualquier PREMIUM activo con mayor tier_order
+  if (!targetPlan) {
+    const { data } = await supabaseAdmin
+      .from("plans")
+      .select("id, slug")
+      .eq("tipo", "PREMIUM")
+      .eq("activo", true)
+      .order("tier_order", { ascending: false, nullsFirst: false })
+      .limit(1)
+      .maybeSingle()
+    if (data) targetPlan = data
+  }
+
+  if (!targetPlan) {
+    console.error(`[MP webhook] No target plan found (payment ${paymentId})`)
+    throw new Error("Target plan not found")
+  }
+
+  const premiumPlan = targetPlan
 
   // Calcular período: si la suscripción está activa y vigente, EXTENDER desde el final actual
   const billingPeriod = externalRef.billing_period || "MONTHLY"
