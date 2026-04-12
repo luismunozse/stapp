@@ -493,7 +493,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                   .filter(i => !i.deletedAt && i.stock <= (i.stockMinimo ?? umbralStockBajo))
                   .map(i => ({
                     inventarioId: i.id,
-                    nombre: i.nombre,
+                    descripcion: `${i.nombre}${i.codigo ? ` (${i.codigo})` : ''}`,
                     codigo: i.codigo,
                     cantidadPedida: Math.max(1, (i.stockMaximo ?? (i.stockMinimo ?? umbralStockBajo) * 2) - i.stock),
                     precioUnitario: i.precioCompra || 0,

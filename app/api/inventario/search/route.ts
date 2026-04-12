@@ -15,15 +15,19 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const q = searchParams.get("q") || ""
     const limit = Math.min(parseInt(searchParams.get("limit") || "10"), 50)
+    const includeZeroStock = searchParams.get("includeZeroStock") === "true"
 
     let query = supabaseAdmin
       .from("inventario")
       .select("id, codigo, nombre, stock, stock_reservado, precio_venta")
       .eq("organization_id", organizationId!)
       .is("deleted_at", null)
-      .gt("stock", 0)
-      .order("nombre", { ascending: true })
-      .limit(limit)
+
+    if (!includeZeroStock) {
+      query = query.gt("stock", 0)
+    }
+
+    query = query.order("nombre", { ascending: true }).limit(limit)
 
     if (q.trim()) {
       if (q.trim().length >= 3) {

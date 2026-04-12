@@ -67,7 +67,7 @@ export function RecibirOCDialog({ open, onOpenChange, ordenCompraId, numeroOC, o
     if (!searchQuery || searchQuery.length < 2) { setSearchResults([]); return }
     const t = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/inventario/search?q=${encodeURIComponent(searchQuery)}&limit=8`)
+        const res = await fetch(`/api/inventario/search?q=${encodeURIComponent(searchQuery)}&limit=8&includeZeroStock=true`)
         if (res.ok) setSearchResults(await res.json())
       } catch { /* ignore */ }
     }, 300)

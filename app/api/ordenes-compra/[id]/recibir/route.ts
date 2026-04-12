@@ -45,7 +45,11 @@ export async function POST(
     const { data: result, error: rpcError } = await supabaseAdmin.rpc("recibir_orden_compra", {
       p_oc_id: id,
       p_user_id: userId,
-      p_items: data.items,
+      p_items: data.items.map(i => ({
+        itemId: i.itemId,
+        cantidadRecibida: i.cantidadRecibida,
+        ...(i.inventarioId ? { inventarioId: i.inventarioId } : {}),
+      })),
     })
 
     if (rpcError) {
