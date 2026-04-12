@@ -22,9 +22,12 @@ export interface OrganizationListItem {
     id: string
     status: SubscriptionStatus
     payment_provider: PaymentProvider | null
+    trial_end: string | null
+    current_period_end: string | null
     plans: {
       id: string
       nombre: string
+      slug: string | null
       tipo: PlanType
     } | null
   } | null

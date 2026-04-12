@@ -46,7 +46,7 @@ import { useSuperadminFetch, useSuperadminMutation } from "@/hooks/use-superadmi
 import { useLastUpdated } from "@/hooks/use-last-updated"
 import { LastUpdated } from "@/components/superadmin/last-updated"
 import type { SubscriptionListItem } from "@/types/superadmin"
-import { getEffectivePlanLabel, isEffectivelyPremium } from "@/lib/subscription-status"
+import { getEffectivePlanLabel, isEffectivelyPremium, isTrialExpired } from "@/lib/subscription-status"
 import { toast } from "sonner"
 
 const PAGE_SIZE = 20
@@ -377,7 +377,7 @@ export default function SuscripcionesPage() {
       key: "plans",
       header: "Plan",
       render: (sub) => (
-        <Badge variant={isEffectivelyPremium(sub) ? "default" : "secondary"}>
+        <Badge variant={isEffectivelyPremium(sub) ? "default" : isTrialExpired(sub) ? "destructive" : "secondary"}>
           {getEffectivePlanLabel(sub)}
         </Badge>
       ),

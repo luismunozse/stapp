@@ -141,7 +141,7 @@ export async function GET(request: Request) {
     // Obtener suscripciones y conteo de usuarios para cada organización
     const orgIds = organizations?.map((o) => o.id) || []
 
-    let subscriptionsMap: Record<string, { id: string; status: string; payment_provider: string | null; plans: { id: string; nombre: string; tipo: string } | null }> = {}
+    let subscriptionsMap: Record<string, { id: string; status: string; payment_provider: string | null; trial_end: string | null; current_period_end: string | null; plans: { id: string; nombre: string; slug: string | null; tipo: string } | null }> = {}
     let usersCountMap: Record<string, number> = {}
     let lastActivityMap: Record<string, string> = {}
 
@@ -156,9 +156,12 @@ export async function GET(request: Request) {
             organization_id,
             status,
             payment_provider,
+            trial_end,
+            current_period_end,
             plans (
               id,
               nombre,
+              slug,
               tipo
             )
           `
@@ -189,6 +192,8 @@ export async function GET(request: Request) {
             id: sub.id,
             status: sub.status as string,
             payment_provider: (sub.payment_provider as string | null) ?? null,
+            trial_end: (sub.trial_end as string | null) ?? null,
+            current_period_end: (sub.current_period_end as string | null) ?? null,
             plans: plansData ?? null,
           }
           return acc

@@ -21,7 +21,7 @@ import { useSuperadminFetch, useSuperadminMutation } from "@/hooks/use-superadmi
 import { useLastUpdated } from "@/hooks/use-last-updated"
 import { LastUpdated } from "@/components/superadmin/last-updated"
 import type { OrganizationListItem, OrganizationsKpis } from "@/types/superadmin"
-import { getEffectivePlanLabel, isEffectivelyPremium } from "@/lib/subscription-status"
+import { getEffectivePlanLabel, isEffectivelyPremium, isTrialExpired } from "@/lib/subscription-status"
 
 const PAGE_SIZE = 20
 
@@ -267,32 +267,56 @@ export default function OrganizacionesPage() {
       key: "subscription",
       header: "Plan",
       sortable: true,
-      render: (org) => (
-        <Badge variant={isEffectivelyPremium(org.subscription) ? "default" : "secondary"}>
-          {getEffectivePlanLabel(org.subscription)}
-        </Badge>
-      ),
+      render: (org) => {
+        const label = getEffectivePlanLabel(org.subscription)
+        const isPremium = isEffectivelyPremium(org.subscription)
+        const isExpired = isTrialExpired(org.subscription)
+
+        return (
+          <Badge variant={isPremium ? "default" : isExpired ? "destructive" : "secondary"}>
+            {label}
+          </Badge>
+        )
+      },
     },
     {
       key: "trial_days",
-      header: "En trial",
+      header: "Trial",
       hideOnMobile: true,
       render: (org) => {
         if (isEffectivelyPremium(org.subscription)) {
           return <Badge variant="default">Pago</Badge>
         }
-        const days = Math.floor(
-          (Date.now() - new Date(org.created_at).getTime()) / (1000 * 60 * 60 * 24)
-        )
+
+        // Usar trial_end real de la suscripción
+        const trialEnd = org.subscription?.trial_end
+          ? new Date(org.subscription.trial_end)
+          : null
+
+        if (!trialEnd) {
+          return <span className="text-muted-foreground text-xs">-</span>
+        }
+
+        const now = new Date()
+        const daysLeft = Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+
+        if (daysLeft <= 0) {
+          return (
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium text-red-600 bg-red-100 dark:bg-red-950">
+              Expirado
+            </span>
+          )
+        }
+
         const color =
-          days <= 7
+          daysLeft > 14
             ? "text-green-600 bg-green-100 dark:bg-green-950"
-            : days <= 14
+            : daysLeft > 5
               ? "text-amber-600 bg-amber-100 dark:bg-amber-950"
               : "text-red-600 bg-red-100 dark:bg-red-950"
         return (
           <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${color}`}>
-            {days}d
+            {daysLeft}d
           </span>
         )
       },

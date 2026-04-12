@@ -13,7 +13,9 @@ import type { PlanType, SubscriptionStatus, PaymentProvider } from "@/types/supe
 export interface SubscriptionLike {
   status: SubscriptionStatus | string | null | undefined
   payment_provider: PaymentProvider | string | null | undefined
-  plans?: { tipo?: PlanType | string | null; nombre?: string | null } | null
+  trial_end?: string | null | undefined
+  current_period_end?: string | null | undefined
+  plans?: { tipo?: PlanType | string | null; nombre?: string | null; slug?: string | null } | null
 }
 
 /**
@@ -35,23 +37,47 @@ export function isEffectivelyPremium(sub: SubscriptionLike | null | undefined): 
 }
 
 /**
- * True si la suscripción es un trial sobre un plan PREMIUM (no pagado todavía).
- * Lo mostramos como "Free (trial)" en la lista para no contarla como ingreso.
+ * True si la suscripción es un trial sobre un plan PREMIUM (no pagado todavía)
+ * y el trial NO expiró.
  */
 export function isPremiumTrial(sub: SubscriptionLike | null | undefined): boolean {
   if (!sub) return false
-  return sub.plans?.tipo === "PREMIUM" && sub.status === "TRIALING"
+  if (sub.plans?.tipo !== "PREMIUM" || sub.status !== "TRIALING") return false
+
+  // Si tenemos trial_end, verificar que no haya expirado
+  if (sub.trial_end) {
+    return new Date(sub.trial_end) > new Date()
+  }
+
+  return true
 }
 
-export type EffectivePlanLabel = "Premium" | "Free (trial)" | "Free" | string
+/**
+ * True si el trial expiró (status TRIALING pero trial_end ya pasó).
+ */
+export function isTrialExpired(sub: SubscriptionLike | null | undefined): boolean {
+  if (!sub) return false
+  if (sub.status !== "TRIALING") return false
+  if (!sub.trial_end) return false
+  return new Date(sub.trial_end) <= new Date()
+}
+
+export type EffectivePlanLabel = "Premium" | "Free (trial)" | "Trial expirado" | "Free" | string
 
 /**
  * Devuelve la etiqueta a mostrar en la columna "Plan" del panel superadmin.
- * Para planes que no son PREMIUM, devuelve el nombre del plan tal cual
- * (o "Free" si la org no tiene suscripción).
+ *
+ * - Premium pagado: nombre del plan (ej: "Profesional", "Emprendedor")
+ * - Trial activo: "Plan (trial)" (ej: "Profesional (trial)")
+ * - Trial expirado: "Trial expirado"
+ * - Sin suscripción: "Free"
  */
 export function getEffectivePlanLabel(sub: SubscriptionLike | null | undefined): EffectivePlanLabel {
   if (isEffectivelyPremium(sub)) return sub?.plans?.nombre || "Premium"
-  if (isPremiumTrial(sub)) return "Free (trial)"
+  if (isTrialExpired(sub)) return "Trial expirado"
+  if (isPremiumTrial(sub)) {
+    const planName = sub?.plans?.nombre || "Premium"
+    return `${planName} (trial)`
+  }
   return sub?.plans?.nombre || "Free"
 }
