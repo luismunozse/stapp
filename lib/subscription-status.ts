@@ -51,7 +51,7 @@ export type EffectivePlanLabel = "Premium" | "Free (trial)" | "Free" | string
  * (o "Free" si la org no tiene suscripción).
  */
 export function getEffectivePlanLabel(sub: SubscriptionLike | null | undefined): EffectivePlanLabel {
-  if (isEffectivelyPremium(sub)) return "Premium"
+  if (isEffectivelyPremium(sub)) return sub?.plans?.nombre || "Premium"
   if (isPremiumTrial(sub)) return "Free (trial)"
   return sub?.plans?.nombre || "Free"
 }

@@ -246,7 +246,20 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
   }
 
   if (loading) {
-    return <div className="text-center py-4 text-muted-foreground">Cargando...</div>
+    return (
+      <div className="space-y-3">
+        {[...Array(3)].map((_, i) => (
+          <div key={i} className="rounded-lg border bg-card p-4 space-y-2">
+            <div className="flex justify-between">
+              <div className="h-4 bg-muted animate-pulse rounded w-1/4" />
+              <div className="h-4 bg-muted animate-pulse rounded w-16" />
+            </div>
+            <div className="h-3 bg-muted animate-pulse rounded w-2/3" />
+            <div className="h-3 bg-muted animate-pulse rounded w-1/3" />
+          </div>
+        ))}
+      </div>
+    )
   }
 
   return (

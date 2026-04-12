@@ -17,6 +17,7 @@ export interface OrganizationListItem {
   activo: boolean
   created_at: string
   usersCount: number
+  last_activity_at: string | null
   subscription: {
     id: string
     status: SubscriptionStatus
@@ -108,6 +109,9 @@ export interface PaymentWithOrg {
   receipt_url?: string | null
   paid_at: string | null
   created_at: string
+  plan_name?: string | null
+  period_start?: string | null
+  period_end?: string | null
   organization?: {
     nombre: string
     slug: string
@@ -185,12 +189,27 @@ export type AuditAction =
   | "TICKET_REPLY"
   | "VERIFY_EMAIL"
 
+// KPIs de la lista de organizaciones
+export interface OrganizationsKpis {
+  totalOrgs: number
+  activeTrial: number
+  premium: number
+  newThisMonth: number
+  conversionRate: number
+}
+
 // Request/Response types
 export interface OrganizationsListResponse {
   organizations: OrganizationListItem[]
   total: number
   page: number
   limit: number
+  kpis?: OrganizationsKpis
+}
+
+export interface MonthlyOrders {
+  month: string
+  count: number
 }
 
 export interface OrganizationDetailResponse {
@@ -199,6 +218,7 @@ export interface OrganizationDetailResponse {
   usage: OrganizationUsage | null
   subscription: SubscriptionWithPlan | null
   payments: PaymentWithOrg[]
+  ordersHistory?: MonthlyOrders[]
 }
 
 export interface SubscriptionsListResponse {
@@ -214,6 +234,17 @@ export interface PaymentsListResponse {
   page: number
   limit: number
   totalAmount: number
+  stats?: PaymentStats
+}
+
+export interface PaymentStats {
+  mrr: number
+  totalHistorico: number
+  pagosEsteMes: number
+  webhookErrorRate: number
+  webhookErrors: number
+  webhookTotal: number
+  pagosPendientes: number
 }
 
 export interface AuditLogsResponse {

@@ -9,6 +9,8 @@ import {
   RefreshCw,
   Loader2,
   CheckCircle,
+  Clock,
+  AlertTriangle,
 } from "lucide-react"
 import {
   Dialog,
@@ -86,7 +88,7 @@ export function OrgSubscriptionTab({
         <CardContent>
           {subscription ? (
             <div className="space-y-4">
-              <div className="flex items-center gap-4">
+              <div className="flex flex-wrap items-center gap-4">
                 <Badge className="text-lg px-4 py-1">
                   {subscription.plans?.nombre || "Plan"}
                 </Badge>
@@ -98,6 +100,44 @@ export function OrgSubscriptionTab({
                 {subscription.billing_period && (
                   <Badge variant="outline">{subscription.billing_period}</Badge>
                 )}
+                {/* Indicador de días restantes */}
+                {(() => {
+                  if (!subscription.current_period_end) return null
+                  const daysLeft = Math.ceil(
+                    (new Date(subscription.current_period_end).getTime() - Date.now()) /
+                      (1000 * 60 * 60 * 24)
+                  )
+                  if (daysLeft < 0) {
+                    return (
+                      <Badge variant="destructive" className="flex items-center gap-1">
+                        <AlertTriangle className="h-3 w-3" />
+                        Vencida
+                      </Badge>
+                    )
+                  }
+                  if (daysLeft < 15) {
+                    return (
+                      <Badge variant="destructive" className="flex items-center gap-1">
+                        <AlertTriangle className="h-3 w-3" />
+                        Vence en {daysLeft} días
+                      </Badge>
+                    )
+                  }
+                  if (daysLeft <= 60) {
+                    return (
+                      <Badge className="flex items-center gap-1 bg-amber-500 hover:bg-amber-600">
+                        <Clock className="h-3 w-3" />
+                        Por vencer — {daysLeft} días restantes
+                      </Badge>
+                    )
+                  }
+                  return (
+                    <Badge className="flex items-center gap-1 bg-green-600 hover:bg-green-700">
+                      <CheckCircle className="h-3 w-3" />
+                      Vigente — {daysLeft} días restantes
+                    </Badge>
+                  )
+                })()}
               </div>
 
               <div className="grid grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">

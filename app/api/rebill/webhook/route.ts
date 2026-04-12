@@ -61,8 +61,10 @@ function verifyRebillAuth(request: NextRequest): RebillAuthResult {
 
 export async function POST(request: NextRequest) {
   let body: any = null
+  let bodyText = ""
   try {
-    body = await request.json()
+    bodyText = await request.text()
+    body = bodyText ? JSON.parse(bodyText) : {}
   } catch {
     const log = await beginWebhookEvent({
       provider: "REBILL",
@@ -90,6 +92,7 @@ export async function POST(request: NextRequest) {
     eventType: event ?? null,
     providerEventId: data?.id != null ? String(data.id) : null,
     payload: body,
+    rawPayload: bodyText,
     headers: {
       "content-type": request.headers.get("content-type"),
       "user-agent": request.headers.get("user-agent"),
@@ -258,39 +261,21 @@ async function handlePaymentEvent(data: any): Promise<RebillHandlerResult> {
   // Calcular período
   const billingPeriod = metadata.billing_period || "MONTHLY"
   const periodMonths = billingPeriod === "YEARLY" ? 12 : 1
+  const periodStart = new Date()
   const periodEnd = new Date()
   periodEnd.setMonth(periodEnd.getMonth() + periodMonths)
 
-  // Actualizar o crear suscripción
-  await supabaseAdmin
-    .from("subscriptions")
-    .upsert(
-      {
-        organization_id: organizationId,
-        plan_id: premiumPlan.id,
-        status: "ACTIVE",
-        billing_period: billingPeriod,
-        payment_provider: "REBILL",
-        rebill_subscription_id: payment.subscriptionId || null,
-        rebill_customer_id: payment.customerId || null,
-        current_period_start: new Date().toISOString(),
-        current_period_end: periodEnd.toISOString(),
-      },
-      {
-        onConflict: "organization_id",
-      }
-    )
-
-  // Obtener suscripción para guardar pago
-  const { data: subscription } = await supabaseAdmin
+  // PASO (a): Registrar el pago SIEMPRE, incluso si la activación falla
+  const { data: existingSub } = await supabaseAdmin
     .from("subscriptions")
     .select("id")
     .eq("organization_id", organizationId)
-    .single()
+    .maybeSingle()
 
-  if (subscription) {
-    await supabaseAdmin.from("subscription_payments").insert({
-      subscription_id: subscription.id,
+  const { data: insertedPayment, error: payInsertError } = await supabaseAdmin
+    .from("subscription_payments")
+    .insert({
+      subscription_id: existingSub?.id ?? null,
       organization_id: organizationId,
       amount: payment.amount || payment.prices?.[0]?.amount,
       currency: payment.currency || "USD",
@@ -298,7 +283,60 @@ async function handlePaymentEvent(data: any): Promise<RebillHandlerResult> {
       provider_payment_id: payment.id,
       status: "SUCCEEDED",
       paid_at: new Date().toISOString(),
+      plan_name: premiumPlan.slug ?? "Premium",
+      period_start: periodStart.toISOString(),
+      period_end: periodEnd.toISOString(),
     })
+    .select("id")
+    .single()
+
+  if (payInsertError) {
+    console.error(`[rebill-webhook] Error inserting payment for org ${organizationId}:`, payInsertError)
+    throw payInsertError
+  }
+
+  // PASO (b): Activar/renovar la suscripción
+  try {
+    await supabaseAdmin
+      .from("subscriptions")
+      .upsert(
+        {
+          organization_id: organizationId,
+          plan_id: premiumPlan.id,
+          status: "ACTIVE",
+          billing_period: billingPeriod,
+          payment_provider: "REBILL",
+          rebill_subscription_id: payment.subscriptionId || null,
+          rebill_customer_id: payment.customerId || null,
+          current_period_start: periodStart.toISOString(),
+          current_period_end: periodEnd.toISOString(),
+        },
+        {
+          onConflict: "organization_id",
+        }
+      )
+
+    // Actualizar subscription_id en el pago si no existía antes
+    if (!existingSub?.id && insertedPayment?.id) {
+      const { data: newSub } = await supabaseAdmin
+        .from("subscriptions")
+        .select("id")
+        .eq("organization_id", organizationId)
+        .single()
+      if (newSub) {
+        await supabaseAdmin
+          .from("subscription_payments")
+          .update({ subscription_id: newSub.id })
+          .eq("id", insertedPayment.id)
+      }
+    }
+  } catch (subError) {
+    console.error(
+      `[rebill-webhook] Subscription activation failed for org ${organizationId}. ` +
+      `Pago registrado (id=${insertedPayment?.id}), suscripción pendiente.`,
+      subError
+    )
+    return { processed: true, organizationId, reason: "payment_registered_subscription_activation_failed" }
   }
 
   console.log(`[rebill-webhook] Payment ${payment.id} processed for org ${organizationId}`)

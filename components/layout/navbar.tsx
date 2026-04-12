@@ -81,44 +81,41 @@ const navItems: NavItem[] = [
 ]
 
 // Grouped nav sections for desktop sidebar
+// Primer nivel: 6 ítems principales siempre visibles
+// Subítems menos usados agrupados en secciones colapsables
 const navSections: NavSection[] = [
   {
     label: "",
     items: [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    ],
-  },
-  {
-    label: "Operaciones",
-    items: [
       { href: "/ordenes", label: "Órdenes", icon: ClipboardList },
       { href: "/clientes", label: "Clientes", icon: Users, roles: ["ADMIN", "VENDEDOR", "TECNICO"] },
-      { href: "/tecnicos", label: "Técnicos", icon: Wrench, roles: ["ADMIN"] },
-      { href: "/vendedores", label: "Vendedores", icon: TrendingUp, roles: ["ADMIN"] },
-      { href: "/cotizaciones", label: "Cotizaciones", icon: Receipt, roles: ["ADMIN", "TECNICO"] },
       { href: "/inventario", label: "Inventario", icon: Package, roles: ["ADMIN"] },
-      { href: "/ordenes-compra", label: "Compras", icon: Truck, roles: ["ADMIN"] },
+      { href: "/ventas", label: "Ventas / POS", icon: ShoppingCart, roles: ["ADMIN", "VENDEDOR"] },
+      { href: "/finanzas", label: "Finanzas", icon: Wallet, roles: ["ADMIN"] },
     ],
   },
   {
     label: "Ventas",
     items: [
-      { href: "/ventas", label: "Ventas", icon: ShoppingCart, roles: ["ADMIN", "VENDEDOR"] },
       { href: "/pos", label: "POS", icon: Store, roles: ["ADMIN", "VENDEDOR"] },
+      { href: "/cotizaciones", label: "Cotizaciones", icon: Receipt, roles: ["ADMIN", "TECNICO"] },
     ],
   },
   {
     label: "Finanzas",
     items: [
-      { href: "/finanzas", label: "Finanzas", icon: Wallet, roles: ["ADMIN"] },
       { href: "/caja", label: "Caja", icon: Landmark, roles: ["ADMIN"] },
       { href: "/facturacion", label: "Facturación", icon: FileText, roles: ["ADMIN"] },
       { href: "/reportes", label: "Reportes", icon: BarChart3, roles: ["ADMIN", "VENDEDOR"] },
     ],
   },
   {
-    label: "Gestión",
+    label: "Más",
     items: [
+      { href: "/tecnicos", label: "Técnicos", icon: Wrench, roles: ["ADMIN"] },
+      { href: "/vendedores", label: "Vendedores", icon: TrendingUp, roles: ["ADMIN"] },
+      { href: "/ordenes-compra", label: "Compras", icon: Truck, roles: ["ADMIN"] },
       { href: "/emails", label: "Emails", icon: Mail, roles: ["ADMIN"] },
       { href: "/soporte", label: "Soporte", icon: Headset },
     ],
@@ -211,16 +208,16 @@ export function Navbar() {
     items: section.items.filter(item => !item.roles || item.roles.includes(userRole)),
   })).filter(section => section.items.length > 0)
 
-  // Add extra items to Gestión section
-  const extraGestionItems: NavItem[] = [
+  // Add extra items to "Más" section
+  const extraItems: NavItem[] = [
     ...(userRole === "ADMIN" || userRole === "VENDEDOR" ? [{ href: "/proveedores", label: "Proveedores", icon: Store }] : []),
     ...(isAdmin ? [{ href: "/configuracion", label: "Configuración", icon: Settings }] : []),
   ]
-  const gestionSection = filteredSections.find(s => s.label === "Gestión")
-  if (gestionSection) {
-    gestionSection.items.push(...extraGestionItems)
-  } else if (extraGestionItems.length > 0) {
-    filteredSections.push({ label: "Gestión", items: extraGestionItems })
+  const masSection = filteredSections.find(s => s.label === "Más")
+  if (masSection) {
+    masSection.items.push(...extraItems)
+  } else if (extraItems.length > 0) {
+    filteredSections.push({ label: "Más", items: extraItems })
   }
 
   // Collapsible sections state - persisted in localStorage
@@ -348,8 +345,15 @@ export function Navbar() {
                       </button>
                     )}
 
-                    {/* Section items */}
-                    {(!isSectionCollapsed || collapsed || !section.label) && (
+                    {/* Section items - animated collapse */}
+                    <div
+                      className={cn(
+                        "space-y-0.5 overflow-hidden transition-all duration-300 ease-in-out",
+                        isSectionCollapsed && !collapsed && section.label
+                          ? "max-h-0 opacity-0"
+                          : "max-h-[500px] opacity-100"
+                      )}
+                    >
                       <div className="space-y-0.5">
                         {section.items.map((item) => {
                           const Icon = item.icon
@@ -361,7 +365,7 @@ export function Navbar() {
                               id={`nav-${item.href.replace("/", "")}`}
                               href={item.href}
                               className={cn(
-                                "flex items-center text-sm font-medium rounded-lg transition-colors",
+                                "flex items-center text-sm font-medium rounded-lg transition-colors duration-150",
                                 collapsed ? "justify-center px-2 py-2" : "px-3 py-2",
                                 isActive
                                   ? "bg-primary text-primary-foreground"
@@ -391,7 +395,7 @@ export function Navbar() {
                           return <div key={item.href}>{linkContent}</div>
                         })}
                       </div>
-                    )}
+                    </div>
                   </div>
                 )
               })}

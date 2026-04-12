@@ -8,12 +8,23 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { DataTable, Column } from "@/components/ui/data-table"
-import { Receipt, Eye, ExternalLink, DollarSign, Download, Search } from "lucide-react"
+import {
+  Receipt,
+  Eye,
+  ExternalLink,
+  DollarSign,
+  Download,
+  Search,
+  TrendingUp,
+  CreditCard,
+  AlertCircle,
+  Clock,
+} from "lucide-react"
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils"
 import { useSuperadminFetch } from "@/hooks/use-superadmin-fetch"
 import { useLastUpdated } from "@/hooks/use-last-updated"
 import { LastUpdated } from "@/components/superadmin/last-updated"
-import type { PaymentWithOrg } from "@/types/superadmin"
+import type { PaymentWithOrg, PaymentStats } from "@/types/superadmin"
 import { ReconcileMpCard } from "./_components/reconcile-mp-card"
 import { WebhookEventsCard } from "./_components/webhook-events-card"
 
@@ -28,16 +39,40 @@ function isSafeUrl(url: string): boolean {
   }
 }
 
+function formatShortDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return "—"
+  try {
+    return new Date(dateStr).toLocaleDateString("es-AR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    })
+  } catch {
+    return "—"
+  }
+}
+
+function getProviderPaymentUrl(provider: string | null | undefined, paymentId: string | null | undefined): string | null {
+  if (!paymentId) return null
+  if (provider === "MERCADOPAGO") {
+    return `https://www.mercadopago.com.ar/activities/search?query=${encodeURIComponent(paymentId)}`
+  }
+  // Rebill no tiene URL pública estándar
+  return null
+}
+
 interface PaymentsResponse {
   payments: PaymentWithOrg[]
   total: number
   totalAmount: number
+  stats?: PaymentStats
 }
 
 export default function PagosPage() {
   const router = useRouter()
   const [payments, setPayments] = useState<PaymentWithOrg[]>([])
   const [statusFilter, setStatusFilter] = useState("")
+  const [providerFilter, setProviderFilter] = useState("")
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
   const [searchInput, setSearchInput] = useState("")
@@ -45,6 +80,7 @@ export default function PagosPage() {
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const [totalAmount, setTotalAmount] = useState(0)
+  const [stats, setStats] = useState<PaymentStats | null>(null)
 
   const { loading, fetchData } = useSuperadminFetch<PaymentsResponse>()
   const { formattedLastUpdated, markUpdated } = useLastUpdated()
@@ -53,7 +89,9 @@ export default function PagosPage() {
     const params = new URLSearchParams({
       page: page.toString(),
       limit: PAGE_SIZE.toString(),
+      includeStats: "true",
       ...(statusFilter && { status: statusFilter }),
+      ...(providerFilter && { provider: providerFilter }),
       ...(dateFrom && { dateFrom }),
       ...(dateTo && { dateTo }),
       ...(searchQuery && { search: searchQuery }),
@@ -64,9 +102,10 @@ export default function PagosPage() {
       setPayments(result.payments || [])
       setTotal(result.total || 0)
       setTotalAmount(result.totalAmount || 0)
+      setStats(result.stats || null)
       markUpdated()
     }
-  }, [page, statusFilter, dateFrom, dateTo, searchQuery, fetchData])
+  }, [page, statusFilter, providerFilter, dateFrom, dateTo, searchQuery, fetchData])
 
   useEffect(() => {
     fetchPayments()
@@ -83,7 +122,7 @@ export default function PagosPage() {
 
   const handleExportCSV = () => {
     const csv = [
-      "fecha,organizacion,monto,estado,proveedor",
+      "fecha,organizacion,monto,estado,proveedor,plan,periodo_inicio,periodo_fin,payment_id",
       ...payments.map((p) =>
         [
           p.paid_at || p.created_at,
@@ -91,6 +130,10 @@ export default function PagosPage() {
           p.amount,
           p.status,
           p.payment_provider || "-",
+          `"${p.plan_name || "-"}"`,
+          p.period_start || "",
+          p.period_end || "",
+          p.provider_payment_id || "",
         ].join(",")
       ),
     ].join("\n")
@@ -103,18 +146,34 @@ export default function PagosPage() {
     URL.revokeObjectURL(url)
   }
 
-  const getStatusVariant = (status: string) => {
+  const getStatusBadge = (status: string) => {
     switch (status) {
       case "SUCCEEDED":
-        return "default"
+        return (
+          <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 border-green-300">
+            {status}
+          </Badge>
+        )
       case "PENDING":
-        return "secondary"
+        return (
+          <Badge className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 border-yellow-300">
+            {status}
+          </Badge>
+        )
       case "FAILED":
-        return "destructive"
+        return (
+          <Badge className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 border-red-300">
+            {status}
+          </Badge>
+        )
       case "REFUNDED":
-        return "warning" as "default"
+        return (
+          <Badge className="bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200 border-gray-300">
+            {status}
+          </Badge>
+        )
       default:
-        return "secondary"
+        return <Badge variant="secondary">{status}</Badge>
     }
   }
 
@@ -142,6 +201,27 @@ export default function PagosPage() {
       ),
     },
     {
+      key: "plan_name",
+      header: "Plan",
+      hideOnMobile: true,
+      render: (payment) => (
+        <span className="text-sm">{payment.plan_name || "—"}</span>
+      ),
+    },
+    {
+      key: "period",
+      header: "Período",
+      hideOnMobile: true,
+      render: (payment) => {
+        if (!payment.period_start && !payment.period_end) return <span className="text-muted-foreground">—</span>
+        return (
+          <span className="text-xs text-muted-foreground">
+            {formatShortDate(payment.period_start)} – {formatShortDate(payment.period_end)}
+          </span>
+        )
+      },
+    },
+    {
       key: "amount",
       header: "Monto",
       render: (payment) => (
@@ -151,15 +231,44 @@ export default function PagosPage() {
     {
       key: "status",
       header: "Estado",
-      render: (payment) => (
-        <Badge variant={getStatusVariant(payment.status)}>{payment.status}</Badge>
-      ),
+      render: (payment) => getStatusBadge(payment.status),
     },
     {
       key: "payment_provider",
       header: "Proveedor",
       hideOnMobile: true,
       render: (payment) => payment.payment_provider || "-",
+    },
+    {
+      key: "provider_payment_id",
+      header: "Payment ID",
+      hideOnMobile: true,
+      render: (payment) => {
+        if (!payment.provider_payment_id) return <span className="text-muted-foreground">—</span>
+        const url = getProviderPaymentUrl(payment.payment_provider, payment.provider_payment_id)
+        if (url) {
+          return (
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs font-mono text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
+            >
+              {payment.provider_payment_id.length > 15
+                ? `${payment.provider_payment_id.slice(0, 15)}...`
+                : payment.provider_payment_id}
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          )
+        }
+        return (
+          <span className="text-xs font-mono text-muted-foreground">
+            {payment.provider_payment_id.length > 15
+              ? `${payment.provider_payment_id.slice(0, 15)}...`
+              : payment.provider_payment_id}
+          </span>
+        )
+      },
     },
     {
       key: "actions",
@@ -219,31 +328,116 @@ export default function PagosPage() {
         </Button>
       </div>
 
-      {/* Stats Card */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-green-100 dark:bg-green-950 rounded-lg">
-              <DollarSign className="h-6 w-6 text-green-600" />
-            </div>
-            <div>
-              <div className="text-sm text-muted-foreground">
-                Total en el período seleccionado
+      {/* KPI Dashboard */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-green-100 dark:bg-green-950 rounded-lg">
+                <TrendingUp className="h-5 w-5 text-green-600" />
               </div>
-              <div className="text-2xl font-bold">
-                {formatCurrency(totalAmount)}
+              <div>
+                <div className="text-xs text-muted-foreground">MRR</div>
+                <div className="text-xl font-bold">
+                  {formatCurrency(stats?.mrr ?? 0)}
+                </div>
               </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
 
-      {/* Herramientas de diagnóstico/reconciliación.
-          Aparecen siempre arriba para que el operador pueda actuar
-          rápido cuando un pago real no impactó. */}
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-100 dark:bg-blue-950 rounded-lg">
+                <DollarSign className="h-5 w-5 text-blue-600" />
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">Total histórico</div>
+                <div className="text-xl font-bold">
+                  {formatCurrency(stats?.totalHistorico ?? 0)}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-purple-100 dark:bg-purple-950 rounded-lg">
+                <CreditCard className="h-5 w-5 text-purple-600" />
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">Pagos este mes</div>
+                <div className="text-xl font-bold">
+                  {stats?.pagosEsteMes ?? 0}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <div className={`p-2 rounded-lg ${
+                (stats?.webhookErrorRate ?? 0) > 10
+                  ? "bg-red-100 dark:bg-red-950"
+                  : "bg-gray-100 dark:bg-gray-800"
+              }`}>
+                <AlertCircle className={`h-5 w-5 ${
+                  (stats?.webhookErrorRate ?? 0) > 10
+                    ? "text-red-600"
+                    : "text-gray-600"
+                }`} />
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">Error webhooks (7d)</div>
+                <div className={`text-xl font-bold ${
+                  (stats?.webhookErrorRate ?? 0) > 10 ? "text-red-600" : ""
+                }`}>
+                  {stats?.webhookErrorRate ?? 0}%
+                </div>
+                <div className="text-[10px] text-muted-foreground">
+                  {stats?.webhookErrors ?? 0} / {stats?.webhookTotal ?? 0}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <div className={`p-2 rounded-lg ${
+                (stats?.pagosPendientes ?? 0) > 0
+                  ? "bg-yellow-100 dark:bg-yellow-950"
+                  : "bg-gray-100 dark:bg-gray-800"
+              }`}>
+                <Clock className={`h-5 w-5 ${
+                  (stats?.pagosPendientes ?? 0) > 0
+                    ? "text-yellow-600"
+                    : "text-gray-600"
+                }`} />
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">Pagos pendientes</div>
+                <div className={`text-xl font-bold ${
+                  (stats?.pagosPendientes ?? 0) > 0 ? "text-yellow-600" : ""
+                }`}>
+                  {stats?.pagosPendientes ?? 0}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Herramientas de diagnóstico/reconciliación */}
       <div className="grid gap-4 lg:grid-cols-2">
         <ReconcileMpCard onReconciled={fetchPayments} />
-        <WebhookEventsCard />
+        <WebhookEventsCard onReconcile={fetchPayments} />
       </div>
 
       <Card>
@@ -276,6 +470,23 @@ export default function PagosPage() {
                 <SelectItem value="refunded">Reembolsados</SelectItem>
               </SelectContent>
             </Select>
+            <Select
+              value={providerFilter || "all"}
+              onValueChange={(value) => {
+                setProviderFilter(value === "all" ? "" : value)
+                setPage(1)
+              }}
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Todos los proveedores" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los proveedores</SelectItem>
+                <SelectItem value="MANUAL">Manual</SelectItem>
+                <SelectItem value="MERCADOPAGO">MercadoPago</SelectItem>
+                <SelectItem value="REBILL">Rebill</SelectItem>
+              </SelectContent>
+            </Select>
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">Desde:</span>
               <Input
@@ -300,13 +511,14 @@ export default function PagosPage() {
                 className="w-[160px]"
               />
             </div>
-            {(dateFrom || dateTo || statusFilter) && (
+            {(dateFrom || dateTo || statusFilter || providerFilter) && (
               <Button
                 variant="ghost"
                 onClick={() => {
                   setDateFrom("")
                   setDateTo("")
                   setStatusFilter("")
+                  setProviderFilter("")
                   setPage(1)
                 }}
               >

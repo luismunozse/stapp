@@ -34,9 +34,13 @@ export async function GET(request: Request) {
       http_status,
       signature_valid,
       error_message,
+      payload,
+      raw_payload,
       received_at,
       processed_at,
-      duration_ms
+      duration_ms,
+      retry_count,
+      requires_manual_review
     `,
       { count: "exact" }
     )
@@ -76,9 +80,10 @@ export async function GET(request: Request) {
     )
   }
 
-  // Contar errores en las últimas 24h y webhooks pendientes de revisión manual
+  // Contar totales y errores en las últimas 24h/7d y webhooks pendientes de revisión manual
   const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-  const [errorsRes, manualReviewRes] = await Promise.all([
+  const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+  const [errorsRes, manualReviewRes, totalRes, errors7dRes] = await Promise.all([
     supabaseAdmin
       .from("webhook_events")
       .select("id", { count: "exact", head: true })
@@ -88,6 +93,14 @@ export async function GET(request: Request) {
       .from("webhook_events")
       .select("id", { count: "exact", head: true })
       .eq("requires_manual_review", true),
+    supabaseAdmin
+      .from("webhook_events")
+      .select("id", { count: "exact", head: true }),
+    supabaseAdmin
+      .from("webhook_events")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "ERROR")
+      .gte("received_at", since7d),
   ])
 
   return NextResponse.json({
@@ -96,9 +109,11 @@ export async function GET(request: Request) {
       organization: e.organization_id ? orgsMap[e.organization_id] || null : null,
     })),
     total: count || 0,
+    totalAll: totalRes.count ?? 0,
     page,
     limit,
     errorsLast24h: errorsRes.count ?? 0,
+    errorsLast7d: errors7dRes.count ?? 0,
     pendingManualReview: manualReviewRes.count ?? 0,
   })
 }

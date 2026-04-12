@@ -1,13 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Wand2, Loader2, AlertTriangle, CheckCircle2 } from "lucide-react"
-import { useSuperadminMutation } from "@/hooks/use-superadmin-fetch"
+import { Wand2, Loader2, AlertTriangle, CheckCircle2, ExternalLink } from "lucide-react"
 import { toast } from "sonner"
+import Link from "next/link"
 
 /**
  * Reconciliador manual de pagos MercadoPago.
@@ -18,28 +18,61 @@ import { toast } from "sonner"
  *  - si hubo activación MANUAL reciente, pide confirmación con force=true
  *  - actualiza el listado de pagos al terminar
  *
- * Es la única forma de "rescatar" un pago real cuya notificación nunca
- * llegó al webhook (firma rota, dominio caído, etc.) sin tener que
- * tocar SQL a mano.
+ * Mejoras:
+ *  - Tras cualquier error, el botón se deshabilita por 10 segundos
+ *  - El error se muestra en rojo debajo del campo con link a la org
+ *  - Si el error es plan_not_found, se muestra link a suscripciones de la org
  */
 export function ReconcileMpCard({ onReconciled }: { onReconciled?: () => void }) {
   const [paymentId, setPaymentId] = useState("")
   const [conflict, setConflict] = useState<{
     message: string
     recentManual: { id: string; paid_at: string; amount: number } | null
+    organizationSlug?: string | null
   } | null>(null)
   const [lastResult, setLastResult] = useState<any>(null)
-  const { mutate, loading } = useSuperadminMutation()
+  const [lastError, setLastError] = useState<{
+    message: string
+    error?: string
+    organizationSlug?: string | null
+    organizationId?: string | null
+    _cached?: boolean
+  } | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [cooldown, setCooldown] = useState(0)
+  const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Countdown timer para cooldown
+  useEffect(() => {
+    if (cooldown <= 0) {
+      if (cooldownRef.current) clearInterval(cooldownRef.current)
+      return
+    }
+    cooldownRef.current = setInterval(() => {
+      setCooldown((prev) => {
+        if (prev <= 1) {
+          if (cooldownRef.current) clearInterval(cooldownRef.current)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+    return () => {
+      if (cooldownRef.current) clearInterval(cooldownRef.current)
+    }
+  }, [cooldown > 0]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const submit = async (force: boolean) => {
     setConflict(null)
     setLastResult(null)
+    setLastError(null)
 
     if (!paymentId.trim()) {
       toast.error("Pegá un Payment ID de MercadoPago")
       return
     }
 
+    setLoading(true)
     try {
       const res = await fetch("/api/superadmin/payments/reconcile-mp", {
         method: "POST",
@@ -52,12 +85,21 @@ export function ReconcileMpCard({ onReconciled }: { onReconciled?: () => void })
         setConflict({
           message: data.message,
           recentManual: data.recentManual ?? null,
+          organizationSlug: data.organizationSlug ?? null,
         })
         return
       }
 
       if (!res.ok) {
-        toast.error(data?.error || "Error reconciliando pago")
+        // Activar cooldown de 10 segundos tras cualquier error
+        setCooldown(10)
+        setLastError({
+          message: data?.message || data?.error || "Error reconciliando pago",
+          error: data?.error,
+          organizationSlug: data?.organizationSlug ?? null,
+          organizationId: data?.organizationId ?? null,
+          _cached: data?._cached ?? false,
+        })
         return
       }
 
@@ -73,9 +115,16 @@ export function ReconcileMpCard({ onReconciled }: { onReconciled?: () => void })
       }
       onReconciled?.()
     } catch (e: any) {
-      toast.error(e?.message || "Error de red")
+      setCooldown(10)
+      setLastError({
+        message: e?.message || "Error de red",
+      })
+    } finally {
+      setLoading(false)
     }
   }
+
+  const isDisabled = loading || cooldown > 0
 
   return (
     <Card>
@@ -99,15 +148,54 @@ export function ReconcileMpCard({ onReconciled }: { onReconciled?: () => void })
             disabled={loading}
             className="font-mono"
           />
-          <Button onClick={() => submit(false)} disabled={loading}>
+          <Button onClick={() => submit(false)} disabled={isDisabled}>
             {loading ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
             ) : (
               <Wand2 className="h-4 w-4 mr-2" />
             )}
-            Reconciliar
+            {cooldown > 0 ? `Esperar ${cooldown}s` : "Reconciliar"}
           </Button>
         </div>
+
+        {/* Error feedback con link a organización */}
+        {lastError && (
+          <div className="p-3 rounded-md border border-red-300 bg-red-50 dark:bg-red-950/30 text-sm space-y-2">
+            <div className="flex items-start gap-2 text-red-900 dark:text-red-100">
+              <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-red-600" />
+              <div className="space-y-1">
+                <p className="font-medium text-red-700 dark:text-red-300">
+                  {lastError.message}
+                </p>
+                {lastError._cached && (
+                  <p className="text-xs text-red-600 dark:text-red-400">
+                    Este error fue cacheado. Esperá 60 segundos antes de reintentar.
+                  </p>
+                )}
+                {lastError.organizationSlug && (
+                  <div className="flex flex-col gap-1 mt-1">
+                    <Link
+                      href={`/superadmin/organizaciones/${lastError.organizationId || ""}`}
+                      className="text-xs text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      Ver organización: {lastError.organizationSlug}
+                    </Link>
+                    {lastError.error === "plan_not_found" && (
+                      <Link
+                        href={`/superadmin/organizaciones/${lastError.organizationId || ""}#suscripcion`}
+                        className="text-xs text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1 font-medium"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        Ir a Suscripciones de esta organización para asignar un plan
+                      </Link>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {conflict && (
           <div className="p-3 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 text-sm space-y-2">
@@ -122,6 +210,15 @@ export function ReconcileMpCard({ onReconciled }: { onReconciled?: () => void })
                     {new Date(conflict.recentManual.paid_at).toLocaleString("es-AR")}
                   </p>
                 )}
+                {conflict.organizationSlug && (
+                  <Link
+                    href={`/superadmin/organizaciones/${conflict.organizationSlug}`}
+                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    Ver organización: {conflict.organizationSlug}
+                  </Link>
+                )}
               </div>
             </div>
             <div className="flex gap-2">
@@ -129,7 +226,7 @@ export function ReconcileMpCard({ onReconciled }: { onReconciled?: () => void })
                 size="sm"
                 variant="destructive"
                 onClick={() => submit(true)}
-                disabled={loading}
+                disabled={isDisabled}
               >
                 Continuar igual (extender encima)
               </Button>

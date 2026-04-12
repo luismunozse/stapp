@@ -450,3 +450,28 @@
     padding-top: env(safe-area-inset-top, 0px);
   }
 }
+
+/* Branded spinner - usa el color primario del brand */
+@keyframes brand-spin {
+  to { transform: rotate(360deg); }
+}
+.spinner-brand {
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid hsl(var(--muted));
+  border-top-color: hsl(var(--primary));
+  border-radius: 50%;
+  animation: brand-spin 0.8s linear infinite;
+}
+.spinner-brand-lg {
+  width: 2rem;
+  height: 2rem;
+  border-width: 3px;
+}
+
+/* Transiciones globales para elementos interactivos */
+@layer utilities {
+  .clickable-card {
+    @apply transition-all duration-200 cursor-pointer hover:shadow-lg;
+  }
+}

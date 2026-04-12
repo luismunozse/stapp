@@ -1,19 +1,26 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
-import { useRouter } from "next/navigation"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import { useRouter, useSearchParams } from "next/navigation"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DataTable, Column } from "@/components/ui/data-table"
-import { Search, Eye, Power, PowerOff, Building2, Loader2, Download, CheckCircle, XCircle, X, Phone } from "lucide-react"
+import { Search, Eye, Power, PowerOff, Building2, Loader2, Download, CheckCircle, XCircle, X, Phone, AlertTriangle, Users, CreditCard, CalendarPlus, TrendingUp, ExternalLink } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { formatDate } from "@/lib/utils"
 import { useSuperadminFetch, useSuperadminMutation } from "@/hooks/use-superadmin-fetch"
 import { useLastUpdated } from "@/hooks/use-last-updated"
 import { LastUpdated } from "@/components/superadmin/last-updated"
-import type { OrganizationListItem } from "@/types/superadmin"
+import type { OrganizationListItem, OrganizationsKpis } from "@/types/superadmin"
 import { getEffectivePlanLabel, isEffectivelyPremium } from "@/lib/subscription-status"
 
 const PAGE_SIZE = 20
@@ -21,11 +28,14 @@ const PAGE_SIZE = 20
 interface OrgsResponse {
   organizations: OrganizationListItem[]
   total: number
+  kpis?: OrganizationsKpis
 }
 
 export default function OrganizacionesPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [organizations, setOrganizations] = useState<OrganizationListItem[]>([])
+  const [kpis, setKpis] = useState<OrganizationsKpis | null>(null)
   const [search, setSearch] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState("")
@@ -34,21 +44,43 @@ export default function OrganizacionesPage() {
   const [total, setTotal] = useState(0)
   const [togglingId, setTogglingId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [confirmDeactivateOpen, setConfirmDeactivateOpen] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Sorting — persistido en URL query params
+  const [sortKey, setSortKey] = useState(searchParams.get("sort") || "")
+  const [sortDir, setSortDir] = useState<"asc" | "desc">(
+    (searchParams.get("dir") as "asc" | "desc") || "desc"
+  )
 
   const { loading, fetchData } = useSuperadminFetch<OrgsResponse>()
   const { mutate } = useSuperadminMutation()
   const { mutate: bulkMutate, loading: bulkLoading } = useSuperadminMutation()
   const { formattedLastUpdated, markUpdated } = useLastUpdated()
 
-  // Debounce search input
+  const handleSort = (key: string) => {
+    let newDir: "asc" | "desc" = "asc"
+    if (sortKey === key) {
+      newDir = sortDir === "asc" ? "desc" : "asc"
+    }
+    setSortKey(key)
+    setSortDir(newDir)
+    setPage(1)
+    // Persistir en URL
+    const params = new URLSearchParams(window.location.search)
+    params.set("sort", key)
+    params.set("dir", newDir)
+    router.replace(`?${params.toString()}`, { scroll: false })
+  }
+
+  // Debounce search input — 400ms sin botón
   const handleSearchChange = (value: string) => {
     setSearch(value)
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
       setDebouncedSearch(value)
       setPage(1)
-    }, 300)
+    }, 400)
   }
 
   const fetchOrganizations = useCallback(async () => {
@@ -58,25 +90,22 @@ export default function OrganizacionesPage() {
       ...(debouncedSearch && { search: debouncedSearch }),
       ...(statusFilter && { status: statusFilter }),
       ...(planFilter && { plan: planFilter }),
+      ...(sortKey && { sort: sortKey }),
+      ...(sortKey && { dir: sortDir }),
     })
 
     const result = await fetchData(`/api/superadmin/organizations?${params}`)
     if (result) {
       setOrganizations(result.organizations || [])
       setTotal(result.total || 0)
+      if (result.kpis) setKpis(result.kpis)
       markUpdated()
     }
-  }, [page, debouncedSearch, statusFilter, planFilter, fetchData])
+  }, [page, debouncedSearch, statusFilter, planFilter, sortKey, sortDir, fetchData])
 
   useEffect(() => {
     fetchOrganizations()
   }, [fetchOrganizations])
-
-  const handleSearch = () => {
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    setDebouncedSearch(search)
-    setPage(1)
-  }
 
   const handleExportCSV = () => {
     const csv = [
@@ -123,6 +152,32 @@ export default function OrganizacionesPage() {
     setTogglingId(null)
   }
 
+  const handleExportSelectedCSV = () => {
+    const selected = organizations.filter((org) => selectedIds.includes(org.id))
+    if (selected.length === 0) return
+    const csv = [
+      "nombre,slug,email,telefono,plan,estado,creada",
+      ...selected.map((org) =>
+        [
+          `"${org.nombre}"`,
+          org.slug,
+          org.email || "-",
+          org.telefono || "-",
+          getEffectivePlanLabel(org.subscription),
+          org.activo ? "Activa" : "Inactiva",
+          org.created_at,
+        ].join(",")
+      ),
+    ].join("\n")
+    const blob = new Blob([csv], { type: "text/csv" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `organizaciones-seleccionadas-${new Date().toISOString().split("T")[0]}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   const handleBulkToggle = async (activo: boolean) => {
     await bulkMutate("/api/superadmin/organizations/bulk-toggle", {
       method: "POST",
@@ -142,14 +197,45 @@ export default function OrganizacionesPage() {
     {
       key: "nombre",
       header: "Organización",
-      render: (org) => (
-        <div>
-          <div className="font-medium">{org.nombre}</div>
-          <div className="text-sm text-muted-foreground">
-            {org.slug}.stapp.com.ar
+      sortable: true,
+      render: (org) => {
+        // Health indicator basado en última actividad
+        let healthColor = "bg-red-500" // sin actividad o > 30 días
+        let healthTitle = "Sin actividad reciente (>30 días)"
+        if (org.last_activity_at) {
+          const daysSince = Math.floor(
+            (Date.now() - new Date(org.last_activity_at).getTime()) / (1000 * 60 * 60 * 24)
+          )
+          if (daysSince <= 7) {
+            healthColor = "bg-green-500"
+            healthTitle = `Activa (hace ${daysSince}d)`
+          } else if (daysSince <= 30) {
+            healthColor = "bg-amber-500"
+            healthTitle = `Actividad moderada (hace ${daysSince}d)`
+          }
+        }
+        return (
+          <div className="flex items-start gap-2">
+            <span
+              className={`mt-1.5 h-2.5 w-2.5 rounded-full shrink-0 ${healthColor}`}
+              title={healthTitle}
+            />
+            <div>
+              <div className="font-medium">{org.nombre}</div>
+              <a
+                href={`https://${org.slug}.stapp.com.ar`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="text-sm text-muted-foreground hover:text-primary hover:underline inline-flex items-center gap-1"
+              >
+                {org.slug}.stapp.com.ar
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            </div>
           </div>
-        </div>
-      ),
+        )
+      },
     },
     {
       key: "email",
@@ -173,12 +259,14 @@ export default function OrganizacionesPage() {
     {
       key: "usersCount",
       header: "Usuarios",
+      sortable: true,
       className: "text-center",
       render: (org) => org.usersCount,
     },
     {
       key: "subscription",
       header: "Plan",
+      sortable: true,
       render: (org) => (
         <Badge variant={isEffectivelyPremium(org.subscription) ? "default" : "secondary"}>
           {getEffectivePlanLabel(org.subscription)}
@@ -186,8 +274,33 @@ export default function OrganizacionesPage() {
       ),
     },
     {
+      key: "trial_days",
+      header: "En trial",
+      hideOnMobile: true,
+      render: (org) => {
+        if (isEffectivelyPremium(org.subscription)) {
+          return <Badge variant="default">Pago</Badge>
+        }
+        const days = Math.floor(
+          (Date.now() - new Date(org.created_at).getTime()) / (1000 * 60 * 60 * 24)
+        )
+        const color =
+          days <= 7
+            ? "text-green-600 bg-green-100 dark:bg-green-950"
+            : days <= 14
+              ? "text-amber-600 bg-amber-100 dark:bg-amber-950"
+              : "text-red-600 bg-red-100 dark:bg-red-950"
+        return (
+          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${color}`}>
+            {days}d
+          </span>
+        )
+      },
+    },
+    {
       key: "activo",
       header: "Estado",
+      sortable: true,
       render: (org) => (
         <Badge variant={org.activo ? "default" : "destructive"}>
           {org.activo ? "Activa" : "Inactiva"}
@@ -197,6 +310,7 @@ export default function OrganizacionesPage() {
     {
       key: "created_at",
       header: "Creada",
+      sortable: true,
       hideOnMobile: true,
       render: (org) => formatDate(org.created_at),
     },
@@ -260,21 +374,100 @@ export default function OrganizacionesPage() {
         </Button>
       </div>
 
+      {/* KPIs */}
+      {kpis ? (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+          {[
+            {
+              title: "Total organizaciones",
+              value: kpis.totalOrgs,
+              icon: Building2,
+              description: "Registradas en el sistema",
+              color: "text-blue-600",
+              bgColor: "bg-blue-100 dark:bg-blue-950",
+            },
+            {
+              title: "Activas en trial",
+              value: kpis.activeTrial,
+              icon: Users,
+              description: "Plan Free activas",
+              color: "text-amber-600",
+              bgColor: "bg-amber-100 dark:bg-amber-950",
+            },
+            {
+              title: "Premium",
+              value: kpis.premium,
+              icon: CreditCard,
+              description: "Con plan de pago activo",
+              color: "text-green-600",
+              bgColor: "bg-green-100 dark:bg-green-950",
+            },
+            {
+              title: "Nuevas este mes",
+              value: kpis.newThisMonth,
+              icon: CalendarPlus,
+              description: "Creadas en el mes actual",
+              color: "text-purple-600",
+              bgColor: "bg-purple-100 dark:bg-purple-950",
+            },
+            {
+              title: "Tasa de conversión",
+              value: `${kpis.conversionRate}%`,
+              icon: TrendingUp,
+              description: "Free → Premium",
+              color: "text-cyan-600",
+              bgColor: "bg-cyan-100 dark:bg-cyan-950",
+            },
+          ].map((stat) => {
+            const Icon = stat.icon
+            return (
+              <Card key={stat.title} className="hover:shadow-md transition-shadow">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    {stat.title}
+                  </CardTitle>
+                  <div className={`p-2 rounded-lg ${stat.bgColor}`}>
+                    <Icon className={`h-4 w-4 ${stat.color}`} />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stat.value}</div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {stat.description}
+                  </p>
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
+      ) : loading ? (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Card key={i} className="animate-pulse">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <div className="h-4 w-24 bg-muted rounded" />
+                <div className="h-8 w-8 bg-muted rounded-lg" />
+              </CardHeader>
+              <CardContent>
+                <div className="h-7 w-16 bg-muted rounded mb-1" />
+                <div className="h-3 w-20 bg-muted rounded" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : null}
+
       <Card>
         <CardHeader>
           <div className="flex flex-col lg:flex-row gap-4">
-            <div className="flex-1 flex gap-2">
+            <div className="flex-1 relative max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Buscar por nombre, slug o email..."
                 value={search}
                 onChange={(e) => handleSearchChange(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                className="max-w-sm"
+                className="pl-9"
               />
-              <Button onClick={handleSearch} variant="secondary">
-                <Search className="h-4 w-4 mr-2" />
-                Buscar
-              </Button>
             </div>
             <div className="flex gap-2">
               <Select
@@ -291,6 +484,7 @@ export default function OrganizacionesPage() {
                   <SelectItem value="all">Todos los estados</SelectItem>
                   <SelectItem value="active">Activas</SelectItem>
                   <SelectItem value="inactive">Inactivas</SelectItem>
+                  <SelectItem value="no_activity">Sin actividad (30d)</SelectItem>
                 </SelectContent>
               </Select>
               <Select
@@ -337,15 +531,19 @@ export default function OrganizacionesPage() {
                   size="sm"
                   variant="outline"
                   className="text-red-600 border-red-600 hover:bg-red-50"
-                  onClick={() => handleBulkToggle(false)}
+                  onClick={() => setConfirmDeactivateOpen(true)}
                   disabled={bulkLoading}
                 >
-                  {bulkLoading ? (
-                    <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                  ) : (
-                    <XCircle className="h-4 w-4 mr-1.5" />
-                  )}
+                  <XCircle className="h-4 w-4 mr-1.5" />
                   Desactivar seleccionados
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleExportSelectedCSV}
+                >
+                  <Download className="h-4 w-4 mr-1.5" />
+                  Exportar seleccionadas
                 </Button>
                 <Button
                   size="sm"
@@ -366,6 +564,9 @@ export default function OrganizacionesPage() {
             loading={loading}
             emptyMessage="No se encontraron organizaciones"
             onRowClick={(org) => router.push(`/superadmin/organizaciones/${org.id}`)}
+            sortKey={sortKey}
+            sortDirection={sortDir}
+            onSort={handleSort}
             selectable={true}
             selectedKeys={selectedIds}
             onSelectionChange={setSelectedIds}
@@ -378,6 +579,52 @@ export default function OrganizacionesPage() {
           />
         </CardContent>
       </Card>
+
+      {/* Modal de confirmación para desactivar en lote */}
+      <Dialog open={confirmDeactivateOpen} onOpenChange={setConfirmDeactivateOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-500" />
+              Confirmar desactivación
+            </DialogTitle>
+            <DialogDescription>
+              Estás por desactivar {selectedIds.length} organización{selectedIds.length > 1 ? "es" : ""}.
+              Los usuarios de estas organizaciones perderán acceso al sistema.
+              Esta acción se puede revertir.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-3 justify-end pt-2">
+            <Button
+              variant="outline"
+              onClick={() => setConfirmDeactivateOpen(false)}
+              disabled={bulkLoading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                await handleBulkToggle(false)
+                setConfirmDeactivateOpen(false)
+              }}
+              disabled={bulkLoading}
+            >
+              {bulkLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Desactivando...
+                </>
+              ) : (
+                <>
+                  <XCircle className="h-4 w-4 mr-2" />
+                  Desactivar {selectedIds.length}
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

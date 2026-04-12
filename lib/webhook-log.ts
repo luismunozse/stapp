@@ -48,6 +48,7 @@ export interface BeginWebhookEventInput {
   providerEventId?: string | number | null
   providerRequestId?: string | null
   payload?: unknown
+  rawPayload?: string | null
   headers?: Record<string, string | null | undefined>
   signatureValid?: boolean | null
 }
@@ -104,6 +105,7 @@ export async function beginWebhookEvent(
           input.providerEventId != null ? String(input.providerEventId) : null,
         provider_request_id: input.providerRequestId ?? null,
         payload: input.payload ?? null,
+        raw_payload: input.rawPayload ?? null,
         headers: sanitizeHeaders(input.headers),
         signature_valid: input.signatureValid ?? null,
         status: "RECEIVED",

@@ -119,8 +119,10 @@ export function DataTable<T>({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border bg-card overflow-hidden">
-        <div className="overflow-x-auto">
+      <div className="rounded-lg border bg-card overflow-hidden relative">
+        {/* Scroll shadow gradient on right edge */}
+        <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-card to-transparent z-10 opacity-0 has-[::-webkit-scrollbar]:opacity-100 md:hidden" aria-hidden="true" />
+        <div className="overflow-x-auto scroll-smooth">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/50">

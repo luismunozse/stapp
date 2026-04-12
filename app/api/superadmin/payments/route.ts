@@ -2,7 +2,6 @@ import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { parsePagination } from "@/lib/api-utils"
-import type { PaymentsListResponse } from "@/types/superadmin"
 
 export async function GET(request: Request) {
   try {
@@ -11,9 +10,11 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url)
     const status = searchParams.get("status") || ""
+    const provider = searchParams.get("provider") || ""
     const dateFrom = searchParams.get("dateFrom") || ""
     const dateTo = searchParams.get("dateTo") || ""
     const search = searchParams.get("search") || ""
+    const includeStats = searchParams.get("includeStats") === "true"
     const { page, limit, offset } = parsePagination(searchParams)
 
     // Si hay búsqueda por org, encontrar IDs primero
@@ -27,11 +28,15 @@ export async function GET(request: Request) {
         .limit(100)
       searchOrgIds = matchingOrgs?.map((o) => o.id) || []
       if (searchOrgIds.length === 0) {
-        return NextResponse.json({ payments: [], total: 0, page, limit, totalAmount: 0 })
+        const emptyResponse: any = { payments: [], total: 0, page, limit, totalAmount: 0 }
+        if (includeStats) {
+          emptyResponse.stats = { mrr: 0, totalHistorico: 0, pagosEsteMes: 0, webhookErrorRate: 0, pagosPendientes: 0 }
+        }
+        return NextResponse.json(emptyResponse)
       }
     }
 
-    // Query base para pagos
+    // Query base para pagos — ahora incluye plan_name, period_start, period_end, provider_payment_id
     let query = supabaseAdmin
       .from("subscription_payments")
       .select(
@@ -47,7 +52,10 @@ export async function GET(request: Request) {
         invoice_url,
         receipt_url,
         paid_at,
-        created_at
+        created_at,
+        plan_name,
+        period_start,
+        period_end
       `,
         { count: "exact" }
       )
@@ -61,6 +69,11 @@ export async function GET(request: Request) {
     // Filtro de estado
     if (status) {
       query = query.eq("status", status.toUpperCase())
+    }
+
+    // Filtro de proveedor
+    if (provider) {
+      query = query.eq("payment_provider", provider.toUpperCase())
     }
 
     // Filtro de fecha desde
@@ -89,15 +102,60 @@ export async function GET(request: Request) {
       totalAmountQuery = totalAmountQuery.lte("paid_at", dateTo + "T23:59:59.999Z")
     }
 
+    // Ejecutar queries base
     const [
       { data: payments, error: dbError, count },
       { data: amountsData },
     ] = await Promise.all([query, totalAmountQuery])
 
+    // Si se piden stats (KPIs), ejecutar queries de métricas en paralelo
+    let statsResults: any[] = []
+    if (includeStats) {
+      const now = new Date()
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
+
+      statsResults = await Promise.all([
+        // MRR: pagos exitosos del mes actual
+        supabaseAdmin
+          .from("subscription_payments")
+          .select("amount")
+          .eq("status", "SUCCEEDED")
+          .gte("paid_at", startOfMonth),
+        // Pagos este mes (count)
+        supabaseAdmin
+          .from("subscription_payments")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "SUCCEEDED")
+          .gte("paid_at", startOfMonth),
+        // Total histórico
+        supabaseAdmin
+          .from("subscription_payments")
+          .select("amount")
+          .eq("status", "SUCCEEDED"),
+        // Webhook total (últimos 7 días)
+        supabaseAdmin
+          .from("webhook_events")
+          .select("id", { count: "exact", head: true })
+          .gte("received_at", sevenDaysAgo),
+        // Webhook errors (últimos 7 días)
+        supabaseAdmin
+          .from("webhook_events")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "ERROR")
+          .gte("received_at", sevenDaysAgo),
+        // Pagos pendientes
+        supabaseAdmin
+          .from("subscription_payments")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "PENDING"),
+      ])
+    }
+
     if (dbError) throw dbError
 
     // Obtener información de organizaciones
-    const orgIds = [...new Set(payments?.map((p) => p.organization_id) || [])]
+    const orgIds = [...new Set(payments?.map((p: any) => p.organization_id) || [])]
 
     let orgsMap: Record<string, { nombre: string; slug: string }> = {}
 
@@ -108,7 +166,7 @@ export async function GET(request: Request) {
         .in("id", orgIds)
 
       orgsMap = (orgs || []).reduce(
-        (acc, org) => {
+        (acc: Record<string, { nombre: string; slug: string }>, org: any) => {
           acc[org.id] = { nombre: org.nombre, slug: org.slug }
           return acc
         },
@@ -116,21 +174,68 @@ export async function GET(request: Request) {
       )
     }
 
+    // Si hay pagos sin plan_name, intentar resolver desde la suscripción
+    const paymentsNeedingPlan = (payments || []).filter((p: any) => !p.plan_name && p.subscription_id)
+    if (paymentsNeedingPlan.length > 0) {
+      const subIds = [...new Set(paymentsNeedingPlan.map((p: any) => p.subscription_id))]
+      const { data: subs } = await supabaseAdmin
+        .from("subscriptions")
+        .select("id, plans(nombre, slug)")
+        .in("id", subIds)
+
+      const subPlanMap: Record<string, string> = {}
+      for (const sub of subs || []) {
+        const plan = sub.plans as any
+        if (plan) subPlanMap[sub.id] = plan.nombre || plan.slug || "Premium"
+      }
+      for (const p of paymentsNeedingPlan) {
+        if (subPlanMap[p.subscription_id]) {
+          p.plan_name = subPlanMap[p.subscription_id]
+        }
+      }
+    }
+
     // Combinar datos
-    const result = (payments || []).map((payment) => ({
+    const result = (payments || []).map((payment: any) => ({
       ...payment,
       organization: orgsMap[payment.organization_id] || null,
     }))
 
     const totalAmount =
-      amountsData?.reduce((sum, p) => sum + (p.amount || 0), 0) || 0
+      amountsData?.reduce((sum: number, p: any) => sum + (p.amount || 0), 0) || 0
 
-    const response: PaymentsListResponse = {
+    const response: any = {
       payments: result,
       total: count || 0,
       page,
       limit,
       totalAmount,
+    }
+
+    // Agregar stats si se pidieron
+    if (includeStats && statsResults.length > 0) {
+      const { data: mrrData } = statsResults[0]
+      const { count: pagosEsteMesCount } = statsResults[1]
+      const { data: totalHistoricoData } = statsResults[2]
+      const { count: webhookTotal } = statsResults[3]
+      const { count: webhookErrors } = statsResults[4]
+      const { count: pagosPendientes } = statsResults[5]
+
+      const mrr = mrrData?.reduce((sum: number, p: any) => sum + (p.amount || 0), 0) || 0
+      const totalHistorico = totalHistoricoData?.reduce((sum: number, p: any) => sum + (p.amount || 0), 0) || 0
+      const webhookErrorRate = (webhookTotal ?? 0) > 0
+        ? Math.round(((webhookErrors ?? 0) / (webhookTotal ?? 1)) * 100)
+        : 0
+
+      response.stats = {
+        mrr,
+        totalHistorico,
+        pagosEsteMes: pagosEsteMesCount ?? 0,
+        webhookErrorRate,
+        webhookErrors: webhookErrors ?? 0,
+        webhookTotal: webhookTotal ?? 0,
+        pagosPendientes: pagosPendientes ?? 0,
+      }
     }
 
     return NextResponse.json(response)

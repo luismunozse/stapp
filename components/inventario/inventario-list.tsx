@@ -627,11 +627,22 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
       )}
 
       {isLoading ? (
-        <div className="text-center py-8">Cargando...</div>
+        <div className="space-y-3">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="rounded-lg border bg-card p-4 flex gap-4">
+              <div className="h-4 bg-muted animate-pulse rounded w-1/6" />
+              <div className="h-4 bg-muted animate-pulse rounded w-1/3" />
+              <div className="h-4 bg-muted animate-pulse rounded w-1/6" />
+              <div className="h-4 bg-muted animate-pulse rounded w-1/6" />
+            </div>
+          ))}
+        </div>
       ) : items.length === 0 ? (
         <Card>
-          <CardContent className="py-8 text-center text-muted-foreground">
-            No hay items en el inventario
+          <CardContent className="py-12 text-center">
+            <Package className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
+            <p className="font-semibold mb-1">Todavía no hay productos en el inventario</p>
+            <p className="text-sm text-muted-foreground mb-4">Agregá tu primer producto para controlar stock y precios</p>
           </CardContent>
         </Card>
       ) : (

@@ -80,8 +80,11 @@ export default async function DashboardLayout({
 
   // Banner de mantenimiento global (gestionado por superadmin)
   const maintenanceBanner = await getMaintenanceBanner()
+  // No mostrar el banner si el sistema está operativo (severity INFO sin mensaje de problema)
+  const isOperational = maintenanceBanner?.severity === "INFO" &&
+    /operativ|normal|resuelto|solucionado/i.test(maintenanceBanner?.message || "")
   const showMaintenanceBanner =
-    !!maintenanceBanner?.active && !!maintenanceBanner?.message?.trim()
+    !!maintenanceBanner?.active && !!maintenanceBanner?.message?.trim() && !isOperational
 
   return (
     <SidebarProvider>

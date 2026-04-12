@@ -112,7 +112,18 @@ export function FacturacionList() {
   }
 
   if (loading) {
-    return <div className="text-center py-8">Cargando...</div>
+    return (
+      <div className="space-y-3">
+        {[...Array(5)].map((_, i) => (
+          <div key={i} className="rounded-lg border bg-card p-4 flex gap-4">
+            <div className="h-4 bg-muted animate-pulse rounded w-20" />
+            <div className="h-4 bg-muted animate-pulse rounded flex-1" />
+            <div className="h-4 bg-muted animate-pulse rounded w-24" />
+            <div className="h-4 bg-muted animate-pulse rounded w-16" />
+          </div>
+        ))}
+      </div>
+    )
   }
 
   return (

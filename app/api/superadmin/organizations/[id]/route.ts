@@ -1,9 +1,70 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
-import { supabaseAdmin } from "@/lib/supabase"
+import { supabaseAdmin, STORAGE_BUCKETS } from "@/lib/supabase"
 import { safeParseBody } from "@/lib/api-utils"
 import type { OrganizationDetailResponse, PaymentWithOrg } from "@/types/superadmin"
+
+/**
+ * Calcula el storage real (en MB) de una organización sumando el tamaño
+ * de todos los archivos en los buckets donde se guardan assets por orgId.
+ * Los buckets usan la convención {orgId}/... como path prefix.
+ */
+async function calculateRealStorageMb(orgId: string): Promise<number> {
+  const bucketsToCheck = [
+    STORAGE_BUCKETS.FOTOS_ORDENES,
+    STORAGE_BUCKETS.FOTOS_INVENTARIO,
+    STORAGE_BUCKETS.LOGOS,
+    STORAGE_BUCKETS.FIRMAS,
+    STORAGE_BUCKETS.AVATARS,
+    STORAGE_BUCKETS.COMPROBANTES_GASTOS,
+  ]
+
+  let totalBytes = 0
+
+  const results = await Promise.all(
+    bucketsToCheck.map(async (bucket) => {
+      try {
+        const { data: files } = await supabaseAdmin.storage
+          .from(bucket)
+          .list(orgId, { limit: 1000 })
+        if (!files) return 0
+
+        let bucketBytes = 0
+        for (const file of files) {
+          if (file.metadata?.size) {
+            bucketBytes += file.metadata.size
+          }
+        }
+
+        // Para buckets con subdirectorios (fotos-ordenes, firmas),
+        // listar primer nivel devuelve carpetas. Necesitamos recorrerlas.
+        const subfolders = files.filter(
+          (f) => !f.metadata?.size && f.id === null
+        )
+        for (const folder of subfolders) {
+          const { data: subFiles } = await supabaseAdmin.storage
+            .from(bucket)
+            .list(`${orgId}/${folder.name}`, { limit: 1000 })
+          if (subFiles) {
+            for (const sf of subFiles) {
+              if (sf.metadata?.size) {
+                bucketBytes += sf.metadata.size
+              }
+            }
+          }
+        }
+
+        return bucketBytes
+      } catch {
+        return 0
+      }
+    })
+  )
+
+  totalBytes = results.reduce((sum, b) => sum + b, 0)
+  return totalBytes / (1024 * 1024)
+}
 
 export async function GET(
   request: Request,
@@ -58,25 +119,62 @@ export async function GET(
       )
     }
 
-    // Obtener pagos si hay suscripción
+    // Obtener pagos, storage real y órdenes históricas en paralelo
     let payments: PaymentWithOrg[] = []
-    if (subscriptionResult.data?.id) {
-      const { data: paymentsData } = await supabaseAdmin
-        .from("subscription_payments")
-        .select("*")
-        .eq("subscription_id", subscriptionResult.data.id)
-        .order("paid_at", { ascending: false })
-        .limit(10)
+    const sixMonthsAgo = new Date()
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
 
-      payments = paymentsData || []
+    const [paymentsResult, realStorageMb, ordersResult] = await Promise.all([
+      subscriptionResult.data?.id
+        ? supabaseAdmin
+            .from("subscription_payments")
+            .select("*")
+            .eq("subscription_id", subscriptionResult.data.id)
+            .order("paid_at", { ascending: false })
+            .limit(10)
+        : Promise.resolve({ data: [] }),
+      calculateRealStorageMb(id),
+      supabaseAdmin
+        .from("ordenes_servicio")
+        .select("fecha_ingreso")
+        .eq("organization_id", id)
+        .gte("fecha_ingreso", sixMonthsAgo.toISOString())
+        .order("fecha_ingreso", { ascending: true }),
+    ])
+
+    payments = paymentsResult.data || []
+
+    // Agrupar órdenes por mes
+    const monthCounts: Record<string, number> = {}
+    // Inicializar los 6 meses para que no haya gaps
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date()
+      d.setMonth(d.getMonth() - i)
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+      monthCounts[key] = 0
     }
+    for (const order of ordersResult.data || []) {
+      const d = new Date(order.fecha_ingreso)
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+      if (key in monthCounts) monthCounts[key]++
+    }
+    const ordersHistory = Object.entries(monthCounts).map(([month, count]) => ({
+      month,
+      count,
+    }))
+
+    // Sobreescribir storage_used_mb con el cálculo real desde los buckets
+    const usageData = usageResult.data
+      ? { ...usageResult.data, storage_used_mb: realStorageMb }
+      : { organization_id: id, ordenes_count: 0, ordenes_mes_actual: 0, tecnicos_count: 0, vendedores_count: 0, clientes_count: 0, storage_used_mb: realStorageMb, periodo_inicio: new Date().toISOString() }
 
     const response: OrganizationDetailResponse = {
       organization: orgResult.data,
       users: usersResult.data || [],
-      usage: usageResult.data || null,
+      usage: usageData,
       subscription: subscriptionResult.data || null,
       payments,
+      ordersHistory,
     }
 
     return NextResponse.json(response)

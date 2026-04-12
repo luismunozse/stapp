@@ -352,7 +352,7 @@ export function OrdenesList() {
       key: "numeroOrden",
       header: "# Orden",
       sortable: true,
-      className: "font-medium",
+      className: "font-medium min-w-[100px]",
       render: (orden) => (
         <span className="text-primary font-semibold">
           {orden.codigoOrden || `#${orden.numeroOrden}`}
@@ -379,6 +379,7 @@ export function OrdenesList() {
       key: "cliente",
       header: "Cliente",
       sortable: false,
+      className: "min-w-[140px]",
       render: (orden) => (
         <div>
           <div className="font-medium">{orden.cliente?.nombre || "-"}</div>
@@ -392,6 +393,7 @@ export function OrdenesList() {
       key: "dispositivo",
       header: "Dispositivo",
       sortable: true,
+      className: "min-w-[150px]",
       render: (orden) => (
         <div>
           <div>{orden.dispositivo}</div>
@@ -406,13 +408,15 @@ export function OrdenesList() {
       header: "Técnico",
       sortable: false,
       hideOnTablet: true,
+      className: "min-w-[110px]",
       render: (orden) => orden.tecnico?.nombre || "-",
     },
     {
       key: "fechaIngreso",
       header: "Fecha Ingreso",
       sortable: true,
-      hideOnMobile: true,
+      hideOnTablet: true,
+      className: "min-w-[110px]",
       render: (orden) => formatDate(orden.fechaIngreso),
     },
     {
@@ -420,7 +424,7 @@ export function OrdenesList() {
       header: "Presupuesto",
       sortable: true,
       headerClassName: "text-right",
-      className: "text-right",
+      className: "text-right min-w-[120px]",
       hideOnMobile: true,
       render: (orden) =>
         orden.presupuesto ? (

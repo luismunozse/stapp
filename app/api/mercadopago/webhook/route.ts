@@ -53,6 +53,7 @@ export async function POST(request: NextRequest) {
     providerEventId: dataIdForSig,
     providerRequestId: xRequestId,
     payload: body,
+    rawPayload: bodyText,
     headers: collectHeaders(request),
     signatureValid: sigCheck.valid,
   })
@@ -215,6 +216,11 @@ export interface HandleResult {
  *
  * Idempotencia: si el (provider_payment_id, payment_provider) ya existe
  * en subscription_payments, retornamos sin tocar la suscripción.
+ *
+ * SEPARACIÓN DE PASOS:
+ *   (a) Registrar el pago como recibido (SUCCEEDED) → siempre se guarda
+ *   (b) Activar/renovar la suscripción → si falla, el pago queda
+ *       registrado igual y la suscripción en PENDING_ACTIVATION
  */
 export async function handlePaymentNotification(
   paymentId: string
@@ -363,36 +369,26 @@ export async function handlePaymentNotification(
     if (data) targetPlan = data
   }
 
-  if (!targetPlan) {
-    console.error(
-      `[MP webhook] No target plan found for payment ${paymentId}, ` +
-      `org=${organizationId}, ref_plan_id=${externalRef.plan_id ?? "none"}, ` +
-      `ref_plan_slug=${externalRef.plan_slug ?? "none"}`
-    )
-    return {
-      status: "SKIPPED",
-      reason: "plan_not_found",
-      organizationId,
-    }
-  }
+  // --- PASO (a): Registrar el pago SIEMPRE, incluso si no hay plan ---
+  // paid_at: usar date_approved si está, si no caer a now
+  const paidAtRaw = payment.date_approved || payment.date_created
+  const paidAt = paidAtRaw ? new Date(paidAtRaw) : new Date()
+  const paidAtIso = isNaN(paidAt.getTime()) ? new Date().toISOString() : paidAt.toISOString()
 
-  console.log(
-    `[MP webhook] Resolved plan: id=${targetPlan.id}, slug=${targetPlan.slug} ` +
-    `for payment ${paymentId}, org=${organizationId}`
-  )
-
-  const premiumPlan = targetPlan
-
-  // Calcular período: si la suscripción está activa y vigente, EXTENDER desde el final actual
-  const billingPeriod = externalRef.billing_period || "MONTHLY"
-  const periodMonths = billingPeriod === "YEARLY" ? 12 : 1
-  const now = new Date()
-
+  // Necesitamos un subscription_id. Intentar obtener la existente o crearla.
+  let subscriptionId: string | null = null
   const { data: existingSub } = await supabaseAdmin
     .from("subscriptions")
     .select("id, status, current_period_end, payment_provider")
     .eq("organization_id", organizationId)
     .maybeSingle()
+
+  subscriptionId = existingSub?.id ?? null
+
+  // Calcular período anticipadamente para guardarlo con el pago
+  const billingPeriod = externalRef.billing_period || "MONTHLY"
+  const periodMonths = billingPeriod === "YEARLY" ? 12 : 1
+  const now = new Date()
 
   let periodStart = now
   if (
@@ -405,54 +401,11 @@ export async function handlePaymentNotification(
   const periodEnd = new Date(periodStart)
   periodEnd.setMonth(periodEnd.getMonth() + periodMonths)
 
-  // Actualizar o crear suscripción
-  const { error: subError } = await supabaseAdmin
-    .from("subscriptions")
-    .upsert(
-      {
-        organization_id: organizationId,
-        plan_id: premiumPlan.id,
-        status: "ACTIVE",
-        billing_period: billingPeriod,
-        payment_provider: "MERCADOPAGO",
-        mercadopago_payer_id: payment.payer?.id?.toString() || null,
-        current_period_start: periodStart.toISOString(),
-        current_period_end: periodEnd.toISOString(),
-        cancel_at_period_end: false,
-        canceled_at: null,
-      },
-      {
-        onConflict: "organization_id",
-      }
-    )
-
-  if (subError) {
-    console.error(`[MP webhook] Error upserting subscription for org ${organizationId} (payment ${paymentId}):`, subError)
-    throw subError
-  }
-
-  // Obtener suscripción para guardar pago
-  const { data: subscription, error: fetchSubError } = await supabaseAdmin
-    .from("subscriptions")
-    .select("id")
-    .eq("organization_id", organizationId)
-    .single()
-
-  if (fetchSubError || !subscription) {
-    console.error(`[MP webhook] Could not fetch subscription after upsert for org ${organizationId} (payment ${paymentId}):`, fetchSubError)
-    throw fetchSubError || new Error("Subscription not found after upsert")
-  }
-
-  // paid_at: usar date_approved si está, si no caer a now
-  const paidAtRaw = payment.date_approved || payment.date_created
-  const paidAt = paidAtRaw ? new Date(paidAtRaw) : new Date()
-  const paidAtIso = isNaN(paidAt.getTime()) ? new Date().toISOString() : paidAt.toISOString()
-
-  // Registrar pago - chequeando errores
+  // Registrar el pago como SUCCEEDED independientemente de si podemos activar la suscripción
   const { data: insertedPayment, error: payInsertError } = await supabaseAdmin
     .from("subscription_payments")
     .insert({
-      subscription_id: subscription.id,
+      subscription_id: subscriptionId,
       organization_id: organizationId,
       amount: payment.transaction_amount ?? 0,
       currency: payment.currency_id || "ARS",
@@ -460,6 +413,9 @@ export async function handlePaymentNotification(
       provider_payment_id: String(paymentId),
       status: "SUCCEEDED",
       paid_at: paidAtIso,
+      plan_name: targetPlan ? (targetPlan.slug ?? "Premium") : null,
+      period_start: periodStart.toISOString(),
+      period_end: periodEnd.toISOString(),
     })
     .select("id")
     .single()
@@ -469,12 +425,109 @@ export async function handlePaymentNotification(
     throw payInsertError
   }
 
+  const paymentRecordId = insertedPayment?.id ?? null
+
+  // Si no hay plan, el pago queda registrado pero la suscripción no se activa
+  if (!targetPlan) {
+    console.error(
+      `[MP webhook] No target plan found for payment ${paymentId}, ` +
+      `org=${organizationId}, ref_plan_id=${externalRef.plan_id ?? "none"}, ` +
+      `ref_plan_slug=${externalRef.plan_slug ?? "none"}. ` +
+      `Pago registrado (id=${paymentRecordId}) pero suscripción NO activada.`
+    )
+    return {
+      status: "SKIPPED",
+      reason: "plan_not_found",
+      organizationId,
+      subscriptionPaymentId: paymentRecordId,
+    }
+  }
+
+  // --- PASO (b): Activar/renovar la suscripción ---
+  const premiumPlan = targetPlan
+
+  console.log(
+    `[MP webhook] Resolved plan: id=${targetPlan.id}, slug=${targetPlan.slug} ` +
+    `for payment ${paymentId}, org=${organizationId}`
+  )
+
+  try {
+    // Actualizar o crear suscripción
+    const { error: subError } = await supabaseAdmin
+      .from("subscriptions")
+      .upsert(
+        {
+          organization_id: organizationId,
+          plan_id: premiumPlan.id,
+          status: "ACTIVE",
+          billing_period: billingPeriod,
+          payment_provider: "MERCADOPAGO",
+          mercadopago_payer_id: payment.payer?.id?.toString() || null,
+          current_period_start: periodStart.toISOString(),
+          current_period_end: periodEnd.toISOString(),
+          cancel_at_period_end: false,
+          canceled_at: null,
+        },
+        {
+          onConflict: "organization_id",
+        }
+      )
+
+    if (subError) {
+      console.error(`[MP webhook] Error upserting subscription for org ${organizationId} (payment ${paymentId}):`, subError)
+      throw subError
+    }
+
+    // Actualizar subscription_id en el pago si no lo teníamos
+    if (!subscriptionId) {
+      const { data: newSub } = await supabaseAdmin
+        .from("subscriptions")
+        .select("id")
+        .eq("organization_id", organizationId)
+        .single()
+      if (newSub && paymentRecordId) {
+        await supabaseAdmin
+          .from("subscription_payments")
+          .update({ subscription_id: newSub.id })
+          .eq("id", paymentRecordId)
+      }
+    }
+  } catch (subActivationError) {
+    // PASO (b) falló, pero el pago ya quedó registrado en PASO (a).
+    // Marcamos la suscripción como PENDING_ACTIVATION para resolución manual.
+    console.error(
+      `[MP webhook] Subscription activation failed for org ${organizationId} (payment ${paymentId}). ` +
+      `Pago registrado (id=${paymentRecordId}), suscripción pendiente de activación.`,
+      subActivationError
+    )
+
+    // Intentar marcar la suscripción existente
+    if (existingSub?.id) {
+      try {
+        await supabaseAdmin
+          .from("subscriptions")
+          .update({ status: "PAST_DUE" })
+          .eq("id", existingSub.id)
+      } catch {
+        // ignorar si no se puede actualizar
+      }
+    }
+
+    // El pago ya está registrado, retornamos PROCESSED porque el pago sí se guardó
+    return {
+      status: "PROCESSED",
+      reason: "payment_registered_subscription_activation_failed",
+      organizationId,
+      subscriptionPaymentId: paymentRecordId,
+    }
+  }
+
   console.log(`[MP webhook] MercadoPago payment ${paymentId} processed for org ${organizationId}`)
 
   return {
     status: "PROCESSED",
     organizationId,
-    subscriptionPaymentId: insertedPayment?.id ?? null,
+    subscriptionPaymentId: paymentRecordId,
   }
 }
 

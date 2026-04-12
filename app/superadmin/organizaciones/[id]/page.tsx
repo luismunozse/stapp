@@ -24,6 +24,7 @@ import type {
   OrganizationUsage,
   SubscriptionWithPlan,
   PaymentWithOrg,
+  MonthlyOrders,
 } from "@/types/superadmin"
 
 interface OrgData {
@@ -32,6 +33,7 @@ interface OrgData {
   usage: OrganizationUsage | null
   subscription: SubscriptionWithPlan | null
   payments: PaymentWithOrg[]
+  ordersHistory?: MonthlyOrders[]
 }
 
 interface PageProps {
@@ -101,6 +103,7 @@ export default function OrganizacionDetallePage({ params }: PageProps) {
   const usage = data?.usage || null
   const subscription = data?.subscription || null
   const payments = data?.payments || []
+  const ordersHistory = data?.ordersHistory || []
 
   return (
     <div className="space-y-6">
@@ -115,17 +118,15 @@ export default function OrganizacionDetallePage({ params }: PageProps) {
               <Building2 className="h-8 w-8" />
               {organization.nombre}
             </h1>
-            <p className="text-muted-foreground flex items-center gap-2">
+            <a
+              href={`https://${organization.slug}.stapp.com.ar`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-muted-foreground hover:text-primary hover:underline inline-flex items-center gap-1"
+            >
               {organization.slug}.stapp.com.ar
-              <a
-                href={`https://${organization.slug}.stapp.com.ar`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary hover:underline inline-flex items-center gap-1"
-              >
-                <ExternalLink className="h-3 w-3" />
-              </a>
-            </p>
+              <ExternalLink className="h-3 w-3" />
+            </a>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -173,11 +174,11 @@ export default function OrganizacionDetallePage({ params }: PageProps) {
         </TabsContent>
 
         <TabsContent value="users">
-          <OrgUsersTab users={users} />
+          <OrgUsersTab users={users} onUpdated={loadOrganization} />
         </TabsContent>
 
         <TabsContent value="usage">
-          <OrgUsageTab usage={usage} />
+          <OrgUsageTab usage={usage} ordersHistory={ordersHistory} />
         </TabsContent>
 
         <TabsContent value="subscription">

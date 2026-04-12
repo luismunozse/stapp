@@ -5,7 +5,6 @@ import { Wrench, X, Info, AlertTriangle } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const BANNER_DISMISS_KEY_PREFIX = "maintenance-banner-dismissed:"
-const DISMISS_DURATION_HOURS = 4
 
 type Severity = "INFO" | "WARNING" | "CRITICAL"
 
@@ -40,20 +39,17 @@ export function MaintenanceBanner({ message, severity = "WARNING" }: Maintenance
   const dismissKey = `${BANNER_DISMISS_KEY_PREFIX}${message}`
 
   useEffect(() => {
-    const dismissedAt = localStorage.getItem(dismissKey)
-    if (dismissedAt) {
-      const dismissedTime = parseInt(dismissedAt, 10)
-      const hoursSince = (Date.now() - dismissedTime) / (1000 * 60 * 60)
-      // Critical banners no se pueden ocultar
-      if (hoursSince < DISMISS_DURATION_HOURS && severity !== "CRITICAL") {
-        setIsDismissed(true)
-      }
+    // Dismiss persiste por toda la sesión del navegador (sessionStorage)
+    // Al cerrar pestaña/navegador se resetea automáticamente
+    const dismissedInSession = sessionStorage.getItem(dismissKey)
+    if (dismissedInSession && severity !== "CRITICAL") {
+      setIsDismissed(true)
     }
     setMounted(true)
   }, [dismissKey, severity])
 
   const handleDismiss = () => {
-    localStorage.setItem(dismissKey, Date.now().toString())
+    sessionStorage.setItem(dismissKey, "1")
     setIsDismissed(true)
   }
 

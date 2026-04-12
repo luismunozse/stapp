@@ -6,6 +6,8 @@ import { formatCurrency, cn } from "@/lib/utils"
 import type { CurrencyCode } from "@/lib/currency"
 import { redirect } from "next/navigation"
 import Link from "next/link"
+import { QuickActions } from "@/components/dashboard/quick-actions"
+import { OnboardingPanel } from "@/components/dashboard/onboarding-panel"
 import { DolarWidget } from "@/components/cotizacion-dolar"
 import {
   OrdenesRecientes,
@@ -24,6 +26,10 @@ const getDashboardData = unstable_cache(
     const primerDiaMes = new Date(new Date().setDate(1))
     const hace7Dias = new Date()
     hace7Dias.setDate(hace7Dias.getDate() - 7)
+    // Mes anterior (para comparativa)
+    const primerDiaMesAnterior = new Date(primerDiaMes)
+    primerDiaMesAnterior.setMonth(primerDiaMesAnterior.getMonth() - 1)
+    const ultimoDiaMesAnterior = new Date(primerDiaMes.getTime() - 1)
 
     const [
       totalOrdenesResult,
@@ -46,6 +52,12 @@ const getDashboardData = unstable_cache(
       ordenesFechaVencidaResult,
       cobrosOrdenMesResult,
       cobrosOrdenUltimos7DiasResult,
+      // Mes anterior
+      ordenesMesAnteriorResult,
+      ingresosMesAnteriorResult,
+      ventasMesAnteriorResult,
+      cobrosMesAnteriorResult,
+      clientesMesAnteriorResult,
     ] = await Promise.all([
       supabaseAdmin
         .from("ordenes_servicio")
@@ -201,6 +213,44 @@ const getDashboardData = unstable_cache(
         .neq("anulado", true)
         .gte("created_at", hace7Dias.toISOString())
         .order("created_at", { ascending: true }),
+      // --- Datos del mes anterior (para comparativa) ---
+      // Órdenes pendientes mes anterior
+      supabaseAdmin
+        .from("ordenes_servicio")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", organizationId)
+        .gte("fecha_ingreso", primerDiaMesAnterior.toISOString())
+        .lte("fecha_ingreso", ultimoDiaMesAnterior.toISOString()),
+      // Ingresos facturas mes anterior
+      supabaseAdmin
+        .from("facturas")
+        .select("total, orden_id, ordenes_servicio!inner(organization_id)")
+        .eq("ordenes_servicio.organization_id", organizationId)
+        .eq("estado_pago", "PAGADO")
+        .gte("fecha", primerDiaMesAnterior.toISOString())
+        .lte("fecha", ultimoDiaMesAnterior.toISOString()),
+      // Ventas mes anterior
+      supabaseAdmin
+        .from("ventas")
+        .select("id, total")
+        .eq("organization_id", organizationId)
+        .eq("estado", "COMPLETADA")
+        .gte("created_at", primerDiaMesAnterior.toISOString())
+        .lte("created_at", ultimoDiaMesAnterior.toISOString()),
+      // Cobros directos mes anterior
+      supabaseAdmin
+        .from("cobros_orden")
+        .select("monto, orden_id")
+        .eq("organization_id", organizationId)
+        .neq("anulado", true)
+        .gte("created_at", primerDiaMesAnterior.toISOString())
+        .lte("created_at", ultimoDiaMesAnterior.toISOString()),
+      // Clientes mes anterior
+      supabaseAdmin
+        .from("clientes")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", organizationId)
+        .lte("created_at", ultimoDiaMesAnterior.toISOString()),
     ])
 
     return {
@@ -224,6 +274,11 @@ const getDashboardData = unstable_cache(
       ordenesFechaVencidaResult,
       cobrosOrdenMesResult,
       cobrosOrdenUltimos7DiasResult,
+      ordenesMesAnteriorResult,
+      ingresosMesAnteriorResult,
+      ventasMesAnteriorResult,
+      cobrosMesAnteriorResult,
+      clientesMesAnteriorResult,
       hace7Dias: hace7Dias.toISOString(),
     }
   },
@@ -433,6 +488,11 @@ export default async function DashboardPage() {
     ordenesFechaVencidaResult,
     cobrosOrdenMesResult,
     cobrosOrdenUltimos7DiasResult,
+    ordenesMesAnteriorResult,
+    ingresosMesAnteriorResult,
+    ventasMesAnteriorResult,
+    cobrosMesAnteriorResult,
+    clientesMesAnteriorResult,
     hace7Dias,
   } = await getDashboardData(organizationId)
 
@@ -454,6 +514,30 @@ export default async function DashboardPage() {
   const ingresosCobrosOrdenMes = cobrosOrdenMesData.reduce((sum, c) => sum + Number(c.monto || 0), 0)
   const ingresos = ingresosFacturas + ingresosVentasMes + ingresosCobrosOrdenMes
   const garantiasPorVencer = garantiasPorVencerResult.data || []
+
+  // --- Comparativa mes anterior ---
+  const ordenesMesAnterior = ordenesMesAnteriorResult.count || 0
+  const clientesMesAnterior = clientesMesAnteriorResult.count || 0
+  const ingresosMesAnteriorData = ingresosMesAnteriorResult.data as { total: number; orden_id: string }[] | null
+  const cobrosMesAnteriorData = (cobrosMesAnteriorResult.data as { monto: number; orden_id: string }[] | null) || []
+  const ordenesConCobroMesAnt = new Set(cobrosMesAnteriorData.map((c) => c.orden_id))
+  const ingresosFacturasAnt = (ingresosMesAnteriorData || [])
+    .filter((f) => !ordenesConCobroMesAnt.has(f.orden_id))
+    .reduce((sum, f) => sum + Number(f.total || 0), 0)
+  const ingresosVentasAnt = (ventasMesAnteriorResult.data as { total: number }[] | null)?.reduce((sum, v) => sum + Number(v.total || 0), 0) || 0
+  const ingresosCobrosAnt = cobrosMesAnteriorData.reduce((sum, c) => sum + Number(c.monto || 0), 0)
+  const ingresosMesAnterior = ingresosFacturasAnt + ingresosVentasAnt + ingresosCobrosAnt
+
+  // Helper para calcular variación porcentual
+  function pctChange(current: number, previous: number): { pct: number; direction: "up" | "down" | "neutral" } | null {
+    if (previous === 0 && current === 0) return null
+    if (previous === 0) return { pct: 100, direction: "up" }
+    const pct = Math.round(((current - previous) / previous) * 100)
+    return { pct: Math.abs(pct), direction: pct > 0 ? "up" : pct < 0 ? "down" : "neutral" }
+  }
+
+  const ingresosChange = pctChange(ingresos, ingresosMesAnterior)
+  const clientesChange = pctChange(totalClientes, clientesMesAnterior)
 
   // Procesar órdenes por estado
   const ordenesPorEstado = {
@@ -599,6 +683,7 @@ export default async function DashboardPage() {
       icon: ClipboardList,
       colorClass: "text-info-600 dark:text-info-500",
       bgClass: "bg-info-50 dark:bg-info-100/50",
+      hoverBorder: "hover:border-blue-300 dark:hover:border-blue-700",
       urgent: ordenesPendientes > 0,
       href: "/ordenes",
     },
@@ -609,6 +694,7 @@ export default async function DashboardPage() {
       icon: Package,
       colorClass: "text-warning-600 dark:text-warning-500",
       bgClass: "bg-warning-50 dark:bg-warning-100/50",
+      hoverBorder: "hover:border-amber-300 dark:hover:border-amber-700",
       urgent: itemsBajoStock > 0,
       href: "/inventario",
     },
@@ -619,6 +705,9 @@ export default async function DashboardPage() {
       icon: Users,
       colorClass: "text-success-600 dark:text-success-500",
       bgClass: "bg-success-50 dark:bg-success-100/50",
+      hoverBorder: "hover:border-green-300 dark:hover:border-green-700",
+      href: "/clientes",
+      change: clientesChange,
     },
     {
       title: "Ingresos del Mes",
@@ -627,6 +716,9 @@ export default async function DashboardPage() {
       icon: DollarSign,
       colorClass: "text-purple-600 dark:text-purple-400",
       bgClass: "bg-purple-50 dark:bg-purple-900/30",
+      hoverBorder: "hover:border-purple-300 dark:hover:border-purple-700",
+      href: "/finanzas",
+      change: ingresosChange,
     },
     {
       title: "Ingresos Hoy",
@@ -635,6 +727,8 @@ export default async function DashboardPage() {
       icon: DollarSign,
       colorClass: "text-emerald-600 dark:text-emerald-400",
       bgClass: "bg-emerald-50 dark:bg-emerald-900/30",
+      hoverBorder: "hover:border-emerald-300 dark:hover:border-emerald-700",
+      href: "/caja",
     },
     {
       title: "Cobros Pendientes",
@@ -643,7 +737,9 @@ export default async function DashboardPage() {
       icon: AlertTriangle,
       colorClass: "text-red-600 dark:text-red-400",
       bgClass: "bg-red-50 dark:bg-red-900/30",
+      hoverBorder: "hover:border-red-300 dark:hover:border-red-700",
       urgent: ordenesPendienteCobro.length > 0,
+      href: "/ordenes?estado_cobro=PENDIENTE",
     },
   ]
 
@@ -655,6 +751,8 @@ export default async function DashboardPage() {
       icon: ClipboardList,
       colorClass: "text-info-600 dark:text-info-500",
       bgClass: "bg-info-50 dark:bg-info-100/50",
+      hoverBorder: "hover:border-blue-300 dark:hover:border-blue-700",
+      href: "/ordenes",
     },
     {
       title: "Clientes",
@@ -663,6 +761,8 @@ export default async function DashboardPage() {
       icon: Users,
       colorClass: "text-success-600 dark:text-success-500",
       bgClass: "bg-success-50 dark:bg-success-100/50",
+      hoverBorder: "hover:border-green-300 dark:hover:border-green-700",
+      href: "/clientes",
     },
     {
       title: "Mis Ventas Hoy",
@@ -671,6 +771,8 @@ export default async function DashboardPage() {
       icon: ShoppingCart,
       colorClass: "text-emerald-600 dark:text-emerald-400",
       bgClass: "bg-emerald-50 dark:bg-emerald-900/30",
+      hoverBorder: "hover:border-emerald-300 dark:hover:border-emerald-700",
+      href: "/ventas",
     },
     {
       title: "Mis Ventas del Mes",
@@ -679,6 +781,8 @@ export default async function DashboardPage() {
       icon: TrendingUp,
       colorClass: "text-cyan-600 dark:text-cyan-400",
       bgClass: "bg-cyan-50 dark:bg-cyan-900/30",
+      hoverBorder: "hover:border-cyan-300 dark:hover:border-cyan-700",
+      href: "/ventas",
     },
   ]
 
@@ -690,6 +794,7 @@ export default async function DashboardPage() {
       icon: ClipboardList,
       colorClass: "text-info-600 dark:text-info-500",
       bgClass: "bg-info-50 dark:bg-info-100/50",
+      hoverBorder: "hover:border-blue-300 dark:hover:border-blue-700",
       href: "/ordenes",
     },
     {
@@ -699,6 +804,7 @@ export default async function DashboardPage() {
       icon: AlertTriangle,
       colorClass: misSinDiagnostico > 0 ? "text-warning-600 dark:text-warning-500" : "text-success-600 dark:text-success-500",
       bgClass: misSinDiagnostico > 0 ? "bg-warning-50 dark:bg-warning-100/50" : "bg-success-50 dark:bg-success-100/50",
+      hoverBorder: misSinDiagnostico > 0 ? "hover:border-amber-300 dark:hover:border-amber-700" : "hover:border-green-300 dark:hover:border-green-700",
       href: "/ordenes?estado=RECIBIDO",
     },
     {
@@ -708,6 +814,7 @@ export default async function DashboardPage() {
       icon: Clock,
       colorClass: misEsperandoRepuesto > 0 ? "text-orange-600 dark:text-orange-400" : "text-success-600 dark:text-success-500",
       bgClass: misEsperandoRepuesto > 0 ? "bg-orange-50 dark:bg-orange-900/30" : "bg-success-50 dark:bg-success-100/50",
+      hoverBorder: misEsperandoRepuesto > 0 ? "hover:border-orange-300 dark:hover:border-orange-700" : "hover:border-green-300 dark:hover:border-green-700",
       href: "/ordenes?estado=ESPERANDO_REPUESTO",
     },
     {
@@ -717,6 +824,7 @@ export default async function DashboardPage() {
       icon: CheckCircle,
       colorClass: "text-success-600 dark:text-success-500",
       bgClass: "bg-success-50 dark:bg-success-100/50",
+      hoverBorder: "hover:border-green-300 dark:hover:border-green-700",
       href: "/ordenes",
     },
   ]
@@ -732,6 +840,20 @@ export default async function DashboardPage() {
         </p>
       </div>
 
+      {/* Onboarding para cuentas nuevas */}
+      {isAdmin && totalOrdenes === 0 && (
+        <OnboardingPanel
+          hasConfig={!!orgData?.zona_horaria}
+          hasTecnicos={ordenesPorTecnico.length > 0}
+          hasOrdenes={totalOrdenes > 0}
+        />
+      )}
+
+      {/* Acciones Rápidas */}
+      {isAdmin && (
+        <QuickActions cobrosPendientesCount={ordenesPendienteCobro.length} />
+      )}
+
       {/* Stats Cards */}
       <div className={`grid gap-3 sm:gap-4 grid-cols-2 ${isTecnico ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
         {stats.map((stat: any) => {
@@ -739,8 +861,9 @@ export default async function DashboardPage() {
           const isUrgent = stat.urgent
           const card = (
             <Card key={stat.title} className={cn(
-              "transition-shadow hover:shadow-md",
-              stat.href && "cursor-pointer hover:border-primary/50",
+              "group transition-all duration-200 cursor-pointer",
+              "hover:shadow-lg",
+              stat.hoverBorder || "hover:border-primary/50",
               isUrgent && "border-l-4 border-l-warning shadow-sm ring-1 ring-warning/10"
             )}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
@@ -756,12 +879,42 @@ export default async function DashboardPage() {
               </CardHeader>
               <CardContent className="p-3 sm:p-6 pt-0">
                 <div className={cn(
-                  "text-lg sm:text-2xl font-bold",
-                  isUrgent ? "text-warning-700 dark:text-warning-400" : "text-foreground"
+                  "font-bold",
+                  // Montos monetarios: más grandes y negros
+                  stat.value?.toString().startsWith("$") || stat.value?.toString().startsWith("-$")
+                    ? "text-xl sm:text-[1.75rem] text-[#111] dark:text-white"
+                    : "text-lg sm:text-2xl",
+                  isUrgent && "!text-warning-700 dark:!text-warning-400",
+                  // Cobros pendientes en naranja
+                  stat.title === "Cobros Pendientes" && "!text-amber-600 dark:!text-amber-400",
+                  // Ingresos en verde
+                  stat.title === "Ingresos Hoy" && "!text-emerald-700 dark:!text-emerald-400",
+                  !isUrgent && !stat.value?.toString().startsWith("$") && "text-foreground"
                 )}>{stat.value}</div>
                 <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">
                   {stat.description}
                 </p>
+                {/* Comparativa mes anterior */}
+                {stat.change ? (
+                  <p className={cn(
+                    "text-[10px] sm:text-xs mt-1",
+                    stat.change.direction === "up" ? "text-green-600 dark:text-green-400" :
+                    stat.change.direction === "down" ? "text-red-600 dark:text-red-400" :
+                    "text-muted-foreground"
+                  )}>
+                    {stat.change.direction === "up" ? "↑" : stat.change.direction === "down" ? "↓" : "→"}{" "}
+                    {stat.change.pct}% vs. mes anterior
+                  </p>
+                ) : stat.change === null ? (
+                  <p className="text-[10px] sm:text-xs text-muted-foreground/60 mt-1">
+                    — sin datos anteriores
+                  </p>
+                ) : null}
+                {stat.href && (
+                  <p className="text-[10px] sm:text-xs text-muted-foreground/50 group-hover:text-muted-foreground mt-1.5 transition-colors duration-200">
+                    → Ver detalle
+                  </p>
+                )}
               </CardContent>
             </Card>
           )

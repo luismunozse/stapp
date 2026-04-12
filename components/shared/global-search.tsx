@@ -8,6 +8,13 @@ import { useGlobalSearch } from "@/hooks/use-global-search"
 import { OrderStatusBadge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 
+const PLACEHOLDER_EXAMPLES = [
+  "Buscar por número: CEL040...",
+  "Buscar por cliente: Diego Alanis...",
+  "Buscar por dispositivo: Galaxy A55...",
+  "Buscar por teléfono: 351789...",
+]
+
 export function GlobalSearch() {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -15,6 +22,15 @@ export function GlobalSearch() {
   const inputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [selectedIndex, setSelectedIndex] = useState(-1)
+  const [placeholderIdx, setPlaceholderIdx] = useState(0)
+
+  // Placeholder rotativo cada 3 segundos
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPlaceholderIdx((prev) => (prev + 1) % PLACEHOLDER_EXAMPLES.length)
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [])
 
   // Keyboard shortcut: Cmd+K / Ctrl+K
   useEffect(() => {
@@ -90,7 +106,7 @@ export function GlobalSearch() {
         className="hidden lg:flex items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground bg-muted/50 border rounded-md hover:bg-muted transition-colors"
       >
         <Search className="h-4 w-4" />
-        <span>Buscar...</span>
+        <span className="max-w-[160px] truncate">{PLACEHOLDER_EXAMPLES[placeholderIdx].replace("...", "")}</span>
         <kbd className="ml-2 px-1.5 py-0.5 text-[10px] bg-background border rounded font-mono">
           Ctrl+K
         </kbd>
@@ -120,7 +136,7 @@ export function GlobalSearch() {
                 setSelectedIndex(-1)
               }}
               onKeyDown={handleKeyDown}
-              placeholder="Buscar clientes, órdenes..."
+              placeholder={PLACEHOLDER_EXAMPLES[placeholderIdx]}
               className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 h-12"
               autoComplete="off"
             />
