@@ -7,6 +7,7 @@ export interface MovimientoUnificado {
   fecha: string
   referencia: string
   referenciaId: string
+  referenciaNumero?: string | null
   observaciones: string | null
   esEgreso?: boolean
 }
@@ -29,7 +30,7 @@ export async function fetchMovimientosDia(
   // 1. Cobros de órdenes
   const { data: cobrosOrdenes } = await supabaseAdmin
     .from("cobros_orden")
-    .select("monto, metodo_pago, created_at, orden_id, observaciones")
+    .select("monto, metodo_pago, created_at, orden_id, observaciones, ordenes_servicio:orden_id(numero_orden)")
     .eq("organization_id", organizationId)
     .gte("created_at", fechaDesde)
     .lte("created_at", fechaHasta)
@@ -85,6 +86,7 @@ export async function fetchMovimientosDia(
   const movimientos: MovimientoUnificado[] = []
 
   for (const c of cobrosOrdenes || []) {
+    const ordenNum = (c as any).ordenes_servicio?.numero_orden
     movimientos.push({
       tipo: "COBRO_ORDEN",
       monto: parseFloat(c.monto),
@@ -92,11 +94,15 @@ export async function fetchMovimientosDia(
       fecha: c.created_at,
       referencia: "Orden",
       referenciaId: c.orden_id,
+      referenciaNumero: ordenNum ? `ORD-${String(ordenNum).padStart(4, "0")}` : null,
       observaciones: c.observaciones,
     })
   }
 
   for (const p of pagosFacturas || []) {
+    const factura = (p as any).facturas
+    const numFactura = factura?.numero_factura
+    const numOrden = factura?.ordenes_servicio?.numero_orden
     movimientos.push({
       tipo: "PAGO_FACTURA",
       monto: parseFloat(p.monto),
@@ -104,11 +110,13 @@ export async function fetchMovimientosDia(
       fecha: p.fecha,
       referencia: "Factura",
       referenciaId: p.factura_id,
+      referenciaNumero: numFactura || (numOrden ? `ORD-${String(numOrden).padStart(4, "0")}` : null),
       observaciones: p.observaciones,
     })
   }
 
   for (const p of pagosVentas || []) {
+    const numVenta = (p as any).ventas?.numero_venta
     movimientos.push({
       tipo: "PAGO_VENTA",
       monto: parseFloat(p.monto),
@@ -116,6 +124,7 @@ export async function fetchMovimientosDia(
       fecha: p.fecha,
       referencia: "Venta",
       referenciaId: p.venta_id,
+      referenciaNumero: numVenta ? `V-${String(numVenta).padStart(4, "0")}` : null,
       observaciones: p.observaciones,
     })
   }

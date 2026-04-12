@@ -28,6 +28,7 @@ export interface PagoLineItem {
   cuotas: number | null
   recargo: number | null
   montoOriginal: number | null
+  costoFinanciero: number | null // % que cobra la terminal (costo que absorbe el comercio)
 }
 
 interface MultiPagoInputProps {
@@ -48,6 +49,7 @@ export function createPagoLine(monto: number = 0, metodo: MetodoPagoValue = "EFE
     cuotas: null,
     recargo: null,
     montoOriginal: null,
+    costoFinanciero: null,
   }
 }
 
@@ -79,6 +81,7 @@ export function MultiPagoInput({
         newPagos[index].cuotas = null
         newPagos[index].recargo = null
         newPagos[index].montoOriginal = null
+        newPagos[index].costoFinanciero = null
       }
       if (updates.metodo !== "TRANSFERENCIA" && updates.metodo !== "MERCADOPAGO") {
         newPagos[index].referencia = ""
@@ -203,7 +206,7 @@ export function MultiPagoInput({
                   />
                 </div>
                 <div>
-                  <Label className="text-xs">Recargo %</Label>
+                  <Label className="text-xs">Recargo al cliente %</Label>
                   <Input
                     type="number"
                     step="0.01"
@@ -220,7 +223,7 @@ export function MultiPagoInput({
             {/* Recargo solo débito */}
             {pago.metodo === "TARJETA_DEBITO" && (
               <div>
-                <Label className="text-xs">Recargo % (si aplica)</Label>
+                <Label className="text-xs">Recargo al cliente % (si aplica)</Label>
                 <Input
                   type="number"
                   step="0.01"
@@ -229,6 +232,22 @@ export function MultiPagoInput({
                   value={pago.recargo || ""}
                   onChange={(e) => updatePago(index, { recargo: parseFloat(e.target.value) || null })}
                   placeholder="0"
+                />
+              </div>
+            )}
+
+            {/* Costo financiero (lo que cobra la terminal al comercio) */}
+            {showRecargo && (
+              <div>
+                <Label className="text-xs">Costo terminal % (lo que absorbe el comercio)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  max={100}
+                  value={pago.costoFinanciero || ""}
+                  onChange={(e) => updatePago(index, { costoFinanciero: parseFloat(e.target.value) || null })}
+                  placeholder="Ej: 12"
                 />
               </div>
             )}
@@ -257,6 +276,23 @@ export function MultiPagoInput({
                       <span>{formatPrice(totalConRecargo / pago.cuotas)}</span>
                     </div>
                   )}
+                </div>
+              )
+            })()}
+
+            {/* Preview de costo financiero (lo que pierde el comercio) */}
+            {showRecargo && pago.costoFinanciero && pago.costoFinanciero > 0 && pago.monto > 0 && (() => {
+              const montoCosto = pago.monto * (pago.costoFinanciero / 100)
+              return (
+                <div className="p-2 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded text-xs space-y-0.5">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Costo terminal ({pago.costoFinanciero}%):</span>
+                    <span className="text-red-600 font-medium">-{formatPrice(montoCosto)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Ganancia real del cobro:</span>
+                    <span className="font-medium">{formatPrice(pago.monto - montoCosto)}</span>
+                  </div>
                 </div>
               )
             })()}

@@ -50,12 +50,11 @@ export function EntregaDialog({
   const [firmaEncargadoMime, setFirmaEncargadoMime] = useState<string | null>(null)
   const [notasEntrega, setNotasEntrega] = useState("")
   const [error, setError] = useState<string | null>(null)
-  const [entregarSinCobro, setEntregarSinCobro] = useState(false)
   const [conGarantia, setConGarantia] = useState(!esRetiro)
   const [diasGarantia, setDiasGarantia] = useState(30)
   const [notasGarantia, setNotasGarantia] = useState("")
 
-  const tienePendiente = orden.estadoCobro && orden.estadoCobro !== "COBRADO" && (orden.pendienteCobro || 0) > 0
+  const tienePendiente = !esRetiro && orden.estadoCobro && orden.estadoCobro !== "COBRADO" && (orden.pendienteCobro || 0) > 0
 
   const handleFirmaClienteChange = (data: string | null, mime: string | null) => {
     setFirmaCliente(data)
@@ -114,7 +113,6 @@ export function EntregaDialog({
       setFirmaEncargadoMime(null)
       setNotasEntrega("")
       setError(null)
-      setEntregarSinCobro(false)
       setConGarantia(!esRetiro)
       setDiasGarantia(30)
       setNotasGarantia("")
@@ -153,28 +151,17 @@ export function EntregaDialog({
             </div>
           )}
 
-          {/* Alerta/Bloqueo si no está cobrado (solo para entregas normales) */}
-          {!esRetiro && orden.estadoCobro && orden.estadoCobro !== "COBRADO" && orden.pendienteCobro && orden.pendienteCobro > 0 && (
-            <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-sm">
-              <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
+          {/* Aviso informativo si hay cobro pendiente (solo para entregas normales) */}
+          {tienePendiente && (
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-sm">
+              <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
               <div>
-                <p className="font-medium text-red-800 dark:text-red-300">
+                <p className="font-medium text-amber-800 dark:text-amber-300">
                   Cobro pendiente: {orden.pendienteCobro?.toLocaleString("es-AR", { style: "currency", currency: "ARS" })}
                 </p>
-                <p className="text-red-700 dark:text-red-400 text-xs mt-0.5">
-                  Se recomienda cobrar antes de entregar. Para entregar sin cobro completo, marque la casilla a continuación.
+                <p className="text-amber-700 dark:text-amber-400 text-xs mt-0.5">
+                  Puede cobrar después de la entrega desde el detalle de la orden.
                 </p>
-                <label className="flex items-center gap-2 mt-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={entregarSinCobro}
-                    onChange={(e) => setEntregarSinCobro(e.target.checked)}
-                    className="rounded border-red-300"
-                  />
-                  <span className="text-xs text-red-700 dark:text-red-400">
-                    Confirmo la entrega sin cobro completo
-                  </span>
-                </label>
               </div>
             </div>
           )}
@@ -280,7 +267,7 @@ export function EntregaDialog({
             </Button>
             <Button
               onClick={handleConfirmar}
-              disabled={loading || (!esRetiro && !!tienePendiente && !entregarSinCobro)}
+              disabled={loading}
             >
               {loading ? (
                 <>

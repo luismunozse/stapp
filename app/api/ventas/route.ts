@@ -39,6 +39,7 @@ const ventaSchema = z.object({
     cuotas: z.number().int().min(1).nullable().optional(),
     recargo: z.number().min(0).nullable().optional(),
     montoOriginal: z.number().positive().nullable().optional(),
+    costoFinanciero: z.number().min(0).nullable().optional(),
   })).optional(),
 })
 

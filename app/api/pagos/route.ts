@@ -10,6 +10,7 @@ const pagoLineSchema = z.object({
   cuotas: z.number().int().min(1).nullable().optional(),
   recargo: z.number().min(0).nullable().optional(),
   montoOriginal: z.number().positive().nullable().optional(),
+  costoFinanciero: z.number().min(0).nullable().optional(),
 })
 
 // Supports both legacy single payment and new multi-payment
@@ -115,6 +116,11 @@ export async function POST(request: Request) {
         }
       }
 
+      const cfPorcentaje = pagoLine.costoFinanciero || null
+      const cfMonto = cfPorcentaje && cfPorcentaje > 0
+        ? Math.round(pagoLine.monto * (cfPorcentaje / 100) * 100) / 100
+        : null
+
       const { data: pago, error: pagoError } = await supabaseAdmin
         .from("pagos_parciales")
         .insert({
@@ -126,6 +132,8 @@ export async function POST(request: Request) {
           cuotas: pagoLine.cuotas || null,
           recargo_porcentaje: pagoLine.recargo || null,
           monto_original: pagoLine.montoOriginal || null,
+          costo_financiero_porcentaje: cfPorcentaje,
+          costo_financiero_monto: cfMonto,
         })
         .select()
         .single()
@@ -157,6 +165,8 @@ export async function POST(request: Request) {
           cuotas: p.cuotas,
           recargoPorcentaje: p.recargo_porcentaje,
           montoOriginal: p.monto_original,
+          costoFinancieroPorcentaje: p.costo_financiero_porcentaje,
+          costoFinancieroMonto: p.costo_financiero_monto,
         })),
         factura: {
           montoAbonado: nuevoMontoAbonado,

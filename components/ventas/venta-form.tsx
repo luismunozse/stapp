@@ -386,6 +386,7 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
           cuotas: p.cuotas,
           recargo: p.recargo,
           montoOriginal: p.recargo && p.recargo > 0 ? p.monto + p.monto * (p.recargo / 100) : null, // total con recargo (informativo)
+          costoFinanciero: p.costoFinanciero,
         })),
       }
 

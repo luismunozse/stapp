@@ -46,6 +46,7 @@ import { NotificationBell } from "@/components/notifications/notification-bell"
 import { useSidebar } from "@/components/layout/sidebar-context"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { UserAvatar } from "@/components/shared/user-avatar"
+import { DeadlineCalendar } from "@/components/ordenes/deadline-calendar"
 
 type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; roles?: string[] }
 
@@ -513,6 +514,7 @@ export function Navbar() {
         "hidden lg:flex items-center gap-2 fixed top-3 right-4 z-40"
       )}>
         <GlobalSearch />
+        <DeadlineCalendar />
         <NotificationBell />
         <Link href="/perfil" className="hover:opacity-80 transition-opacity">
           <UserAvatar
@@ -533,6 +535,7 @@ export function Navbar() {
           </div>
           <div className="flex items-center gap-1">
             <GlobalSearch />
+            <DeadlineCalendar />
             <NotificationBell />
             <ThemeToggle variant="icon" />
             <Button

@@ -84,6 +84,7 @@ export function PagoForm({
           cuotas: p.cuotas,
           recargo: p.recargo,
           montoOriginal: p.montoOriginal,
+          costoFinanciero: p.costoFinanciero,
         })),
         observaciones: observaciones || undefined,
         clienteId: clienteId || undefined,

@@ -122,7 +122,69 @@ export async function GET(request: Request) {
     }
 
     // ========================================
-    // 4. GASTOS (movimientos manuales tipo EGRESO con afecta_rentabilidad = true)
+    // 4. COSTOS FINANCIEROS (comisiones de terminales de pago)
+    // ========================================
+    // Pagos de ventas con costo financiero
+    const { data: pagosVentaCF } = await supabaseAdmin
+      .from("pagos_venta")
+      .select("costo_financiero_monto, venta_id")
+      .not("costo_financiero_monto", "is", null)
+      .gt("costo_financiero_monto", 0)
+
+    // Filtrar por ventas de esta org y período
+    let costosFinancierosVentas = 0
+    if (pagosVentaCF && pagosVentaCF.length > 0) {
+      const ventaIds = [...new Set(pagosVentaCF.map(p => p.venta_id))]
+      const { data: ventasValidas } = await supabaseAdmin
+        .from("ventas")
+        .select("id")
+        .eq("organization_id", organizationId!)
+        .neq("estado", "ANULADA")
+        .gte("created_at", desdeISO)
+        .lte("created_at", hastaISO)
+        .in("id", ventaIds)
+
+      const ventaIdsValidos = new Set((ventasValidas || []).map(v => v.id))
+      for (const p of pagosVentaCF) {
+        if (ventaIdsValidos.has(p.venta_id)) {
+          costosFinancierosVentas += parseFloat(p.costo_financiero_monto || "0")
+        }
+      }
+    }
+
+    // Pagos de facturas (servicios) con costo financiero
+    const { data: pagosParcialCF } = await supabaseAdmin
+      .from("pagos_parciales")
+      .select("costo_financiero_monto, factura_id")
+      .not("costo_financiero_monto", "is", null)
+      .gt("costo_financiero_monto", 0)
+
+    let costosFinancierosServicios = 0
+    if (pagosParcialCF && pagosParcialCF.length > 0) {
+      const facturaIds = [...new Set(pagosParcialCF.map(p => p.factura_id))]
+      const { data: facturasValidas } = await supabaseAdmin
+        .from("facturas")
+        .select("id, ordenes_servicio!inner(organization_id)")
+        .gte("created_at", desdeISO)
+        .lte("created_at", hastaISO)
+        .in("id", facturaIds)
+
+      const facturaIdsValidos = new Set(
+        (facturasValidas || [])
+          .filter(f => (f.ordenes_servicio as any)?.organization_id === organizationId)
+          .map(f => f.id)
+      )
+      for (const p of pagosParcialCF) {
+        if (facturaIdsValidos.has(p.factura_id)) {
+          costosFinancierosServicios += parseFloat(p.costo_financiero_monto || "0")
+        }
+      }
+    }
+
+    const totalCostosFinancieros = costosFinancierosVentas + costosFinancierosServicios
+
+    // ========================================
+    // 5. GASTOS (movimientos manuales tipo EGRESO con afecta_rentabilidad = true)
     // ========================================
     const { data: movEgresos } = await supabaseAdmin
       .from("movimientos_caja")
@@ -188,7 +250,7 @@ export async function GET(request: Request) {
     const totalCostos = costoProductos + costoRepuestos
     const gananciaBruta = totalIngresos - totalCostos
     const totalGastos = gastosFijos + gastosVariables
-    const gananciaNeta = gananciaBruta - totalGastos
+    const gananciaNeta = gananciaBruta - totalGastos - totalCostosFinancieros
 
     const margenBruto = totalIngresos > 0 ? (gananciaBruta / totalIngresos) * 100 : 0
     const margenNeto = totalIngresos > 0 ? (gananciaNeta / totalIngresos) * 100 : 0
@@ -211,6 +273,11 @@ export async function GET(request: Request) {
       },
       gananciaBruta: round(gananciaBruta),
       margenBruto: round(margenBruto, 1),
+      costosFinancieros: {
+        ventas: round(costosFinancierosVentas),
+        servicios: round(costosFinancierosServicios),
+        total: round(totalCostosFinancieros),
+      },
       gastos: {
         fijos: round(gastosFijos),
         variables: round(gastosVariables),
