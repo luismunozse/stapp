@@ -22,6 +22,8 @@ import {
   LayoutGrid,
   LayoutList,
   TrendingUp,
+  Truck,
+  ScanLine,
 } from "lucide-react"
 import { InventarioForm } from "./inventario-form"
 import { InventarioStats } from "./inventario-stats"
@@ -29,6 +31,7 @@ import { InventarioBulkBar } from "./inventario-bulk-bar"
 import { QuickStockAdjust } from "./quick-stock-adjust"
 import { MovimientosHistorial } from "./movimientos-historial"
 import { InventarioAnalyticsModal } from "./inventario-analytics-modal"
+import { BarcodeScanner } from "./barcode-scanner"
 import { ImportModal } from "@/components/import/import-modal"
 import { ExportButton } from "@/components/export/export-button"
 import { useCurrency } from "@/contexts/currency-context"
@@ -77,6 +80,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   const [editingItem, setEditingItem] = useState<Inventario | null>(null)
   const [movimientosItem, setMovimientosItem] = useState<{ id: string; nombre: string } | null>(null)
   const [analyticsItem, setAnalyticsItem] = useState<{ id: string; nombre: string } | null>(null)
+  const [showScanner, setShowScanner] = useState(false)
   const [includeArchived, setIncludeArchived] = useState(false)
   // Default a "list": es la vista que escala con catálogos grandes.
   // La preferencia se persiste en localStorage.
@@ -474,6 +478,15 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
             Bajo Stock
           </Button>
           <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setShowScanner(true)}
+          >
+            <ScanLine className="h-4 w-4" />
+            <span className="hidden sm:inline">Escanear</span>
+          </Button>
+          <Button
             variant={includeArchived ? "default" : "outline"}
             size="sm"
             className="gap-1.5"
@@ -482,6 +495,32 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
             <ArchiveRestore className="h-4 w-4" />
             Archivados
           </Button>
+          {bajoStock && items.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => {
+                // Build items for OC grouped by proveedor
+                const ocItems = items
+                  .filter(i => !i.deletedAt && i.stock <= (i.stockMinimo ?? umbralStockBajo))
+                  .map(i => ({
+                    inventarioId: i.id,
+                    nombre: i.nombre,
+                    codigo: i.codigo,
+                    cantidadPedida: Math.max(1, (i.stockMaximo ?? (i.stockMinimo ?? umbralStockBajo) * 2) - i.stock),
+                    precioUnitario: i.precioCompra || 0,
+                  }))
+                if (ocItems.length === 0) return
+                // Navigate to OC with pre-filled items via sessionStorage
+                sessionStorage.setItem("oc-draft-items", JSON.stringify(ocItems))
+                window.location.href = "/ordenes-compra?draft=true"
+              }}
+            >
+              <Truck className="h-4 w-4" />
+              Generar OC ({items.filter(i => !i.deletedAt && i.stock <= (i.stockMinimo ?? umbralStockBajo)).length})
+            </Button>
+          )}
           <ExportButton
             entity="inventario"
             filters={{
@@ -566,6 +605,29 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
           inventarioNombre={analyticsItem.nombre}
         />
       )}
+
+      <BarcodeScanner
+        open={showScanner}
+        onOpenChange={setShowScanner}
+        onResult={async (result) => {
+          if (result.found && result.item) {
+            setEditingItem(result.item)
+            setShowForm(true)
+          } else {
+            const crear = await confirm({
+              title: "Código no encontrado",
+              description: `El código "${result.code}" no está en el inventario. ¿Crear un nuevo producto con este código de barras?`,
+              confirmText: "Crear producto",
+              cancelText: "Cancelar",
+            })
+            if (crear) {
+              sessionStorage.setItem("new-item-barcode", result.code)
+              setEditingItem(null)
+              setShowForm(true)
+            }
+          }
+        }}
+      />
 
       {selectedKeys.length > 0 && viewMode === "list" && (
         <InventarioBulkBar

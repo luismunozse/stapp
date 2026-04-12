@@ -35,6 +35,7 @@ const inventarioSchema = z.object({
   stockMinimo: z.number().int().min(0).nullable().optional(),
   stockMaximo: z.number().int().min(0).nullable().optional(),
   puntoReorden: z.number().int().min(0).nullable().optional(),
+  barcode: z.string().nullable().optional(),
 })
 
 type InventarioFormData = z.infer<typeof inventarioSchema>
@@ -117,6 +118,7 @@ export function InventarioForm({
           stockMinimo: item.stockMinimo ?? null,
           stockMaximo: item.stockMaximo ?? null,
           puntoReorden: item.puntoReorden ?? null,
+          barcode: item.barcode ?? null,
         }
       : {
           nombre: "",
@@ -129,6 +131,7 @@ export function InventarioForm({
           stockMinimo: null,
           stockMaximo: null,
           puntoReorden: null,
+          barcode: null,
         },
   })
 
@@ -188,12 +191,27 @@ export function InventarioForm({
         stockMinimo: item.stockMinimo ?? null,
         stockMaximo: item.stockMaximo ?? null,
         puntoReorden: item.puntoReorden ?? null,
+        barcode: item.barcode ?? null,
       })
       setImagenPreview(item.imagenUrl || null)
       setPendingFile(null)
       setRemoveExistingImage(false)
     }
   }, [item, reset])
+
+  // Pick up barcode from scanner for new items
+  useEffect(() => {
+    if (!item) {
+      try {
+        const bc = sessionStorage.getItem("new-item-barcode")
+        if (bc) {
+          sessionStorage.removeItem("new-item-barcode")
+          setValue("barcode", bc)
+          setShowStockConfig(true)
+        }
+      } catch { /* ignore */ }
+    }
+  }, [item, setValue])
 
   const handleAddTipo = async () => {
     const nombre = newTipo.trim()
@@ -744,6 +762,16 @@ export function InventarioForm({
                     })}
                     min={0}
                     placeholder="Auto"
+                  />
+                </div>
+                <div className="col-span-3">
+                  <Label htmlFor="barcode">Código de Barras</Label>
+                  <Input
+                    id="barcode"
+                    {...register("barcode", {
+                      setValueAs: (v: string) => v === "" || v === null ? null : v,
+                    })}
+                    placeholder="Escanear o ingresar código de barras"
                   />
                 </div>
               </div>

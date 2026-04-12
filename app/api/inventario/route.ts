@@ -20,6 +20,7 @@ const inventarioSchema = z.object({
   stockMinimo: z.number().int().min(0).nullable().optional(),
   stockMaximo: z.number().int().min(0).nullable().optional(),
   puntoReorden: z.number().int().min(0).nullable().optional(),
+  barcode: z.string().nullable().optional(),
 })
 
 export async function GET(request: Request) {
@@ -153,6 +154,7 @@ export async function POST(request: Request) {
           stock_minimo: data.stockMinimo ?? null,
           stock_maximo: data.stockMaximo ?? null,
           punto_reorden: data.puntoReorden ?? null,
+          barcode: data.barcode ?? null,
           organization_id: organizationId!,
         })
         .select("*, proveedores:proveedor_id(id, nombre)")
