@@ -900,28 +900,32 @@ export function EngagementContent() {
                         </div>
                       </div>
 
-                      {/* Comentarios recientes */}
+                      {/* Todos los comentarios con scroll */}
                       {npsData.recentResponses.filter(r => r.comentario).length > 0 && (
                         <div className="mt-4 pt-4 border-t space-y-2">
-                          <p className="text-xs font-medium text-muted-foreground uppercase">Comentarios recientes</p>
-                          {npsData.recentResponses.filter(r => r.comentario).slice(0, 5).map(r => (
-                            <div key={r.id} className="p-2 bg-muted/50 rounded text-sm">
-                              <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                <Badge
-                                  variant={r.categoria === "PROMOTOR" ? "default" : r.categoria === "DETRACTOR" ? "destructive" : "secondary"}
-                                  className={`text-xs ${
-                                    r.categoria === "PROMOTOR" ? "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-200" :
-                                    r.categoria === "DETRACTOR" ? "" : "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200"
-                                  }`}
-                                >
-                                  {r.score}
-                                </Badge>
-                                <span className="text-xs font-medium">{r.organizacion}</span>
-                                <span className="text-xs text-muted-foreground">{timeAgo(r.createdAt)}</span>
+                          <p className="text-xs font-medium text-muted-foreground uppercase">
+                            Comentarios ({npsData.recentResponses.filter(r => r.comentario).length})
+                          </p>
+                          <div className="max-h-[400px] overflow-y-auto space-y-2 pr-1">
+                            {npsData.recentResponses.filter(r => r.comentario).map(r => (
+                              <div key={r.id} className="p-2 bg-muted/50 rounded text-sm">
+                                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                  <Badge
+                                    variant={r.categoria === "PROMOTOR" ? "default" : r.categoria === "DETRACTOR" ? "destructive" : "secondary"}
+                                    className={`text-xs ${
+                                      r.categoria === "PROMOTOR" ? "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-200" :
+                                      r.categoria === "DETRACTOR" ? "" : "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200"
+                                    }`}
+                                  >
+                                    {r.score}
+                                  </Badge>
+                                  <span className="text-xs font-medium">{r.organizacion}</span>
+                                  <span className="text-xs text-muted-foreground">{timeAgo(r.createdAt)}</span>
+                                </div>
+                                <p className="text-muted-foreground text-xs">{r.comentario}</p>
                               </div>
-                              <p className="text-muted-foreground text-xs">{r.comentario}</p>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                         </div>
                       )}
 

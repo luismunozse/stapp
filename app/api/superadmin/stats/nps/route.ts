@@ -17,21 +17,24 @@ export async function GET() {
       // Total respuestas all-time
       supabaseAdmin
         .from("nps_responses")
-        .select("score, categoria"),
+        .select("score, categoria")
+        .limit(10000),
 
       // Últimos 30 días
       supabaseAdmin
         .from("nps_responses")
         .select("score, categoria")
-        .gte("created_at", thirtyDaysAgo.toISOString()),
+        .gte("created_at", thirtyDaysAgo.toISOString())
+        .limit(10000),
 
       // Últimos 90 días
       supabaseAdmin
         .from("nps_responses")
         .select("score, categoria")
-        .gte("created_at", ninetyDaysAgo.toISOString()),
+        .gte("created_at", ninetyDaysAgo.toISOString())
+        .limit(10000),
 
-      // Últimas 20 respuestas con detalle
+      // Todas las respuestas con comentario + últimas 20 sin comentario
       supabaseAdmin
         .from("nps_responses")
         .select(`
@@ -40,7 +43,7 @@ export async function GET() {
           organizations (nombre, slug)
         `)
         .order("created_at", { ascending: false })
-        .limit(20),
+        .limit(200),
     ])
 
     const calcNPS = (data: Array<{ score: number; categoria: string }>) => {

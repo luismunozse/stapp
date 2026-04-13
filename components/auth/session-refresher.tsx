@@ -138,7 +138,7 @@ async function readPWATokens(): Promise<{ refreshToken: string | null; expiresAt
 /**
  * Limpiar tokens de ambos storages
  */
-async function clearPWATokens() {
+export async function clearPWATokens() {
   if (typeof window === "undefined") return
   localStorage.removeItem(PWA_REFRESH_TOKEN_KEY)
   localStorage.removeItem(PWA_REFRESH_TOKEN_EXPIRES_KEY)

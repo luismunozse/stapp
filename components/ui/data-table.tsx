@@ -82,6 +82,23 @@ export function DataTable<T>({
   renderExpandedRow,
   expandedKeys,
 }: DataTableProps<T>) {
+  // Scroll shadow: detect if table is scrollable and show right-edge gradient
+  const scrollRef = React.useRef<HTMLDivElement>(null)
+  const [canScrollRight, setCanScrollRight] = React.useState(false)
+
+  React.useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const check = () => {
+      setCanScrollRight(el.scrollWidth - el.scrollLeft - el.clientWidth > 1)
+    }
+    check()
+    el.addEventListener("scroll", check, { passive: true })
+    const ro = new ResizeObserver(check)
+    ro.observe(el)
+    return () => { el.removeEventListener("scroll", check); ro.disconnect() }
+  }, [data, columns])
+
   const handleSort = (key: string) => {
     if (onSort) {
       onSort(key)
@@ -120,9 +137,15 @@ export function DataTable<T>({
   return (
     <div className="space-y-4">
       <div className="rounded-lg border bg-card overflow-hidden relative">
-        {/* Scroll shadow gradient on right edge */}
-        <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-card to-transparent z-10 opacity-0 has-[::-webkit-scrollbar]:opacity-100 md:hidden" aria-hidden="true" />
-        <div className="overflow-x-auto scroll-smooth">
+        {/* Scroll shadow: visible gradient on right edge when content overflows */}
+        <div
+          className={cn(
+            "pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-card to-transparent z-10 transition-opacity duration-200",
+            canScrollRight ? "opacity-100" : "opacity-0"
+          )}
+          aria-hidden="true"
+        />
+        <div ref={scrollRef} className="overflow-x-auto scroll-smooth">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/50">

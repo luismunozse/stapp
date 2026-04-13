@@ -75,6 +75,14 @@ const estadoOptions = [
   { value: "ENTREGADO_SIN_REPARACION", label: "Retirado sin Reparación" },
 ]
 
+// Placeholder rotativo para el buscador de órdenes
+const SEARCH_PLACEHOLDERS = [
+  "Buscar por número: CEL040...",
+  "Buscar por cliente: Diego Alanis...",
+  "Buscar por dispositivo: Galaxy A55...",
+  "Buscar por teléfono: 351789...",
+]
+
 export function OrdenesList() {
   const router = useRouter()
   const { formatPrice, formatDate } = useCurrency()
@@ -83,6 +91,15 @@ export function OrdenesList() {
   const [showForm, setShowForm] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
   const { confirm, showError } = useModal()
+
+  // Placeholder rotativo cada 3 segundos
+  const [placeholderIdx, setPlaceholderIdx] = useState(0)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPlaceholderIdx((prev) => (prev + 1) % SEARCH_PLACEHOLDERS.length)
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [])
 
   // Bulk actions
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -479,7 +496,7 @@ export function OrdenesList() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar orden, cliente, dispositivo..."
+              placeholder={SEARCH_PLACEHOLDERS[placeholderIdx]}
               value={search}
               onChange={(e) => handleSearchChange(e.target.value)}
               className="pl-10 w-full sm:max-w-sm"

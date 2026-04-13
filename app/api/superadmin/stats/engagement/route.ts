@@ -44,29 +44,34 @@ export async function GET() {
         .gte("canceled_at", thirtyDaysAgo.toISOString()),
 
       // 4 - Órdenes últimos 30 días (actividad real)
+      // Limit alto para evitar truncamiento silencioso por PostgREST (default 1000)
       supabaseAdmin
         .from("ordenes_servicio")
         .select("organization_id, estado, created_at, updated_at")
-        .gte("created_at", thirtyDaysAgo.toISOString()),
+        .gte("created_at", thirtyDaysAgo.toISOString())
+        .limit(10000),
 
       // 5 - Ventas últimos 30 días
       supabaseAdmin
         .from("ventas")
         .select("organization_id, created_at")
-        .gte("created_at", thirtyDaysAgo.toISOString()),
+        .gte("created_at", thirtyDaysAgo.toISOString())
+        .limit(10000),
 
       // 6 - Clientes nuevos últimos 30 días
       supabaseAdmin
         .from("clientes")
         .select("organization_id, created_at")
-        .gte("created_at", thirtyDaysAgo.toISOString()),
+        .gte("created_at", thirtyDaysAgo.toISOString())
+        .limit(10000),
 
       // 7 - Engagement pre-calculado (si existe, como complemento)
       supabaseAdmin
         .from("organization_engagement")
         .select("organization_id, engagement_score, fecha, ordenes_creadas, ventas_realizadas, usuarios_activos")
         .gte("fecha", thirtyDaysAgo.toISOString().split("T")[0])
-        .order("fecha", { ascending: false }),
+        .order("fecha", { ascending: false })
+        .limit(10000),
 
       // 8 - Trials vencidos sin conversión (últimos 30 días)
       supabaseAdmin

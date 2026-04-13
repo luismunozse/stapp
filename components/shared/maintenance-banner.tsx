@@ -39,17 +39,17 @@ export function MaintenanceBanner({ message, severity = "WARNING" }: Maintenance
   const dismissKey = `${BANNER_DISMISS_KEY_PREFIX}${message}`
 
   useEffect(() => {
-    // Dismiss persiste por toda la sesión del navegador (sessionStorage)
-    // Al cerrar pestaña/navegador se resetea automáticamente
-    const dismissedInSession = sessionStorage.getItem(dismissKey)
-    if (dismissedInSession && severity !== "CRITICAL") {
+    // Dismiss persiste en localStorage para que no reaparezca hasta que
+    // el superadmin cambie el mensaje (el key incluye hash del mensaje)
+    const dismissed = localStorage.getItem(dismissKey)
+    if (dismissed && severity !== "CRITICAL") {
       setIsDismissed(true)
     }
     setMounted(true)
   }, [dismissKey, severity])
 
   const handleDismiss = () => {
-    sessionStorage.setItem(dismissKey, "1")
+    localStorage.setItem(dismissKey, "1")
     setIsDismissed(true)
   }
 

@@ -241,6 +241,8 @@ export function Navbar() {
 
   // Logout que redirige al login del mismo dominio/subdominio
   const handleLogout = async () => {
+    const { clearPWATokens } = await import("@/components/auth/session-refresher")
+    await clearPWATokens()
     await signOut({ redirect: false })
     if (isNativePlatform()) {
       // En la app nativa, volver a la pantalla de seleccion de empresa

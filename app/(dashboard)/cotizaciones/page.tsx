@@ -391,18 +391,42 @@ export default function CotizacionesPage() {
 
       {/* List */}
       {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        <div className="space-y-3">
+          {[...Array(3)].map((_, i) => (
+            <Card key={`skeleton-${i}`}>
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="h-5 w-28 bg-muted animate-pulse rounded" />
+                  <div className="h-5 w-20 bg-muted animate-pulse rounded" />
+                </div>
+                <div className="h-4 w-48 bg-muted animate-pulse rounded" />
+                <div className="h-3 w-36 bg-muted animate-pulse rounded" />
+              </CardContent>
+            </Card>
+          ))}
         </div>
       ) : cotizaciones.length === 0 ? (
         <Card>
-          <CardContent className="text-center py-12">
-            <Receipt className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-            <p className="text-muted-foreground">
+          <CardContent className="flex flex-col items-center justify-center py-12 px-4">
+            <div className="flex items-center justify-center w-16 h-16 mb-4 rounded-full bg-muted">
+              <Receipt className="h-8 w-8 text-muted-foreground" />
+            </div>
+            <h3 className="text-lg font-semibold mb-2">
               {!debouncedSearch && estadoFilter === "TODOS"
-                ? "No hay cotizaciones. Crea la primera."
-                : "No hay cotizaciones con ese filtro."}
+                ? "Todavía no hay cotizaciones"
+                : "Sin resultados"}
+            </h3>
+            <p className="text-sm text-muted-foreground text-center max-w-sm mb-4">
+              {!debouncedSearch && estadoFilter === "TODOS"
+                ? "Creá tu primera cotización para enviar presupuestos a tus clientes."
+                : "No se encontraron cotizaciones con los filtros aplicados."}
             </p>
+            {!debouncedSearch && estadoFilter === "TODOS" && (
+              <Button onClick={() => setShowForm(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Nueva Cotización
+              </Button>
+            )}
           </CardContent>
         </Card>
       ) : (
