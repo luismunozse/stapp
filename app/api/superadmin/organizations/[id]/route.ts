@@ -187,6 +187,105 @@ export async function GET(
   }
 }
 
+/**
+ * DELETE /api/superadmin/organizations/[id]
+ * Elimina una organización y todos sus datos (CASCADE en DB).
+ * También limpia archivos de storage.
+ */
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { error: authError, email } = await requireSuperadmin()
+    if (authError) return authError
+
+    const { id } = await params
+
+    // Verificar que la organización existe
+    const { data: org, error: orgError } = await supabaseAdmin
+      .from("organizations")
+      .select("id, nombre, slug")
+      .eq("id", id)
+      .single()
+
+    if (orgError || !org) {
+      return NextResponse.json(
+        { error: "Organización no encontrada" },
+        { status: 404 }
+      )
+    }
+
+    // Limpiar archivos de storage (best effort, no bloquea el delete)
+    const bucketsToClean = [
+      STORAGE_BUCKETS.FOTOS_ORDENES,
+      STORAGE_BUCKETS.FOTOS_INVENTARIO,
+      STORAGE_BUCKETS.LOGOS,
+      STORAGE_BUCKETS.FIRMAS,
+      STORAGE_BUCKETS.AVATARS,
+      STORAGE_BUCKETS.COMPROBANTES_GASTOS,
+    ]
+
+    await Promise.allSettled(
+      bucketsToClean.map(async (bucket) => {
+        try {
+          const { data: files } = await supabaseAdmin.storage
+            .from(bucket)
+            .list(id, { limit: 1000 })
+          if (files && files.length > 0) {
+            const paths = files.map((f) => `${id}/${f.name}`)
+            await supabaseAdmin.storage.from(bucket).remove(paths)
+          }
+        } catch {
+          // Storage cleanup is best-effort
+        }
+      })
+    )
+
+    // Eliminar organización (CASCADE borra users, orders, subscriptions, etc.)
+    const { error: deleteError } = await supabaseAdmin
+      .from("organizations")
+      .delete()
+      .eq("id", id)
+
+    if (deleteError) {
+      console.error("Error deleting organization:", deleteError)
+      return NextResponse.json(
+        { error: "Error al eliminar la organización" },
+        { status: 500 }
+      )
+    }
+
+    // Registrar en audit_logs (la org ya no existe, log sin org_id)
+    try {
+      await supabaseAdmin.from("audit_logs").insert({
+        organization_id: null,
+        user_id: null,
+        action: "DELETE",
+        entity: "organizations",
+        entity_id: id,
+        changes: {
+          deleted_org: { id, nombre: org.nombre, slug: org.slug },
+          superadmin_email: email,
+        },
+      })
+    } catch {
+      // best effort
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: `Organización "${org.nombre}" eliminada permanentemente`,
+    })
+  } catch (error) {
+    console.error("Error in DELETE /api/superadmin/organizations/[id]:", error)
+    return NextResponse.json(
+      { error: "Error interno del servidor" },
+      { status: 500 }
+    )
+  }
+}
+
 const updateOrgSchema = z.object({
   nombre: z.string().min(1).optional(),
   nombre_mostrar: z.string().nullable().optional(),

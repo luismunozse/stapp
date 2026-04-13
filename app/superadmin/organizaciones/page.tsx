@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DataTable, Column } from "@/components/ui/data-table"
-import { Search, Eye, Power, PowerOff, Building2, Loader2, Download, CheckCircle, XCircle, X, Phone, AlertTriangle, Users, CreditCard, CalendarPlus, TrendingUp, ExternalLink } from "lucide-react"
+import { Search, Eye, Power, PowerOff, Building2, Loader2, Download, CheckCircle, XCircle, X, Phone, AlertTriangle, Users, CreditCard, CalendarPlus, TrendingUp, ExternalLink, Trash2 } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -45,6 +45,9 @@ export default function OrganizacionesPage() {
   const [togglingId, setTogglingId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [confirmDeactivateOpen, setConfirmDeactivateOpen] = useState(false)
+  const [confirmDeleteOrg, setConfirmDeleteOrg] = useState<{ id: string; nombre: string } | null>(null)
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Sorting — persistido en URL query params
@@ -188,6 +191,36 @@ export default function OrganizacionesPage() {
       errorMessage: "Error al cambiar estado en lote",
       onSuccess: () => {
         setSelectedIds([])
+        fetchOrganizations()
+      },
+    })
+  }
+
+  const handleDeleteOrg = async () => {
+    if (!confirmDeleteOrg) return
+    setDeletingId(confirmDeleteOrg.id)
+    await bulkMutate(`/api/superadmin/organizations/${confirmDeleteOrg.id}`, {
+      method: "DELETE",
+      successMessage: `"${confirmDeleteOrg.nombre}" eliminada permanentemente`,
+      errorMessage: "Error al eliminar organización",
+      onSuccess: () => {
+        setConfirmDeleteOrg(null)
+        setDeletingId(null)
+        fetchOrganizations()
+      },
+    })
+    setDeletingId(null)
+  }
+
+  const handleBulkDelete = async () => {
+    await bulkMutate("/api/superadmin/organizations/bulk-delete", {
+      method: "POST",
+      body: { ids: selectedIds },
+      successMessage: `${selectedIds.length} organizaciones eliminadas`,
+      errorMessage: "Error al eliminar organizaciones",
+      onSuccess: () => {
+        setSelectedIds([])
+        setConfirmBulkDelete(false)
         fetchOrganizations()
       },
     })
@@ -364,6 +397,19 @@ export default function OrganizacionesPage() {
               <PowerOff className="h-4 w-4 text-red-500" />
             ) : (
               <Power className="h-4 w-4 text-green-500" />
+            )}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setConfirmDeleteOrg({ id: org.id, nombre: org.nombre })}
+            title="Eliminar permanentemente"
+            disabled={deletingId === org.id}
+          >
+            {deletingId === org.id ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Trash2 className="h-4 w-4 text-red-500" />
             )}
           </Button>
         </div>
@@ -572,6 +618,15 @@ export default function OrganizacionesPage() {
                 </Button>
                 <Button
                   size="sm"
+                  variant="destructive"
+                  onClick={() => setConfirmBulkDelete(true)}
+                  disabled={bulkLoading}
+                >
+                  <Trash2 className="h-4 w-4 mr-1.5" />
+                  Eliminar seleccionados
+                </Button>
+                <Button
+                  size="sm"
                   variant="ghost"
                   onClick={() => setSelectedIds([])}
                   disabled={bulkLoading}
@@ -644,6 +699,77 @@ export default function OrganizacionesPage() {
                 <>
                   <XCircle className="h-4 w-4 mr-2" />
                   Desactivar {selectedIds.length}
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Confirmar eliminación individual */}
+      <Dialog open={!!confirmDeleteOrg} onOpenChange={(open) => !open && setConfirmDeleteOrg(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-500" />
+              Eliminar organización
+            </DialogTitle>
+            <DialogDescription>
+              Estás por eliminar permanentemente <strong>&quot;{confirmDeleteOrg?.nombre}&quot;</strong> y todos sus datos
+              (usuarios, órdenes, clientes, inventario, suscripciones, pagos).
+              <br /><br />
+              <strong className="text-red-600">Esta acción NO se puede revertir.</strong>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-3 justify-end pt-2">
+            <Button variant="outline" onClick={() => setConfirmDeleteOrg(null)}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteOrg} disabled={!!deletingId}>
+              {deletingId ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Eliminando...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Eliminar permanentemente
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Confirmar eliminación masiva */}
+      <Dialog open={confirmBulkDelete} onOpenChange={setConfirmBulkDelete}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-500" />
+              Eliminar {selectedIds.length} organizaciones
+            </DialogTitle>
+            <DialogDescription>
+              Estás por eliminar permanentemente {selectedIds.length} organización{selectedIds.length > 1 ? "es" : ""} y todos sus datos.
+              <br /><br />
+              <strong className="text-red-600">Esta acción NO se puede revertir.</strong>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-3 justify-end pt-2">
+            <Button variant="outline" onClick={() => setConfirmBulkDelete(false)} disabled={bulkLoading}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={handleBulkDelete} disabled={bulkLoading}>
+              {bulkLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Eliminando...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Eliminar {selectedIds.length} permanentemente
                 </>
               )}
             </Button>
