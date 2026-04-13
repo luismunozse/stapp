@@ -321,9 +321,10 @@ export async function hasValidAccess(organizationId: string): Promise<{
     return { hasAccess: false, reason: "trial_expired", trialInfo }
   }
 
-  // Si está en trial y expiró = bloqueado
+  // Si está en trial y expiró → migrar a plan Free automáticamente
   if (trialInfo.isTrialExpired) {
-    return { hasAccess: false, reason: "trial_expired", trialInfo }
+    await downgradeToFree(organizationId)
+    return { hasAccess: true, trialInfo }
   }
 
   // Si el status es CANCELED = bloqueado
@@ -338,6 +339,39 @@ export async function hasValidAccess(organizationId: string): Promise<{
 
   // TRIALING (no expirado) o ACTIVE = tiene acceso
   return { hasAccess: true, trialInfo }
+}
+
+/**
+ * Migra la suscripción de una organización al plan Free.
+ * Se llama automáticamente cuando el trial de Profesional expira.
+ */
+async function downgradeToFree(organizationId: string): Promise<void> {
+  try {
+    // Buscar el plan Free activo
+    const { data: freePlan } = await supabaseAdmin
+      .from("plans")
+      .select("id")
+      .eq("slug", "free")
+      .eq("activo", true)
+      .single()
+
+    if (!freePlan) {
+      console.error("[Subscriptions] No active Free plan found for downgrade")
+      return
+    }
+
+    // Actualizar la suscripción al plan Free con status ACTIVE
+    await supabaseAdmin
+      .from("subscriptions")
+      .update({
+        plan_id: freePlan.id,
+        status: "ACTIVE",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("organization_id", organizationId)
+  } catch (error) {
+    console.error("[Subscriptions] Error downgrading to Free:", error)
+  }
 }
 
 // Verificar si la organización tiene plan Premium (o está en trial activo)

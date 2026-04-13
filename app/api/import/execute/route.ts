@@ -5,6 +5,7 @@ import { parseCSV, parseExcel } from "@/lib/csv-parser"
 import { validateClienteRow, validateInventarioRow } from "@/lib/csv-validator"
 import { uploadImportFile, base64ToBuffer } from "@/lib/storage"
 import { enforcePlanLimit } from "@/lib/plan-limits"
+import { hasPlanFeature } from "@/lib/subscriptions"
 import { z } from "zod"
 
 const executeSchema = z.object({
@@ -18,6 +19,14 @@ export async function POST(request: Request) {
   try {
     const { error, organizationId, userId } = await requireAuth()
     if (error) return error
+
+    const hasImport = await hasPlanFeature(organizationId!, "import_export")
+    if (!hasImport) {
+      return NextResponse.json(
+        { error: "Importación requiere el plan Profesional", code: "PREMIUM_REQUIRED" },
+        { status: 403 }
+      )
+    }
 
     const body = await request.json()
     const data = executeSchema.parse(body)

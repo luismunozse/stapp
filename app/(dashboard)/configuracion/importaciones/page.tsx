@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth"
 import { redirect } from "next/navigation"
 import { ImportHistory } from "@/components/import/import-history"
+import { hasPlanFeature } from "@/lib/subscriptions"
 import Link from "next/link"
 import { ChevronLeft } from "lucide-react"
 
@@ -13,6 +14,11 @@ export default async function ImportacionesPage() {
 
   if (session.user?.role !== "ADMIN") {
     redirect("/dashboard")
+  }
+
+  const hasImport = await hasPlanFeature(session.user.organizationId, "import_export")
+  if (!hasImport) {
+    redirect("/configuracion/billing?upgrade=importaciones")
   }
 
   return (

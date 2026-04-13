@@ -4,7 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { uploadOrderPhoto, deleteFile, base64ToBuffer } from "@/lib/storage"
 import { formatFoto } from "@/lib/db-utils"
 import { enforcePlanLimit } from "@/lib/plan-limits"
-import { updateStorageUsage } from "@/lib/subscriptions"
+import { updateStorageUsage, hasPlanFeature } from "@/lib/subscriptions"
 import { z } from "zod"
 
 const fotoSchema = z.object({
@@ -74,6 +74,15 @@ export async function POST(
   try {
     const { error, organizationId } = await requireAuth()
     if (error) return error
+
+    // Verificar feature fotos_etapa
+    const hasFotos = await hasPlanFeature(organizationId!, "fotos_etapa")
+    if (!hasFotos) {
+      return NextResponse.json(
+        { error: "Fotos por etapa requiere el plan Profesional", code: "PREMIUM_REQUIRED" },
+        { status: 403 }
+      )
+    }
 
     const { id: ordenId } = await params
 

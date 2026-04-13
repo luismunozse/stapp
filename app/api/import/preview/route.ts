@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { parseCSV, parseExcel } from "@/lib/csv-parser"
 import { validateClienteRow, validateInventarioRow, validateCSVHeaders } from "@/lib/csv-validator"
+import { hasPlanFeature } from "@/lib/subscriptions"
 import { z } from "zod"
 
 const previewSchema = z.object({
@@ -14,6 +15,14 @@ export async function POST(request: Request) {
   try {
     const { error, organizationId } = await requireAuth()
     if (error) return error
+
+    const hasImport = await hasPlanFeature(organizationId!, "import_export")
+    if (!hasImport) {
+      return NextResponse.json(
+        { error: "Importación requiere el plan Profesional", code: "PREMIUM_REQUIRED" },
+        { status: 403 }
+      )
+    }
 
     const body = await request.json()
     const data = previewSchema.parse(body)

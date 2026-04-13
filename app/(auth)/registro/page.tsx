@@ -267,7 +267,9 @@ function RegistroForm() {
       })
 
       // Éxito - redirigir al login del subdominio con mensaje de verificación
+      // Pequeño delay para que el evento de conversión se envíe antes de redirigir
       const targetUrl = `https://${cleanSlug}.${rootDomain}/login?registered=true&verify=true`
+      await new Promise((resolve) => setTimeout(resolve, 500))
       window.location.href = targetUrl
     } catch (err) {
       console.error("Error:", err)
