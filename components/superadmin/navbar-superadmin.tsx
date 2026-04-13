@@ -81,6 +81,8 @@ export function NavbarSuperadmin({ userEmail }: NavbarSuperadminProps) {
   }, [mobileMenuOpen])
 
   const handleLogout = async () => {
+    const { clearPWATokens } = await import("@/components/auth/session-refresher")
+    await clearPWATokens()
     await signOut({ redirect: false })
     window.location.href = "/superadmin-login"
   }

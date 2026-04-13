@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase"
 
-export type PlanSlug = "free" | "emprendedor" | "profesional" | "taller-plus" | string
+export type PlanSlug = "free" | "profesional" | string
 
 export interface SubscriptionInfo {
   id: string
@@ -137,10 +137,10 @@ export async function getUsageInfo(organizationId: string): Promise<UsageInfo> {
 
 // Límites por defecto del plan FREE (cuando no hay suscripción)
 const FREE_PLAN_LIMITS: Record<string, number> = {
-  ordenes: 50,
-  tecnicos: 2,
-  vendedores: 2,
-  clientes: 100,
+  ordenes: 15,
+  tecnicos: 1,
+  vendedores: 1,
+  clientes: 30,
   storageMb: 100,
 }
 
@@ -211,8 +211,7 @@ export async function checkPlanLimit(
 
   // Sugerencia de upgrade dinámica según el plan actual
   const currentSlug = subscription?.planSlug || "free"
-  const upgradeTarget =
-    currentSlug === "emprendedor" ? "Profesional" : "un plan superior"
+  const upgradeTarget = "Profesional"
 
   return {
     allowed,

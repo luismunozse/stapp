@@ -50,23 +50,6 @@ interface PlanCardData {
 
 const planCards: PlanCardData[] = [
   {
-    slug: "emprendedor",
-    name: "Emprendedor",
-    description: "Para talleres que recién arrancan",
-    priceMultiplier: 0.55,
-    features: [
-      { text: "30 órdenes/mes", included: true },
-      { text: "1 técnico", included: true },
-      { text: "Clientes ilimitados", included: true },
-      { text: "1GB almacenamiento", included: true },
-      { text: "Punto de venta", included: true },
-      { text: "Reportes avanzados", included: false },
-      { text: "Notificaciones WhatsApp", included: false },
-      { text: "Portal de seguimiento", included: false },
-    ],
-    ctaVariant: "outline",
-  },
-  {
     slug: "profesional",
     name: "Profesional",
     description: "Todo lo que tu taller necesita",
@@ -83,20 +66,6 @@ const planCards: PlanCardData[] = [
       { text: "Portal de seguimiento", included: true },
     ],
     ctaVariant: "default",
-  },
-  {
-    slug: "taller-plus",
-    name: "Taller+",
-    description: "Para talleres con alto volumen",
-    priceMultiplier: 1.8,
-    features: [
-      { text: "Todo de Profesional", included: true },
-      { text: "20GB almacenamiento", included: true },
-      { text: "Soporte dedicado", included: true },
-      { text: "Onboarding personalizado", included: true },
-      { text: "Backup descargable", included: true },
-    ],
-    ctaVariant: "outline",
   },
 ]
 
@@ -119,7 +88,7 @@ export function SubscriptionRequiredView({
   // Map de slug → { monthly, yearly } en ARS. Se llena desde la API.
   const [allPrices, setAllPrices] = useState<Record<string, { monthly: number; yearly: number }>>({})
   // Base: precio Profesional (para fallback con multiplier)
-  const [baseProfesionalPrice, setBaseProfesionalPrice] = useState({ monthly: 19999, yearly: 191990 })
+  const [baseProfesionalPrice, setBaseProfesionalPrice] = useState({ monthly: 19999, yearly: 149999 })
 
   const message = hasAccess ? null : reasonMessages[reason]
   const Icon = message?.icon || CheckCircle2
@@ -161,18 +130,13 @@ export function SubscriptionRequiredView({
   }
 
   const handleSelectPlan = (slug: string) => {
-    if (slug === "taller-plus") {
-      window.open(
-        "https://wa.me/5491112345678?text=Hola,%20quiero%20activar%20el%20plan%20Taller%2B",
-        "_blank"
-      )
-      return
-    }
     setSelectedPlanSlug(slug)
     setUpgradeModalOpen(true)
   }
 
   const handleLogout = async () => {
+    const { clearPWATokens } = await import("@/components/auth/session-refresher")
+    await clearPWATokens()
     await signOut({ redirect: false })
     window.location.href = "/login"
   }
@@ -220,7 +184,7 @@ export function SubscriptionRequiredView({
         )}
 
         {/* 3-tier plan grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto items-start">
+        <div className="grid grid-cols-1 gap-6 max-w-md mx-auto items-start">
           {planCards.map((card) => {
             const priceArs = getPlanPrice(card)
             return (
@@ -268,14 +232,8 @@ export function SubscriptionRequiredView({
                     variant={card.ctaVariant}
                     onClick={() => handleSelectPlan(card.slug)}
                   >
-                    {card.slug === "taller-plus" ? (
-                      "Contactar Ventas"
-                    ) : (
-                      <>
-                        <CreditCard className="h-4 w-4 mr-2" />
-                        Activar {card.name}
-                      </>
-                    )}
+                    <CreditCard className="h-4 w-4 mr-2" />
+                    Activar {card.name}
                   </Button>
 
                   <ul className="space-y-2 border-t pt-4 flex-1">

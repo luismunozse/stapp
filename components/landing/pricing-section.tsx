@@ -31,24 +31,26 @@ interface Plan {
 
 const plans: Plan[] = [
   {
-    name: "Emprendedor",
-    slug: "emprendedor",
-    description: "Para talleres que recién arrancan",
-    priceMultiplier: 0.55,
+    name: "Free",
+    slug: "free",
+    description: "Para arrancar y conocer STApp",
+    priceMultiplier: 0,
     features: [
-      { text: "Hasta 30 órdenes/mes", included: true },
+      { text: "Hasta 15 órdenes/mes", included: true },
       { text: "1 técnico", included: true },
-      { text: "Clientes ilimitados", included: true },
+      { text: "Hasta 30 clientes", included: true },
       { text: "Inventario básico", included: true },
-      { text: "1GB almacenamiento", included: true },
+      { text: "100MB almacenamiento", included: true },
       { text: "Soporte por email", included: true },
       { text: "Punto de venta", included: false },
       { text: "Portal de seguimiento", included: false },
       { text: "Reportes avanzados", included: false },
       { text: "Notificaciones WhatsApp", included: false },
+      { text: "Logo personalizado", included: false },
+      { text: "Cotizaciones online", included: false },
     ],
     cta: "Comenzar Gratis",
-    ctaHref: "/registro?plan=emprendedor",
+    ctaHref: "/registro",
     ctaVariant: "outline",
   },
   {
@@ -74,27 +76,9 @@ const plans: Plan[] = [
       { text: "Tu logo en presupuestos", included: true, highlight: "Tu marca" },
       { text: "Soporte prioritario", included: true },
     ],
-    cta: "Comenzar Gratis",
+    cta: "Probar 30 días gratis",
     ctaHref: "/registro?plan=profesional",
     ctaVariant: "default",
-  },
-  {
-    name: "Taller+",
-    slug: "taller-plus",
-    description: "Para talleres con alto volumen",
-    priceMultiplier: 1.8,
-    features: [
-      { text: "Todo de Profesional", included: true },
-      { text: "20GB almacenamiento", included: true },
-      { text: "Soporte dedicado por WhatsApp", included: true },
-      { text: "Onboarding personalizado", included: true },
-      { text: "Backup diario descargable", included: true },
-      { text: "Múltiples sucursales", included: true, highlight: "Próximamente" },
-      { text: "Acceso API", included: true, highlight: "Próximamente" },
-    ],
-    cta: "Contactar Ventas",
-    ctaHref: "https://wa.me/5491112345678?text=Hola,%20me%20interesa%20el%20plan%20Taller%2B",
-    ctaVariant: "outline",
   },
 ]
 
@@ -126,6 +110,9 @@ export function PricingSection({ prices, allPlans }: PricingSectionProps) {
   // Helper: obtener precio de un plan.
   // Si hay allPlans en la DB, usa el precio real. Si no, fallback a multiplier.
   const getPlanPrice = (plan: Plan): { ars: number; usd: number } => {
+    // Plan gratuito siempre $0
+    if (plan.priceMultiplier === 0) return { ars: 0, usd: 0 }
+
     if (allPlans && allPlans[plan.slug]) {
       const dbPlan = allPlans[plan.slug]
       const ars = annual
@@ -162,7 +149,7 @@ export function PricingSection({ prices, allPlans }: PricingSectionProps) {
               Elegí el plan que mejor se adapte a tu taller
             </h2>
             <p className="text-lg text-muted-foreground">
-              30 días gratis en todos los planes. Sin tarjeta de crédito.
+              30 días gratis con acceso total al plan Profesional. Sin tarjeta de crédito.
             </p>
           </m.div>
 
@@ -195,7 +182,7 @@ export function PricingSection({ prices, allPlans }: PricingSectionProps) {
           </div>
 
           {/* Plans grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto items-start">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto items-start">
             {plans.map((plan, index) => {
               const { ars: priceArs, usd: priceUsd } = getPlanPrice(plan)
 

@@ -24,40 +24,34 @@ export type AllPlansPrices = Record<string, PlanDetails>
 
 // Valores de fallback en caso de que la DB no esté disponible
 const FALLBACK_PRICES: PlanPrices = {
-  ars: { monthly: 19999, yearly: 191990 },
-  usd: { monthly: 14, yearly: 134 },
+  ars: { monthly: 19999, yearly: 149999 },
+  usd: { monthly: 14, yearly: 107 },
 }
 
 const FALLBACK_ALL_PLANS: AllPlansPrices = {
-  emprendedor: {
-    id: "fallback-emprendedor",
-    slug: "emprendedor",
-    nombre: "Emprendedor",
-    tierOrder: 1,
-    ars: { monthly: 10999, yearly: 105590 },
-    usd: { monthly: 8, yearly: 77 },
+  free: {
+    id: "fallback-free",
+    slug: "free",
+    nombre: "Free",
+    tierOrder: 0,
+    ars: { monthly: 0, yearly: 0 },
+    usd: { monthly: 0, yearly: 0 },
     limits: {
-      ordenes: 500,
+      ordenes: 15,
       tecnicos: 1,
-      clientes: null,
-      vendedores: 2,
-      storageMb: 1000,
+      clientes: 30,
+      vendedores: 1,
+      storageMb: 100,
     },
-    featureFlags: {
-      pos_sales: true,
-      fotos_etapa: true,
-      garantias: true,
-      firma_digital: true,
-      cuenta_corriente: true,
-    },
+    featureFlags: {},
   },
   profesional: {
     id: "fallback-profesional",
     slug: "profesional",
     nombre: "Profesional",
     tierOrder: 2,
-    ars: { monthly: 19999, yearly: 191990 },
-    usd: { monthly: 14, yearly: 134 },
+    ars: { monthly: 19999, yearly: 149999 },
+    usd: { monthly: 14, yearly: 107 },
     limits: {
       ordenes: null,
       tecnicos: null,

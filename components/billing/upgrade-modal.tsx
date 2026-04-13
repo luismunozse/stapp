@@ -27,8 +27,8 @@ export function UpgradeModal({ open, onClose, planSlug = "profesional" }: Upgrad
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("mercadopago")
   const [loading, setLoading] = useState(false)
   const [planName, setPlanName] = useState("Profesional")
-  const [pricesArs, setPricesArs] = useState({ MONTHLY: 19999, YEARLY: 191990 })
-  const [pricesUsd, setPricesUsd] = useState({ MONTHLY: 14, YEARLY: 134 })
+  const [pricesArs, setPricesArs] = useState({ MONTHLY: 19999, YEARLY: 149999 })
+  const [pricesUsd, setPricesUsd] = useState({ MONTHLY: 14, YEARLY: 107 })
 
   useEffect(() => {
     if (!open) return

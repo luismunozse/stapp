@@ -152,7 +152,7 @@ export function CurrentPlan({ subscription, onUpgrade, onManage, onCancel }: Cur
           {!isPremium && !isTrialing && (
             <Button onClick={onUpgrade} size="sm">
               <Crown className="h-4 w-4 mr-2" />
-              Actualizar a Premium
+              Actualizar a Profesional
             </Button>
           )}
           {isPremium && isPaid && !isCanceled && (

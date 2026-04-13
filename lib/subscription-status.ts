@@ -67,7 +67,7 @@ export type EffectivePlanLabel = "Premium" | "Free (trial)" | "Trial expirado" |
 /**
  * Devuelve la etiqueta a mostrar en la columna "Plan" del panel superadmin.
  *
- * - Premium pagado: nombre del plan (ej: "Profesional", "Emprendedor")
+ * - Premium pagado: nombre del plan (ej: "Profesional")
  * - Trial activo: "Plan (trial)" (ej: "Profesional (trial)")
  * - Trial expirado: "Trial expirado"
  * - Sin suscripción: "Free"

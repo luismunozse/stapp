@@ -7,7 +7,7 @@ import { PricingSection } from "@/components/landing/pricing-section"
 import { FAQ } from "@/components/landing/faq"
 import { Footer } from "@/components/landing/footer"
 import { WhatsAppButton } from "@/components/landing/whatsapp-button"
-import { getPremiumPrices } from "@/lib/pricing"
+import { getPremiumPrices, getAllPlanPrices } from "@/lib/pricing"
 import { FAQPageJsonLd, BreadcrumbJsonLd } from "@/components/seo/json-ld"
 
 export const metadata: Metadata = {
@@ -39,22 +39,27 @@ const pricingFaqs = [
   {
     question: "¿Cuánto cuesta STApp?",
     answer:
-      "STApp ofrece una prueba gratuita de 30 días con todas las funciones incluidas, sin necesidad de tarjeta de crédito. Después podés elegir el plan Premium mensual o anual con descuento. Aceptamos MercadoPago (pesos argentinos) y pagos internacionales en dólares.",
+      "STApp tiene un plan Free gratuito para siempre con funciones básicas, y un plan Profesional con todas las funciones desbloqueadas. Al registrarte, tenés 30 días gratis con acceso total al plan Profesional. Aceptamos MercadoPago (pesos argentinos) y pagos internacionales en dólares.",
   },
   {
     question: "¿Puedo probar STApp gratis?",
     answer:
-      "Sí, tenés 30 días completamente gratis con acceso a todas las funciones premium. No se requiere tarjeta de crédito ni compromiso. Si no te convence, simplemente no hacés nada.",
+      "Sí, al registrarte tenés 30 días con acceso completo al plan Profesional, sin tarjeta de crédito. Si no te convence, tu cuenta pasa automáticamente al plan Free sin perder tus datos.",
   },
   {
-    question: "¿Qué incluye el plan Premium?",
+    question: "¿Qué incluye el plan Profesional?",
     answer:
-      "El plan Premium incluye: órdenes de trabajo ilimitadas, gestión de clientes, control de inventario con alertas, facturación electrónica, notificaciones por WhatsApp, reportes avanzados, técnicos y vendedores ilimitados, app móvil Android, y soporte prioritario.",
+      "El plan Profesional incluye: órdenes de trabajo ilimitadas, gestión de clientes, control de inventario con alertas, punto de venta con garantías, cotizaciones con aprobación online, notificaciones por WhatsApp, portal de seguimiento para clientes, 15+ reportes avanzados, técnicos y vendedores ilimitados, modo kiosco, tu logo en presupuestos, y soporte prioritario.",
+  },
+  {
+    question: "¿Qué incluye el plan Free?",
+    answer:
+      "El plan Free incluye hasta 15 órdenes por mes, 1 técnico, hasta 30 clientes, inventario básico y 100MB de almacenamiento. Es ideal para conocer STApp y para talleres muy pequeños.",
   },
   {
     question: "¿Puedo cancelar en cualquier momento?",
     answer:
-      "Sí, podés cancelar tu suscripción cuando quieras sin penalidades ni cargos ocultos. Mantendrás el acceso hasta el final del período ya pagado.",
+      "Sí, podés cancelar tu suscripción cuando quieras sin penalidades ni cargos ocultos. Tu cuenta pasa al plan Free y mantenés todos tus datos.",
   },
   {
     question: "¿Aceptan pagos desde otros países?",
@@ -64,7 +69,7 @@ const pricingFaqs = [
 ]
 
 export default async function PreciosPage() {
-  const [session, prices] = await Promise.all([auth(), getPremiumPrices()])
+  const [session, prices, allPlans] = await Promise.all([auth(), getPremiumPrices(), getAllPlanPrices()])
 
   if (session) {
     const { data: org } = await supabaseAdmin
@@ -92,7 +97,7 @@ export default async function PreciosPage() {
       <main className="min-h-screen">
         <NavbarLanding />
         <div className="pt-20">
-          <PricingSection prices={prices} />
+          <PricingSection prices={prices} allPlans={allPlans} />
           <FAQ faqs={pricingFaqs} />
         </div>
         <Footer />
