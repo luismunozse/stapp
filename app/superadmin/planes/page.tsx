@@ -232,6 +232,33 @@ export default function PlanesPage() {
                 </div>
               </div>
 
+              {/* Feature Flags */}
+              {plan.feature_flags && Object.keys(plan.feature_flags).length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-sm font-medium">Feature Flags:</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {Object.entries(plan.feature_flags)
+                      .filter(([, v]) => v === true)
+                      .slice(0, 5)
+                      .map(([key]) => (
+                        <Badge key={key} variant="secondary" className="text-[10px] font-normal">
+                          {key.replace(/_/g, " ")}
+                        </Badge>
+                      ))}
+                    {Object.values(plan.feature_flags).filter(Boolean).length > 5 && (
+                      <Badge variant="outline" className="text-[10px]">
+                        +{Object.values(plan.feature_flags).filter(Boolean).length - 5}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              )}
+              {(!plan.feature_flags || Object.values(plan.feature_flags || {}).filter(Boolean).length === 0) && (
+                <div className="text-xs text-muted-foreground italic">
+                  Sin feature flags activas
+                </div>
+              )}
+
               {/* Features */}
               {plan.features && plan.features.length > 0 && (
                 <div className="space-y-2">

@@ -67,11 +67,14 @@ export default function EditPlanPage({ params }: PageProps) {
           descripcion: plan.descripcion,
           precio_mensual: plan.precio_mensual,
           precio_anual: plan.precio_anual,
+          precio_mensual_usd: plan.precio_mensual_usd,
+          precio_anual_usd: plan.precio_anual_usd,
           limite_ordenes: plan.limite_ordenes,
           limite_tecnicos: plan.limite_tecnicos,
           limite_clientes: plan.limite_clientes,
           limite_storage_mb: plan.limite_storage_mb,
           features: plan.features || [],
+          feature_flags: plan.feature_flags || {},
         }}
       />
     </div>

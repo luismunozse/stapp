@@ -86,16 +86,20 @@ export interface SubscriptionWithPlan {
 export interface Plan {
   id: string
   nombre: string
+  slug: string
   tipo: PlanType
   descripcion: string | null
   precio_mensual: number
   precio_anual: number
+  precio_mensual_usd: number
+  precio_anual_usd: number
   limite_ordenes: number | null
   limite_tecnicos: number | null
   limite_clientes: number | null
   limite_vendedores: number | null
   limite_storage_mb: number | null
   features: string[]
+  feature_flags: Record<string, boolean>
   activo: boolean
 }
 
@@ -297,12 +301,15 @@ export interface UpdatePlanInput {
   descripcion?: string | null
   precio_mensual?: number
   precio_anual?: number
+  precio_mensual_usd?: number
+  precio_anual_usd?: number
   limite_ordenes?: number | null
   limite_tecnicos?: number | null
   limite_clientes?: number | null
   limite_vendedores?: number | null
   limite_storage_mb?: number | null
   features?: string[]
+  feature_flags?: Record<string, boolean>
 }
 
 // ========================================

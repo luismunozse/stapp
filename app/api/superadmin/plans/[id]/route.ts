@@ -10,12 +10,15 @@ const updatePlanSchema = z.object({
   descripcion: z.string().max(500).nullable().optional(),
   precio_mensual: z.number().min(0).optional(),
   precio_anual: z.number().min(0).optional(),
+  precio_mensual_usd: z.number().min(0).optional(),
+  precio_anual_usd: z.number().min(0).optional(),
   limite_ordenes: z.number().positive().nullable().optional(),
   limite_tecnicos: z.number().positive().nullable().optional(),
   limite_clientes: z.number().positive().nullable().optional(),
   limite_vendedores: z.number().positive().nullable().optional(),
   limite_storage_mb: z.number().positive().nullable().optional(),
   features: z.array(z.string()).optional(),
+  feature_flags: z.record(z.boolean()).optional(),
 })
 
 interface RouteParams {
