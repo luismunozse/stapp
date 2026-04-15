@@ -17,6 +17,7 @@ export async function GET() {
         id,
         nombre,
         email,
+        porcentaje_comision,
         ordenes_servicio:ordenes_servicio!tecnico_id (
           id,
           estado
@@ -43,6 +44,7 @@ export async function GET() {
         id: tecnico.id,
         nombre: tecnico.nombre,
         email: tecnico.email,
+        porcentajeComision: Number(tecnico.porcentaje_comision ?? 0),
         ordenesActivas,
         ordenesCompletadas,
       }
@@ -70,11 +72,19 @@ export async function POST(request: Request) {
     if (limitError) return limitError
 
     const body = await request.json()
-    const { nombre, email, password } = body
+    const { nombre, email, password, porcentajeComision } = body
 
     if (!nombre || !email || !password) {
       return NextResponse.json(
         { error: "Nombre, email y contraseña son requeridos" },
+        { status: 400 }
+      )
+    }
+
+    const porcentajeNum = Number(porcentajeComision ?? 0)
+    if (!Number.isFinite(porcentajeNum) || porcentajeNum < 0 || porcentajeNum > 100) {
+      return NextResponse.json(
+        { error: "El porcentaje de comisión debe estar entre 0 y 100" },
         { status: 400 }
       )
     }
@@ -104,8 +114,9 @@ export async function POST(request: Request) {
         rol: "TECNICO",
         organization_id: organizationId!,
         email_verified: true,
+        porcentaje_comision: porcentajeNum,
       })
-      .select("id, nombre, email")
+      .select("id, nombre, email, porcentaje_comision")
       .single()
 
     if (dbError) {

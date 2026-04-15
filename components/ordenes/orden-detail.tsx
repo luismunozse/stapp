@@ -58,6 +58,7 @@ import { NotificationHistory } from "@/components/ordenes/notification-history"
 import { OrdenEstadoCard } from "@/components/ordenes/orden-estado-card"
 import { OrdenTecnicoCard } from "@/components/ordenes/orden-tecnico-card"
 import { OrdenCostosCard } from "@/components/ordenes/orden-costos-card"
+import { OrdenComisionCard } from "@/components/ordenes/orden-comision-card"
 import { OrdenRepuestosTab } from "@/components/ordenes/orden-repuestos-tab"
 import { CobrarOrdenDialog } from "@/components/ordenes/cobrar-orden-dialog"
 import { PatternDisplay } from "@/components/ui/pattern-display"
@@ -1070,6 +1071,19 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             onCobrar={() => setShowCobrarDialog(true)}
             readOnly={userRole === "TECNICO"}
           />
+
+          {isAdmin && (
+            <OrdenComisionCard
+              ordenId={orden.id}
+              tecnicoId={orden.tecnicoId}
+              costoFinal={orden.costoFinal}
+              repuestos={(orden as any).repuestos || []}
+              porcentajeComision={(orden as any).porcentajeComision}
+              comisionPagada={(orden as any).comisionPagada}
+              fechaPagoComision={(orden as any).fechaPagoComision}
+              onUpdateField={handleUpdateField}
+            />
+          )}
         </div>
       </div>
 
@@ -1115,6 +1129,18 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           onCobrar={() => setShowCobrarDialog(true)}
           readOnly={userRole === "TECNICO"}
         />
+        {isAdmin && (
+          <OrdenComisionCard
+            ordenId={orden.id}
+            tecnicoId={orden.tecnicoId}
+            costoFinal={orden.costoFinal}
+            repuestos={(orden as any).repuestos || []}
+            porcentajeComision={(orden as any).porcentajeComision}
+            comisionPagada={(orden as any).comisionPagada}
+            fechaPagoComision={(orden as any).fechaPagoComision}
+            onUpdateField={handleUpdateField}
+          />
+        )}
       </div>
 
       {/* Diálogo de Cobro */}

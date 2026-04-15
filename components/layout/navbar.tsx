@@ -34,6 +34,7 @@ import {
   ChevronDown,
   Wallet,
   Truck,
+  Percent,
 } from "lucide-react"
 import { useState, useEffect, useRef, useCallback } from "react"
 import { cn } from "@/lib/utils"
@@ -66,6 +67,7 @@ const navItems: NavItem[] = [
   { href: "/ordenes", label: "Órdenes", icon: ClipboardList },
   { href: "/clientes", label: "Clientes", icon: Users, roles: ["ADMIN", "VENDEDOR", "TECNICO"] },
   { href: "/tecnicos", label: "Técnicos", icon: Wrench, roles: ["ADMIN"] },
+  { href: "/comisiones", label: "Comisiones", icon: Percent, roles: ["ADMIN"] },
   { href: "/vendedores", label: "Vendedores", icon: TrendingUp, roles: ["ADMIN"] },
   { href: "/ventas", label: "Ventas", icon: ShoppingCart, roles: ["ADMIN", "VENDEDOR"] },
   { href: "/pos", label: "POS", icon: Store, roles: ["ADMIN", "VENDEDOR"] },
@@ -114,6 +116,7 @@ const navSections: NavSection[] = [
     label: "Más",
     items: [
       { href: "/tecnicos", label: "Técnicos", icon: Wrench, roles: ["ADMIN"] },
+      { href: "/comisiones", label: "Comisiones", icon: Percent, roles: ["ADMIN"] },
       { href: "/vendedores", label: "Vendedores", icon: TrendingUp, roles: ["ADMIN"] },
       { href: "/ordenes-compra", label: "Compras", icon: Truck, roles: ["ADMIN"] },
       { href: "/emails", label: "Emails", icon: Mail, roles: ["ADMIN"] },

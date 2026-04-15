@@ -25,6 +25,7 @@ interface Tecnico {
   id: string
   nombre: string
   email: string
+  porcentajeComision?: number
   ordenesActivas: number
   ordenesCompletadas: number
 }
@@ -204,6 +205,12 @@ export function TecnicosList() {
                     </div>
                     <Badge className="bg-green-100 text-green-800 hover:bg-green-100 text-[10px] sm:text-xs">
                       {tecnico.ordenesCompletadas}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs sm:text-sm text-muted-foreground">% Comisión</span>
+                    <Badge variant="outline" className="text-[10px] sm:text-xs">
+                      {Number(tecnico.porcentajeComision ?? 0).toFixed(2)}%
                     </Badge>
                   </div>
                   <div className="pt-2 border-t">

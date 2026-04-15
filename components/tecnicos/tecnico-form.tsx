@@ -20,6 +20,7 @@ interface TecnicoFormProps {
     id: string
     nombre: string
     email: string
+    porcentajeComision?: number
   } | null
   onSuccess: () => void
 }
@@ -28,6 +29,9 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
   const [nombre, setNombre] = useState(tecnico?.nombre || "")
   const [email, setEmail] = useState(tecnico?.email || "")
   const [password, setPassword] = useState("")
+  const [porcentajeComision, setPorcentajeComision] = useState<string>(
+    tecnico?.porcentajeComision != null ? String(tecnico.porcentajeComision) : "0"
+  )
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
@@ -43,7 +47,15 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
       const url = isEditing ? `/api/tecnicos/${tecnico.id}` : "/api/tecnicos"
       const method = isEditing ? "PUT" : "POST"
 
-      const body: { nombre: string; email: string; password?: string } = { nombre, email }
+      const porcNum = parseFloat(porcentajeComision) || 0
+      if (porcNum < 0 || porcNum > 100) {
+        throw new Error("El porcentaje de comisión debe estar entre 0 y 100")
+      }
+      const body: { nombre: string; email: string; password?: string; porcentajeComision: number } = {
+        nombre,
+        email,
+        porcentajeComision: porcNum,
+      }
       if (password) body.password = password
 
       const res = await fetch(url, {
@@ -71,6 +83,7 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
     setNombre("")
     setEmail("")
     setPassword("")
+    setPorcentajeComision("0")
     setError("")
   }
 
@@ -80,6 +93,9 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
     } else if (tecnico) {
       setNombre(tecnico.nombre)
       setEmail(tecnico.email)
+      setPorcentajeComision(
+        tecnico.porcentajeComision != null ? String(tecnico.porcentajeComision) : "0"
+      )
     }
     onOpenChange(newOpen)
   }
@@ -150,6 +166,22 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
                 )}
               </Button>
             </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="porcentajeComision">% Comisión sobre ganancia</Label>
+            <Input
+              id="porcentajeComision"
+              type="number"
+              step="0.01"
+              min="0"
+              max="100"
+              value={porcentajeComision}
+              onChange={(e) => setPorcentajeComision(e.target.value)}
+              placeholder="0"
+            />
+            <p className="text-xs text-muted-foreground">
+              Se aplica sobre (costo final − repuestos) de cada orden.
+            </p>
           </div>
           <div className="flex justify-end gap-2 pt-4">
             <Button

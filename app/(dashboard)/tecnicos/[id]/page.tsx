@@ -18,6 +18,7 @@ import {
   Trash2,
 } from "lucide-react"
 import { TecnicoForm } from "@/components/tecnicos/tecnico-form"
+import { TecnicoComisiones } from "@/components/tecnicos/tecnico-comisiones"
 import { useModal } from "@/contexts/modal-context"
 
 interface Orden {
@@ -33,6 +34,7 @@ interface TecnicoDetalle {
   id: string
   nombre: string
   email: string
+  porcentajeComision?: number
   createdAt: string
   ordenesActivas: number
   ordenesCompletadas: number
@@ -201,6 +203,12 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
               <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground shrink-0" />
               <span className="text-xs sm:text-sm">Desde {formatDate(tecnico.createdAt)}</span>
             </div>
+            <div className="flex items-center justify-between pt-2 border-t">
+              <span className="text-xs sm:text-sm text-muted-foreground">% Comisión</span>
+              <Badge variant="outline" className="text-[10px] sm:text-xs">
+                {Number(tecnico.porcentajeComision ?? 0).toFixed(2)}%
+              </Badge>
+            </div>
           </CardContent>
         </Card>
 
@@ -230,6 +238,23 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
           </CardContent>
         </Card>
       </div>
+
+      {/* Comisiones del técnico */}
+      {isAdmin && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base sm:text-lg font-semibold">Comisiones</h2>
+            <span className="text-xs text-muted-foreground">
+              % Comisión base aplicada a ganancia (cobrado − repuestos)
+            </span>
+          </div>
+          <TecnicoComisiones
+            tecnicoId={tecnico.id}
+            tecnicoNombre={tecnico.nombre}
+            porcentajeDefault={tecnico.porcentajeComision}
+          />
+        </div>
+      )}
 
       {/* Historial */}
       <Card>

@@ -20,6 +20,7 @@ export async function GET(
         id,
         nombre,
         email,
+        porcentaje_comision,
         created_at,
         ordenes_servicio:ordenes_servicio!tecnico_id (
           id,
@@ -51,6 +52,7 @@ export async function GET(
       id: tecnico.id,
       nombre: tecnico.nombre,
       email: tecnico.email,
+      porcentajeComision: Number(tecnico.porcentaje_comision ?? 0),
       createdAt: tecnico.created_at,
       ordenesActivas: ordenesActivas.length,
       ordenesCompletadas: ordenesCompletadas.length,
@@ -86,7 +88,17 @@ export async function PUT(
 
     const { id } = await params
     const body = await request.json()
-    const { nombre, email, password } = body
+    const { nombre, email, password, porcentajeComision } = body
+
+    if (porcentajeComision !== undefined) {
+      const p = Number(porcentajeComision)
+      if (!Number.isFinite(p) || p < 0 || p > 100) {
+        return NextResponse.json(
+          { error: "El porcentaje de comisión debe estar entre 0 y 100" },
+          { status: 400 }
+        )
+      }
+    }
 
     // Verificar que el técnico existe
     const { data: tecnico, error: fetchError } = await supabaseAdmin
@@ -121,12 +133,13 @@ export async function PUT(
     if (nombre) updateData.nombre = nombre
     if (email) updateData.email = email
     if (password) updateData.password = await bcrypt.hash(password, 10)
+    if (porcentajeComision !== undefined) updateData.porcentaje_comision = Number(porcentajeComision)
 
     const { data: updatedTecnico, error: updateError } = await supabaseAdmin
       .from("users")
       .update(updateData)
       .eq("id", id)
-      .select("id, nombre, email")
+      .select("id, nombre, email, porcentaje_comision")
       .single()
 
     if (updateError) {

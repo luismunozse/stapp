@@ -34,11 +34,9 @@ export function BarcodeScanner({ open, onOpenChange, onResult }: Props) {
       const res = await fetch(`/api/inventario/barcode?code=${encodeURIComponent(code.trim())}`)
       if (res.ok) {
         const data = await res.json()
+        onOpenChange(false)
+        setCode("")
         onResult(data)
-        if (data.found) {
-          onOpenChange(false)
-          setCode("")
-        }
       }
     } catch {
       // ignore

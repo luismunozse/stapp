@@ -73,6 +73,9 @@ export function formatOrden(orden: any) {
     fechaIngreso: orden.fecha_ingreso,
     fechaPrometida: orden.fecha_prometida,
     fechaCompletado: orden.fecha_completado,
+    porcentajeComision: orden.porcentaje_comision != null ? Number(orden.porcentaje_comision) : null,
+    comisionPagada: !!orden.comision_pagada,
+    fechaPagoComision: orden.fecha_pago_comision || null,
     observaciones: orden.observaciones,
     diagnostico: orden.diagnostico,
     // Relaciones

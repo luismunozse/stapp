@@ -31,6 +31,7 @@ const updateOrdenSchema = z.object({
   diagnostico: z.string().optional().nullable(),
   problemaReportado: z.string().min(1, "El problema reportado no puede estar vacío").optional(),
   telefonoContacto: z.string().optional().nullable(),
+  porcentajeComision: z.number().min(0).max(100).optional().nullable(),
 })
 
 export async function GET(
@@ -161,10 +162,11 @@ export async function PUT(
     }
 
     // Validar que el técnico exista y tenga rol TECNICO
+    let porcentajeComisionFromTecnico: number | null = null
     if (data.tecnicoId) {
       const { data: tecnico } = await supabaseAdmin
         .from("users")
-        .select("id, rol")
+        .select("id, rol, porcentaje_comision")
         .eq("id", data.tecnicoId)
         .eq("organization_id", organizationId!)
         .single()
@@ -175,13 +177,25 @@ export async function PUT(
       if (tecnico.rol !== "TECNICO" && tecnico.rol !== "ADMIN") {
         return NextResponse.json({ error: "El usuario seleccionado no tiene rol de técnico" }, { status: 400 })
       }
+      porcentajeComisionFromTecnico = Number(tecnico.porcentaje_comision ?? 0)
     }
 
     // Preparar datos para update
     const updateData: Record<string, any> = {}
 
     if (data.estado !== undefined) updateData.estado = data.estado
-    if (data.tecnicoId !== undefined) updateData.tecnico_id = data.tecnicoId
+    if (data.tecnicoId !== undefined) {
+      updateData.tecnico_id = data.tecnicoId
+      // Al (re)asignar técnico, copiar su % por defecto si no vino explícito
+      if (data.tecnicoId && data.porcentajeComision === undefined) {
+        updateData.porcentaje_comision = porcentajeComisionFromTecnico
+      }
+      // Al desasignar, limpiar snapshot
+      if (!data.tecnicoId && data.porcentajeComision === undefined) {
+        updateData.porcentaje_comision = null
+      }
+    }
+    if (data.porcentajeComision !== undefined) updateData.porcentaje_comision = data.porcentajeComision
     if (data.presupuesto !== undefined) updateData.presupuesto = data.presupuesto
     if (data.costoFinal !== undefined) updateData.costo_final = data.costoFinal
     if (data.observaciones !== undefined) updateData.observaciones = data.observaciones
