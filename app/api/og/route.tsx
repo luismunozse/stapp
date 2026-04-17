@@ -123,7 +123,7 @@ export async function GET(request: NextRequest) {
             style={{
               display: "flex",
               gap: "32px",
-              marginTop: "40px",
+              marginTop: "32px",
               color: "rgba(255,255,255,0.6)",
               fontSize: "18px",
             }}
@@ -132,6 +132,25 @@ export async function GET(request: NextRequest) {
             <span>\u2022 Inventario</span>
             <span>\u2022 Clientes</span>
             <span>\u2022 Reportes</span>
+          </div>
+
+          {/* CTA Button */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              marginTop: "36px",
+              padding: "18px 44px",
+              background: "linear-gradient(135deg, #3b82f6, #2563eb)",
+              borderRadius: "999px",
+              color: "white",
+              fontSize: "26px",
+              fontWeight: "bold",
+              boxShadow: "0 10px 30px rgba(59,130,246,0.45)",
+            }}
+          >
+            Prob\u00e1 gratis 30 d\u00edas \u2192
           </div>
 
           {/* URL */}

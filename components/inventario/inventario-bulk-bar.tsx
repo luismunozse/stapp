@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Archive, Tag, Percent, X } from "lucide-react"
+import { Archive, Tag, Percent, X, Printer } from "lucide-react"
 import { useModal } from "@/contexts/modal-context"
 
 interface InventarioBulkBarProps {
@@ -14,6 +14,7 @@ interface InventarioBulkBarProps {
   categoriasDisponibles: string[]
   onClear: () => void
   onSuccess: () => void
+  onGenerateLabels?: () => void
 }
 
 export function InventarioBulkBar({
@@ -22,6 +23,7 @@ export function InventarioBulkBar({
   categoriasDisponibles,
   onClear,
   onSuccess,
+  onGenerateLabels,
 }: InventarioBulkBarProps) {
   const { confirm, showError, showSuccess } = useModal()
   const [pending, setPending] = useState(false)
@@ -163,6 +165,14 @@ export function InventarioBulkBar({
             </Button>
           </PopoverContent>
         </Popover>
+
+        {/* Etiquetas */}
+        {onGenerateLabels && (
+          <Button size="sm" variant="outline" onClick={onGenerateLabels} disabled={pending}>
+            <Printer className="mr-2 h-4 w-4" />
+            Etiquetas
+          </Button>
+        )}
 
         {/* Archivar */}
         <Button size="sm" variant="outline" onClick={handleArchive} disabled={pending} className="text-destructive hover:text-destructive">

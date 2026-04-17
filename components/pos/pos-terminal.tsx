@@ -26,6 +26,7 @@ import { PosTicketShare } from "./pos-ticket-share"
 import { usePosShortcuts } from "./use-pos-shortcuts"
 import { useBarcodeScanner } from "./use-barcode-scanner"
 import { useThermalPrinter } from "./use-thermal-printer"
+import { BarcodeScanner } from "@/components/inventario/barcode-scanner"
 import { useCurrency } from "@/contexts/currency-context"
 import { generateTicketCommands } from "@/lib/escpos"
 import type {
@@ -56,7 +57,7 @@ type MobileTab = "products" | "cart"
 export function PosTerminal() {
   const router = useRouter()
   const { formatPrice } = useCurrency()
-  const { confirm, showSuccess } = useModal()
+  const { confirm, showSuccess, showError } = useModal()
   const searchRef = useRef<PosProductSearchRef>(null)
 
   // Cart state
@@ -67,6 +68,7 @@ export function PosTerminal() {
   // UI state
   const [checkoutOpen, setCheckoutOpen] = useState(false)
   const [heldSalesOpen, setHeldSalesOpen] = useState(false)
+  const [scannerOpen, setScannerOpen] = useState(false)
   const [heldSales, setHeldSales] = useState<HeldSale[]>([])
   const [showShortcuts, setShowShortcuts] = useState(false)
   const [successData, setSuccessData] = useState<any>(null)
@@ -377,22 +379,37 @@ export function PosTerminal() {
   // --- Barcode scanner ---
   const handleBarcodeScan = useCallback(
     async (barcode: string) => {
+      const code = barcode.trim()
+      if (!code) return
       try {
-        const res = await fetch(`/api/inventario/search?q=${encodeURIComponent(barcode)}&limit=1`)
+        const res = await fetch(`/api/inventario/barcode?code=${encodeURIComponent(code)}`)
+        if (!res.ok) return
         const data = await res.json()
-        if (Array.isArray(data) && data.length > 0) {
-          addProduct(data[0])
+        if (data.found && data.item) {
+          if ((data.item.stock ?? 0) <= 0) {
+            await showError(`"${data.item.nombre}" sin stock disponible`)
+            return
+          }
+          addProduct({
+            id: data.item.id,
+            codigo: data.item.codigo,
+            nombre: data.item.nombre,
+            stock: data.item.stock,
+            precioVenta: data.item.precioVenta,
+          })
+        } else {
+          await showError(`Código "${code}" no encontrado en inventario`)
         }
       } catch {
-        // ignore
+        await showError("Error al buscar el código de barras")
       }
     },
-    [addProduct]
+    [addProduct, showError]
   )
 
   useBarcodeScanner({
     onScan: handleBarcodeScan,
-    enabled: !checkoutOpen && !heldSalesOpen && !successData,
+    enabled: !checkoutOpen && !heldSalesOpen && !successData && !scannerOpen,
   })
 
   // --- Keyboard shortcuts ---
@@ -532,7 +549,7 @@ export function PosTerminal() {
       <div className="hidden lg:flex flex-1 overflow-hidden">
         {/* Left: Product search */}
         <div className="w-[60%] border-r overflow-hidden flex flex-col">
-          <PosProductSearch ref={searchRef} onAddProduct={addProduct} onAddManualProduct={addManualProduct} />
+          <PosProductSearch ref={searchRef} onAddProduct={addProduct} onAddManualProduct={addManualProduct} onOpenScanner={() => setScannerOpen(true)} />
         </div>
         {/* Right: Cart */}
         <div className="w-[40%] overflow-hidden flex flex-col">
@@ -559,7 +576,7 @@ export function PosTerminal() {
         {/* Content area */}
         <div className="flex-1 overflow-hidden">
           {mobileTab === "products" ? (
-            <PosProductSearch ref={searchRef} onAddProduct={addProduct} onAddManualProduct={addManualProduct} />
+            <PosProductSearch ref={searchRef} onAddProduct={addProduct} onAddManualProduct={addManualProduct} onOpenScanner={() => setScannerOpen(true)} />
           ) : (
             <PosCart
               items={cartItems}
@@ -658,6 +675,14 @@ export function PosTerminal() {
         heldSales={heldSales}
         onRecall={recallSale}
         onDelete={deleteHeldSale}
+      />
+
+      <BarcodeScanner
+        open={scannerOpen}
+        onOpenChange={setScannerOpen}
+        onResult={(result) => {
+          handleBarcodeScan(result.code)
+        }}
       />
 
       {/* ===== Success overlay ===== */}

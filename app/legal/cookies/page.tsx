@@ -3,6 +3,9 @@ import { Metadata } from "next"
 export const metadata: Metadata = {
   title: "Política de Cookies | STApp",
   description: "Política de cookies y tecnologías de seguimiento de STApp",
+  alternates: {
+    canonical: "https://stapp.com.ar/legal/cookies",
+  },
 }
 
 export default function CookiesPage() {

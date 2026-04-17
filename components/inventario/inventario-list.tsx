@@ -24,6 +24,7 @@ import {
   TrendingUp,
   Truck,
   ScanLine,
+  Tag,
 } from "lucide-react"
 import { InventarioForm } from "./inventario-form"
 import { InventarioStats } from "./inventario-stats"
@@ -32,6 +33,7 @@ import { QuickStockAdjust } from "./quick-stock-adjust"
 import { MovimientosHistorial } from "./movimientos-historial"
 import { InventarioAnalyticsModal } from "./inventario-analytics-modal"
 import { BarcodeScanner } from "./barcode-scanner"
+import { LabelsPrintDialog } from "./labels-print-dialog"
 import { ImportModal } from "@/components/import/import-modal"
 import { ExportButton } from "@/components/export/export-button"
 import { useCurrency } from "@/contexts/currency-context"
@@ -81,6 +83,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   const [movimientosItem, setMovimientosItem] = useState<{ id: string; nombre: string } | null>(null)
   const [analyticsItem, setAnalyticsItem] = useState<{ id: string; nombre: string } | null>(null)
   const [showScanner, setShowScanner] = useState(false)
+  const [labelItems, setLabelItems] = useState<Inventario[] | null>(null)
   const [includeArchived, setIncludeArchived] = useState(false)
   // Default a "list": es la vista que escala con catálogos grandes.
   // La preferencia se persiste en localStorage.
@@ -376,6 +379,15 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                 <Button
                   variant="ghost"
                   size="icon"
+                  className="h-7 w-7 text-muted-foreground"
+                  title="Imprimir etiqueta"
+                  onClick={(e) => { e.stopPropagation(); setLabelItems([item]) }}
+                >
+                  <Tag className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
                   className="h-7 w-7"
                   onClick={(e) => { e.stopPropagation(); setEditingItem(item); setShowForm(true) }}
                 >
@@ -593,6 +605,20 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
         />
       )}
 
+      {labelItems && (
+        <LabelsPrintDialog
+          open={!!labelItems}
+          onOpenChange={(open) => { if (!open) setLabelItems(null) }}
+          items={labelItems.map(i => ({
+            id: i.id,
+            nombre: i.nombre,
+            codigo: i.codigo,
+            barcode: i.barcode,
+            precioVenta: i.precioVenta,
+          }))}
+        />
+      )}
+
       <BarcodeScanner
         open={showScanner}
         onOpenChange={setShowScanner}
@@ -623,6 +649,10 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
           categoriasDisponibles={categoriasDisponibles}
           onClear={() => setSelectedKeys([])}
           onSuccess={() => setRefreshKey((k) => k + 1)}
+          onGenerateLabels={() => {
+            const selected = items.filter((i) => selectedKeys.includes(i.id))
+            if (selected.length > 0) setLabelItems(selected)
+          }}
         />
       )}
 

@@ -3,6 +3,9 @@ import { Metadata } from "next"
 export const metadata: Metadata = {
   title: "Política de Privacidad | STApp",
   description: "Política de privacidad y protección de datos de STApp",
+  alternates: {
+    canonical: "https://stapp.com.ar/legal/privacidad",
+  },
 }
 
 export default function PrivacidadPage() {

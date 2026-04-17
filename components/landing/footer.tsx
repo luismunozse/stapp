@@ -7,13 +7,21 @@ export function Footer() {
 
   const footerLinks = {
     producto: [
-      { name: "Características", href: "#features" },
-      { name: "Precios", href: "#pricing" },
-      { name: "FAQ", href: "#faq" },
+      { name: "Características", href: "/#features" },
+      { name: "Precios", href: "/precios" },
+      { name: "Casos de uso", href: "/casos-de-uso" },
+      { name: "FAQ", href: "/#faq" },
+    ],
+    empresa: [
+      { name: "Sobre nosotros", href: "/empresa/sobre-nosotros" },
+      { name: "Blog", href: "/empresa/blog" },
+      { name: "Trabajá con nosotros", href: "/empresa/trabaja-con-nosotros" },
+      { name: "Contacto", href: "/empresa/contacto" },
     ],
     soporte: [
       { name: "Centro de ayuda", href: "/ayuda" },
-      { name: "Contacto", href: "/empresa/contacto" },
+      { name: "Manual de uso", href: "/ayuda/manual" },
+      { name: "Descargar app Android", href: "/descargar/android" },
       { name: "WhatsApp", href: "https://wa.me/5491100000000" },
     ],
     comunidad: [
@@ -30,7 +38,7 @@ export function Footer() {
   return (
     <footer className="bg-muted dark:bg-card border-t">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-8">
           {/* Brand */}
           <div className="lg:col-span-2">
             <Link href="/" className="flex items-center mb-6">
@@ -48,22 +56,22 @@ export function Footer() {
             <ul className="space-y-3">
               {footerLinks.producto.map((link) => (
                 <li key={link.name}>
-                  <a
+                  <Link
                     href={link.href}
                     className="text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm"
                   >
                     {link.name}
-                  </a>
+                  </Link>
                 </li>
               ))}
             </ul>
           </div>
 
-          {/* Soporte */}
+          {/* Empresa */}
           <div>
-            <h3 className="text-foreground font-semibold mb-4">Soporte</h3>
+            <h3 className="text-foreground font-semibold mb-4">Empresa</h3>
             <ul className="space-y-3">
-              {footerLinks.soporte.map((link) => (
+              {footerLinks.empresa.map((link) => (
                 <li key={link.name}>
                   <Link
                     href={link.href}
@@ -73,6 +81,37 @@ export function Footer() {
                   </Link>
                 </li>
               ))}
+            </ul>
+          </div>
+
+          {/* Soporte */}
+          <div>
+            <h3 className="text-foreground font-semibold mb-4">Soporte</h3>
+            <ul className="space-y-3">
+              {footerLinks.soporte.map((link) => {
+                const isExternal = link.href.startsWith("http")
+                return (
+                  <li key={link.name}>
+                    {isExternal ? (
+                      <a
+                        href={link.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm"
+                      >
+                        {link.name}
+                      </a>
+                    ) : (
+                      <Link
+                        href={link.href}
+                        className="text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm"
+                      >
+                        {link.name}
+                      </Link>
+                    )}
+                  </li>
+                )
+              })}
             </ul>
           </div>
 

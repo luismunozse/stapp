@@ -19,6 +19,7 @@ import {
 } from "lucide-react"
 import { TecnicoForm } from "@/components/tecnicos/tecnico-form"
 import { TecnicoComisiones } from "@/components/tecnicos/tecnico-comisiones"
+import { TecnicoInsights } from "@/components/tecnicos/tecnico-insights"
 import { useModal } from "@/contexts/modal-context"
 
 interface Orden {
@@ -238,6 +239,9 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
           </CardContent>
         </Card>
       </div>
+
+      {/* Insights operativos */}
+      {isAdmin && <TecnicoInsights tecnicoId={tecnico.id} />}
 
       {/* Comisiones del técnico */}
       {isAdmin && (

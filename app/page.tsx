@@ -7,6 +7,8 @@ import { Hero } from "@/components/landing/hero"
 import { Features } from "@/components/landing/features"
 import { PricingSection } from "@/components/landing/pricing-section"
 import { Comparison } from "@/components/landing/comparison"
+import { UseCasesGrid } from "@/components/landing/use-cases-grid"
+import { BlogTeaser } from "@/components/landing/blog-teaser"
 import { FAQ } from "@/components/landing/faq"
 import { DownloadApp } from "@/components/landing/download-app"
 import { Footer } from "@/components/landing/footer"
@@ -48,9 +50,9 @@ export const metadata: Metadata = {
     "gestión financiera taller",
   ],
   openGraph: {
-    title: "STApp - El Mejor Software para Talleres de Reparación de Celulares",
+    title: "STApp - Software de Gestión para Talleres de Celulares",
     description:
-      "Gestión completa para tu taller: órdenes, caja, inventario, ventas, finanzas, leads, cotizaciones, reportes y asistente IA. Usado por +500 talleres en Argentina. 30 días gratis.",
+      "Gestión completa de tu taller: órdenes, inventario, ventas y finanzas. +500 talleres en Argentina. Probá 30 días gratis.",
     url: "https://stapp.com.ar",
   },
   alternates: {
@@ -172,7 +174,9 @@ export default async function Home() {
         <Hero />
         <Features />
         <Comparison />
+        <UseCasesGrid />
         <PricingSection prices={prices} allPlans={allPlans} />
+        <BlogTeaser />
         <FAQ faqs={faqData} />
         <DownloadApp />
         <Footer />

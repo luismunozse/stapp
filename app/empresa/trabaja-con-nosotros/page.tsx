@@ -17,6 +17,9 @@ import {
 export const metadata = {
   title: "Trabaja con Nosotros - STApp",
   description: "Únete a nuestro equipo y ayúdanos a transformar la gestión de talleres de reparación.",
+  alternates: {
+    canonical: "https://stapp.com.ar/empresa/trabaja-con-nosotros",
+  },
 }
 
 const openPositions = [

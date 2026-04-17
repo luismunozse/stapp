@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Search, Package, Loader2, Plus, Barcode, PenLine, X } from "lucide-react"
+import { Search, Package, Loader2, Plus, Barcode, PenLine, X, ScanLine } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import type { InventarioResult } from "./pos-types"
 
@@ -15,6 +15,7 @@ interface ManualProduct {
 interface PosProductSearchProps {
   onAddProduct: (product: InventarioResult) => void
   onAddManualProduct: (product: ManualProduct) => void
+  onOpenScanner?: () => void
 }
 
 export interface PosProductSearchRef {
@@ -22,7 +23,7 @@ export interface PosProductSearchRef {
 }
 
 export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearchProps>(
-  function PosProductSearch({ onAddProduct, onAddManualProduct }, ref) {
+  function PosProductSearch({ onAddProduct, onAddManualProduct, onOpenScanner }, ref) {
     const { formatPrice } = useCurrency()
     const inputRef = useRef<HTMLInputElement>(null)
     const manualNameRef = useRef<HTMLInputElement>(null)
@@ -143,6 +144,18 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
                 <Barcode className="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground/40" />
               )}
             </div>
+            {/* Scan barcode button (manual trigger — useful on touch/mobile) */}
+            {onOpenScanner && (
+              <Button
+                variant="outline"
+                className="h-12 shrink-0 gap-1.5 px-3"
+                onClick={onOpenScanner}
+                title="Escanear código de barras"
+              >
+                <ScanLine className="h-4 w-4" />
+                <span className="hidden sm:inline text-sm">Escanear</span>
+              </Button>
+            )}
             {/* Always-visible manual product button */}
             <Button
               variant={showManualForm ? "default" : "outline"}

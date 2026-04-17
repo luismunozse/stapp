@@ -30,9 +30,10 @@ export function NavbarLanding() {
   }, [])
 
   const navigation = [
-    { name: "Características", href: "#features" },
-    { name: "Precios", href: "#pricing" },
-    { name: "FAQ", href: "#faq" },
+    { name: "Características", href: "/#features" },
+    { name: "Precios", href: "/precios" },
+    { name: "Casos de uso", href: "/casos-de-uso" },
+    { name: "Blog", href: "/empresa/blog" },
     { name: "Ayuda", href: "/ayuda" },
   ]
 
@@ -47,15 +48,26 @@ export function NavbarLanding() {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center justify-center flex-1 gap-4 lg:gap-8 min-w-0">
-            {navigation.map((item) => (
-              <a
-                key={item.name}
-                href={item.href}
-                className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm whitespace-nowrap"
-              >
-                {item.name}
-              </a>
-            ))}
+            {navigation.map((item) => {
+              const isHashLink = item.href.includes("#")
+              return isHashLink ? (
+                <a
+                  key={item.name}
+                  href={item.href}
+                  className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm whitespace-nowrap"
+                >
+                  {item.name}
+                </a>
+              ) : (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm whitespace-nowrap"
+                >
+                  {item.name}
+                </Link>
+              )
+            })}
           </div>
 
           {/* Desktop CTA */}
@@ -106,16 +118,28 @@ export function NavbarLanding() {
         {mobileMenuOpen && (
           <div id="mobile-menu" ref={menuRef} className="md:hidden py-4 border-t">
             <div className="flex flex-col gap-4">
-              {navigation.map((item) => (
-                <a
-                  key={item.name}
-                  href={item.href}
-                  className="text-sm font-medium text-muted-foreground hover:text-primary"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  {item.name}
-                </a>
-              ))}
+              {navigation.map((item) => {
+                const isHashLink = item.href.includes("#")
+                return isHashLink ? (
+                  <a
+                    key={item.name}
+                    href={item.href}
+                    className="text-sm font-medium text-muted-foreground hover:text-primary"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    {item.name}
+                  </a>
+                ) : (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    className="text-sm font-medium text-muted-foreground hover:text-primary"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    {item.name}
+                  </Link>
+                )
+              })}
               <div className="flex flex-col gap-2 pt-4 border-t">
                 {isChecking ? null : isLoggedIn ? (
                   <Link href="/dashboard">

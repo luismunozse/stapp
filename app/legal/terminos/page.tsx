@@ -3,6 +3,9 @@ import { Metadata } from "next"
 export const metadata: Metadata = {
   title: "Términos de Servicio | STApp",
   description: "Términos y condiciones de uso de STApp",
+  alternates: {
+    canonical: "https://stapp.com.ar/legal/terminos",
+  },
 }
 
 export default function TerminosPage() {
