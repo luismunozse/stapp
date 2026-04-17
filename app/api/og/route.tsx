@@ -5,10 +5,10 @@ export const runtime = "edge"
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl
-  const title = searchParams.get("title") || "STApp - Gesti\u00f3n de Servicio T\u00e9cnico"
+  const title = searchParams.get("title") || "STApp - Software de Gestión para Talleres de Celulares"
   const description =
     searchParams.get("description") ||
-    "Software para talleres de reparaci\u00f3n de celulares y dispositivos electr\u00f3nicos"
+    "Gestión completa de tu taller: órdenes, inventario, ventas y finanzas"
 
   return new ImageResponse(
     (
@@ -20,9 +20,9 @@ export async function GET(request: NextRequest) {
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: "#0a0a1a",
+          backgroundColor: "#f8fafc",
           backgroundImage:
-            "radial-gradient(circle at 25% 25%, #1e3a5f 0%, transparent 50%), radial-gradient(circle at 75% 75%, #1a1a4e 0%, transparent 50%)",
+            "radial-gradient(circle at 20% 20%, #dbeafe 0%, transparent 55%), radial-gradient(circle at 80% 80%, #e0e7ff 0%, transparent 55%)",
         }}
       >
         {/* Grid pattern */}
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
             position: "absolute",
             inset: 0,
             backgroundImage:
-              "linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px)",
+              "linear-gradient(to right, rgba(37,99,235,0.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(37,99,235,0.06) 1px, transparent 1px)",
             backgroundSize: "40px 40px",
           }}
         />
@@ -51,24 +51,25 @@ export async function GET(request: NextRequest) {
             style={{
               display: "flex",
               alignItems: "center",
-              gap: "16px",
-              marginBottom: "40px",
+              gap: "18px",
+              marginBottom: "36px",
             }}
           >
             <div
               style={{
-                width: "64px",
-                height: "64px",
-                borderRadius: "16px",
+                width: "72px",
+                height: "72px",
+                borderRadius: "18px",
                 background: "linear-gradient(135deg, #3b82f6, #2563eb)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
+                boxShadow: "0 10px 25px rgba(37,99,235,0.35)",
               }}
             >
               <svg
-                width="36"
-                height="36"
+                width="40"
+                height="40"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="white"
@@ -82,25 +83,26 @@ export async function GET(request: NextRequest) {
             </div>
             <span
               style={{
-                fontSize: "48px",
+                fontSize: "54px",
                 fontWeight: "bold",
-                color: "white",
-                letterSpacing: "-1px",
+                color: "#0f172a",
+                letterSpacing: "-1.5px",
               }}
             >
-              <span style={{ color: "#3b82f6" }}>ST</span>App
+              <span style={{ color: "#2563eb" }}>ST</span>App
             </span>
           </div>
 
           {/* Title */}
           <h1
             style={{
-              fontSize: "52px",
+              fontSize: "56px",
               fontWeight: "bold",
-              color: "white",
-              lineHeight: 1.2,
+              color: "#0f172a",
+              lineHeight: 1.15,
               marginBottom: "20px",
-              maxWidth: "900px",
+              maxWidth: "960px",
+              letterSpacing: "-1px",
             }}
           >
             {title}
@@ -109,10 +111,11 @@ export async function GET(request: NextRequest) {
           {/* Description */}
           <p
             style={{
-              fontSize: "24px",
-              color: "rgba(255,255,255,0.7)",
-              lineHeight: 1.5,
-              maxWidth: "700px",
+              fontSize: "26px",
+              color: "#475569",
+              lineHeight: 1.45,
+              maxWidth: "820px",
+              margin: 0,
             }}
           >
             {description}
@@ -124,14 +127,15 @@ export async function GET(request: NextRequest) {
               display: "flex",
               gap: "32px",
               marginTop: "32px",
-              color: "rgba(255,255,255,0.6)",
-              fontSize: "18px",
+              color: "#64748b",
+              fontSize: "20px",
+              fontWeight: 500,
             }}
           >
-            <span>\u2022 \u00d3rdenes de trabajo</span>
-            <span>\u2022 Inventario</span>
-            <span>\u2022 Clientes</span>
-            <span>\u2022 Reportes</span>
+            <span>• Órdenes</span>
+            <span>• Inventario</span>
+            <span>• Ventas</span>
+            <span>• Finanzas</span>
           </div>
 
           {/* CTA Button */}
@@ -141,16 +145,16 @@ export async function GET(request: NextRequest) {
               alignItems: "center",
               justifyContent: "center",
               marginTop: "36px",
-              padding: "18px 44px",
+              padding: "20px 48px",
               background: "linear-gradient(135deg, #3b82f6, #2563eb)",
               borderRadius: "999px",
               color: "white",
-              fontSize: "26px",
+              fontSize: "28px",
               fontWeight: "bold",
-              boxShadow: "0 10px 30px rgba(59,130,246,0.45)",
+              boxShadow: "0 14px 36px rgba(37,99,235,0.45)",
             }}
           >
-            Prob\u00e1 gratis 30 d\u00edas \u2192
+            Probá gratis 30 días →
           </div>
 
           {/* URL */}
@@ -161,8 +165,9 @@ export async function GET(request: NextRequest) {
               display: "flex",
               alignItems: "center",
               gap: "8px",
-              color: "rgba(255,255,255,0.4)",
+              color: "#94a3b8",
               fontSize: "18px",
+              fontWeight: 500,
             }}
           >
             stapp.com.ar
