@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -11,7 +12,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Eye, EyeOff } from "lucide-react"
+import { Eye, EyeOff, Check } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 interface TecnicoFormProps {
   open: boolean
@@ -21,22 +23,74 @@ interface TecnicoFormProps {
     nombre: string
     email: string
     porcentajeComision?: number
+    telefono?: string | null
+    especialidades?: string[]
+    fechaIngresoTecnico?: string | null
   } | null
   onSuccess: () => void
 }
 
+interface TipoDispositivo {
+  codigo: string
+  nombre: string
+}
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json())
+
 export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoFormProps) {
-  const [nombre, setNombre] = useState(tecnico?.nombre || "")
-  const [email, setEmail] = useState(tecnico?.email || "")
+  const [nombre, setNombre] = useState("")
+  const [email, setEmail] = useState("")
+  const [telefono, setTelefono] = useState("")
   const [password, setPassword] = useState("")
-  const [porcentajeComision, setPorcentajeComision] = useState<string>(
-    tecnico?.porcentajeComision != null ? String(tecnico.porcentajeComision) : "0"
-  )
+  const [porcentajeComision, setPorcentajeComision] = useState<string>("0")
+  const [especialidades, setEspecialidades] = useState<string[]>([])
+  const [fechaIngreso, setFechaIngreso] = useState<string>("")
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
 
+  const { data: tipos = [] } = useSWR<TipoDispositivo[]>(
+    open ? "/api/tipos-dispositivo" : null,
+    fetcher,
+    { revalidateOnFocus: false }
+  )
+
   const isEditing = !!tecnico
+
+  useEffect(() => {
+    if (!open) return
+    if (tecnico) {
+      setNombre(tecnico.nombre)
+      setEmail(tecnico.email)
+      setTelefono(tecnico.telefono ?? "")
+      setPorcentajeComision(
+        tecnico.porcentajeComision != null ? String(tecnico.porcentajeComision) : "0"
+      )
+      setEspecialidades(tecnico.especialidades ?? [])
+      setFechaIngreso(tecnico.fechaIngresoTecnico ?? "")
+    } else {
+      resetForm()
+    }
+    setError("")
+    setPassword("")
+  }, [open, tecnico])
+
+  const resetForm = () => {
+    setNombre("")
+    setEmail("")
+    setTelefono("")
+    setPassword("")
+    setPorcentajeComision("0")
+    setEspecialidades([])
+    setFechaIngreso("")
+    setError("")
+  }
+
+  const toggleEspecialidad = (codigo: string) => {
+    setEspecialidades((prev) =>
+      prev.includes(codigo) ? prev.filter((e) => e !== codigo) : [...prev, codigo]
+    )
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -51,10 +105,14 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
       if (porcNum < 0 || porcNum > 100) {
         throw new Error("El porcentaje de comisión debe estar entre 0 y 100")
       }
-      const body: { nombre: string; email: string; password?: string; porcentajeComision: number } = {
+
+      const body: Record<string, unknown> = {
         nombre,
         email,
+        telefono: telefono.trim() || null,
         porcentajeComision: porcNum,
+        especialidades,
+        fechaIngresoTecnico: fechaIngreso || null,
       }
       if (password) body.password = password
 
@@ -79,30 +137,14 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
     }
   }
 
-  const resetForm = () => {
-    setNombre("")
-    setEmail("")
-    setPassword("")
-    setPorcentajeComision("0")
-    setError("")
-  }
-
   const handleOpenChange = (newOpen: boolean) => {
-    if (!newOpen) {
-      resetForm()
-    } else if (tecnico) {
-      setNombre(tecnico.nombre)
-      setEmail(tecnico.email)
-      setPorcentajeComision(
-        tecnico.porcentajeComision != null ? String(tecnico.porcentajeComision) : "0"
-      )
-    }
+    if (!newOpen) resetForm()
     onOpenChange(newOpen)
   }
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEditing ? "Editar Técnico" : "Nuevo Técnico"}</DialogTitle>
           <DialogDescription>
@@ -117,18 +159,32 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
               {error}
             </div>
           )}
-          <div className="space-y-2">
-            <Label htmlFor="nombre">Nombre</Label>
-            <Input
-              id="nombre"
-              value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
-              placeholder="Nombre completo"
-              required
-            />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="nombre">Nombre *</Label>
+              <Input
+                id="nombre"
+                value={nombre}
+                onChange={(e) => setNombre(e.target.value)}
+                placeholder="Nombre completo"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="telefono">Teléfono / WhatsApp</Label>
+              <Input
+                id="telefono"
+                type="tel"
+                value={telefono}
+                onChange={(e) => setTelefono(e.target.value)}
+                placeholder="+54 9 11 ..."
+              />
+            </div>
           </div>
+
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email">Email *</Label>
             <Input
               id="email"
               type="email"
@@ -138,9 +194,11 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
               required
             />
           </div>
+
           <div className="space-y-2">
             <Label htmlFor="password">
               Contraseña {isEditing && "(dejar vacío para mantener)"}
+              {!isEditing && " *"}
             </Label>
             <div className="relative">
               <Input
@@ -167,22 +225,70 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
               </Button>
             </div>
           </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="porcentajeComision">% Comisión sobre ganancia</Label>
+              <Input
+                id="porcentajeComision"
+                type="number"
+                step="0.01"
+                min="0"
+                max="100"
+                value={porcentajeComision}
+                onChange={(e) => setPorcentajeComision(e.target.value)}
+                placeholder="0"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Sobre (costo final − repuestos) de cada orden.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="fechaIngreso">Fecha de ingreso</Label>
+              <Input
+                id="fechaIngreso"
+                type="date"
+                value={fechaIngreso}
+                onChange={(e) => setFechaIngreso(e.target.value)}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Fecha de alta laboral (opcional).
+              </p>
+            </div>
+          </div>
+
           <div className="space-y-2">
-            <Label htmlFor="porcentajeComision">% Comisión sobre ganancia</Label>
-            <Input
-              id="porcentajeComision"
-              type="number"
-              step="0.01"
-              min="0"
-              max="100"
-              value={porcentajeComision}
-              onChange={(e) => setPorcentajeComision(e.target.value)}
-              placeholder="0"
-            />
-            <p className="text-xs text-muted-foreground">
-              Se aplica sobre (costo final − repuestos) de cada orden.
+            <Label>Especialidades</Label>
+            {tipos.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Sin tipos de dispositivo configurados.</p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {tipos.map((t) => {
+                  const active = especialidades.includes(t.codigo)
+                  return (
+                    <button
+                      type="button"
+                      key={t.codigo}
+                      onClick={() => toggleEspecialidad(t.codigo)}
+                      className={cn(
+                        "inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors",
+                        active
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-background hover:bg-muted border-input text-muted-foreground"
+                      )}
+                    >
+                      {active && <Check className="h-3 w-3" />}
+                      {t.nombre}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+            <p className="text-[11px] text-muted-foreground">
+              Se usan para priorizar asignaciones según el tipo de dispositivo.
             </p>
           </div>
+
           <div className="flex justify-end gap-2 pt-4">
             <Button
               type="button"

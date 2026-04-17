@@ -6,6 +6,7 @@ import {
   isExemptFromRateLimit,
   extractPublicToken,
 } from "@/lib/rate-limit"
+import { getTenantStatusBySlug } from "@/lib/tenant-status-edge"
 
 // Hashea un string con SHA-256 usando Web Crypto (compatible con Edge Runtime,
 // donde `node:crypto` no está disponible). Devuelve los primeros 16 hex chars,
@@ -333,6 +334,67 @@ export async function middleware(request: NextRequest) {
   // Agregar slug del tenant a headers
   requestHeaders.set("x-tenant-slug", subdomain)
 
+  // Validar que el tenant exista y esté activo. Se hace antes del chequeo de
+  // rutas públicas para cortar también intentos de login sobre una org
+  // desactivada (el bypass de superadmin en authorize() dejaría pasar igual).
+  // El cache tiene TTL de 30s, así que una des/activación desde el panel
+  // superadmin tarda a lo sumo ese tiempo en propagarse por todas las Edge
+  // instances. `/tenant-not-found` queda siempre accesible para no loopear.
+  let tenantStatus: { id: string; activo: boolean } | null = null
+  if (pathname !== "/tenant-not-found") {
+    tenantStatus = await getTenantStatusBySlug(subdomain)
+    if (!tenantStatus || !tenantStatus.activo) {
+      if (pathname.startsWith("/api/")) {
+        return NextResponse.json(
+          { error: "Organización inactiva o no encontrada" },
+          { status: 403 }
+        )
+      }
+      return NextResponse.redirect(new URL("/tenant-not-found", request.url))
+    }
+  }
+
+  // Leemos el token una sola vez y lo reutilizamos para los chequeos de
+  // ownership, landing y rutas protegidas.
+  const cookieName =
+    process.env.NODE_ENV === "production"
+      ? "__Secure-next-auth.session-token"
+      : "next-auth.session-token"
+
+  const token = await getToken({
+    req: request,
+    secret: process.env.NEXTAUTH_SECRET,
+    cookieName,
+  })
+
+  // Chequeo de pertenencia al tenant. La cookie de sesión está scopeada a
+  // `.stapp.com.ar` ([lib/auth.ts] COOKIE_DOMAIN), así que el mismo JWT viaja
+  // a todos los subdominios. Sin este check, cualquier usuario logueado en
+  // tenant-a podría ver tenant-b (y en particular el superadmin podría
+  // aterrizar en cualquier tenant por cookie compartida con admin.*).
+  // Mandamos a /login para que pueda re-autenticarse como usuario del tenant
+  // actual; /login es pública y no expone datos protegidos.
+  if (
+    tenantStatus &&
+    token &&
+    (token.organizationId as string) !== tenantStatus.id
+  ) {
+    if (pathname.startsWith("/api/") && !pathname.startsWith("/api/auth")) {
+      return NextResponse.json(
+        { error: "No pertenecés a esta organización" },
+        { status: 403 }
+      )
+    }
+    if (!isPublicPath(pathname)) {
+      return NextResponse.redirect(new URL("/login", request.url))
+    }
+    // En rutas públicas (incluye /api/auth/* para permitir re-login) dejamos
+    // pasar pero NO inyectamos x-organization-id ni headers de usuario.
+    return NextResponse.next({
+      request: { headers: requestHeaders },
+    })
+  }
+
   // Si es ruta pública, permitir pero pasar contexto
   if (isPublicPath(pathname)) {
     return NextResponse.next({
@@ -342,16 +404,6 @@ export async function middleware(request: NextRequest) {
 
   // Si es landing page en subdominio, redirigir a dashboard o login
   if (isLandingPath(pathname)) {
-    const landingCookieName = process.env.NODE_ENV === "production"
-      ? "__Secure-next-auth.session-token"
-      : "next-auth.session-token"
-
-    const token = await getToken({
-      req: request,
-      secret: process.env.NEXTAUTH_SECRET,
-      cookieName: landingCookieName,
-    })
-
     if (token) {
       return NextResponse.redirect(new URL("/dashboard", request.url))
     } else {
@@ -360,16 +412,6 @@ export async function middleware(request: NextRequest) {
   }
 
   // Para rutas protegidas, verificar autenticación
-  const cookieName = process.env.NODE_ENV === "production"
-    ? "__Secure-next-auth.session-token"
-    : "next-auth.session-token"
-
-  const token = await getToken({
-    req: request,
-    secret: process.env.NEXTAUTH_SECRET,
-    cookieName,
-  })
-
   if (!token) {
     // Redirigir a login del subdominio
     const loginUrl = new URL("/login", request.url)

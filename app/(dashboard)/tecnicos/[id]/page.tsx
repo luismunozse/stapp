@@ -9,17 +9,24 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
   ArrowLeft,
-  Wrench,
   Mail,
   Calendar,
   ClipboardList,
   CheckCircle,
   Edit,
   Trash2,
+  Phone,
+  Tag,
+  Power,
+  PowerOff,
+  ArrowRightLeft,
+  AlertTriangle,
 } from "lucide-react"
+import { toast } from "sonner"
 import { TecnicoForm } from "@/components/tecnicos/tecnico-form"
 import { TecnicoComisiones } from "@/components/tecnicos/tecnico-comisiones"
 import { TecnicoInsights } from "@/components/tecnicos/tecnico-insights"
+import { ReasignarOrdenesDialog } from "@/components/tecnicos/reasignar-ordenes-dialog"
 import { useModal } from "@/contexts/modal-context"
 
 interface Orden {
@@ -35,6 +42,11 @@ interface TecnicoDetalle {
   id: string
   nombre: string
   email: string
+  telefono?: string | null
+  activo: boolean
+  especialidades: string[]
+  fechaIngresoTecnico?: string | null
+  avatarUrl?: string | null
   porcentajeComision?: number
   createdAt: string
   ordenesActivas: number
@@ -86,6 +98,8 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
   const [loading, setLoading] = useState(true)
   const [editOpen, setEditOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [togglingEstado, setTogglingEstado] = useState(false)
+  const [reasignarOpen, setReasignarOpen] = useState(false)
 
   useEffect(() => {
     fetchTecnico()
@@ -105,6 +119,45 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
       router.push("/tecnicos")
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleToggleEstado = async () => {
+    if (!tecnico) return
+    const nuevo = !tecnico.activo
+    const confirmed = await confirm({
+      title: nuevo ? "Reactivar técnico" : "Desactivar técnico",
+      description: nuevo
+        ? "El técnico volverá a poder recibir asignaciones."
+        : `El técnico dejará de recibir asignaciones nuevas.${
+            tecnico.ordenesActivas > 0
+              ? ` Aún tiene ${tecnico.ordenesActivas} orden(es) activa(s) — considerá reasignarlas.`
+              : ""
+          }`,
+      confirmText: nuevo ? "Reactivar" : "Desactivar",
+      variant: nuevo ? "info" : "danger",
+    })
+    if (!confirmed) return
+
+    setTogglingEstado(true)
+    try {
+      const res = await fetch(`/api/tecnicos/${id}/estado`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ activo: nuevo }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || "Error al actualizar estado")
+      }
+      const data = await res.json()
+      toast.success(nuevo ? "Técnico reactivado" : "Técnico desactivado")
+      if (data.warning) toast.warning(data.warning)
+      fetchTecnico()
+    } catch (err) {
+      await showError(err instanceof Error ? err.message : "Error al actualizar estado")
+    } finally {
+      setTogglingEstado(false)
     }
   }
 
@@ -159,12 +212,42 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
             </Link>
           </Button>
           <div className="min-w-0">
-            <h1 className="text-xl sm:text-3xl font-bold truncate">{tecnico.nombre}</h1>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl sm:text-3xl font-bold truncate">{tecnico.nombre}</h1>
+              {!tecnico.activo && (
+                <Badge variant="outline" className="bg-muted text-muted-foreground text-[10px]">
+                  Inactivo
+                </Badge>
+              )}
+            </div>
             <p className="text-xs sm:text-sm text-muted-foreground">Detalle del técnico</p>
           </div>
         </div>
         {isAdmin && (
-          <div className="flex gap-2 pl-12 sm:pl-0">
+          <div className="flex flex-wrap gap-2 pl-12 sm:pl-0">
+            {tecnico.ordenesActivas > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setReasignarOpen(true)}
+              >
+                <ArrowRightLeft className="mr-1.5 h-4 w-4" />
+                Reasignar órdenes
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleToggleEstado}
+              disabled={togglingEstado}
+            >
+              {tecnico.activo ? (
+                <PowerOff className="mr-1.5 h-4 w-4" />
+              ) : (
+                <Power className="mr-1.5 h-4 w-4" />
+              )}
+              {tecnico.activo ? "Desactivar" : "Reactivar"}
+            </Button>
             <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
               <Edit className="mr-1.5 h-4 w-4" />
               Editar
@@ -174,6 +257,7 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
               size="sm"
               onClick={handleDelete}
               disabled={deleting || tecnico.ordenesActivas > 0}
+              title={tecnico.ordenesActivas > 0 ? "No se puede eliminar con órdenes activas" : ""}
             >
               <Trash2 className="mr-1.5 h-4 w-4" />
               <span className="hidden sm:inline">{deleting ? "Eliminando..." : "Eliminar"}</span>
@@ -182,6 +266,19 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
           </div>
         )}
       </div>
+
+      {!tecnico.activo && (
+        <div className="flex items-start gap-2 p-3 rounded-md border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 text-sm">
+          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+          <div>
+            <div className="font-medium">Técnico desactivado</div>
+            <div className="text-xs">
+              Conserva su historial y comisiones, pero no recibirá asignaciones nuevas hasta
+              reactivarlo.
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid gap-3 sm:gap-6 grid-cols-3">
@@ -193,17 +290,44 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
           </CardHeader>
           <CardContent className="p-3 sm:p-6 pt-0 space-y-2 sm:space-y-3">
             <div className="flex items-center gap-2 min-w-0">
-              <Wrench className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground shrink-0" />
-              <span className="text-xs sm:text-sm truncate">{tecnico.nombre}</span>
-            </div>
-            <div className="flex items-center gap-2 min-w-0">
               <Mail className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground shrink-0" />
               <span className="text-xs sm:text-sm truncate">{tecnico.email}</span>
             </div>
+            {tecnico.telefono ? (
+              <div className="flex items-center gap-2 min-w-0">
+                <Phone className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground shrink-0" />
+                <a
+                  href={`tel:${tecnico.telefono}`}
+                  className="text-xs sm:text-sm truncate hover:underline"
+                >
+                  {tecnico.telefono}
+                </a>
+              </div>
+            ) : null}
             <div className="flex items-center gap-2">
               <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground shrink-0" />
-              <span className="text-xs sm:text-sm">Desde {formatDate(tecnico.createdAt)}</span>
+              <span className="text-xs sm:text-sm">
+                {tecnico.fechaIngresoTecnico
+                  ? `Ingreso ${formatDate(tecnico.fechaIngresoTecnico)}`
+                  : `Desde ${formatDate(tecnico.createdAt)}`}
+              </span>
             </div>
+            {tecnico.especialidades && tecnico.especialidades.length > 0 && (
+              <div className="flex items-start gap-2">
+                <Tag className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground shrink-0 mt-0.5" />
+                <div className="flex flex-wrap gap-1">
+                  {tecnico.especialidades.map((esp) => (
+                    <Badge
+                      key={esp}
+                      variant="secondary"
+                      className="text-[10px] font-normal"
+                    >
+                      {esp}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="flex items-center justify-between pt-2 border-t">
               <span className="text-xs sm:text-sm text-muted-foreground">% Comisión</span>
               <Badge variant="outline" className="text-[10px] sm:text-xs">
@@ -304,6 +428,15 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
         open={editOpen}
         onOpenChange={setEditOpen}
         tecnico={tecnico}
+        onSuccess={fetchTecnico}
+      />
+
+      <ReasignarOrdenesDialog
+        open={reasignarOpen}
+        onOpenChange={setReasignarOpen}
+        tecnicoOrigenId={tecnico.id}
+        tecnicoOrigenNombre={tecnico.nombre}
+        ordenesActivas={tecnico.ordenesActivas}
         onSuccess={fetchTecnico}
       />
     </div>

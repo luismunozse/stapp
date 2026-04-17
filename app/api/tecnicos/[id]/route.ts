@@ -20,6 +20,11 @@ export async function GET(
         id,
         nombre,
         email,
+        telefono,
+        activo,
+        especialidades,
+        avatar_url,
+        fecha_ingreso_tecnico,
         porcentaje_comision,
         created_at,
         ordenes_servicio:ordenes_servicio!tecnico_id (
@@ -52,6 +57,11 @@ export async function GET(
       id: tecnico.id,
       nombre: tecnico.nombre,
       email: tecnico.email,
+      telefono: tecnico.telefono ?? null,
+      activo: tecnico.activo !== false,
+      especialidades: tecnico.especialidades ?? [],
+      avatarUrl: tecnico.avatar_url ?? null,
+      fechaIngresoTecnico: tecnico.fecha_ingreso_tecnico ?? null,
       porcentajeComision: Number(tecnico.porcentaje_comision ?? 0),
       createdAt: tecnico.created_at,
       ordenesActivas: ordenesActivas.length,
@@ -88,7 +98,15 @@ export async function PUT(
 
     const { id } = await params
     const body = await request.json()
-    const { nombre, email, password, porcentajeComision } = body
+    const {
+      nombre,
+      email,
+      password,
+      porcentajeComision,
+      telefono,
+      especialidades,
+      fechaIngresoTecnico,
+    } = body
 
     if (porcentajeComision !== undefined) {
       const p = Number(porcentajeComision)
@@ -98,6 +116,13 @@ export async function PUT(
           { status: 400 }
         )
       }
+    }
+
+    if (especialidades !== undefined && !Array.isArray(especialidades)) {
+      return NextResponse.json(
+        { error: "especialidades debe ser un array" },
+        { status: 400 }
+      )
     }
 
     // Verificar que el técnico existe
@@ -134,12 +159,19 @@ export async function PUT(
     if (email) updateData.email = email
     if (password) updateData.password = await bcrypt.hash(password, 10)
     if (porcentajeComision !== undefined) updateData.porcentaje_comision = Number(porcentajeComision)
+    if (telefono !== undefined) updateData.telefono = telefono || null
+    if (especialidades !== undefined) {
+      updateData.especialidades = especialidades.filter(
+        (e: unknown) => typeof e === "string" && e.length > 0
+      )
+    }
+    if (fechaIngresoTecnico !== undefined) updateData.fecha_ingreso_tecnico = fechaIngresoTecnico || null
 
     const { data: updatedTecnico, error: updateError } = await supabaseAdmin
       .from("users")
       .update(updateData)
       .eq("id", id)
-      .select("id, nombre, email, porcentaje_comision")
+      .select("id, nombre, email, porcentaje_comision, telefono, especialidades, fecha_ingreso_tecnico, activo")
       .single()
 
     if (updateError) {

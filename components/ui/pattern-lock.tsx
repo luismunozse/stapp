@@ -46,17 +46,33 @@ export function PatternLock({
   }, [padding, spacing])
 
   // Encontrar qué punto está cerca de una posición
+  // Threshold chico (0.6 * dotSize) para no enganchar puntos laterales al trazar diagonales
   const findNearestPoint = useCallback((x: number, y: number): number | null => {
-    const threshold = dotSize * 1.5
+    const threshold = dotSize * 0.6
+    let closestIdx: number | null = null
+    let closestDist = threshold
     for (let i = 0; i < 9; i++) {
       const pos = getPointPosition(i)
       const distance = Math.sqrt(Math.pow(x - pos.x, 2) + Math.pow(y - pos.y, 2))
-      if (distance < threshold) {
-        return i + 1 // Puntos numerados del 1 al 9
+      if (distance < closestDist) {
+        closestDist = distance
+        closestIdx = i + 1
       }
     }
-    return null
+    return closestIdx
   }, [dotSize, getPointPosition])
+
+  // Si entre A y B hay un punto colineal (horizontal, vertical o diagonal), devolverlo
+  const getIntermediatePoint = (a: number, b: number): number | null => {
+    const rA = Math.floor((a - 1) / 3), cA = (a - 1) % 3
+    const rB = Math.floor((b - 1) / 3), cB = (b - 1) % 3
+    const dr = rB - rA, dc = cB - cA
+    if (Math.abs(dr) <= 1 && Math.abs(dc) <= 1) return null
+    if (dr !== 0 && dc !== 0 && Math.abs(dr) !== Math.abs(dc)) return null
+    const mr = (rA + rB) / 2, mc = (cA + cB) / 2
+    if (!Number.isInteger(mr) || !Number.isInteger(mc)) return null
+    return mr * 3 + mc + 1
+  }
 
   // Dibujar el canvas
   const draw = useCallback(() => {
@@ -176,7 +192,14 @@ export function PatternLock({
 
     const point = findNearestPoint(pos.x, pos.y)
     if (point && !pattern.includes(point)) {
-      setPattern((prev) => [...prev, point])
+      setPattern((prev) => {
+        const last = prev[prev.length - 1]
+        const mid = last ? getIntermediatePoint(last, point) : null
+        if (mid && !prev.includes(mid)) {
+          return [...prev, mid, point]
+        }
+        return [...prev, point]
+      })
     }
   }
 

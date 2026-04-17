@@ -9,7 +9,7 @@ interface QuickActionsProps {
 export function QuickActions({ cobrosPendientesCount }: QuickActionsProps) {
   const actions = [
     {
-      label: "+ Nueva Orden",
+      label: "Nueva Orden",
       href: "/ordenes?nueva=1",
       icon: Plus,
       className: "bg-primary text-primary-foreground hover:bg-primary/90",

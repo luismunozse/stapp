@@ -25,6 +25,9 @@ interface Tecnico {
   id: string
   nombre: string
   email: string
+  telefono?: string | null
+  activo: boolean
+  especialidades?: string[]
   porcentajeComision?: number
   ordenesActivas: number
   ordenesCompletadas: number
@@ -135,18 +138,33 @@ export function TecnicosList() {
         <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {tecnicos.map((tecnico) => (
             <Link key={tecnico.id} href={`/tecnicos/${tecnico.id}`}>
-              <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
+              <Card
+                className={`hover:shadow-md transition-shadow cursor-pointer h-full ${
+                  !tecnico.activo ? "opacity-70" : ""
+                }`}
+              >
                 <CardHeader className="p-3 sm:p-6">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                      <div className="p-1.5 sm:p-2 bg-primary/10 rounded-lg shrink-0">
-                        <Wrench className="h-4 w-4 sm:h-6 sm:w-6 text-primary" />
+                      <div className={`p-1.5 sm:p-2 rounded-lg shrink-0 ${
+                        tecnico.activo ? "bg-primary/10" : "bg-muted"
+                      }`}>
+                        <Wrench className={`h-4 w-4 sm:h-6 sm:w-6 ${
+                          tecnico.activo ? "text-primary" : "text-muted-foreground"
+                        }`} />
                       </div>
                       <div className="min-w-0">
                         <TooltipProvider delayDuration={300}>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <CardTitle className="text-sm sm:text-lg truncate">{tecnico.nombre}</CardTitle>
+                              <CardTitle className="text-sm sm:text-lg truncate flex items-center gap-1.5">
+                                {tecnico.nombre}
+                                {!tecnico.activo && (
+                                  <Badge variant="outline" className="text-[9px] font-normal bg-muted">
+                                    Inactivo
+                                  </Badge>
+                                )}
+                              </CardTitle>
                             </TooltipTrigger>
                             <TooltipContent side="top">
                               <p className="font-medium">{tecnico.nombre}</p>

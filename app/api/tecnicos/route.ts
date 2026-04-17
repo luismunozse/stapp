@@ -10,13 +10,17 @@ export async function GET() {
     const { error, organizationId } = await requireAuth()
     if (error) return error
 
-    // Obtener técnicos con sus órdenes activas
     const { data: tecnicos, error: dbError } = await supabaseAdmin
       .from("users")
       .select(`
         id,
         nombre,
         email,
+        telefono,
+        activo,
+        especialidades,
+        avatar_url,
+        fecha_ingreso_tecnico,
         porcentaje_comision,
         ordenes_servicio:ordenes_servicio!tecnico_id (
           id,
@@ -25,6 +29,7 @@ export async function GET() {
       `)
       .eq("rol", "TECNICO")
       .eq("organization_id", organizationId!)
+      .order("activo", { ascending: false })
       .order("nombre", { ascending: true })
 
     if (dbError) {
@@ -44,6 +49,11 @@ export async function GET() {
         id: tecnico.id,
         nombre: tecnico.nombre,
         email: tecnico.email,
+        telefono: tecnico.telefono ?? null,
+        activo: tecnico.activo !== false,
+        especialidades: tecnico.especialidades ?? [],
+        avatarUrl: tecnico.avatar_url ?? null,
+        fechaIngresoTecnico: tecnico.fecha_ingreso_tecnico ?? null,
         porcentajeComision: Number(tecnico.porcentaje_comision ?? 0),
         ordenesActivas,
         ordenesCompletadas,
@@ -72,7 +82,15 @@ export async function POST(request: Request) {
     if (limitError) return limitError
 
     const body = await request.json()
-    const { nombre, email, password, porcentajeComision } = body
+    const {
+      nombre,
+      email,
+      password,
+      porcentajeComision,
+      telefono,
+      especialidades,
+      fechaIngresoTecnico,
+    } = body
 
     if (!nombre || !email || !password) {
       return NextResponse.json(
@@ -88,6 +106,10 @@ export async function POST(request: Request) {
         { status: 400 }
       )
     }
+
+    const especialidadesArr = Array.isArray(especialidades)
+      ? especialidades.filter((e) => typeof e === "string" && e.length > 0)
+      : []
 
     // Verificar si el email ya existe
     const { data: existingUser } = await supabaseAdmin
@@ -115,8 +137,12 @@ export async function POST(request: Request) {
         organization_id: organizationId!,
         email_verified: true,
         porcentaje_comision: porcentajeNum,
+        telefono: telefono || null,
+        especialidades: especialidadesArr,
+        fecha_ingreso_tecnico: fechaIngresoTecnico || null,
+        activo: true,
       })
-      .select("id, nombre, email, porcentaje_comision")
+      .select("id, nombre, email, porcentaje_comision, telefono, especialidades, fecha_ingreso_tecnico, activo")
       .single()
 
     if (dbError) {
