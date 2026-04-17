@@ -24,7 +24,7 @@ export async function generateMetadata({
   const post = getBlogPostBySlug(slug)
 
   if (!post) {
-    return { title: "Art\u00edculo no encontrado" }
+    return { title: "Artículo no encontrado" }
   }
 
   return {
@@ -61,7 +61,6 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
     notFound()
   }
 
-  // Obtener posts relacionados (misma categor\u00eda, excluyendo el actual)
   const relatedPosts = blogPosts
     .filter((p) => p.category === post.category && p.id !== post.id)
     .slice(0, 3)
@@ -128,7 +127,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
               <div className="aspect-video relative rounded-lg overflow-hidden mb-8">
                 <Image
                   src={post.image}
-                  alt={`${post.title} - Art\u00edculo del blog de STApp sobre ${post.category.toLowerCase()} para talleres de reparaci\u00f3n`}
+                  alt={`${post.title} - Artículo del blog de STApp sobre ${post.category.toLowerCase()} para talleres de reparación`}
                   fill
                   sizes="(max-width: 768px) 100vw, 768px"
                   className="object-cover"
@@ -185,10 +184,10 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
               {/* CTA */}
               <div className="mt-12 p-6 bg-primary/5 rounded-lg border border-primary/20 text-center">
                 <h3 className="text-xl font-bold mb-2">
-                  \u00bfListo para profesionalizar tu taller?
+                  ¿Listo para profesionalizar tu taller?
                 </h3>
                 <p className="text-muted-foreground mb-4">
-                  Prob\u00e1 STApp gratis por 30 d\u00edas. Sin tarjeta de cr\u00e9dito.
+                  Probá STApp gratis por 30 días. Sin tarjeta de crédito.
                 </p>
                 <Link href="/registro">
                   <Button size="lg">Comenzar gratis</Button>
@@ -204,7 +203,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
             <div className="container mx-auto px-4 sm:px-6 lg:px-8">
               <div className="max-w-5xl mx-auto">
                 <h2 className="text-2xl font-bold mb-8">
-                  Art\u00edculos relacionados
+                  Artículos relacionados
                 </h2>
                 <div className="grid md:grid-cols-3 gap-6">
                   {relatedPosts.map((related) => (
@@ -216,7 +215,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
                       <div className="aspect-video relative rounded-lg overflow-hidden mb-3">
                         <Image
                           src={related.image}
-                          alt={`${related.title} - Art\u00edculo sobre ${related.category.toLowerCase()} para talleres`}
+                          alt={`${related.title} - Artículo sobre ${related.category.toLowerCase()} para talleres`}
                           fill
                           sizes="(max-width: 768px) 100vw, 33vw"
                           className="object-cover group-hover:scale-105 transition-transform"
@@ -241,7 +240,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
         <footer className="border-t bg-card py-8">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8">
             <p className="text-center text-muted-foreground">
-              \u00a9 {new Date().getFullYear()} STApp. Todos los derechos
+              © {new Date().getFullYear()} STApp. Todos los derechos
               reservados.
             </p>
           </div>

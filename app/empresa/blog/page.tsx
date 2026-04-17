@@ -7,21 +7,21 @@ import { BreadcrumbJsonLd } from "@/components/seo/json-ld"
 import { blogPosts, blogCategories } from "@/lib/blog-data"
 
 export const metadata = {
-  title: "Blog - Consejos para Talleres de Reparaci\u00f3n de Celulares",
+  title: "Blog - Consejos para Talleres de Reparación de Celulares",
   description:
-    "Consejos, novedades y mejores pr\u00e1cticas para talleres de reparaci\u00f3n de celulares y dispositivos electr\u00f3nicos. Aprende a gestionar mejor tu negocio de servicio t\u00e9cnico.",
+    "Consejos, novedades y mejores prácticas para talleres de reparación de celulares y dispositivos electrónicos. Aprende a gestionar mejor tu negocio de servicio técnico.",
   keywords: [
-    "blog servicio t\u00e9cnico",
-    "consejos taller reparaci\u00f3n",
-    "gesti\u00f3n negocio reparaciones",
-    "tips reparaci\u00f3n celulares",
-    "como abrir taller reparaci\u00f3n",
-    "\u00f3rdenes de trabajo servicio t\u00e9cnico",
+    "blog servicio técnico",
+    "consejos taller reparación",
+    "gestión negocio reparaciones",
+    "tips reparación celulares",
+    "como abrir taller reparación",
+    "órdenes de trabajo servicio técnico",
   ],
   openGraph: {
-    title: "Blog - STApp | Consejos para Talleres de Reparaci\u00f3n",
+    title: "Blog - STApp | Consejos para Talleres de Reparación",
     description:
-      "Consejos, novedades y mejores pr\u00e1cticas para talleres de reparaci\u00f3n de celulares.",
+      "Consejos, novedades y mejores prácticas para talleres de reparación de celulares.",
     url: "https://stapp.com.ar/empresa/blog",
   },
   alternates: {
@@ -59,8 +59,8 @@ export default function BlogPage() {
                 Blog de STApp
               </h1>
               <p className="text-xl text-muted-foreground">
-                Consejos, novedades y mejores pr\u00e1cticas para hacer crecer tu taller
-                de reparaci\u00f3n de celulares y dispositivos electr\u00f3nicos
+                Consejos, novedades y mejores prácticas para hacer crecer tu taller
+                de reparación de celulares y dispositivos electrónicos
               </p>
             </div>
           </div>
@@ -93,7 +93,7 @@ export default function BlogPage() {
                     <div className="aspect-video bg-muted relative overflow-hidden">
                       <Image
                         src={post.image}
-                        alt={`${post.title} - Art\u00edculo sobre ${post.category.toLowerCase()} para talleres de reparaci\u00f3n de celulares`}
+                        alt={`${post.title} - Artículo sobre ${post.category.toLowerCase()} para talleres de reparación de celulares`}
                         fill
                         sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
                         className="object-cover"
@@ -129,7 +129,7 @@ export default function BlogPage() {
                     <CardContent>
                       <p className="text-muted-foreground mb-4">{post.excerpt}</p>
                       <span className="inline-flex items-center gap-2 font-semibold text-primary">
-                        Leer m\u00e1s
+                        Leer más
                         <ArrowRight className="h-4 w-4" />
                       </span>
                     </CardContent>
@@ -145,15 +145,15 @@ export default function BlogPage() {
           <div className="container mx-auto px-4 sm:px-6 lg:px-8">
             <div className="max-w-2xl mx-auto text-center">
               <h2 className="text-3xl font-bold text-foreground mb-4">
-                Suscr\u00edbete a nuestro newsletter
+                Suscríbete a nuestro newsletter
               </h2>
               <p className="text-muted-foreground mb-8">
-                Recibe los \u00faltimos art\u00edculos, consejos y novedades directamente en tu correo
+                Recibe los últimos artículos, consejos y novedades directamente en tu correo
               </p>
               <div className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
                 <input
                   type="email"
-                  placeholder="Tu correo electr\u00f3nico"
+                  placeholder="Tu correo electrónico"
                   className="flex-1 px-4 py-3 rounded-lg border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                   aria-label="Email para newsletter"
                 />
@@ -167,7 +167,7 @@ export default function BlogPage() {
         <footer className="border-t bg-card py-8">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8">
             <p className="text-center text-muted-foreground">
-              \u00a9 {new Date().getFullYear()} STApp. Todos los derechos reservados.
+              © {new Date().getFullYear()} STApp. Todos los derechos reservados.
             </p>
           </div>
         </footer>
