@@ -42,6 +42,7 @@ const ordenSchema = z.object({
   metadata: z.record(z.any()).optional(),
   sectorId: z.string().optional(),
   telefonoContacto: z.string().optional(),
+  tecnicoId: z.string().optional(),
 })
 
 export async function GET(request: Request) {
@@ -254,6 +255,22 @@ export async function POST(request: Request) {
     // Generar token público para acceso al PDF
     const publicToken = generatePublicToken()
 
+    // Resolver técnico asignado: TECNICO → siempre él mismo; otros roles → optativo desde el form
+    let tecnicoAsignadoId: string | null = role === "TECNICO" ? userId! : null
+    if (role !== "TECNICO" && data.tecnicoId) {
+      const { data: tecnicoCheck } = await supabaseAdmin
+        .from("users")
+        .select("id")
+        .eq("id", data.tecnicoId)
+        .eq("organization_id", organizationId!)
+        .eq("rol", "TECNICO")
+        .maybeSingle()
+      if (!tecnicoCheck) {
+        return NextResponse.json({ error: "Técnico inválido" }, { status: 400 })
+      }
+      tecnicoAsignadoId = data.tecnicoId
+    }
+
     // Determinar estado inicial y costo final
     const estadoInicial = data.presupuestoAceptado ? "EN_REPARACION" : "RECIBIDO"
     const costoFinal = data.presupuestoAceptado && data.presupuesto ? data.presupuesto : null
@@ -286,7 +303,7 @@ export async function POST(request: Request) {
         metodo_pago_sena: data.metodoPagoSena || "EFECTIVO",
         metadata: data.metadata || {},
         sector_id: data.sectorId || null,
-        tecnico_id: role === "TECNICO" ? userId : null,
+        tecnico_id: tecnicoAsignadoId,
         telefono_contacto: data.telefonoContacto || null,
       })
       .select(`
