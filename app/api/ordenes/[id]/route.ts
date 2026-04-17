@@ -205,7 +205,7 @@ export async function PUT(
 
     if (data.fechaPrometida !== undefined) {
       updateData.fecha_prometida = data.fechaPrometida
-        ? new Date(data.fechaPrometida).toISOString()
+        ? new Date(`${data.fechaPrometida}T12:00:00Z`).toISOString()
         : null
     }
 

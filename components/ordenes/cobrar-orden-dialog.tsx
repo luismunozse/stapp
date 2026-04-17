@@ -53,8 +53,11 @@ export function CobrarOrdenDialog({
   const [showHistorial, setShowHistorial] = useState(false)
   const [loadingHistorial, setLoadingHistorial] = useState(false)
 
+  const [mostrarDescuento, setMostrarDescuento] = useState(false)
+
   const costoConDescuento = orden.costoFinal - orden.descuentoCobro - descuento
   const pendiente = Math.max(0, costoConDescuento - orden.totalCobrado)
+  const yaCobradoTotal = orden.costoFinal - orden.descuentoCobro - orden.totalCobrado <= 0
 
   const [pagosLines, setPagosLines] = useState<PagoLineItem[]>([createPagoLine(pendiente)])
 
@@ -64,6 +67,7 @@ export function CobrarOrdenDialog({
       const p = Math.max(0, orden.costoFinal - orden.descuentoCobro - orden.totalCobrado)
       setPagosLines([createPagoLine(p)])
       setDescuento(0)
+      setMostrarDescuento(false)
       setObservaciones("")
       fetchHistorial()
       fetchSaldoCuenta()
@@ -213,7 +217,7 @@ export function CobrarOrdenDialog({
           )}
         </div>
 
-        {pendiente <= 0 ? (
+        {yaCobradoTotal ? (
           <div className="text-center py-4">
             <Badge variant="success" className="text-base px-4 py-1">
               Cobrado en su totalidad
@@ -221,25 +225,6 @@ export function CobrarOrdenDialog({
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Descuento al cobrar */}
-            <div>
-              <Label className="text-xs">Descuento al cobrar (opcional)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                max={orden.costoFinal - orden.descuentoCobro - orden.totalCobrado}
-                value={descuento || ""}
-                onChange={(e) => setDescuento(parseFloat(e.target.value) || 0)}
-                placeholder="0.00"
-              />
-              {descuento > 0 && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Nuevo pendiente: {formatPrice(pendiente)}
-                </p>
-              )}
-            </div>
-
             {/* Saldo de cuenta corriente visible */}
             {!!orden.clienteId && saldoCuenta > 0 && (
               <div className="flex items-center justify-between p-2 rounded-md bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-xs">
@@ -257,6 +242,38 @@ export function CobrarOrdenDialog({
               showCuentaCorriente={!!orden.clienteId && saldoCuenta > 0}
             />
 
+            {/* Descuento al cobrar (oculto detrás de un toggle para evitar tipeos accidentales) */}
+            {!mostrarDescuento ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="w-full text-xs text-muted-foreground"
+                onClick={() => setMostrarDescuento(true)}
+              >
+                + Aplicar descuento
+              </Button>
+            ) : (
+              <div>
+                <Label className="text-xs">Descuento al cobrar (opcional)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max={orden.costoFinal - orden.descuentoCobro - orden.totalCobrado}
+                  value={descuento || ""}
+                  onChange={(e) => setDescuento(parseFloat(e.target.value) || 0)}
+                  placeholder="0.00"
+                  autoFocus
+                />
+                {descuento > 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Nuevo pendiente: {formatPrice(pendiente)}
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Observaciones */}
             <div>
               <Label className="text-xs">Observaciones</Label>
@@ -272,7 +289,7 @@ export function CobrarOrdenDialog({
             <Button
               className="w-full"
               onClick={handleCobrar}
-              disabled={loading}
+              disabled={loading || pendiente <= 0}
             >
               {loading ? (
                 <>

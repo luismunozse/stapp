@@ -243,7 +243,7 @@ export function OrdenRepuestosTab({ ordenId, repuestos, onRepuestosChanged }: Or
                   />
                 </div>
                 <div className="sm:col-span-2">
-                  <Label className="text-xs">Precio unitario</Label>
+                  <Label className="text-xs">Costo unitario</Label>
                   <Input
                     type="number"
                     min="0"

@@ -275,7 +275,7 @@ export async function POST(request: Request) {
         password_dispositivo: data.codigoAccesoDispositivo || null,
         presupuesto: data.presupuesto || null,
         fecha_prometida: data.fechaPrometida
-          ? new Date(data.fechaPrometida).toISOString()
+          ? new Date(`${data.fechaPrometida}T12:00:00Z`).toISOString()
           : null,
         observaciones: data.observaciones || null,
         public_token: publicToken,
