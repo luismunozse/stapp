@@ -16,6 +16,7 @@ import {
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { Eye, EyeOff, AlertTriangle } from "lucide-react"
 import { STAppLogo } from "@/components/shared/stapp-logo"
+import { TwoFactorVerify } from "@/components/auth/two-factor-verify"
 
 function LoginForm() {
   const router = useRouter()
@@ -25,8 +26,59 @@ function LoginForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
+  const [requires2FA, setRequires2FA] = useState(false)
+  const [pending2FAUserId, setPending2FAUserId] = useState<string | null>(null)
+  const [twoFAError, setTwoFAError] = useState("")
 
   const callbackUrl = searchParams.get("callbackUrl") || "/superadmin/dashboard"
+
+  const completeLogin = () => {
+    window.location.href = callbackUrl
+  }
+
+  const mapAuthError = (err: string): string => {
+    if (err.includes("EMAIL_NOT_VERIFIED")) return "Tu email no ha sido verificado."
+    if (err.includes("ACCOUNT_LOCKED")) return "Cuenta bloqueada por intentos fallidos. Esperá unos minutos."
+    if (err.includes("USE_GOOGLE_LOGIN")) return "Esta cuenta usa Google. Iniciá sesión con Google."
+    if (err.includes("SUPERADMIN_REQUIRES_2FA_SETUP")) {
+      return "Tu cuenta superadmin requiere 2FA. Pedile al sysadmin que lo configure."
+    }
+    return "Credenciales incorrectas"
+  }
+
+  const handle2FAVerified = async (totpCode: string) => {
+    setLoading(true)
+    setTwoFAError("")
+
+    try {
+      const result = await signIn("credentials", {
+        email,
+        password,
+        rememberMe: "false",
+        totpCode,
+        redirect: false,
+      })
+
+      if (result?.error) {
+        if (result.error.includes("INVALID_2FA_CODE")) {
+          setTwoFAError("Código inválido. Verificá e intentá de nuevo.")
+          setLoading(false)
+          return
+        }
+        setError(mapAuthError(result.error))
+        setRequires2FA(false)
+        setPending2FAUserId(null)
+        setLoading(false)
+        return
+      }
+
+      completeLogin()
+    } catch (err) {
+      console.error("2FA verify error:", err)
+      setError("Error al iniciar sesión")
+      setLoading(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -42,23 +94,47 @@ function LoginForm() {
       })
 
       if (result?.error) {
-        if (result.error.includes("EMAIL_NOT_VERIFIED")) {
-          setError("Tu email no ha sido verificado.")
-        } else {
-          setError("Credenciales incorrectas")
+        if (result.error.includes("REQUIRES_2FA")) {
+          const userId = result.error.split("REQUIRES_2FA:")[1]
+          setPending2FAUserId(userId)
+          setRequires2FA(true)
+          setLoading(false)
+          return
         }
+        setError(mapAuthError(result.error))
         setLoading(false)
         return
       }
 
       // El middleware se encargará de verificar SUPERADMIN_EMAILS
       // Si llegamos hasta aquí, redirigimos al dashboard
-      window.location.href = callbackUrl
+      completeLogin()
     } catch (error) {
       console.error("Login error:", error)
       setError("Error al iniciar sesión")
       setLoading(false)
     }
+  }
+
+  if (requires2FA && pending2FAUserId) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-muted/30 dark:bg-background px-4">
+        <div className="absolute top-4 right-4">
+          <ThemeToggle variant="icon" />
+        </div>
+        <TwoFactorVerify
+          userId={pending2FAUserId}
+          onVerified={handle2FAVerified}
+          externalError={twoFAError}
+          onCancel={() => {
+            setRequires2FA(false)
+            setPending2FAUserId(null)
+            setError("")
+            setTwoFAError("")
+          }}
+        />
+      </div>
+    )
   }
 
   return (
