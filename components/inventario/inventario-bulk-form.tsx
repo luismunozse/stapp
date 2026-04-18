@@ -116,10 +116,11 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
   } | null>(null)
 
   const categoriasDisponibles = useMemo(() => {
-    const cfg = tiposDispositivo.find((t) => t.nombre === tipoDispositivo)
+    if (!tipoDispositivo) return []
+    const cfg = tiposDispositivo.find((t) => t.codigo === tipoDispositivo)
       ?.config?.categoriasInventario as string[] | undefined
     if (cfg && cfg.length > 0) return cfg
-    return categoriasPorTipo[tipoDispositivo] || []
+    return categoriasPorTipo[tipoDispositivo] || categoriasPorTipo.TODOS
   }, [tipoDispositivo, tiposDispositivo])
 
   const updateRow = (id: string, patch: Partial<Row>) => {
@@ -298,7 +299,7 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
                 </SelectTrigger>
                 <SelectContent>
                   {tiposDispositivo.map((t) => (
-                    <SelectItem key={t.nombre} value={t.nombre}>
+                    <SelectItem key={t.id} value={t.codigo}>
                       {t.nombre}
                     </SelectItem>
                   ))}
