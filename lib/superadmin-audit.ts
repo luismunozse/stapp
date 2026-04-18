@@ -73,7 +73,7 @@ interface SuperadminAuditParams {
 export async function logSuperadminAudit(params: SuperadminAuditParams): Promise<void> {
   try {
     const { error } = await supabaseAdmin.from("audit_logs").insert({
-      organization_id: params.organizationId || "00000000-0000-0000-0000-000000000000",
+      organization_id: params.organizationId || null,
       user_id: params.userId || null,
       action: params.action,
       entity: params.entity,
