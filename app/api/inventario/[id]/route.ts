@@ -153,29 +153,94 @@ export async function DELETE(
     if (error) return error
 
     const { id } = await params
+    const url = new URL(request.url)
+    const archive = url.searchParams.get("archive") === "true"
 
-    // Soft-delete: set deleted_at instead of hard delete
-    const { data: item, error: updateError } = await supabaseAdmin
+    // Verificar que el item existe y pertenece a la organización (incluye archivados
+    // porque permitimos hard-delete sobre items ya archivados).
+    const { data: existing, error: fetchError } = await supabaseAdmin
       .from("inventario")
-      .update({ deleted_at: new Date().toISOString(), deleted_by: userId })
+      .select("id, deleted_at")
       .eq("id", id)
       .eq("organization_id", organizationId!)
-      .is("deleted_at", null)
-      .select("id")
-      .single()
+      .maybeSingle()
 
-    if (updateError || !item) {
+    if (fetchError || !existing) {
+      return NextResponse.json({ error: "Item no encontrado" }, { status: 404 })
+    }
+
+    // Modo archivar: soft-delete (conserva historial)
+    if (archive) {
+      if (existing.deleted_at) {
+        return NextResponse.json({ success: true, archived: true })
+      }
+      const { error: updateError } = await supabaseAdmin
+        .from("inventario")
+        .update({ deleted_at: new Date().toISOString(), deleted_by: userId })
+        .eq("id", id)
+      if (updateError) throw updateError
+      return NextResponse.json({ success: true, archived: true })
+    }
+
+    // Modo hard-delete: primero chequear referencias bloqueantes (FK RESTRICT).
+    // items_venta y items_cotizacion usan ON DELETE SET NULL — no bloquean.
+    // movimientos_inventario e historial_precios usan CASCADE — se limpian solos.
+    const [repuestos, devoluciones, ordenesCompra] = await Promise.all([
+      supabaseAdmin.from("repuestos_orden").select("id", { count: "exact", head: true }).eq("inventario_id", id),
+      supabaseAdmin.from("items_devolucion").select("id", { count: "exact", head: true }).eq("inventario_id", id),
+      supabaseAdmin.from("items_orden_compra").select("id", { count: "exact", head: true }).eq("inventario_id", id),
+    ])
+
+    const refs = {
+      ordenesServicio: repuestos.count ?? 0,
+      devoluciones: devoluciones.count ?? 0,
+      ordenesCompra: ordenesCompra.count ?? 0,
+    }
+    const total = refs.ordenesServicio + refs.devoluciones + refs.ordenesCompra
+
+    if (total > 0) {
+      const detalles: string[] = []
+      if (refs.ordenesServicio) detalles.push(`${refs.ordenesServicio} orden${refs.ordenesServicio === 1 ? "" : "es"} de servicio`)
+      if (refs.devoluciones) detalles.push(`${refs.devoluciones} devolución${refs.devoluciones === 1 ? "" : "es"}`)
+      if (refs.ordenesCompra) detalles.push(`${refs.ordenesCompra} orden${refs.ordenesCompra === 1 ? "" : "es"} de compra`)
       return NextResponse.json(
-        { error: "Item no encontrado" },
-        { status: 404 }
+        {
+          error: `Este item está en uso en ${detalles.join(", ")}. No se puede eliminar permanentemente; podés archivarlo.`,
+          code: "HAS_REFERENCES",
+          canArchive: true,
+          references: refs,
+        },
+        { status: 409 }
       )
     }
 
-    return NextResponse.json({ success: true })
+    // Sin referencias bloqueantes: hard delete.
+    const { error: deleteError } = await supabaseAdmin
+      .from("inventario")
+      .delete()
+      .eq("id", id)
+      .eq("organization_id", organizationId!)
+
+    if (deleteError) {
+      // Fallback defensivo: si una FK nueva apareció entre el chequeo y el delete.
+      if ((deleteError as any).code === "23503") {
+        return NextResponse.json(
+          {
+            error: "Este item está siendo usado en otros registros. Archivalo en su lugar.",
+            code: "HAS_REFERENCES",
+            canArchive: true,
+          },
+          { status: 409 }
+        )
+      }
+      throw deleteError
+    }
+
+    return NextResponse.json({ success: true, archived: false })
   } catch (error) {
-    console.error("Error archiving inventario:", error)
+    console.error("Error deleting inventario:", error)
     return NextResponse.json(
-      { error: "Error al archivar item" },
+      { error: "Error al eliminar item" },
       { status: 500 }
     )
   }

@@ -25,6 +25,7 @@ import {
   Truck,
   ScanLine,
   Tag,
+  Trash2,
 } from "lucide-react"
 import { InventarioForm } from "./inventario-form"
 import { ConsolidateDuplicatesDialog } from "./consolidate-duplicates-dialog"
@@ -233,24 +234,46 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
 
   const [consolidateGroup, setConsolidateGroup] = useState<Inventario[] | null>(null)
 
-  const handleArchive = async (id: string) => {
+  const handleDelete = async (id: string, nombre?: string) => {
     const confirmed = await confirm({
-      title: "Archivar Item",
-      description: "¿Estás seguro de archivar este item? No aparecerá en búsquedas ni ventas, pero se conservan los movimientos e historial.",
-      confirmText: "Archivar",
+      title: "Eliminar Item",
+      description: `¿Eliminar "${nombre ?? "este item"}" del inventario? Si nunca fue usado en órdenes o ventas se borra definitivamente; si ya tiene historial, te vamos a ofrecer archivarlo.`,
+      confirmText: "Eliminar",
       cancelText: "Cancelar",
       variant: "danger",
     })
-
     if (!confirmed) return
 
     try {
       const res = await fetch(`/api/inventario/${id}`, { method: "DELETE" })
       if (res.ok) {
         setRefreshKey(k => k + 1)
+        return
       }
+
+      if (res.status === 409) {
+        const data = await res.json().catch(() => ({}))
+        if (data.canArchive) {
+          const archiveConfirmed = await confirm({
+            title: "No se puede eliminar",
+            description: `${data.error} ¿Querés archivarlo? Queda oculto de búsquedas y ventas, pero el historial se conserva.`,
+            confirmText: "Archivar",
+            cancelText: "Cancelar",
+            variant: "danger",
+          })
+          if (!archiveConfirmed) return
+          const archRes = await fetch(`/api/inventario/${id}?archive=true`, { method: "DELETE" })
+          if (archRes.ok) setRefreshKey(k => k + 1)
+          else alert("No se pudo archivar el item")
+          return
+        }
+      }
+
+      const err = await res.json().catch(() => ({}))
+      alert(err.error || "No se pudo eliminar el item")
     } catch (error) {
-      console.error("Error archiving item:", error)
+      console.error("Error deleting item:", error)
+      alert("Error al eliminar el item")
     }
   }
 
@@ -447,19 +470,20 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                 >
                   <Edit className="h-3.5 w-3.5" />
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                  onClick={(e) => { e.stopPropagation(); handleArchive(item.id) }}
-                >
-                  <Archive className="h-3.5 w-3.5" />
-                </Button>
               </>
             )}
             {isArchived && (
               <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 text-muted-foreground">Archivado</Badge>
             )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+              title="Eliminar"
+              onClick={(e) => { e.stopPropagation(); handleDelete(item.id, item.nombre) }}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
           </div>
         )
       },
@@ -838,28 +862,27 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                                 Archivado
                               </Badge>
                             ) : (
-                              <>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7"
-                                  onClick={() => {
-                                    setEditingItem(item)
-                                    setShowForm(true)
-                                  }}
-                                >
-                                  <Edit className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                  onClick={() => handleArchive(item.id)}
-                                >
-                                  <Archive className="h-3.5 w-3.5" />
-                                </Button>
-                              </>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={() => {
+                                  setEditingItem(item)
+                                  setShowForm(true)
+                                }}
+                              >
+                                <Edit className="h-3.5 w-3.5" />
+                              </Button>
                             )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                              title="Eliminar"
+                              onClick={() => handleDelete(item.id, item.nombre)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
                           </div>
                         </div>
 
