@@ -25,10 +25,13 @@ interface DuplicateMatch {
   id: string
   codigo: string
   nombre: string
+  categoria: string
+  tipoDispositivo: string
   stock: number
   precioCompra: number
   precioVenta: number
   proveedor: string | null
+  score: number
 }
 
 const proveedoresFetcher = (url: string): Promise<ProveedorLite[]> =>
@@ -232,36 +235,33 @@ export function InventarioForm({
     }
   }, [item, setValue])
 
-  // Duplicate detection (debounced) — only for new items
+  // Duplicate detection — dispara on blur del nombre (cuando el usuario pasa
+  // al siguiente input). Fuzzy match por tokens en el backend; tipo/categoría
+  // son filtros opcionales que acotan si están presentes.
   const nombre = watch("nombre")
-  useEffect(() => {
+  const checkDuplicates = useCallback(async () => {
     if (item) return
     const trimmed = (nombre || "").trim()
-    if (trimmed.length < 2 || !tipoDispositivo || !categoria) {
+    if (trimmed.length < 2) {
       setDuplicates([])
       return
     }
-    const controller = new AbortController()
-    const t = setTimeout(async () => {
-      try {
-        const params = new URLSearchParams({
-          nombre: trimmed,
-          tipo: tipoDispositivo,
-          categoria,
-        })
-        const res = await fetch(`/api/inventario/check-duplicate?${params}`, {
-          signal: controller.signal,
-        })
-        if (!res.ok) return
-        const data = await res.json()
-        setDuplicates(data.matches || [])
-      } catch { /* aborted or network error */ }
-    }, 350)
-    return () => {
-      clearTimeout(t)
-      controller.abort()
-    }
+    try {
+      const params = new URLSearchParams({ nombre: trimmed })
+      if (tipoDispositivo) params.set("tipo", tipoDispositivo)
+      if (categoria) params.set("categoria", categoria)
+      const res = await fetch(`/api/inventario/check-duplicate?${params}`)
+      if (!res.ok) return
+      const data = await res.json()
+      setDuplicates(data.matches || [])
+    } catch { /* network error */ }
   }, [nombre, tipoDispositivo, categoria, item])
+
+  // Si el usuario sigue escribiendo tras ver el aviso, limpiamos el warning
+  // para evitar mostrar matches desactualizados.
+  useEffect(() => {
+    setDuplicates([])
+  }, [nombre])
 
   // Sumar stock del item nuevo al existente y cerrar el formulario.
   // Genera un movimiento ENTRADA con referenciaTipo=CONSOLIDACION para trazabilidad.
@@ -557,7 +557,7 @@ export function InventarioForm({
               <Label htmlFor="nombre">Nombre *</Label>
               <Input
                 id="nombre"
-                {...register("nombre")}
+                {...register("nombre", { onBlur: () => checkDuplicates() })}
                 placeholder="Ej: Batería iPhone 12"
                 autoFocus
               />
@@ -575,10 +575,12 @@ export function InventarioForm({
                 <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
                 <div className="flex-1">
                   <p className="font-medium">
-                    Ya {duplicates.length === 1 ? "existe un producto" : `existen ${duplicates.length} productos`} con este nombre en la misma categoría.
+                    {duplicates.length === 1
+                      ? "Posible duplicado: hay un producto con nombre similar."
+                      : `Posibles duplicados: ${duplicates.length} productos con nombre similar.`}
                   </p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    ¿Querés sumar el stock al existente o crear uno nuevo igualmente?
+                    Revisá si es el mismo. Podés sumar stock al existente, editarlo, o crear uno nuevo igualmente.
                   </p>
                 </div>
               </div>
@@ -591,7 +593,7 @@ export function InventarioForm({
                     <div className="flex-1 min-w-0">
                       <div className="font-medium truncate">{match.nombre}</div>
                       <div className="text-xs text-muted-foreground">
-                        {match.codigo} · Stock actual: {match.stock}
+                        {match.codigo} · {match.tipoDispositivo} / {match.categoria} · Stock: {match.stock}
                         {match.proveedor ? ` · ${match.proveedor}` : ""}
                       </div>
                     </div>

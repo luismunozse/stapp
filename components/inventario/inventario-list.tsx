@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { DataTable, DataTablePagination, type Column } from "@/components/ui/data-table"
 import {
   Plus,
+  ListPlus,
   Search,
   Edit,
   Archive,
@@ -28,6 +29,7 @@ import {
   Trash2,
 } from "lucide-react"
 import { InventarioForm } from "./inventario-form"
+import { InventarioBulkForm } from "./inventario-bulk-form"
 import { ConsolidateDuplicatesDialog } from "./consolidate-duplicates-dialog"
 import { InventarioStats } from "./inventario-stats"
 import { InventarioBulkBar } from "./inventario-bulk-bar"
@@ -80,6 +82,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   const [tipoDispositivo, setTipoDispositivo] = useState<TipoDispositivo | "">("")
   const [bajoStock, setBajoStock] = useState(false)
   const [showForm, setShowForm] = useState(false)
+  const [showBulkForm, setShowBulkForm] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [editingItem, setEditingItem] = useState<Inventario | null>(null)
   const [movimientosItem, setMovimientosItem] = useState<{ id: string; nombre: string } | null>(null)
@@ -632,12 +635,27 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
               <LayoutList className="h-4 w-4" />
             </Button>
           </div>
+          <Button onClick={() => setShowBulkForm(true)} variant="outline" className="gap-2">
+            <ListPlus className="h-4 w-4" />
+            <span className="hidden sm:inline">Carga en lista</span>
+            <span className="sm:hidden">Lista</span>
+          </Button>
           <Button onClick={() => setShowForm(true)} className="gap-2">
             <Plus className="h-4 w-4" />
             Nuevo Item
           </Button>
         </div>
       </div>
+
+      {showBulkForm && (
+        <InventarioBulkForm
+          onClose={() => setShowBulkForm(false)}
+          onSuccess={() => {
+            setShowBulkForm(false)
+            setRefreshKey(k => k + 1)
+          }}
+        />
+      )}
 
       {showForm && (
         <InventarioForm
