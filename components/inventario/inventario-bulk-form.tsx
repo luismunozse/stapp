@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -21,6 +21,7 @@ import {
   Loader2,
   AlertCircle,
   CheckCircle2,
+  AlertTriangle,
 } from "lucide-react"
 import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
 
@@ -44,6 +45,28 @@ interface RowError {
   stock?: string
   precioCompra?: string
   precioVenta?: string
+}
+
+interface DuplicateMatch {
+  id: string
+  codigo: string
+  nombre: string
+  categoria: string
+  tipoDispositivo: string
+  stock: number
+  score: number
+}
+
+const DUPLICATE_THRESHOLD = 0.65
+
+function normalizeName(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
 }
 
 const categoriasPorTipo: Record<string, string[]> = {
@@ -107,6 +130,111 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
   const [defaultStock, setDefaultStock] = useState("0")
 
   const [rows, setRows] = useState<Row[]>([newRow(), newRow(), newRow()])
+  const prevDefaultsRef = useRef({
+    stock: "0",
+    precioCompra: "",
+    precioVenta: "",
+  })
+
+  // Propagar cambios de defaults a las filas: se pisan solo valores vacíos
+  // o que coinciden con el default anterior (así respetamos ediciones manuales).
+  useEffect(() => {
+    const prev = prevDefaultsRef.current
+    const next = {
+      stock: defaultStock,
+      precioCompra: defaultPrecioCompra,
+      precioVenta: defaultPrecioVenta,
+    }
+    if (
+      prev.stock === next.stock &&
+      prev.precioCompra === next.precioCompra &&
+      prev.precioVenta === next.precioVenta
+    ) {
+      return
+    }
+    setRows((current) =>
+      current.map((r) => {
+        const patch: Partial<Row> = {}
+        if (next.stock !== prev.stock && (r.stock === "" || r.stock === prev.stock)) {
+          patch.stock = next.stock
+        }
+        if (
+          next.precioCompra !== prev.precioCompra &&
+          (r.precioCompra === "" || r.precioCompra === prev.precioCompra)
+        ) {
+          patch.precioCompra = next.precioCompra
+        }
+        if (
+          next.precioVenta !== prev.precioVenta &&
+          (r.precioVenta === "" || r.precioVenta === prev.precioVenta)
+        ) {
+          patch.precioVenta = next.precioVenta
+        }
+        return Object.keys(patch).length > 0 ? { ...r, ...patch } : r
+      })
+    )
+    prevDefaultsRef.current = next
+  }, [defaultStock, defaultPrecioCompra, defaultPrecioVenta])
+
+  // Chequeo de duplicados contra inventario existente (debounced).
+  // Corre cuando hay tipo + categoría. Por cada fila con nombre de 3+ chars,
+  // llama al endpoint fuzzy y guarda matches sobre umbral.
+  useEffect(() => {
+    if (!tipoDispositivo || !categoria) {
+      setMatchesByRow({})
+      return
+    }
+    const handle = setTimeout(async () => {
+      const controller = new AbortController()
+      const entries = await Promise.all(
+        rows
+          .filter((r) => r.nombre.trim().length >= 3)
+          .map(async (r) => {
+            try {
+              const params = new URLSearchParams({
+                nombre: r.nombre.trim(),
+                tipo: tipoDispositivo,
+                categoria,
+              })
+              const res = await fetch(
+                `/api/inventario/check-duplicate?${params}`,
+                { signal: controller.signal }
+              )
+              if (!res.ok) return [r.id, []] as const
+              const body = await res.json()
+              const matches: DuplicateMatch[] = (body.matches || []).filter(
+                (m: DuplicateMatch) => m.score >= DUPLICATE_THRESHOLD
+              )
+              return [r.id, matches] as const
+            } catch {
+              return [r.id, [] as DuplicateMatch[]] as const
+            }
+          })
+      )
+      const next: Record<string, DuplicateMatch[]> = {}
+      for (const [id, matches] of entries) {
+        if (matches.length > 0) next[id] = [...matches]
+      }
+      setMatchesByRow(next)
+    }, 500)
+    return () => clearTimeout(handle)
+  }, [rows, tipoDispositivo, categoria])
+
+  // Duplicados dentro del lote: filas con el mismo nombre normalizado.
+  const inBatchDuplicates = useMemo(() => {
+    const groups: Record<string, string[]> = {}
+    for (const r of rows) {
+      const key = normalizeName(r.nombre)
+      if (!key) continue
+      if (!groups[key]) groups[key] = []
+      groups[key].push(r.id)
+    }
+    const conflicts = new Set<string>()
+    for (const ids of Object.values(groups)) {
+      if (ids.length > 1) ids.forEach((id) => conflicts.add(id))
+    }
+    return conflicts
+  }, [rows])
   const [rowErrors, setRowErrors] = useState<Record<string, RowError>>({})
   const [globalError, setGlobalError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -114,6 +242,8 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
     createdCount: number
     errors: { index: number; nombre: string; error: string }[]
   } | null>(null)
+  const [matchesByRow, setMatchesByRow] = useState<Record<string, DuplicateMatch[]>>({})
+  const [showDuplicateConfirm, setShowDuplicateConfirm] = useState(false)
 
   const categoriasDisponibles = useMemo(() => {
     if (!tipoDispositivo) return []
@@ -154,17 +284,6 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
 
   const removeRow = (id: string) => {
     setRows((prev) => (prev.length > 1 ? prev.filter((r) => r.id !== id) : prev))
-  }
-
-  const applyDefaultsToEmpty = () => {
-    setRows((prev) =>
-      prev.map((r) => ({
-        ...r,
-        stock: r.stock && r.stock !== "0" ? r.stock : defaultStock || r.stock,
-        precioCompra: r.precioCompra || defaultPrecioCompra,
-        precioVenta: r.precioVenta || defaultPrecioVenta,
-      }))
-    )
   }
 
   const validate = () => {
@@ -231,9 +350,27 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
     return payload
   }
 
-  const handleSubmit = async () => {
+  const hasWarnings = useMemo(() => {
+    const rowsWithName = rows.filter((r) => r.nombre.trim().length > 0)
+    const anyDupExisting = rowsWithName.some((r) => matchesByRow[r.id]?.length)
+    const anyDupBatch = rowsWithName.some((r) => inBatchDuplicates.has(r.id))
+    return anyDupExisting || anyDupBatch
+  }, [rows, matchesByRow, inBatchDuplicates])
+
+  const handleSubmitClick = () => {
     const payload = validate()
     if (!payload) return
+    if (hasWarnings) {
+      setShowDuplicateConfirm(true)
+      return
+    }
+    void doSubmit()
+  }
+
+  const doSubmit = async () => {
+    const payload = validate()
+    if (!payload) return
+    setShowDuplicateConfirm(false)
 
     setSubmitting(true)
     setResult(null)
@@ -267,7 +404,7 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4">
-      <Card className="w-full max-w-6xl max-h-[95vh] overflow-hidden flex flex-col">
+      <Card className="relative w-full max-w-6xl max-h-[95vh] overflow-hidden flex flex-col">
         <CardHeader className="flex flex-row items-center justify-between border-b">
           <div>
             <CardTitle className="text-lg">Carga en lista</CardTitle>
@@ -373,19 +510,6 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
                 onChange={(e) => setDefaultPrecioVenta(e.target.value)}
               />
             </div>
-            <div className="md:col-span-3 flex justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={applyDefaultsToEmpty}
-                disabled={
-                  !defaultPrecioCompra && !defaultPrecioVenta && defaultStock === "0"
-                }
-              >
-                Aplicar a filas vacías
-              </Button>
-            </div>
           </div>
 
           {/* Tabla */}
@@ -407,16 +531,50 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
               <tbody>
                 {rows.map((r, idx) => {
                   const err = rowErrors[r.id] || {}
+                  const rowMatches = matchesByRow[r.id] || []
+                  const inBatchDup = inBatchDuplicates.has(r.id)
+                  const topMatch = rowMatches[0]
                   return (
                     <tr key={r.id} className="border-t">
                       <td className="px-2 py-1 text-muted-foreground">{idx + 1}</td>
                       <td className="px-2 py-1">
-                        <Input
-                          value={r.nombre}
-                          onChange={(e) => updateRow(r.id, { nombre: e.target.value })}
-                          placeholder="Ej: Funda iPhone 15 Pro"
-                          className={err.nombre ? "border-red-500" : ""}
-                        />
+                        <div className="relative">
+                          <Input
+                            value={r.nombre}
+                            onChange={(e) => updateRow(r.id, { nombre: e.target.value })}
+                            placeholder="Ej: Funda iPhone 15 Pro"
+                            className={
+                              err.nombre
+                                ? "border-red-500"
+                                : topMatch || inBatchDup
+                                ? "border-amber-500 pr-8"
+                                : ""
+                            }
+                          />
+                          {(topMatch || inBatchDup) && (
+                            <div
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-amber-600"
+                              title={
+                                inBatchDup
+                                  ? "Otra fila de este lote tiene el mismo nombre"
+                                  : `Posible duplicado: ${topMatch.nombre} (${topMatch.codigo}) — stock ${topMatch.stock}`
+                              }
+                            >
+                              <AlertTriangle className="h-4 w-4" />
+                            </div>
+                          )}
+                        </div>
+                        {topMatch && !inBatchDup && (
+                          <div className="text-[11px] text-amber-700 mt-0.5">
+                            Ya existe: {topMatch.nombre} ({topMatch.codigo}) · stock{" "}
+                            {topMatch.stock}
+                          </div>
+                        )}
+                        {inBatchDup && (
+                          <div className="text-[11px] text-amber-700 mt-0.5">
+                            Nombre repetido en este lote
+                          </div>
+                        )}
                       </td>
                       <td className="px-2 py-1">
                         <Input
@@ -540,12 +698,72 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
           )}
         </CardContent>
 
+        {showDuplicateConfirm && (
+          <div className="absolute inset-0 bg-black/40 flex items-center justify-center p-4 z-10">
+            <Card className="w-full max-w-lg">
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2 text-amber-700">
+                  <AlertTriangle className="h-5 w-5" />
+                  Posibles duplicados detectados
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <p className="text-muted-foreground">
+                  Algunos nombres ya existen en el inventario o están repetidos en
+                  este lote:
+                </p>
+                <ul className="list-disc pl-6 space-y-1 max-h-56 overflow-y-auto">
+                  {rows
+                    .filter(
+                      (r) =>
+                        r.nombre.trim().length > 0 &&
+                        (matchesByRow[r.id]?.length || inBatchDuplicates.has(r.id))
+                    )
+                    .map((r) => {
+                      const top = matchesByRow[r.id]?.[0]
+                      return (
+                        <li key={r.id}>
+                          <span className="font-medium">{r.nombre}</span>
+                          {inBatchDuplicates.has(r.id) && (
+                            <span className="text-amber-700"> — repetido en el lote</span>
+                          )}
+                          {top && !inBatchDuplicates.has(r.id) && (
+                            <span className="text-muted-foreground">
+                              {" "}
+                              · ya existe como <span className="font-mono">{top.codigo}</span>{" "}
+                              ({top.nombre})
+                            </span>
+                          )}
+                        </li>
+                      )
+                    })}
+                </ul>
+                <p className="text-muted-foreground">
+                  ¿Querés crearlos igual? Los productos existentes no se modifican.
+                </p>
+              </CardContent>
+              <div className="border-t p-3 flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowDuplicateConfirm(false)}
+                >
+                  Revisar
+                </Button>
+                <Button onClick={doSubmit} disabled={submitting}>
+                  {submitting && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+                  Crear igual
+                </Button>
+              </div>
+            </Card>
+          </div>
+        )}
+
         <div className="border-t p-3 flex justify-end gap-2 shrink-0">
           <Button variant="outline" onClick={onClose} disabled={submitting}>
             {result && result.createdCount > 0 ? "Cerrar" : "Cancelar"}
           </Button>
           <Button
-            onClick={handleSubmit}
+            onClick={handleSubmitClick}
             disabled={submitting || totalConNombre === 0}
           >
             {submitting && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
