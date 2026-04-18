@@ -46,6 +46,13 @@ function LoginForm() {
     return "Credenciales incorrectas"
   }
 
+  // En NextAuth v5 los errores customizados viajan en `result.code` (no en
+  // `result.error`, que siempre es "CredentialsSignin"). Ver lib/auth.ts →
+  // AuthSigninError. Mantenemos fallback a `error` por si algún día cambia.
+  const extractAuthCode = (r: { error?: string; code?: string } | undefined): string => {
+    return r?.code || r?.error || ""
+  }
+
   const handle2FAVerified = async (totpCode: string) => {
     setLoading(true)
     setTwoFAError("")
@@ -60,12 +67,13 @@ function LoginForm() {
       })
 
       if (result?.error) {
-        if (result.error.includes("INVALID_2FA_CODE")) {
+        const code = extractAuthCode(result)
+        if (code.includes("INVALID_2FA_CODE")) {
           setTwoFAError("Código inválido. Verificá e intentá de nuevo.")
           setLoading(false)
           return
         }
-        setError(mapAuthError(result.error))
+        setError(mapAuthError(code))
         setRequires2FA(false)
         setPending2FAUserId(null)
         setLoading(false)
@@ -94,14 +102,15 @@ function LoginForm() {
       })
 
       if (result?.error) {
-        if (result.error.includes("REQUIRES_2FA")) {
-          const userId = result.error.split("REQUIRES_2FA:")[1]
+        const code = extractAuthCode(result)
+        if (code.includes("REQUIRES_2FA")) {
+          const userId = code.split("REQUIRES_2FA:")[1]
           setPending2FAUserId(userId)
           setRequires2FA(true)
           setLoading(false)
           return
         }
-        setError(mapAuthError(result.error))
+        setError(mapAuthError(code))
         setLoading(false)
         return
       }

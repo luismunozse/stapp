@@ -1,5 +1,19 @@
-import NextAuth from "next-auth"
+import NextAuth, { CredentialsSignin } from "next-auth"
 import Credentials from "next-auth/providers/credentials"
+
+// NextAuth v5: cuando authorize() tira `throw new Error("CODE")`, el mensaje
+// queda atrapado dentro de CallbackRouteError y el cliente nunca lo ve — recibe
+// solo "CallbackRouteError" en result.error. Para propagar el código al cliente
+// hay que tirar una subclase de CredentialsSignin con `code`: el framework
+// pasa ese code como query param `?code=` y el cliente lo lee en `result.code`.
+// Usamos el code como string serializado para preservar el patrón "CODE:payload"
+// usado en el codebase (ej. REQUIRES_2FA:userId).
+class AuthSigninError extends CredentialsSignin {
+  constructor(code: string) {
+    super()
+    this.code = code
+  }
+}
 import { supabaseAdmin } from "@/lib/supabase"
 import bcrypt from "bcryptjs"
 import { randomBytes } from "crypto"
@@ -193,7 +207,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             .single()
 
           if (gError || !gUser) {
-            throw new Error("GOOGLE_NO_ACCOUNT")
+            throw new AuthSigninError("GOOGLE_NO_ACCOUNT")
           }
 
           // Google ya verificó el email, marcar como verificado si no lo está
@@ -223,17 +237,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               : ""
             if (!providedCode) {
               // Aún no envió código: pedir el segundo factor
-              throw new Error(`REQUIRES_2FA:${gUser.id}`)
+              throw new AuthSigninError(`REQUIRES_2FA:${gUser.id}`)
             }
             const totpResult = await verifyUserTotpCode(gUser.id, providedCode)
             if (!totpResult.valid) {
-              throw new Error("INVALID_2FA_CODE")
+              throw new AuthSigninError("INVALID_2FA_CODE")
             }
           }
 
           // Forzar 2FA para superadmin con Google login
           if (isGoogleSuper && !gUser.totp_enabled) {
-            throw new Error("SUPERADMIN_REQUIRES_2FA_SETUP")
+            throw new AuthSigninError("SUPERADMIN_REQUIRES_2FA_SETUP")
           }
 
           const rememberMe = credentials.rememberMe === "true"
@@ -290,12 +304,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             isSuperadmin: isSuperadminEmail(user.email),
             reason: "Cuenta bloqueada por intentos fallidos",
           }).catch(() => {})
-          throw new Error("ACCOUNT_LOCKED")
+          throw new AuthSigninError("ACCOUNT_LOCKED")
         }
 
         // Verificar que el email esté verificado
         if (!user.email_verified) {
-          throw new Error("EMAIL_NOT_VERIFIED")
+          throw new AuthSigninError("EMAIL_NOT_VERIFIED")
         }
 
         // Verificar si es superadmin
@@ -316,7 +330,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         // Verificar password (puede ser null si el usuario se registró con Google)
         if (!user.password) {
-          throw new Error("USE_GOOGLE_LOGIN")
+          throw new AuthSigninError("USE_GOOGLE_LOGIN")
         }
 
         const isPasswordValid = await bcrypt.compare(
@@ -349,7 +363,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             : ""
           if (!providedCode) {
             // Lanzar error especial para que el frontend muestre el paso de 2FA
-            throw new Error(`REQUIRES_2FA:${user.id}`)
+            throw new AuthSigninError(`REQUIRES_2FA:${user.id}`)
           }
           const totpResult = await verifyUserTotpCode(user.id, providedCode)
           if (!totpResult.valid) {
@@ -361,13 +375,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               isSuperadmin: isSuper,
               reason: "Código 2FA inválido",
             }).catch(() => {})
-            throw new Error("INVALID_2FA_CODE")
+            throw new AuthSigninError("INVALID_2FA_CODE")
           }
         }
 
         // Forzar 2FA para superadmin: si no tiene 2FA activado, exigir que lo configure
         if (isSuper && !user.totp_enabled) {
-          throw new Error("SUPERADMIN_REQUIRES_2FA_SETUP")
+          throw new AuthSigninError("SUPERADMIN_REQUIRES_2FA_SETUP")
         }
 
         // Resetear intentos fallidos y log login exitoso
