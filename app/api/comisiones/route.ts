@@ -1,17 +1,25 @@
 import { NextResponse } from "next/server"
-import { requireAdmin } from "@/lib/auth-utils"
+import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAdmin()
+    const { error, organizationId, userId, role } = await requireAuth()
     if (error) return error
 
     const { searchParams } = new URL(request.url)
-    const tecnicoId = searchParams.get("tecnicoId")
+    let tecnicoId = searchParams.get("tecnicoId")
     const desde = searchParams.get("desde")
     const hasta = searchParams.get("hasta")
     const soloPendientes = searchParams.get("soloPendientes") === "true"
+
+    // Un TECNICO solo puede ver sus propias comisiones
+    if (role !== "ADMIN") {
+      if (tecnicoId && tecnicoId !== userId) {
+        return NextResponse.json({ error: "Acceso denegado" }, { status: 403 })
+      }
+      tecnicoId = userId
+    }
 
     let query = supabaseAdmin
       .from("v_comisiones_ordenes")

@@ -30,6 +30,12 @@ import {
 import { useCurrency } from "@/contexts/currency-context"
 import { cn } from "@/lib/utils"
 
+function formatPlazo(horasRestantes: number, vencida: boolean): string {
+  const horas = Math.abs(horasRestantes)
+  const texto = horas < 24 ? `${horas}h` : `${Math.round(horas / 24)}d`
+  return vencida ? `Vencida ${texto}` : texto
+}
+
 interface Insights {
   rangoDias: number
   totales: {
@@ -185,7 +191,7 @@ export function TecnicoInsights({ tecnicoId }: { tecnicoId: string }) {
                       className="text-[10px] shrink-0"
                     >
                       <CalendarClock className="h-3 w-3 mr-0.5" />
-                      {o.vencida ? `Vencida ${Math.abs(o.horasRestantes)}h` : `${o.horasRestantes}h`}
+                      {formatPlazo(o.horasRestantes, o.vencida)}
                     </Badge>
                   </Link>
                 ))}

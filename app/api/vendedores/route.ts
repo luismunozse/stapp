@@ -3,51 +3,101 @@ import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { enforcePlanLimit } from "@/lib/plan-limits"
 import bcrypt from "bcryptjs"
+import { z } from "zod"
 
-export async function GET() {
+const vendedorCreateSchema = z.object({
+  nombre: z.string().trim().min(1, "El nombre es requerido"),
+  email: z.string().email("Email inválido"),
+  password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
+  telefono: z.string().trim().optional().nullable(),
+  porcentajeComision: z.coerce
+    .number()
+    .min(0, "La comisión debe ser mayor o igual a 0")
+    .max(100, "La comisión no puede superar 100")
+    .optional()
+    .default(0),
+})
+
+export async function GET(request: Request) {
   try {
     const { error, organizationId } = await requireAuth()
     if (error) return error
 
-    const { data: vendedores, error: dbError } = await supabaseAdmin
+    const { searchParams } = new URL(request.url)
+    const search = (searchParams.get("search") || "").trim()
+    const activoParam = searchParams.get("activo")
+    const page = Math.max(parseInt(searchParams.get("page") || "1"), 1)
+    const limit = Math.min(Math.max(parseInt(searchParams.get("limit") || "20"), 1), 100)
+    const offset = (page - 1) * limit
+
+    let query = supabaseAdmin
       .from("users")
-      .select(`
-        id,
-        nombre,
-        email,
-        created_at,
-        ventas!ventas_vendedor_id_fkey (
-          id,
-          estado
-        )
-      `)
+      .select(
+        "id, nombre, email, telefono, activo, porcentaje_comision, created_at",
+        { count: "exact" }
+      )
       .eq("rol", "VENDEDOR")
       .eq("organization_id", organizationId!)
+      .order("activo", { ascending: false })
       .order("nombre", { ascending: true })
+
+    if (search) {
+      const escaped = search.replace(/[%,]/g, "")
+      query = query.or(`nombre.ilike.%${escaped}%,email.ilike.%${escaped}%,telefono.ilike.%${escaped}%`)
+    }
+
+    if (activoParam === "true") query = query.eq("activo", true)
+    else if (activoParam === "false") query = query.eq("activo", false)
+
+    query = query.range(offset, offset + limit - 1)
+
+    const { data: vendedores, error: dbError, count } = await query
 
     if (dbError) {
       throw dbError
     }
 
-    const vendedoresConStats = (vendedores || []).map((vendedor) => {
-      const ventas = vendedor.ventas || []
-      const ventasCompletadas = ventas.filter(
-        (v: any) => v.estado === "COMPLETADA"
-      ).length
+    // Stats agregadas vía RPC (lifetime, sin filtro de fecha)
+    const { data: statsRows } = await supabaseAdmin.rpc("get_vendedores_stats", {
+      p_org_id: organizationId!,
+    })
 
+    const statsByVendedor = new Map<string, { ventasTotal: number; ventasCompletadas: number }>()
+    for (const row of statsRows || []) {
+      statsByVendedor.set(row.vendedor_id, {
+        ventasTotal: Number(row.ventas_total || 0),
+        ventasCompletadas: Number(row.ventas_completadas || 0),
+      })
+    }
+
+    const vendedoresConStats = (vendedores || []).map((vendedor: any) => {
+      const stats = statsByVendedor.get(vendedor.id) ?? {
+        ventasTotal: 0,
+        ventasCompletadas: 0,
+      }
       return {
         id: vendedor.id,
         nombre: vendedor.nombre,
         email: vendedor.email,
+        telefono: vendedor.telefono ?? null,
+        activo: vendedor.activo !== false,
+        porcentajeComision: Number(vendedor.porcentaje_comision ?? 0),
         created_at: vendedor.created_at,
-        ventasCompletadas,
-        ventasTotal: ventas.length,
+        ventasCompletadas: stats.ventasCompletadas,
+        ventasTotal: stats.ventasTotal,
       }
     })
 
-    return NextResponse.json(vendedoresConStats, {
-      headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
-    })
+    return NextResponse.json(
+      {
+        data: vendedoresConStats,
+        total: count || 0,
+        page,
+        limit,
+        totalPages: Math.ceil((count || 0) / limit),
+      },
+      { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
+    )
   } catch (error) {
     console.error("Error fetching vendedores:", error)
     return NextResponse.json(
@@ -67,20 +117,13 @@ export async function POST(request: Request) {
     if (limitError) return limitError
 
     const body = await request.json()
-    const { nombre, email, password } = body
-
-    if (!nombre || !email || !password) {
-      return NextResponse.json(
-        { error: "Nombre, email y contraseña son requeridos" },
-        { status: 400 }
-      )
-    }
+    const data = vendedorCreateSchema.parse(body)
 
     // Verificar si el email ya existe
     const { data: existingUser } = await supabaseAdmin
       .from("users")
       .select("id")
-      .eq("email", email)
+      .eq("email", data.email)
       .single()
 
     if (existingUser) {
@@ -90,19 +133,22 @@ export async function POST(request: Request) {
       )
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10)
+    const hashedPassword = await bcrypt.hash(data.password, 10)
 
     const { data: vendedor, error: dbError } = await supabaseAdmin
       .from("users")
       .insert({
-        nombre,
-        email,
+        nombre: data.nombre,
+        email: data.email,
         password: hashedPassword,
         rol: "VENDEDOR",
         organization_id: organizationId!,
         email_verified: true,
+        telefono: data.telefono?.trim() || null,
+        porcentaje_comision: data.porcentajeComision,
+        activo: true,
       })
-      .select("id, nombre, email")
+      .select("id, nombre, email, telefono, activo, porcentaje_comision")
       .single()
 
     if (dbError) {
@@ -111,6 +157,12 @@ export async function POST(request: Request) {
 
     return NextResponse.json(vendedor, { status: 201 })
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: error.errors[0].message },
+        { status: 400 }
+      )
+    }
     console.error("Error creating vendedor:", error)
     return NextResponse.json(
       { error: "Error al crear vendedor" },

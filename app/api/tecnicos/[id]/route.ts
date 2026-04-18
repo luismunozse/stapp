@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth, requireAdmin } from "@/lib/auth-utils"
+import { requireAdmin, requireAdminOrSelf } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { ESTADOS_ACTIVOS, ESTADOS_COMPLETADOS } from "@/lib/order-states"
 import bcrypt from "bcryptjs"
@@ -9,10 +9,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
-    if (error) return error
-
     const { id } = await params
+    const { error, organizationId } = await requireAdminOrSelf(id)
+    if (error) return error
 
     const { data: tecnico, error: dbError } = await supabaseAdmin
       .from("users")
@@ -27,14 +26,7 @@ export async function GET(
         fecha_ingreso_tecnico,
         porcentaje_comision,
         created_at,
-        ordenes_servicio:ordenes_servicio!tecnico_id (
-          id,
-          numero_orden,
-          dispositivo,
-          estado,
-          fecha_ingreso,
-          clientes (nombre)
-        )
+        ordenes_servicio:ordenes_servicio!tecnico_id ( estado )
       `)
       .eq("id", id)
       .eq("rol", "TECNICO")
@@ -46,12 +38,12 @@ export async function GET(
     }
 
     const ordenes = tecnico.ordenes_servicio || []
-    const ordenesActivas = ordenes.filter(
-      (o: any) => ESTADOS_ACTIVOS.includes(o.estado)
-    )
-    const ordenesCompletadas = ordenes.filter(
-      (o: any) => ESTADOS_COMPLETADOS.includes(o.estado)
-    )
+    const ordenesActivas = ordenes.filter((o: any) =>
+      ESTADOS_ACTIVOS.includes(o.estado)
+    ).length
+    const ordenesCompletadas = ordenes.filter((o: any) =>
+      ESTADOS_COMPLETADOS.includes(o.estado)
+    ).length
 
     return NextResponse.json({
       id: tecnico.id,
@@ -64,20 +56,8 @@ export async function GET(
       fechaIngresoTecnico: tecnico.fecha_ingreso_tecnico ?? null,
       porcentajeComision: Number(tecnico.porcentaje_comision ?? 0),
       createdAt: tecnico.created_at,
-      ordenesActivas: ordenesActivas.length,
-      ordenesCompletadas: ordenesCompletadas.length,
-      ordenes: ordenes
-        .sort((a: any, b: any) =>
-          new Date(b.fecha_ingreso).getTime() - new Date(a.fecha_ingreso).getTime()
-        )
-        .map((o: any) => ({
-          id: o.id,
-          numeroOrden: o.numero_orden,
-          dispositivo: o.dispositivo,
-          estado: o.estado,
-          fechaIngreso: o.fecha_ingreso,
-          cliente: o.clientes?.nombre,
-        })),
+      ordenesActivas,
+      ordenesCompletadas,
     })
   } catch (error) {
     console.error("Error fetching tecnico:", error)

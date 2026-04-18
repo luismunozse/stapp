@@ -27,6 +27,7 @@ import {
   Tag,
 } from "lucide-react"
 import { InventarioForm } from "./inventario-form"
+import { ConsolidateDuplicatesDialog } from "./consolidate-duplicates-dialog"
 import { InventarioStats } from "./inventario-stats"
 import { InventarioBulkBar } from "./inventario-bulk-bar"
 import { QuickStockAdjust } from "./quick-stock-adjust"
@@ -200,6 +201,38 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   const items: Inventario[] = data?.data || (Array.isArray(data) ? data : [])
   const total = data?.total || (Array.isArray(data) ? data.length : 0)
 
+  // Detección client-side de duplicados en la página actual.
+  // Clave: nombre normalizado + tipo + categoría. Marca como duplicado cualquier
+  // item que comparta clave con al menos otro de los visibles. También mapea
+  // cada id a su grupo completo para alimentar el diálogo de consolidación.
+  const { duplicateIds, duplicateGroupByItemId } = useMemo(() => {
+    const groups = new Map<string, Inventario[]>()
+    for (const it of items) {
+      const key = `${it.nombre
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/\s+/g, " ")
+        .trim()}|${it.tipoDispositivo}|${it.categoria}`
+      const arr = groups.get(key) || []
+      arr.push(it)
+      groups.set(key, arr)
+    }
+    const dup = new Set<string>()
+    const byId = new Map<string, Inventario[]>()
+    for (const list of groups.values()) {
+      if (list.length > 1) {
+        list.forEach((it) => {
+          dup.add(it.id)
+          byId.set(it.id, list)
+        })
+      }
+    }
+    return { duplicateIds: dup, duplicateGroupByItemId: byId }
+  }, [items])
+
+  const [consolidateGroup, setConsolidateGroup] = useState<Inventario[] | null>(null)
+
   const handleArchive = async (id: string) => {
     const confirmed = await confirm({
       title: "Archivar Item",
@@ -241,7 +274,28 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
             )}
           </div>
           <div className="min-w-0">
-            <div className="font-medium text-sm truncate">{item.nombre}</div>
+            <div className="font-medium text-sm truncate flex items-center gap-1.5">
+              <span className="truncate">{item.nombre}</span>
+              {duplicateIds.has(item.id) && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    const group = duplicateGroupByItemId.get(item.id)
+                    if (group) setConsolidateGroup(group)
+                  }}
+                  className="shrink-0"
+                  title="Clic para consolidar los duplicados detectados en esta página."
+                >
+                  <Badge
+                    variant="outline"
+                    className="h-4 px-1 text-[9px] font-normal border-amber-500/60 text-amber-600 bg-amber-500/10 hover:bg-amber-500/20 cursor-pointer"
+                  >
+                    Duplicado
+                  </Badge>
+                </button>
+              )}
+            </div>
             <div className="text-xs text-muted-foreground">{item.codigo}</div>
           </div>
         </div>
@@ -410,7 +464,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
         )
       },
     },
-  ], [tiposDispositivo, umbralStockBajo, formatPrice])
+  ], [tiposDispositivo, umbralStockBajo, formatPrice, duplicateIds, duplicateGroupByItemId])
 
   return (
     <div className="space-y-4">
@@ -573,6 +627,29 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
             setEditingItem(null)
             setRefreshKey(k => k + 1)
           }}
+          onEditExisting={async (id) => {
+            try {
+              const res = await fetch(`/api/inventario/${id}`, { cache: "no-store" })
+              if (!res.ok) throw new Error("No se pudo cargar el item")
+              const existing: Inventario = await res.json()
+              setEditingItem(existing)
+            } catch (err) {
+              console.error("Error cargando item existente:", err)
+              alert("No se pudo abrir el item existente")
+            }
+          }}
+        />
+      )}
+
+      {consolidateGroup && (
+        <ConsolidateDuplicatesDialog
+          open={!!consolidateGroup}
+          onOpenChange={(o) => { if (!o) setConsolidateGroup(null) }}
+          group={consolidateGroup}
+          onSuccess={() => {
+            setConsolidateGroup(null)
+            setRefreshKey(k => k + 1)
+          }}
         />
       )}
 
@@ -731,7 +808,28 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                         {/* Row 1: Name + Actions */}
                         <div className="flex items-start justify-between gap-2 mb-2">
                           <div className="min-w-0 flex-1">
-                            <div className="font-semibold text-sm leading-tight truncate">{item.nombre}</div>
+                            <div className="font-semibold text-sm leading-tight truncate flex items-center gap-1.5">
+                              <span className="truncate">{item.nombre}</span>
+                              {duplicateIds.has(item.id) && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    const group = duplicateGroupByItemId.get(item.id)
+                                    if (group) setConsolidateGroup(group)
+                                  }}
+                                  className="shrink-0"
+                                  title="Clic para consolidar los duplicados detectados en esta página."
+                                >
+                                  <Badge
+                                    variant="outline"
+                                    className="h-4 px-1 text-[9px] font-normal border-amber-500/60 text-amber-600 bg-amber-500/10 hover:bg-amber-500/20 cursor-pointer"
+                                  >
+                                    Duplicado
+                                  </Badge>
+                                </button>
+                              )}
+                            </div>
                             <div className="text-xs text-muted-foreground">{item.codigo}</div>
                           </div>
                           <div className="flex items-center gap-0.5 shrink-0">

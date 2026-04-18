@@ -67,6 +67,7 @@ const navItems: NavItem[] = [
   { href: "/ordenes", label: "Órdenes", icon: ClipboardList },
   { href: "/clientes", label: "Clientes", icon: Users, roles: ["ADMIN", "VENDEDOR", "TECNICO"] },
   { href: "/tecnicos", label: "Técnicos", icon: Wrench, roles: ["ADMIN"] },
+  { href: "/tecnicos", label: "Mi desempeño", icon: TrendingUp, roles: ["TECNICO"] },
   { href: "/comisiones", label: "Comisiones", icon: Percent, roles: ["ADMIN"] },
   { href: "/vendedores", label: "Vendedores", icon: TrendingUp, roles: ["ADMIN"] },
   { href: "/ventas", label: "Ventas", icon: ShoppingCart, roles: ["ADMIN", "VENDEDOR"] },
@@ -116,6 +117,7 @@ const navSections: NavSection[] = [
     label: "Más",
     items: [
       { href: "/tecnicos", label: "Técnicos", icon: Wrench, roles: ["ADMIN"] },
+      { href: "/tecnicos", label: "Mi desempeño", icon: TrendingUp, roles: ["TECNICO"] },
       { href: "/comisiones", label: "Comisiones", icon: Percent, roles: ["ADMIN"] },
       { href: "/vendedores", label: "Vendedores", icon: TrendingUp, roles: ["ADMIN"] },
       { href: "/ordenes-compra", label: "Compras", icon: Truck, roles: ["ADMIN"] },

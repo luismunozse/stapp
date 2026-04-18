@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAdmin } from "@/lib/auth-utils"
+import { requireAdminOrSelf } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 
 export async function GET(
@@ -7,10 +7,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAdmin()
-    if (error) return error
-
     const { id } = await params
+    const { error, organizationId } = await requireAdminOrSelf(id)
+    if (error) return error
     const { searchParams } = new URL(request.url)
     const dias = parseInt(searchParams.get("dias") || "90", 10)
     const desde = new Date()

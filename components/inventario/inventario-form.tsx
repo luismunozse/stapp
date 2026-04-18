@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { X, ChevronDown, ChevronUp, Plus, Check, Loader2, ImagePlus, Trash2, Package } from "lucide-react"
+import { X, ChevronDown, ChevronUp, Plus, Check, Loader2, ImagePlus, Trash2, Package, AlertTriangle, PlusCircle, Pencil } from "lucide-react"
 import type { Inventario } from "@/types"
 import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
 import { compressImage } from "@/lib/image-compression"
@@ -19,6 +19,16 @@ interface ProveedorLite {
   id: string
   nombre: string
   activo?: boolean
+}
+
+interface DuplicateMatch {
+  id: string
+  codigo: string
+  nombre: string
+  stock: number
+  precioCompra: number
+  precioVenta: number
+  proveedor: string | null
 }
 
 const proveedoresFetcher = (url: string): Promise<ProveedorLite[]> =>
@@ -64,12 +74,16 @@ interface InventarioFormProps {
   item?: Inventario | null
   onClose: () => void
   onSuccess: () => void
+  // Disparado al pedir editar un duplicado detectado. El padre debe cargar
+  // ese item y reabrir el form en modo edición.
+  onEditExisting?: (id: string) => void
 }
 
 export function InventarioForm({
   item,
   onClose,
   onSuccess,
+  onEditExisting,
 }: InventarioFormProps) {
   const { tipos: tiposDispositivo, loading: tiposLoading, error: tiposError, refetch: refetchTipos } = useTiposDispositivo({ incluirTodos: true })
   const [loading, setLoading] = useState(false)
@@ -96,6 +110,11 @@ export function InventarioForm({
   const { data: proveedores = [] } = useSWR<ProveedorLite[]>("/api/proveedores", proveedoresFetcher, {
     revalidateOnFocus: false,
   })
+
+  // Detección de duplicados (solo alta nueva): nombre normalizado + mismo tipo + misma categoría.
+  // Señal suave; el usuario decide si consolidar, editar el existente o crear igual.
+  const [duplicates, setDuplicates] = useState<DuplicateMatch[]>([])
+  const [consolidating, setConsolidating] = useState<string | null>(null)
 
   const {
     register,
@@ -212,6 +231,72 @@ export function InventarioForm({
       } catch { /* ignore */ }
     }
   }, [item, setValue])
+
+  // Duplicate detection (debounced) — only for new items
+  const nombre = watch("nombre")
+  useEffect(() => {
+    if (item) return
+    const trimmed = (nombre || "").trim()
+    if (trimmed.length < 2 || !tipoDispositivo || !categoria) {
+      setDuplicates([])
+      return
+    }
+    const controller = new AbortController()
+    const t = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({
+          nombre: trimmed,
+          tipo: tipoDispositivo,
+          categoria,
+        })
+        const res = await fetch(`/api/inventario/check-duplicate?${params}`, {
+          signal: controller.signal,
+        })
+        if (!res.ok) return
+        const data = await res.json()
+        setDuplicates(data.matches || [])
+      } catch { /* aborted or network error */ }
+    }, 350)
+    return () => {
+      clearTimeout(t)
+      controller.abort()
+    }
+  }, [nombre, tipoDispositivo, categoria, item])
+
+  // Sumar stock del item nuevo al existente y cerrar el formulario.
+  // Genera un movimiento ENTRADA con referenciaTipo=CONSOLIDACION para trazabilidad.
+  const handleConsolidate = async (match: DuplicateMatch) => {
+    const values = watch()
+    const stockToAdd = Number(values.stock) || 0
+    if (stockToAdd <= 0) {
+      alert("Ingresá una cantidad de stock mayor a 0 para sumar al existente.")
+      return
+    }
+    setConsolidating(match.id)
+    try {
+      const res = await fetch(`/api/inventario/${match.id}/stock`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "delta",
+          value: stockToAdd,
+          tipo: "ENTRADA",
+          referenciaTipo: "CONSOLIDACION",
+          motivo: `Consolidación desde alta duplicada (${values.nombre})`,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || "Error al sumar stock")
+      }
+      onSuccess()
+    } catch (err) {
+      console.error("Error consolidando stock:", err)
+      alert(err instanceof Error ? err.message : "Error al sumar stock")
+    } finally {
+      setConsolidating(null)
+    }
+  }
 
   const handleAddTipo = async () => {
     const nombre = newTipo.trim()
@@ -483,6 +568,68 @@ export function InventarioForm({
               )}
             </div>
           </div>
+
+          {!item && duplicates.length > 0 && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 space-y-2">
+              <div className="flex items-start gap-2 text-sm">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
+                <div className="flex-1">
+                  <p className="font-medium">
+                    Ya {duplicates.length === 1 ? "existe un producto" : `existen ${duplicates.length} productos`} con este nombre en la misma categoría.
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    ¿Querés sumar el stock al existente o crear uno nuevo igualmente?
+                  </p>
+                </div>
+              </div>
+              <ul className="space-y-1.5">
+                {duplicates.map((match) => (
+                  <li
+                    key={match.id}
+                    className="flex flex-col sm:flex-row sm:items-center gap-2 rounded border bg-background p-2 text-sm"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate">{match.nombre}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {match.codigo} · Stock actual: {match.stock}
+                        {match.proveedor ? ` · ${match.proveedor}` : ""}
+                      </div>
+                    </div>
+                    <div className="flex gap-1.5 shrink-0">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="default"
+                        className="h-8 gap-1"
+                        onClick={() => handleConsolidate(match)}
+                        disabled={consolidating !== null}
+                      >
+                        {consolidating === match.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <PlusCircle className="h-3.5 w-3.5" />
+                        )}
+                        Sumar stock
+                      </Button>
+                      {onEditExisting && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-8 gap-1"
+                          onClick={() => onEditExisting(match.id)}
+                          disabled={consolidating !== null}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                          Editar este
+                        </Button>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>

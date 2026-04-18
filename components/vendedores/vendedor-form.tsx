@@ -20,6 +20,9 @@ interface VendedorFormProps {
     id: string
     nombre: string
     email: string
+    telefono?: string | null
+    activo?: boolean
+    porcentajeComision?: number
   } | null
   onSuccess: () => void
 }
@@ -28,6 +31,11 @@ export function VendedorForm({ open, onOpenChange, vendedor, onSuccess }: Vended
   const [nombre, setNombre] = useState(vendedor?.nombre || "")
   const [email, setEmail] = useState(vendedor?.email || "")
   const [password, setPassword] = useState("")
+  const [telefono, setTelefono] = useState(vendedor?.telefono || "")
+  const [activo, setActivo] = useState(vendedor?.activo !== false)
+  const [porcentajeComision, setPorcentajeComision] = useState(
+    vendedor?.porcentajeComision?.toString() || "0"
+  )
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
@@ -37,14 +45,34 @@ export function VendedorForm({ open, onOpenChange, vendedor, onSuccess }: Vended
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
+
+    const porcentajeNum = Number(porcentajeComision)
+    if (!Number.isFinite(porcentajeNum) || porcentajeNum < 0 || porcentajeNum > 100) {
+      setError("El porcentaje de comisión debe estar entre 0 y 100")
+      return
+    }
+
     setLoading(true)
 
     try {
       const url = isEditing ? `/api/vendedores/${vendedor.id}` : "/api/vendedores"
       const method = isEditing ? "PUT" : "POST"
 
-      const body: { nombre: string; email: string; password?: string } = { nombre, email }
+      const body: {
+        nombre: string
+        email: string
+        password?: string
+        telefono: string | null
+        porcentajeComision: number
+        activo?: boolean
+      } = {
+        nombre,
+        email,
+        telefono: telefono.trim() || null,
+        porcentajeComision: porcentajeNum,
+      }
       if (password) body.password = password
+      if (isEditing) body.activo = activo
 
       const res = await fetch(url, {
         method,
@@ -71,6 +99,9 @@ export function VendedorForm({ open, onOpenChange, vendedor, onSuccess }: Vended
     setNombre("")
     setEmail("")
     setPassword("")
+    setTelefono("")
+    setActivo(true)
+    setPorcentajeComision("0")
     setError("")
   }
 
@@ -80,6 +111,9 @@ export function VendedorForm({ open, onOpenChange, vendedor, onSuccess }: Vended
     } else if (vendedor) {
       setNombre(vendedor.nombre)
       setEmail(vendedor.email)
+      setTelefono(vendedor.telefono || "")
+      setActivo(vendedor.activo !== false)
+      setPorcentajeComision(vendedor.porcentajeComision?.toString() || "0")
     }
     onOpenChange(newOpen)
   }
@@ -151,6 +185,51 @@ export function VendedorForm({ open, onOpenChange, vendedor, onSuccess }: Vended
               </Button>
             </div>
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="telefono">Teléfono</Label>
+            <Input
+              id="telefono"
+              type="tel"
+              value={telefono}
+              onChange={(e) => setTelefono(e.target.value)}
+              placeholder="+54 11 1234-5678"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="porcentajeComision">Porcentaje de comisión (%)</Label>
+            <Input
+              id="porcentajeComision"
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              value={porcentajeComision}
+              onChange={(e) => setPorcentajeComision(e.target.value)}
+              placeholder="0"
+            />
+            <p className="text-xs text-muted-foreground">
+              Comisión por defecto aplicada sobre cada venta.
+            </p>
+          </div>
+          {isEditing && (
+            <div className="flex items-center gap-2 pt-2">
+              <input
+                id="activo"
+                type="checkbox"
+                checked={activo}
+                onChange={(e) => setActivo(e.target.checked)}
+                className="h-4 w-4 rounded border-input"
+              />
+              <Label htmlFor="activo" className="cursor-pointer">
+                Vendedor activo
+              </Label>
+              {!activo && (
+                <span className="text-xs text-muted-foreground">
+                  — no aparecerá en nuevas asignaciones
+                </span>
+              )}
+            </div>
+          )}
           <div className="flex justify-end gap-2 pt-4">
             <Button
               type="button"

@@ -75,7 +75,10 @@ export function EmailCompose() {
 
       if (vendedoresRes.ok) {
         const vendedores = await vendedoresRes.json()
-        ;(Array.isArray(vendedores) ? vendedores : [])
+        const lista = Array.isArray(vendedores)
+          ? vendedores
+          : vendedores.data || []
+        lista
           .filter((v: any) =>
             v.nombre?.toLowerCase().includes(query.toLowerCase()) ||
             v.email?.toLowerCase().includes(query.toLowerCase())

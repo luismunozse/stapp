@@ -12,6 +12,10 @@ const adjustSchema = z.object({
   mode: z.enum(["absolute", "delta"]),
   value: z.number().int(),
   motivo: z.string().max(500).optional(),
+  // Tipo de movimiento a registrar. Default AJUSTE; para consolidación de
+  // duplicados al crear un item nuevo pasamos "ENTRADA" y referenciaTipo "CONSOLIDACION".
+  tipo: z.enum(["AJUSTE", "ENTRADA"]).optional(),
+  referenciaTipo: z.string().max(50).optional(),
 })
 
 export async function POST(
@@ -24,7 +28,7 @@ export async function POST(
 
     const { id } = await params
     const body = await request.json()
-    const { mode, value, motivo } = adjustSchema.parse(body)
+    const { mode, value, motivo, tipo, referenciaTipo } = adjustSchema.parse(body)
 
     // Verificar que el item pertenece a la organización y está activo
     const { data: existingItem, error: fetchError } = await supabaseAdmin
@@ -63,11 +67,11 @@ export async function POST(
 
     await supabaseAdmin.from("movimientos_inventario").insert({
       inventario_id: id,
-      tipo: "AJUSTE",
+      tipo: tipo || "AJUSTE",
       cantidad: stockPosterior - stockAnterior,
       stock_anterior: stockAnterior,
       stock_posterior: stockPosterior,
-      referencia_tipo: "AJUSTE_MANUAL",
+      referencia_tipo: referenciaTipo || "AJUSTE_MANUAL",
       observaciones: motivo || "Ajuste rápido desde lista",
       usuario_id: userId,
       organization_id: organizationId,

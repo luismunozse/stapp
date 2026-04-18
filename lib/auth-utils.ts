@@ -67,6 +67,23 @@ export async function requireAdmin() {
   return result
 }
 
+// ADMIN OR el propio técnico accediendo a sus datos
+export async function requireAdminOrSelf(targetUserId: string) {
+  const result = await requireAuth()
+  if (result.error) return result
+
+  if (result.role !== "ADMIN" && result.userId !== targetUserId) {
+    return {
+      error: NextResponse.json({ error: "Acceso denegado" }, { status: 403 }),
+      session: null,
+      organizationId: null,
+      userId: null,
+      role: null,
+    }
+  }
+  return result
+}
+
 // VENDEDOR puede: crear clientes, crear órdenes, ver inventario
 // No puede: modificar inventario, acceder a configuración, gestionar usuarios
 export async function requireAdminOrVendedor() {

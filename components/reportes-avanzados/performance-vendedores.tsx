@@ -1,11 +1,15 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
+import { Button } from "@/components/ui/button"
+import { DateRangePicker } from "@/components/ui/date-picker"
 import { TrendingUp, DollarSign, CheckCircle } from "lucide-react"
+import { format } from "date-fns"
+import { es } from "date-fns/locale"
 import {
   BarChart,
   Bar,
@@ -50,19 +54,84 @@ const formatCurrency = (amount: number) => {
   }).format(amount)
 }
 
+const toYMD = (d: Date) => format(d, "yyyy-MM-dd")
+
+type PresetKey = "mes-actual" | "mes-anterior" | "ultimos-30" | "ultimos-90" | "anio-actual"
+
+const getPresetRange = (preset: PresetKey): { from: string; to: string } => {
+  const now = new Date()
+  if (preset === "mes-actual") {
+    const from = new Date(now.getFullYear(), now.getMonth(), 1)
+    return { from: toYMD(from), to: toYMD(now) }
+  }
+  if (preset === "mes-anterior") {
+    const from = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const to = new Date(now.getFullYear(), now.getMonth(), 0)
+    return { from: toYMD(from), to: toYMD(to) }
+  }
+  if (preset === "ultimos-30") {
+    const from = new Date(now)
+    from.setDate(from.getDate() - 29)
+    return { from: toYMD(from), to: toYMD(now) }
+  }
+  if (preset === "ultimos-90") {
+    const from = new Date(now)
+    from.setDate(from.getDate() - 89)
+    return { from: toYMD(from), to: toYMD(now) }
+  }
+  const from = new Date(now.getFullYear(), 0, 1)
+  return { from: toYMD(from), to: toYMD(now) }
+}
+
+const PRESET_OPTIONS: { key: PresetKey; label: string }[] = [
+  { key: "mes-actual", label: "Este mes" },
+  { key: "mes-anterior", label: "Mes anterior" },
+  { key: "ultimos-30", label: "Últimos 30 días" },
+  { key: "ultimos-90", label: "Últimos 90 días" },
+  { key: "anio-actual", label: "Este año" },
+]
+
 export function PerformanceVendedores() {
   const [data, setData] = useState<PerformanceData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    fetchData()
-  }, [])
+  const defaultRange = useMemo(() => getPresetRange("mes-actual"), [])
+  const [from, setFrom] = useState<string>(defaultRange.from)
+  const [to, setTo] = useState<string>(defaultRange.to)
+  const [activePreset, setActivePreset] = useState<PresetKey | "custom">("mes-actual")
 
-  const fetchData = async () => {
+  useEffect(() => {
+    if (!from || !to) return
+    fetchData(from, to)
+  }, [from, to])
+
+  const applyPreset = (key: PresetKey) => {
+    const range = getPresetRange(key)
+    setActivePreset(key)
+    setFrom(range.from)
+    setTo(range.to)
+  }
+
+  const handleRangeChange = (range: { from: string; to: string }) => {
+    if (range.from && range.to) {
+      setActivePreset("custom")
+      setFrom(range.from)
+      setTo(range.to)
+    } else if (range.from) {
+      setFrom(range.from)
+    }
+  }
+
+  const fetchData = async (desde: string, hasta: string) => {
     try {
       setLoading(true)
-      const response = await fetch("/api/reportes/performance-vendedores")
+      setError(null)
+      // desde: inicio del día; hasta: fin del día (incluye toda la jornada)
+      const desdeISO = new Date(`${desde}T00:00:00`).toISOString()
+      const hastaISO = new Date(`${hasta}T23:59:59.999`).toISOString()
+      const params = new URLSearchParams({ desde: desdeISO, hasta: hastaISO })
+      const response = await fetch(`/api/reportes/performance-vendedores?${params}`)
       if (!response.ok) {
         const errData = await response.json().catch(() => null)
         throw new Error(errData?.error || "Error al cargar datos")
@@ -76,9 +145,49 @@ export function PerformanceVendedores() {
     }
   }
 
+  const periodoLabel = useMemo(() => {
+    if (!data) return ""
+    const desde = new Date(data.periodo.desde)
+    const hasta = new Date(data.periodo.hasta)
+    return `${format(desde, "dd MMM yyyy", { locale: es })} — ${format(hasta, "dd MMM yyyy", { locale: es })}`
+  }, [data])
+
+  const toolbar = (
+    <Card>
+      <CardContent className="p-3 sm:p-4 space-y-3">
+        <div className="flex flex-wrap gap-1.5">
+          {PRESET_OPTIONS.map((opt) => (
+            <Button
+              key={opt.key}
+              size="sm"
+              variant={activePreset === opt.key ? "default" : "outline"}
+              onClick={() => applyPreset(opt.key)}
+            >
+              {opt.label}
+            </Button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex-1 min-w-0 max-w-sm">
+            <DateRangePicker
+              from={from}
+              to={to}
+              onChange={handleRangeChange}
+              placeholder="Rango personalizado"
+            />
+          </div>
+          {activePreset === "custom" && (
+            <span className="text-xs text-muted-foreground">Rango personalizado</span>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  )
+
   if (loading) {
     return (
       <div className="space-y-4">
+        {toolbar}
         <div className="grid gap-4 md:grid-cols-3">
           {[...Array(3)].map((_, i) => (
             <Card key={`skeleton-${i}`}>
@@ -102,11 +211,14 @@ export function PerformanceVendedores() {
 
   if (error || !data) {
     return (
-      <Card>
-        <CardContent className="py-8 text-center text-muted-foreground">
-          {error || "No hay datos disponibles"}
-        </CardContent>
-      </Card>
+      <div className="space-y-4">
+        {toolbar}
+        <Card>
+          <CardContent className="py-8 text-center text-muted-foreground">
+            {error || "No hay datos disponibles"}
+          </CardContent>
+        </Card>
+      </div>
     )
   }
 
@@ -118,6 +230,10 @@ export function PerformanceVendedores() {
 
   return (
     <div className="space-y-6">
+      {toolbar}
+      <p className="text-xs sm:text-sm text-muted-foreground -mt-2">
+        Periodo: {periodoLabel}
+      </p>
       {/* Stats Cards */}
       <div className="grid grid-cols-3 gap-3">
         <Card>
@@ -128,7 +244,7 @@ export function PerformanceVendedores() {
           <CardContent className="p-3 sm:p-6 pt-0">
             <div className="text-base sm:text-2xl font-bold">{data.totales.totalCompletadas}</div>
             <p className="text-[10px] sm:text-xs text-muted-foreground">
-              {data.totales.totalAnuladas > 0 ? `${data.totales.totalAnuladas} anuladas` : "Este mes"}
+              {data.totales.totalAnuladas > 0 ? `${data.totales.totalAnuladas} anuladas` : "En el periodo"}
             </p>
           </CardContent>
         </Card>
@@ -204,7 +320,7 @@ export function PerformanceVendedores() {
         <CardContent>
           {data.vendedores.length === 0 ? (
             <p className="text-center text-muted-foreground py-4">
-              No hay vendedores con ventas registradas este mes
+              No hay vendedores con ventas registradas en el periodo seleccionado
             </p>
           ) : (
             <div className="space-y-3">

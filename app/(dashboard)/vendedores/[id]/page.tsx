@@ -17,8 +17,11 @@ import {
   DollarSign,
   Edit,
   Trash2,
+  Wallet,
+  BadgePercent,
 } from "lucide-react"
 import { VendedorForm } from "@/components/vendedores/vendedor-form"
+import { LiquidarComisionesDialog } from "@/components/vendedores/liquidar-comisiones-dialog"
 import { useModal } from "@/contexts/modal-context"
 
 interface Venta {
@@ -32,10 +35,16 @@ interface VendedorDetalle {
   id: string
   nombre: string
   email: string
+  telefono: string | null
+  activo: boolean
+  porcentajeComision: number
   createdAt: string
   ventasCompletadas: number
   ventasTotal: number
   montoTotalVentas: number
+  comisionDevengada: number
+  comisionPagada: number
+  comisionPendiente: number
   ventas: Venta[]
 }
 
@@ -66,6 +75,7 @@ export default function VendedorDetallePage({ params }: { params: Promise<{ id: 
   const [vendedor, setVendedor] = useState<VendedorDetalle | null>(null)
   const [loading, setLoading] = useState(true)
   const [editOpen, setEditOpen] = useState(false)
+  const [liquidarOpen, setLiquidarOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
@@ -242,6 +252,81 @@ export default function VendedorDetallePage({ params }: { params: Promise<{ id: 
         </Card>
       </div>
 
+      {/* Comisiones */}
+      <div className="grid gap-3 sm:gap-6 grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="p-3 sm:p-6 pb-1 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground flex items-center gap-1.5 sm:gap-2">
+              <BadgePercent className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span>Comisión actual</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-3 sm:p-6 pt-0">
+            <div className="text-lg sm:text-2xl font-bold">
+              {vendedor.porcentajeComision}%
+            </div>
+            <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">
+              Sobre el total de cada venta
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="p-3 sm:p-6 pb-1 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground flex items-center gap-1.5 sm:gap-2">
+              <Wallet className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span>Devengada</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-3 sm:p-6 pt-0">
+            <div className="text-lg sm:text-2xl font-bold">
+              {formatCurrency(vendedor.comisionDevengada)}
+            </div>
+            <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">
+              Ventas completadas
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="p-3 sm:p-6 pb-1 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground flex items-center gap-1.5 sm:gap-2">
+              <CheckCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span>Pagada</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-3 sm:p-6 pt-0">
+            <div className="text-lg sm:text-2xl font-bold text-green-600">
+              {formatCurrency(vendedor.comisionPagada)}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className={vendedor.comisionPendiente > 0 ? "border-amber-300 dark:border-amber-800" : undefined}>
+          <CardHeader className="p-3 sm:p-6 pb-1 sm:pb-2">
+            <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground flex items-center gap-1.5 sm:gap-2">
+              <DollarSign className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span>Pendiente</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-3 sm:p-6 pt-0 space-y-2">
+            <div className={`text-lg sm:text-2xl font-bold ${vendedor.comisionPendiente > 0 ? "text-amber-600" : "text-muted-foreground"}`}>
+              {formatCurrency(vendedor.comisionPendiente)}
+            </div>
+            {isAdmin && vendedor.comisionPendiente > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full h-7 text-xs"
+                onClick={() => setLiquidarOpen(true)}
+              >
+                Liquidar
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Historial de Ventas */}
       <Card>
         <CardHeader className="p-4 sm:p-6">
@@ -286,6 +371,14 @@ export default function VendedorDetallePage({ params }: { params: Promise<{ id: 
         onOpenChange={setEditOpen}
         vendedor={vendedor}
         onSuccess={fetchVendedor}
+      />
+
+      <LiquidarComisionesDialog
+        open={liquidarOpen}
+        onOpenChange={setLiquidarOpen}
+        vendedorId={vendedor.id}
+        vendedorNombre={vendedor.nombre}
+        onLiquidated={fetchVendedor}
       />
     </div>
   )

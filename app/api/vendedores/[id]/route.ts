@@ -2,6 +2,20 @@ import { NextResponse } from "next/server"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import bcrypt from "bcryptjs"
+import { z } from "zod"
+
+const vendedorUpdateSchema = z.object({
+  nombre: z.string().trim().min(1).optional(),
+  email: z.string().email("Email inválido").optional(),
+  password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres").optional(),
+  telefono: z.string().trim().optional().nullable(),
+  activo: z.boolean().optional(),
+  porcentajeComision: z.coerce
+    .number()
+    .min(0, "La comisión debe ser mayor o igual a 0")
+    .max(100, "La comisión no puede superar 100")
+    .optional(),
+})
 
 export async function GET(
   request: Request,
@@ -15,18 +29,9 @@ export async function GET(
 
     const { data: vendedor, error: dbError } = await supabaseAdmin
       .from("users")
-      .select(`
-        id,
-        nombre,
-        email,
-        created_at,
-        ventas!ventas_vendedor_id_fkey (
-          id,
-          total,
-          estado,
-          created_at
-        )
-      `)
+      .select(
+        "id, nombre, email, telefono, activo, porcentaje_comision, created_at"
+      )
       .eq("id", id)
       .eq("rol", "VENDEDOR")
       .eq("organization_id", organizationId!)
@@ -36,30 +41,59 @@ export async function GET(
       return NextResponse.json({ error: "Vendedor no encontrado" }, { status: 404 })
     }
 
-    const ventas = vendedor.ventas || []
-    const ventasCompletadas = ventas.filter((v: any) => v.estado === "COMPLETADA")
+    const HISTORIAL_LIMIT = 50
+
+    const [statsRes, ventasRes, comisionesRes] = await Promise.all([
+      supabaseAdmin.rpc("get_vendedores_stats", { p_org_id: organizationId! }),
+      supabaseAdmin
+        .from("ventas")
+        .select("id, total, estado, created_at")
+        .eq("organization_id", organizationId!)
+        .eq("vendedor_id", id)
+        .order("created_at", { ascending: false })
+        .limit(HISTORIAL_LIMIT),
+      supabaseAdmin
+        .from("v_comisiones_ventas")
+        .select("monto_comision, comision_pagada")
+        .eq("organization_id", organizationId!)
+        .eq("vendedor_id", id),
+    ])
+
+    const statsRow = (statsRes.data || []).find((r: any) => r.vendedor_id === id)
+    const ventasRecientes = ventasRes.data || []
+    const comisiones = comisionesRes.data || []
+
+    const comisionDevengada = comisiones.reduce(
+      (sum: number, c: any) => sum + parseFloat(c.monto_comision || "0"),
+      0
+    )
+    const comisionPagada = comisiones
+      .filter((c: any) => c.comision_pagada)
+      .reduce((sum: number, c: any) => sum + parseFloat(c.monto_comision || "0"), 0)
 
     return NextResponse.json({
       id: vendedor.id,
       nombre: vendedor.nombre,
       email: vendedor.email,
+      telefono: vendedor.telefono ?? null,
+      activo: vendedor.activo !== false,
+      porcentajeComision: Number(vendedor.porcentaje_comision ?? 0),
       createdAt: vendedor.created_at,
-      ventasCompletadas: ventasCompletadas.length,
-      ventasTotal: ventas.length,
-      montoTotalVentas: ventasCompletadas.reduce(
-        (sum: number, v: any) => sum + parseFloat(v.total || "0"),
-        0
-      ),
-      ventas: ventas
-        .sort((a: any, b: any) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        )
-        .map((v: any) => ({
-          id: v.id,
-          total: v.total,
-          estado: v.estado,
-          fecha: v.created_at,
-        })),
+      ventasCompletadas: Number(statsRow?.ventas_completadas ?? 0),
+      ventasTotal: Number(statsRow?.ventas_total ?? 0),
+      montoTotalVentas: Number(statsRow?.monto_total ?? 0),
+      ticketPromedio: statsRow?.ticket_promedio !== null && statsRow?.ticket_promedio !== undefined
+        ? Number(statsRow.ticket_promedio)
+        : null,
+      comisionDevengada,
+      comisionPagada,
+      comisionPendiente: comisionDevengada - comisionPagada,
+      ventas: ventasRecientes.map((v: any) => ({
+        id: v.id,
+        total: v.total,
+        estado: v.estado,
+        fecha: v.created_at,
+      })),
     })
   } catch (error) {
     console.error("Error fetching vendedor:", error)
@@ -80,7 +114,7 @@ export async function PUT(
 
     const { id } = await params
     const body = await request.json()
-    const { nombre, email, password } = body
+    const data = vendedorUpdateSchema.parse(body)
 
     // Verificar que el vendedor existe
     const { data: vendedor, error: fetchError } = await supabaseAdmin
@@ -96,11 +130,11 @@ export async function PUT(
     }
 
     // Verificar email único si cambió
-    if (email && email !== vendedor.email) {
+    if (data.email && data.email !== vendedor.email) {
       const { data: existingUser } = await supabaseAdmin
         .from("users")
         .select("id")
-        .eq("email", email)
+        .eq("email", data.email)
         .single()
 
       if (existingUser) {
@@ -112,15 +146,20 @@ export async function PUT(
     }
 
     const updateData: Record<string, any> = {}
-    if (nombre) updateData.nombre = nombre
-    if (email) updateData.email = email
-    if (password) updateData.password = await bcrypt.hash(password, 10)
+    if (data.nombre) updateData.nombre = data.nombre
+    if (data.email) updateData.email = data.email
+    if (data.password) updateData.password = await bcrypt.hash(data.password, 10)
+    if (data.telefono !== undefined) updateData.telefono = data.telefono?.trim() || null
+    if (data.activo !== undefined) updateData.activo = data.activo
+    if (data.porcentajeComision !== undefined) updateData.porcentaje_comision = data.porcentajeComision
 
     const { data: updatedVendedor, error: updateError } = await supabaseAdmin
       .from("users")
       .update(updateData)
       .eq("id", id)
-      .select("id, nombre, email")
+      .eq("organization_id", organizationId!)
+      .eq("rol", "VENDEDOR")
+      .select("id, nombre, email, telefono, activo, porcentaje_comision")
       .single()
 
     if (updateError) {
@@ -129,6 +168,12 @@ export async function PUT(
 
     return NextResponse.json(updatedVendedor)
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: error.errors[0].message },
+        { status: 400 }
+      )
+    }
     console.error("Error updating vendedor:", error)
     return NextResponse.json(
       { error: "Error al actualizar vendedor" },
@@ -147,16 +192,10 @@ export async function DELETE(
 
     const { id } = await params
 
-    // Verificar que el vendedor existe y obtener ventas asociadas
+    // Verificar que el vendedor existe
     const { data: vendedor, error: fetchError } = await supabaseAdmin
       .from("users")
-      .select(`
-        id,
-        ventas!ventas_vendedor_id_fkey (
-          id,
-          estado
-        )
-      `)
+      .select("id")
       .eq("id", id)
       .eq("rol", "VENDEDOR")
       .eq("organization_id", organizationId!)
@@ -166,11 +205,18 @@ export async function DELETE(
       return NextResponse.json({ error: "Vendedor no encontrado" }, { status: 404 })
     }
 
-    // No permitir eliminar si tiene ventas asociadas
-    const ventas = vendedor.ventas || []
-    if (ventas.length > 0) {
+    // Contar ventas asociadas sin traerlas (HEAD + count exact)
+    const { count: ventasCount, error: countError } = await supabaseAdmin
+      .from("ventas")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", organizationId!)
+      .eq("vendedor_id", id)
+
+    if (countError) throw countError
+
+    if ((ventasCount || 0) > 0) {
       return NextResponse.json(
-        { error: `No se puede eliminar un vendedor con ${ventas.length} venta(s) asociada(s). Reasigne las ventas primero.` },
+        { error: `No se puede eliminar un vendedor con ${ventasCount} venta(s) asociada(s). Reasigne las ventas primero.` },
         { status: 400 }
       )
     }
@@ -179,6 +225,8 @@ export async function DELETE(
       .from("users")
       .delete()
       .eq("id", id)
+      .eq("organization_id", organizationId!)
+      .eq("rol", "VENDEDOR")
 
     if (deleteError) {
       throw deleteError

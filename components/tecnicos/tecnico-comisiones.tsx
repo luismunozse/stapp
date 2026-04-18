@@ -98,9 +98,10 @@ interface Props {
   tecnicoId: string
   tecnicoNombre: string
   porcentajeDefault?: number
+  readOnly?: boolean
 }
 
-export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault }: Props) {
+export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault, readOnly = false }: Props) {
   const { formatPrice, formatDate } = useCurrency()
   const { confirm } = useModal()
 
@@ -338,7 +339,7 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault 
       </div>
 
       {/* Barra de acción para selección */}
-      {selected.size > 0 && (
+      {!readOnly && selected.size > 0 && (
         <div className="sticky top-0 z-10 flex items-center justify-between gap-3 p-3 rounded-md bg-primary/10 border border-primary/30">
           <div className="text-sm">
             <strong>{selected.size}</strong> seleccionada(s) · Total a pagar:{" "}
@@ -375,7 +376,7 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault 
           ) : (
             <>
               {/* Barra de selección todas pendientes */}
-              {pendientes.length > 0 && (
+              {!readOnly && pendientes.length > 0 && (
                 <div className="flex items-center gap-2 px-4 py-2 border-b bg-muted/30">
                   <input
                     type="checkbox"
@@ -399,7 +400,7 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault 
                     )}
                   >
                     <div className="w-5 shrink-0">
-                      {!i.comisionPagada && (
+                      {!readOnly && !i.comisionPagada && (
                         <input
                           type="checkbox"
                           className="h-4 w-4 accent-primary"
@@ -454,15 +455,27 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault 
                           </span>
                         </div>
                         {i.comisionPagada ? (
-                          <button
-                            onClick={() => handleRevertir(i.ordenId)}
-                            className="inline-flex items-center gap-1 text-[10px] text-green-700 hover:underline"
-                            title={i.fechaPagoComision ? `Pagada ${formatDate(i.fechaPagoComision)}` : ""}
-                          >
-                            <CheckCircle2 className="h-3 w-3" />
-                            Pagada
-                            <RotateCcw className="h-2.5 w-2.5 ml-0.5" />
-                          </button>
+                          readOnly ? (
+                            <span
+                              className="inline-flex items-center gap-1 text-[10px] text-green-700"
+                              title={
+                                i.fechaPagoComision ? `Pagada ${formatDate(i.fechaPagoComision)}` : ""
+                              }
+                            >
+                              <CheckCircle2 className="h-3 w-3" />
+                              Pagada
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => handleRevertir(i.ordenId)}
+                              className="inline-flex items-center gap-1 text-[10px] text-green-700 hover:underline"
+                              title={i.fechaPagoComision ? `Pagada ${formatDate(i.fechaPagoComision)}` : ""}
+                            >
+                              <CheckCircle2 className="h-3 w-3" />
+                              Pagada
+                              <RotateCcw className="h-2.5 w-2.5 ml-0.5" />
+                            </button>
+                          )
                         ) : (
                           <Badge variant="secondary" className="text-[10px]">
                             <Clock className="h-3 w-3 mr-0.5" />

@@ -26,17 +26,9 @@ import { toast } from "sonner"
 import { TecnicoForm } from "@/components/tecnicos/tecnico-form"
 import { TecnicoComisiones } from "@/components/tecnicos/tecnico-comisiones"
 import { TecnicoInsights } from "@/components/tecnicos/tecnico-insights"
+import { TecnicoHistorial } from "@/components/tecnicos/tecnico-historial"
 import { ReasignarOrdenesDialog } from "@/components/tecnicos/reasignar-ordenes-dialog"
 import { useModal } from "@/contexts/modal-context"
-
-interface Orden {
-  id: string
-  numeroOrden: number
-  dispositivo: string
-  estado: string
-  fechaIngreso: string
-  cliente: string
-}
 
 interface TecnicoDetalle {
   id: string
@@ -51,33 +43,6 @@ interface TecnicoDetalle {
   createdAt: string
   ordenesActivas: number
   ordenesCompletadas: number
-  ordenes: Orden[]
-}
-
-const estadoColors: Record<string, string> = {
-  RECIBIDO: "bg-slate-100 text-slate-800",
-  EN_DIAGNOSTICO: "bg-purple-100 text-purple-800",
-  PRESUPUESTADO: "bg-amber-100 text-amber-800",
-  APROBADO: "bg-blue-100 text-blue-800",
-  EN_REPARACION: "bg-yellow-100 text-yellow-800",
-  ESPERANDO_REPUESTO: "bg-orange-100 text-orange-800",
-  REPARADO: "bg-cyan-100 text-cyan-800",
-  ENTREGADO: "bg-green-100 text-green-800",
-  CANCELADO: "bg-gray-100 text-gray-800",
-  SIN_REPARACION: "bg-red-100 text-red-800",
-}
-
-const estadoLabels: Record<string, string> = {
-  RECIBIDO: "Recibido",
-  EN_DIAGNOSTICO: "En Diagnóstico",
-  PRESUPUESTADO: "Presupuestado",
-  APROBADO: "Aprobado",
-  EN_REPARACION: "En Reparación",
-  ESPERANDO_REPUESTO: "Esperando Repuesto",
-  REPARADO: "Reparado",
-  ENTREGADO: "Entregado",
-  CANCELADO: "Cancelado",
-  SIN_REPARACION: "Sin Reparación",
 }
 
 const formatDate = (dateStr: string) => {
@@ -92,7 +57,10 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
   const { id } = use(params)
   const router = useRouter()
   const { data: session } = useSession()
-  const isAdmin = session?.user?.role === "ADMIN"
+  const role = session?.user?.role
+  const isAdmin = role === "ADMIN"
+  const isSelf = role === "TECNICO" && session?.user?.id === id
+  const canView = isAdmin || isSelf
   const { confirm, showError } = useModal()
   const [tecnico, setTecnico] = useState<TecnicoDetalle | null>(null)
   const [loading, setLoading] = useState(true)
@@ -102,8 +70,12 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
   const [reasignarOpen, setReasignarOpen] = useState(false)
 
   useEffect(() => {
+    if (session && !canView) {
+      router.push("/dashboard")
+      return
+    }
     fetchTecnico()
-  }, [id])
+  }, [id, session, canView])
 
   const fetchTecnico = async () => {
     try {
@@ -206,21 +178,27 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-center gap-3 sm:gap-4">
-          <Button variant="ghost" size="icon" asChild className="shrink-0">
-            <Link href="/tecnicos">
-              <ArrowLeft className="h-5 w-5" />
-            </Link>
-          </Button>
+          {isAdmin && (
+            <Button variant="ghost" size="icon" asChild className="shrink-0">
+              <Link href="/tecnicos">
+                <ArrowLeft className="h-5 w-5" />
+              </Link>
+            </Button>
+          )}
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xl sm:text-3xl font-bold truncate">{tecnico.nombre}</h1>
+              <h1 className="text-xl sm:text-3xl font-bold truncate">
+                {isSelf ? "Mi desempeño" : tecnico.nombre}
+              </h1>
               {!tecnico.activo && (
                 <Badge variant="outline" className="bg-muted text-muted-foreground text-[10px]">
                   Inactivo
                 </Badge>
               )}
             </div>
-            <p className="text-xs sm:text-sm text-muted-foreground">Detalle del técnico</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">
+              {isSelf ? tecnico.nombre : "Detalle del técnico"}
+            </p>
           </div>
         </div>
         {isAdmin && (
@@ -365,13 +343,15 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
       </div>
 
       {/* Insights operativos */}
-      {isAdmin && <TecnicoInsights tecnicoId={tecnico.id} />}
+      {canView && <TecnicoInsights tecnicoId={tecnico.id} />}
 
       {/* Comisiones del técnico */}
-      {isAdmin && (
+      {canView && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-base sm:text-lg font-semibold">Comisiones</h2>
+            <h2 className="text-base sm:text-lg font-semibold">
+              {isSelf ? "Mis comisiones" : "Comisiones"}
+            </h2>
             <span className="text-xs text-muted-foreground">
               % Comisión base aplicada a ganancia (cobrado − repuestos)
             </span>
@@ -380,49 +360,13 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
             tecnicoId={tecnico.id}
             tecnicoNombre={tecnico.nombre}
             porcentajeDefault={tecnico.porcentajeComision}
+            readOnly={!isAdmin}
           />
         </div>
       )}
 
       {/* Historial */}
-      <Card>
-        <CardHeader className="p-4 sm:p-6">
-          <CardTitle className="text-base sm:text-lg">Historial de Órdenes</CardTitle>
-        </CardHeader>
-        <CardContent className="p-4 sm:p-6 pt-0">
-          {tecnico.ordenes.length === 0 ? (
-            <p className="text-center text-muted-foreground py-6 sm:py-8 text-sm">
-              No hay órdenes asignadas a este técnico
-            </p>
-          ) : (
-            <div className="space-y-2 sm:space-y-3">
-              {tecnico.ordenes.map((orden) => (
-                <Link
-                  key={orden.id}
-                  href={`/ordenes/${orden.id}`}
-                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4 border rounded-lg hover:bg-muted/50 transition-colors gap-2"
-                >
-                  <div className="flex items-center gap-2 sm:gap-4 min-w-0">
-                    <div className="font-medium text-sm shrink-0">#{orden.numeroOrden}</div>
-                    <div className="min-w-0">
-                      <div className="font-medium text-sm truncate">{orden.dispositivo}</div>
-                      <div className="text-xs sm:text-sm text-muted-foreground truncate">{orden.cliente}</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 sm:gap-4 pl-7 sm:pl-0">
-                    <span className="text-[10px] sm:text-sm text-muted-foreground">
-                      {formatDate(orden.fechaIngreso)}
-                    </span>
-                    <Badge className={`text-[10px] sm:text-xs ${estadoColors[orden.estado]}`}>
-                      {estadoLabels[orden.estado]}
-                    </Badge>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <TecnicoHistorial tecnicoId={tecnico.id} />
 
       <TecnicoForm
         open={editOpen}
