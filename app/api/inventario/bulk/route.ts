@@ -4,7 +4,8 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
 
 const bulkSchema = z.object({
-  ids: z.array(z.string().uuid()).min(1, "Se requiere al menos un item"),
+  // Los ids del inventario son cuids (TEXT), no uuids — validamos solo que no sean vacíos.
+  ids: z.array(z.string().min(1)).min(1, "Se requiere al menos un item"),
   action: z.enum(["archive", "set_category", "price_adjust", "set_proveedor"]),
   payload: z
     .object({
