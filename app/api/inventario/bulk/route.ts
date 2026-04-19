@@ -5,13 +5,15 @@ import { z } from "zod"
 
 const bulkSchema = z.object({
   ids: z.array(z.string().uuid()).min(1, "Se requiere al menos un item"),
-  action: z.enum(["archive", "set_category", "price_adjust"]),
+  action: z.enum(["archive", "set_category", "price_adjust", "set_proveedor"]),
   payload: z
     .object({
       categoria: z.string().optional(),
       // price_adjust: porcentaje (-99..1000) y campo a ajustar
       percent: z.number().min(-99).max(1000).optional(),
       target: z.enum(["precioVenta", "precioCompra"]).optional(),
+      // set_proveedor: id del proveedor o null para quitar
+      proveedorId: z.string().min(1).nullable().optional(),
     })
     .optional(),
 })
@@ -119,6 +121,37 @@ export async function PATCH(request: Request) {
         )
       }
       updatedCount = updates.length
+    } else if (action === "set_proveedor") {
+      // proveedorId === null → quitar proveedor. String → setearlo.
+      const proveedorId = payload?.proveedorId ?? null
+
+      if (proveedorId) {
+        // Validar que el proveedor pertenezca a la organización.
+        const { data: prov, error: provErr } = await supabaseAdmin
+          .from("proveedores")
+          .select("id")
+          .eq("id", proveedorId)
+          .eq("organization_id", organizationId!)
+          .maybeSingle()
+        if (provErr) throw provErr
+        if (!prov) {
+          return NextResponse.json(
+            { error: "Proveedor inválido" },
+            { status: 400 }
+          )
+        }
+      }
+
+      const { data, error: dbError } = await supabaseAdmin
+        .from("inventario")
+        .update({ proveedor_id: proveedorId, updated_at: new Date().toISOString() })
+        .in("id", ids)
+        .eq("organization_id", organizationId!)
+        .is("deleted_at", null)
+        .select("id")
+
+      if (dbError) throw dbError
+      updatedCount = data?.length || 0
     }
 
     return NextResponse.json({ updated: updatedCount })

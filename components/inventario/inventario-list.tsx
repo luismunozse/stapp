@@ -27,6 +27,7 @@ import {
   ScanLine,
   Tag,
   Trash2,
+  X,
 } from "lucide-react"
 import { InventarioForm } from "./inventario-form"
 import { InventarioBulkForm } from "./inventario-bulk-form"
@@ -46,6 +47,15 @@ import { useModal } from "@/contexts/modal-context"
 import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
 
 const fetcher = (url: string) => fetch(url, { cache: "no-store" }).then(res => res.json())
+
+interface ProveedorLite {
+  id: string
+  nombre: string
+  activo?: boolean
+}
+
+const proveedoresFetcher = (url: string): Promise<ProveedorLite[]> =>
+  fetch(url).then((res) => res.json())
 
 const todasLasCategorias = [
   "Baterías",
@@ -76,10 +86,20 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   const { confirm } = useModal()
   const { formatPrice } = useCurrency()
   const { tipos: tiposDispositivo, loading: tiposLoading } = useTiposDispositivo()
+  const { data: proveedores = [] } = useSWR<ProveedorLite[]>(
+    "/api/proveedores",
+    proveedoresFetcher,
+    { revalidateOnFocus: false }
+  )
+  const proveedoresActivos = useMemo(
+    () => proveedores.filter((p) => p.activo !== false),
+    [proveedores]
+  )
   const [search, setSearch] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
   const [categoria, setCategoria] = useState("")
   const [tipoDispositivo, setTipoDispositivo] = useState<TipoDispositivo | "">("")
+  const [proveedorId, setProveedorId] = useState<string>("")
   const [bajoStock, setBajoStock] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [showBulkForm, setShowBulkForm] = useState(false)
@@ -184,6 +204,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
     if (debouncedSearch) params.append("search", debouncedSearch)
     if (categoria) params.append("categoria", categoria)
     if (tipoDispositivo) params.append("tipoDispositivo", tipoDispositivo)
+    if (proveedorId) params.append("proveedorId", proveedorId)
     if (bajoStock) params.append("bajoStock", "true")
     if (includeArchived) params.append("includeArchived", "true")
     params.append("page", page.toString())
@@ -192,7 +213,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
     params.append("sortOrder", sortOrder)
     params.append("_r", refreshKey.toString())
     return `/api/inventario?${params.toString()}`
-  }, [debouncedSearch, categoria, tipoDispositivo, bajoStock, includeArchived, page, pageSize, sortBy, sortOrder, refreshKey])
+  }, [debouncedSearch, categoria, tipoDispositivo, proveedorId, bajoStock, includeArchived, page, pageSize, sortBy, sortOrder, refreshKey])
 
   // SWR for fetching with cache
   const { data, isLoading } = useSWR(apiUrl, fetcher, {
@@ -330,7 +351,8 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
     {
       key: "tipoDispositivo",
       header: "Tipo",
-      hideOnMobile: true,
+      className: "hidden xl:table-cell",
+      headerClassName: "hidden xl:table-cell",
       render: (item) => {
         const nombre = tiposDispositivo.find((t) => t.codigo === item.tipoDispositivo)?.nombre || item.tipoDispositivo
         return <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5">{nombre}</Badge>
@@ -417,9 +439,8 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
     {
       key: "margen",
       header: "Margen",
-      hideOnMobile: true,
-      className: "text-right",
-      headerClassName: "text-right",
+      className: "text-right hidden xl:table-cell",
+      headerClassName: "text-right hidden xl:table-cell",
       render: (item) => {
         const margen = item.precioVenta - item.precioCompra
         if (item.precioCompra === 0 && item.precioVenta > 0) {
@@ -501,15 +522,25 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
         onFilterBajoStock={() => { setBajoStock(true); setPage(1) }}
       />
       <div className="flex flex-col gap-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
           <div className="relative sm:col-span-2 lg:col-span-2">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
               placeholder="Buscar por nombre, código, descripción o proveedor..."
               value={search}
               onChange={(e) => handleSearchChange(e.target.value)}
-              className="pl-10"
+              className="pl-10 pr-9"
             />
+            {search && (
+              <button
+                type="button"
+                onClick={() => handleSearchChange("")}
+                aria-label="Limpiar búsqueda"
+                className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 rounded-md flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
           <Select
             value={categoria || "all"}
@@ -544,6 +575,23 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                     {tipo.nombre}
                   </SelectItem>
                 ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={proveedorId || "all"}
+            onValueChange={(value) => { setProveedorId(value === "all" ? "" : value); setPage(1) }}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Todos los proveedores" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos los proveedores</SelectItem>
+              <SelectItem value="none">Sin proveedor</SelectItem>
+              {proveedoresActivos.map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.nombre}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -766,6 +814,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
           selectedCount={selectedKeys.length}
           selectedIds={selectedKeys}
           categoriasDisponibles={categoriasDisponibles}
+          proveedores={proveedoresActivos}
           onClear={() => setSelectedKeys([])}
           onSuccess={() => setRefreshKey((k) => k + 1)}
           onGenerateLabels={() => {

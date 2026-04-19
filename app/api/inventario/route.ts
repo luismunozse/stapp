@@ -32,6 +32,7 @@ export async function GET(request: Request) {
     const search = searchParams.get("search") || ""
     const categoria = searchParams.get("categoria") || ""
     const tipoDispositivo = searchParams.get("tipoDispositivo") || ""
+    const proveedorId = searchParams.get("proveedorId") || ""
     const bajoStock = searchParams.get("bajoStock") === "true"
 
     // Paginación
@@ -84,6 +85,14 @@ export async function GET(request: Request) {
 
     if (tipoDispositivo) {
       query = query.eq("tipo_dispositivo", tipoDispositivo)
+    }
+
+    if (proveedorId) {
+      if (proveedorId === "none") {
+        query = query.is("proveedor_id", null)
+      } else {
+        query = query.eq("proveedor_id", proveedorId)
+      }
     }
 
     if (bajoStock) {

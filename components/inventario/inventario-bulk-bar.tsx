@@ -5,13 +5,20 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Archive, Tag, Percent, X, Printer } from "lucide-react"
+import { Archive, Tag, Percent, X, Printer, Truck } from "lucide-react"
 import { useModal } from "@/contexts/modal-context"
+
+interface ProveedorLite {
+  id: string
+  nombre: string
+  activo?: boolean
+}
 
 interface InventarioBulkBarProps {
   selectedCount: number
   selectedIds: string[]
   categoriasDisponibles: string[]
+  proveedores?: ProveedorLite[]
   onClear: () => void
   onSuccess: () => void
   onGenerateLabels?: () => void
@@ -21,6 +28,7 @@ export function InventarioBulkBar({
   selectedCount,
   selectedIds,
   categoriasDisponibles,
+  proveedores = [],
   onClear,
   onSuccess,
   onGenerateLabels,
@@ -30,9 +38,10 @@ export function InventarioBulkBar({
   const [categoria, setCategoria] = useState("")
   const [percent, setPercent] = useState("")
   const [target, setTarget] = useState<"precioVenta" | "precioCompra">("precioVenta")
+  const [proveedorSel, setProveedorSel] = useState<string>("")
 
   const runBulk = async (
-    action: "archive" | "set_category" | "price_adjust",
+    action: "archive" | "set_category" | "price_adjust" | "set_proveedor",
     payload?: Record<string, unknown>
   ) => {
     setPending(true)
@@ -76,6 +85,27 @@ export function InventarioBulkBar({
     }
     await runBulk("set_category", { categoria })
     setCategoria("")
+  }
+
+  const handleSetProveedor = async () => {
+    if (!proveedorSel) {
+      await showError("Seleccioná un proveedor o 'Sin proveedor'")
+      return
+    }
+    const proveedorId = proveedorSel === "none" ? null : proveedorSel
+    const nombre = proveedorId
+      ? proveedores.find((p) => p.id === proveedorId)?.nombre || "el proveedor"
+      : "Sin proveedor"
+    const ok = await confirm({
+      title: "Cambiar proveedor",
+      description: `¿Asignar "${nombre}" a ${selectedCount} item${selectedCount === 1 ? "" : "s"}?`,
+      confirmText: "Aplicar",
+      cancelText: "Cancelar",
+      variant: "info",
+    })
+    if (!ok) return
+    await runBulk("set_proveedor", { proveedorId })
+    setProveedorSel("")
   }
 
   const handlePriceAdjust = async () => {
@@ -161,6 +191,42 @@ export function InventarioBulkBar({
               Positivo para aumentar, negativo para reducir.
             </p>
             <Button size="sm" className="w-full" onClick={handlePriceAdjust} disabled={pending || !percent}>
+              Aplicar
+            </Button>
+          </PopoverContent>
+        </Popover>
+
+        {/* Cambiar proveedor */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button size="sm" variant="outline" disabled={pending}>
+              <Truck className="mr-2 h-4 w-4" />
+              Proveedor
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-64 space-y-2">
+            <div className="text-sm font-medium">Cambiar proveedor</div>
+            <Select value={proveedorSel} onValueChange={setProveedorSel}>
+              <SelectTrigger>
+                <SelectValue placeholder="Seleccionar..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Sin proveedor</SelectItem>
+                {proveedores
+                  .filter((p) => p.activo !== false)
+                  .map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.nombre}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+            <Button
+              size="sm"
+              className="w-full"
+              onClick={handleSetProveedor}
+              disabled={pending || !proveedorSel}
+            >
               Aplicar
             </Button>
           </PopoverContent>
