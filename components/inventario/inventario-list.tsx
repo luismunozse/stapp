@@ -28,7 +28,14 @@ import {
   Tag,
   Trash2,
   X,
+  MoreHorizontal,
 } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { InventarioForm } from "./inventario-form"
 import { InventarioBulkForm } from "./inventario-bulk-form"
 import { ConsolidateDuplicatesDialog } from "./consolidate-duplicates-dialog"
@@ -361,7 +368,8 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
     {
       key: "categoria",
       header: "Categoría",
-      hideOnMobile: true,
+      className: "hidden xl:table-cell",
+      headerClassName: "hidden xl:table-cell",
       render: (item) => <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5">{item.categoria}</Badge>,
     },
     {
@@ -457,48 +465,49 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
         const isArchived = !!item.deletedAt
         return (
           <div className="flex items-center justify-end gap-0.5">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 text-muted-foreground"
-              title="Analytics"
-              onClick={(e) => { e.stopPropagation(); setAnalyticsItem({ id: item.id, nombre: item.nombre }) }}
-            >
-              <TrendingUp className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 text-muted-foreground"
-              title="Movimientos"
-              onClick={(e) => { e.stopPropagation(); setMovimientosItem({ id: item.id, nombre: item.nombre }) }}
-            >
-              <History className="h-3.5 w-3.5" />
-            </Button>
             {!isArchived && (
-              <>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 text-muted-foreground"
-                  title="Imprimir etiqueta"
-                  onClick={(e) => { e.stopPropagation(); setLabelItems([item]) }}
-                >
-                  <Tag className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6"
-                  onClick={(e) => { e.stopPropagation(); setEditingItem(item); setShowForm(true) }}
-                >
-                  <Edit className="h-3.5 w-3.5" />
-                </Button>
-              </>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                title="Editar"
+                onClick={(e) => { e.stopPropagation(); setEditingItem(item); setShowForm(true) }}
+              >
+                <Edit className="h-3.5 w-3.5" />
+              </Button>
             )}
             {isArchived && (
               <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 text-muted-foreground">Archivado</Badge>
             )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 text-muted-foreground"
+                  title="Más acciones"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <MoreHorizontal className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                <DropdownMenuItem onClick={() => setAnalyticsItem({ id: item.id, nombre: item.nombre })}>
+                  <TrendingUp className="h-4 w-4 mr-2" />
+                  Analytics
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setMovimientosItem({ id: item.id, nombre: item.nombre })}>
+                  <History className="h-4 w-4 mr-2" />
+                  Movimientos
+                </DropdownMenuItem>
+                {!isArchived && (
+                  <DropdownMenuItem onClick={() => setLabelItems([item])}>
+                    <Tag className="h-4 w-4 mr-2" />
+                    Imprimir etiqueta
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button
               variant="ghost"
               size="icon"
