@@ -60,6 +60,8 @@ export interface DataTableProps<T> {
   // Expandable rows
   renderExpandedRow?: (item: T) => React.ReactNode | null
   expandedKeys?: Set<string>
+  // Usa padding reducido por celda (ideal para tablas anchas con muchas columnas)
+  compact?: boolean
 }
 
 const EMPTY_KEYS: string[] = []
@@ -81,7 +83,9 @@ export function DataTable<T>({
   onSelectionChange,
   renderExpandedRow,
   expandedKeys,
+  compact = false,
 }: DataTableProps<T>) {
+  const cellPad = compact ? "px-2 py-2" : "px-4 py-3"
   // Scroll shadow: detect if table is scrollable and show right-edge gradient
   const scrollRef = React.useRef<HTMLDivElement>(null)
   const [canScrollRight, setCanScrollRight] = React.useState(false)
@@ -150,7 +154,7 @@ export function DataTable<T>({
             <thead>
               <tr className="border-b bg-muted/50">
                 {selectable && (
-                  <th className="w-12 px-4 py-3 text-left">
+                  <th className={cn("w-12 text-left", cellPad)}>
                     <input
                       type="checkbox"
                       checked={data.length > 0 && selectedKeys.length === data.length}
@@ -163,7 +167,8 @@ export function DataTable<T>({
                   <th
                     key={column.key}
                     className={cn(
-                      "px-4 py-3 text-left font-medium text-muted-foreground",
+                      cellPad,
+                      "text-left font-medium text-muted-foreground",
                       column.sortable && "cursor-pointer select-none hover:text-foreground",
                       column.hideOnMobile && "hidden sm:table-cell",
                       column.hideOnTablet && "hidden md:table-cell",
@@ -216,7 +221,7 @@ export function DataTable<T>({
                         onClick={() => onRowClick?.(item)}
                       >
                         {selectable && (
-                          <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                          <td className={cellPad} onClick={(e) => e.stopPropagation()}>
                             <input
                               type="checkbox"
                               checked={isSelected}
@@ -229,7 +234,7 @@ export function DataTable<T>({
                           <td
                             key={column.key}
                             className={cn(
-                              "px-4 py-3",
+                              cellPad,
                               column.hideOnMobile && "hidden sm:table-cell",
                               column.hideOnTablet && "hidden md:table-cell",
                               column.className

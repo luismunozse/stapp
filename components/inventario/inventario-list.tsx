@@ -308,7 +308,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
       sortable: true,
       render: (item) => (
         <div className="flex items-center gap-2">
-          <div className="h-9 w-9 shrink-0 rounded overflow-hidden bg-muted/50 flex items-center justify-center border">
+          <div className="h-8 w-8 shrink-0 rounded overflow-hidden bg-muted/50 flex items-center justify-center border">
             {item.imagenUrl ? (
               <img
                 src={item.imagenUrl}
@@ -460,7 +460,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7 text-muted-foreground"
+              className="h-6 w-6 text-muted-foreground"
               title="Analytics"
               onClick={(e) => { e.stopPropagation(); setAnalyticsItem({ id: item.id, nombre: item.nombre }) }}
             >
@@ -469,7 +469,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7 text-muted-foreground"
+              className="h-6 w-6 text-muted-foreground"
               title="Movimientos"
               onClick={(e) => { e.stopPropagation(); setMovimientosItem({ id: item.id, nombre: item.nombre }) }}
             >
@@ -480,7 +480,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7 text-muted-foreground"
+                  className="h-6 w-6 text-muted-foreground"
                   title="Imprimir etiqueta"
                   onClick={(e) => { e.stopPropagation(); setLabelItems([item]) }}
                 >
@@ -489,7 +489,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7"
+                  className="h-6 w-6"
                   onClick={(e) => { e.stopPropagation(); setEditingItem(item); setShowForm(true) }}
                 >
                   <Edit className="h-3.5 w-3.5" />
@@ -502,7 +502,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+              className="h-6 w-6 text-muted-foreground hover:text-destructive"
               title="Eliminar"
               onClick={(e) => { e.stopPropagation(); handleDelete(item.id, item.nombre) }}
             >
@@ -850,6 +850,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
               data={items}
               columns={listColumns}
               keyExtractor={(item) => item.id}
+              compact
               sortKey={sortBy}
               sortDirection={sortOrder}
               onSort={handleSort}
