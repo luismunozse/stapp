@@ -223,6 +223,13 @@ async function exportInventario(
   if (filters.tipo_dispositivo) {
     query = query.eq("tipo_dispositivo", filters.tipo_dispositivo)
   }
+  if (filters.proveedor_id) {
+    if (filters.proveedor_id === "none") {
+      query = query.is("proveedor_id", null)
+    } else {
+      query = query.eq("proveedor_id", filters.proveedor_id)
+    }
+  }
   if (filters.bajo_stock === "true") {
     query = query.lt("stock", 5)
   }

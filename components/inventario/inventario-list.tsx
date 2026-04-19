@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { InventarioForm } from "./inventario-form"
 import { InventarioBulkForm } from "./inventario-bulk-form"
+import { InventarioProveedorStats } from "./inventario-proveedor-stats"
 import { ConsolidateDuplicatesDialog } from "./consolidate-duplicates-dialog"
 import { InventarioStats } from "./inventario-stats"
 import { InventarioBulkBar } from "./inventario-bulk-bar"
@@ -604,6 +605,20 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
             </SelectContent>
           </Select>
         </div>
+        {proveedorId && (
+          <InventarioProveedorStats
+            proveedorId={proveedorId}
+            proveedorNombre={
+              proveedorId === "none"
+                ? "Sin proveedor"
+                : proveedores.find((p) => p.id === proveedorId)?.nombre || "Proveedor"
+            }
+            categoria={categoria || undefined}
+            tipoDispositivo={tipoDispositivo || undefined}
+            bajoStock={bajoStock}
+            refreshKey={refreshKey}
+          />
+        )}
         <div className="flex flex-wrap gap-2">
           <Button
             variant={bajoStock ? "default" : "outline"}
@@ -663,6 +678,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
             filters={{
               ...(categoria && { categoria }),
               ...(tipoDispositivo && { tipo_dispositivo: tipoDispositivo }),
+              ...(proveedorId && { proveedor_id: proveedorId }),
               ...(bajoStock && { bajo_stock: "true" }),
             }}
             variant="outline"
