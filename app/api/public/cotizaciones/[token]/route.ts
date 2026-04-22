@@ -42,6 +42,9 @@ export async function GET(
         organization_id,
         visto_at,
         visto_count,
+        tipo,
+        equipo_snapshot,
+        checklist_snapshot,
         ordenes_servicio (
           id,
           numero_orden,
@@ -73,15 +76,12 @@ export async function GET(
       )
     }
 
-    // Fire-and-forget: track read confirmation
+    // Fire-and-forget: track read confirmation con RPC atómico
+    // para evitar race conditions cuando el link se abre concurrentemente.
     if (cotizacion.estado === "ENVIADA") {
-      void supabaseAdmin
-        .from("cotizaciones")
-        .update({
-          visto_at: cotizacion.visto_at || new Date().toISOString(),
-          visto_count: (cotizacion.visto_count || 0) + 1,
-        })
-        .eq("id", cotizacion.id)
+      void supabaseAdmin.rpc("increment_cotizacion_visto", {
+        p_id: cotizacion.id,
+      })
     }
 
     const orden = cotizacion.ordenes_servicio as any
@@ -117,6 +117,9 @@ export async function GET(
       ivaPorcentaje: cotizacion.iva_porcentaje,
       terminos: cotizacion.terminos,
       motivoRechazo: cotizacion.motivo_rechazo || null,
+      tipo: (cotizacion as any).tipo || "ORDEN",
+      equipo: (cotizacion as any).equipo_snapshot || null,
+      checklist: (cotizacion as any).checklist_snapshot || null,
       orden: orden ? {
         numeroOrden: orden.numero_orden,
         dispositivo: orden.dispositivo,

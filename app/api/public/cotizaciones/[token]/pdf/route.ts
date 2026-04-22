@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { generateCotizacionPDF } from "@/lib/pdf"
+import { buildCotizacionPdfExtras } from "@/lib/cotizacion-pdf"
 
 export async function GET(
   request: Request,
@@ -53,7 +54,10 @@ export async function GET(
       org = orgData
     }
 
+    const pdfExtras = await buildCotizacionPdfExtras(cotizacion)
+
     const pdfBuffer = await generateCotizacionPDF({
+      ...pdfExtras,
       numeroCotizacion: cotizacion.numero_cotizacion,
       fecha: cotizacion.created_at,
       fechaVencimiento: cotizacion.fecha_vencimiento,

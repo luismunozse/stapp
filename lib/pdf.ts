@@ -68,6 +68,25 @@ interface CotizacionPDFData {
     dispositivo: string
     problemaReportado: string
   }
+  // Tipo de cotización. ORDEN (default) mantiene el layout histórico.
+  // PRESUPUESTO dibuja un card de "Equipo" con más detalle y sección de checklist.
+  tipo?: "ORDEN" | "PRESUPUESTO"
+  equipo?: {
+    dispositivo: string
+    tipoDispositivo?: string | null
+    marca?: string | null
+    modelo?: string | null
+    color?: string | null
+    imei?: string | null
+    numeroSerie?: string | null
+    accesorios?: string | null
+    problemaReportado: string
+    codigoAcceso?: string | null
+  } | null
+  checklist?: {
+    items: Array<{ label: string; valor: string; categoria?: string | null }>
+    notas?: string | null
+  } | null
   items: CotizacionItem[]
   subtotal: number
   iva: number
@@ -272,9 +291,14 @@ export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Bu
   cursor -= 20
 
   // ---- Info cards ----
-  const hasOrden = !!data.orden
+  // Si la cotización tiene equipo (PRESUPUESTO) lo dibujamos como card de equipo
+  // reemplazando el mini-card de orden. Si es ORDEN ligada, sigue el layout original.
+  const equipo = data.equipo
+  const hasEquipo = !!equipo
+  const hasOrden = !!data.orden && !hasEquipo
+  const hasRightCard = hasEquipo || hasOrden
   const cardGap = 12
-  const cardW = hasOrden ? (contentWidth - cardGap) / 2 : contentWidth
+  const cardW = hasRightCard ? (contentWidth - cardGap) / 2 : contentWidth
 
   // Calculate client card height
   const clienteLines = 2 + (clienteEmail ? 1 : 0) + (clienteDireccion ? 1 : 0) + (sectorNombre ? 1 : 0)
@@ -305,8 +329,62 @@ export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Bu
     page.drawText(`Sector: ${sectorNombre.substring(0, 30)}`, { x: marginL + 14, y: cy, size: 9, font: helveticaBold, color: notesText })
   }
 
-  // Orden card (only if linked)
-  if (data.orden) {
+  // Equipo card (PRESUPUESTO) — tiene prioridad sobre el mini-card de orden.
+  let rightCardH = 0
+  if (hasEquipo && equipo) {
+    const ox = marginL + cardW + cardGap
+    const equipoDispositivo = safe(equipo.dispositivo)
+    const equipoMarca = safe(equipo.marca)
+    const equipoModelo = safe(equipo.modelo)
+    const equipoColor = safe(equipo.color)
+    const equipoImei = safe(equipo.imei)
+    const equipoSerie = safe(equipo.numeroSerie)
+    const equipoAccesorios = safe(equipo.accesorios)
+    const equipoProblema = safe(equipo.problemaReportado)
+
+    // Líneas: titulo + dispositivo/marca + color/modelo + imei/serie + accesorios (si) + problema (2 líneas)
+    const extraLines =
+      (equipoMarca || equipoModelo ? 1 : 0) +
+      (equipoColor ? 1 : 0) +
+      (equipoImei || equipoSerie ? 1 : 0) +
+      (equipoAccesorios ? 1 : 0)
+    const equipoCardH = Math.max(clienteCardH, 75 + extraLines * 14)
+
+    page.drawRectangle({ x: ox, y: cursor - equipoCardH, width: cardW, height: equipoCardH, color: bgLight, borderColor: border, borderWidth: 0.5 })
+    page.drawRectangle({ x: ox, y: cursor - equipoCardH, width: 3, height: equipoCardH, color: accent })
+
+    let oy = cursor - 15
+    page.drawText("EQUIPO", { x: ox + 14, y: oy, size: 9, font: helveticaBold, color: accent })
+    oy -= 18
+    page.drawText(equipoDispositivo.substring(0, 38), { x: ox + 14, y: oy, size: 10, font: helveticaBold, color: textDark })
+    oy -= 14
+
+    if (equipoMarca || equipoModelo) {
+      const txt = [equipoMarca, equipoModelo].filter(Boolean).join(" · ")
+      page.drawText(txt.substring(0, 40), { x: ox + 14, y: oy, size: 8, font: helvetica, color: textMuted })
+      oy -= 13
+    }
+    if (equipoColor) {
+      page.drawText(`Color: ${equipoColor}`.substring(0, 40), { x: ox + 14, y: oy, size: 8, font: helvetica, color: textMuted })
+      oy -= 13
+    }
+    if (equipoImei || equipoSerie) {
+      const txt = equipoImei ? `IMEI: ${equipoImei}` : `N° serie: ${equipoSerie}`
+      page.drawText(txt.substring(0, 40), { x: ox + 14, y: oy, size: 8, font: helvetica, color: textMuted })
+      oy -= 13
+    }
+    if (equipoAccesorios) {
+      page.drawText(`Acc.: ${equipoAccesorios}`.substring(0, 40), { x: ox + 14, y: oy, size: 8, font: helvetica, color: textMuted })
+      oy -= 13
+    }
+
+    oy -= 2
+    page.drawText("Problema reportado", { x: ox + 14, y: oy, size: 8, font: helvetica, color: textMuted })
+    oy -= 12
+    page.drawText(equipoProblema.substring(0, 45), { x: ox + 14, y: oy, size: 9, font: helvetica, color: textDark })
+
+    rightCardH = equipoCardH
+  } else if (data.orden) {
     const ox = marginL + cardW + cardGap
     const ordenCardH = Math.max(clienteCardH, 75)
     page.drawRectangle({ x: ox, y: cursor - ordenCardH, width: cardW, height: ordenCardH, color: bgLight, borderColor: border, borderWidth: 0.5 })
@@ -322,9 +400,11 @@ export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Bu
     page.drawText("Problema reportado", { x: ox + 14, y: oy, size: 8, font: helvetica, color: textMuted })
     oy -= 13
     page.drawText(safe(data.orden.problemaReportado).substring(0, 45), { x: ox + 14, y: oy, size: 9, font: helvetica, color: textDark })
+
+    rightCardH = ordenCardH
   }
 
-  cursor -= Math.max(clienteCardH, hasOrden ? 75 : clienteCardH) + 20
+  cursor -= Math.max(clienteCardH, rightCardH || clienteCardH) + 20
 
   // ====== ITEMS TABLE ======
   // Table column positions (right edge for right-aligned columns)
@@ -463,6 +543,64 @@ export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Bu
     const validW = helvetica.widthOfTextAtSize(validText, 9)
     page.drawText(validText, { x: marginL + (contentWidth - validW) / 2, y: cursor - bannerH + 9, size: 9, font: helveticaBold, color: warnText })
     cursor -= bannerH + 8
+  }
+
+  // ====== CHECKLIST (solo para PRESUPUESTO con checklist) ======
+  if (data.checklist && Array.isArray(data.checklist.items) && data.checklist.items.length > 0) {
+    const chk = data.checklist
+    // Agrupar por categoría para visualización
+    const byCat: Record<string, Array<{ label: string; valor: string }>> = {}
+    for (const it of chk.items) {
+      const cat = it.categoria || "General"
+      if (!byCat[cat]) byCat[cat] = []
+      byCat[cat].push({ label: it.label, valor: it.valor })
+    }
+
+    // Altura estimada: 22 de header + por categoria (12 titulo + 11 por item) + notas
+    let estH = 22
+    for (const cat of Object.keys(byCat)) {
+      estH += 14
+      estH += byCat[cat].length * 12
+    }
+    if (chk.notas) estH += 20
+
+    // Si no entra en la página actual, crear una nueva
+    if (cursor - estH < minY) {
+      page = pdfDoc.addPage([pageW, pageH])
+      pages.push(page)
+      page.drawRectangle({ x: 0, y: pageH - 4, width: pageW, height: 4, color: accent })
+      cursor = pageH - 30
+    }
+
+    page.drawRectangle({ x: marginL, y: cursor - estH, width: contentWidth, height: estH, color: notesBg, borderColor: border, borderWidth: 0.5 })
+    page.drawText("CHECKLIST DE RECEPCIÓN", { x: marginL + 12, y: cursor - 14, size: 8, font: helveticaBold, color: notesText })
+    let chY = cursor - 28
+
+    const labelsByCat: Record<string, string> = {
+      CONDICION_FISICA: "Condición física",
+      ACCESORIOS: "Accesorios",
+      FUNCIONAL: "Estado funcional",
+      GENERAL: "General",
+    }
+
+    for (const [cat, items] of Object.entries(byCat)) {
+      page.drawText(labelsByCat[cat] || cat, { x: marginL + 12, y: chY, size: 8, font: helveticaBold, color: textDark })
+      chY -= 12
+      for (const it of items) {
+        const line = `• ${it.label}: ${it.valor}`.substring(0, 95)
+        page.drawText(line, { x: marginL + 18, y: chY, size: 7.5, font: helvetica, color: textMuted })
+        chY -= 11
+      }
+      chY -= 2
+    }
+
+    if (chk.notas) {
+      page.drawText(`Observaciones: ${safe(chk.notas)}`.substring(0, 100), {
+        x: marginL + 12, y: chY, size: 7.5, font: helvetica, color: textMuted,
+      })
+    }
+
+    cursor -= estH + 8
   }
 
   // ====== NOTAS ======

@@ -5,7 +5,7 @@ import { z } from "zod"
 
 const convertSchema = z.object({
   metodoPago: z.enum([
-    "EFECTIVO", "TRANSFERENCIA", "TARJETA", "TARJETA_DEBITO",
+    "EFECTIVO", "TRANSFERENCIA", "TARJETA_DEBITO",
     "TARJETA_CREDITO", "MERCADOPAGO", "CUENTA_CORRIENTE", "OTRO"
   ]),
   observaciones: z.string().optional(),
@@ -58,6 +58,13 @@ export async function POST(
     if (cotizacion.estado !== "ACEPTADA") {
       return NextResponse.json(
         { error: "Solo se pueden convertir cotizaciones aceptadas" },
+        { status: 400 }
+      )
+    }
+
+    if (cotizacion.tipo === "PRESUPUESTO") {
+      return NextResponse.json(
+        { error: "Los presupuestos planos deben convertirse primero a orden de servicio" },
         { status: 400 }
       )
     }

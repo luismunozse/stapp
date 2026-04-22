@@ -29,7 +29,16 @@ import {
   BookmarkPlus,
   LayoutGrid,
   LayoutList,
+  FileText,
+  Wrench,
 } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { useCurrency } from "@/contexts/currency-context"
 import { CotizacionForm } from "@/components/cotizaciones/cotizacion-form"
 import { CotizacionApprovalDialog } from "@/components/cotizaciones/cotizacion-approval-dialog"
@@ -64,6 +73,27 @@ interface Cotizacion {
   vistoAt?: string | null
   vistoCount?: number
   motivoRechazo?: string | null
+  tipo?: "ORDEN" | "PRESUPUESTO"
+  equipo?: {
+    dispositivo: string
+    tipoDispositivoId?: string | null
+    tipoDispositivo?: string | null
+    marca?: string | null
+    modelo?: string | null
+    color?: string | null
+    imei?: string | null
+    numeroSerie?: string | null
+    accesorios?: string | null
+    problemaReportado: string
+    codigoAcceso?: string | null
+  } | null
+  checklist?: {
+    templateId: string
+    tipoDispositivoId?: string | null
+    valores: Record<string, boolean | string | null>
+    notas?: string | null
+  } | null
+  convertidaAOrdenId?: string | null
   items: {
     id: string
     descripcion: string
@@ -96,9 +126,12 @@ const fetcher = (url: string) => fetch(url).then(res => res.json())
 export default function CotizacionesPage() {
   const { formatPrice, formatDate } = useCurrency()
   const [showForm, setShowForm] = useState(false)
+  const [showTipoSelector, setShowTipoSelector] = useState(false)
+  const [formTipo, setFormTipo] = useState<"ORDEN" | "PRESUPUESTO">("ORDEN")
   const [editingCotizacion, setEditingCotizacion] = useState<Cotizacion | null>(null)
   const [sendingId, setSendingId] = useState<string | null>(null)
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null)
+  const [convertingOrdenId, setConvertingOrdenId] = useState<string | null>(null)
   const [approvingCotizacion, setApprovingCotizacion] = useState<Cotizacion | null>(null)
   const [convertingCotizacion, setConvertingCotizacion] = useState<Cotizacion | null>(null)
   const [search, setSearch] = useState("")
@@ -260,6 +293,36 @@ export default function CotizacionesPage() {
     }
   }
 
+  const handleConvertirOrden = async (cotizacion: Cotizacion) => {
+    const confirmed = await confirm({
+      title: "Convertir a orden",
+      description: `Se creará una nueva orden de servicio con los datos de ${cotizacion.numeroCotizacion}. ¿Continuar?`,
+      confirmText: "Crear orden",
+      cancelText: "Cancelar",
+      variant: "info",
+    })
+    if (!confirmed) return
+
+    setConvertingOrdenId(cotizacion.id)
+    try {
+      const res = await fetch(`/api/cotizaciones/${cotizacion.id}/convertir-orden`, {
+        method: "POST",
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        await showError(err.error || "Error al convertir en orden")
+        return
+      }
+      const data = await res.json()
+      await showSuccess(`Orden ${data.codigoOrden} creada`)
+      mutate()
+    } catch {
+      await showError("Error al convertir en orden")
+    } finally {
+      setConvertingOrdenId(null)
+    }
+  }
+
   const handleSaveAsTemplate = async (cotizacion: Cotizacion) => {
     const nombre = window.prompt("Nombre de la plantilla:")
     if (!nombre) return
@@ -303,9 +366,9 @@ export default function CotizacionesPage() {
           Cotizaciones
         </h1>
         {!showForm && !editingCotizacion && (
-          <Button onClick={() => setShowForm(true)}>
+          <Button onClick={() => setShowTipoSelector(true)}>
             <Plus className="mr-2 h-4 w-4" />
-            Nueva Cotizacion
+            Nueva Cotización
           </Button>
         )}
       </div>
@@ -315,7 +378,7 @@ export default function CotizacionesPage() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Buscar por numero de cotizacion..."
+            placeholder="Buscar por número o cliente..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -355,9 +418,60 @@ export default function CotizacionesPage() {
         </div>
       </div>
 
+      {/* Selector de tipo */}
+      <Dialog open={showTipoSelector} onOpenChange={setShowTipoSelector}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>¿Qué tipo de cotización querés crear?</DialogTitle>
+            <DialogDescription>
+              Elegí el tipo según el escenario. Podés convertir un presupuesto en orden más tarde.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 sm:grid-cols-2 pt-2">
+            <button
+              type="button"
+              className="text-left p-4 border rounded-lg hover:border-primary hover:bg-muted/50 transition-colors"
+              onClick={() => {
+                setFormTipo("ORDEN")
+                setShowTipoSelector(false)
+                setShowForm(true)
+              }}
+            >
+              <div className="flex items-center gap-2 font-medium mb-1">
+                <Wrench className="h-4 w-4 text-primary" />
+                Cotización de orden
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Para piezas/servicios sobre un equipo ya ingresado al taller. Requiere
+                firma del cliente al aprobar y reserva stock.
+              </p>
+            </button>
+            <button
+              type="button"
+              className="text-left p-4 border rounded-lg hover:border-primary hover:bg-muted/50 transition-colors"
+              onClick={() => {
+                setFormTipo("PRESUPUESTO")
+                setShowTipoSelector(false)
+                setShowForm(true)
+              }}
+            >
+              <div className="flex items-center gap-2 font-medium mb-1">
+                <FileText className="h-4 w-4 text-primary" />
+                Presupuesto
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Documento plano para presentar (seguro, empresa). Incluye datos del
+                equipo y checklist. Sin firma. Luego se puede convertir en orden.
+              </p>
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Form */}
       {showForm && (
         <CotizacionForm
+          tipo={formTipo}
           onClose={() => setShowForm(false)}
           onSuccess={() => {
             setShowForm(false)
@@ -368,6 +482,7 @@ export default function CotizacionesPage() {
 
       {editingCotizacion && (
         <CotizacionForm
+          tipo={editingCotizacion.tipo || "ORDEN"}
           ordenId={editingCotizacion.ordenId || undefined}
           initialData={{
             id: editingCotizacion.id,
@@ -380,6 +495,8 @@ export default function CotizacionesPage() {
             ivaPorcentaje: editingCotizacion.ivaPorcentaje || undefined,
             clienteId: editingCotizacion.clienteId || undefined,
             sectorId: editingCotizacion.sectorId || undefined,
+            equipo: editingCotizacion.equipo || undefined,
+            checklist: editingCotizacion.checklist || undefined,
           }}
           onClose={() => setEditingCotizacion(null)}
           onSuccess={() => {
@@ -461,7 +578,16 @@ export default function CotizacionesPage() {
                       const canDelete = cotizacion.estado !== "ACEPTADA"
                       return (
                         <tr key={cotizacion.id} className="border-b hover:bg-muted/30 transition-colors">
-                          <td className="p-3 font-medium">{cotizacion.numeroCotizacion}</td>
+                          <td className="p-3 font-medium">
+                            <div className="flex items-center gap-2">
+                              {cotizacion.numeroCotizacion}
+                              {cotizacion.tipo === "PRESUPUESTO" && (
+                                <Badge variant="outline" className="text-[10px] border-purple-300 text-purple-700">
+                                  Presupuesto
+                                </Badge>
+                              )}
+                            </div>
+                          </td>
                           <td className="p-3">
                             <Badge className={config.color}>
                               <Icon className="mr-1 h-3 w-3" />
@@ -521,7 +647,7 @@ export default function CotizacionesPage() {
                                   </Button>
                                 </>
                               )}
-                              {cotizacion.estado === "ACEPTADA" && (
+                              {cotizacion.estado === "ACEPTADA" && cotizacion.tipo !== "PRESUPUESTO" && (
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -530,6 +656,18 @@ export default function CotizacionesPage() {
                                   title="Convertir a venta"
                                 >
                                   <ShoppingCart className="h-4 w-4" />
+                                </Button>
+                              )}
+                              {cotizacion.tipo === "PRESUPUESTO" && !cotizacion.convertidaAOrdenId && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-blue-600 hover:text-blue-700"
+                                  onClick={() => handleConvertirOrden(cotizacion)}
+                                  disabled={convertingOrdenId === cotizacion.id}
+                                  title="Convertir a orden"
+                                >
+                                  <Wrench className="h-4 w-4" />
                                 </Button>
                               )}
                               <Button
@@ -600,9 +738,20 @@ export default function CotizacionesPage() {
                           <Icon className="mr-1 h-3 w-3" />
                           {config.label}
                         </Badge>
+                        {cotizacion.tipo === "PRESUPUESTO" && (
+                          <Badge variant="outline" className="text-xs border-purple-300 text-purple-700">
+                            <FileText className="mr-1 h-3 w-3" />
+                            Presupuesto
+                          </Badge>
+                        )}
                         {cotizacion.ordenNumero && (
                           <Badge variant="outline" className="text-xs">
                             Orden #{cotizacion.ordenNumero}
+                          </Badge>
+                        )}
+                        {cotizacion.convertidaAOrdenId && (
+                          <Badge variant="outline" className="text-xs border-green-300 text-green-700">
+                            Convertida a orden
                           </Badge>
                         )}
                         {cotizacion.vistoAt && (
@@ -728,7 +877,7 @@ export default function CotizacionesPage() {
                         <Copy className="mr-2 h-3 w-3" />
                         {duplicatingId === cotizacion.id ? "Duplicando..." : "Duplicar"}
                       </Button>
-                      {cotizacion.estado === "ACEPTADA" && (
+                      {cotizacion.estado === "ACEPTADA" && cotizacion.tipo !== "PRESUPUESTO" && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -737,6 +886,18 @@ export default function CotizacionesPage() {
                         >
                           <ShoppingCart className="mr-2 h-3 w-3" />
                           Convertir a Venta
+                        </Button>
+                      )}
+                      {cotizacion.tipo === "PRESUPUESTO" && !cotizacion.convertidaAOrdenId && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-blue-600 hover:text-blue-700"
+                          onClick={() => handleConvertirOrden(cotizacion)}
+                          disabled={convertingOrdenId === cotizacion.id}
+                        >
+                          <Wrench className="mr-2 h-3 w-3" />
+                          {convertingOrdenId === cotizacion.id ? "Creando orden..." : "Convertir a orden"}
                         </Button>
                       )}
                       {canDelete && (

@@ -17,7 +17,29 @@ const itemSchema = z.object({
   inventarioId: z.string().nullable().optional(),
 })
 
+const equipoSchema = z.object({
+  dispositivo: z.string().min(1, "Dispositivo requerido"),
+  tipoDispositivoId: z.string().optional().nullable(),
+  tipoDispositivo: z.string().optional().nullable(),
+  marca: z.string().optional().nullable(),
+  modelo: z.string().optional().nullable(),
+  color: z.string().optional().nullable(),
+  imei: z.string().optional().nullable(),
+  numeroSerie: z.string().optional().nullable(),
+  accesorios: z.string().optional().nullable(),
+  problemaReportado: z.string().min(1, "Problema reportado requerido"),
+  codigoAcceso: z.string().optional().nullable(),
+})
+
+const checklistSchema = z.object({
+  templateId: z.string(),
+  tipoDispositivoId: z.string().optional().nullable(),
+  valores: z.record(z.union([z.boolean(), z.string(), z.null()])),
+  notas: z.string().optional().nullable(),
+})
+
 const cotizacionSchema = z.object({
+  tipo: z.enum(["ORDEN", "PRESUPUESTO"]).default("ORDEN"),
   ordenId: z.string().optional(),
   clienteId: z.string().optional(),
   sectorId: z.string().optional(),
@@ -29,6 +51,8 @@ const cotizacionSchema = z.object({
   descuentoGlobalValor: z.number().min(0).optional(),
   ivaPorcentaje: z.number().min(0).max(100).optional(),
   tipoCambio: z.number().positive().optional(),
+  equipo: equipoSchema.optional(),
+  checklist: checklistSchema.optional(),
 })
 
 function calcItemNeto(item: { cantidad: number; precioUnitario: number; descuentoTipo?: string; descuentoValor?: number }) {
@@ -68,6 +92,10 @@ function formatCotizacion(c: any) {
     vistoCount: c.visto_count || 0,
     motivoRechazo: c.motivo_rechazo || null,
     tipoCambio: c.tipo_cambio || null,
+    tipo: c.tipo || "ORDEN",
+    equipo: c.equipo_snapshot || null,
+    checklist: c.checklist_snapshot || null,
+    convertidaAOrdenId: c.convertida_a_orden_id || null,
     clienteNombre: cliente?.nombre || null,
     clienteEmail: cliente?.email || null,
     ordenNumero: orden?.numero_orden || null,
@@ -158,7 +186,26 @@ export async function GET(request: Request) {
       .order("created_at", { ascending: false })
 
     if (estado && estado !== "TODOS") query = query.eq("estado", estado)
-    if (search) query = query.ilike("numero_cotizacion", `%${search}%`)
+    if (search) {
+      // Buscar por número de cotización o nombre de cliente.
+      // Supabase no soporta OR cross-table en un select, así que resolvemos
+      // los cliente_ids que matchean y armamos un or() con in-list.
+      const escaped = search.replace(/[%_]/g, "\\$&") // escape wildcards
+      const { data: clientesMatch } = await supabaseAdmin
+        .from("clientes")
+        .select("id")
+        .eq("organization_id", organizationId!)
+        .ilike("nombre", `%${escaped}%`)
+
+      const clienteIds = (clientesMatch || []).map((c) => c.id)
+      if (clienteIds.length > 0) {
+        query = query.or(
+          `numero_cotizacion.ilike.%${escaped}%,cliente_id.in.(${clienteIds.join(",")})`
+        )
+      } else {
+        query = query.ilike("numero_cotizacion", `%${escaped}%`)
+      }
+    }
     if (role === "TECNICO") query = query.eq("created_by", userId!)
 
     query = query.range(offset, offset + limit - 1)
@@ -193,12 +240,35 @@ export async function POST(request: Request) {
     const body = await request.json()
     const data = cotizacionSchema.parse(body)
 
-    // Validate: must have either ordenId or clienteId
-    if (!data.ordenId && !data.clienteId) {
-      return NextResponse.json(
-        { error: "Se requiere una orden o un cliente" },
-        { status: 400 }
-      )
+    // Reglas por tipo:
+    //   ORDEN       -> debe venir con ordenId o clienteId (flujo actual).
+    //   PRESUPUESTO -> requiere clienteId + equipo (documento plano).
+    if (data.tipo === "PRESUPUESTO") {
+      if (!data.clienteId) {
+        return NextResponse.json(
+          { error: "Un presupuesto requiere un cliente" },
+          { status: 400 }
+        )
+      }
+      if (!data.equipo) {
+        return NextResponse.json(
+          { error: "Un presupuesto requiere los datos del equipo" },
+          { status: 400 }
+        )
+      }
+      if (data.ordenId) {
+        return NextResponse.json(
+          { error: "Un presupuesto plano no puede estar vinculado a una orden" },
+          { status: 400 }
+        )
+      }
+    } else {
+      if (!data.ordenId && !data.clienteId) {
+        return NextResponse.json(
+          { error: "Se requiere una orden o un cliente" },
+          { status: 400 }
+        )
+      }
     }
 
     let clienteIdForInsert: string | null = null
@@ -300,6 +370,9 @@ export async function POST(request: Request) {
         total,
         tipo_cambio: data.tipoCambio || null,
         created_by: userId,
+        tipo: data.tipo,
+        equipo_snapshot: data.tipo === "PRESUPUESTO" ? data.equipo : null,
+        checklist_snapshot: data.tipo === "PRESUPUESTO" ? data.checklist || null : null,
       })
       .select()
       .single()

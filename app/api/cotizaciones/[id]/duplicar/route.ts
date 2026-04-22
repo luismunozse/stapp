@@ -9,15 +9,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, role } = await requireAuth()
+    const { error, organizationId, userId, role } = await requireAuth()
     if (error) return error
-
-    if (role !== "ADMIN") {
-      return NextResponse.json(
-        { error: "Solo administradores pueden duplicar cotizaciones" },
-        { status: 403 }
-      )
-    }
 
     const { id } = await params
 
@@ -36,6 +29,14 @@ export async function POST(
       return NextResponse.json(
         { error: "Cotizacion no encontrada" },
         { status: 404 }
+      )
+    }
+
+    // TECNICO sólo puede duplicar cotizaciones creadas por él mismo
+    if (role === "TECNICO" && source.created_by !== userId) {
+      return NextResponse.json(
+        { error: "No autorizado para duplicar esta cotización" },
+        { status: 403 }
       )
     }
 
@@ -74,6 +75,7 @@ export async function POST(
         subtotal: source.subtotal,
         iva: source.iva,
         total: source.total,
+        created_by: userId,
       })
       .select()
       .single()

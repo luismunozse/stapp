@@ -4,8 +4,8 @@ import { queueNotification } from "@/lib/notifications/queue"
 import { z } from "zod"
 
 const aprobarSchema = z.object({
-  firmaAprobacion: z.string().min(1, "Firma requerida"),
-  firmaMime: z.string().min(1, "Tipo de firma requerido"),
+  firmaAprobacion: z.string().optional().nullable(),
+  firmaMime: z.string().optional().nullable(),
   nombreAprobador: z.string().optional(),
 })
 
@@ -32,7 +32,7 @@ export async function POST(
     // motivo el query recibiera un valor falsy que pasara el length check.
     const { data: cotizacion, error: fetchError } = await supabaseAdmin
       .from("cotizaciones")
-      .select("id, estado, orden_id, total")
+      .select("id, estado, orden_id, total, tipo")
       .eq("public_token", token)
       .not("public_token", "is", null)
       .is("deleted_at", null)
@@ -52,27 +52,38 @@ export async function POST(
       )
     }
 
+    // PRESUPUESTO plano no requiere firma; ORDEN sí.
+    const esPresupuesto = cotizacion.tipo === "PRESUPUESTO"
+    if (!esPresupuesto && (!data.firmaAprobacion || !data.firmaMime)) {
+      return NextResponse.json(
+        { error: "La firma es requerida" },
+        { status: 400 }
+      )
+    }
+
     // Update cotizacion to ACEPTADA
     const { error: updateError } = await supabaseAdmin
       .from("cotizaciones")
       .update({
         estado: "ACEPTADA",
-        firma_aprobacion: data.firmaAprobacion,
-        firma_mime: data.firmaMime,
+        firma_aprobacion: data.firmaAprobacion || null,
+        firma_mime: data.firmaMime || null,
         fecha_aprobacion: new Date().toISOString(),
       })
       .eq("id", cotizacion.id)
 
     if (updateError) throw updateError
 
-    // Reserve inventory for items linked to inventario
-    try {
-      await supabaseAdmin.rpc("reservar_items_cotizacion", {
-        p_cotizacion_id: cotizacion.id,
-        p_user_id: "system-public",
-      })
-    } catch (reserveErr) {
-      console.error("Error reserving stock for cotizacion:", reserveErr)
+    // Reservar stock sólo para tipo ORDEN
+    if (!esPresupuesto) {
+      try {
+        await supabaseAdmin.rpc("reservar_items_cotizacion", {
+          p_cotizacion_id: cotizacion.id,
+          p_user_id: "system-public",
+        })
+      } catch (reserveErr) {
+        console.error("Error reserving stock for cotizacion:", reserveErr)
+      }
     }
 
     // If cotizacion is linked to an order in PRESUPUESTADO, transition it to APROBADO

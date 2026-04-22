@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { generateCotizacionPDF } from "@/lib/pdf"
+import { buildCotizacionPdfExtras } from "@/lib/cotizacion-pdf"
 import { sendCotizacionEmail } from "@/lib/email"
 
 export async function POST(
@@ -9,12 +10,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, role } = await requireAuth()
+    const { error, organizationId, userId, role } = await requireAuth()
     if (error) return error
-
-    if (role !== "ADMIN") {
-      return NextResponse.json({ error: "Solo administradores pueden enviar cotizaciones" }, { status: 403 })
-    }
 
     const { id } = await params
 
@@ -41,6 +38,11 @@ export async function POST(
       return NextResponse.json({ error: "Cotización no encontrada" }, { status: 404 })
     }
 
+    // TECNICO sólo puede enviar cotizaciones creadas por él mismo
+    if (role === "TECNICO" && cotizacion.created_by !== userId) {
+      return NextResponse.json({ error: "No autorizado para enviar esta cotización" }, { status: 403 })
+    }
+
     const orden = cotizacion.ordenes_servicio
     const cliente = orden?.clientes || cotizacion.clientes
 
@@ -61,7 +63,10 @@ export async function POST(
     }
 
     // Generar PDF
+    const pdfExtras = await buildCotizacionPdfExtras(cotizacion)
+
     const pdfBuffer = await generateCotizacionPDF({
+      ...pdfExtras,
       numeroCotizacion: cotizacion.numero_cotizacion,
       fecha: cotizacion.created_at,
       fechaVencimiento: cotizacion.fecha_vencimiento,

@@ -14,10 +14,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { X, Plus, FileText, Calculator, Percent, DollarSign, Loader2, BookOpen } from "lucide-react"
+import { X, Plus, FileText, Calculator, Percent, DollarSign, Loader2, BookOpen, Smartphone } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
+import { useModal } from "@/contexts/modal-context"
 import { ItemRow, calcItemNeto } from "./item-row"
 import { ClienteSelector } from "./cliente-selector"
+import { ChecklistPicker, type ChecklistPickerValue } from "./checklist-picker"
 
 interface CotizacionItem {
   descripcion: string
@@ -29,7 +31,22 @@ interface CotizacionItem {
   inventarioId?: string | null
 }
 
+interface EquipoData {
+  dispositivo: string
+  tipoDispositivoId?: string | null
+  tipoDispositivo?: string | null
+  marca?: string | null
+  modelo?: string | null
+  color?: string | null
+  imei?: string | null
+  numeroSerie?: string | null
+  accesorios?: string | null
+  problemaReportado: string
+  codigoAcceso?: string | null
+}
+
 interface CotizacionFormProps {
+  tipo?: "ORDEN" | "PRESUPUESTO"
   ordenId?: string
   onClose: () => void
   onSuccess: () => void
@@ -44,17 +61,22 @@ interface CotizacionFormProps {
     ivaPorcentaje?: number
     clienteId?: string | null
     sectorId?: string | null
+    equipo?: EquipoData | null
+    checklist?: ChecklistPickerValue | null
   }
 }
 
 export function CotizacionForm({
+  tipo = "ORDEN",
   ordenId,
   onClose,
   onSuccess,
   initialData,
 }: CotizacionFormProps) {
+  const isPresupuesto = tipo === "PRESUPUESTO"
   const [loading, setLoading] = useState(false)
   const { formatPrice } = useCurrency()
+  const { showError, showWarning } = useModal()
   const [items, setItems] = useState<CotizacionItem[]>(
     initialData?.items || [{ descripcion: "", cantidad: 1, precioUnitario: 0, unidad: "Unidad", descuentoTipo: "porcentaje", descuentoValor: 0 }]
   )
@@ -78,8 +100,41 @@ export function CotizacionForm({
   const [templatesLoaded, setTemplatesLoaded] = useState(false)
   const [showTemplates, setShowTemplates] = useState(false)
 
+  // Estado para PRESUPUESTO: datos del equipo + checklist
+  const [equipo, setEquipo] = useState<EquipoData>({
+    dispositivo: initialData?.equipo?.dispositivo || "",
+    tipoDispositivoId: initialData?.equipo?.tipoDispositivoId || null,
+    tipoDispositivo: initialData?.equipo?.tipoDispositivo || null,
+    marca: initialData?.equipo?.marca || null,
+    modelo: initialData?.equipo?.modelo || null,
+    color: initialData?.equipo?.color || null,
+    imei: initialData?.equipo?.imei || null,
+    numeroSerie: initialData?.equipo?.numeroSerie || null,
+    accesorios: initialData?.equipo?.accesorios || null,
+    problemaReportado: initialData?.equipo?.problemaReportado || "",
+    codigoAcceso: initialData?.equipo?.codigoAcceso || null,
+  })
+  const [checklistValue, setChecklistValue] = useState<ChecklistPickerValue | null>(
+    initialData?.checklist || null
+  )
+  const [tiposDispositivo, setTiposDispositivo] = useState<Array<{ id: string; codigo: string; nombre: string }>>([])
+
   const isEditing = !!initialData?.id
   const isStandalone = !ordenId
+
+  // Cargar tipos de dispositivo (solo para PRESUPUESTO)
+  useEffect(() => {
+    if (!isPresupuesto || tiposDispositivo.length > 0) return
+    ;(async () => {
+      try {
+        const res = await fetch("/api/tipos-dispositivo")
+        if (res.ok) {
+          const data = await res.json()
+          setTiposDispositivo(Array.isArray(data) ? data : [])
+        }
+      } catch { /* ignore */ }
+    })()
+  }, [isPresupuesto, tiposDispositivo.length])
 
   // Fetch org config for defaults (only for new cotizaciones)
   useEffect(() => {
@@ -143,7 +198,7 @@ export function CotizacionForm({
         setNuevoSectorNombre("")
       } else {
         const err = await res.json()
-        alert(err.error || "Error al crear sector")
+        await showError(err.error || "Error al crear sector")
       }
     } catch {
       // ignore
@@ -221,19 +276,34 @@ export function CotizacionForm({
       (item) => item.descripcion && item.cantidad > 0 && item.precioUnitario > 0
     )
     if (validItems.length === 0) {
-      alert("Debe agregar al menos un item válido")
+      await showWarning("Debe agregar al menos un item válido")
       return
     }
 
     if (isStandalone && !clienteId) {
-      alert("Debe seleccionar un cliente")
+      await showWarning("Debe seleccionar un cliente")
       return
+    }
+
+    if (isPresupuesto) {
+      if (!equipo.dispositivo.trim()) {
+        await showWarning("Ingresá el dispositivo del equipo")
+        return
+      }
+      if (!equipo.problemaReportado.trim()) {
+        await showWarning("Ingresá el problema reportado")
+        return
+      }
+      if (!equipo.tipoDispositivoId) {
+        await showWarning("Seleccioná el tipo de dispositivo")
+        return
+      }
     }
 
     if (fechaVencimiento) {
       const today = new Date().toISOString().split("T")[0]
       if (fechaVencimiento < today) {
-        alert("La fecha de vencimiento no puede ser anterior a hoy")
+        await showWarning("La fecha de vencimiento no puede ser anterior a hoy")
         return
       }
     }
@@ -246,6 +316,7 @@ export function CotizacionForm({
       const method = isEditing ? "PUT" : "POST"
 
       const payload: Record<string, any> = {
+        tipo,
         items: validItems.map(item => ({
           descripcion: item.descripcion,
           cantidad: item.cantidad,
@@ -268,6 +339,23 @@ export function CotizacionForm({
       if (isStandalone && clienteId) payload.clienteId = clienteId
       if (selectedSectorId) payload.sectorId = selectedSectorId
 
+      if (isPresupuesto) {
+        payload.equipo = {
+          dispositivo: equipo.dispositivo.trim(),
+          tipoDispositivoId: equipo.tipoDispositivoId,
+          tipoDispositivo: equipo.tipoDispositivo,
+          marca: equipo.marca || null,
+          modelo: equipo.modelo || null,
+          color: equipo.color || null,
+          imei: equipo.imei || null,
+          numeroSerie: equipo.numeroSerie || null,
+          accesorios: equipo.accesorios || null,
+          problemaReportado: equipo.problemaReportado.trim(),
+          codigoAcceso: equipo.codigoAcceso || null,
+        }
+        if (checklistValue) payload.checklist = checklistValue
+      }
+
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
@@ -276,14 +364,14 @@ export function CotizacionForm({
 
       if (!res.ok) {
         const error = await res.json()
-        alert(error.error || "Error al guardar cotización")
+        await showError(error.error || "Error al guardar cotización")
         return
       }
 
       onSuccess()
     } catch (error) {
       console.error("Error:", error)
-      alert("Error al guardar cotización")
+      await showError("Error al guardar cotización")
     } finally {
       setLoading(false)
     }
@@ -295,7 +383,9 @@ export function CotizacionForm({
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
-            {isEditing ? "Editar Cotización" : "Nueva Cotización"}
+            {isEditing
+              ? isPresupuesto ? "Editar Presupuesto" : "Editar Cotización"
+              : isPresupuesto ? "Nuevo Presupuesto" : "Nueva Cotización"}
           </CardTitle>
           <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="h-4 w-4" />
@@ -363,6 +453,140 @@ export function CotizacionForm({
                 </div>
               )}
             </>
+          )}
+
+          {/* Datos del equipo (solo PRESUPUESTO) */}
+          {isPresupuesto && (
+            <div className="space-y-3 p-3 border rounded-lg bg-muted/20">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Smartphone className="h-4 w-4" /> Datos del equipo
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <Label>Tipo de dispositivo *</Label>
+                  <Select
+                    value={equipo.tipoDispositivoId || ""}
+                    onValueChange={(id) => {
+                      const td = tiposDispositivo.find((t) => t.id === id)
+                      setEquipo((prev) => ({
+                        ...prev,
+                        tipoDispositivoId: id,
+                        tipoDispositivo: td?.codigo || null,
+                      }))
+                      // Reset checklist si cambia el tipo
+                      setChecklistValue(null)
+                    }}
+                    disabled={loading}
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Seleccionar..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {tiposDispositivo.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.nombre}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Dispositivo *</Label>
+                  <Input
+                    value={equipo.dispositivo}
+                    onChange={(e) => setEquipo((p) => ({ ...p, dispositivo: e.target.value }))}
+                    placeholder="Ej: iPhone 13, Notebook Dell Latitude"
+                    disabled={loading}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label>Marca</Label>
+                  <Input
+                    value={equipo.marca || ""}
+                    onChange={(e) => setEquipo((p) => ({ ...p, marca: e.target.value || null }))}
+                    disabled={loading}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label>Modelo</Label>
+                  <Input
+                    value={equipo.modelo || ""}
+                    onChange={(e) => setEquipo((p) => ({ ...p, modelo: e.target.value || null }))}
+                    disabled={loading}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label>Color</Label>
+                  <Input
+                    value={equipo.color || ""}
+                    onChange={(e) => setEquipo((p) => ({ ...p, color: e.target.value || null }))}
+                    disabled={loading}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label>IMEI</Label>
+                  <Input
+                    value={equipo.imei || ""}
+                    onChange={(e) => setEquipo((p) => ({ ...p, imei: e.target.value || null }))}
+                    disabled={loading}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label>N° de serie</Label>
+                  <Input
+                    value={equipo.numeroSerie || ""}
+                    onChange={(e) => setEquipo((p) => ({ ...p, numeroSerie: e.target.value || null }))}
+                    disabled={loading}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label>Código de acceso</Label>
+                  <Input
+                    value={equipo.codigoAcceso || ""}
+                    onChange={(e) => setEquipo((p) => ({ ...p, codigoAcceso: e.target.value || null }))}
+                    disabled={loading}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label>Accesorios entregados</Label>
+                <Input
+                  value={equipo.accesorios || ""}
+                  onChange={(e) => setEquipo((p) => ({ ...p, accesorios: e.target.value || null }))}
+                  placeholder="Cargador, funda, caja..."
+                  disabled={loading}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label>Problema reportado *</Label>
+                <Textarea
+                  value={equipo.problemaReportado}
+                  onChange={(e) => setEquipo((p) => ({ ...p, problemaReportado: e.target.value }))}
+                  placeholder="Descripción del problema del equipo..."
+                  rows={2}
+                  disabled={loading}
+                  className="mt-1"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Checklist (solo PRESUPUESTO) */}
+          {isPresupuesto && (
+            <ChecklistPicker
+              tipoDispositivoId={equipo.tipoDispositivoId || null}
+              value={checklistValue}
+              onChange={setChecklistValue}
+              disabled={loading}
+            />
           )}
 
           {/* Items Header - Hidden on mobile */}

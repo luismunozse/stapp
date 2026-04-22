@@ -15,6 +15,27 @@ const itemSchema = z.object({
   inventarioId: z.string().nullable().optional(),
 })
 
+const equipoSchema = z.object({
+  dispositivo: z.string().min(1),
+  tipoDispositivoId: z.string().optional().nullable(),
+  tipoDispositivo: z.string().optional().nullable(),
+  marca: z.string().optional().nullable(),
+  modelo: z.string().optional().nullable(),
+  color: z.string().optional().nullable(),
+  imei: z.string().optional().nullable(),
+  numeroSerie: z.string().optional().nullable(),
+  accesorios: z.string().optional().nullable(),
+  problemaReportado: z.string().min(1),
+  codigoAcceso: z.string().optional().nullable(),
+})
+
+const checklistSchema = z.object({
+  templateId: z.string(),
+  tipoDispositivoId: z.string().optional().nullable(),
+  valores: z.record(z.union([z.boolean(), z.string(), z.null()])),
+  notas: z.string().optional().nullable(),
+})
+
 const updateCotizacionSchema = z.object({
   estado: z.enum(["BORRADOR", "ENVIADA", "ACEPTADA", "RECHAZADA"]).optional(),
   notas: z.string().optional(),
@@ -26,6 +47,8 @@ const updateCotizacionSchema = z.object({
   ivaPorcentaje: z.number().min(0).max(100).optional(),
   tipoCambio: z.number().positive().nullable().optional(),
   sectorId: z.string().nullable().optional(),
+  equipo: equipoSchema.optional(),
+  checklist: checklistSchema.nullable().optional(),
 })
 
 function calcItemNeto(item: { cantidad: number; precioUnitario: number; descuentoTipo?: string; descuentoValor?: number }) {
@@ -61,6 +84,10 @@ function formatCotizacion(c: any) {
     descuentoGlobalValor: c.descuento_global_valor,
     ivaPorcentaje: c.iva_porcentaje,
     terminos: c.terminos,
+    tipo: c.tipo || "ORDEN",
+    equipo: c.equipo_snapshot || null,
+    checklist: c.checklist_snapshot || null,
+    convertidaAOrdenId: c.convertida_a_orden_id || null,
     orden: orden ? {
       id: orden.id,
       numeroOrden: orden.numero_orden,
@@ -144,13 +171,6 @@ export async function PUT(
     const { error, organizationId, userId, role } = await requireAuth()
     if (error) return error
 
-    if (role !== "ADMIN") {
-      return NextResponse.json(
-        { error: "Solo administradores pueden editar cotizaciones" },
-        { status: 403 }
-      )
-    }
-
     const { id } = await params
     const body = await request.json()
     const data = updateCotizacionSchema.parse(body)
@@ -158,7 +178,7 @@ export async function PUT(
     // Verify cotizacion exists and belongs to org
     const { data: existing, error: fetchError } = await supabaseAdmin
       .from("cotizaciones")
-      .select("id, estado, organization_id, iva_porcentaje, descuento_global_tipo, descuento_global_valor")
+      .select("id, estado, tipo, organization_id, created_by, iva_porcentaje, descuento_global_tipo, descuento_global_valor")
       .eq("id", id)
       .eq("organization_id", organizationId!)
       .single()
@@ -167,6 +187,14 @@ export async function PUT(
       return NextResponse.json(
         { error: "Cotización no encontrada" },
         { status: 404 }
+      )
+    }
+
+    // TECNICO sólo puede editar cotizaciones creadas por él mismo
+    if (role === "TECNICO" && existing.created_by !== userId) {
+      return NextResponse.json(
+        { error: "No autorizado para editar esta cotización" },
+        { status: 403 }
       )
     }
 
@@ -205,6 +233,17 @@ export async function PUT(
     if (data.ivaPorcentaje !== undefined) updateData.iva_porcentaje = data.ivaPorcentaje
     if (data.tipoCambio !== undefined) updateData.tipo_cambio = data.tipoCambio
     if (data.sectorId !== undefined) updateData.sector_id = data.sectorId
+
+    // Equipo/checklist sólo aplican a PRESUPUESTO.
+    if (existing.tipo === "PRESUPUESTO") {
+      if (data.equipo !== undefined) updateData.equipo_snapshot = data.equipo
+      if (data.checklist !== undefined) updateData.checklist_snapshot = data.checklist
+    } else if (data.equipo || data.checklist) {
+      return NextResponse.json(
+        { error: "No se pueden modificar equipo/checklist en cotizaciones tipo ORDEN" },
+        { status: 400 }
+      )
+    }
 
     // If updating items, recalculate totals with discounts/IVA
     if (data.items) {

@@ -4,8 +4,8 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
 
 const aprobarSchema = z.object({
-  firmaAprobacion: z.string().min(1, "Firma requerida"),
-  firmaMime: z.string().min(1, "Tipo de firma requerido"),
+  firmaAprobacion: z.string().optional().nullable(),
+  firmaMime: z.string().optional().nullable(),
 })
 
 export async function POST(
@@ -13,18 +13,19 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, userId, role } = await requireAuth()
     if (error) return error
 
     const { id } = await params
     const body = await request.json()
     const data = aprobarSchema.parse(body)
 
-    // Verificar cotización y acceso
+    // Verificar cotización via organization_id (soporta standalone y con orden)
     const { data: cotizacion, error: fetchError } = await supabaseAdmin
       .from("cotizaciones")
-      .select(`*, ordenes_servicio!inner(organization_id)`)
+      .select("*")
       .eq("id", id)
+      .eq("organization_id", organizationId!)
       .is("deleted_at", null)
       .single()
 
@@ -32,8 +33,8 @@ export async function POST(
       return NextResponse.json({ error: "Cotización no encontrada" }, { status: 404 })
     }
 
-    const ordenOrgId = (cotizacion.ordenes_servicio as any)?.organization_id
-    if (ordenOrgId !== organizationId) {
+    // TECNICO sólo puede aprobar cotizaciones creadas por él mismo
+    if (role === "TECNICO" && cotizacion.created_by !== userId) {
       return NextResponse.json({ error: "No autorizado" }, { status: 403 })
     }
 
@@ -42,34 +43,45 @@ export async function POST(
       return NextResponse.json({ error: "Solo se pueden aprobar cotizaciones enviadas" }, { status: 400 })
     }
 
+    // Cotizaciones tipo ORDEN (ligadas a un arreglo real) requieren firma.
+    // PRESUPUESTO plano no — es sólo un documento que el cliente acepta internamente.
+    const esPresupuesto = cotizacion.tipo === "PRESUPUESTO"
+    if (!esPresupuesto && (!data.firmaAprobacion || !data.firmaMime)) {
+      return NextResponse.json({ error: "La firma es requerida para aprobar" }, { status: 400 })
+    }
+
     const { data: updatedCotizacion, error: updateError } = await supabaseAdmin
       .from("cotizaciones")
       .update({
         estado: "ACEPTADA",
-        firma_aprobacion: data.firmaAprobacion,
-        firma_mime: data.firmaMime,
+        firma_aprobacion: data.firmaAprobacion || null,
+        firma_mime: data.firmaMime || null,
         fecha_aprobacion: new Date().toISOString(),
       })
       .eq("id", id)
       .select(`
         *,
         ordenes_servicio (id, numero_orden, dispositivo, clientes(*)),
+        clientes (*),
         items_cotizacion (*)
       `)
       .single()
 
     if (updateError) throw updateError
 
-    // Reserve inventory for items linked to inventario
-    try {
-      await supabaseAdmin.rpc("reservar_items_cotizacion", {
-        p_cotizacion_id: id,
-        p_user_id: "system",
-      })
-    } catch (reserveErr) {
-      console.error("Error reserving stock for cotizacion:", reserveErr)
+    // Reservar stock sólo si es tipo ORDEN (el PRESUPUESTO no inmoviliza inventario).
+    if (!esPresupuesto) {
+      try {
+        await supabaseAdmin.rpc("reservar_items_cotizacion", {
+          p_cotizacion_id: id,
+          p_user_id: userId || "system",
+        })
+      } catch (reserveErr) {
+        console.error("Error reserving stock for cotizacion:", reserveErr)
+      }
     }
 
+    const orden = updatedCotizacion.ordenes_servicio as any
     return NextResponse.json({
       id: updatedCotizacion.id,
       ordenId: updatedCotizacion.orden_id,
@@ -80,12 +92,13 @@ export async function POST(
       total: updatedCotizacion.total,
       firmaAprobacion: updatedCotizacion.firma_aprobacion,
       fechaAprobacion: updatedCotizacion.fecha_aprobacion,
-      orden: {
-        id: updatedCotizacion.ordenes_servicio.id,
-        numeroOrden: updatedCotizacion.ordenes_servicio.numero_orden,
-        dispositivo: updatedCotizacion.ordenes_servicio.dispositivo,
-        cliente: updatedCotizacion.ordenes_servicio.clientes,
-      },
+      orden: orden ? {
+        id: orden.id,
+        numeroOrden: orden.numero_orden,
+        dispositivo: orden.dispositivo,
+        cliente: orden.clientes,
+      } : null,
+      cliente: updatedCotizacion.clientes || orden?.clientes || null,
       items: updatedCotizacion.items_cotizacion?.map((i: any) => ({
         id: i.id,
         descripcion: i.descripcion,
