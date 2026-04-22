@@ -85,7 +85,6 @@ interface Cotizacion {
     numeroSerie?: string | null
     accesorios?: string | null
     problemaReportado: string
-    codigoAcceso?: string | null
   } | null
   checklist?: {
     templateId: string

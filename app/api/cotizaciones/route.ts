@@ -28,7 +28,6 @@ const equipoSchema = z.object({
   numeroSerie: z.string().optional().nullable(),
   accesorios: z.string().optional().nullable(),
   problemaReportado: z.string().min(1, "Problema reportado requerido"),
-  codigoAcceso: z.string().optional().nullable(),
 })
 
 const checklistSchema = z.object({

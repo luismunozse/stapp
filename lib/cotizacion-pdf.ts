@@ -22,7 +22,6 @@ export async function buildCotizacionPdfExtras(cotizacion: any) {
         numeroSerie: equipoRaw.numeroSerie || null,
         accesorios: equipoRaw.accesorios || null,
         problemaReportado: equipoRaw.problemaReportado || "",
-        codigoAcceso: equipoRaw.codigoAcceso || null,
       }
     : null
 

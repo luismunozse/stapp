@@ -81,7 +81,6 @@ interface CotizacionPDFData {
     numeroSerie?: string | null
     accesorios?: string | null
     problemaReportado: string
-    codigoAcceso?: string | null
   } | null
   checklist?: {
     items: Array<{ label: string; valor: string; categoria?: string | null }>

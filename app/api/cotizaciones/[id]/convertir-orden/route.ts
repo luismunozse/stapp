@@ -119,7 +119,6 @@ export async function POST(
         imei: equipo.imei || null,
         problema_reportado: equipo.problemaReportado,
         accesorios: equipo.accesorios || null,
-        password_dispositivo: equipo.codigoAcceso || null,
         presupuesto: cotizacion.total || null,
         observaciones: `Generada desde presupuesto ${cotizacion.numero_cotizacion}`,
         public_token: publicToken,

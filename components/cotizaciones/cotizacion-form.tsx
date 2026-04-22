@@ -42,7 +42,6 @@ interface EquipoData {
   numeroSerie?: string | null
   accesorios?: string | null
   problemaReportado: string
-  codigoAcceso?: string | null
 }
 
 interface CotizacionFormProps {
@@ -112,7 +111,6 @@ export function CotizacionForm({
     numeroSerie: initialData?.equipo?.numeroSerie || null,
     accesorios: initialData?.equipo?.accesorios || null,
     problemaReportado: initialData?.equipo?.problemaReportado || "",
-    codigoAcceso: initialData?.equipo?.codigoAcceso || null,
   })
   const [checklistValue, setChecklistValue] = useState<ChecklistPickerValue | null>(
     initialData?.checklist || null
@@ -351,7 +349,6 @@ export function CotizacionForm({
           numeroSerie: equipo.numeroSerie || null,
           accesorios: equipo.accesorios || null,
           problemaReportado: equipo.problemaReportado.trim(),
-          codigoAcceso: equipo.codigoAcceso || null,
         }
         if (checklistValue) payload.checklist = checklistValue
       }
@@ -541,15 +538,6 @@ export function CotizacionForm({
                   <Input
                     value={equipo.numeroSerie || ""}
                     onChange={(e) => setEquipo((p) => ({ ...p, numeroSerie: e.target.value || null }))}
-                    disabled={loading}
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label>Código de acceso</Label>
-                  <Input
-                    value={equipo.codigoAcceso || ""}
-                    onChange={(e) => setEquipo((p) => ({ ...p, codigoAcceso: e.target.value || null }))}
                     disabled={loading}
                     className="mt-1"
                   />
