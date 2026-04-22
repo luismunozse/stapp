@@ -133,7 +133,7 @@ export async function GET(
       .from("cotizaciones")
       .select(`
         *,
-        ordenes_servicio (
+        ordenes_servicio!cotizaciones_orden_id_fkey (
           id, numero_orden, dispositivo, organization_id,
           clientes (*)
         ),
@@ -378,7 +378,7 @@ export async function PUT(
       .from("cotizaciones")
       .select(`
         *,
-        ordenes_servicio (
+        ordenes_servicio!cotizaciones_orden_id_fkey (
           id, numero_orden, dispositivo,
           clientes (*)
         ),

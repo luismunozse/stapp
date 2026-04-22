@@ -45,7 +45,7 @@ export async function GET(
         tipo,
         equipo_snapshot,
         checklist_snapshot,
-        ordenes_servicio (
+        ordenes_servicio!cotizaciones_orden_id_fkey (
           id,
           numero_orden,
           dispositivo,

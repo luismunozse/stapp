@@ -61,7 +61,7 @@ export async function POST(
       .eq("id", id)
       .select(`
         *,
-        ordenes_servicio (id, numero_orden, dispositivo, clientes(*)),
+        ordenes_servicio!cotizaciones_orden_id_fkey (id, numero_orden, dispositivo, clientes(*)),
         clientes (*),
         items_cotizacion (*)
       `)

@@ -145,7 +145,7 @@ export async function GET(request: Request) {
         .from("cotizaciones")
         .select(`
           *,
-          ordenes_servicio!inner (
+          ordenes_servicio!cotizaciones_orden_id_fkey!inner (
             id, numero_orden, dispositivo, organization_id,
             clientes (*)
           ),
@@ -173,7 +173,7 @@ export async function GET(request: Request) {
       .from("cotizaciones")
       .select(`
         *,
-        ordenes_servicio (
+        ordenes_servicio!cotizaciones_orden_id_fkey (
           id, numero_orden, dispositivo, organization_id,
           clientes (*)
         ),
@@ -416,7 +416,7 @@ export async function POST(request: Request) {
       .from("cotizaciones")
       .select(`
         *,
-        ordenes_servicio (
+        ordenes_servicio!cotizaciones_orden_id_fkey (
           id, numero_orden, dispositivo,
           clientes (*)
         ),

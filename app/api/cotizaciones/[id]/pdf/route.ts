@@ -19,7 +19,7 @@ export async function GET(
       .from("cotizaciones")
       .select(`
         *,
-        ordenes_servicio (
+        ordenes_servicio!cotizaciones_orden_id_fkey (
           id, numero_orden, dispositivo, problema_reportado, organization_id,
           clientes (*),
           organizations (id, nombre_mostrar, telefono, direccion, logo_url, moneda, zona_horaria)
