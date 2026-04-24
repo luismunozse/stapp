@@ -387,7 +387,17 @@ export async function middleware(request: NextRequest) {
     token &&
     (token.organizationId as string) !== tenantStatus.id
   ) {
-    if (pathname.startsWith("/api/") && !pathname.startsWith("/api/auth")) {
+    // /api/auth y /api/public son públicos por diseño: el primero necesita
+    // funcionar para poder re-loguearse como usuario del tenant actual, y el
+    // segundo expone info no sensible (nombre/logo del tenant) que el login
+    // page consume ANTES de autenticar. Bloquearlos rompe el flujo para
+    // cualquier usuario que tenga una cookie de sesión de otra org en
+    // `.stapp.com.ar` (cookie compartida entre subdominios).
+    if (
+      pathname.startsWith("/api/") &&
+      !pathname.startsWith("/api/auth") &&
+      !pathname.startsWith("/api/public")
+    ) {
       return NextResponse.json(
         { error: "No pertenecés a esta organización" },
         { status: 403 }
