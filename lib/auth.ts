@@ -192,6 +192,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         // Modo 2: Autenticación con Google ID Token
         if (credentials?.googleIdToken) {
           const googleUser = await verifyGoogleIdToken(credentials.googleIdToken as string)
+          // Google ya devuelve el email en lowercase per spec, pero normalizamos
+          // por consistencia con el resto de los lookups.
+          const googleEmailNormalized = googleUser.email.trim().toLowerCase()
 
           // Buscar usuario por email
           const { data: gUser, error: gError } = await supabaseAdmin
@@ -203,7 +206,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 activo
               )
             `)
-            .eq("email", googleUser.email)
+            .eq("email", googleEmailNormalized)
             .single()
 
           if (gError || !gUser) {
@@ -271,6 +274,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           return null
         }
 
+        // Normalizamos el email a lowercase+trim porque `.eq()` de PostgREST es
+        // case-sensitive. Sin esto, un usuario que se registró como
+        // "kompucel@gmail.com" y tipea "Kompucel@gmail.com" (autocaps de mobile)
+        // no se encuentra en la query y ve "Credenciales incorrectas".
+        const normalizedEmail = (credentials.email as string).trim().toLowerCase()
+
         // Buscar usuario con su organización
         const { data: user, error } = await supabaseAdmin
           .from("users")
@@ -281,15 +290,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               activo
             )
           `)
-          .eq("email", credentials.email as string)
+          .eq("email", normalizedEmail)
           .single()
 
         if (error || !user) {
           // Log login fallido - usuario no encontrado
           logLoginEvent({
-            email: credentials.email as string,
+            email: normalizedEmail,
             success: false,
-            isSuperadmin: isSuperadminEmail(credentials.email as string),
+            isSuperadmin: isSuperadminEmail(normalizedEmail),
             reason: "Usuario no encontrado",
           }).catch(() => {})
           return null

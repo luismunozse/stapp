@@ -93,8 +93,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Para Google, usar el email verificado por Google
-    const userEmail = isGoogleRegister ? googleEmail! : usuario.email
+    // Para Google, usar el email verificado por Google.
+    // Normalizamos a lowercase+trim porque `.eq("email", ...)` de PostgREST es
+    // case-sensitive: si guardamos "Kompucel@gmail.com" y el usuario intenta
+    // loguearse con "kompucel@gmail.com", el lookup falla y ve "Credenciales
+    // incorrectas" aunque la password sea correcta.
+    const userEmail = (isGoogleRegister ? googleEmail! : usuario.email).trim().toLowerCase()
     const userName = isGoogleRegister ? (usuario.nombre || googleName!) : usuario.nombre
 
     // Validar formato del slug
