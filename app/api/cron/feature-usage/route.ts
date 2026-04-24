@@ -48,7 +48,7 @@ export async function GET(request: Request) {
 
     const { data: orgs, error: orgsError } = await supabaseAdmin
       .from("organizations")
-      .select("id, notificaciones_whatsapp, notificaciones_email, kiosco_habilitado")
+      .select("id, notificaciones_whatsapp, notificaciones_email")
       .eq("activo", true)
 
     if (orgsError) {
@@ -75,7 +75,7 @@ export async function GET(request: Request) {
           ordenesCount, cotizacionesCount, garantiasCount, fotosCount,
           ventasCount, inventarioCount, whatsappCount, emailCount,
           facturasCount, checklistCount, firmasCount, trackingCount,
-          tecnicosCount, vendedoresCount, clientesCount,
+          tecnicosCount, vendedoresCount, clientesCount, kioscoCount,
         ] = await Promise.all([
           countRows("ordenes_servicio", o),
           countRows("cotizaciones", o),
@@ -92,6 +92,7 @@ export async function GET(request: Request) {
           countRows("users", o, { column: "rol", op: "eq", value: "TECNICO" }),
           countRows("users", o, { column: "rol", op: "eq", value: "VENDEDOR" }),
           countRows("clientes", o),
+          countRows("kiosk_tokens", o, { column: "activo", op: "eq", value: "true" }),
         ])
 
         const features = [
@@ -120,7 +121,7 @@ export async function GET(request: Request) {
           usa_checklist: features[9], checklist_count: checklistCount,
           usa_firma_digital: features[10], firmas_count: firmasCount,
           usa_tracking_publico: features[11], tracking_count: trackingCount,
-          usa_kiosco: !!org.kiosco_habilitado,
+          usa_kiosco: kioscoCount > 0,
           tecnicos_count: tecnicosCount,
           vendedores_count: vendedoresCount,
           clientes_count: clientesCount,

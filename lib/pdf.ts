@@ -79,7 +79,6 @@ interface CotizacionPDFData {
     color?: string | null
     imei?: string | null
     numeroSerie?: string | null
-    accesorios?: string | null
     problemaReportado: string
   } | null
   checklist?: {
@@ -338,15 +337,13 @@ export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Bu
     const equipoColor = safe(equipo.color)
     const equipoImei = safe(equipo.imei)
     const equipoSerie = safe(equipo.numeroSerie)
-    const equipoAccesorios = safe(equipo.accesorios)
     const equipoProblema = safe(equipo.problemaReportado)
 
-    // Líneas: titulo + dispositivo/marca + color/modelo + imei/serie + accesorios (si) + problema (2 líneas)
+    // Líneas: titulo + dispositivo/marca + color/modelo + imei/serie + problema (2 líneas)
     const extraLines =
       (equipoMarca || equipoModelo ? 1 : 0) +
       (equipoColor ? 1 : 0) +
-      (equipoImei || equipoSerie ? 1 : 0) +
-      (equipoAccesorios ? 1 : 0)
+      (equipoImei || equipoSerie ? 1 : 0)
     const equipoCardH = Math.max(clienteCardH, 75 + extraLines * 14)
 
     page.drawRectangle({ x: ox, y: cursor - equipoCardH, width: cardW, height: equipoCardH, color: bgLight, borderColor: border, borderWidth: 0.5 })
@@ -370,10 +367,6 @@ export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Bu
     if (equipoImei || equipoSerie) {
       const txt = equipoImei ? `IMEI: ${equipoImei}` : `N° serie: ${equipoSerie}`
       page.drawText(txt.substring(0, 40), { x: ox + 14, y: oy, size: 8, font: helvetica, color: textMuted })
-      oy -= 13
-    }
-    if (equipoAccesorios) {
-      page.drawText(`Acc.: ${equipoAccesorios}`.substring(0, 40), { x: ox + 14, y: oy, size: 8, font: helvetica, color: textMuted })
       oy -= 13
     }
 

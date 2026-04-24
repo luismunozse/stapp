@@ -40,7 +40,6 @@ interface EquipoData {
   color?: string | null
   imei?: string | null
   numeroSerie?: string | null
-  accesorios?: string | null
   problemaReportado: string
 }
 
@@ -109,7 +108,6 @@ export function CotizacionForm({
     color: initialData?.equipo?.color || null,
     imei: initialData?.equipo?.imei || null,
     numeroSerie: initialData?.equipo?.numeroSerie || null,
-    accesorios: initialData?.equipo?.accesorios || null,
     problemaReportado: initialData?.equipo?.problemaReportado || "",
   })
   const [checklistValue, setChecklistValue] = useState<ChecklistPickerValue | null>(
@@ -347,7 +345,6 @@ export function CotizacionForm({
           color: equipo.color || null,
           imei: equipo.imei || null,
           numeroSerie: equipo.numeroSerie || null,
-          accesorios: equipo.accesorios || null,
           problemaReportado: equipo.problemaReportado.trim(),
         }
         if (checklistValue) payload.checklist = checklistValue
@@ -542,16 +539,6 @@ export function CotizacionForm({
                     className="mt-1"
                   />
                 </div>
-              </div>
-              <div>
-                <Label>Accesorios entregados</Label>
-                <Input
-                  value={equipo.accesorios || ""}
-                  onChange={(e) => setEquipo((p) => ({ ...p, accesorios: e.target.value || null }))}
-                  placeholder="Cargador, funda, caja..."
-                  disabled={loading}
-                  className="mt-1"
-                />
               </div>
               <div>
                 <Label>Problema reportado *</Label>

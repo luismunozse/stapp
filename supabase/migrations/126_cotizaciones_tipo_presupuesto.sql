@@ -22,7 +22,6 @@ ALTER TABLE cotizaciones ADD COLUMN IF NOT EXISTS tipo TEXT NOT NULL DEFAULT 'OR
 --   "color": "Negro",
 --   "imei": "xxxx",
 --   "numeroSerie": "xxxx",
---   "accesorios": "Cargador, caja",
 --   "problemaReportado": "Pantalla rota"
 -- }
 ALTER TABLE cotizaciones ADD COLUMN IF NOT EXISTS equipo_snapshot JSONB DEFAULT NULL;

@@ -20,7 +20,6 @@ export async function buildCotizacionPdfExtras(cotizacion: any) {
         color: equipoRaw.color || null,
         imei: equipoRaw.imei || null,
         numeroSerie: equipoRaw.numeroSerie || null,
-        accesorios: equipoRaw.accesorios || null,
         problemaReportado: equipoRaw.problemaReportado || "",
       }
     : null

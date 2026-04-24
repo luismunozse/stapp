@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
+import { buildCotizacionPdfExtras } from "@/lib/cotizacion-pdf"
 
 export async function GET(
   request: Request,
@@ -98,6 +99,9 @@ export async function GET(
       org = orgData
     }
 
+    // Hidratar equipo + checklist (con labels) usando el mismo helper que el PDF
+    const pdfExtras = await buildCotizacionPdfExtras(cotizacion)
+
     return NextResponse.json({
       id: cotizacion.id,
       numeroCotizacion: cotizacion.numero_cotizacion,
@@ -117,9 +121,9 @@ export async function GET(
       ivaPorcentaje: cotizacion.iva_porcentaje,
       terminos: cotizacion.terminos,
       motivoRechazo: cotizacion.motivo_rechazo || null,
-      tipo: (cotizacion as any).tipo || "ORDEN",
-      equipo: (cotizacion as any).equipo_snapshot || null,
-      checklist: (cotizacion as any).checklist_snapshot || null,
+      tipo: pdfExtras.tipo,
+      equipo: pdfExtras.equipo,
+      checklist: pdfExtras.checklist,
       orden: orden ? {
         numeroOrden: orden.numero_orden,
         dispositivo: orden.dispositivo,

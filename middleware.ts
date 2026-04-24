@@ -340,17 +340,25 @@ export async function middleware(request: NextRequest) {
   // El cache tiene TTL de 30s, así que una des/activación desde el panel
   // superadmin tarda a lo sumo ese tiempo en propagarse por todas las Edge
   // instances. `/tenant-not-found` queda siempre accesible para no loopear.
+  //
+  // Fail-open: si la consulta a Supabase falla (env faltante, timeout, 5xx),
+  // dejamos pasar en vez de redirigir. Si redirigiéramos, cualquier glitch
+  // transitorio de Supabase tiraría abajo el sitio entero para todos los
+  // tenants. Las rutas protegidas igual exigen auth más abajo.
   let tenantStatus: { id: string; activo: boolean } | null = null
   if (pathname !== "/tenant-not-found") {
-    tenantStatus = await getTenantStatusBySlug(subdomain)
-    if (!tenantStatus || !tenantStatus.activo) {
-      if (pathname.startsWith("/api/")) {
-        return NextResponse.json(
-          { error: "Organización inactiva o no encontrada" },
-          { status: 403 }
-        )
+    const lookup = await getTenantStatusBySlug(subdomain)
+    if (lookup.kind === "ok") {
+      tenantStatus = lookup.status
+      if (!tenantStatus || !tenantStatus.activo) {
+        if (pathname.startsWith("/api/")) {
+          return NextResponse.json(
+            { error: "Organización inactiva o no encontrada" },
+            { status: 403 }
+          )
+        }
+        return NextResponse.redirect(new URL("/tenant-not-found", request.url))
       }
-      return NextResponse.redirect(new URL("/tenant-not-found", request.url))
     }
   }
 

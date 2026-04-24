@@ -24,7 +24,6 @@ const equipoSchema = z.object({
   color: z.string().optional().nullable(),
   imei: z.string().optional().nullable(),
   numeroSerie: z.string().optional().nullable(),
-  accesorios: z.string().optional().nullable(),
   problemaReportado: z.string().min(1),
 })
 

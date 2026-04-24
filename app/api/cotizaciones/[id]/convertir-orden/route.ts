@@ -118,7 +118,6 @@ export async function POST(
         color: equipo.color || null,
         imei: equipo.imei || null,
         problema_reportado: equipo.problemaReportado,
-        accesorios: equipo.accesorios || null,
         presupuesto: cotizacion.total || null,
         observaciones: `Generada desde presupuesto ${cotizacion.numero_cotizacion}`,
         public_token: publicToken,

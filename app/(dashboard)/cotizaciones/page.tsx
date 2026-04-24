@@ -83,7 +83,6 @@ interface Cotizacion {
     color?: string | null
     imei?: string | null
     numeroSerie?: string | null
-    accesorios?: string | null
     problemaReportado: string
   } | null
   checklist?: {

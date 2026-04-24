@@ -11,6 +11,14 @@ export interface TenantStatus {
   activo: boolean
 }
 
+// Resultado explícito para que el caller pueda distinguir:
+//  - kind: "ok"    → Supabase respondió. status puede ser null (no existe) o la fila.
+//  - kind: "error" → no pudimos consultar (env faltante, fetch throw, !ok).
+//                    El middleware debe tratar esto como fail-open, no como "no existe".
+export type TenantLookupResult =
+  | { kind: "ok"; status: TenantStatus | null }
+  | { kind: "error" }
+
 interface CacheEntry {
   data: TenantStatus | null
   expiresAt: number
@@ -21,16 +29,16 @@ const TTL_MS = 30_000
 
 export async function getTenantStatusBySlug(
   slug: string
-): Promise<TenantStatus | null> {
+): Promise<TenantLookupResult> {
   const now = Date.now()
   const hit = store.get(slug)
   if (hit && hit.expiresAt > now) {
-    return hit.data
+    return { kind: "ok", status: hit.data }
   }
 
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!base || !key) return null
+  if (!base || !key) return { kind: "error" }
 
   const url = `${base}/rest/v1/organizations?slug=eq.${encodeURIComponent(
     slug
@@ -44,15 +52,14 @@ export async function getTenantStatusBySlug(
       },
     })
     if (!res.ok) {
-      // Fail-open: si Supabase falla, no bloqueamos el sitio entero.
-      // Devolvemos null pero NO cacheamos para reintentar en el próximo request.
-      return null
+      // No cacheamos el error: queremos reintentar en el próximo request.
+      return { kind: "error" }
     }
     const rows = (await res.json()) as Array<TenantStatus>
     const data = rows[0] ?? null
     store.set(slug, { data, expiresAt: now + TTL_MS })
-    return data
+    return { kind: "ok", status: data }
   } catch {
-    return null
+    return { kind: "error" }
   }
 }

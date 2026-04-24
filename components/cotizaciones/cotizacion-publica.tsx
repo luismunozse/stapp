@@ -21,6 +21,7 @@ import {
   Wrench,
   PenTool,
   CalendarClock,
+  ClipboardCheck,
 } from "lucide-react"
 import { formatCurrencyValue, type CurrencyCode } from "@/lib/currency"
 import { formatDateValue } from "@/lib/timezone"
@@ -45,6 +46,21 @@ interface CotizacionData {
   descuentoGlobalValor?: number | null
   ivaPorcentaje?: number | null
   terminos?: string | null
+  tipo?: "ORDEN" | "PRESUPUESTO"
+  equipo?: {
+    dispositivo: string
+    tipoDispositivo?: string | null
+    marca?: string | null
+    modelo?: string | null
+    color?: string | null
+    imei?: string | null
+    numeroSerie?: string | null
+    problemaReportado: string
+  } | null
+  checklist?: {
+    items: Array<{ label: string; valor: string; categoria?: string | null }>
+    notas?: string | null
+  } | null
   orden: {
     numeroOrden: number
     dispositivo: string
@@ -117,7 +133,9 @@ export function CotizacionPublica({ token }: { token: string }) {
   }, [token])
 
   const handleApprove = async () => {
-    if (!firma || !firmaMime) {
+    // Para PRESUPUESTO la firma es opcional; para ORDEN es obligatoria.
+    const esPresupuesto = data?.tipo === "PRESUPUESTO"
+    if (!esPresupuesto && (!firma || !firmaMime)) {
       setApproveError("La firma es requerida para aprobar")
       return
     }
@@ -130,8 +148,8 @@ export function CotizacionPublica({ token }: { token: string }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          firmaAprobacion: firma,
-          firmaMime: firmaMime,
+          firmaAprobacion: firma || null,
+          firmaMime: firmaMime || null,
         }),
       })
 
@@ -240,7 +258,7 @@ export function CotizacionPublica({ token }: { token: string }) {
           {data.organizacion.nombre || "Servicio Tecnico"}
         </h1>
         <p className="text-sm text-muted-foreground">
-          Presupuesto de servicio
+          {data.tipo === "PRESUPUESTO" ? "Presupuesto" : "Cotización de servicio"}
         </p>
       </div>
 
@@ -328,6 +346,109 @@ export function CotizacionPublica({ token }: { token: string }) {
               <p className="text-muted-foreground">Problema reportado</p>
               <p>{data.orden.problemaReportado}</p>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Equipo - PRESUPUESTO (snapshot en la cotización) */}
+      {data.tipo === "PRESUPUESTO" && data.equipo && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Wrench className="h-5 w-5" />
+              Equipo
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm space-y-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-muted-foreground">Dispositivo</p>
+                <p className="font-medium">{data.equipo.dispositivo}</p>
+              </div>
+              {data.equipo.marca && (
+                <div>
+                  <p className="text-muted-foreground">Marca</p>
+                  <p className="font-medium">{data.equipo.marca}</p>
+                </div>
+              )}
+              {data.equipo.modelo && (
+                <div>
+                  <p className="text-muted-foreground">Modelo</p>
+                  <p className="font-medium">{data.equipo.modelo}</p>
+                </div>
+              )}
+              {data.equipo.color && (
+                <div>
+                  <p className="text-muted-foreground">Color</p>
+                  <p className="font-medium">{data.equipo.color}</p>
+                </div>
+              )}
+              {data.equipo.imei && (
+                <div>
+                  <p className="text-muted-foreground">IMEI</p>
+                  <p className="font-medium break-all">{data.equipo.imei}</p>
+                </div>
+              )}
+              {data.equipo.numeroSerie && (
+                <div>
+                  <p className="text-muted-foreground">N° de serie</p>
+                  <p className="font-medium break-all">{data.equipo.numeroSerie}</p>
+                </div>
+              )}
+            </div>
+            <div className="pt-2 border-t">
+              <p className="text-muted-foreground">Problema reportado</p>
+              <p className="whitespace-pre-wrap">{data.equipo.problemaReportado}</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Checklist de recepción - PRESUPUESTO */}
+      {data.tipo === "PRESUPUESTO" && data.checklist && data.checklist.items.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <ClipboardCheck className="h-5 w-5" />
+              Checklist de recepción
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm space-y-4">
+            {(() => {
+              const catLabels: Record<string, string> = {
+                CONDICION_FISICA: "Condición física",
+                ACCESORIOS: "Accesorios",
+                FUNCIONAL: "Estado funcional",
+                GENERAL: "General",
+              }
+              const byCat: Record<string, Array<{ label: string; valor: string }>> = {}
+              for (const it of data.checklist!.items) {
+                const c = it.categoria || "GENERAL"
+                if (!byCat[c]) byCat[c] = []
+                byCat[c].push({ label: it.label, valor: it.valor })
+              }
+              return Object.entries(byCat).map(([cat, items]) => (
+                <div key={cat}>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                    {catLabels[cat] || cat}
+                  </p>
+                  <ul className="space-y-1">
+                    {items.map((it, idx) => (
+                      <li key={idx} className="flex justify-between gap-2">
+                        <span className="text-muted-foreground">{it.label}</span>
+                        <span className="font-medium text-right">{it.valor}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))
+            })()}
+            {data.checklist.notas && (
+              <div className="pt-2 border-t">
+                <p className="text-xs text-muted-foreground mb-1">Observaciones</p>
+                <p className="whitespace-pre-wrap">{data.checklist.notas}</p>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -455,26 +576,28 @@ export function CotizacionPublica({ token }: { token: string }) {
         </Card>
       )}
 
-      {/* Firma de aprobacion existente */}
-      {data.estado === "ACEPTADA" && data.firmaAprobacion && data.firmaMime && (
+      {/* Estado aprobado (con o sin firma) */}
+      {data.estado === "ACEPTADA" && (
         <Card className="border-green-200">
           <CardHeader className="pb-3">
             <CardTitle className="text-lg flex items-center gap-2 text-green-700">
               <CheckCircle className="h-5 w-5" />
-              Cotizacion aprobada
+              {data.tipo === "PRESUPUESTO" ? "Presupuesto aprobado" : "Cotización aprobada"}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="border rounded-lg p-3 bg-white">
-              <Image
-                src={`data:${data.firmaMime};base64,${data.firmaAprobacion}`}
-                alt="Firma de aprobacion"
-                width={200}
-                height={96}
-                className="max-h-24 w-auto mx-auto"
-                unoptimized
-              />
-            </div>
+            {data.firmaAprobacion && data.firmaMime && (
+              <div className="border rounded-lg p-3 bg-white">
+                <Image
+                  src={`data:${data.firmaMime};base64,${data.firmaAprobacion}`}
+                  alt="Firma de aprobación"
+                  width={200}
+                  height={96}
+                  className="max-h-24 w-auto mx-auto"
+                  unoptimized
+                />
+              </div>
+            )}
             {data.fechaAprobacion && (
               <p className="text-sm text-muted-foreground text-center">
                 Aprobada el {formatDate(data.fechaAprobacion)}
@@ -592,15 +715,18 @@ export function CotizacionPublica({ token }: { token: string }) {
       {showApproval && (
         <Card className="border-primary">
           <CardHeader className="pb-3">
-            <CardTitle className="text-lg">Aprobar cotizacion</CardTitle>
+            <CardTitle className="text-lg">
+              {data.tipo === "PRESUPUESTO" ? "Aprobar presupuesto" : "Aprobar cotización"}
+            </CardTitle>
             <p className="text-sm text-muted-foreground">
-              Firme a continuacion para confirmar la aprobacion del presupuesto
-              por {formatCurrencyValue(data.total, (data.moneda as CurrencyCode) || "ARS")}.
+              {data.tipo === "PRESUPUESTO"
+                ? `Confirme la aprobación del presupuesto por ${formatCurrencyValue(data.total, (data.moneda as CurrencyCode) || "ARS")}. La firma es opcional.`
+                : `Firme a continuación para confirmar la aprobación del presupuesto por ${formatCurrencyValue(data.total, (data.moneda as CurrencyCode) || "ARS")}.`}
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
             <SignaturePad
-              label="Firma de aprobacion"
+              label={data.tipo === "PRESUPUESTO" ? "Firma (opcional)" : "Firma de aprobación"}
               onSignatureChange={(sig, mime) => {
                 setFirma(sig)
                 setFirmaMime(mime)
@@ -630,7 +756,7 @@ export function CotizacionPublica({ token }: { token: string }) {
               <Button
                 className="flex-1"
                 onClick={handleApprove}
-                disabled={approving || !firma}
+                disabled={approving || (data.tipo !== "PRESUPUESTO" && !firma)}
               >
                 {approving ? (
                   <>
@@ -640,7 +766,7 @@ export function CotizacionPublica({ token }: { token: string }) {
                 ) : (
                   <>
                     <CheckCircle className="mr-2 h-4 w-4" />
-                    Confirmar aprobacion
+                    Confirmar aprobación
                   </>
                 )}
               </Button>

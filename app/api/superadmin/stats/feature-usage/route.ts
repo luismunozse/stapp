@@ -62,7 +62,7 @@ export async function GET() {
     if (latest.length === 0) {
       const { data: orgs } = await supabaseAdmin
         .from("organizations")
-        .select("id, nombre, slug, notificaciones_whatsapp, notificaciones_email, kiosco_habilitado")
+        .select("id, nombre, slug, notificaciones_whatsapp, notificaciones_email")
         .eq("activo", true)
 
       if (!orgs || orgs.length === 0) {
@@ -81,7 +81,7 @@ export async function GET() {
         ordenesRes, cotizacionesRes, garantiasRes, fotosRes,
         ventasRes, inventarioRes, whatsappRes, emailRes,
         facturasRes, checklistRes, firmasRes, trackingRes,
-        tecnicosRes, vendedoresRes, clientesRes,
+        tecnicosRes, vendedoresRes, clientesRes, kioscoRes,
       ] = await Promise.all([
         supabaseAdmin.from("ordenes_servicio").select("organization_id").in("organization_id", orgIds),
         supabaseAdmin.from("cotizaciones").select("organization_id").in("organization_id", orgIds),
@@ -98,6 +98,7 @@ export async function GET() {
         supabaseAdmin.from("users").select("organization_id").in("organization_id", orgIds).eq("rol", "TECNICO"),
         supabaseAdmin.from("users").select("organization_id").in("organization_id", orgIds).eq("rol", "VENDEDOR"),
         supabaseAdmin.from("clientes").select("organization_id").in("organization_id", orgIds),
+        supabaseAdmin.from("kiosk_tokens").select("organization_id").in("organization_id", orgIds).eq("activo", true),
       ])
 
       // Contar por org usando Sets
@@ -124,6 +125,7 @@ export async function GET() {
       const tecnicosCounts = countByOrg(tecnicosRes.data)
       const vendedoresCounts = countByOrg(vendedoresRes.data)
       const clientesCounts = countByOrg(clientesRes.data)
+      const kioscoCounts = countByOrg(kioscoRes.data)
 
       const fechaHoy = new Date().toISOString().split("T")[0]
 
@@ -183,7 +185,7 @@ export async function GET() {
           firmas_count: firmas,
           usa_tracking_publico: tracking > 0,
           tracking_count: tracking,
-          usa_kiosco: !!org.kiosco_habilitado,
+          usa_kiosco: (kioscoCounts[o] || 0) > 0,
           tecnicos_count: tecnicosCounts[o] || 0,
           vendedores_count: vendedoresCounts[o] || 0,
           clientes_count: clientesCounts[o] || 0,
