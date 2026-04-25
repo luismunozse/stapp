@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect, useRef } from "react"
 import {
   Dialog,
   DialogContent,
@@ -26,12 +26,14 @@ interface Props {
 export function BarcodeScanner({ open, onOpenChange, onResult }: Props) {
   const [code, setCode] = useState("")
   const [loading, setLoading] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
 
-  const handleSearch = useCallback(async () => {
-    if (!code.trim()) return
+  const runSearch = useCallback(async (raw: string) => {
+    const trimmed = raw.trim()
+    if (!trimmed) return
     setLoading(true)
     try {
-      const res = await fetch(`/api/inventario/barcode?code=${encodeURIComponent(code.trim())}`)
+      const res = await fetch(`/api/inventario/barcode?code=${encodeURIComponent(trimmed)}`)
       if (res.ok) {
         const data = await res.json()
         onOpenChange(false)
@@ -43,7 +45,9 @@ export function BarcodeScanner({ open, onOpenChange, onResult }: Props) {
     } finally {
       setLoading(false)
     }
-  }, [code, onResult, onOpenChange])
+  }, [onResult, onOpenChange])
+
+  const handleSearch = useCallback(() => runSearch(code), [code, runSearch])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
@@ -52,9 +56,41 @@ export function BarcodeScanner({ open, onOpenChange, onResult }: Props) {
     }
   }
 
+  // Global wedge-scanner listener: captures rapid keystrokes ending in Enter/Tab
+  // even if the input lost focus during the Radix Dialog open animation.
+  useEffect(() => {
+    if (!open) return
+    let buf = ""
+    let last = 0
+    const onKey = (e: KeyboardEvent) => {
+      const now = Date.now()
+      if (now - last > 100) buf = ""
+      last = now
+      if (e.key === "Enter" || e.key === "Tab") {
+        if (buf.length >= 4) {
+          e.preventDefault()
+          e.stopPropagation()
+          setCode(buf)
+          runSearch(buf)
+        }
+        buf = ""
+        return
+      }
+      if (e.key.length === 1) buf += e.key
+    }
+    window.addEventListener("keydown", onKey, true)
+    return () => window.removeEventListener("keydown", onKey, true)
+  }, [open, runSearch])
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm">
+      <DialogContent
+        className="max-w-sm"
+        onOpenAutoFocus={(e) => {
+          e.preventDefault()
+          setTimeout(() => inputRef.current?.focus(), 50)
+        }}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ScanLine className="h-4 w-4" />
@@ -69,11 +105,11 @@ export function BarcodeScanner({ open, onOpenChange, onResult }: Props) {
 
           <div className="flex gap-2">
             <Input
+              ref={inputRef}
               placeholder="Código de barras..."
               value={code}
               onChange={(e) => setCode(e.target.value)}
               onKeyDown={handleKeyDown}
-              autoFocus
               className="font-mono"
             />
             <Button onClick={handleSearch} disabled={loading || !code.trim()}>

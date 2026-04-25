@@ -507,7 +507,18 @@ export function InventarioForm({
         </div>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <form
+          onSubmit={handleSubmit(onSubmit)}
+          onKeyDown={(e) => {
+            if (e.key !== "Enter") return
+            const t = e.target as HTMLElement
+            const tag = t.tagName
+            if (tag === "TEXTAREA") return
+            if (tag === "BUTTON" && (t as HTMLButtonElement).type === "submit") return
+            e.preventDefault()
+          }}
+          className="space-y-4"
+        >
           {/* Fila con imagen + nombre */}
           <div className="flex gap-4 items-start">
             <div className="shrink-0">
