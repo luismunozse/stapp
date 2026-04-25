@@ -69,7 +69,8 @@
       "Bash(xargs -I {} sh -c 'echo \"\"=== {} ===\"\" && wc -l {}')",
       "Bash(npm run test)",
       "Bash(sed 's/CREATE TABLE//')",
-      "Read(//c/Users/PC/OneDrive/Escritorio/stapp/**)"
+      "Read(//c/Users/PC/OneDrive/Escritorio/stapp/**)",
+      "Bash(tee /tmp/tsc.log)"
     ]
   }
 }
