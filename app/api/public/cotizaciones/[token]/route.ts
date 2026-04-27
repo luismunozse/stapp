@@ -124,6 +124,7 @@ export async function GET(
       tipo: pdfExtras.tipo,
       equipo: pdfExtras.equipo,
       checklist: pdfExtras.checklist,
+      condiciones: pdfExtras.condiciones,
       orden: orden ? {
         numeroOrden: orden.numero_orden,
         dispositivo: orden.dispositivo,
@@ -156,6 +157,7 @@ export async function GET(
         unidad: i.unidad,
         descuentoTipo: i.descuento_tipo,
         descuentoValor: i.descuento_valor,
+        tipoRepuesto: i.tipo_repuesto || "NO_APLICA",
       })),
     }, {
       headers: {

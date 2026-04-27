@@ -61,6 +61,15 @@ interface CotizacionData {
     items: Array<{ label: string; valor: string; categoria?: string | null }>
     notas?: string | null
   } | null
+  condiciones?: {
+    diagnostico: string | null
+    plazoEstimadoDias: number | null
+    anticipoTipo: string
+    anticipoValor: number
+    garantiaDias: number
+    garantiaAlcance: string
+    politicaAbandonoDias: number | null
+  } | null
   orden: {
     numeroOrden: number
     dispositivo: string
@@ -91,6 +100,7 @@ interface CotizacionData {
     unidad?: string
     descuentoTipo?: string
     descuentoValor?: number
+    tipoRepuesto?: string
   }[]
 }
 
@@ -453,6 +463,71 @@ export function CotizacionPublica({ token }: { token: string }) {
         </Card>
       )}
 
+      {/* Condiciones técnicas - PRESUPUESTO */}
+      {data.tipo === "PRESUPUESTO" && data.condiciones && (() => {
+        const c = data.condiciones
+        const hasGarantia = c.garantiaAlcance && c.garantiaAlcance !== "NINGUNA" && c.garantiaDias > 0
+        const hasAnticipo = c.anticipoValor && c.anticipoValor > 0
+        const hasPlazo = c.plazoEstimadoDias && c.plazoEstimadoDias > 0
+        const hasRetiro = c.politicaAbandonoDias && c.politicaAbandonoDias > 0
+        const hasDiag = !!c.diagnostico
+        if (!hasGarantia && !hasAnticipo && !hasPlazo && !hasRetiro && !hasDiag) return null
+        const alcanceLabel = c.garantiaAlcance === "AMBOS"
+          ? "Repuesto y mano de obra"
+          : c.garantiaAlcance === "REPUESTO"
+            ? "Solo repuesto"
+            : c.garantiaAlcance === "MANO_OBRA"
+              ? "Solo mano de obra"
+              : ""
+        const anticipoText = c.anticipoTipo === "fijo"
+          ? formatCurrencyValue(c.anticipoValor, (data.moneda as any) || "ARS")
+          : `${c.anticipoValor}% del total`
+        return (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Wrench className="h-5 w-5" />
+                Condiciones técnicas
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm space-y-3">
+              {hasDiag && (
+                <div>
+                  <p className="text-muted-foreground text-xs uppercase tracking-wide mb-1">Diagnóstico</p>
+                  <p className="whitespace-pre-wrap">{c.diagnostico}</p>
+                </div>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t">
+                {hasPlazo && (
+                  <div>
+                    <p className="text-muted-foreground text-xs">Plazo estimado</p>
+                    <p className="font-medium">{c.plazoEstimadoDias} días hábiles</p>
+                  </div>
+                )}
+                {hasAnticipo && (
+                  <div>
+                    <p className="text-muted-foreground text-xs">Anticipo requerido</p>
+                    <p className="font-medium">{anticipoText}</p>
+                  </div>
+                )}
+                {hasGarantia && (
+                  <div>
+                    <p className="text-muted-foreground text-xs">Garantía</p>
+                    <p className="font-medium">{c.garantiaDias} días — {alcanceLabel}</p>
+                  </div>
+                )}
+                {hasRetiro && (
+                  <div>
+                    <p className="text-muted-foreground text-xs">Plazo de retiro</p>
+                    <p className="font-medium">{c.politicaAbandonoDias} días tras aviso de listo</p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )
+      })()}
+
       {/* Items / Detalle del presupuesto */}
       <Card>
         <CardHeader className="pb-3">
@@ -479,6 +554,13 @@ export function CotizacionPublica({ token }: { token: string }) {
                 >
                   <div className="col-span-4">
                     <div>{item.descripcion}</div>
+                    {item.tipoRepuesto && item.tipoRepuesto !== "NO_APLICA" && (
+                      <div className="text-xs text-muted-foreground">
+                        {item.tipoRepuesto === "ORIGINAL" ? "Repuesto original"
+                          : item.tipoRepuesto === "ALTERNATIVO" ? "Repuesto alternativo"
+                          : "Repuesto reciclado"}
+                      </div>
+                    )}
                     {item.unidad && item.unidad !== "Unidad" && (
                       <div className="text-xs text-muted-foreground">{item.unidad}</div>
                     )}
