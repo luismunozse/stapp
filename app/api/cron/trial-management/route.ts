@@ -59,6 +59,7 @@ export async function GET(request: Request) {
       .not("trial_end", "is", null)
       .lte("trial_end", threeDaysFromNow.toISOString())
       .eq("organizations.activo", true)
+      .neq("organizations.slug", "superadmin")
 
     if (!subs || subs.length === 0) {
       return NextResponse.json({ success: true, results })

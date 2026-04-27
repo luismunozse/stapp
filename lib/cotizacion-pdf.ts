@@ -24,6 +24,22 @@ export async function buildCotizacionPdfExtras(cotizacion: any) {
       }
     : null
 
+  const cnd = equipoRaw?.condiciones as Record<string, any> | null | undefined
+  const condiciones = tipo === "PRESUPUESTO" && cnd && (
+    cnd.diagnostico || cnd.plazoEstimadoDias || cnd.anticipoValor ||
+    (cnd.garantiaAlcance && cnd.garantiaAlcance !== "NINGUNA") || cnd.politicaAbandonoDias
+  )
+    ? {
+        diagnostico: cnd.diagnostico || null,
+        plazoEstimadoDias: typeof cnd.plazoEstimadoDias === "number" ? cnd.plazoEstimadoDias : null,
+        anticipoTipo: cnd.anticipoTipo || "porcentaje",
+        anticipoValor: typeof cnd.anticipoValor === "number" ? cnd.anticipoValor : 0,
+        garantiaDias: typeof cnd.garantiaDias === "number" ? cnd.garantiaDias : 0,
+        garantiaAlcance: cnd.garantiaAlcance || "NINGUNA",
+        politicaAbandonoDias: typeof cnd.politicaAbandonoDias === "number" ? cnd.politicaAbandonoDias : null,
+      }
+    : null
+
   let checklist: { items: Array<{ label: string; valor: string; categoria?: string | null }>; notas?: string | null } | null = null
   const chkSnap = cotizacion?.checklist_snapshot as Record<string, any> | null
 
@@ -55,5 +71,5 @@ export async function buildCotizacionPdfExtras(cotizacion: any) {
     }
   }
 
-  return { tipo, equipo, checklist }
+  return { tipo, equipo, checklist, condiciones }
 }

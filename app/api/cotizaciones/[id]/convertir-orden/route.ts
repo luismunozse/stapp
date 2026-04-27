@@ -104,6 +104,39 @@ export async function POST(
 
     const publicToken = randomBytes(16).toString("hex")
 
+    // Condiciones técnicas del presupuesto (si existen)
+    const condiciones = (equipo.condiciones || {}) as Record<string, any>
+    const diagnostico: string | null = condiciones.diagnostico || null
+    const plazoEstimadoDias: number | null = typeof condiciones.plazoEstimadoDias === "number" && condiciones.plazoEstimadoDias > 0 ? condiciones.plazoEstimadoDias : null
+    const garantiaDias: number = typeof condiciones.garantiaDias === "number" ? condiciones.garantiaDias : 0
+    const garantiaAlcance: string = condiciones.garantiaAlcance || "NINGUNA"
+    const politicaAbandonoDias: number | null = typeof condiciones.politicaAbandonoDias === "number" && condiciones.politicaAbandonoDias > 0 ? condiciones.politicaAbandonoDias : null
+    const anticipoTipo: string = condiciones.anticipoTipo || "porcentaje"
+    const anticipoValor: number = typeof condiciones.anticipoValor === "number" ? condiciones.anticipoValor : 0
+
+    // Calcular fecha prometida desde plazo
+    let fechaPrometida: string | null = null
+    if (plazoEstimadoDias) {
+      const d = new Date()
+      d.setDate(d.getDate() + plazoEstimadoDias)
+      fechaPrometida = d.toISOString()
+    }
+
+    // Calcular seña en moneda local desde anticipo
+    const totalCotizacion = Number(cotizacion.total) || 0
+    let sena = 0
+    if (anticipoValor > 0 && totalCotizacion > 0) {
+      sena = anticipoTipo === "fijo"
+        ? Math.min(anticipoValor, totalCotizacion)
+        : Math.round(totalCotizacion * (anticipoValor / 100) * 100) / 100
+    }
+
+    // Componer observaciones
+    const obsLines: string[] = [`Generada desde presupuesto ${cotizacion.numero_cotizacion}`]
+    if (politicaAbandonoDias) {
+      obsLines.push(`Plazo de retiro: ${politicaAbandonoDias} días tras aviso de listo.`)
+    }
+
     // Crear la orden con los datos del snapshot
     const { data: orden, error: ordenError } = await supabaseAdmin
       .from("ordenes_servicio")
@@ -118,8 +151,11 @@ export async function POST(
         color: equipo.color || null,
         imei: equipo.imei || null,
         problema_reportado: equipo.problemaReportado,
+        diagnostico: diagnostico,
         presupuesto: cotizacion.total || null,
-        observaciones: `Generada desde presupuesto ${cotizacion.numero_cotizacion}`,
+        sena: sena || 0,
+        fecha_prometida: fechaPrometida,
+        observaciones: obsLines.join("\n"),
         public_token: publicToken,
         estado: "RECIBIDO",
         sector_id: cotizacion.sector_id || null,
@@ -132,6 +168,25 @@ export async function POST(
 
     if (ordenError) {
       throw ordenError
+    }
+
+    // Crear garantía si corresponde
+    if (garantiaAlcance !== "NINGUNA" && garantiaDias > 0) {
+      const inicio = new Date()
+      const vencimiento = new Date()
+      vencimiento.setDate(vencimiento.getDate() + garantiaDias)
+      const alcanceLabel = garantiaAlcance === "AMBOS"
+        ? "Repuesto y mano de obra"
+        : garantiaAlcance === "REPUESTO"
+          ? "Solo repuesto"
+          : "Solo mano de obra"
+      await supabaseAdmin.from("garantias").insert({
+        orden_id: orden.id,
+        dias_validez: garantiaDias,
+        fecha_inicio: inicio.toISOString(),
+        fecha_vencimiento: vencimiento.toISOString(),
+        notas: `Alcance: ${alcanceLabel}. Garantía generada desde presupuesto ${cotizacion.numero_cotizacion}.`,
+      })
     }
 
     // Si hay checklist_snapshot, copiarlo a checklist_recepcion

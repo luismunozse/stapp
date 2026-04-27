@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { X, Plus, FileText, Calculator, Percent, DollarSign, Loader2, BookOpen, Smartphone } from "lucide-react"
+import { X, Plus, FileText, Calculator, Percent, DollarSign, Loader2, BookOpen, Smartphone, Wrench } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { useModal } from "@/contexts/modal-context"
 import { ItemRow, calcItemNeto } from "./item-row"
@@ -29,6 +29,17 @@ interface CotizacionItem {
   descuentoTipo?: string
   descuentoValor?: number
   inventarioId?: string | null
+  tipoRepuesto?: "ORIGINAL" | "ALTERNATIVO" | "RECICLADO" | "NO_APLICA"
+}
+
+interface CondicionesTecnicas {
+  diagnostico: string | null
+  plazoEstimadoDias: number | null
+  anticipoTipo: "porcentaje" | "fijo"
+  anticipoValor: number
+  garantiaDias: number
+  garantiaAlcance: "REPUESTO" | "MANO_OBRA" | "AMBOS" | "NINGUNA"
+  politicaAbandonoDias: number | null
 }
 
 interface EquipoData {
@@ -41,6 +52,7 @@ interface EquipoData {
   imei?: string | null
   numeroSerie?: string | null
   problemaReportado: string
+  condiciones?: CondicionesTecnicas | null
 }
 
 interface CotizacionFormProps {
@@ -76,7 +88,7 @@ export function CotizacionForm({
   const { formatPrice } = useCurrency()
   const { showError, showWarning } = useModal()
   const [items, setItems] = useState<CotizacionItem[]>(
-    initialData?.items || [{ descripcion: "", cantidad: 1, precioUnitario: 0, unidad: "Unidad", descuentoTipo: "porcentaje", descuentoValor: 0 }]
+    initialData?.items || [{ descripcion: "", cantidad: 1, precioUnitario: 0, unidad: "Unidad", descuentoTipo: "porcentaje", descuentoValor: 0, tipoRepuesto: "NO_APLICA" }]
   )
   const [notas, setNotas] = useState(initialData?.notas || "")
   const [fechaVencimiento, setFechaVencimiento] = useState(
@@ -109,6 +121,15 @@ export function CotizacionForm({
     imei: initialData?.equipo?.imei || null,
     numeroSerie: initialData?.equipo?.numeroSerie || null,
     problemaReportado: initialData?.equipo?.problemaReportado || "",
+  })
+  const [condiciones, setCondiciones] = useState<CondicionesTecnicas>({
+    diagnostico: initialData?.equipo?.condiciones?.diagnostico ?? null,
+    plazoEstimadoDias: initialData?.equipo?.condiciones?.plazoEstimadoDias ?? null,
+    anticipoTipo: initialData?.equipo?.condiciones?.anticipoTipo ?? "porcentaje",
+    anticipoValor: initialData?.equipo?.condiciones?.anticipoValor ?? 0,
+    garantiaDias: initialData?.equipo?.condiciones?.garantiaDias ?? 30,
+    garantiaAlcance: initialData?.equipo?.condiciones?.garantiaAlcance ?? "AMBOS",
+    politicaAbandonoDias: initialData?.equipo?.condiciones?.politicaAbandonoDias ?? null,
   })
   const [checklistValue, setChecklistValue] = useState<ChecklistPickerValue | null>(
     initialData?.checklist || null
@@ -147,6 +168,14 @@ export function CotizacionForm({
             d.setDate(d.getDate() + (data.cotizacionValidezDias || 30))
             setFechaVencimiento(d.toISOString().split("T")[0])
           }
+          if (isPresupuesto) {
+            setCondiciones((prev) => ({
+              ...prev,
+              garantiaDias: data.garantiaDiasDefault ?? prev.garantiaDias,
+              politicaAbandonoDias: data.politicaAbandonoDiasDefault ?? prev.politicaAbandonoDias,
+              anticipoValor: data.anticipoPorcentajeDefault ?? prev.anticipoValor,
+            }))
+          }
         }
       } catch {
         // ignore
@@ -154,7 +183,7 @@ export function CotizacionForm({
       setConfigLoaded(true)
     }
     fetchConfig()
-  }, [isEditing, configLoaded, fechaVencimiento])
+  }, [isEditing, configLoaded, fechaVencimiento, isPresupuesto])
 
   const esClienteEmpresa = clienteObj?.tipoCliente === "EMPRESA" || !!clienteObj?.razonSocial
 
@@ -216,7 +245,7 @@ export function CotizacionForm({
   }
 
   const addItem = () => {
-    setItems([...items, { descripcion: "", cantidad: 1, precioUnitario: 0, unidad: "Unidad", descuentoTipo: "porcentaje", descuentoValor: 0, inventarioId: null }])
+    setItems([...items, { descripcion: "", cantidad: 1, precioUnitario: 0, unidad: "Unidad", descuentoTipo: "porcentaje", descuentoValor: 0, inventarioId: null, tipoRepuesto: "NO_APLICA" }])
   }
 
   const handleLoadTemplates = async () => {
@@ -241,6 +270,7 @@ export function CotizacionForm({
       unidad: i.unidad || "Unidad",
       descuentoTipo: i.descuentoTipo || "porcentaje",
       descuentoValor: i.descuentoValor || 0,
+      tipoRepuesto: i.tipoRepuesto || "NO_APLICA",
     })))
     if (template.notas) setNotas(template.notas)
     if (template.terminos) setTerminos(template.terminos)
@@ -282,16 +312,16 @@ export function CotizacionForm({
     }
 
     if (isPresupuesto) {
-      if (!equipo.dispositivo.trim()) {
-        await showWarning("Ingresá el dispositivo del equipo")
+      if (!equipo.tipoDispositivoId) {
+        await showWarning("Seleccioná el tipo de dispositivo")
+        return
+      }
+      if (!equipo.marca?.trim() || !equipo.modelo?.trim()) {
+        await showWarning("Ingresá marca y modelo del equipo")
         return
       }
       if (!equipo.problemaReportado.trim()) {
         await showWarning("Ingresá el problema reportado")
-        return
-      }
-      if (!equipo.tipoDispositivoId) {
-        await showWarning("Seleccioná el tipo de dispositivo")
         return
       }
     }
@@ -321,6 +351,7 @@ export function CotizacionForm({
           descuentoTipo: item.descuentoTipo || "porcentaje",
           descuentoValor: item.descuentoValor || 0,
           inventarioId: item.inventarioId || null,
+          tipoRepuesto: item.tipoRepuesto || "NO_APLICA",
         })),
         notas: notas || undefined,
         fechaVencimiento: fechaVencimiento || undefined,
@@ -336,16 +367,29 @@ export function CotizacionForm({
       if (selectedSectorId) payload.sectorId = selectedSectorId
 
       if (isPresupuesto) {
+        const marca = equipo.marca?.trim() || ""
+        const modelo = equipo.modelo?.trim() || ""
+        const dispositivo = `${marca} ${modelo}`.trim()
+        const isCelular = equipo.tipoDispositivo === "CELULAR"
         payload.equipo = {
-          dispositivo: equipo.dispositivo.trim(),
+          dispositivo,
           tipoDispositivoId: equipo.tipoDispositivoId,
           tipoDispositivo: equipo.tipoDispositivo,
-          marca: equipo.marca || null,
-          modelo: equipo.modelo || null,
+          marca: marca || null,
+          modelo: modelo || null,
           color: equipo.color || null,
-          imei: equipo.imei || null,
+          imei: isCelular ? (equipo.imei || null) : null,
           numeroSerie: equipo.numeroSerie || null,
           problemaReportado: equipo.problemaReportado.trim(),
+          condiciones: {
+            diagnostico: condiciones.diagnostico?.trim() || null,
+            plazoEstimadoDias: condiciones.plazoEstimadoDias && condiciones.plazoEstimadoDias > 0 ? condiciones.plazoEstimadoDias : null,
+            anticipoTipo: condiciones.anticipoTipo,
+            anticipoValor: condiciones.anticipoValor || 0,
+            garantiaDias: condiciones.garantiaAlcance === "NINGUNA" ? 0 : (condiciones.garantiaDias || 0),
+            garantiaAlcance: condiciones.garantiaAlcance,
+            politicaAbandonoDias: condiciones.politicaAbandonoDias && condiciones.politicaAbandonoDias > 0 ? condiciones.politicaAbandonoDias : null,
+          },
         }
         if (checklistValue) payload.checklist = checklistValue
       }
@@ -485,29 +529,21 @@ export function CotizacionForm({
                   </Select>
                 </div>
                 <div>
-                  <Label>Dispositivo *</Label>
-                  <Input
-                    value={equipo.dispositivo}
-                    onChange={(e) => setEquipo((p) => ({ ...p, dispositivo: e.target.value }))}
-                    placeholder="Ej: iPhone 13, Notebook Dell Latitude"
-                    disabled={loading}
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label>Marca</Label>
+                  <Label>Marca *</Label>
                   <Input
                     value={equipo.marca || ""}
                     onChange={(e) => setEquipo((p) => ({ ...p, marca: e.target.value || null }))}
+                    placeholder="Ej: Apple, Samsung, Dell"
                     disabled={loading}
                     className="mt-1"
                   />
                 </div>
                 <div>
-                  <Label>Modelo</Label>
+                  <Label>Modelo *</Label>
                   <Input
                     value={equipo.modelo || ""}
                     onChange={(e) => setEquipo((p) => ({ ...p, modelo: e.target.value || null }))}
+                    placeholder="Ej: iPhone 13 Pro, Latitude 5520"
                     disabled={loading}
                     className="mt-1"
                   />
@@ -521,15 +557,17 @@ export function CotizacionForm({
                     className="mt-1"
                   />
                 </div>
-                <div>
-                  <Label>IMEI</Label>
-                  <Input
-                    value={equipo.imei || ""}
-                    onChange={(e) => setEquipo((p) => ({ ...p, imei: e.target.value || null }))}
-                    disabled={loading}
-                    className="mt-1"
-                  />
-                </div>
+                {equipo.tipoDispositivo === "CELULAR" && (
+                  <div>
+                    <Label>IMEI</Label>
+                    <Input
+                      value={equipo.imei || ""}
+                      onChange={(e) => setEquipo((p) => ({ ...p, imei: e.target.value || null }))}
+                      disabled={loading}
+                      className="mt-1"
+                    />
+                  </div>
+                )}
                 <div>
                   <Label>N° de serie</Label>
                   <Input
@@ -564,6 +602,109 @@ export function CotizacionForm({
             />
           )}
 
+          {/* Condiciones técnicas (solo PRESUPUESTO) */}
+          {isPresupuesto && (
+            <div className="space-y-3 p-3 border rounded-lg bg-muted/20">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Wrench className="h-4 w-4" /> Condiciones técnicas
+              </div>
+              <div>
+                <Label>Diagnóstico técnico</Label>
+                <Textarea
+                  value={condiciones.diagnostico || ""}
+                  onChange={(e) => setCondiciones((p) => ({ ...p, diagnostico: e.target.value || null }))}
+                  placeholder="Qué encontró el técnico al revisar el equipo (distinto del problema reportado por el cliente)"
+                  rows={2}
+                  disabled={loading}
+                  className="mt-1"
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <Label>Plazo estimado (días)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={condiciones.plazoEstimadoDias ?? ""}
+                    onChange={(e) => setCondiciones((p) => ({ ...p, plazoEstimadoDias: e.target.value ? parseInt(e.target.value) : null }))}
+                    placeholder="Ej: 5"
+                    disabled={loading}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label>Anticipo</Label>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={condiciones.anticipoValor || ""}
+                      onChange={(e) => setCondiciones((p) => ({ ...p, anticipoValor: parseFloat(e.target.value) || 0 }))}
+                      placeholder="0"
+                      disabled={loading}
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant={condiciones.anticipoTipo === "fijo" ? "default" : "outline"}
+                      size="icon"
+                      className="h-10 w-10 shrink-0"
+                      onClick={() => setCondiciones((p) => ({ ...p, anticipoTipo: p.anticipoTipo === "fijo" ? "porcentaje" : "fijo" }))}
+                      disabled={loading}
+                    >
+                      {condiciones.anticipoTipo === "fijo" ? <DollarSign className="h-4 w-4" /> : <Percent className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+                <div>
+                  <Label>Plazo de retiro (días)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={condiciones.politicaAbandonoDias ?? ""}
+                    onChange={(e) => setCondiciones((p) => ({ ...p, politicaAbandonoDias: e.target.value ? parseInt(e.target.value) : null }))}
+                    placeholder="Ej: 60"
+                    disabled={loading}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <Label>Garantía (días)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={condiciones.garantiaDias || ""}
+                    onChange={(e) => setCondiciones((p) => ({ ...p, garantiaDias: parseInt(e.target.value) || 0 }))}
+                    placeholder="30"
+                    disabled={loading || condiciones.garantiaAlcance === "NINGUNA"}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label>Alcance de garantía</Label>
+                  <Select
+                    value={condiciones.garantiaAlcance}
+                    onValueChange={(v) => setCondiciones((p) => ({ ...p, garantiaAlcance: v as CondicionesTecnicas["garantiaAlcance"] }))}
+                    disabled={loading}
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="AMBOS">Repuesto y mano de obra</SelectItem>
+                      <SelectItem value="REPUESTO">Solo repuesto</SelectItem>
+                      <SelectItem value="MANO_OBRA">Solo mano de obra</SelectItem>
+                      <SelectItem value="NINGUNA">Sin garantía</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Items Header - Hidden on mobile */}
           <div className="hidden sm:grid gap-2 text-sm font-medium text-muted-foreground border-b pb-2" style={{ gridTemplateColumns: "4fr 1fr 1.5fr 1.5fr 1.5fr 2fr 0.5fr" }}>
             <div>Descripción</div>
@@ -584,6 +725,7 @@ export function CotizacionForm({
               onUpdate={updateItem}
               onRemove={removeItem}
               disabled={loading}
+              showTipoRepuesto={isPresupuesto}
             />
           ))}
 

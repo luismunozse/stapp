@@ -31,12 +31,21 @@ interface ItemRowProps {
     descuentoTipo?: string
     descuentoValor?: number
     inventarioId?: string | null
+    tipoRepuesto?: string
   }
   index: number
   onUpdate: (index: number, field: string, value: string | number | null) => void
   onRemove: (index: number) => void
   disabled?: boolean
+  showTipoRepuesto?: boolean
 }
+
+const TIPO_REPUESTO_OPTIONS = [
+  { value: "NO_APLICA", label: "No aplica" },
+  { value: "ORIGINAL", label: "Original" },
+  { value: "ALTERNATIVO", label: "Alternativo" },
+  { value: "RECICLADO", label: "Reciclado" },
+]
 
 export function calcItemNeto(item: { cantidad: number; precioUnitario: number; descuentoTipo?: string; descuentoValor?: number }) {
   const bruto = item.cantidad * item.precioUnitario
@@ -46,7 +55,7 @@ export function calcItemNeto(item: { cantidad: number; precioUnitario: number; d
   return Math.max(0, bruto * (1 - dv / 100))
 }
 
-export function ItemRow({ item, index, onUpdate, onRemove, disabled }: ItemRowProps) {
+export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRepuesto }: ItemRowProps) {
   const { formatPrice } = useCurrency()
   const bruto = item.cantidad * item.precioUnitario
   const neto = calcItemNeto(item)
@@ -138,6 +147,25 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled }: ItemRowPr
             <Trash2 className="h-4 w-4" />
           </Button>
         </div>
+        {showTipoRepuesto && (
+          <div>
+            <label className="text-xs text-muted-foreground">Tipo de repuesto</label>
+            <Select
+              value={item.tipoRepuesto || "NO_APLICA"}
+              onValueChange={(v) => onUpdate(index, "tipoRepuesto", v)}
+              disabled={disabled}
+            >
+              <SelectTrigger className="h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {TIPO_REPUESTO_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         <div className="grid grid-cols-3 gap-2">
           <div>
             <label htmlFor={`item-cantidad-${index}`} className="text-xs text-muted-foreground">Cantidad</label>
@@ -253,6 +281,22 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled }: ItemRowPr
                 </button>
               ))}
             </div>
+          )}
+          {showTipoRepuesto && (
+            <Select
+              value={item.tipoRepuesto || "NO_APLICA"}
+              onValueChange={(v) => onUpdate(index, "tipoRepuesto", v)}
+              disabled={disabled}
+            >
+              <SelectTrigger className="h-7 mt-1 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {TIPO_REPUESTO_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
         </div>
         <div>

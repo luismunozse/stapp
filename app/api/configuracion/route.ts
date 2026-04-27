@@ -35,6 +35,9 @@ export async function GET() {
         cotizacion_validez_dias,
         cotizacion_terminos,
         recepcion_terminos,
+        garantia_dias_default,
+        politica_abandono_dias_default,
+        anticipo_porcentaje_default,
         pais
       `)
       .eq("id", organizationId!)
@@ -83,6 +86,9 @@ export async function GET() {
       cotizacionValidezDias: organization.cotizacion_validez_dias ?? 30,
       cotizacionTerminos: organization.cotizacion_terminos || "",
       recepcionTerminos: organization.recepcion_terminos || "",
+      garantiaDiasDefault: organization.garantia_dias_default ?? 30,
+      politicaAbandonoDiasDefault: organization.politica_abandono_dias_default ?? 60,
+      anticipoPorcentajeDefault: organization.anticipo_porcentaje_default ?? 50,
       pais: organization.pais || "AR",
     })
   } catch (error) {
@@ -107,7 +113,7 @@ export async function PUT(request: Request) {
         { status: 413 }
       )
     }
-    const { logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, pais } = body
+    const { logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais } = body
 
     const updateData: Record<string, any> = {}
 
@@ -211,11 +217,32 @@ export async function PUT(request: Request) {
       updateData.recepcion_terminos = recepcionTerminos || null
     }
 
+    if (garantiaDiasDefault !== undefined) {
+      const val = parseInt(garantiaDiasDefault)
+      if (!isNaN(val) && val >= 0) {
+        updateData.garantia_dias_default = val
+      }
+    }
+
+    if (politicaAbandonoDiasDefault !== undefined) {
+      const val = parseInt(politicaAbandonoDiasDefault)
+      if (!isNaN(val) && val >= 0) {
+        updateData.politica_abandono_dias_default = val
+      }
+    }
+
+    if (anticipoPorcentajeDefault !== undefined) {
+      const val = parseFloat(anticipoPorcentajeDefault)
+      if (!isNaN(val) && val >= 0 && val <= 100) {
+        updateData.anticipo_porcentaje_default = val
+      }
+    }
+
     if (pais !== undefined && typeof pais === "string" && pais in COUNTRIES) {
       updateData.pais = pais
     }
 
-    const selectCols = "id, logo_url, logo_path, nombre_mostrar, telefono, direccion, ciudad, provincia, codigo_postal, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, pais"
+    const selectCols = "id, logo_url, logo_path, nombre_mostrar, telefono, direccion, ciudad, provincia, codigo_postal, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, garantia_dias_default, politica_abandono_dias_default, anticipo_porcentaje_default, pais"
     const selectColsFull = selectCols + ", recepcion_terminos"
 
     // Solo actualizar si hay cambios
@@ -244,6 +271,9 @@ export async function PUT(request: Request) {
         cotizacionValidezDias: org?.cotizacion_validez_dias ?? 30,
         cotizacionTerminos: org?.cotizacion_terminos || "",
         recepcionTerminos: org?.recepcion_terminos || "",
+        garantiaDiasDefault: org?.garantia_dias_default ?? 30,
+        politicaAbandonoDiasDefault: org?.politica_abandono_dias_default ?? 60,
+        anticipoPorcentajeDefault: org?.anticipo_porcentaje_default ?? 50,
         pais: org?.pais || "AR",
       })
     }
@@ -294,6 +324,9 @@ export async function PUT(request: Request) {
       cotizacionValidezDias: organization.cotizacion_validez_dias ?? 30,
       cotizacionTerminos: organization.cotizacion_terminos || "",
       recepcionTerminos: organization.recepcion_terminos || "",
+      garantiaDiasDefault: organization.garantia_dias_default ?? 30,
+      politicaAbandonoDiasDefault: organization.politica_abandono_dias_default ?? 60,
+      anticipoPorcentajeDefault: organization.anticipo_porcentaje_default ?? 50,
       pais: organization.pais || "AR",
     })
   } catch (error: any) {

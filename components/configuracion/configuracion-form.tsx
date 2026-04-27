@@ -48,6 +48,9 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
   const [cotizacionValidezDias, setCotizacionValidezDias] = useState("30")
   const [cotizacionTerminos, setCotizacionTerminos] = useState("")
   const [recepcionTerminos, setRecepcionTerminos] = useState("")
+  const [garantiaDiasDefault, setGarantiaDiasDefault] = useState("30")
+  const [politicaAbandonoDiasDefault, setPoliticaAbandonoDiasDefault] = useState("60")
+  const [anticipoPorcentajeDefault, setAnticipoPorcentajeDefault] = useState("50")
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -74,6 +77,9 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
         setCotizacionValidezDias(String(data.cotizacionValidezDias ?? 30))
         setCotizacionTerminos(data.cotizacionTerminos || "")
         setRecepcionTerminos(data.recepcionTerminos || "")
+        setGarantiaDiasDefault(String(data.garantiaDiasDefault ?? 30))
+        setPoliticaAbandonoDiasDefault(String(data.politicaAbandonoDiasDefault ?? 60))
+        setAnticipoPorcentajeDefault(String(data.anticipoPorcentajeDefault ?? 50))
         // Usar logoUrl si existe, o logoData para compatibilidad
         if (data.logoUrl) {
           setPreview(data.logoUrl)
@@ -158,7 +164,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
       const res = await fetch("/api/configuracion", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, pais }),
+        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais }),
       })
 
       if (res.ok) {
@@ -510,6 +516,48 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
             />
             <p className="text-xs sm:text-sm text-muted-foreground mt-1">
               Se incluirán por defecto en nuevas cotizaciones y PDFs
+            </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t">
+            <div>
+              <Label htmlFor="garantiaDiasDefault" className="text-sm">Garantía por defecto (días)</Label>
+              <Input
+                id="garantiaDiasDefault"
+                type="number"
+                min="0"
+                value={garantiaDiasDefault}
+                onChange={(e) => setGarantiaDiasDefault(e.target.value)}
+                placeholder="30"
+                disabled={!allowEdit}
+              />
+            </div>
+            <div>
+              <Label htmlFor="anticipoPorcentajeDefault" className="text-sm">Anticipo por defecto (%)</Label>
+              <Input
+                id="anticipoPorcentajeDefault"
+                type="number"
+                min="0"
+                max="100"
+                value={anticipoPorcentajeDefault}
+                onChange={(e) => setAnticipoPorcentajeDefault(e.target.value)}
+                placeholder="50"
+                disabled={!allowEdit}
+              />
+            </div>
+            <div>
+              <Label htmlFor="politicaAbandonoDiasDefault" className="text-sm">Plazo de retiro (días)</Label>
+              <Input
+                id="politicaAbandonoDiasDefault"
+                type="number"
+                min="0"
+                value={politicaAbandonoDiasDefault}
+                onChange={(e) => setPoliticaAbandonoDiasDefault(e.target.value)}
+                placeholder="60"
+                disabled={!allowEdit}
+              />
+            </div>
+            <p className="text-xs sm:text-sm text-muted-foreground sm:col-span-3 mt-1">
+              Defaults técnicos sugeridos al crear nuevos presupuestos.
             </p>
           </div>
         </CardContent>

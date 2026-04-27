@@ -15,7 +15,18 @@ const itemSchema = z.object({
   descuentoTipo: z.enum(["porcentaje", "fijo"]).optional(),
   descuentoValor: z.number().min(0).optional(),
   inventarioId: z.string().nullable().optional(),
+  tipoRepuesto: z.enum(["ORIGINAL", "ALTERNATIVO", "RECICLADO", "NO_APLICA"]).optional(),
 })
+
+const condicionesSchema = z.object({
+  diagnostico: z.string().nullable().optional(),
+  plazoEstimadoDias: z.number().int().min(0).nullable().optional(),
+  anticipoTipo: z.enum(["porcentaje", "fijo"]).optional(),
+  anticipoValor: z.number().min(0).optional(),
+  garantiaDias: z.number().int().min(0).optional(),
+  garantiaAlcance: z.enum(["REPUESTO", "MANO_OBRA", "AMBOS", "NINGUNA"]).optional(),
+  politicaAbandonoDias: z.number().int().min(0).nullable().optional(),
+}).optional().nullable()
 
 const equipoSchema = z.object({
   dispositivo: z.string().min(1, "Dispositivo requerido"),
@@ -27,6 +38,7 @@ const equipoSchema = z.object({
   imei: z.string().optional().nullable(),
   numeroSerie: z.string().optional().nullable(),
   problemaReportado: z.string().min(1, "Problema reportado requerido"),
+  condiciones: condicionesSchema,
 })
 
 const checklistSchema = z.object({
@@ -123,6 +135,7 @@ function formatCotizacion(c: any) {
       descuentoTipo: i.descuento_tipo,
       descuentoValor: i.descuento_valor,
       inventarioId: i.inventario_id ?? null,
+      tipoRepuesto: i.tipo_repuesto || "NO_APLICA",
     })),
   }
 }
@@ -393,6 +406,7 @@ export async function POST(request: Request) {
           descuento_tipo: item.descuentoTipo || "porcentaje",
           descuento_valor: item.descuentoValor || 0,
           inventario_id: item.inventarioId || null,
+          tipo_repuesto: item.tipoRepuesto || "NO_APLICA",
         }))
       )
 

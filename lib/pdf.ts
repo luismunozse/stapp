@@ -48,6 +48,8 @@ interface CotizacionItem {
   descuento_valor?: number
   descuentoTipo?: string
   descuentoValor?: number
+  tipo_repuesto?: string
+  tipoRepuesto?: string
 }
 
 interface CotizacionPDFData {
@@ -84,6 +86,15 @@ interface CotizacionPDFData {
   checklist?: {
     items: Array<{ label: string; valor: string; categoria?: string | null }>
     notas?: string | null
+  } | null
+  condiciones?: {
+    diagnostico: string | null
+    plazoEstimadoDias: number | null
+    anticipoTipo: string
+    anticipoValor: number
+    garantiaDias: number
+    garantiaAlcance: string
+    politicaAbandonoDias: number | null
   } | null
   items: CotizacionItem[]
   subtotal: number
@@ -453,7 +464,11 @@ export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Bu
     }
 
     // Description - allow longer text
-    const descText = safe(item.descripcion).substring(0, 55)
+    const tipoRep = safe(item.tipo_repuesto || item.tipoRepuesto)
+    const tipoRepLabel = tipoRep && tipoRep !== "NO_APLICA"
+      ? ` [${tipoRep === "ALTERNATIVO" ? "ALT" : tipoRep === "RECICLADO" ? "REC" : "ORIG"}]`
+      : ""
+    const descText = (safe(item.descripcion) + tipoRepLabel).substring(0, 60)
     page.drawText(descText, { x: colDesc, y: cursor + 1, size: 9, font: helvetica, color: textDark })
 
     // Item discount indicator
@@ -593,6 +608,83 @@ export async function generateCotizacionPDF(data: CotizacionPDFData): Promise<Bu
     }
 
     cursor -= estH + 8
+  }
+
+  // ====== CONDICIONES TÉCNICAS (solo PRESUPUESTO con condiciones) ======
+  if (data.condiciones) {
+    const cnd = data.condiciones
+
+    // Wrap diagnóstico into lines
+    const diagnostico = safe(cnd.diagnostico)
+    const diagLines: string[] = []
+    if (diagnostico) {
+      let dLine = ""
+      for (const word of diagnostico.split(" ")) {
+        if (helvetica.widthOfTextAtSize(dLine + " " + word, 8) < contentWidth - 100) {
+          dLine += (dLine ? " " : "") + word
+        } else {
+          diagLines.push(dLine)
+          dLine = word
+        }
+      }
+      if (dLine) diagLines.push(dLine)
+    }
+
+    const condRows: Array<{ label: string; value: string }> = []
+    if (cnd.plazoEstimadoDias && cnd.plazoEstimadoDias > 0) {
+      condRows.push({ label: "Plazo estimado:", value: `${cnd.plazoEstimadoDias} días hábiles` })
+    }
+    if (cnd.anticipoValor && cnd.anticipoValor > 0) {
+      const ant = cnd.anticipoTipo === "fijo"
+        ? fmtCurrency(cnd.anticipoValor)
+        : `${cnd.anticipoValor}% del total`
+      condRows.push({ label: "Anticipo requerido:", value: ant })
+    }
+    if (cnd.garantiaAlcance && cnd.garantiaAlcance !== "NINGUNA" && cnd.garantiaDias > 0) {
+      const alcance = cnd.garantiaAlcance === "AMBOS"
+        ? "Repuesto y mano de obra"
+        : cnd.garantiaAlcance === "REPUESTO"
+          ? "Solo repuesto"
+          : "Solo mano de obra"
+      condRows.push({ label: "Garantía:", value: `${cnd.garantiaDias} días — ${alcance}` })
+    }
+    if (cnd.politicaAbandonoDias && cnd.politicaAbandonoDias > 0) {
+      condRows.push({ label: "Plazo de retiro:", value: `${cnd.politicaAbandonoDias} días tras aviso de listo` })
+    }
+
+    const hasContent = diagLines.length > 0 || condRows.length > 0
+    if (hasContent) {
+      const estH = 20 + (diagLines.length > 0 ? (14 + diagLines.length * 11 + 4) : 0) + condRows.length * 12 + 6
+
+      if (cursor - estH < minY) {
+        page = pdfDoc.addPage([pageW, pageH])
+        pages.push(page)
+        page.drawRectangle({ x: 0, y: pageH - 4, width: pageW, height: 4, color: accent })
+        cursor = pageH - 30
+      }
+
+      page.drawRectangle({ x: marginL, y: cursor - estH, width: contentWidth, height: estH, color: notesBg, borderColor: border, borderWidth: 0.5 })
+      page.drawText("CONDICIONES TÉCNICAS", { x: marginL + 12, y: cursor - 14, size: 8, font: helveticaBold, color: notesText })
+      let cY = cursor - 28
+
+      if (diagLines.length > 0) {
+        page.drawText("Diagnóstico:", { x: marginL + 12, y: cY, size: 8, font: helveticaBold, color: textDark })
+        cY -= 12
+        for (const l of diagLines.slice(0, 4)) {
+          page.drawText(l, { x: marginL + 18, y: cY, size: 7.5, font: helvetica, color: textMuted })
+          cY -= 11
+        }
+        cY -= 4
+      }
+
+      for (const row of condRows) {
+        page.drawText(row.label, { x: marginL + 12, y: cY, size: 8, font: helveticaBold, color: textDark })
+        page.drawText(row.value, { x: marginL + 110, y: cY, size: 8, font: helvetica, color: textMuted })
+        cY -= 12
+      }
+
+      cursor -= estH + 8
+    }
   }
 
   // ====== NOTAS ======

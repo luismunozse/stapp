@@ -307,6 +307,16 @@ export async function getTrialInfo(organizationId: string): Promise<TrialInfo> {
   }
 }
 
+// Verificar si la organización es la del Superadmin (panel admin.stapp.com.ar)
+async function isSuperadminOrg(organizationId: string): Promise<boolean> {
+  const { data } = await supabaseAdmin
+    .from("organizations")
+    .select("slug")
+    .eq("id", organizationId)
+    .single()
+  return data?.slug === "superadmin"
+}
+
 // Verificar si la organización tiene acceso válido (no bloqueado)
 export async function hasValidAccess(organizationId: string): Promise<{
   hasAccess: boolean
@@ -315,6 +325,11 @@ export async function hasValidAccess(organizationId: string): Promise<{
 }> {
   const subscription = await getSubscriptionInfo(organizationId)
   const trialInfo = await getTrialInfo(organizationId)
+
+  // Superadmin siempre tiene acceso, nunca se downgradea
+  if (await isSuperadminOrg(organizationId)) {
+    return { hasAccess: true, trialInfo }
+  }
 
   // Sin suscripción = sin acceso
   if (!subscription) {
@@ -347,6 +362,11 @@ export async function hasValidAccess(organizationId: string): Promise<{
  */
 async function downgradeToFree(organizationId: string): Promise<void> {
   try {
+    // Guard: nunca downgradear la organización del Superadmin
+    if (await isSuperadminOrg(organizationId)) {
+      return
+    }
+
     // Buscar el plan Free activo
     const { data: freePlan } = await supabaseAdmin
       .from("plans")

@@ -70,7 +70,8 @@
       "Bash(npm run test)",
       "Bash(sed 's/CREATE TABLE//')",
       "Read(//c/Users/PC/OneDrive/Escritorio/stapp/**)",
-      "Bash(tee /tmp/tsc.log)"
+      "Bash(tee /tmp/tsc.log)",
+      "Bash(xargs -I {} sh -c 'echo \"=== {} ===\" && head -5 {}')"
     ]
   }
 }
