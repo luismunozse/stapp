@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ScanLine, Search } from "lucide-react"
+import { ScanLine, Search, AlertCircle } from "lucide-react"
 
 interface ScanResult {
   found: boolean
@@ -26,12 +26,18 @@ interface Props {
 export function BarcodeScanner({ open, onOpenChange, onResult }: Props) {
   const [code, setCode] = useState("")
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  const loadingRef = useRef(false)
 
   const runSearch = useCallback(async (raw: string) => {
     const trimmed = raw.trim()
     if (!trimmed) return
+    if (loadingRef.current) return
+    loadingRef.current = true
     setLoading(true)
+    setError(null)
     try {
       const res = await fetch(`/api/inventario/barcode?code=${encodeURIComponent(trimmed)}`)
       if (res.ok) {
@@ -39,11 +45,14 @@ export function BarcodeScanner({ open, onOpenChange, onResult }: Props) {
         onOpenChange(false)
         setCode("")
         onResult(data)
+      } else {
+        setError("Error al buscar el código. Intentá de nuevo.")
       }
     } catch {
-      // ignore
+      setError("Sin conexión. Verificá la red e intentá de nuevo.")
     } finally {
       setLoading(false)
+      loadingRef.current = false
     }
   }, [onResult, onOpenChange])
 
@@ -64,7 +73,7 @@ export function BarcodeScanner({ open, onOpenChange, onResult }: Props) {
     let last = 0
     const onKey = (e: KeyboardEvent) => {
       const now = Date.now()
-      if (now - last > 100) buf = ""
+      if (now - last > 200) buf = ""
       last = now
       if (e.key === "Enter" || e.key === "Tab") {
         if (buf.length >= 4) {
@@ -108,7 +117,7 @@ export function BarcodeScanner({ open, onOpenChange, onResult }: Props) {
               ref={inputRef}
               placeholder="Código de barras..."
               value={code}
-              onChange={(e) => setCode(e.target.value)}
+              onChange={(e) => { setCode(e.target.value); setError(null) }}
               onKeyDown={handleKeyDown}
               className="font-mono"
             />
@@ -120,6 +129,13 @@ export function BarcodeScanner({ open, onOpenChange, onResult }: Props) {
           {loading && (
             <div className="flex justify-center py-2">
               <div className="animate-spin h-5 w-5 border-2 border-primary border-t-transparent rounded-full" />
+            </div>
+          )}
+
+          {error && (
+            <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              {error}
             </div>
           )}
         </div>

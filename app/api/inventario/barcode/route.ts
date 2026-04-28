@@ -17,21 +17,35 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Código requerido" }, { status: 400 })
     }
 
-    const { data: item, error: dbError } = await supabaseAdmin
+    // Search by barcode first, fallback to codigo (products may store EAN in either field)
+    let item = null
+    const { data: byBarcode, error: barcodeErr } = await supabaseAdmin
       .from("inventario")
       .select("*, proveedores:proveedor_id(id, nombre)")
       .eq("organization_id", organizationId!)
       .eq("barcode", code)
       .is("deleted_at", null)
       .maybeSingle()
+    if (barcodeErr) throw barcodeErr
+    item = byBarcode
 
-    if (dbError) throw dbError
+    if (!item) {
+      const { data: byCodigo, error: codigoErr } = await supabaseAdmin
+        .from("inventario")
+        .select("*, proveedores:proveedor_id(id, nombre)")
+        .eq("organization_id", organizationId!)
+        .eq("codigo", code)
+        .is("deleted_at", null)
+        .maybeSingle()
+      if (codigoErr) throw codigoErr
+      item = byCodigo
+    }
 
     if (!item) {
       return NextResponse.json({ found: false, code })
     }
 
-    return NextResponse.json({ found: true, item: formatInventario(item) })
+    return NextResponse.json({ found: true, code, item: formatInventario(item) })
   } catch (error) {
     console.error("Error searching by barcode:", error)
     return NextResponse.json({ error: "Error al buscar por código de barras" }, { status: 500 })
