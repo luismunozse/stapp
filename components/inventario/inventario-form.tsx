@@ -228,8 +228,7 @@ export function InventarioForm({
         const bc = sessionStorage.getItem("new-item-barcode")
         if (bc) {
           sessionStorage.removeItem("new-item-barcode")
-          setValue("barcode", bc)
-          setShowStockConfig(true)
+          setValue("barcode", bc, { shouldDirty: true, shouldTouch: true })
         }
       } catch { /* ignore */ }
     }
@@ -924,18 +923,19 @@ export function InventarioForm({
                     placeholder="Auto"
                   />
                 </div>
-                <div className="col-span-3">
-                  <Label htmlFor="barcode">Código de Barras</Label>
-                  <Input
-                    id="barcode"
-                    {...register("barcode", {
-                      setValueAs: (v: string) => v === "" || v === null ? null : v,
-                    })}
-                    placeholder="Escanear o ingresar código de barras"
-                  />
-                </div>
               </div>
             )}
+          </div>
+
+          <div>
+            <Label htmlFor="barcode">Código de Barras</Label>
+            <Input
+              id="barcode"
+              {...register("barcode", {
+                setValueAs: (v: string) => v === "" || v === null ? null : v,
+              })}
+              placeholder="Escanear o ingresar código de barras"
+            />
           </div>
 
           <div className="flex gap-2 justify-end pt-2">
