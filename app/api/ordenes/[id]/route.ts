@@ -19,6 +19,7 @@ const updateOrdenSchema = z.object({
       "REPARADO",
       "ENTREGADO",
       "ENTREGADO_SIN_REPARACION",
+      "ENTREGADO_SIN_COBRO",
       "CANCELADO",
       "SIN_REPARACION",
     ])
@@ -220,7 +221,7 @@ export async function PUT(
     }
 
     // Setear fecha_completado la primera vez que llega a REPARADO o ENTREGADO
-    if ((data.estado === "REPARADO" || data.estado === "ENTREGADO" || data.estado === "ENTREGADO_SIN_REPARACION") && !orden.fecha_completado) {
+    if ((data.estado === "REPARADO" || data.estado === "ENTREGADO" || data.estado === "ENTREGADO_SIN_REPARACION" || data.estado === "ENTREGADO_SIN_COBRO") && !orden.fecha_completado) {
       updateData.fecha_completado = new Date().toISOString()
     }
 
