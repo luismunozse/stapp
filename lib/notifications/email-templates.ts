@@ -53,6 +53,7 @@ const estadoLabels: Record<EstadoOrden, string> = {
   REPARADO: "Reparado - Listo para retirar",
   ENTREGADO: "Entregado",
   ENTREGADO_SIN_REPARACION: "Retirado sin reparación",
+  ENTREGADO_SIN_COBRO: "Entregado sin cobro",
   CANCELADO: "Cancelado",
   SIN_REPARACION: "Sin reparación posible",
 }
@@ -67,6 +68,7 @@ const estadoColors: Record<EstadoOrden, string> = {
   REPARADO: "#06b6d4",
   ENTREGADO: "#22c55e",
   ENTREGADO_SIN_REPARACION: "#d97706",
+  ENTREGADO_SIN_COBRO: "#0ea5e9",
   CANCELADO: "#6b7280",
   SIN_REPARACION: "#ef4444",
 }

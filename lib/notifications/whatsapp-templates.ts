@@ -19,6 +19,7 @@ const estadoLabels: Record<EstadoOrden, string> = {
   REPARADO: "listo para retirar",
   ENTREGADO: "entregado",
   ENTREGADO_SIN_REPARACION: "retirado sin reparacion",
+  ENTREGADO_SIN_COBRO: "entregado sin cobro",
   CANCELADO: "cancelado",
   SIN_REPARACION: "sin posibilidad de reparacion",
 }
