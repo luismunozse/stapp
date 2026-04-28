@@ -109,6 +109,7 @@ export default function SuscripcionesPage() {
   const [extendMotivo, setExtendMotivo] = useState("")
   const [renewPeriod, setRenewPeriod] = useState<"MONTHLY" | "YEARLY">("MONTHLY")
   const [renewCustomDate, setRenewCustomDate] = useState("")
+  const [renewDays, setRenewDays] = useState("")
   const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([])
   const [limitOverrides, setLimitOverrides] = useState({ limite_ordenes: "", limite_tecnicos: "", limite_clientes: "", limite_storage_mb: "", motivo: "" })
   const [bulkDias, setBulkDias] = useState(7)
@@ -216,12 +217,14 @@ export default function SuscripcionesPage() {
       body: {
         organizationId: renewModal.orgId,
         billingPeriod: renewPeriod,
+        ...(renewDays && !renewCustomDate && { days: parseInt(renewDays) }),
         ...(renewCustomDate && { customEndDate: new Date(renewCustomDate).toISOString() }),
       },
       successMessage: "Suscripción activada",
       onSuccess: () => {
         setRenewModal({ open: false, orgId: "", orgName: "" })
         setRenewCustomDate("")
+        setRenewDays("")
         fetchSubscriptions()
       },
     })
@@ -638,7 +641,7 @@ export default function SuscripcionesPage() {
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label>Período de facturación</Label>
-              <Select value={renewPeriod} onValueChange={(v) => setRenewPeriod(v as "MONTHLY" | "YEARLY")}>
+              <Select value={renewPeriod} onValueChange={(v) => setRenewPeriod(v as "MONTHLY" | "YEARLY")} disabled={!!renewDays || !!renewCustomDate}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="MONTHLY">Mensual (1 mes)</SelectItem>
@@ -647,15 +650,27 @@ export default function SuscripcionesPage() {
               </Select>
             </div>
             <div className="space-y-2">
+              <Label>Extender por días exactos</Label>
+              <Input
+                type="number"
+                min={1}
+                max={3650}
+                placeholder="Ej: 30"
+                value={renewDays}
+                onChange={(e) => { setRenewDays(e.target.value); if (e.target.value) setRenewCustomDate("") }}
+              />
+              {renewDays && <p className="text-xs text-muted-foreground">Se extiende desde la fecha de vencimiento actual (o desde hoy si ya venció)</p>}
+            </div>
+            <div className="space-y-2">
               <Label>O fecha de fin personalizada</Label>
-              <Input type="date" value={renewCustomDate} onChange={(e) => setRenewCustomDate(e.target.value)} min={new Date().toISOString().split("T")[0]} />
+              <Input type="date" value={renewCustomDate} onChange={(e) => { setRenewCustomDate(e.target.value); if (e.target.value) setRenewDays("") }} min={new Date().toISOString().split("T")[0]} />
               {renewCustomDate && <p className="text-xs text-muted-foreground">La fecha personalizada tiene prioridad sobre el período</p>}
             </div>
             <div className="p-3 rounded-lg bg-muted text-sm text-muted-foreground">
               Se activará sin proceso de pago. El admin de la org será notificado.
             </div>
             <div className="flex gap-3 justify-end">
-              <Button variant="outline" onClick={() => { setRenewModal({ open: false, orgId: "", orgName: "" }); setRenewCustomDate("") }} disabled={mutating}>Cancelar</Button>
+              <Button variant="outline" onClick={() => { setRenewModal({ open: false, orgId: "", orgName: "" }); setRenewCustomDate(""); setRenewDays("") }} disabled={mutating}>Cancelar</Button>
               <Button onClick={handleRenew} disabled={mutating}>
                 {mutating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
                 Activar

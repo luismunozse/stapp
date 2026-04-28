@@ -8,6 +8,7 @@ const renewSchema = z.object({
   organizationId: z.string().min(1, "ID de organización requerido"),
   billingPeriod: z.enum(["MONTHLY", "YEARLY"]).optional().default("MONTHLY"),
   months: z.number().int().min(1).max(36).optional(),
+  days: z.number().int().min(1).max(3650).optional(),
   customEndDate: z.string().optional(), // ISO date string para fecha custom
   planSlug: z.string().optional(), // Default: 'profesional'
 })
@@ -20,7 +21,7 @@ export async function POST(request: Request) {
     const parsed = await safeParseBody(request, renewSchema)
     if ("error" in parsed) return parsed.error
 
-    const { organizationId, billingPeriod, months, customEndDate, planSlug } = parsed.data
+    const { organizationId, billingPeriod, months, days, customEndDate, planSlug } = parsed.data
 
     const period: "MONTHLY" | "YEARLY" = billingPeriod
     const targetSlug = planSlug || "profesional"
@@ -66,6 +67,9 @@ export async function POST(request: Request) {
           { status: 400 }
         )
       }
+    } else if (days) {
+      periodEnd = new Date(now)
+      periodEnd.setDate(periodEnd.getDate() + days)
     } else {
       periodEnd = new Date(now)
       if (months) {
@@ -98,7 +102,9 @@ export async function POST(request: Request) {
       ) {
         startDate = new Date(existingSub.current_period_end)
         const extendedEnd = new Date(startDate)
-        if (months) {
+        if (days) {
+          extendedEnd.setDate(extendedEnd.getDate() + days)
+        } else if (months) {
           extendedEnd.setMonth(extendedEnd.getMonth() + months)
         } else if (period === "YEARLY") {
           extendedEnd.setFullYear(extendedEnd.getFullYear() + 1)
@@ -189,7 +195,8 @@ export async function POST(request: Request) {
       new_status: "ACTIVE",
       details: {
         billing_period: period,
-        months: months || (period === "YEARLY" ? 12 : 1),
+        months: days ? undefined : (months || (period === "YEARLY" ? 12 : 1)),
+        days: days || undefined,
         period_end: periodEnd.toISOString(),
         custom_date: !!customEndDate,
       },
