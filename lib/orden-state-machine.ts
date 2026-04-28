@@ -9,17 +9,18 @@ import type { EstadoOrden } from "@/types"
  * Cada estado tiene una lista de estados a los que puede transicionar.
  */
 export const TRANSICIONES_VALIDAS: Record<EstadoOrden, EstadoOrden[]> = {
-  RECIBIDO: ["EN_DIAGNOSTICO", "PRESUPUESTADO", "EN_REPARACION", "CANCELADO", "SIN_REPARACION"],
-  EN_DIAGNOSTICO: ["PRESUPUESTADO", "EN_REPARACION", "CANCELADO", "SIN_REPARACION"],
+  RECIBIDO: ["EN_DIAGNOSTICO", "PRESUPUESTADO", "EN_REPARACION", "CANCELADO", "SIN_REPARACION", "ENTREGADO_SIN_COBRO"],
+  EN_DIAGNOSTICO: ["PRESUPUESTADO", "EN_REPARACION", "CANCELADO", "SIN_REPARACION", "ENTREGADO_SIN_COBRO"],
   PRESUPUESTADO: ["APROBADO", "EN_DIAGNOSTICO", "CANCELADO", "SIN_REPARACION"],
   APROBADO: ["EN_REPARACION", "CANCELADO"],
   EN_REPARACION: ["ESPERANDO_REPUESTO", "REPARADO", "CANCELADO", "SIN_REPARACION"],
   ESPERANDO_REPUESTO: ["EN_REPARACION", "REPARADO", "CANCELADO", "SIN_REPARACION"],
-  REPARADO: ["ENTREGADO", "EN_REPARACION"], // Puede volver a reparación si se detecta falla
+  REPARADO: ["ENTREGADO", "ENTREGADO_SIN_COBRO", "EN_REPARACION"], // Puede volver a reparación si se detecta falla
   ENTREGADO: [], // Estado terminal
   ENTREGADO_SIN_REPARACION: [], // Estado terminal - retirado sin reparar
+  ENTREGADO_SIN_COBRO: [], // Estado terminal - entregado sin cobrar
   CANCELADO: ["RECIBIDO"], // Puede reactivarse
-  SIN_REPARACION: ["RECIBIDO", "ENTREGADO_SIN_REPARACION"], // Puede reactivarse o retirarse
+  SIN_REPARACION: ["RECIBIDO", "ENTREGADO_SIN_REPARACION", "ENTREGADO_SIN_COBRO"], // Puede reactivarse o retirarse
 }
 
 /**
@@ -115,6 +116,7 @@ export const ESTADO_LABELS: Record<EstadoOrden, string> = {
   REPARADO: "Reparado",
   ENTREGADO: "Entregado",
   ENTREGADO_SIN_REPARACION: "Retirado sin Reparación",
+  ENTREGADO_SIN_COBRO: "Entregado sin Cobro",
   CANCELADO: "Cancelado",
   SIN_REPARACION: "Sin Reparación",
 }

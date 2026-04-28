@@ -317,7 +317,7 @@ export async function PUT(
       throw updateError
     }
 
-    // Sync presupuesto on linked order when items/totals change
+    // Sync presupuesto on linked order when items/totals change — sum ALL cotizaciones
     if (data.items && updateData.total != null) {
       const { data: cotForSync } = await supabaseAdmin
         .from("cotizaciones")
@@ -326,9 +326,15 @@ export async function PUT(
         .single()
 
       if (cotForSync?.orden_id) {
+        const { data: allCots } = await supabaseAdmin
+          .from("cotizaciones")
+          .select("total")
+          .eq("orden_id", cotForSync.orden_id)
+          .is("deleted_at", null)
+        const totalPresupuesto = (allCots || []).reduce((sum, c) => sum + Number(c.total), 0)
         await supabaseAdmin
           .from("ordenes_servicio")
-          .update({ presupuesto: updateData.total })
+          .update({ presupuesto: totalPresupuesto })
           .eq("id", cotForSync.orden_id)
       }
     }
@@ -364,11 +370,17 @@ export async function PUT(
 
         if (ordenActual && validStates.includes(ordenActual.estado)) {
           const estadoAnterior = ordenActual.estado
+          const { data: allCots } = await supabaseAdmin
+            .from("cotizaciones")
+            .select("total")
+            .eq("orden_id", cotWithOrder.orden_id)
+            .is("deleted_at", null)
+          const totalPresupuesto = (allCots || []).reduce((sum, c) => sum + Number(c.total), 0)
           await supabaseAdmin
             .from("ordenes_servicio")
             .update({
               estado: "PRESUPUESTADO",
-              presupuesto: cotWithOrder.total,
+              presupuesto: totalPresupuesto,
             })
             .eq("id", ordenActual.id)
 
@@ -474,7 +486,7 @@ export async function DELETE(
       throw deleteError
     }
 
-    // Si la cotización estaba vinculada a una orden, limpiar presupuesto y revertir estado
+    // Si la cotización estaba vinculada a una orden, recalcular presupuesto con cotizaciones restantes
     if (cotizacion.orden_id) {
       const { data: orden } = await supabaseAdmin
         .from("ordenes_servicio")
@@ -483,17 +495,31 @@ export async function DELETE(
         .single()
 
       if (orden && (orden.estado === "PRESUPUESTADO" || orden.estado === "APROBADO")) {
-        await supabaseAdmin
-          .from("ordenes_servicio")
-          .update({
-            estado: "EN_DIAGNOSTICO",
-            presupuesto: null,
-            costo_final: null,
-            presupuesto_aprobado_portal: false,
-            presupuesto_firma_url: null,
-            presupuesto_fecha_aprobacion: null,
-          })
-          .eq("id", cotizacion.orden_id)
+        const { data: remaining } = await supabaseAdmin
+          .from("cotizaciones")
+          .select("total")
+          .eq("orden_id", cotizacion.orden_id)
+          .is("deleted_at", null)
+
+        if (remaining && remaining.length > 0) {
+          const totalPresupuesto = remaining.reduce((sum, c) => sum + Number(c.total), 0)
+          await supabaseAdmin
+            .from("ordenes_servicio")
+            .update({ presupuesto: totalPresupuesto })
+            .eq("id", cotizacion.orden_id)
+        } else {
+          await supabaseAdmin
+            .from("ordenes_servicio")
+            .update({
+              estado: "EN_DIAGNOSTICO",
+              presupuesto: null,
+              costo_final: null,
+              presupuesto_aprobado_portal: false,
+              presupuesto_firma_url: null,
+              presupuesto_fecha_aprobacion: null,
+            })
+            .eq("id", cotizacion.orden_id)
+        }
       }
     }
 

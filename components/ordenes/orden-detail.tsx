@@ -37,6 +37,7 @@ import {
   Receipt,
   Printer,
   Tag,
+  HandCoins,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -102,6 +103,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const [printingPdf, setPrintingPdf] = useState(false)
   const [activeTab, setActiveTab] = useState("repuestos")
   const [showEntregaDialog, setShowEntregaDialog] = useState(false)
+  const [sinCobroEntrega, setSinCobroEntrega] = useState(false)
   const [showCobrarDialog, setShowCobrarDialog] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
   const [editingProblema, setEditingProblema] = useState(false)
@@ -114,7 +116,6 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const isAdmin = session?.user?.role === "ADMIN"
   const userRole = session?.user?.role
   const { hasFeature: hasClientPortal } = useHasFeature("client_portal")
-  const { hasFeature: hasFotosEtapa } = useHasFeature("fotos_etapa")
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
 
   const seguimientoUrl = orden?.publicToken
@@ -264,6 +265,13 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
 
   const handleUpdateEstado = async (nuevoEstado: EstadoOrden) => {
     if (nuevoEstado === "ENTREGADO") {
+      setSinCobroEntrega(false)
+      setShowEntregaDialog(true)
+      return
+    }
+
+    if (nuevoEstado === "ENTREGADO_SIN_COBRO") {
+      setSinCobroEntrega(true)
       setShowEntregaDialog(true)
       return
     }
@@ -539,6 +547,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const estadoParaProgreso = orden.estado === "ESPERANDO_REPUESTO" ? "EN_REPARACION" : orden.estado
   const currentEstadoIndex = estadoFlow.indexOf(estadoParaProgreso)
   const isRetiro = orden.estado === "ENTREGADO_SIN_REPARACION"
+  const isSinCobro = orden.estado === "ENTREGADO_SIN_COBRO"
   const progressPercentage = orden.estado === "CANCELADO" || orden.estado === "SIN_REPARACION"
     ? 0
     : Math.round(((currentEstadoIndex + 1) / estadoFlow.length) * 100)
@@ -671,6 +680,16 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
         </div>
       )}
 
+      {/* Banner de entrega sin cobro */}
+      {isSinCobro && (
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 text-sm">
+          <HandCoins className="h-4 w-4 text-green-600 shrink-0" />
+          <span className="text-green-800 dark:text-green-300">
+            Entregado sin cobro — El equipo fue entregado al cliente sin cargo.
+          </span>
+        </div>
+      )}
+
       {/* Banner de re-ingreso */}
       {orden.esReingreso && orden.ordenOrigenId && (
         <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-sm">
@@ -685,7 +704,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
       )}
 
       {/* Progress Bar */}
-      {orden.estado !== "CANCELADO" && orden.estado !== "SIN_REPARACION" && !isRetiro && (
+      {orden.estado !== "CANCELADO" && orden.estado !== "SIN_REPARACION" && !isRetiro && !isSinCobro && (
         <div className="space-y-2">
           <div className="flex justify-between text-xs text-muted-foreground">
             <span>Progreso</span>
@@ -924,7 +943,6 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
               <TabsTrigger value="fotos" className="gap-2">
                 <Camera className="h-4 w-4" />
                 Fotos
-                {!hasFotosEtapa && <Crown className="h-3 w-3 text-yellow-500" />}
               </TabsTrigger>
               <TabsTrigger value="checklist" className="gap-2">
                 <ClipboardCheck className="h-4 w-4" />
@@ -949,23 +967,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             </TabsContent>
 
             <TabsContent value="fotos" className="mt-4">
-              {hasFotosEtapa ? (
-                <FotoGallery ordenId={ordenId} />
-              ) : (
-                <Card className="border-dashed border-yellow-300 dark:border-yellow-700">
-                  <CardContent className="p-8 text-center">
-                    <Camera className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
-                    <h3 className="font-semibold mb-1">Fotos por etapa</h3>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      Documentá el estado del equipo con fotos en cada etapa de la reparación.
-                    </p>
-                    <Button variant="outline" onClick={() => setShowUpgradeModal(true)}>
-                      <Crown className="h-4 w-4 mr-1.5 text-yellow-500" />
-                      Desbloquear con Profesional
-                    </Button>
-                  </CardContent>
-                </Card>
-              )}
+              <FotoGallery ordenId={ordenId} />
             </TabsContent>
 
             <TabsContent value="checklist" className="mt-4">
@@ -985,8 +987,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             </TabsContent>
           </Tabs>
 
-          {/* Garantia (no aplica para retiros sin reparación) */}
-          {!isRetiro && (
+          {/* Garantia (no aplica para retiros ni sin cobro) */}
+          {!isRetiro && !isSinCobro && (
             <GarantiaCard ordenId={ordenId} ordenEstado={orden.estado} />
           )}
         </div>
@@ -1167,7 +1169,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
       {orden && (
         <EntregaDialog
           open={showEntregaDialog}
-          onClose={() => setShowEntregaDialog(false)}
+          onClose={() => { setShowEntregaDialog(false); setSinCobroEntrega(false) }}
           onSuccess={handleEntregaSuccess}
           orden={{
             id: orden.id,
@@ -1182,7 +1184,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             pendienteCobro: (orden.costoFinal || 0) - (orden.descuentoCobro || 0) - (orden.totalCobrado || 0),
           }}
           encargadoNombre={session?.user?.name || "Usuario"}
-          esRetiro={orden.estado === "SIN_REPARACION"}
+          esRetiro={orden.estado === "SIN_REPARACION" && !sinCobroEntrega}
+          sinCobro={sinCobroEntrega}
         />
       )}
 

@@ -34,7 +34,7 @@ interface FotoPreview {
 const FALLBACK_CONFIG: TipoDispositivoConfig = {
   campos: {
     imei: { visible: true, label: "Numero de Serie", placeholder: "S/N del equipo" },
-    password: { visible: false },
+    password: { visible: true },
     color: { visible: true },
     marca: { visible: true },
   },

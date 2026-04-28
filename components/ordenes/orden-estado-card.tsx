@@ -49,9 +49,9 @@ export function OrdenEstadoCard({
   const transicionesPosibles = getTransicionesPosibles(estado)
   const esTerminal = transicionesPosibles.length === 0
 
-  const fechaPrometidaVencida = fechaPrometida && new Date(fechaPrometida) < new Date() && estado !== "ENTREGADO" && estado !== "ENTREGADO_SIN_REPARACION" && estado !== "CANCELADO" && estado !== "SIN_REPARACION"
+  const fechaPrometidaVencida = fechaPrometida && new Date(fechaPrometida) < new Date() && estado !== "ENTREGADO" && estado !== "ENTREGADO_SIN_REPARACION" && estado !== "ENTREGADO_SIN_COBRO" && estado !== "CANCELADO" && estado !== "SIN_REPARACION"
 
-  const showElapsed = estado !== "ENTREGADO" && estado !== "ENTREGADO_SIN_REPARACION" && estado !== "CANCELADO" && estado !== "SIN_REPARACION"
+  const showElapsed = estado !== "ENTREGADO" && estado !== "ENTREGADO_SIN_REPARACION" && estado !== "ENTREGADO_SIN_COBRO" && estado !== "CANCELADO" && estado !== "SIN_REPARACION"
 
   return (
     <Card>

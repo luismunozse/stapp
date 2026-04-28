@@ -30,7 +30,7 @@ import { useCurrency } from "@/contexts/currency-context"
 import type { OrdenServicio, EstadoOrden } from "@/types"
 import { useSession } from "next-auth/react"
 
-const ESTADOS_FINALES = ["ENTREGADO", "ENTREGADO_SIN_REPARACION", "CANCELADO", "SIN_REPARACION"]
+const ESTADOS_FINALES = ["ENTREGADO", "ENTREGADO_SIN_REPARACION", "ENTREGADO_SIN_COBRO", "CANCELADO", "SIN_REPARACION"]
 
 function isUrgente(orden: OrdenServicio): boolean {
   if (!orden.fechaPrometida || ESTADOS_FINALES.includes(orden.estado)) return false
@@ -59,6 +59,7 @@ const ESTADO_LABELS_MAP: Record<string, string> = {
   CANCELADO: "Cancelado",
   SIN_REPARACION: "Sin Reparación",
   ENTREGADO_SIN_REPARACION: "Retirado sin Reparación",
+  ENTREGADO_SIN_COBRO: "Entregado sin Cobro",
 }
 
 const estadoOptions = [
@@ -73,6 +74,7 @@ const estadoOptions = [
   { value: "CANCELADO", label: "Cancelado" },
   { value: "SIN_REPARACION", label: "Sin Reparación" },
   { value: "ENTREGADO_SIN_REPARACION", label: "Retirado sin Reparación" },
+  { value: "ENTREGADO_SIN_COBRO", label: "Entregado sin Cobro" },
 ]
 
 // Placeholder rotativo para el buscador de órdenes

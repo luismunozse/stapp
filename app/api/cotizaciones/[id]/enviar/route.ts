@@ -131,11 +131,17 @@ export async function POST(
 
       if (ordenActual && validStates.includes(ordenActual.estado)) {
         const estadoAnterior = ordenActual.estado
+        const { data: allCots } = await supabaseAdmin
+          .from("cotizaciones")
+          .select("total")
+          .eq("orden_id", orden.id)
+          .is("deleted_at", null)
+        const totalPresupuesto = (allCots || []).reduce((sum, c) => sum + Number(c.total), 0)
         await supabaseAdmin
           .from("ordenes_servicio")
           .update({
             estado: "PRESUPUESTADO",
-            presupuesto: cotizacion.total,
+            presupuesto: totalPresupuesto,
           })
           .eq("id", orden.id)
 

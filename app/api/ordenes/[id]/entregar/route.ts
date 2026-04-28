@@ -13,6 +13,7 @@ const entregarSchema = z.object({
   notasEntrega: z.string().optional().nullable(),
   diasGarantia: z.number().int().positive().optional(),
   notasGarantia: z.string().optional().nullable(),
+  sinCobro: z.boolean().optional(),
 })
 
 export async function POST(
@@ -45,20 +46,24 @@ export async function POST(
     }
 
     // Verificar que no esté ya entregada
-    if (orden.estado === "ENTREGADO" || orden.estado === "ENTREGADO_SIN_REPARACION") {
+    if (["ENTREGADO", "ENTREGADO_SIN_REPARACION", "ENTREGADO_SIN_COBRO"].includes(orden.estado)) {
       return NextResponse.json({ error: "La orden ya fue entregada" }, { status: 400 })
     }
 
-    // Solo se puede entregar desde REPARADO o SIN_REPARACION (retiro)
-    if (orden.estado !== "REPARADO" && orden.estado !== "SIN_REPARACION") {
+    const sinCobro = data.sinCobro === true
+    const estadosPermitidos = sinCobro
+      ? ["REPARADO", "SIN_REPARACION", "EN_DIAGNOSTICO", "RECIBIDO", "EN_REPARACION", "ESPERANDO_REPUESTO"]
+      : ["REPARADO", "SIN_REPARACION"]
+
+    if (!estadosPermitidos.includes(orden.estado)) {
       return NextResponse.json(
         { error: `No se puede entregar una orden en estado "${orden.estado}". Debe estar en estado "REPARADO" o "SIN_REPARACION".` },
         { status: 400 }
       )
     }
 
-    const esRetiro = orden.estado === "SIN_REPARACION"
-    const nuevoEstado = esRetiro ? "ENTREGADO_SIN_REPARACION" : "ENTREGADO"
+    const esRetiro = orden.estado === "SIN_REPARACION" && !sinCobro
+    const nuevoEstado = sinCobro ? "ENTREGADO_SIN_COBRO" : esRetiro ? "ENTREGADO_SIN_REPARACION" : "ENTREGADO"
 
     // Actualizar orden con datos de entrega
     const { data: updatedOrden, error: updateError } = await supabaseAdmin
@@ -79,8 +84,8 @@ export async function POST(
 
     if (updateError) throw updateError
 
-    // Create warranty if requested (only for normal deliveries, not returns)
-    if (data.diasGarantia && !esRetiro) {
+    // Create warranty if requested (only for normal deliveries, not returns or sin cobro)
+    if (data.diasGarantia && !esRetiro && !sinCobro) {
       const fechaInicio = new Date()
       const fechaVencimiento = new Date()
       fechaVencimiento.setDate(fechaVencimiento.getDate() + data.diasGarantia)

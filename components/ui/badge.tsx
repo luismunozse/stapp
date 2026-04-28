@@ -12,6 +12,7 @@ import {
   Truck,
   Ban,
   CircleDot,
+  HandCoins,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -51,6 +52,8 @@ const badgeVariants = cva(
           "border-transparent bg-success text-success-foreground",
         entregado_sin_reparacion:
           "border-transparent bg-amber-500 text-white",
+        entregado_sin_cobro:
+          "border-transparent bg-emerald-500 text-white",
         cancelado:
           "border-transparent bg-muted text-muted-foreground",
         sin_reparacion:
@@ -78,6 +81,7 @@ const variantIcons: Record<string, React.ComponentType<{ className?: string }>> 
   reparado: CheckCircle,
   entregado: Truck,
   entregado_sin_reparacion: Package,
+  entregado_sin_cobro: HandCoins,
   cancelado: Ban,
   sin_reparacion: XCircle,
 }
@@ -127,6 +131,7 @@ function getOrderStatusVariant(status: string): BadgeProps["variant"] {
     REPARADO: "reparado",
     ENTREGADO: "entregado",
     ENTREGADO_SIN_REPARACION: "entregado_sin_reparacion",
+    ENTREGADO_SIN_COBRO: "entregado_sin_cobro",
     CANCELADO: "cancelado",
     SIN_REPARACION: "sin_reparacion",
   }
@@ -145,6 +150,7 @@ function getOrderStatusLabel(status: string): string {
     REPARADO: "Reparado",
     ENTREGADO: "Entregado",
     ENTREGADO_SIN_REPARACION: "Retirado sin Reparación",
+    ENTREGADO_SIN_COBRO: "Entregado sin Cobro",
     CANCELADO: "Cancelado",
     SIN_REPARACION: "Sin Reparación",
   }

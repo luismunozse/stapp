@@ -503,6 +503,17 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
               </Card>
             )
           })}
+
+          {cotizaciones.length > 1 && (
+            <div className="flex items-center justify-between border-t pt-3 px-1 mt-1">
+              <span className="text-sm font-medium text-muted-foreground">
+                Total ({cotizaciones.length} cotizaciones)
+              </span>
+              <span className="text-lg font-bold">
+                {formatPrice(cotizaciones.reduce((sum, c) => sum + c.total, 0))}
+              </span>
+            </div>
+          )}
         </div>
       )}
 

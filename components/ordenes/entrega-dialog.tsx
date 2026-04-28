@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { SignaturePad } from "@/components/firma/signature-pad"
 import { Input } from "@/components/ui/input"
-import { Loader2, PackageCheck, PackageX, AlertTriangle, Shield } from "lucide-react"
+import { Loader2, PackageCheck, PackageX, AlertTriangle, Shield, HandCoins } from "lucide-react"
 
 interface EntregaDialogProps {
   open: boolean
@@ -33,6 +33,7 @@ interface EntregaDialogProps {
   }
   encargadoNombre: string
   esRetiro?: boolean
+  sinCobro?: boolean
 }
 
 export function EntregaDialog({
@@ -42,6 +43,7 @@ export function EntregaDialog({
   orden,
   encargadoNombre,
   esRetiro = false,
+  sinCobro = false,
 }: EntregaDialogProps) {
   const [loading, setLoading] = useState(false)
   const [firmaCliente, setFirmaCliente] = useState<string | null>(null)
@@ -50,11 +52,11 @@ export function EntregaDialog({
   const [firmaEncargadoMime, setFirmaEncargadoMime] = useState<string | null>(null)
   const [notasEntrega, setNotasEntrega] = useState("")
   const [error, setError] = useState<string | null>(null)
-  const [conGarantia, setConGarantia] = useState(!esRetiro)
+  const [conGarantia, setConGarantia] = useState(!esRetiro && !sinCobro)
   const [diasGarantia, setDiasGarantia] = useState(30)
   const [notasGarantia, setNotasGarantia] = useState("")
 
-  const tienePendiente = !esRetiro && orden.estadoCobro && orden.estadoCobro !== "COBRADO" && (orden.pendienteCobro || 0) > 0
+  const tienePendiente = !esRetiro && !sinCobro && orden.estadoCobro && orden.estadoCobro !== "COBRADO" && (orden.pendienteCobro || 0) > 0
 
   const handleFirmaClienteChange = (data: string | null, mime: string | null) => {
     setFirmaCliente(data)
@@ -82,7 +84,8 @@ export function EntregaDialog({
           firmaEncargadoEntrega: firmaEncargado || null,
           firmaEncargadoMime: firmaEncargadoMime || null,
           notasEntrega: notasEntrega || null,
-          ...(conGarantia && !esRetiro ? {
+          sinCobro: sinCobro || undefined,
+          ...(conGarantia && !esRetiro && !sinCobro ? {
             diasGarantia,
             notasGarantia: notasGarantia || null,
           } : {}),
@@ -113,7 +116,7 @@ export function EntregaDialog({
       setFirmaEncargadoMime(null)
       setNotasEntrega("")
       setError(null)
-      setConGarantia(!esRetiro)
+      setConGarantia(!esRetiro && !sinCobro)
       setDiasGarantia(30)
       setNotasGarantia("")
       onClose()
@@ -127,8 +130,8 @@ export function EntregaDialog({
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            {esRetiro ? <PackageX className="h-5 w-5" /> : <PackageCheck className="h-5 w-5" />}
-            {esRetiro ? "Retiro de Equipo Sin Reparación" : "Entrega de Equipo"}
+            {sinCobro ? <HandCoins className="h-5 w-5" /> : esRetiro ? <PackageX className="h-5 w-5" /> : <PackageCheck className="h-5 w-5" />}
+            {sinCobro ? "Entrega sin Cobro" : esRetiro ? "Retiro de Equipo Sin Reparación" : "Entrega de Equipo"}
           </DialogTitle>
           <DialogDescription>
             Orden {codigoDisplay} - {orden.dispositivo}
@@ -136,6 +139,21 @@ export function EntregaDialog({
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* Banner informativo de entrega sin cobro */}
+          {sinCobro && (
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 text-sm">
+              <HandCoins className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
+              <div>
+                <p className="font-medium text-green-800 dark:text-green-300">
+                  Entrega sin cobro
+                </p>
+                <p className="text-green-700 dark:text-green-400 text-xs mt-0.5">
+                  El equipo será entregado sin cargo al cliente. No se generará cobro por esta reparación.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Banner informativo de retiro sin reparación */}
           {esRetiro && (
             <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-sm">
@@ -193,8 +211,8 @@ export function EntregaDialog({
             </div>
           </div>
 
-          {/* Garantía (solo para entregas normales, no retiros) */}
-          {!esRetiro && (
+          {/* Garantía (solo para entregas normales, no retiros ni sin cobro) */}
+          {!esRetiro && !sinCobro && (
             <div className="space-y-3 p-3 rounded-lg border">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -276,8 +294,8 @@ export function EntregaDialog({
                 </>
               ) : (
                 <>
-                  {esRetiro ? <PackageX className="mr-2 h-4 w-4" /> : <PackageCheck className="mr-2 h-4 w-4" />}
-                  {esRetiro ? "Confirmar Retiro" : "Confirmar Entrega"}
+                  {sinCobro ? <HandCoins className="mr-2 h-4 w-4" /> : esRetiro ? <PackageX className="mr-2 h-4 w-4" /> : <PackageCheck className="mr-2 h-4 w-4" />}
+                  {sinCobro ? "Confirmar Entrega sin Cobro" : esRetiro ? "Confirmar Retiro" : "Confirmar Entrega"}
                 </>
               )}
             </Button>
