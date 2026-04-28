@@ -424,7 +424,7 @@ export async function POST(request: Request) {
       const totalPresupuesto = (allCots || []).reduce((sum, c) => sum + Number(c.total), 0)
       await supabaseAdmin
         .from("ordenes_servicio")
-        .update({ presupuesto: totalPresupuesto })
+        .update({ presupuesto: totalPresupuesto, costo_final: totalPresupuesto })
         .eq("id", data.ordenId)
     }
 

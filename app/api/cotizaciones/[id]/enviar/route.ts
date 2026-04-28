@@ -142,6 +142,7 @@ export async function POST(
           .update({
             estado: "PRESUPUESTADO",
             presupuesto: totalPresupuesto,
+            costo_final: totalPresupuesto,
           })
           .eq("id", orden.id)
 

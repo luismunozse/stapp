@@ -334,7 +334,7 @@ export async function PUT(
         const totalPresupuesto = (allCots || []).reduce((sum, c) => sum + Number(c.total), 0)
         await supabaseAdmin
           .from("ordenes_servicio")
-          .update({ presupuesto: totalPresupuesto })
+          .update({ presupuesto: totalPresupuesto, costo_final: totalPresupuesto })
           .eq("id", cotForSync.orden_id)
       }
     }
@@ -381,6 +381,7 @@ export async function PUT(
             .update({
               estado: "PRESUPUESTADO",
               presupuesto: totalPresupuesto,
+              costo_final: totalPresupuesto,
             })
             .eq("id", ordenActual.id)
 
@@ -505,7 +506,7 @@ export async function DELETE(
           const totalPresupuesto = remaining.reduce((sum, c) => sum + Number(c.total), 0)
           await supabaseAdmin
             .from("ordenes_servicio")
-            .update({ presupuesto: totalPresupuesto })
+            .update({ presupuesto: totalPresupuesto, costo_final: totalPresupuesto })
             .eq("id", cotizacion.orden_id)
         } else {
           await supabaseAdmin
