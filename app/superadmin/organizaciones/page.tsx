@@ -38,6 +38,8 @@ export default function OrganizacionesPage() {
   const [kpis, setKpis] = useState<OrganizationsKpis | null>(null)
   const [search, setSearch] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
+  const [adminEmail, setAdminEmail] = useState("")
+  const [debouncedAdminEmail, setDebouncedAdminEmail] = useState("")
   const [statusFilter, setStatusFilter] = useState("")
   const [planFilter, setPlanFilter] = useState("")
   const [page, setPage] = useState(1)
@@ -49,6 +51,7 @@ export default function OrganizacionesPage() {
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const debounceAdminEmailRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Sorting — persistido en URL query params
   const [sortKey, setSortKey] = useState(searchParams.get("sort") || "")
@@ -86,11 +89,21 @@ export default function OrganizacionesPage() {
     }, 400)
   }
 
+  const handleAdminEmailChange = (value: string) => {
+    setAdminEmail(value)
+    if (debounceAdminEmailRef.current) clearTimeout(debounceAdminEmailRef.current)
+    debounceAdminEmailRef.current = setTimeout(() => {
+      setDebouncedAdminEmail(value)
+      setPage(1)
+    }, 400)
+  }
+
   const fetchOrganizations = useCallback(async () => {
     const params = new URLSearchParams({
       page: page.toString(),
       limit: PAGE_SIZE.toString(),
       ...(debouncedSearch && { search: debouncedSearch }),
+      ...(debouncedAdminEmail && { admin_email: debouncedAdminEmail }),
       ...(statusFilter && { status: statusFilter }),
       ...(planFilter && { plan: planFilter }),
       ...(sortKey && { sort: sortKey }),
@@ -104,7 +117,7 @@ export default function OrganizacionesPage() {
       if (result.kpis) setKpis(result.kpis)
       markUpdated()
     }
-  }, [page, debouncedSearch, statusFilter, planFilter, sortKey, sortDir, fetchData])
+  }, [page, debouncedSearch, debouncedAdminEmail, statusFilter, planFilter, sortKey, sortDir, fetchData])
 
   useEffect(() => {
     fetchOrganizations()
@@ -536,6 +549,15 @@ export default function OrganizacionesPage() {
                 placeholder="Buscar por nombre, slug o email..."
                 value={search}
                 onChange={(e) => handleSearchChange(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <div className="flex-1 relative max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Email del admin (registro)..."
+                value={adminEmail}
+                onChange={(e) => handleAdminEmailChange(e.target.value)}
                 className="pl-9"
               />
             </div>

@@ -543,6 +543,33 @@ export interface Database {
         }
         Update: Partial<Omit<ChatbotMensaje, "id">>
       }
+      catalogo_config: {
+        Row: CatalogoConfig
+        Insert: Omit<CatalogoConfig, "id" | "created_at" | "updated_at"> & {
+          id?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: Partial<Omit<CatalogoConfig, "id">>
+      }
+      catalogo_categorias: {
+        Row: CatalogoCategoria
+        Insert: Omit<CatalogoCategoria, "id" | "created_at" | "updated_at"> & {
+          id?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: Partial<Omit<CatalogoCategoria, "id">>
+      }
+      catalogo_items: {
+        Row: CatalogoItem
+        Insert: Omit<CatalogoItem, "id" | "created_at" | "updated_at"> & {
+          id?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: Partial<Omit<CatalogoItem, "id">>
+      }
     }
     Enums: {
       user_role: UserRole
@@ -713,4 +740,69 @@ export interface LeadConRelaciones extends Lead {
   assigned_user?: User | null
   conversacion?: ChatbotConversacion
   mensajes_count?: number
+}
+
+// ========================================
+// CATÁLOGO PÚBLICO TYPES
+// ========================================
+
+export type TipoCatalogoItem = "PRODUCTO" | "SERVICIO"
+
+export interface CatalogoConfig {
+  id: string
+  organization_id: string
+  slug: string
+  titulo: string | null
+  descripcion: string | null
+  color_primary: string | null
+  whatsapp: string | null
+  activo: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface CatalogoCategoria {
+  id: string
+  organization_id: string
+  nombre: string
+  descripcion: string | null
+  imagen_url: string | null
+  orden: number
+  activo: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface CatalogoItem {
+  id: string
+  organization_id: string
+  categoria_id: string | null
+  inventario_id: string | null
+  tipo: TipoCatalogoItem
+  nombre: string
+  descripcion: string | null
+  precio: number | null
+  precio_hasta: number | null
+  imagen_url: string | null
+  imagenes: string[]
+  etiquetas: string[]
+  stock: number | null
+  activo: boolean
+  orden: number
+  created_at: string
+  updated_at: string
+}
+
+// Item con stock resuelto desde inventario si está linkeado
+export interface CatalogoItemConStock extends CatalogoItem {
+  categoria?: CatalogoCategoria | null
+  stock_disponible: number | null  // null = sin tracking; n = stock real (resuelto)
+  inventario?: Inventario | null
+}
+
+// Vista pública del catálogo (lo que ve el cliente)
+export interface CatalogoPublico {
+  config: Pick<CatalogoConfig, "slug" | "titulo" | "descripcion" | "color_primary" | "whatsapp">
+  organizacion: Pick<Organization, "id" | "nombre" | "logo_url" | "telefono" | "moneda">
+  categorias: CatalogoCategoria[]
 }

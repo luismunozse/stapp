@@ -73,6 +73,7 @@ export const STORAGE_BUCKETS = {
   SOPORTE_ATTACHMENTS: "soporte-attachments",
   AVATARS: "avatars",
   COMPROBANTES_GASTOS: "comprobantes-gastos",
+  CATALOGO: "catalogo",
 } as const
 
 // Helper para obtener URL pública de un archivo

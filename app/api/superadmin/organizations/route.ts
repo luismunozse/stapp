@@ -11,11 +11,40 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url)
     const search = searchParams.get("search") || ""
+    const adminEmail = searchParams.get("admin_email") || ""
     const status = searchParams.get("status") || ""
     const plan = searchParams.get("plan") || ""
     const sort = searchParams.get("sort") || ""
     const dir = searchParams.get("dir") || "desc"
     const { page, limit, offset } = parsePagination(searchParams)
+
+    // Filtro por email del admin de la organización: resolver a org IDs vía
+    // users (rol=ADMIN, email ilike). Si no hay match → respuesta vacía.
+    let adminEmailOrgIds: string[] | null = null
+    if (adminEmail) {
+      const { data: adminUsers, error: adminErr } = await supabaseAdmin
+        .from("users")
+        .select("organization_id")
+        .eq("rol", "ADMIN")
+        .ilike("email", `%${adminEmail}%`)
+
+      if (adminErr) throw adminErr
+      adminEmailOrgIds = [
+        ...new Set(
+          (adminUsers || [])
+            .map((u) => u.organization_id)
+            .filter((id): id is string => !!id)
+        ),
+      ]
+      if (adminEmailOrgIds.length === 0) {
+        return NextResponse.json({
+          organizations: [],
+          total: 0,
+          page,
+          limit,
+        } satisfies OrganizationsListResponse)
+      }
+    }
 
     // ============================================================
     // Filtro de plan: lo aplicamos ANTES de paginar para que `total`
@@ -90,6 +119,11 @@ export async function GET(request: Request) {
       query = query.or(
         `nombre.ilike.%${search}%,slug.ilike.%${search}%,email.ilike.%${search}%`
       )
+    }
+
+    // Filtro por email de admin (org IDs ya resueltos arriba)
+    if (adminEmailOrgIds) {
+      query = query.in("id", adminEmailOrgIds)
     }
 
     // Filtro de estado
@@ -270,7 +304,7 @@ export async function GET(request: Request) {
 
     // Calcular KPIs solo en la primera página (sin filtros) para eficiencia
     let kpis: OrganizationsKpis | undefined
-    if (page === 1 && !search && !status && !plan) {
+    if (page === 1 && !search && !adminEmail && !status && !plan) {
       const now = new Date()
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
 

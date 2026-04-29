@@ -35,6 +35,7 @@ import {
   Wallet,
   Truck,
   Percent,
+  BookMarked,
 } from "lucide-react"
 import { useState, useEffect, useRef, useCallback } from "react"
 import { cn } from "@/lib/utils"
@@ -73,6 +74,7 @@ const navItems: NavItem[] = [
   { href: "/ventas", label: "Ventas", icon: ShoppingCart, roles: ["ADMIN", "VENDEDOR"] },
   { href: "/pos", label: "POS", icon: Store, roles: ["ADMIN", "VENDEDOR"] },
   { href: "/cotizaciones", label: "Cotizaciones", icon: Receipt, roles: ["ADMIN", "TECNICO"] },
+  { href: "/catalogo", label: "Catálogo público", icon: BookMarked, roles: ["ADMIN"] },
   { href: "/inventario", label: "Inventario", icon: Package, roles: ["ADMIN"] },
   { href: "/ordenes-compra", label: "Compras", icon: Truck, roles: ["ADMIN"] },
   { href: "/caja", label: "Caja", icon: Landmark, roles: ["ADMIN"] },
@@ -103,6 +105,7 @@ const navSections: NavSection[] = [
     items: [
       { href: "/pos", label: "POS", icon: Store, roles: ["ADMIN", "VENDEDOR"] },
       { href: "/cotizaciones", label: "Cotizaciones", icon: Receipt, roles: ["ADMIN", "TECNICO"] },
+      { href: "/catalogo", label: "Catálogo público", icon: BookMarked, roles: ["ADMIN"] },
     ],
   },
   {
