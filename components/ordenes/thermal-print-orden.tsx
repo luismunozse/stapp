@@ -19,13 +19,10 @@ import type { OrdenServicio } from "@/types"
 
 interface ThermalPrintOrdenProps {
   orden: OrdenServicio & {
-    organizations?: {
-      nombre?: string | null
-      nombre_mostrar?: string | null
-      logo_url?: string | null
-      telefono?: string | null
-      direccion?: string | null
-    } | null
+    organizationName?: string | null
+    organizationLogoUrl?: string | null
+    organizationTelefono?: string | null
+    organizationDireccion?: string | null
   }
 }
 
@@ -61,12 +58,11 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
   const [printingThermal, setPrintingThermal] = useState(false)
 
   const preview: PreviewData = useMemo(() => {
-    const org = orden.organizations
     return {
-      nombreEmpresa: org?.nombre_mostrar || org?.nombre || "Servicio Tecnico",
-      telefonoEmpresa: org?.telefono ?? null,
-      direccionEmpresa: org?.direccion ?? null,
-      logoUrl: org?.logo_url ?? null,
+      nombreEmpresa: orden.organizationName || "Servicio Tecnico",
+      telefonoEmpresa: orden.organizationTelefono ?? null,
+      direccionEmpresa: orden.organizationDireccion ?? null,
+      logoUrl: orden.organizationLogoUrl ?? null,
       ordenCode: orden.codigoOrden || `#${String(orden.numeroOrden).padStart(4, "0")}`,
       fechaIngreso: orden.fechaIngreso
         ? new Date(orden.fechaIngreso).toLocaleString("es-AR", {

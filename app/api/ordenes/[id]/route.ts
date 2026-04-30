@@ -87,9 +87,13 @@ export async function GET(
     }
 
     const formatted = formatOrden(orden)
+    const org = (orden as any).organizations
     return NextResponse.json({
       ...formatted,
-      organizationName: (orden as any).organizations?.nombre_mostrar || (orden as any).organizations?.nombre || null,
+      organizationName: org?.nombre_mostrar || org?.nombre || null,
+      organizationLogoUrl: org?.logo_url || null,
+      organizationTelefono: org?.telefono || null,
+      organizationDireccion: org?.direccion || null,
     }, {
       headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
     })

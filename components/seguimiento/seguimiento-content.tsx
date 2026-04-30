@@ -213,6 +213,7 @@ interface TrackingData {
   color?: string
   estado: string
   problemaReportado: string
+  diagnostico?: string | null
   accesorios?: string
   fechaIngreso: string
   fechaPrometida?: string
@@ -679,6 +680,25 @@ export function SeguimientoContent({ token }: { token: string }) {
         <VisualTimeline events={timelineEvents} timezone={data.zonaHoraria} />
       )}
 
+      {/* ══════════ DIAGNOSTICO DEL TECNICO ══════════ */}
+      {data.diagnostico && (
+        <Card className="border-blue-200 dark:border-blue-800">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <div className="h-10 w-10 rounded-xl bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center shrink-0">
+                <Search className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-1">
+                  Diagnóstico del técnico
+                </p>
+                <p className="text-sm leading-relaxed whitespace-pre-wrap">{data.diagnostico}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* ══════════ COTIZACION / BUDGET APPROVAL ══════════ */}
       {showCotizacionApproval && activeCotizacion && (
         <CotizacionApproval
@@ -687,6 +707,7 @@ export function SeguimientoContent({ token }: { token: string }) {
           dispositivo={data.dispositivo}
           moneda={data.moneda}
           zonaHoraria={data.zonaHoraria}
+          diagnostico={data.diagnostico || undefined}
           onApproved={() => { fetchData() }}
         />
       )}
@@ -696,6 +717,7 @@ export function SeguimientoContent({ token }: { token: string }) {
           presupuesto={data.presupuesto!}
           moneda={data.moneda}
           dispositivo={data.dispositivo}
+          diagnostico={data.diagnostico || undefined}
           onApproved={() => { fetchData() }}
         />
       )}
