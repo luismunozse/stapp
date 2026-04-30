@@ -415,12 +415,13 @@ export async function POST(request: Request) {
       throw itemsError
     }
 
-    // Auto-fill presupuesto on the linked order — sum ALL cotizaciones for this orden
+    // Auto-fill presupuesto on the linked order — sum non-rejected cotizaciones for this orden
     if (data.ordenId) {
       const { data: allCots } = await supabaseAdmin
         .from("cotizaciones")
         .select("total")
         .eq("orden_id", data.ordenId)
+        .neq("estado", "RECHAZADA")
       const totalPresupuesto = (allCots || []).reduce((sum, c) => sum + Number(c.total), 0)
       await supabaseAdmin
         .from("ordenes_servicio")

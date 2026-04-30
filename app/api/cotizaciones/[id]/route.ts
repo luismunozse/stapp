@@ -331,6 +331,7 @@ export async function PUT(
           .select("total")
           .eq("orden_id", cotForSync.orden_id)
           .is("deleted_at", null)
+          .neq("estado", "RECHAZADA")
         const totalPresupuesto = (allCots || []).reduce((sum, c) => sum + Number(c.total), 0)
         await supabaseAdmin
           .from("ordenes_servicio")
@@ -375,6 +376,7 @@ export async function PUT(
             .select("total")
             .eq("orden_id", cotWithOrder.orden_id)
             .is("deleted_at", null)
+            .neq("estado", "RECHAZADA")
           const totalPresupuesto = (allCots || []).reduce((sum, c) => sum + Number(c.total), 0)
           await supabaseAdmin
             .from("ordenes_servicio")
@@ -501,6 +503,7 @@ export async function DELETE(
           .select("total")
           .eq("orden_id", cotizacion.orden_id)
           .is("deleted_at", null)
+          .neq("estado", "RECHAZADA")
 
         if (remaining && remaining.length > 0) {
           const totalPresupuesto = remaining.reduce((sum, c) => sum + Number(c.total), 0)
