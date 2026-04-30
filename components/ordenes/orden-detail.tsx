@@ -55,6 +55,7 @@ import { ChecklistCard } from "@/components/checklist/checklist-card"
 import { WhatsAppDialog } from "@/components/ordenes/whatsapp-dialog"
 import { EntregaDialog } from "@/components/ordenes/entrega-dialog"
 import { printDeviceLabel } from "@/components/ordenes/print-label"
+import { ThermalPrintOrden } from "@/components/ordenes/thermal-print-orden"
 import { NotificationHistory } from "@/components/ordenes/notification-history"
 import { OrdenEstadoCard } from "@/components/ordenes/orden-estado-card"
 import { OrdenTecnicoCard } from "@/components/ordenes/orden-tecnico-card"
@@ -611,6 +612,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             <Printer className="h-4 w-4 mr-2" />
             {printingPdf ? "..." : "Imprimir"}
           </Button>
+          <ThermalPrintOrden orden={orden as any} />
           <Button
             variant="outline"
             size="sm"

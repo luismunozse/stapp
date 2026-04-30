@@ -111,6 +111,146 @@ function formatMoney(amount: number): string {
   return "$" + amount.toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })
 }
 
+// Wrap text into lines of max `width` chars
+function wrapText(text: string, width: number): string[] {
+  const words = text.split(" ")
+  const lines: string[] = []
+  let current = ""
+  for (const word of words) {
+    if (word.length > width) {
+      if (current) { lines.push(current); current = "" }
+      for (let i = 0; i < word.length; i += width) lines.push(word.slice(i, i + width))
+    } else if ((current + (current ? " " : "") + word).length <= width) {
+      current = current ? current + " " + word : word
+    } else {
+      if (current) lines.push(current)
+      current = word
+    }
+  }
+  if (current) lines.push(current)
+  return lines
+}
+
+export interface OrdenTicketData {
+  numeroOrden: number
+  codigoOrden?: string | null
+  fechaIngreso: string
+  estado: string
+  cliente: { nombre: string; telefono?: string | null }
+  dispositivo: string
+  marca?: string | null
+  color?: string | null
+  imei?: string | null
+  accesorios?: string | null
+  problemaReportado: string
+  presupuesto?: number | null
+  costoFinal?: number | null
+  fechaPrometida?: string | null
+  observaciones?: string | null
+  nombreEmpresa?: string
+  telefonoEmpresa?: string | null
+  direccionEmpresa?: string | null
+}
+
+export function generateOrdenTicketCommands(data: OrdenTicketData, printerWidth: 58 | 80 = 80): Uint8Array {
+  const W = printerWidth === 58 ? CHARS_PER_LINE_58 : CHARS_PER_LINE_80
+  const buf: number[] = []
+
+  const add = (...cmds: number[][]) => { for (const cmd of cmds) buf.push(...cmd) }
+
+  add(CMD.INIT, CMD.CHARSET_LATIN)
+
+  // === HEADER ===
+  add(CMD.ALIGN_CENTER, CMD.BOLD_ON, CMD.DOUBLE_ON)
+  add(line((data.nombreEmpresa || "Servicio Tecnico").substring(0, W / 2)))
+  add(CMD.DOUBLE_OFF, CMD.BOLD_OFF)
+  if (data.telefonoEmpresa) add(line(`Tel: ${data.telefonoEmpresa}`))
+  if (data.direccionEmpresa) add(line(data.direccionEmpresa.substring(0, W)))
+  add(doubleSeparator(W))
+
+  // === ORDEN NUMBER ===
+  add(CMD.BOLD_ON, CMD.DOUBLE_ON)
+  add(line("ORDEN DE SERVICIO"))
+  add(CMD.DOUBLE_OFF, CMD.BOLD_OFF)
+  add(CMD.ALIGN_LEFT)
+
+  const ordenCode = data.codigoOrden || `#${String(data.numeroOrden).padStart(4, "0")}`
+  add(CMD.BOLD_ON)
+  add(line(ordenCode))
+  add(CMD.BOLD_OFF)
+  add(line(data.fechaIngreso))
+  add(columns("Estado:", data.estado.substring(0, W - 9), W))
+  add(separator(W))
+
+  // === CLIENTE ===
+  add(CMD.BOLD_ON)
+  add(line("CLIENTE"))
+  add(CMD.BOLD_OFF)
+  add(line(data.cliente.nombre.substring(0, W)))
+  if (data.cliente.telefono) add(columns("Tel:", data.cliente.telefono, W))
+  add(separator(W))
+
+  // === DISPOSITIVO ===
+  add(CMD.BOLD_ON)
+  add(line("DISPOSITIVO"))
+  add(CMD.BOLD_OFF)
+  add(line(data.dispositivo.substring(0, W)))
+  if (data.marca) add(columns("Marca:", data.marca.substring(0, W - 8), W))
+  if (data.color) add(columns("Color:", data.color.substring(0, W - 8), W))
+  if (data.imei) add(columns("IMEI:", data.imei.substring(0, W - 7), W))
+  if (data.accesorios) {
+    add(line("Accesorios:"))
+    for (const l of wrapText(data.accesorios, W)) add(line(" " + l))
+  }
+  add(separator(W))
+
+  // === PROBLEMA ===
+  add(CMD.BOLD_ON)
+  add(line("PROBLEMA REPORTADO"))
+  add(CMD.BOLD_OFF)
+  for (const l of wrapText(data.problemaReportado, W)) add(line(l))
+
+  if (data.observaciones) {
+    add(separator(W, "-"))
+    add(CMD.BOLD_ON)
+    add(line("Observaciones:"))
+    add(CMD.BOLD_OFF)
+    for (const l of wrapText(data.observaciones, W)) add(line(l))
+  }
+  add(separator(W))
+
+  // === PRESUPUESTO / FECHAS ===
+  const hasBudget = data.presupuesto != null || data.costoFinal != null
+  const hasFecha = !!data.fechaPrometida
+
+  if (hasBudget || hasFecha) {
+    if (data.presupuesto != null) {
+      add(CMD.BOLD_ON)
+      add(columns("Presupuesto:", formatMoney(data.presupuesto), W))
+      add(CMD.BOLD_OFF)
+    }
+    if (data.costoFinal != null) {
+      add(CMD.BOLD_ON)
+      add(columns("Costo final:", formatMoney(data.costoFinal), W))
+      add(CMD.BOLD_OFF)
+    }
+    if (hasFecha) {
+      add(columns("Entrega est.:", data.fechaPrometida!.substring(0, W - 14), W))
+    }
+    add(separator(W))
+  }
+
+  // === FOOTER ===
+  add(CMD.ALIGN_CENTER)
+  add(CMD.BOLD_ON)
+  add(line("Conserve este comprobante"))
+  add(CMD.BOLD_OFF)
+  if (data.telefonoEmpresa) add(line(`Consultas: ${data.telefonoEmpresa}`))
+
+  add(CMD.FEED_5, CMD.CUT)
+  return new Uint8Array(buf)
+}
+
 export function generateTicketCommands(data: TicketData, printerWidth: 58 | 80 = 58): Uint8Array {
   const W = printerWidth === 58 ? CHARS_PER_LINE_58 : CHARS_PER_LINE_80
   const buf: number[] = []
