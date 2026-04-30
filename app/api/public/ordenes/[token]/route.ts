@@ -59,6 +59,7 @@ export async function GET(
         id, numero_cotizacion, estado, fecha_vencimiento, notas,
         subtotal, iva, total, created_at, public_token,
         firma_aprobacion, firma_mime, fecha_aprobacion,
+        motivo_rechazo, fecha_rechazo,
         descuento_global_tipo, descuento_global_valor, iva_porcentaje, terminos,
         items_cotizacion (
           id, descripcion, cantidad, precio_unitario, subtotal,
@@ -66,7 +67,7 @@ export async function GET(
         )
       `)
       .eq("orden_id", orden.id)
-      .in("estado", ["ENVIADA", "ACEPTADA"])
+      .in("estado", ["ENVIADA", "ACEPTADA", "RECHAZADA"])
       .order("created_at", { ascending: false })
 
     if (cotizacionesData && cotizacionesData.length > 0) {
@@ -84,6 +85,8 @@ export async function GET(
         firmaAprobacion: c.firma_aprobacion,
         firmaMime: c.firma_mime,
         fechaAprobacion: c.fecha_aprobacion,
+        motivoRechazo: c.motivo_rechazo,
+        fechaRechazo: c.fecha_rechazo,
         descuentoGlobalTipo: c.descuento_global_tipo,
         descuentoGlobalValor: c.descuento_global_valor,
         ivaPorcentaje: c.iva_porcentaje,

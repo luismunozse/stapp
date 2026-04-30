@@ -238,6 +238,8 @@ interface TrackingData {
     firmaAprobacion: string | null
     firmaMime: string | null
     fechaAprobacion: string | null
+    motivoRechazo?: string | null
+    fechaRechazo?: string | null
     descuentoGlobalTipo?: string | null
     descuentoGlobalValor?: number | null
     ivaPorcentaje?: number | null
@@ -400,6 +402,9 @@ export function SeguimientoContent({ token }: { token: string }) {
   const currentIndex = estadoFlow.indexOf(estadoParaProgreso)
   const progressPercent = isTerminal ? 0 : isCompleted ? 100 : Math.round(((currentIndex) / (estadoFlow.length - 1)) * 100)
   const activeCotizacion = data.cotizaciones?.find(c => c.estado === "ENVIADA")
+  const rejectedCotizacion = !activeCotizacion
+    ? data.cotizaciones?.find(c => c.estado === "RECHAZADA")
+    : undefined
   const showCotizacionApproval = data.estado === "PRESUPUESTADO" && !!activeCotizacion && !data.presupuestoAprobadoPortal
   const showBudgetApproval = data.estado === "PRESUPUESTADO" && data.presupuesto && !data.presupuestoAprobadoPortal && !activeCotizacion
   const CurrentStateIcon = estadoIcons[data.estado] || Circle
@@ -720,6 +725,60 @@ export function SeguimientoContent({ token }: { token: string }) {
           diagnostico={data.diagnostico || undefined}
           onApproved={() => { fetchData() }}
         />
+      )}
+
+      {/* ══════════ COTIZACION RECHAZADA ══════════ */}
+      {rejectedCotizacion && !showCotizacionApproval && !showBudgetApproval && (
+        <Card className="border-red-200 dark:border-red-800">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <div className="h-10 w-10 rounded-xl bg-red-50 dark:bg-red-950/40 flex items-center justify-center shrink-0">
+                <XCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
+              </div>
+              <div className="flex-1 min-w-0 space-y-2">
+                <div>
+                  <p className="text-[10px] font-bold text-red-600 dark:text-red-400 uppercase tracking-widest">
+                    Presupuesto rechazado
+                  </p>
+                  <p className="text-sm font-semibold mt-0.5">
+                    {rejectedCotizacion.numeroCotizacion}
+                  </p>
+                  {rejectedCotizacion.fechaRechazo && (
+                    <p className="text-xs text-muted-foreground">
+                      Rechazado el {formatDate(rejectedCotizacion.fechaRechazo)}
+                    </p>
+                  )}
+                </div>
+
+                {rejectedCotizacion.motivoRechazo && (
+                  <div className="rounded-md bg-red-50/60 dark:bg-red-950/30 p-2 border border-red-100 dark:border-red-900">
+                    <p className="text-[10px] font-medium text-red-700 dark:text-red-300 uppercase tracking-wider mb-0.5">
+                      Motivo
+                    </p>
+                    <p className="text-sm whitespace-pre-wrap">{rejectedCotizacion.motivoRechazo}</p>
+                  </div>
+                )}
+
+                <p className="text-xs text-muted-foreground">
+                  El taller fue notificado y puede contactarte para ofrecer alternativas.
+                </p>
+
+                {rejectedCotizacion.publicToken && (
+                  <a
+                    href={`/api/public/cotizaciones/${rejectedCotizacion.publicToken}/pdf`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Button variant="outline" size="sm" className="w-full">
+                      <Download className="mr-2 h-4 w-4" />
+                      Descargar PDF
+                    </Button>
+                  </a>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* ══════════ PHOTOS ══════════ */}

@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
+import QRCode from "qrcode"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -46,6 +47,7 @@ interface PreviewData {
   presupuesto: number | null
   costoFinal: number | null
   fechaPrometida: string | null
+  seguimientoUrl: string | null
 }
 
 function formatMoney(amount: number): string {
@@ -58,11 +60,15 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
   const [printingThermal, setPrintingThermal] = useState(false)
 
   const preview: PreviewData = useMemo(() => {
+    const seguimientoUrl = orden.publicToken && typeof window !== "undefined"
+      ? `${window.location.origin}/seguimiento/${orden.publicToken}`
+      : null
     return {
       nombreEmpresa: orden.organizationName || "Servicio Tecnico",
       telefonoEmpresa: orden.organizationTelefono ?? null,
       direccionEmpresa: orden.organizationDireccion ?? null,
       logoUrl: orden.organizationLogoUrl ?? null,
+      seguimientoUrl,
       ordenCode: orden.codigoOrden || `#${String(orden.numeroOrden).padStart(4, "0")}`,
       fechaIngreso: orden.fechaIngreso
         ? new Date(orden.fechaIngreso).toLocaleString("es-AR", {
@@ -113,6 +119,7 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
       telefonoEmpresa: preview.telefonoEmpresa,
       direccionEmpresa: preview.direccionEmpresa,
       logoRaster,
+      qrUrl: preview.seguimientoUrl,
     }
   }
 
@@ -217,6 +224,18 @@ function Row({ left, right }: { left: string; right: string }) {
 }
 
 function ReceiptPreview({ data }: { data: PreviewData }) {
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!data.seguimientoUrl) {
+      setQrDataUrl(null)
+      return
+    }
+    QRCode.toDataURL(data.seguimientoUrl, { margin: 1, width: 200 })
+      .then(setQrDataUrl)
+      .catch(() => setQrDataUrl(null))
+  }, [data.seguimientoUrl])
+
   return (
     <div
       id="thermal-receipt-print-area"
@@ -290,6 +309,16 @@ function ReceiptPreview({ data }: { data: PreviewData }) {
           {data.fechaPrometida && (
             <Row left="Entrega est.:" right={data.fechaPrometida} />
           )}
+          <Sep />
+        </>
+      )}
+
+      {qrDataUrl && (
+        <>
+          <div className="text-center font-bold mt-2">SEGUIMIENTO ONLINE</div>
+          <div className="text-center text-[10px]">Escanea para ver el estado</div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={qrDataUrl} alt="QR seguimiento" className="mx-auto my-1" style={{ width: "150px", height: "150px" }} />
           <Sep />
         </>
       )}

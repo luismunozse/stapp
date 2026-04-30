@@ -111,6 +111,30 @@ function formatMoney(amount: number): string {
   return "$" + amount.toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })
 }
 
+/**
+ * Generate ESC/POS native QR code commands (GS ( k).
+ * Most thermal printers support this. Renders crisp QR.
+ */
+function qrCommands(data: string, size: number = 7): number[] {
+  const out: number[] = []
+  // Model 2
+  out.push(GS, 0x28, 0x6b, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00)
+  // Size (1-16, default 7 ~ medium)
+  const s = Math.max(1, Math.min(16, size))
+  out.push(GS, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x43, s)
+  // Error correction M (49)
+  out.push(GS, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x45, 0x49)
+  // Store data
+  const bytes = textToBytes(data)
+  const len = bytes.length + 3
+  const pL = len & 0xff
+  const pH = (len >> 8) & 0xff
+  out.push(GS, 0x28, 0x6b, pL, pH, 0x31, 0x50, 0x30, ...bytes)
+  // Print
+  out.push(GS, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x51, 0x30)
+  return out
+}
+
 // Wrap text into lines of max `width` chars
 function wrapText(text: string, width: number): string[] {
   const words = text.split(" ")
@@ -152,6 +176,8 @@ export interface OrdenTicketData {
   direccionEmpresa?: string | null
   /** Pre-rasterized logo bytes (use imageUrlToRaster from lib/escpos-image.ts) */
   logoRaster?: Uint8Array | null
+  /** URL for tracking QR (printed near footer) */
+  qrUrl?: string | null
 }
 
 export function generateOrdenTicketCommands(data: OrdenTicketData, printerWidth: 58 | 80 = 80): Uint8Array {
@@ -244,6 +270,18 @@ export function generateOrdenTicketCommands(data: OrdenTicketData, printerWidth:
     if (hasFecha) {
       add(columns("Entrega est.:", data.fechaPrometida!.substring(0, W - 14), W))
     }
+    add(separator(W))
+  }
+
+  // === QR SEGUIMIENTO (optional) ===
+  if (data.qrUrl) {
+    add(CMD.ALIGN_CENTER)
+    add(CMD.BOLD_ON)
+    add(line("SEGUIMIENTO ONLINE"))
+    add(CMD.BOLD_OFF)
+    add(line("Escanea para ver el estado"))
+    buf.push(...qrCommands(data.qrUrl, 7))
+    add([LF])
     add(separator(W))
   }
 

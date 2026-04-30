@@ -51,7 +51,11 @@ export async function POST(
     // Si hay cotizaciones ENVIADA vinculadas, marcarlas como RECHAZADA
     await supabaseAdmin
       .from("cotizaciones")
-      .update({ estado: "RECHAZADA" })
+      .update({
+        estado: "RECHAZADA",
+        motivo_rechazo: motivo || null,
+        fecha_rechazo: new Date().toISOString(),
+      })
       .eq("orden_id", orden.id)
       .eq("estado", "ENVIADA")
 
