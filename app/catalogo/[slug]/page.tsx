@@ -1,16 +1,23 @@
 import { notFound } from "next/navigation"
+import { unstable_cache } from "next/cache"
 import { supabaseAdmin } from "@/lib/supabase"
 import { CatalogoView } from "@/components/catalogo-public/catalogo-view"
 import type { Metadata, Viewport } from "next"
 
 type PageProps = { params: Promise<{ slug: string }> }
 
-async function fetchCatalogo(slug: string) {
+const fetchCatalogo = unstable_cache(
+  _fetchCatalogo,
+  ["catalogo-public"],
+  { revalidate: 60, tags: ["catalogo"] }
+)
+
+async function _fetchCatalogo(slug: string) {
   if (!/^[a-z0-9]([a-z0-9-]{1,48}[a-z0-9])?$/.test(slug)) return null
 
   const { data: config } = await supabaseAdmin
     .from("catalogo_config")
-    .select("slug, titulo, descripcion, color_primary, whatsapp, activo, organization_id")
+    .select("slug, titulo, descripcion, color_primary, whatsapp, banner_url, activo, organization_id")
     .eq("slug", slug)
     .maybeSingle()
 
@@ -33,11 +40,12 @@ async function fetchCatalogo(slug: string) {
     .from("catalogo_items")
     .select(`
       id, tipo, nombre, descripcion, categoria_id, precio, precio_hasta,
-      imagen_url, imagenes, etiquetas, stock, inventario_id, orden,
+      imagen_url, imagenes, etiquetas, stock, destacado, inventario_id, orden,
       inventario:inventario(stock)
     `)
     .eq("organization_id", config.organization_id)
     .eq("activo", true)
+    .order("destacado", { ascending: false })
     .order("orden", { ascending: true })
 
   const items = (itemsRaw ?? []).map((it: any) => {
@@ -54,6 +62,7 @@ async function fetchCatalogo(slug: string) {
       descripcion: config.descripcion,
       color_primary: config.color_primary || "#2563eb",
       whatsapp: config.whatsapp,
+      banner_url: config.banner_url,
     },
     organizacion: org!,
     categorias: categorias ?? [],

@@ -7,7 +7,8 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Copy, ExternalLink, Loader2, QrCode, Save, CheckCircle2, AlertCircle } from "lucide-react"
+import { Copy, ExternalLink, Loader2, QrCode, Save, CheckCircle2, AlertCircle, ImagePlus, Trash2, Upload } from "lucide-react"
+import { useRef } from "react"
 import { toast } from "sonner"
 import QRCode from "qrcode"
 import type { CatalogoConfig } from "@/types/database"
@@ -24,7 +25,10 @@ export function CatalogoCompartirTab() {
   const [descripcion, setDescripcion] = useState("")
   const [colorPrimary, setColorPrimary] = useState("#2563eb")
   const [whatsapp, setWhatsapp] = useState("")
+  const [bannerUrl, setBannerUrl] = useState<string | null>(null)
+  const [uploadingBanner, setUploadingBanner] = useState(false)
   const [activo, setActivo] = useState(false)
+  const bannerInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     (async () => {
@@ -39,6 +43,7 @@ export function CatalogoCompartirTab() {
         setDescripcion(data.config.descripcion ?? "")
         setColorPrimary(data.config.color_primary ?? "#2563eb")
         setWhatsapp(data.config.whatsapp ?? "")
+        setBannerUrl(data.config.banner_url ?? null)
         setActivo(data.config.activo)
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Error cargando configuración")
@@ -58,6 +63,22 @@ export function CatalogoCompartirTab() {
       .catch(() => setQrDataUrl(null))
   }, [url, activo])
 
+  const handleBannerUpload = async (file: File) => {
+    setUploadingBanner(true)
+    try {
+      const fd = new FormData()
+      fd.append("file", file)
+      const res = await fetch("/api/catalogo/upload", { method: "POST", body: fd })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Error al subir")
+      setBannerUrl(data.url)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al subir banner")
+    } finally {
+      setUploadingBanner(false)
+    }
+  }
+
   const handleSave = async () => {
     setSaving(true)
     try {
@@ -67,6 +88,7 @@ export function CatalogoCompartirTab() {
         descripcion: descripcion.trim() || null,
         color_primary: colorPrimary,
         whatsapp: whatsapp.trim() || null,
+        banner_url: bannerUrl,
         activo,
       }
       const res = await fetch("/api/catalogo/config", {
@@ -148,6 +170,60 @@ export function CatalogoCompartirTab() {
           <div>
             <Label htmlFor="desc">Descripción</Label>
             <Textarea id="desc" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} rows={3} maxLength={500} />
+          </div>
+
+          <div>
+            <Label>Banner de portada (opcional)</Label>
+            <div className="mt-1.5 flex flex-col gap-2">
+              <div className="aspect-[3/1] bg-muted rounded-md overflow-hidden border flex items-center justify-center">
+                {bannerUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={bannerUrl} alt="Banner" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="flex flex-col items-center gap-1 text-muted-foreground">
+                    <ImagePlus className="h-8 w-8" />
+                    <span className="text-xs">Sin banner</span>
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => bannerInputRef.current?.click()}
+                  disabled={uploadingBanner}
+                  className="gap-1.5"
+                >
+                  {uploadingBanner ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                  {bannerUrl ? "Cambiar banner" : "Subir banner"}
+                </Button>
+                {bannerUrl && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setBannerUrl(null)}
+                    className="gap-1.5 text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Quitar
+                  </Button>
+                )}
+                <input
+                  ref={bannerInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    if (f) handleBannerUpload(f)
+                    e.target.value = ""
+                  }}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">Recomendado: 1200×400px o ratio 3:1.</p>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { revalidateTag } from "next/cache"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
@@ -11,6 +12,7 @@ const upsertSchema = z.object({
   descripcion: z.string().max(500).nullable().optional(),
   color_primary: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Color hex inválido").nullable().optional(),
   whatsapp: z.string().max(30).nullable().optional(),
+  banner_url: z.string().url().nullable().optional(),
   activo: z.boolean().optional(),
 })
 
@@ -118,6 +120,8 @@ export async function PUT(req: Request) {
     if (error.code === "23505") return NextResponse.json({ error: "Slug ya en uso" }, { status: 409 })
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
+  revalidateTag("catalogo", "max")
 
   const url = `${process.env.NEXT_PUBLIC_APP_URL || ""}/catalogo/${data.slug}`
   return NextResponse.json({ config: data, url })

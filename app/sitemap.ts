@@ -1,8 +1,9 @@
 import type { MetadataRoute } from "next"
 import { blogPosts } from "@/lib/blog-data"
 import { useCases } from "@/lib/use-cases-data"
+import { supabaseAdmin } from "@/lib/supabase"
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = "https://stapp.com.ar"
 
   // URLs estaticas
@@ -118,5 +119,42 @@ export default function sitemap(): MetadataRoute.Sitemap {
     })),
   ]
 
-  return [...staticUrls, ...blogUrls, ...useCaseUrls]
+  // Catálogos públicos activos
+  const catalogoUrls: MetadataRoute.Sitemap = []
+  try {
+    const { data: catalogos } = await supabaseAdmin
+      .from("catalogo_config")
+      .select("slug, updated_at, organization_id")
+      .eq("activo", true)
+
+    for (const cat of catalogos ?? []) {
+      catalogoUrls.push({
+        url: `${baseUrl}/catalogo/${cat.slug}`,
+        lastModified: new Date(cat.updated_at),
+        changeFrequency: "weekly",
+        priority: 0.7,
+      })
+
+      // Items activos del catálogo (para SEO de productos)
+      const { data: items } = await supabaseAdmin
+        .from("catalogo_items")
+        .select("id, updated_at")
+        .eq("organization_id", cat.organization_id)
+        .eq("activo", true)
+        .limit(1000)
+
+      for (const it of items ?? []) {
+        catalogoUrls.push({
+          url: `${baseUrl}/catalogo/${cat.slug}/${it.id}`,
+          lastModified: new Date(it.updated_at),
+          changeFrequency: "weekly",
+          priority: 0.6,
+        })
+      }
+    }
+  } catch (err) {
+    console.error("sitemap: error fetching catalogs", err)
+  }
+
+  return [...staticUrls, ...blogUrls, ...useCaseUrls, ...catalogoUrls]
 }

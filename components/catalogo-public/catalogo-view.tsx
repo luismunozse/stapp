@@ -2,12 +2,14 @@
 
 import { useMemo, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Search, MessageCircle, ShoppingCart, X } from "lucide-react"
-import { Input } from "@/components/ui/input"
+import { ShoppingCart } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { CartDrawer } from "./cart-drawer"
 import { ItemDetailDialog } from "./item-detail-dialog"
+import { CatalogoHero } from "./catalogo-hero"
+import { CatalogoFilters, type SortOption } from "./catalogo-filters"
+import { MiniCart } from "./mini-cart"
+import { ItemCard } from "./item-card"
 import { useCart, type CartItem } from "./use-cart"
 
 interface CatalogoData {
@@ -17,6 +19,7 @@ interface CatalogoData {
     descripcion: string | null
     color_primary: string
     whatsapp: string | null
+    banner_url: string | null
   }
   organizacion: {
     id: string
@@ -44,6 +47,7 @@ interface CatalogoData {
     imagenes: string[]
     etiquetas: string[]
     stock_disponible: number | null
+    destacado: boolean
   }>
 }
 
@@ -51,207 +55,210 @@ export function CatalogoView({ data }: { data: CatalogoData }) {
   const cart = useCart(data.config.slug)
   const [search, setSearch] = useState("")
   const [categoriaActiva, setCategoriaActiva] = useState<string | null>(null)
+  const [sort, setSort] = useState<SortOption>("recomendados")
+  const [tagsActivos, setTagsActivos] = useState<string[]>([])
+  const [soloDisponibles, setSoloDisponibles] = useState(false)
   const [cartOpen, setCartOpen] = useState(false)
   const [detalleId, setDetalleId] = useState<string | null>(null)
 
-  const itemsFiltrados = useMemo(() => {
-    return data.items.filter((it) => {
-      if (categoriaActiva && it.categoria_id !== categoriaActiva) return false
-      if (search && !it.nombre.toLowerCase().includes(search.toLowerCase())) return false
-      return true
-    })
-  }, [data.items, search, categoriaActiva])
-
-  const itemDetalle = data.items.find((i) => i.id === detalleId) ?? null
   const titulo = data.config.titulo || data.organizacion.nombre_mostrar || data.organizacion.nombre
   const moneda = data.organizacion.moneda || "ARS"
   const formatPrecio = (n: number) =>
     new Intl.NumberFormat("es-AR", { style: "currency", currency: moneda, maximumFractionDigits: 0 }).format(n)
 
-  const whatsappLink = data.config.whatsapp
-    ? `https://wa.me/${data.config.whatsapp.replace(/\D/g, "")}`
-    : null
+  // Calcular rango de precios disponibles
+  const { precioMin, precioMax } = useMemo(() => {
+    const precios = data.items.map((i) => Number(i.precio)).filter((p) => !isNaN(p) && p > 0)
+    if (precios.length === 0) return { precioMin: 0, precioMax: 0 }
+    return { precioMin: Math.floor(Math.min(...precios)), precioMax: Math.ceil(Math.max(...precios)) }
+  }, [data.items])
+
+  const [precioRange, setPrecioRange] = useState<[number, number]>([precioMin, precioMax])
+
+  // Tags únicos de items activos
+  const tags = useMemo(() => {
+    const set = new Set<string>()
+    data.items.forEach((i) => i.etiquetas.forEach((t) => set.add(t)))
+    return Array.from(set).sort()
+  }, [data.items])
+
+  const itemsFiltrados = useMemo(() => {
+    let arr = data.items.filter((it) => {
+      if (categoriaActiva && it.categoria_id !== categoriaActiva) return false
+      if (search && !it.nombre.toLowerCase().includes(search.toLowerCase())) return false
+      if (soloDisponibles && it.stock_disponible === 0) return false
+      if (tagsActivos.length > 0 && !tagsActivos.some((t) => it.etiquetas.includes(t))) return false
+      if (precioRange[0] > precioMin || precioRange[1] < precioMax) {
+        if (it.precio != null) {
+          const p = Number(it.precio)
+          if (p < precioRange[0] || p > precioRange[1]) return false
+        }
+      }
+      return true
+    })
+
+    if (sort === "precio_asc") {
+      arr = [...arr].sort((a, b) => (Number(a.precio) || Infinity) - (Number(b.precio) || Infinity))
+    } else if (sort === "precio_desc") {
+      arr = [...arr].sort((a, b) => (Number(b.precio) || -Infinity) - (Number(a.precio) || -Infinity))
+    } else if (sort === "nombre_asc") {
+      arr = [...arr].sort((a, b) => a.nombre.localeCompare(b.nombre, "es"))
+    }
+    // recomendados: ya viene ordenado del server (destacado DESC, orden ASC)
+
+    return arr
+  }, [data.items, search, categoriaActiva, soloDisponibles, tagsActivos, precioRange, precioMin, precioMax, sort])
+
+  const itemDetalle = data.items.find((i) => i.id === detalleId) ?? null
+
+  const hasActiveFilters =
+    !!search ||
+    categoriaActiva !== null ||
+    sort !== "recomendados" ||
+    tagsActivos.length > 0 ||
+    soloDisponibles ||
+    precioRange[0] !== precioMin ||
+    precioRange[1] !== precioMax
+
+  const clearFilters = () => {
+    setSearch("")
+    setCategoriaActiva(null)
+    setSort("recomendados")
+    setTagsActivos([])
+    setSoloDisponibles(false)
+    setPrecioRange([precioMin, precioMax])
+  }
+
+  const handleQuickAdd = (item: CatalogoData["items"][number]) => {
+    if (item.precio == null) return
+    cart.add({
+      id: item.id,
+      nombre: item.nombre,
+      precio: Number(item.precio),
+      imagen_url: item.imagen_url,
+      stock_disponible: item.stock_disponible,
+    })
+  }
+
+  const shareUrl = typeof window !== "undefined" ? window.location.href : ""
 
   return (
     <div
       className="min-h-screen bg-background"
       style={{ ["--brand" as any]: data.config.color_primary }}
     >
-      {/* Header */}
-      <header className="border-b bg-gradient-to-b from-[var(--brand)]/10 to-transparent">
-        <div className="container mx-auto max-w-5xl px-4 py-8">
-          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-            {data.organizacion.logo_url && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={data.organizacion.logo_url}
-                alt={titulo}
-                className="h-16 w-16 rounded-xl object-cover bg-white border shadow-sm"
-              />
-            )}
-            <div className="flex-1 min-w-0">
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{titulo}</h1>
-              {data.config.descripcion && (
-                <p className="text-muted-foreground mt-1">{data.config.descripcion}</p>
-              )}
-            </div>
-            {whatsappLink && (
-              <Button asChild className="gap-2" style={{ backgroundColor: "var(--brand)" }}>
-                <a href={whatsappLink} target="_blank" rel="noreferrer">
-                  <MessageCircle className="h-4 w-4" />
-                  Contactar
-                </a>
-              </Button>
-            )}
-          </div>
-        </div>
-      </header>
+      <CatalogoHero
+        bannerUrl={data.config.banner_url}
+        logoUrl={data.organizacion.logo_url}
+        titulo={titulo}
+        descripcion={data.config.descripcion}
+        whatsapp={data.config.whatsapp}
+        brandColor={data.config.color_primary}
+        shareUrl={shareUrl}
+      />
 
-      {/* Filtros sticky */}
-      <div className="sticky top-0 z-30 bg-background/95 backdrop-blur border-b">
-        <div className="container mx-auto max-w-5xl px-4 py-3 space-y-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar..."
-              className="pl-9"
-            />
-          </div>
+      <CatalogoFilters
+        search={search}
+        onSearch={setSearch}
+        categorias={data.categorias}
+        categoriaActiva={categoriaActiva}
+        onCategoria={setCategoriaActiva}
+        sort={sort}
+        onSort={setSort}
+        tags={tags}
+        tagsActivos={tagsActivos}
+        onToggleTag={(t) =>
+          setTagsActivos((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]))
+        }
+        precioMin={precioMin}
+        precioMax={precioMax}
+        precioRange={precioRange}
+        onPrecioRange={setPrecioRange}
+        soloDisponibles={soloDisponibles}
+        onSoloDisponibles={setSoloDisponibles}
+        brandColor={data.config.color_primary}
+        formatPrecio={formatPrecio}
+        hasActiveFilters={hasActiveFilters}
+        onClearFilters={clearFilters}
+      />
 
-          {data.categorias.length > 0 && (
-            <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-thin">
-              <button
-                onClick={() => setCategoriaActiva(null)}
-                className={`shrink-0 px-3 py-1.5 rounded-full text-sm transition-colors border ${
-                  categoriaActiva === null
-                    ? "bg-[var(--brand)] text-white border-[var(--brand)]"
-                    : "bg-background hover:bg-muted"
-                }`}
+      <main className="container mx-auto max-w-6xl px-4 py-6 pb-32 lg:pb-12">
+        <div className="flex gap-6">
+          <div className="flex-1 min-w-0">
+            {itemsFiltrados.length === 0 ? (
+              <div className="text-center py-20 text-muted-foreground">
+                <p className="mb-3">No hay items que coincidan con tu búsqueda.</p>
+                {hasActiveFilters && (
+                  <Button variant="outline" size="sm" onClick={clearFilters}>
+                    Limpiar filtros
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <motion.div
+                className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4"
+                initial="hidden"
+                animate="visible"
+                variants={{
+                  visible: { transition: { staggerChildren: 0.03 } },
+                  hidden: {},
+                }}
               >
-                Todos
-              </button>
-              {data.categorias.map((cat) => (
-                <button
-                  key={cat.id}
-                  onClick={() => setCategoriaActiva(cat.id)}
-                  className={`shrink-0 px-3 py-1.5 rounded-full text-sm transition-colors border ${
-                    categoriaActiva === cat.id
-                      ? "bg-[var(--brand)] text-white border-[var(--brand)]"
-                      : "bg-background hover:bg-muted"
-                  }`}
-                >
-                  {cat.nombre}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+                <AnimatePresence>
+                  {itemsFiltrados.map((item) => (
+                    <ItemCard
+                      key={item.id}
+                      item={item}
+                      onClick={() => setDetalleId(item.id)}
+                      onQuickAdd={() => handleQuickAdd(item)}
+                      formatPrecio={formatPrecio}
+                      brandColor={data.config.color_primary}
+                    />
+                  ))}
+                </AnimatePresence>
+              </motion.div>
+            )}
 
-      {/* Grid */}
-      <main className="container mx-auto max-w-5xl px-4 py-6 pb-24">
-        {itemsFiltrados.length === 0 ? (
-          <div className="text-center py-20 text-muted-foreground">
-            <p>No hay items que coincidan con tu búsqueda.</p>
+            <p className="text-center text-xs text-muted-foreground mt-12">
+              Powered by <a href="https://stapp.com.ar" className="underline">STApp</a>
+            </p>
           </div>
-        ) : (
-          <motion.div
-            className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4"
-            initial="hidden"
-            animate="visible"
-            variants={{
-              visible: { transition: { staggerChildren: 0.03 } },
-              hidden: {},
-            }}
-          >
-            <AnimatePresence>
-              {itemsFiltrados.map((item) => {
-                const agotado = item.stock_disponible === 0
-                const sinPrecio = item.precio == null
-                return (
-                  <motion.button
-                    key={item.id}
-                    onClick={() => setDetalleId(item.id)}
-                    layout
-                    variants={{
-                      hidden: { opacity: 0, y: 10 },
-                      visible: { opacity: 1, y: 0 },
-                    }}
-                    whileHover={{ y: -2 }}
-                    className={`text-left group relative rounded-xl border bg-card overflow-hidden transition-shadow hover:shadow-md ${
-                      agotado ? "opacity-60" : ""
-                    }`}
-                  >
-                    <div className="aspect-square bg-muted relative">
-                      {item.imagen_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={item.imagen_url}
-                          alt={item.nombre}
-                          loading="lazy"
-                          decoding="async"
-                          className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-3xl text-muted-foreground">
-                          {item.tipo === "PRODUCTO" ? "📦" : "🛠️"}
-                        </div>
-                      )}
-                      {agotado && (
-                        <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
-                          <Badge variant="secondary" className="text-base">Agotado</Badge>
-                        </div>
-                      )}
-                    </div>
-                    <div className="p-3 space-y-1">
-                      <h3 className="font-medium text-sm line-clamp-2 min-h-[2.5rem]">{item.nombre}</h3>
-                      <div className="text-base font-bold" style={{ color: "var(--brand)" }}>
-                        {sinPrecio
-                          ? <span className="text-sm font-normal text-muted-foreground italic">Consultar</span>
-                          : item.precio_hasta != null
-                            ? `Desde ${formatPrecio(Number(item.precio))}`
-                            : formatPrecio(Number(item.precio))}
-                      </div>
-                    </div>
-                  </motion.button>
-                )
-              })}
-            </AnimatePresence>
-          </motion.div>
-        )}
 
-        <p className="text-center text-xs text-muted-foreground mt-12">
-          Powered by <a href="https://stapp.app" className="underline">STApp</a>
-        </p>
+          <MiniCart
+            cart={cart}
+            onOpen={() => setCartOpen(true)}
+            formatPrecio={formatPrecio}
+            brandColor={data.config.color_primary}
+          />
+        </div>
       </main>
 
-      {/* Cart FAB */}
+      {/* Sticky bottom CTA mobile */}
       <AnimatePresence>
         {cart.count > 0 && (
           <motion.div
-            initial={{ y: 100, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 100, opacity: 0 }}
-            className="fixed bottom-4 right-4 z-40"
+            initial={{ y: 100 }}
+            animate={{ y: 0 }}
+            exit={{ y: 100 }}
+            transition={{ type: "spring", damping: 25 }}
+            className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-background border-t shadow-2xl px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]"
           >
             <Button
-              size="lg"
               onClick={() => setCartOpen(true)}
-              className="rounded-full shadow-xl h-14 px-5 gap-2"
-              style={{ backgroundColor: "var(--brand)" }}
+              size="lg"
+              className="w-full justify-between gap-3 h-12"
+              style={{ backgroundColor: data.config.color_primary }}
             >
-              <ShoppingCart className="h-5 w-5" />
-              <span className="font-semibold">{cart.count}</span>
-              <span className="hidden sm:inline">·</span>
-              <span className="hidden sm:inline">{formatPrecio(cart.total)}</span>
+              <span className="flex items-center gap-2">
+                <ShoppingCart className="h-5 w-5" />
+                <span className="font-semibold">{cart.count} item{cart.count > 1 ? "s" : ""}</span>
+              </span>
+              <span className="font-bold">{formatPrecio(cart.total)}</span>
             </Button>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Detail dialog */}
       <ItemDetailDialog
         item={itemDetalle}
         open={!!itemDetalle}
@@ -262,9 +269,12 @@ export function CatalogoView({ data }: { data: CatalogoData }) {
         }}
         formatPrecio={formatPrecio}
         brandColor={data.config.color_primary}
+        whatsapp={data.config.whatsapp}
+        slug={data.config.slug}
+        relatedItems={data.items}
+        onSelectRelated={(id) => setDetalleId(id)}
       />
 
-      {/* Cart drawer */}
       <CartDrawer
         open={cartOpen}
         onClose={() => setCartOpen(false)}

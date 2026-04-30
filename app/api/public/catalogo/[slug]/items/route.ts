@@ -27,11 +27,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
     .from("catalogo_items")
     .select(`
       id, tipo, nombre, descripcion, categoria_id, precio, precio_hasta,
-      imagen_url, imagenes, etiquetas, stock, inventario_id, orden,
+      imagen_url, imagenes, etiquetas, stock, destacado, inventario_id, orden,
       inventario:inventario(stock)
     `)
     .eq("organization_id", config.organization_id)
     .eq("activo", true)
+    .order("destacado", { ascending: false })
     .order("orden", { ascending: true })
 
   if (categoriaId) query = query.eq("categoria_id", categoriaId)

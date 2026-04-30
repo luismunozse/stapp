@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { Upload, Loader2, ImageOff, X } from "lucide-react"
+import { Upload, Loader2, ImageOff, X, Star } from "lucide-react"
 import { toast } from "sonner"
 import type { CatalogoItem, CatalogoCategoria } from "@/types/database"
 
@@ -33,6 +33,7 @@ export function CatalogoItemDialog({ item, categorias, open, onClose, onSaved }:
   const [stock, setStock] = useState<string>("")
   const [imagenUrl, setImagenUrl] = useState<string | null>(null)
   const [activo, setActivo] = useState(true)
+  const [destacado, setDestacado] = useState(false)
 
   useEffect(() => {
     if (item) {
@@ -45,6 +46,7 @@ export function CatalogoItemDialog({ item, categorias, open, onClose, onSaved }:
       setStock(item.stock != null ? String(item.stock) : "")
       setImagenUrl(item.imagen_url ?? null)
       setActivo(item.activo)
+      setDestacado(item.destacado ?? false)
     } else {
       setTipo("PRODUCTO")
       setNombre("")
@@ -55,6 +57,7 @@ export function CatalogoItemDialog({ item, categorias, open, onClose, onSaved }:
       setStock("")
       setImagenUrl(null)
       setActivo(true)
+      setDestacado(false)
     }
   }, [item, open])
 
@@ -89,6 +92,7 @@ export function CatalogoItemDialog({ item, categorias, open, onClose, onSaved }:
       precio_hasta: precioHasta ? Number(precioHasta) : null,
       imagen_url: imagenUrl,
       activo,
+      destacado,
     }
 
     if (tipo === "PRODUCTO") {
@@ -270,6 +274,17 @@ export function CatalogoItemDialog({ item, categorias, open, onClose, onSaved }:
               </p>
             </div>
           )}
+
+          <div className="flex items-center justify-between pt-2">
+            <div className="flex items-start gap-2">
+              <Star className="h-4 w-4 text-yellow-500 mt-0.5" />
+              <div>
+                <Label htmlFor="destacado">Destacar item</Label>
+                <p className="text-xs text-muted-foreground">Aparece primero con badge "Destacado".</p>
+              </div>
+            </div>
+            <Switch id="destacado" checked={destacado} onCheckedChange={setDestacado} />
+          </div>
 
           <div className="flex items-center justify-between pt-2">
             <div>

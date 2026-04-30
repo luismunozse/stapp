@@ -756,6 +756,7 @@ export interface CatalogoConfig {
   descripcion: string | null
   color_primary: string | null
   whatsapp: string | null
+  banner_url: string | null
   activo: boolean
   created_at: string
   updated_at: string
@@ -787,6 +788,7 @@ export interface CatalogoItem {
   imagenes: string[]
   etiquetas: string[]
   stock: number | null
+  destacado: boolean
   activo: boolean
   orden: number
   created_at: string

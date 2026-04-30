@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { revalidateTag } from "next/cache"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
@@ -15,6 +16,7 @@ const updateSchema = z.object({
   imagenes: z.array(z.string().url()).optional(),
   etiquetas: z.array(z.string().max(40)).optional(),
   stock: z.number().int().min(0).nullable().optional(),
+  destacado: z.boolean().optional(),
   activo: z.boolean().optional(),
   orden: z.number().int().min(0).optional(),
 })
@@ -59,6 +61,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  revalidateTag("catalogo", "max")
   return NextResponse.json({ item: data })
 }
 
@@ -74,5 +77,6 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     .eq("organization_id", auth.organizationId!)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  revalidateTag("catalogo", "max")
   return NextResponse.json({ ok: true })
 }

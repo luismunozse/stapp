@@ -271,7 +271,7 @@ function generateEstadoMessage(ctx: NotificationContext): string {
       break
     case "ENTREGADO":
       mensaje +=
-        "\n\nGracias por confiar en nosotros. Esperamos que su equipo funcione correctamente!"
+        "\n\nGracias por confiar en nosotros!"
       break
     case "ENTREGADO_SIN_REPARACION":
       mensaje +=
