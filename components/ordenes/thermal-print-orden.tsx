@@ -5,13 +5,20 @@ import { Button } from "@/components/ui/button"
 import { Printer, Loader2, Usb } from "lucide-react"
 import { useThermalPrinter } from "@/components/pos/use-thermal-printer"
 import { generateOrdenTicketCommands, type OrdenTicketData } from "@/lib/escpos"
+import { imageUrlToRaster } from "@/lib/escpos-image"
 import { ESTADO_LABELS } from "@/lib/orden-state-machine"
 import { toast } from "sonner"
 import type { OrdenServicio } from "@/types"
 
 interface ThermalPrintOrdenProps {
   orden: OrdenServicio & {
-    organizations?: { nombre?: string | null; nombre_mostrar?: string | null } | null
+    organizations?: {
+      nombre?: string | null
+      nombre_mostrar?: string | null
+      logo_url?: string | null
+      telefono?: string | null
+      direccion?: string | null
+    } | null
   }
 }
 
@@ -21,9 +28,14 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
 
   if (!isSupported) return null
 
-  const buildTicketData = (): OrdenTicketData => {
+  const buildTicketData = async (): Promise<OrdenTicketData> => {
     const org = orden.organizations
     const nombreEmpresa = org?.nombre_mostrar || org?.nombre || undefined
+
+    let logoRaster: Uint8Array | null = null
+    if (org?.logo_url) {
+      logoRaster = await imageUrlToRaster(org.logo_url, { maxWidth: 280 })
+    }
 
     return {
       numeroOrden: orden.numeroOrden,
@@ -52,8 +64,9 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
         : null,
       observaciones: orden.observaciones ?? null,
       nombreEmpresa,
-      telefonoEmpresa: null,
-      direccionEmpresa: null,
+      telefonoEmpresa: org?.telefono ?? null,
+      direccionEmpresa: org?.direccion ?? null,
+      logoRaster,
     }
   }
 
@@ -64,7 +77,8 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
     }
     setPrinting(true)
     try {
-      const commands = generateOrdenTicketCommands(buildTicketData(), 80)
+      const ticketData = await buildTicketData()
+      const commands = generateOrdenTicketCommands(ticketData, 80)
       const ok = await print(commands)
       if (ok) {
         toast.success("Comprobante impreso")

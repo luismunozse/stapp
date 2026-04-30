@@ -61,7 +61,10 @@ export async function GET(
         ),
         organizations:organization_id (
           nombre,
-          nombre_mostrar
+          nombre_mostrar,
+          logo_url,
+          telefono,
+          direccion
         )
       `)
       .eq("id", id)

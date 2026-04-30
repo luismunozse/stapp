@@ -150,6 +150,8 @@ export interface OrdenTicketData {
   nombreEmpresa?: string
   telefonoEmpresa?: string | null
   direccionEmpresa?: string | null
+  /** Pre-rasterized logo bytes (use imageUrlToRaster from lib/escpos-image.ts) */
+  logoRaster?: Uint8Array | null
 }
 
 export function generateOrdenTicketCommands(data: OrdenTicketData, printerWidth: 58 | 80 = 80): Uint8Array {
@@ -159,6 +161,11 @@ export function generateOrdenTicketCommands(data: OrdenTicketData, printerWidth:
   const add = (...cmds: number[][]) => { for (const cmd of cmds) buf.push(...cmd) }
 
   add(CMD.INIT, CMD.CHARSET_LATIN)
+
+  // === LOGO (optional) ===
+  if (data.logoRaster && data.logoRaster.length > 0) {
+    buf.push(...Array.from(data.logoRaster))
+  }
 
   // === HEADER ===
   add(CMD.ALIGN_CENTER, CMD.BOLD_ON, CMD.DOUBLE_ON)
