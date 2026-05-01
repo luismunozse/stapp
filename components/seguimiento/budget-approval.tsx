@@ -193,7 +193,7 @@ export function BudgetApproval({
         )}
 
         <div className="bg-amber-50 dark:bg-amber-950/50 rounded-lg p-4">
-          <p className="text-sm text-muted-foreground">Reparación de</p>
+          <p className="text-sm text-muted-foreground">Equipo</p>
           <p className="font-medium">{dispositivo}</p>
           <p className="text-2xl font-bold mt-2 text-amber-700 dark:text-amber-300">
             {formatPrice(presupuesto)}

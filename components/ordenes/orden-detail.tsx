@@ -65,9 +65,6 @@ import { OrdenRepuestosTab } from "@/components/ordenes/orden-repuestos-tab"
 import { CobrarOrdenDialog } from "@/components/ordenes/cobrar-orden-dialog"
 import { PatternDisplay } from "@/components/ui/pattern-display"
 import { useModal } from "@/contexts/modal-context"
-import { useHasFeature } from "@/hooks/use-subscription"
-import { UpgradeModal } from "@/components/billing/upgrade-modal"
-import { Crown } from "lucide-react"
 import { toast } from "sonner"
 import { getSupabaseClient } from "@/lib/supabase-client"
 import type { RealtimeChannel } from "@supabase/supabase-js"
@@ -116,8 +113,6 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
 
   const isAdmin = session?.user?.role === "ADMIN"
   const userRole = session?.user?.role
-  const { hasFeature: hasClientPortal } = useHasFeature("client_portal")
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
 
   const seguimientoUrl = orden?.publicToken
     ? `${typeof window !== "undefined" ? window.location.origin : ""}/seguimiento/${orden.publicToken}`
@@ -1007,7 +1002,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           />
 
           {/* Link de Seguimiento */}
-          {seguimientoUrl && hasClientPortal && (
+          {seguimientoUrl && (
             <Card>
               <CardContent className="p-4">
                 <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-3">
@@ -1032,24 +1027,6 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                     </a>
                   </Button>
                 </div>
-              </CardContent>
-            </Card>
-          )}
-          {seguimientoUrl && !hasClientPortal && (
-            <Card className="border-dashed border-yellow-300 dark:border-yellow-700">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
-                  <Link2 className="h-4 w-4" />
-                  LINK DE SEGUIMIENTO
-                  <Crown className="h-3.5 w-3.5 text-yellow-500 ml-auto" />
-                </div>
-                <p className="text-xs text-muted-foreground mb-3">
-                  Compartí un link para que tus clientes vean el estado de su reparación en tiempo real.
-                </p>
-                <Button variant="outline" size="sm" className="w-full" onClick={() => setShowUpgradeModal(true)}>
-                  <Crown className="h-4 w-4 mr-1.5 text-yellow-500" />
-                  Desbloquear con Profesional
-                </Button>
               </CardContent>
             </Card>
           )}
@@ -1093,7 +1070,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
 
       {/* Mobile: Costos (below content) */}
       <div className="lg:hidden space-y-4">
-        {seguimientoUrl && hasClientPortal && (
+        {seguimientoUrl && (
           <Card>
             <CardContent className="p-4">
               <div className="flex gap-2">
@@ -1106,16 +1083,6 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                   WhatsApp
                 </Button>
               </div>
-            </CardContent>
-          </Card>
-        )}
-        {seguimientoUrl && !hasClientPortal && (
-          <Card className="border-dashed border-yellow-300 dark:border-yellow-700">
-            <CardContent className="p-4">
-              <Button variant="outline" size="sm" className="w-full" onClick={() => setShowUpgradeModal(true)}>
-                <Crown className="h-4 w-4 mr-1.5 text-yellow-500" />
-                Desbloquear portal de seguimiento
-              </Button>
             </CardContent>
           </Card>
         )}
@@ -1191,8 +1158,6 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
         />
       )}
 
-      {/* Modal de upgrade para features bloqueadas */}
-      <UpgradeModal open={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} />
     </div>
   )
 }

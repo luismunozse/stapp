@@ -497,7 +497,7 @@ export async function DELETE(
         .eq("id", cotizacion.orden_id)
         .single()
 
-      if (orden && (orden.estado === "PRESUPUESTADO" || orden.estado === "APROBADO")) {
+      if (orden) {
         const { data: remaining } = await supabaseAdmin
           .from("cotizaciones")
           .select("total")
@@ -505,13 +505,15 @@ export async function DELETE(
           .is("deleted_at", null)
           .neq("estado", "RECHAZADA")
 
+        const totalPresupuesto = (remaining || []).reduce((sum, c) => sum + Number(c.total), 0)
+
         if (remaining && remaining.length > 0) {
-          const totalPresupuesto = remaining.reduce((sum, c) => sum + Number(c.total), 0)
           await supabaseAdmin
             .from("ordenes_servicio")
             .update({ presupuesto: totalPresupuesto, costo_final: totalPresupuesto })
             .eq("id", cotizacion.orden_id)
-        } else {
+        } else if (orden.estado === "PRESUPUESTADO" || orden.estado === "APROBADO") {
+          // No quedan cotizaciones activas: revertir a EN_DIAGNOSTICO solo si la orden estaba en flujo de presupuesto
           await supabaseAdmin
             .from("ordenes_servicio")
             .update({
@@ -522,6 +524,12 @@ export async function DELETE(
               presupuesto_firma_url: null,
               presupuesto_fecha_aprobacion: null,
             })
+            .eq("id", cotizacion.orden_id)
+        } else {
+          // Otros estados: solo limpiar montos
+          await supabaseAdmin
+            .from("ordenes_servicio")
+            .update({ presupuesto: null, costo_final: null })
             .eq("id", cotizacion.orden_id)
         }
       }

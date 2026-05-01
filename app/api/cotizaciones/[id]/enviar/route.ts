@@ -136,6 +136,7 @@ export async function POST(
           .select("total")
           .eq("orden_id", orden.id)
           .is("deleted_at", null)
+          .neq("estado", "RECHAZADA")
         const totalPresupuesto = (allCots || []).reduce((sum, c) => sum + Number(c.total), 0)
         await supabaseAdmin
           .from("ordenes_servicio")

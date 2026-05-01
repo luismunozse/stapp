@@ -214,7 +214,7 @@ export function CotizacionApproval({
 
         {/* Info del equipo */}
         <div className="bg-amber-50 dark:bg-amber-950/50 rounded-lg p-3">
-          <p className="text-sm text-muted-foreground">Reparacion de</p>
+          <p className="text-sm text-muted-foreground">Equipo</p>
           <p className="font-medium">{dispositivo}</p>
         </div>
 

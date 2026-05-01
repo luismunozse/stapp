@@ -43,7 +43,9 @@ const FALLBACK_ALL_PLANS: AllPlansPrices = {
       vendedores: 1,
       storageMb: 100,
     },
-    featureFlags: {},
+    featureFlags: {
+      client_portal: true,
+    },
   },
   profesional: {
     id: "fallback-profesional",
