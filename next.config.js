@@ -19,6 +19,56 @@ const nextConfig = {
       },
     ],
   },
+  // EN → ES redirects para rutas intuitivas del superadmin
+  async redirects() {
+    return [
+      {
+        source: "/superadmin/organizations/:path*",
+        destination: "/superadmin/organizaciones/:path*",
+        permanent: true,
+      },
+      {
+        source: "/superadmin/chatbot/:path*",
+        destination: "/superadmin/conversaciones/:path*",
+        permanent: true,
+      },
+      {
+        source: "/superadmin/chatbot",
+        destination: "/superadmin/conversaciones",
+        permanent: true,
+      },
+      {
+        source: "/superadmin/subscriptions/:path*",
+        destination: "/superadmin/suscripciones/:path*",
+        permanent: true,
+      },
+      {
+        source: "/superadmin/payments/:path*",
+        destination: "/superadmin/pagos/:path*",
+        permanent: true,
+      },
+      {
+        source: "/superadmin/plans/:path*",
+        destination: "/superadmin/planes/:path*",
+        permanent: true,
+      },
+      {
+        source: "/superadmin/support/:path*",
+        destination: "/superadmin/soporte/:path*",
+        permanent: true,
+      },
+      {
+        source: "/superadmin/audit/:path*",
+        destination: "/superadmin/logs/:path*",
+        permanent: true,
+      },
+      {
+        source: "/superadmin/maintenance/:path*",
+        destination: "/superadmin/maintenance-banner/:path*",
+        permanent: true,
+      },
+    ]
+  },
   // PWA + SEO headers
   async headers() {
     return [

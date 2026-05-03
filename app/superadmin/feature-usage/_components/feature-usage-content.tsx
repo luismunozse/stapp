@@ -94,7 +94,7 @@ export function FeatureUsageContent() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Feature Usage</h1>
-          <p className="text-muted-foreground">Adopcion de funcionalidades por organizacion</p>
+          <p className="text-muted-foreground">Adopción de funcionalidades por organización</p>
         </div>
         <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
           {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
@@ -123,7 +123,7 @@ export function FeatureUsageContent() {
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Adopcion Promedio</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Adopción Promedio</CardTitle>
               <div className="p-2 rounded-lg bg-green-100 dark:bg-green-950"><TrendingUp className="h-4 w-4 text-green-600" /></div>
             </CardHeader>
             <CardContent>
@@ -134,7 +134,7 @@ export function FeatureUsageContent() {
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Alta adopcion</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Alta adopción</CardTitle>
               <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-950"><Zap className="h-4 w-4 text-emerald-600" /></div>
             </CardHeader>
             <CardContent>
@@ -144,7 +144,7 @@ export function FeatureUsageContent() {
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Baja adopcion</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Baja adopción</CardTitle>
               <div className="p-2 rounded-lg bg-red-100 dark:bg-red-950"><AlertTriangle className="h-4 w-4 text-red-600" /></div>
             </CardHeader>
             <CardContent>
@@ -161,7 +161,7 @@ export function FeatureUsageContent() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Puzzle className="h-5 w-5" />
-              Adopcion por Feature
+              Adopción por Feature
             </CardTitle>
             <CardDescription>% de orgs que usan cada funcionalidad</CardDescription>
           </CardHeader>
@@ -201,16 +201,16 @@ export function FeatureUsageContent() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Puzzle className="h-5 w-5" />
-                Adopcion por Organizacion
+                Adopción por Organización
               </CardTitle>
               <div className="flex gap-2 mt-2">
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input placeholder="Buscar organizacion..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+                  <Input placeholder="Buscar organización..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
                 </div>
                 <Button variant="outline" size="sm" onClick={() => setSortBy(s => s === "adoption" ? "ordenes" : s === "ordenes" ? "nombre" : "adoption")}>
                   <ArrowUpDown className="h-4 w-4 mr-1" />
-                  {sortBy === "adoption" ? "Adopcion" : sortBy === "ordenes" ? "Ordenes" : "Nombre"}
+                  {sortBy === "adoption" ? "Adopción" : sortBy === "ordenes" ? "Órdenes" : "Nombre"}
                 </Button>
               </div>
             </CardHeader>
@@ -280,7 +280,7 @@ export function FeatureUsageContent() {
                   <p className="text-center text-muted-foreground py-8">
                     {data?.organizations.length === 0
                       ? "Sin datos. El tracking se ejecuta diariamente a las 3 AM."
-                      : "No hay organizaciones que coincidan"}
+                      : "No hay organizaciónes que coincidan"}
                   </p>
                 )}
               </div>

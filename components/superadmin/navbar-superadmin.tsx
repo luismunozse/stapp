@@ -202,7 +202,7 @@ export function NavbarSuperadmin({ userEmail }: NavbarSuperadminProps) {
         )}
       >
         <div className="flex flex-col h-full pt-16">
-          <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto">
+          <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto scrollbar-thin">
             {navItems.map((item) => {
               const Icon = item.icon
               const isActive =

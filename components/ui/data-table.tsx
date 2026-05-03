@@ -297,10 +297,10 @@ function DataTablePagination({
   return (
     <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-2">
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <span className="hidden xs:inline">
+        <span className="hidden sm:inline">
           Mostrando {start} - {end} de {total}
         </span>
-        <span className="xs:hidden">
+        <span className="sm:hidden">
           {start}-{end}/{total}
         </span>
         {onPageSizeChange && (

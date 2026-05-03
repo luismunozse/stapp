@@ -428,20 +428,36 @@ export function EngagementContent() {
                     Solo {healthy} saludables ({totalClients > 0 ? Math.round((healthy / totalClients) * 100) : 0}%)
                   </span>
                 </div>
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={() => {
-                    setBroadcastMsg({
-                      title: "Te extrañamos en STApp",
-                      message: "Hola! Notamos que hace un tiempo no entrás a tu cuenta. Estamos para ayudarte si tenés alguna duda. Respondé a esta notificación o escribinos por soporte.",
-                    })
-                    setShowBroadcast(true)
-                  }}
-                >
-                  <Megaphone className="h-4 w-4 mr-1" />
-                  Contactar orgs en riesgo
-                </Button>
+                <div className="flex gap-2 flex-wrap">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setRiskFilter("alto")
+                      document.getElementById("engagement-orgs-table")?.scrollIntoView({
+                        behavior: "smooth",
+                        block: "start",
+                      })
+                    }}
+                  >
+                    <Users className="h-4 w-4 mr-1" />
+                    Ver lista filtrada
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => {
+                      setBroadcastMsg({
+                        title: "Te extrañamos en STApp",
+                        message: "Hola! Notamos que hace un tiempo no entrás a tu cuenta. Estamos para ayudarte si tenés alguna duda. Respondé a esta notificación o escribinos por soporte.",
+                      })
+                      setShowBroadcast(true)
+                    }}
+                  >
+                    <Megaphone className="h-4 w-4 mr-1" />
+                    Contactar por broadcast
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -649,7 +665,7 @@ export function EngagementContent() {
         {/* ================================================================ */}
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Organizations Table */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-2" id="engagement-orgs-table">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">

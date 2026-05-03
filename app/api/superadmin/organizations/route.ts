@@ -278,6 +278,57 @@ export async function GET(request: Request) {
       )
     }
 
+    // Detección de posibles duplicados: traer (id, nombre, slug) de TODAS las orgs
+    // y agrupar por nombre + slug normalizados (lowercase, sin no-alfanum,
+    // con runs de char repetidos colapsados a 1) para detectar pares como
+    // "jumpfix" / "jumpfixx" o "Tecnico" / "Técnico".
+    const COMBINING_MARKS = new RegExp("[\\u0300-\\u036f]", "g")
+    const normalizeForDup = (s: string): string =>
+      s
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(COMBINING_MARKS, "")
+        .replace(/[^a-z0-9]/g, "")
+        .replace(/(.)\1+/g, "$1")
+
+    const { data: allOrgsForDup } = await supabaseAdmin
+      .from("organizations")
+      .select("id, nombre, slug")
+
+    const dupGroups = new Map<string, { id: string; nombre: string; slug: string }[]>()
+    for (const org of allOrgsForDup || []) {
+      const keyName = normalizeForDup(org.nombre || "")
+      const keySlug = normalizeForDup(org.slug || "")
+      const composite = `${keyName}|${keySlug}`
+      if (!keyName && !keySlug) continue
+      // Agrupar por nombre normalizado o slug normalizado (cualquiera matcheo)
+      for (const key of [keyName, keySlug, composite]) {
+        if (!key) continue
+        if (!dupGroups.has(key)) dupGroups.set(key, [])
+        const group = dupGroups.get(key)!
+        if (!group.some((g) => g.id === org.id)) {
+          group.push({ id: org.id, nombre: org.nombre, slug: org.slug })
+        }
+      }
+    }
+
+    const dupByOrgId = new Map<string, { id: string; nombre: string; slug: string }[]>()
+    for (const org of allOrgsForDup || []) {
+      const keyName = normalizeForDup(org.nombre || "")
+      const keySlug = normalizeForDup(org.slug || "")
+      const matches = new Map<string, { id: string; nombre: string; slug: string }>()
+      for (const key of [keyName, keySlug]) {
+        if (!key) continue
+        const group = dupGroups.get(key) || []
+        for (const member of group) {
+          if (member.id !== org.id) matches.set(member.id, member)
+        }
+      }
+      if (matches.size > 0) {
+        dupByOrgId.set(org.id, Array.from(matches.values()))
+      }
+    }
+
     // Combinar datos. El filtro de plan ya se aplicó a nivel SQL más arriba
     // (ver bloque premiumOrgIds), no hace falta filtrar en memoria acá.
     let result = (organizations || []).map((org) => ({
@@ -285,6 +336,7 @@ export async function GET(request: Request) {
       usersCount: usersCountMap[org.id] || 0,
       last_activity_at: lastActivityMap[org.id] || null,
       subscription: subscriptionsMap[org.id] || null,
+      possibleDuplicates: dupByOrgId.get(org.id) || undefined,
     }))
 
     // Sort en memoria para columnas calculadas (usersCount, plan)

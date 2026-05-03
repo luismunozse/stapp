@@ -200,9 +200,12 @@ export function TicketsListSuperadmin() {
             <Headset className="h-5 w-5" />
             Todos los Tickets
           </CardTitle>
-          <div className="flex flex-col sm:flex-row gap-3 mt-3">
+          <div className="flex flex-col sm:flex-row sm:items-end gap-3 mt-3">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1 block">
+                Buscar
+              </label>
+              <Search className="absolute left-3 top-[calc(50%+8px)] -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
               <Input
                 placeholder="Buscar por asunto..."
                 value={search}
@@ -210,40 +213,57 @@ export function TicketsListSuperadmin() {
                 className="pl-9"
               />
             </div>
-            <Select value={filtroEstado || "all"} onValueChange={(v) => { setFiltroEstado(v === "all" ? "" : v); setPage(1) }}>
-              <SelectTrigger className="w-full sm:w-[160px]">
-                <SelectValue placeholder="Estado" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="ABIERTO">Abierto</SelectItem>
-                <SelectItem value="EN_PROCESO">En proceso</SelectItem>
-                <SelectItem value="RESUELTO">Resuelto</SelectItem>
-                <SelectItem value="CERRADO">Cerrado</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={filtroPrioridad || "all"} onValueChange={(v) => { setFiltroPrioridad(v === "all" ? "" : v); setPage(1) }}>
-              <SelectTrigger className="w-full sm:w-[140px]">
-                <SelectValue placeholder="Prioridad" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas</SelectItem>
-                <SelectItem value="ALTA">Alta</SelectItem>
-                <SelectItem value="MEDIA">Media</SelectItem>
-                <SelectItem value="BAJA">Baja</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={filtroTipo || "all"} onValueChange={(v) => { setFiltroTipo(v === "all" ? "" : v); setPage(1) }}>
-              <SelectTrigger className="w-full sm:w-[150px]">
-                <SelectValue placeholder="Tipo" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="BUG">Bug</SelectItem>
-                <SelectItem value="SUGERENCIA">Sugerencia</SelectItem>
-                <SelectItem value="PREGUNTA">Pregunta</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex flex-col sm:flex-row gap-3 sm:border-l sm:pl-3">
+              <div>
+                <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1 block">
+                  Estado
+                </label>
+                <Select value={filtroEstado || "all"} onValueChange={(v) => { setFiltroEstado(v === "all" ? "" : v); setPage(1) }}>
+                  <SelectTrigger className="w-full sm:w-[160px]">
+                    <SelectValue placeholder="Estado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="ABIERTO">Abierto</SelectItem>
+                    <SelectItem value="EN_PROCESO">En proceso</SelectItem>
+                    <SelectItem value="RESUELTO">Resuelto</SelectItem>
+                    <SelectItem value="CERRADO">Cerrado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1 block">
+                  Prioridad
+                </label>
+                <Select value={filtroPrioridad || "all"} onValueChange={(v) => { setFiltroPrioridad(v === "all" ? "" : v); setPage(1) }}>
+                  <SelectTrigger className="w-full sm:w-[140px]">
+                    <SelectValue placeholder="Prioridad" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas</SelectItem>
+                    <SelectItem value="ALTA">Alta</SelectItem>
+                    <SelectItem value="MEDIA">Media</SelectItem>
+                    <SelectItem value="BAJA">Baja</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1 block">
+                  Tipo
+                </label>
+                <Select value={filtroTipo || "all"} onValueChange={(v) => { setFiltroTipo(v === "all" ? "" : v); setPage(1) }}>
+                  <SelectTrigger className="w-full sm:w-[150px]">
+                    <SelectValue placeholder="Tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="BUG">Bug</SelectItem>
+                    <SelectItem value="SUGERENCIA">Sugerencia</SelectItem>
+                    <SelectItem value="PREGUNTA">Pregunta</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           </div>
         </CardHeader>
         <CardContent>

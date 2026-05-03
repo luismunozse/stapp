@@ -21,6 +21,8 @@ import {
   Building2,
   History,
   CheckCircle2,
+  Bell,
+  ExternalLink,
 } from "lucide-react"
 import { useSuperadminFetch, useSuperadminMutation } from "@/hooks/use-superadmin-fetch"
 import { formatDateTime } from "@/lib/utils"
@@ -201,6 +203,39 @@ export default function BroadcastPage() {
                 <p className="text-xs text-muted-foreground">
                   Ruta a la que navega el usuario al hacer click en la notificacion
                 </p>
+              </div>
+
+              {/* Preview en vivo */}
+              <div className="space-y-2 pt-2 border-t">
+                <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Preview
+                </Label>
+                <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+                  <div className="flex items-start gap-3">
+                    <div className="h-9 w-9 rounded-full bg-primary/15 flex items-center justify-center flex-shrink-0">
+                      <Bell className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">
+                        {title.trim() || (
+                          <span className="text-muted-foreground italic">Título de la notificación</span>
+                        )}
+                      </p>
+                      <p className="text-xs text-muted-foreground whitespace-pre-wrap break-words mt-0.5">
+                        {message.trim() || (
+                          <span className="italic">Mensaje que verá el usuario en la campana de notificaciones</span>
+                        )}
+                      </p>
+                      {actionUrl.trim() && (
+                        <p className="text-[11px] text-primary mt-1.5 inline-flex items-center gap-1">
+                          <ExternalLink className="h-3 w-3" />
+                          {actionUrl.trim()}
+                        </p>
+                      )}
+                      <p className="text-[10px] text-muted-foreground mt-1">ahora</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>

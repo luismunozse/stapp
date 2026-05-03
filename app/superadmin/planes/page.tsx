@@ -149,14 +149,30 @@ export default function PlanesPage() {
           ))}
         </div>
       ) : (
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 auto-rows-fr">
         {plans.map((plan) => (
-          <Card key={plan.id} className={!plan.activo ? "opacity-60" : ""}>
+          <Card
+            key={plan.id}
+            className={
+              !plan.activo
+                ? "relative opacity-70 grayscale border-dashed"
+                : "relative"
+            }
+          >
+            {!plan.activo && (
+              <div className="absolute top-3 right-3 z-10 px-2 py-0.5 rounded-md bg-red-600 text-white text-[10px] font-bold tracking-widest uppercase shadow-sm">
+                Inactivo
+              </div>
+            )}
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <CardTitle className="text-xl">{plan.nombre}</CardTitle>
+                    <CardTitle
+                      className={`text-xl ${!plan.activo ? "line-through decoration-1" : ""}`}
+                    >
+                      {plan.nombre}
+                    </CardTitle>
                     <Badge className={getPlanTypeColor(plan.tipo)}>
                       {plan.tipo}
                     </Badge>
@@ -167,9 +183,6 @@ export default function PlanesPage() {
                     </CardDescription>
                   )}
                 </div>
-                <Badge variant={plan.activo ? "default" : "secondary"}>
-                  {plan.activo ? "Activo" : "Inactivo"}
-                </Badge>
               </div>
             </CardHeader>
 

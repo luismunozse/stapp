@@ -1,0 +1,46 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - button "Cambiar tema" [ref=e4] [cursor=pointer]:
+      - img [ref=e5]
+      - img
+      - generic [ref=e11]: Cambiar tema
+    - generic [ref=e12]:
+      - paragraph [ref=e17]: Ingresa tus credenciales para acceder
+      - generic [ref=e18]:
+        - generic [ref=e19]:
+          - generic [ref=e20]:
+            - text: Email
+            - textbox "Email" [active] [ref=e21]:
+              - /placeholder: tu@email.com
+              - text: usuario-inexistente@test.com
+          - generic [ref=e22]:
+            - text: Contraseña
+            - generic [ref=e23]:
+              - textbox "Contraseña" [ref=e24]:
+                - /placeholder: ••••••••
+              - button "Mostrar contraseña" [ref=e25] [cursor=pointer]:
+                - img [ref=e26]
+          - generic [ref=e29]:
+            - generic [ref=e30] [cursor=pointer]:
+              - checkbox "Recordarme por 30 días" [ref=e31]
+              - generic [ref=e32]: Recordarme por 30 días
+            - link "¿Olvidaste tu contraseña?" [ref=e33] [cursor=pointer]:
+              - /url: /forgot-password
+          - button "Iniciar Sesión" [ref=e34] [cursor=pointer]
+        - generic [ref=e39]: O continuar con
+        - button "Continuar con Google" [ref=e40] [cursor=pointer]:
+          - img [ref=e41]
+          - text: Continuar con Google
+        - generic [ref=e46]:
+          - generic [ref=e47]:
+            - text: ¿No tienes cuenta?
+            - link "Registra tu negocio" [ref=e48] [cursor=pointer]:
+              - /url: /registro
+          - link "Volver al inicio" [ref=e50] [cursor=pointer]:
+            - /url: /
+  - region "Notifications alt+T"
+  - alert [ref=e51]
+```

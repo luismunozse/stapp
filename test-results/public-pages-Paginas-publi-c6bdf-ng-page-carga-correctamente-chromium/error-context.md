@@ -1,0 +1,875 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - link "Saltar al contenido principal" [ref=e2] [cursor=pointer]:
+    - /url: "#main-content"
+  - main [ref=e3]:
+    - navigation [ref=e5]:
+      - generic [ref=e6]:
+        - link "STApp" [ref=e7] [cursor=pointer]:
+          - /url: /
+          - generic [ref=e8]:
+            - img [ref=e9]
+            - generic [ref=e18]: STApp
+        - generic [ref=e19]:
+          - link "Características" [ref=e20] [cursor=pointer]:
+            - /url: /#features
+          - link "Precios" [ref=e21] [cursor=pointer]:
+            - /url: /precios
+          - link "Casos de uso" [ref=e22] [cursor=pointer]:
+            - /url: /casos-de-uso
+          - link "Blog" [ref=e23] [cursor=pointer]:
+            - /url: /empresa/blog
+          - link "Ayuda" [ref=e24] [cursor=pointer]:
+            - /url: /ayuda
+        - generic [ref=e25]:
+          - button "Cambiar tema" [ref=e26] [cursor=pointer]:
+            - img [ref=e27]
+            - img
+            - generic [ref=e33]: Cambiar tema
+          - link "Iniciar Sesión" [ref=e34] [cursor=pointer]:
+            - /url: /login
+            - button "Iniciar Sesión" [ref=e35]
+          - link "Comenzar Gratis" [ref=e36] [cursor=pointer]:
+            - /url: /registro
+            - button "Comenzar Gratis" [ref=e37]
+    - generic [ref=e38]:
+      - img [ref=e42]
+      - img [ref=e46]
+      - img [ref=e49]
+      - img [ref=e52]
+      - img [ref=e56]
+      - img [ref=e59]
+      - img [ref=e71]
+      - img [ref=e74]
+      - img [ref=e77]
+      - img [ref=e80]
+      - generic [ref=e82]:
+        - generic [ref=e83]:
+          - generic [ref=e84]:
+            - generic [ref=e86]:
+              - img [ref=e87]
+              - text: 30 días gratis, sin tarjeta de crédito
+            - heading "Nunca más pierdas una reparación entre papeles" [level=1] [ref=e89]
+            - paragraph [ref=e90]: Dejá de anotar en papeles, de olvidarte qué equipo era de quién, y de perseguir cobros. Órdenes, caja, inventario, ventas, finanzas y más — organizá todo tu taller desde el celular.
+            - generic [ref=e91]:
+              - generic [ref=e92]:
+                - img [ref=e93]
+                - text: Órdenes ilimitadas
+              - generic [ref=e96]:
+                - img [ref=e97]
+                - text: Caja y finanzas
+              - generic [ref=e100]:
+                - img [ref=e101]
+                - text: Punto de venta incluido
+              - generic [ref=e104]:
+                - img [ref=e105]
+                - text: Seguimiento online
+              - generic [ref=e108]:
+                - img [ref=e109]
+                - text: Asistente IA 24/7
+              - generic [ref=e112]:
+                - img [ref=e113]
+                - text: 30 días gratis
+            - generic [ref=e116]:
+              - link "Comenzar Gratis" [ref=e117] [cursor=pointer]:
+                - /url: /registro
+                - button "Comenzar Gratis" [ref=e119]:
+                  - text: Comenzar Gratis
+                  - img [ref=e120]
+              - link "Ver cómo funciona" [ref=e122] [cursor=pointer]:
+                - /url: "#features"
+                - button "Ver cómo funciona" [ref=e124]
+            - paragraph [ref=e125]: Sin tarjeta de crédito • Configuración en 2 min • Soporte incluido
+          - generic [ref=e127]:
+            - generic [ref=e128]:
+              - button "Órdenes" [ref=e129] [cursor=pointer]:
+                - img [ref=e130]
+                - generic [ref=e133]: Órdenes
+              - button "Dashboard" [ref=e134] [cursor=pointer]:
+                - img [ref=e135]
+                - generic [ref=e140]: Dashboard
+              - button "Inventario" [ref=e141] [cursor=pointer]:
+                - img [ref=e142]
+                - generic [ref=e146]: Inventario
+              - button "Clientes" [ref=e147] [cursor=pointer]:
+                - img [ref=e148]
+                - generic [ref=e153]: Clientes
+            - generic [ref=e156]:
+              - generic [ref=e162]: stapp.com/dashboard
+              - generic [ref=e164]:
+                - generic [ref=e165]:
+                  - generic [ref=e166]:
+                    - generic [ref=e167]:
+                      - img [ref=e168]
+                      - generic [ref=e170]: Hoy
+                    - paragraph [ref=e171]: $4.3k
+                  - generic [ref=e172]:
+                    - generic [ref=e173]:
+                      - img [ref=e174]
+                      - generic [ref=e177]: Activas
+                    - paragraph [ref=e178]: "15"
+                  - generic [ref=e179]:
+                    - generic [ref=e180]:
+                      - img [ref=e181]
+                      - generic [ref=e184]: Listas
+                    - paragraph [ref=e185]: "8"
+                  - generic [ref=e186]:
+                    - generic [ref=e187]:
+                      - img [ref=e188]
+                      - generic [ref=e190]: Pendientes
+                    - paragraph [ref=e191]: "7"
+                - generic [ref=e193]:
+                  - heading "Ingresos del Mes" [level=4] [ref=e194]
+                  - img [ref=e195]
+            - generic [ref=e206]:
+              - button [ref=e207] [cursor=pointer]
+              - button [ref=e208] [cursor=pointer]
+              - button [ref=e209] [cursor=pointer]
+              - button [ref=e210] [cursor=pointer]
+        - link "Ver más contenido" [ref=e211] [cursor=pointer]:
+          - /url: "#features"
+          - generic [ref=e212]: Descubrí más
+          - img [ref=e214]
+    - generic [ref=e217]:
+      - generic [ref=e218]:
+        - heading "Todo tu taller en una sola plataforma" [level=2] [ref=e219]
+        - paragraph [ref=e220]: Reparaciones, ventas, caja, finanzas, cotizaciones, seguimiento online, leads, reportes avanzados, soporte con IA y más — pensado para talleres de reparación, no adaptado de otro rubro.
+      - generic [ref=e221]:
+        - tablist [ref=e223]:
+          - tab "Servicio" [selected] [ref=e224] [cursor=pointer]:
+            - img [ref=e225]
+            - generic [ref=e227]: Servicio
+          - tab "Administración" [ref=e228] [cursor=pointer]:
+            - img [ref=e229]
+            - generic [ref=e232]: Administración
+          - tab "Ventas" [ref=e233] [cursor=pointer]:
+            - img [ref=e234]
+            - generic [ref=e238]: Ventas
+          - tab "Finanzas" [ref=e239] [cursor=pointer]:
+            - img [ref=e240]
+            - generic [ref=e243]: Finanzas
+          - tab "Productividad" [ref=e244] [cursor=pointer]:
+            - img [ref=e245]
+            - generic [ref=e247]: Productividad
+          - tab "Soporte" [ref=e248] [cursor=pointer]:
+            - img [ref=e249]
+            - generic [ref=e252]: Soporte
+        - tabpanel [ref=e253]:
+          - paragraph [ref=e254]: Gestiona el flujo completo de reparaciones
+          - generic [ref=e255]:
+            - generic [ref=e256]:
+              - img [ref=e258]
+              - heading "Órdenes de Servicio" [level=3] [ref=e261]
+              - paragraph [ref=e262]: El corazón de tu taller. Creá una orden en menos de 1 minuto con estados en tiempo real, checklists personalizados y seguimiento completo.
+            - generic [ref=e263]:
+              - img [ref=e265]
+              - heading "Cotizaciones y Presupuestos" [level=3] [ref=e267]
+              - paragraph [ref=e268]: Creá presupuestos profesionales con descuentos, impuestos y condiciones. Tu cliente los aprueba online con firma digital desde un link, sin necesidad de cuenta.
+            - generic [ref=e269]:
+              - img [ref=e271]
+              - heading "Fotos por Etapa" [level=3] [ref=e274]
+              - paragraph [ref=e275]: "Documenta cada paso: ingreso, durante la reparación y entrega. Protegé tu taller ante cualquier reclamo con evidencia visual."
+            - generic [ref=e276]:
+              - img [ref=e278]
+              - heading "Portal de Seguimiento" [level=3] [ref=e281]
+              - paragraph [ref=e282]: Tu cliente sigue su reparación en tiempo real desde un link, sin crear cuenta. Ve el estado, fotos, garantía y descarga el comprobante en PDF.
+    - generic [ref=e284]:
+      - generic [ref=e285]:
+        - heading "Por qué cambiar a STApp" [level=2] [ref=e286]
+        - paragraph [ref=e287]: Compará cómo gestionás tu taller hoy vs cómo podrías hacerlo
+      - generic [ref=e289]:
+        - generic [ref=e290]:
+          - generic [ref=e291]: Funcionalidad
+          - generic [ref=e292]: STApp
+          - generic [ref=e293]: Excel
+          - generic [ref=e294]: Papel
+        - generic [ref=e295]:
+          - generic [ref=e296]: Órdenes de trabajo
+          - generic [ref=e298]:
+            - img [ref=e299]
+            - generic [ref=e301]: Digitales con estados en tiempo real
+          - generic [ref=e303]:
+            - img [ref=e304]
+            - generic [ref=e305]: Planilla manual
+          - generic [ref=e307]:
+            - img [ref=e308]
+            - generic [ref=e311]: Anotaciones sueltas
+        - generic [ref=e312]:
+          - generic [ref=e313]: Control de inventario
+          - generic [ref=e315]:
+            - img [ref=e316]
+            - generic [ref=e318]: Alertas automáticas de stock
+          - generic [ref=e320]:
+            - img [ref=e321]
+            - generic [ref=e322]: Actualización manual
+          - generic [ref=e324]:
+            - img [ref=e325]
+            - generic [ref=e328]: Imposible de controlar
+        - generic [ref=e329]:
+          - generic [ref=e330]: Historial de clientes
+          - generic [ref=e332]:
+            - img [ref=e333]
+            - generic [ref=e335]: Completo y automático
+          - generic [ref=e337]:
+            - img [ref=e338]
+            - generic [ref=e339]: Búsqueda lenta
+          - generic [ref=e341]:
+            - img [ref=e342]
+            - generic [ref=e345]: Se pierde con el tiempo
+        - generic [ref=e346]:
+          - generic [ref=e347]: Cobros y facturación
+          - generic [ref=e349]:
+            - img [ref=e350]
+            - generic [ref=e352]: Integrado con MercadoPago
+          - generic [ref=e354]:
+            - img [ref=e355]
+            - generic [ref=e356]: Cálculos manuales
+          - generic [ref=e358]:
+            - img [ref=e359]
+            - generic [ref=e362]: Sin registro confiable
+        - generic [ref=e363]:
+          - generic [ref=e364]: Seguimiento para clientes
+          - generic [ref=e366]:
+            - img [ref=e367]
+            - generic [ref=e369]: Link público en tiempo real
+          - generic [ref=e371]:
+            - img [ref=e372]
+            - generic [ref=e375]: No disponible
+          - generic [ref=e377]:
+            - img [ref=e378]
+            - generic [ref=e381]: No disponible
+        - generic [ref=e382]:
+          - generic [ref=e383]: Cotizaciones online
+          - generic [ref=e385]:
+            - img [ref=e386]
+            - generic [ref=e388]: Aprobación con firma digital
+          - generic [ref=e390]:
+            - img [ref=e391]
+            - generic [ref=e392]: PDF manual
+          - generic [ref=e394]:
+            - img [ref=e395]
+            - generic [ref=e398]: No disponible
+        - generic [ref=e399]:
+          - generic [ref=e400]: Punto de venta
+          - generic [ref=e402]:
+            - img [ref=e403]
+            - generic [ref=e405]: Ventas con garantía y devoluciones
+          - generic [ref=e407]:
+            - img [ref=e408]
+            - generic [ref=e409]: Registro básico
+          - generic [ref=e411]:
+            - img [ref=e412]
+            - generic [ref=e415]: Anotaciones sueltas
+        - generic [ref=e416]:
+          - generic [ref=e417]: Reportes
+          - generic [ref=e419]:
+            - img [ref=e420]
+            - generic [ref=e422]: 15+ reportes avanzados
+          - generic [ref=e424]:
+            - img [ref=e425]
+            - generic [ref=e426]: Gráficos básicos
+          - generic [ref=e428]:
+            - img [ref=e429]
+            - generic [ref=e432]: No existen
+        - generic [ref=e433]:
+          - generic [ref=e434]: Acceso remoto
+          - generic [ref=e436]:
+            - img [ref=e437]
+            - generic [ref=e439]: Cualquier dispositivo + offline
+          - generic [ref=e441]:
+            - img [ref=e442]
+            - generic [ref=e443]: Solo en tu PC
+          - generic [ref=e445]:
+            - img [ref=e446]
+            - generic [ref=e449]: Solo en el local
+        - generic [ref=e450]:
+          - generic [ref=e451]: Fotos y firma digital
+          - generic [ref=e453]:
+            - img [ref=e454]
+            - generic [ref=e456]: Incluido
+          - generic [ref=e458]:
+            - img [ref=e459]
+            - generic [ref=e462]: No disponible
+          - generic [ref=e464]:
+            - img [ref=e465]
+            - generic [ref=e468]: No disponible
+        - generic [ref=e469]:
+          - generic [ref=e470]: Notificaciones WhatsApp
+          - generic [ref=e472]:
+            - img [ref=e473]
+            - generic [ref=e475]: Con un click
+          - generic [ref=e477]:
+            - img [ref=e478]
+            - generic [ref=e479]: Manual
+          - generic [ref=e481]:
+            - img [ref=e482]
+            - generic [ref=e483]: Manual
+        - generic [ref=e484]:
+          - generic [ref=e485]: Pantalla kiosco en local
+          - generic [ref=e487]:
+            - img [ref=e488]
+            - generic [ref=e490]: Incluido y personalizable
+          - generic [ref=e492]:
+            - img [ref=e493]
+            - generic [ref=e496]: No disponible
+          - generic [ref=e498]:
+            - img [ref=e499]
+            - generic [ref=e502]: No disponible
+        - generic [ref=e503]:
+          - generic [ref=e504]: Caja diaria
+          - generic [ref=e506]:
+            - img [ref=e507]
+            - generic [ref=e509]: Apertura/cierre con control total
+          - generic [ref=e511]:
+            - img [ref=e512]
+            - generic [ref=e513]: Planilla separada
+          - generic [ref=e515]:
+            - img [ref=e516]
+            - generic [ref=e517]: Cuaderno de caja
+        - generic [ref=e518]:
+          - generic [ref=e519]: Control de gastos
+          - generic [ref=e521]:
+            - img [ref=e522]
+            - generic [ref=e524]: Categorías y gastos recurrentes
+          - generic [ref=e526]:
+            - img [ref=e527]
+            - generic [ref=e528]: Registro manual
+          - generic [ref=e530]:
+            - img [ref=e531]
+            - generic [ref=e534]: Se pierden recibos
+        - generic [ref=e535]:
+          - generic [ref=e536]: Órdenes de compra
+          - generic [ref=e538]:
+            - img [ref=e539]
+            - generic [ref=e541]: Vinculadas al inventario
+          - generic [ref=e543]:
+            - img [ref=e544]
+            - generic [ref=e547]: No disponible
+          - generic [ref=e549]:
+            - img [ref=e550]
+            - generic [ref=e553]: No disponible
+        - generic [ref=e554]:
+          - generic [ref=e555]: Dashboard analítico
+          - generic [ref=e557]:
+            - img [ref=e558]
+            - generic [ref=e560]: KPIs en tiempo real
+          - generic [ref=e562]:
+            - img [ref=e563]
+            - generic [ref=e564]: Gráficos manuales
+          - generic [ref=e566]:
+            - img [ref=e567]
+            - generic [ref=e570]: No disponible
+        - generic [ref=e571]:
+          - generic [ref=e572]: Captación de leads
+          - generic [ref=e574]:
+            - img [ref=e575]
+            - generic [ref=e577]: Seguimiento hasta conversión
+          - generic [ref=e579]:
+            - img [ref=e580]
+            - generic [ref=e581]: Lista manual
+          - generic [ref=e583]:
+            - img [ref=e584]
+            - generic [ref=e587]: Se olvidan
+        - generic [ref=e588]:
+          - generic [ref=e589]: Asistente IA integrado
+          - generic [ref=e591]:
+            - img [ref=e592]
+            - generic [ref=e594]: Santi, disponible 24/7
+          - generic [ref=e596]:
+            - img [ref=e597]
+            - generic [ref=e600]: No disponible
+          - generic [ref=e602]:
+            - img [ref=e603]
+            - generic [ref=e606]: No disponible
+    - region "Hecho para tu tipo de taller" [ref=e607]:
+      - generic [ref=e608]:
+        - generic [ref=e609]:
+          - heading "Hecho para tu tipo de taller" [level=2] [ref=e610]
+          - paragraph [ref=e611]: STApp se adapta a lo que reparás. Mirá cómo resuelve los problemas puntuales de cada rubro.
+        - generic [ref=e612]:
+          - link "Reparación de Celulares Gestioná órdenes de reparación de pantallas, baterías, placas y más. Documentá cada paso con fotos, controlá tu stock de repuestos y mantené a tus clientes informados por WhatsApp. Ver caso de uso" [ref=e613] [cursor=pointer]:
+            - /url: /casos-de-uso/celulares
+            - generic [ref=e614]:
+              - img [ref=e616]
+              - heading "Reparación de Celulares" [level=3] [ref=e618]
+              - paragraph [ref=e619]: Gestioná órdenes de reparación de pantallas, baterías, placas y más. Documentá cada paso con fotos, controlá tu stock de repuestos y mantené a tus clientes informados por WhatsApp.
+              - generic [ref=e620]:
+                - text: Ver caso de uso
+                - img [ref=e621]
+          - link "Reparación de Computadoras Administrá reparaciones de PCs, notebooks y laptops. Desde el diagnóstico hasta la entrega con firma digital, todo queda documentado y trazable. Ver caso de uso" [ref=e623] [cursor=pointer]:
+            - /url: /casos-de-uso/computadoras
+            - generic [ref=e624]:
+              - img [ref=e626]
+              - heading "Reparación de Computadoras" [level=3] [ref=e628]
+              - paragraph [ref=e629]: Administrá reparaciones de PCs, notebooks y laptops. Desde el diagnóstico hasta la entrega con firma digital, todo queda documentado y trazable.
+              - generic [ref=e630]:
+                - text: Ver caso de uso
+                - img [ref=e631]
+          - link "Reparación de Electrónicos Tablets, consolas, equipos de audio, cámaras — si lo reparás, STApp lo gestiona. Un solo sistema flexible para cualquier tipo de dispositivo electrónico. Ver caso de uso" [ref=e633] [cursor=pointer]:
+            - /url: /casos-de-uso/electronicos
+            - generic [ref=e634]:
+              - img [ref=e636]
+              - heading "Reparación de Electrónicos" [level=3] [ref=e639]
+              - paragraph [ref=e640]: Tablets, consolas, equipos de audio, cámaras — si lo reparás, STApp lo gestiona. Un solo sistema flexible para cualquier tipo de dispositivo electrónico.
+              - generic [ref=e641]:
+                - text: Ver caso de uso
+                - img [ref=e642]
+          - link "Reparación de Tablets Gestioná reparaciones de iPads, tablets Samsung, Lenovo y más. Registrá diagnósticos, controlá stock de pantallas y digitalizadores, y mantené informado a tu cliente. Ver caso de uso" [ref=e644] [cursor=pointer]:
+            - /url: /casos-de-uso/tablets
+            - generic [ref=e645]:
+              - img [ref=e647]
+              - heading "Reparación de Tablets" [level=3] [ref=e649]
+              - paragraph [ref=e650]: Gestioná reparaciones de iPads, tablets Samsung, Lenovo y más. Registrá diagnósticos, controlá stock de pantallas y digitalizadores, y mantené informado a tu cliente.
+              - generic [ref=e651]:
+                - text: Ver caso de uso
+                - img [ref=e652]
+          - link "Reparación de Consolas PlayStation, Xbox, Nintendo Switch — administrá reparaciones de consolas con un sistema profesional. Control de órdenes, repuestos y comunicación con clientes. Ver caso de uso" [ref=e654] [cursor=pointer]:
+            - /url: /casos-de-uso/consolas
+            - generic [ref=e655]:
+              - img [ref=e657]
+              - heading "Reparación de Consolas" [level=3] [ref=e659]
+              - paragraph [ref=e660]: PlayStation, Xbox, Nintendo Switch — administrá reparaciones de consolas con un sistema profesional. Control de órdenes, repuestos y comunicación con clientes.
+              - generic [ref=e661]:
+                - text: Ver caso de uso
+                - img [ref=e662]
+          - link "Ver todos los casos Explorar" [ref=e664] [cursor=pointer]:
+            - /url: /casos-de-uso
+            - generic [ref=e665]:
+              - heading "Ver todos los casos" [level=3] [ref=e666]
+              - generic [ref=e667]:
+                - text: Explorar
+                - img [ref=e668]
+    - generic [ref=e671]:
+      - generic [ref=e672]:
+        - heading "Elegí el plan que mejor se adapte a tu taller" [level=2] [ref=e673]
+        - paragraph [ref=e674]: 30 días gratis con acceso total al plan Profesional. Sin tarjeta de crédito.
+      - generic [ref=e675]:
+        - generic [ref=e676]: Mensual
+        - switch "Cambiar entre facturación mensual y anual" [ref=e677] [cursor=pointer]
+        - generic [ref=e678]:
+          - text: Anual
+          - generic [ref=e679]: (-37%)
+      - generic [ref=e680]:
+        - generic [ref=e681]:
+          - generic [ref=e682]:
+            - heading "Free" [level=3] [ref=e683]
+            - paragraph [ref=e684]: Para arrancar y conocer STApp
+          - generic [ref=e685]:
+            - generic [ref=e686]:
+              - generic [ref=e687]: $0
+              - generic [ref=e688]: /mes
+            - paragraph [ref=e689]: ARS
+          - generic [ref=e691]:
+            - img [ref=e692]
+            - generic [ref=e695]: USD $0/mes
+          - link "Comenzar Gratis" [ref=e696] [cursor=pointer]:
+            - /url: /registro
+            - button "Comenzar Gratis" [ref=e698]
+          - list [ref=e700]:
+            - listitem [ref=e701]:
+              - img [ref=e702]
+              - generic [ref=e704]: Hasta 15 órdenes/mes
+            - listitem [ref=e705]:
+              - img [ref=e706]
+              - generic [ref=e708]: 1 técnico
+            - listitem [ref=e709]:
+              - img [ref=e710]
+              - generic [ref=e712]: Hasta 30 clientes
+            - listitem [ref=e713]:
+              - img [ref=e714]
+              - generic [ref=e716]: Inventario básico
+            - listitem [ref=e717]:
+              - img [ref=e718]
+              - generic [ref=e720]: 100MB almacenamiento
+            - listitem [ref=e721]:
+              - img [ref=e722]
+              - generic [ref=e724]: Soporte por email
+            - listitem [ref=e725]:
+              - img [ref=e726]
+              - generic [ref=e729]: Punto de venta
+            - listitem [ref=e730]:
+              - img [ref=e731]
+              - generic [ref=e734]: Portal de seguimiento
+            - listitem [ref=e735]:
+              - img [ref=e736]
+              - generic [ref=e739]: Reportes avanzados
+            - listitem [ref=e740]:
+              - img [ref=e741]
+              - generic [ref=e744]: Notificaciones WhatsApp
+            - listitem [ref=e745]:
+              - img [ref=e746]
+              - generic [ref=e749]: Logo personalizado
+            - listitem [ref=e750]:
+              - img [ref=e751]
+              - generic [ref=e754]: Cotizaciones online
+        - generic [ref=e755]:
+          - generic [ref=e757]:
+            - img [ref=e758]
+            - text: Más popular
+          - generic [ref=e760]:
+            - heading "Profesional" [level=3] [ref=e761]
+            - paragraph [ref=e762]: Todo lo que tu taller necesita
+          - generic [ref=e763]:
+            - generic [ref=e764]:
+              - generic [ref=e765]: $19.999
+              - generic [ref=e766]: /mes
+            - paragraph [ref=e767]: ARS
+          - generic [ref=e769]:
+            - img [ref=e770]
+            - generic [ref=e773]: USD $14/mes
+          - link "Probar 30 días gratis" [ref=e774] [cursor=pointer]:
+            - /url: /registro?plan=profesional
+            - button "Probar 30 días gratis" [ref=e776]
+          - list [ref=e778]:
+            - listitem [ref=e779]:
+              - img [ref=e780]
+              - generic [ref=e782]: Órdenes ilimitadas
+            - listitem [ref=e783]:
+              - img [ref=e784]
+              - generic [ref=e786]: Técnicos ilimitados
+            - listitem [ref=e787]:
+              - img [ref=e788]
+              - generic [ref=e790]: Clientes ilimitados
+            - listitem [ref=e791]:
+              - img [ref=e792]
+              - generic [ref=e794]: Punto de venta con garantías
+            - listitem [ref=e795]:
+              - img [ref=e796]
+              - generic [ref=e798]: Cotizaciones con aprobación online
+            - listitem [ref=e799]:
+              - img [ref=e800]
+              - generic [ref=e802]: Portal de seguimiento para clientes
+              - generic [ref=e803]: Diferencial
+            - listitem [ref=e804]:
+              - img [ref=e805]
+              - generic [ref=e807]: Modo kiosco para tu local
+            - listitem [ref=e808]:
+              - img [ref=e809]
+              - generic [ref=e811]: 15+ reportes avanzados
+            - listitem [ref=e812]:
+              - img [ref=e813]
+              - generic [ref=e815]: 5GB almacenamiento
+            - listitem [ref=e816]:
+              - img [ref=e817]
+              - generic [ref=e819]: Notificaciones WhatsApp
+            - listitem [ref=e820]:
+              - img [ref=e821]
+              - generic [ref=e823]: Cuenta corriente de clientes
+            - listitem [ref=e824]:
+              - img [ref=e825]
+              - generic [ref=e827]: Import/export datos
+            - listitem [ref=e828]:
+              - img [ref=e829]
+              - generic [ref=e831]: Tu logo en presupuestos
+              - generic [ref=e832]: Tu marca
+            - listitem [ref=e833]:
+              - img [ref=e834]
+              - generic [ref=e836]: Soporte prioritario
+      - generic [ref=e837]:
+        - paragraph [ref=e838]: Precio de lanzamiento — no va a durar para siempre
+        - paragraph [ref=e839]: Si no te convence en 30 días, no pagás nada. Sin preguntas, sin vueltas.
+        - generic [ref=e840]:
+          - generic [ref=e841]: Pagos seguros con
+          - img "MercadoPago - Pagos seguros para suscripción de software de servicio técnico" [ref=e842]
+    - region "Aprendé a escalar tu taller" [ref=e843]:
+      - generic [ref=e844]:
+        - generic [ref=e845]:
+          - generic [ref=e846]:
+            - heading "Aprendé a escalar tu taller" [level=2] [ref=e847]
+            - paragraph [ref=e848]: Guías, estrategias y buenas prácticas para dueños de talleres de reparación.
+          - link "Ver todo el blog" [ref=e849] [cursor=pointer]:
+            - /url: /empresa/blog
+            - button "Ver todo el blog" [ref=e850]:
+              - text: Ver todo el blog
+              - img [ref=e851]
+        - generic [ref=e853]:
+          - link "Cómo elegir el mejor software de servicio técnico en 2025 - Blog STApp 31 de mar de 2024 7 min Cómo elegir el mejor software de servicio técnico en 2025 Criterios clave para evaluar y elegir el software de gestión ideal para tu taller de reparación. Comparativa de funciones esenciales." [ref=e854] [cursor=pointer]:
+            - /url: /empresa/blog/elegir-mejor-software-servicio-tecnico
+            - generic [ref=e855]:
+              - img "Cómo elegir el mejor software de servicio técnico en 2025 - Blog STApp" [ref=e857]
+              - generic [ref=e858]:
+                - generic [ref=e859]:
+                  - generic [ref=e860]:
+                    - img [ref=e861]
+                    - time [ref=e863]: 31 de mar de 2024
+                  - generic [ref=e864]:
+                    - img [ref=e865]
+                    - text: 7 min
+                - heading "Cómo elegir el mejor software de servicio técnico en 2025" [level=3] [ref=e868]
+                - paragraph [ref=e869]: Criterios clave para evaluar y elegir el software de gestión ideal para tu taller de reparación. Comparativa de funciones esenciales.
+          - 'link "Notificaciones WhatsApp para clientes: la clave para fidelizar en tu taller - Blog STApp 19 de mar de 2024 6 min Notificaciones WhatsApp para clientes: la clave para fidelizar en tu taller Cómo usar WhatsApp para mantener informados a tus clientes sobre el estado de sus reparaciones y aumentar la satisfacción." [ref=e870] [cursor=pointer]':
+            - /url: /empresa/blog/notificaciones-whatsapp-clientes-reparacion
+            - generic [ref=e871]:
+              - 'img "Notificaciones WhatsApp para clientes: la clave para fidelizar en tu taller - Blog STApp" [ref=e873]'
+              - generic [ref=e874]:
+                - generic [ref=e875]:
+                  - generic [ref=e876]:
+                    - img [ref=e877]
+                    - time [ref=e879]: 19 de mar de 2024
+                  - generic [ref=e880]:
+                    - img [ref=e881]
+                    - text: 6 min
+                - 'heading "Notificaciones WhatsApp para clientes: la clave para fidelizar en tu taller" [level=3] [ref=e884]'
+                - paragraph [ref=e885]: Cómo usar WhatsApp para mantener informados a tus clientes sobre el estado de sus reparaciones y aumentar la satisfacción.
+          - 'link "Cómo escalar tu taller de reparación de celulares sin perder calidad - Blog STApp 14 de mar de 2024 9 min Cómo escalar tu taller de reparación de celulares sin perder calidad Estrategias probadas para crecer tu taller de reparación: agregar técnicos, abrir sucursales y sistematizar procesos sin sacrificar la calidad." [ref=e886] [cursor=pointer]':
+            - /url: /empresa/blog/como-escalar-taller-reparacion-celulares
+            - generic [ref=e887]:
+              - img "Cómo escalar tu taller de reparación de celulares sin perder calidad - Blog STApp" [ref=e889]
+              - generic [ref=e890]:
+                - generic [ref=e891]:
+                  - generic [ref=e892]:
+                    - img [ref=e893]
+                    - time [ref=e895]: 14 de mar de 2024
+                  - generic [ref=e896]:
+                    - img [ref=e897]
+                    - text: 9 min
+                - heading "Cómo escalar tu taller de reparación de celulares sin perder calidad" [level=3] [ref=e900]
+                - paragraph [ref=e901]: "Estrategias probadas para crecer tu taller de reparación: agregar técnicos, abrir sucursales y sistematizar procesos sin sacrificar la calidad."
+    - generic [ref=e903]:
+      - generic [ref=e904]:
+        - heading "Preguntas frecuentes" [level=2] [ref=e905]
+        - paragraph [ref=e906]: Todo lo que querés saber antes de empezar.
+      - generic [ref=e907]:
+        - generic [ref=e908]:
+          - button "¿Necesito instalar algo en mi computadora?" [expanded] [ref=e909] [cursor=pointer]:
+            - generic [ref=e910]: ¿Necesito instalar algo en mi computadora?
+            - img [ref=e912]
+          - region "¿Necesito instalar algo en mi computadora?" [ref=e914]:
+            - paragraph [ref=e915]: No, STApp es una aplicación web que funciona directamente en tu navegador desde cualquier dispositivo. Solo necesitas conexión a internet. Además, podés descargar la app nativa para Android (APK), instalarla como PWA en cualquier dispositivo, y próximamente estará disponible también en iOS.
+        - generic [ref=e916]:
+          - button "¿Puedo probar antes de pagar?" [ref=e917] [cursor=pointer]:
+            - generic [ref=e918]: ¿Puedo probar antes de pagar?
+            - img [ref=e920]
+          - paragraph [ref=e922]: ¡Por supuesto! Tienes 30 días gratis con acceso completo a todas las funciones, sin necesidad de tarjeta de crédito. Si no te convence, simplemente no hacés nada y la prueba finaliza sin ningún cargo.
+        - generic [ref=e923]:
+          - button "¿Qué métodos de pago aceptan?" [ref=e924] [cursor=pointer]:
+            - generic [ref=e925]: ¿Qué métodos de pago aceptan?
+            - img [ref=e927]
+          - paragraph [ref=e929]: Aceptamos tarjetas de crédito, débito, efectivo y otros medios de pago a través de MercadoPago. Podés elegir entre plan mensual o anual (con descuento). Los pagos se procesan de forma segura.
+        - generic [ref=e930]:
+          - button "¿Puedo cancelar mi suscripción en cualquier momento?" [ref=e931] [cursor=pointer]:
+            - generic [ref=e932]: ¿Puedo cancelar mi suscripción en cualquier momento?
+            - img [ref=e934]
+          - paragraph [ref=e936]: Sí, podés cancelar cuando quieras sin penalidades ni cargos ocultos. Mantendrás el acceso a todas las funciones hasta el final del período ya facturado.
+        - generic [ref=e937]:
+          - button "¿Puedo importar y exportar mis datos?" [ref=e938] [cursor=pointer]:
+            - generic [ref=e939]: ¿Puedo importar y exportar mis datos?
+            - img [ref=e941]
+          - paragraph [ref=e943]: Sí, podés importar clientes e inventario desde archivos Excel o CSV con plantillas descargables y validación automática. También podés exportar tus datos en cualquier momento. Tus datos son tuyos siempre.
+        - generic [ref=e944]:
+          - button "¿Mis datos están seguros?" [ref=e945] [cursor=pointer]:
+            - generic [ref=e946]: ¿Mis datos están seguros?
+            - img [ref=e948]
+          - paragraph [ref=e950]: Absolutamente. Usamos encriptación HTTPS/TLS, autenticación de dos factores (2FA) con códigos de respaldo, controles de acceso estrictos, monitoreo continuo y copias de seguridad periódicas. Tu información y la de tus clientes está protegida en todo momento.
+        - generic [ref=e951]:
+          - button "¿Cómo funcionan las notificaciones por WhatsApp?" [ref=e952] [cursor=pointer]:
+            - generic [ref=e953]: ¿Cómo funcionan las notificaciones por WhatsApp?
+            - img [ref=e955]
+          - paragraph [ref=e957]: "STApp incluye plantillas listas para enviar actualizaciones a tus clientes por WhatsApp: aviso de equipo listo, presupuestos, seguimiento de reparación y más. Todo con un solo clic desde la orden de servicio."
+        - generic [ref=e958]:
+          - button "¿Puedo gestionar varios técnicos y vendedores?" [ref=e959] [cursor=pointer]:
+            - generic [ref=e960]: ¿Puedo gestionar varios técnicos y vendedores?
+            - img [ref=e962]
+          - paragraph [ref=e964]: Sí, podés agregar técnicos y vendedores ilimitados con roles diferenciados (admin, técnico, vendedor). Asigná reparaciones, visualizá la carga de trabajo de cada uno y seguí el rendimiento del equipo con métricas en tiempo real.
+        - generic [ref=e965]:
+          - button "¿Mi cliente puede ver el estado de su reparación?" [ref=e966] [cursor=pointer]:
+            - generic [ref=e967]: ¿Mi cliente puede ver el estado de su reparación?
+            - img [ref=e969]
+          - paragraph [ref=e971]: Sí. Cada orden genera un link único que podés compartir por WhatsApp. Tu cliente ve el estado en tiempo real, las fotos, la información de garantía y puede descargar el comprobante en PDF. No necesita crear cuenta ni instalar nada.
+        - generic [ref=e972]:
+          - button "¿Puedo vender accesorios y repuestos además de reparar?" [ref=e973] [cursor=pointer]:
+            - generic [ref=e974]: ¿Puedo vender accesorios y repuestos además de reparar?
+            - img [ref=e976]
+          - paragraph [ref=e978]: Sí, STApp incluye un módulo de ventas completo. Registrá ventas con garantía por producto, múltiples medios de pago, gestión de devoluciones y seguimiento de vendedores con métricas individuales.
+        - generic [ref=e979]:
+          - button "¿Cómo puedo obtener soporte si tengo un problema?" [ref=e980] [cursor=pointer]:
+            - generic [ref=e981]: ¿Cómo puedo obtener soporte si tengo un problema?
+            - img [ref=e983]
+          - paragraph [ref=e985]: "Tenés varias opciones: nuestro asistente virtual Santi disponible dentro de la app, el sistema de tickets de soporte para reportar errores o hacer consultas, y también podés contactarnos directamente. Brindamos soporte prioritario a todos los usuarios."
+        - generic [ref=e986]:
+          - button "¿Pueden agregar funciones que necesito?" [ref=e987] [cursor=pointer]:
+            - generic [ref=e988]: ¿Pueden agregar funciones que necesito?
+            - img [ref=e990]
+          - paragraph [ref=e992]: ¡Claro! Estamos en constante mejora basándonos en el feedback de nuestros usuarios. Podés enviar sugerencias desde el sistema de soporte dentro de la app y muchas funciones nuevas nacen de las ideas de nuestros clientes.
+        - generic [ref=e993]:
+          - button "¿STApp tiene control de caja y finanzas?" [ref=e994] [cursor=pointer]:
+            - generic [ref=e995]: ¿STApp tiene control de caja y finanzas?
+            - img [ref=e997]
+          - paragraph [ref=e999]: Sí. STApp incluye caja diaria con apertura y cierre, control de movimientos de efectivo, gestión de gastos por categoría, gastos recurrentes (alquiler, servicios, sueldos) y un dashboard analítico con los KPIs de tu taller en tiempo real. También podés gestionar órdenes de compra a proveedores vinculadas directamente al inventario.
+        - generic [ref=e1000]:
+          - button "¿Qué es Santi, el asistente de IA?" [ref=e1001] [cursor=pointer]:
+            - generic [ref=e1002]: ¿Qué es Santi, el asistente de IA?
+            - img [ref=e1004]
+          - paragraph [ref=e1006]: Santi es tu asistente virtual integrado dentro de STApp, disponible 24/7. Podés preguntarle cómo usar cualquier función, pedirle ayuda para resolver problemas, o que te guíe paso a paso. Es como tener soporte técnico instantáneo sin esperar.
+        - generic [ref=e1007]:
+          - button "¿Puedo captar leads y darles seguimiento?" [ref=e1008] [cursor=pointer]:
+            - generic [ref=e1009]: ¿Puedo captar leads y darles seguimiento?
+            - img [ref=e1011]
+          - paragraph [ref=e1013]: Sí. STApp incluye un módulo de captación de leads donde podés registrar consultas y potenciales clientes. Hacé seguimiento de cada lead hasta convertirlo en una orden de trabajo real, sin que se te escape ninguna oportunidad.
+    - generic [ref=e1016]:
+      - generic [ref=e1017]:
+        - generic [ref=e1019]:
+          - generic [ref=e1022]:
+            - generic [ref=e1024]: 9:41
+            - img "Gestión de órdenes de trabajo - Sistema de seguimiento de reparaciones de celulares" [ref=e1031]
+          - button "Anterior" [ref=e1034] [cursor=pointer]:
+            - img [ref=e1035]
+          - button "Siguiente" [ref=e1037] [cursor=pointer]:
+            - img [ref=e1038]
+          - generic [ref=e1040]:
+            - button "Dashboard" [ref=e1041] [cursor=pointer]:
+              - generic [ref=e1043]: Dashboard
+            - button "Órdenes" [ref=e1044] [cursor=pointer]:
+              - generic [ref=e1046]: Órdenes
+            - button "Clientes" [ref=e1047] [cursor=pointer]:
+              - generic [ref=e1049]: Clientes
+            - button "Inventario" [ref=e1050] [cursor=pointer]:
+              - generic [ref=e1052]: Inventario
+        - generic [ref=e1054]:
+          - generic [ref=e1055]:
+            - img [ref=e1056]
+            - text: App Android
+          - heading "Descargá la app en tu celular" [level=2] [ref=e1058]
+          - paragraph [ref=e1059]: Instalá la app nativa en tu Android. Abrila directo desde el inicio, sin pasar por el navegador.
+          - generic [ref=e1060]:
+            - generic [ref=e1061]:
+              - img [ref=e1063]
+              - generic [ref=e1065]:
+                - paragraph [ref=e1066]: Acceso rápido
+                - paragraph [ref=e1067]: Abrí la app directo desde tu celular sin usar el navegador
+            - generic [ref=e1068]:
+              - img [ref=e1070]
+              - generic [ref=e1072]:
+                - paragraph [ref=e1073]: Segura
+                - paragraph [ref=e1074]: Misma seguridad que la versión web con conexión encriptada
+            - generic [ref=e1075]:
+              - img [ref=e1077]
+              - generic [ref=e1082]:
+                - paragraph [ref=e1083]: Siempre actualizada
+                - paragraph [ref=e1084]: Se actualiza automáticamente sin necesidad de descargar nuevamente
+          - generic [ref=e1085]:
+            - generic [ref=e1086]:
+              - link "Descargar APK" [ref=e1087] [cursor=pointer]:
+                - /url: /api/download/apk
+                - button "Descargar APK" [ref=e1088]:
+                  - img [ref=e1089]
+                  - text: Descargar APK
+              - generic [ref=e1092]: 9.73 MB
+            - generic [ref=e1093]:
+              - img [ref=e1094]
+              - generic [ref=e1097]: v1.0.0
+              - generic [ref=e1098]: · Actualizado el 24 de marzo de 2026
+      - generic [ref=e1100]:
+        - generic [ref=e1101]:
+          - img [ref=e1102]
+          - heading "¿Usás iPhone?" [level=3] [ref=e1105]
+        - paragraph [ref=e1106]: La app para iOS está en camino. Dejá tu email y te avisamos cuando esté lista.
+        - generic [ref=e1107]:
+          - textbox "tu@email.com" [ref=e1108]
+          - button "Avisarme" [ref=e1109] [cursor=pointer]:
+            - img [ref=e1110]
+            - text: Avisarme
+    - generic [ref=e1114]:
+      - generic [ref=e1115]:
+        - generic [ref=e1116]:
+          - link "STApp" [ref=e1117] [cursor=pointer]:
+            - /url: /
+            - generic [ref=e1118]:
+              - img [ref=e1119]
+              - generic [ref=e1128]: STApp
+          - paragraph [ref=e1129]: Sistema completo para gestionar tu taller de reparación de dispositivos electrónicos. Órdenes, inventario, facturación y más.
+        - generic [ref=e1130]:
+          - heading "Producto" [level=3] [ref=e1131]
+          - list [ref=e1132]:
+            - listitem [ref=e1133]:
+              - link "Características" [ref=e1134] [cursor=pointer]:
+                - /url: /#features
+            - listitem [ref=e1135]:
+              - link "Precios" [ref=e1136] [cursor=pointer]:
+                - /url: /precios
+            - listitem [ref=e1137]:
+              - link "Casos de uso" [ref=e1138] [cursor=pointer]:
+                - /url: /casos-de-uso
+            - listitem [ref=e1139]:
+              - link "FAQ" [ref=e1140] [cursor=pointer]:
+                - /url: /#faq
+        - generic [ref=e1141]:
+          - heading "Empresa" [level=3] [ref=e1142]
+          - list [ref=e1143]:
+            - listitem [ref=e1144]:
+              - link "Sobre nosotros" [ref=e1145] [cursor=pointer]:
+                - /url: /empresa/sobre-nosotros
+            - listitem [ref=e1146]:
+              - link "Blog" [ref=e1147] [cursor=pointer]:
+                - /url: /empresa/blog
+            - listitem [ref=e1148]:
+              - link "Trabajá con nosotros" [ref=e1149] [cursor=pointer]:
+                - /url: /empresa/trabaja-con-nosotros
+            - listitem [ref=e1150]:
+              - link "Contacto" [ref=e1151] [cursor=pointer]:
+                - /url: /empresa/contacto
+        - generic [ref=e1152]:
+          - heading "Soporte" [level=3] [ref=e1153]
+          - list [ref=e1154]:
+            - listitem [ref=e1155]:
+              - link "Centro de ayuda" [ref=e1156] [cursor=pointer]:
+                - /url: /ayuda
+            - listitem [ref=e1157]:
+              - link "Manual de uso" [ref=e1158] [cursor=pointer]:
+                - /url: /ayuda/manual
+            - listitem [ref=e1159]:
+              - link "Descargar app Android" [ref=e1160] [cursor=pointer]:
+                - /url: /descargar/android
+            - listitem [ref=e1161]:
+              - link "WhatsApp" [ref=e1162] [cursor=pointer]:
+                - /url: https://wa.me/5491100000000
+        - generic [ref=e1163]:
+          - heading "Comunidad" [level=3] [ref=e1164]
+          - list [ref=e1165]:
+            - listitem [ref=e1166]:
+              - link "Instagram" [ref=e1167] [cursor=pointer]:
+                - /url: https://instagram.com/stapp.ar
+            - listitem [ref=e1168]:
+              - link "TikTok" [ref=e1169] [cursor=pointer]:
+                - /url: https://tiktok.com/@stapp.ar
+        - generic [ref=e1170]:
+          - heading "Legal" [level=3] [ref=e1171]
+          - list [ref=e1172]:
+            - listitem [ref=e1173]:
+              - link "Términos de servicio" [ref=e1174] [cursor=pointer]:
+                - /url: /legal/terminos
+            - listitem [ref=e1175]:
+              - link "Política de privacidad" [ref=e1176] [cursor=pointer]:
+                - /url: /legal/privacidad
+            - listitem [ref=e1177]:
+              - link "Política de cookies" [ref=e1178] [cursor=pointer]:
+                - /url: /legal/cookies
+      - paragraph [ref=e1180]: © 2026 STApp. Todos los derechos reservados.
+    - link "Contactar por WhatsApp" [ref=e1181] [cursor=pointer]:
+      - /url: https://wa.me/5491169625733?text=Hola!%20Me%20interesa%20saber%20m%C3%A1s%20sobre%20STApp%20para%20mi%20taller%20de%20reparaci%C3%B3n.
+      - img [ref=e1182]
+      - generic: Chateá con nosotros
+    - button "Abrir chat con Santi" [ref=e1184] [cursor=pointer]:
+      - img [ref=e1185]
+      - generic: Hola! Soy Santi 👋
+  - button "Cerrar" [ref=e1195] [cursor=pointer]
+  - generic [ref=e1199]:
+    - generic [ref=e1200]:
+      - img [ref=e1202]
+      - generic [ref=e1204]:
+        - heading "Utilizamos cookies" [level=3] [ref=e1205]
+        - paragraph [ref=e1206]:
+          - text: Utilizamos cookies esenciales para el funcionamiento del sitio y cookies opcionales para mejorar tu experiencia. Puedes elegir qué cookies aceptar.
+          - link "Más información" [ref=e1207] [cursor=pointer]:
+            - /url: /legal/cookies
+    - generic [ref=e1208]:
+      - button "Rechazar todo" [ref=e1209] [cursor=pointer]
+      - button "Solo esenciales" [ref=e1210] [cursor=pointer]
+      - button "Aceptar todo" [ref=e1211] [cursor=pointer]
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=e1217] [cursor=pointer]:
+    - img [ref=e1218]
+  - alert [ref=e1221]
+```

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DataTable, Column } from "@/components/ui/data-table"
-import { Search, Eye, Power, PowerOff, Building2, Loader2, Download, CheckCircle, XCircle, X, Phone, AlertTriangle, Users, CreditCard, CalendarPlus, TrendingUp, ExternalLink, Trash2 } from "lucide-react"
+import { Search, Eye, Power, PowerOff, Building2, Loader2, Download, CheckCircle, XCircle, X, Phone, AlertTriangle, Users, CreditCard, CalendarPlus, TrendingUp, ExternalLink, Trash2, Copy, MoreHorizontal } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -16,6 +16,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { formatDate } from "@/lib/utils"
 import { useSuperadminFetch, useSuperadminMutation } from "@/hooks/use-superadmin-fetch"
 import { useLastUpdated } from "@/hooks/use-last-updated"
@@ -47,6 +53,7 @@ export default function OrganizacionesPage() {
   const [togglingId, setTogglingId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [confirmDeactivateOpen, setConfirmDeactivateOpen] = useState(false)
+  const [confirmToggleOrg, setConfirmToggleOrg] = useState<{ id: string; nombre: string; activo: boolean } | null>(null)
   const [confirmDeleteOrg, setConfirmDeleteOrg] = useState<{ id: string; nombre: string } | null>(null)
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -147,11 +154,7 @@ export default function OrganizacionesPage() {
     URL.revokeObjectURL(url)
   }
 
-  const handleToggleStatus = async (
-    e: React.MouseEvent,
-    org: OrganizationListItem
-  ) => {
-    e.stopPropagation()
+  const performToggle = async (org: { id: string; nombre: string; activo: boolean }) => {
     setTogglingId(org.id)
     await mutate(
       `/api/superadmin/organizations/${org.id}/toggle-status`,
@@ -166,6 +169,19 @@ export default function OrganizacionesPage() {
       }
     )
     setTogglingId(null)
+  }
+
+  const handleToggleStatus = async (
+    e: React.MouseEvent,
+    org: OrganizationListItem
+  ) => {
+    e.stopPropagation()
+    if (org.activo) {
+      // Desactivar: pedir confirmación antes (acción visible, reversible pero impacta usuarios)
+      setConfirmToggleOrg({ id: org.id, nombre: org.nombre, activo: org.activo })
+      return
+    }
+    await performToggle({ id: org.id, nombre: org.nombre, activo: org.activo })
   }
 
   const handleExportSelectedCSV = () => {
@@ -260,6 +276,9 @@ export default function OrganizacionesPage() {
             healthTitle = `Actividad moderada (hace ${daysSince}d)`
           }
         }
+        const dupTitle = org.possibleDuplicates && org.possibleDuplicates.length > 0
+          ? `Posible duplicado de: ${org.possibleDuplicates.map((d) => `${d.nombre} (${d.slug})`).join(", ")}`
+          : ""
         return (
           <div className="flex items-start gap-2">
             <span
@@ -267,7 +286,18 @@ export default function OrganizacionesPage() {
               title={healthTitle}
             />
             <div>
-              <div className="font-medium">{org.nombre}</div>
+              <div className="font-medium flex items-center gap-1.5">
+                <span>{org.nombre}</span>
+                {org.possibleDuplicates && org.possibleDuplicates.length > 0 && (
+                  <span
+                    title={dupTitle}
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold text-amber-700 bg-amber-100 dark:text-amber-300 dark:bg-amber-950 border border-amber-300 dark:border-amber-800"
+                  >
+                    <Copy className="h-3 w-3" />
+                    Posible duplicado
+                  </span>
+                )}
+              </div>
               <a
                 href={`https://${org.slug}.stapp.com.ar`}
                 target="_blank"
@@ -287,7 +317,14 @@ export default function OrganizacionesPage() {
       key: "email",
       header: "Email",
       hideOnMobile: true,
-      render: (org) => org.email || "-",
+      render: (org) =>
+        org.email ? (
+          <span className="truncate max-w-[200px] block" title={org.email}>
+            {org.email}
+          </span>
+        ) : (
+          <span className="text-muted-foreground/40 text-xs">Sin datos</span>
+        ),
     },
     {
       key: "telefono",
@@ -299,7 +336,7 @@ export default function OrganizacionesPage() {
           {org.telefono}
         </span>
       ) : (
-        <span className="text-muted-foreground">-</span>
+        <span className="text-muted-foreground/40 text-xs">Sin datos</span>
       ),
     },
     {
@@ -388,7 +425,7 @@ export default function OrganizacionesPage() {
       key: "actions",
       header: "Acciones",
       render: (org) => (
-        <div className="flex gap-1">
+        <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
           <Button
             size="sm"
             variant="ghost"
@@ -412,19 +449,31 @@ export default function OrganizacionesPage() {
               <Power className="h-4 w-4 text-green-500" />
             )}
           </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setConfirmDeleteOrg({ id: org.id, nombre: org.nombre })}
-            title="Eliminar permanentemente"
-            disabled={deletingId === org.id}
-          >
-            {deletingId === org.id ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Trash2 className="h-4 w-4 text-red-500" />
-            )}
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                size="sm"
+                variant="ghost"
+                title="Más acciones"
+                disabled={deletingId === org.id}
+              >
+                {deletingId === org.id ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <MoreHorizontal className="h-4 w-4" />
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem
+                onClick={() => setConfirmDeleteOrg({ id: org.id, nombre: org.nombre })}
+                className="text-red-600 hover:bg-red-50 dark:hover:bg-red-950 focus:bg-red-50 dark:focus:bg-red-950"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Eliminar permanentemente
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       ),
     },
@@ -468,14 +517,24 @@ export default function OrganizacionesPage() {
               description: "Registradas en el sistema",
               color: "text-blue-600",
               bgColor: "bg-blue-100 dark:bg-blue-950",
+              filter: () => {
+                setStatusFilter("")
+                setPlanFilter("")
+                setPage(1)
+              },
             },
             {
               title: "Activas en trial",
               value: kpis.activeTrial,
               icon: Users,
-              description: "Plan Free activas",
+              description: "Plan Profesional (trial)",
               color: "text-amber-600",
               bgColor: "bg-amber-100 dark:bg-amber-950",
+              filter: () => {
+                setStatusFilter("active")
+                setPlanFilter("free")
+                setPage(1)
+              },
             },
             {
               title: "Premium",
@@ -484,6 +543,11 @@ export default function OrganizacionesPage() {
               description: "Con plan de pago activo",
               color: "text-green-600",
               bgColor: "bg-green-100 dark:bg-green-950",
+              filter: () => {
+                setStatusFilter("")
+                setPlanFilter("premium")
+                setPage(1)
+              },
             },
             {
               title: "Nuevas este mes",
@@ -492,6 +556,7 @@ export default function OrganizacionesPage() {
               description: "Creadas en el mes actual",
               color: "text-purple-600",
               bgColor: "bg-purple-100 dark:bg-purple-950",
+              filter: undefined as (() => void) | undefined,
             },
             {
               title: "Tasa de conversión",
@@ -500,11 +565,25 @@ export default function OrganizacionesPage() {
               description: "Free → Premium",
               color: "text-cyan-600",
               bgColor: "bg-cyan-100 dark:bg-cyan-950",
+              filter: undefined as (() => void) | undefined,
             },
           ].map((stat) => {
             const Icon = stat.icon
+            const clickable = !!stat.filter
             return (
-              <Card key={stat.title} className="hover:shadow-md transition-shadow">
+              <Card
+                key={stat.title}
+                onClick={stat.filter}
+                role={clickable ? "button" : undefined}
+                tabIndex={clickable ? 0 : undefined}
+                onKeyDown={clickable ? (e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault()
+                    stat.filter?.()
+                  }
+                } : undefined}
+                className={`transition-all ${clickable ? "cursor-pointer hover:shadow-md hover:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary" : ""}`}
+              >
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
                     {stat.title}
@@ -681,6 +760,53 @@ export default function OrganizacionesPage() {
           />
         </CardContent>
       </Card>
+
+      {/* Modal de confirmación para desactivar una sola organización */}
+      <Dialog open={!!confirmToggleOrg} onOpenChange={(open) => !open && setConfirmToggleOrg(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-500" />
+              Desactivar organización
+            </DialogTitle>
+            <DialogDescription>
+              Estás por desactivar <strong>&quot;{confirmToggleOrg?.nombre}&quot;</strong>.
+              Sus usuarios perderán acceso al sistema. Esta acción se puede revertir.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-3 justify-end pt-2">
+            <Button
+              variant="outline"
+              onClick={() => setConfirmToggleOrg(null)}
+              disabled={togglingId === confirmToggleOrg?.id}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                if (!confirmToggleOrg) return
+                const target = confirmToggleOrg
+                setConfirmToggleOrg(null)
+                await performToggle(target)
+              }}
+              disabled={togglingId === confirmToggleOrg?.id}
+            >
+              {togglingId === confirmToggleOrg?.id ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Desactivando...
+                </>
+              ) : (
+                <>
+                  <PowerOff className="h-4 w-4 mr-2" />
+                  Desactivar
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal de confirmación para desactivar en lote */}
       <Dialog open={confirmDeactivateOpen} onOpenChange={setConfirmDeactivateOpen}>

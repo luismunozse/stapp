@@ -11,8 +11,17 @@ const segmentLabels: Record<string, string> = {
   pagos: "Pagos",
   planes: "Planes",
   soporte: "Soporte",
+  leads: "Leads",
+  conversaciones: "Chatbot",
+  engagement: "Engagement",
+  broadcast: "Broadcast",
+  changelog: "Changelog",
   waitlist: "Waitlist iOS",
   logs: "Auditoría",
+  "feature-usage": "Feature Usage",
+  "email-campaigns": "Campañas Email",
+  "lifecycle-emails": "Lifecycle Emails",
+  "maintenance-banner": "Banner de Mantenimiento",
   nuevo: "Nuevo",
   historial: "Historial",
 }
@@ -23,7 +32,11 @@ function getLabel(segment: string): string {
   if (segment.match(/^[0-9a-fA-F-]{8,}$/) || segment.match(/^\d+$/)) {
     return "Detalle"
   }
-  return segment.charAt(0).toUpperCase() + segment.slice(1)
+  // Kebab-case → Title Case fallback
+  return segment
+    .split("-")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ")
 }
 
 export function Breadcrumbs() {

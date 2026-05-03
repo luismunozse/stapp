@@ -815,24 +815,44 @@ export default function LogsPage() {
         {/* ============================================================ */}
 
         {/* Alerta: Logins fallidos */}
-        {stats && stats.loginsFailed7Days > failedLoginThreshold && (
-          <Card className="border-destructive/50 bg-destructive/5">
-            <CardContent className="p-4">
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-destructive">
-                    Alto número de intentos fallidos de login
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Se detectaron {stats.loginsFailed7Days} intentos fallidos en los últimos 7 días
-                    (umbral: {failedLoginThreshold}). Revisá las IPs de origen en la pestaña Seguridad.
-                  </p>
+        {stats && stats.loginsFailed7Days > failedLoginThreshold && (() => {
+          const lastFailed = stats.securityEvents
+            ?.filter((e) => e.action === "LOGIN_FAILED")
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0]
+          return (
+            <Card className="border-destructive/50 bg-destructive/5">
+              <CardContent className="p-4">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-destructive">
+                      Alto número de intentos fallidos de login
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Se detectaron {stats.loginsFailed7Days} intentos fallidos en los últimos 7 días
+                      {" "}(umbral: {failedLoginThreshold}).
+                      {lastFailed && (
+                        <>
+                          {" "}Último intento: <strong>{formatDateTime(lastFailed.createdAt)}</strong>
+                          {lastFailed.ipAddress && <> desde IP <code className="px-1 py-0.5 bg-muted rounded text-[11px]">{lastFailed.ipAddress}</code></>}
+                          {lastFailed.email && <> · {lastFailed.email}</>}.
+                        </>
+                      )}
+                    </p>
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="h-auto p-0 mt-2 text-destructive"
+                      onClick={() => handleTabChange("security")}
+                    >
+                      Ver detalles en pestaña Seguridad →
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+              </CardContent>
+            </Card>
+          )
+        })()}
 
         {/* Alerta: Alta actividad de usuario */}
         {stats && stats.highActivityUsers && stats.highActivityUsers.length > 0 && (

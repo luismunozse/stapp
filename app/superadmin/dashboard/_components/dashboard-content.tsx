@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
+import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -107,6 +108,8 @@ export function DashboardContent() {
           description: `${data.activeOrganizations} activas`,
           color: "text-blue-600",
           bgColor: "bg-blue-100 dark:bg-blue-950",
+          href: "/superadmin/organizaciones",
+          tooltip: undefined as string | undefined,
         },
         {
           title: "Total Usuarios",
@@ -115,6 +118,8 @@ export function DashboardContent() {
           description: "En todas las organizaciones",
           color: "text-green-600",
           bgColor: "bg-green-100 dark:bg-green-950",
+          href: "/superadmin/organizaciones",
+          tooltip: undefined as string | undefined,
         },
         {
           title: "Suscripciones Premium",
@@ -123,14 +128,22 @@ export function DashboardContent() {
           description: "Planes activos",
           color: "text-purple-600",
           bgColor: "bg-purple-100 dark:bg-purple-950",
+          href: "/superadmin/organizaciones?plan=premium",
+          tooltip: undefined as string | undefined,
         },
         {
           title: "Ingresos del Mes",
           value: formatCurrency(data.monthlyRevenue),
           icon: DollarSign,
-          description: "Pagos procesados",
+          description: data.monthlyRevenue === 0 && data.premiumSubscriptions > 0
+            ? "Sin pagos registrados este mes"
+            : "Pagos procesados",
           color: "text-amber-600",
           bgColor: "bg-amber-100 dark:bg-amber-950",
+          href: "/superadmin/pagos",
+          tooltip: data.monthlyRevenue === 0 && data.premiumSubscriptions > 0
+            ? "Hay suscripciones Premium pero ningún pago registrado este mes. Verificá la integración con el provider de pagos."
+            : undefined,
         },
         {
           title: "Nuevas Orgs (Mes)",
@@ -139,6 +152,8 @@ export function DashboardContent() {
           description: "Registradas este mes",
           color: "text-cyan-600",
           bgColor: "bg-cyan-100 dark:bg-cyan-950",
+          href: "/superadmin/organizaciones",
+          tooltip: undefined as string | undefined,
         },
       ]
     : []
@@ -153,12 +168,19 @@ export function DashboardContent() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <div
+            className="flex items-center gap-1.5 text-xs text-muted-foreground"
+            title={
+              loading
+                ? "Cargando datos del dashboard..."
+                : `\u00DAltima actualizaci\u00F3n: ${formatSecondsAgo(secondsAgo)}. Pr\u00F3ximo refresh autom\u00E1tico en ${countdown}s.`
+            }
+          >
             <Clock className="h-3.5 w-3.5" />
             <span>
               {loading
                 ? "Actualizando..."
-                : `${formatSecondsAgo(secondsAgo)} \u00B7 ${countdown}s`}
+                : `${formatSecondsAgo(secondsAgo)} \u00B7 refresh en ${countdown}s`}
             </span>
           </div>
           <Button
@@ -214,25 +236,29 @@ export function DashboardContent() {
           {stats.map((stat) => {
             const Icon = stat.icon
             return (
-              <Card
+              <Link
                 key={stat.title}
-                className="hover:shadow-md transition-shadow"
+                href={stat.href}
+                title={stat.tooltip}
+                className="block focus:outline-none focus:ring-2 focus:ring-primary rounded-xl"
               >
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    {stat.title}
-                  </CardTitle>
-                  <div className={`p-2 rounded-lg ${stat.bgColor}`}>
-                    <Icon className={`h-4 w-4 ${stat.color}`} />
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{stat.value}</div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {stat.description}
-                  </p>
-                </CardContent>
-              </Card>
+                <Card className="hover:shadow-md hover:border-primary/40 transition-all cursor-pointer h-full">
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      {stat.title}
+                    </CardTitle>
+                    <div className={`p-2 rounded-lg ${stat.bgColor}`}>
+                      <Icon className={`h-4 w-4 ${stat.color}`} />
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{stat.value}</div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {stat.description}
+                    </p>
+                  </CardContent>
+                </Card>
+              </Link>
             )
           })}
         </div>

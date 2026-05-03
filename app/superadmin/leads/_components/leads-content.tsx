@@ -10,6 +10,7 @@ import {
   Phone,
   Building2,
   MessageCircle,
+  MessageSquare,
   RefreshCw,
   Users,
   UserCheck,
@@ -235,18 +236,27 @@ export function LeadsContent() {
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium truncate">
-                        {lead.nombre || "Sin nombre"}
-                      </span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {lead.nombre ? (
+                        <span className="font-medium truncate">{lead.nombre}</span>
+                      ) : lead.email ? (
+                        <span className="font-medium truncate">{lead.email.split("@")[0]}</span>
+                      ) : (
+                        <span className="font-medium italic text-muted-foreground">Sin nombre</span>
+                      )}
                       <Badge variant="secondary" className={cn("text-[10px] px-1.5 py-0", estadoColors[lead.estado])}>
                         {lead.estado}
                       </Badge>
                       <Badge variant="outline" className="text-[10px] px-1.5 py-0">
                         {lead.origen}
                       </Badge>
+                      {lead.plan_interes && (
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                          Interés: {lead.plan_interes}
+                        </Badge>
+                      )}
                     </div>
-                    <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground flex-wrap">
                       {lead.email && (
                         <span className="flex items-center gap-1 truncate">
                           <Mail className="w-3 h-3" />
@@ -266,6 +276,11 @@ export function LeadsContent() {
                         </span>
                       )}
                     </div>
+                    {lead.interes && (
+                      <p className="text-xs text-muted-foreground/80 mt-0.5 truncate italic" title={lead.interes}>
+                        “{lead.interes}”
+                      </p>
+                    )}
                   </div>
 
                   {/* Date + action */}
@@ -279,12 +294,12 @@ export function LeadsContent() {
                       })}
                     </span>
                     {lead.chatbot_conversaciones && lead.chatbot_conversaciones.length > 0 && (
-                      <Badge variant="outline" className="text-[10px] gap-1">
-                        <MessageCircle className="w-3 h-3" />
+                      <Badge variant="outline" className="text-[10px] gap-1 border-violet-300 text-violet-700 dark:text-violet-400">
+                        <MessageSquare className="w-3 h-3" />
                         Chat
                       </Badge>
                     )}
-                    <Eye className="w-4 h-4 text-muted-foreground" />
+                    <Eye className="w-4 h-4 text-muted-foreground" aria-label="Ver detalle" />
                   </div>
                 </div>
               ))}

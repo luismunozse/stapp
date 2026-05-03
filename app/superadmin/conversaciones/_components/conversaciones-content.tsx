@@ -215,7 +215,11 @@ export function ConversacionesContent() {
           </SelectContent>
         </Select>
         <Badge variant="secondary" className="h-9 px-3 flex items-center">
-          {total} conversaciones
+          {loading && !data ? (
+            <span className="inline-block h-3 w-20 bg-muted-foreground/20 rounded animate-pulse" />
+          ) : (
+            `${total} conversaciones`
+          )}
         </Badge>
       </div>
 
@@ -223,8 +227,20 @@ export function ConversacionesContent() {
       <Card>
         <CardContent className="pt-4">
           {loading && !data ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            <div className="space-y-2">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-4 p-3 rounded-lg border animate-pulse"
+                >
+                  <div className="w-10 h-10 rounded-full bg-muted flex-shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 w-1/3 bg-muted rounded" />
+                    <div className="h-3 w-2/3 bg-muted rounded" />
+                  </div>
+                  <div className="h-3 w-16 bg-muted rounded" />
+                </div>
+              ))}
             </div>
           ) : conversaciones.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">

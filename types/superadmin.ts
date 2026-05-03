@@ -31,6 +31,7 @@ export interface OrganizationListItem {
       tipo: PlanType
     } | null
   } | null
+  possibleDuplicates?: { id: string; nombre: string; slug: string }[]
 }
 
 export interface OrganizationDetail {

@@ -46,22 +46,23 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
     const fetchConfig = async () => {
       try {
         const res = await fetch("/api/configuracion", { signal: controller.signal })
-        if (res.ok) {
-          const data = await res.json()
-          if (data.moneda && data.moneda in CURRENCIES) {
-            setCurrency(data.moneda as CurrencyCode)
-          }
-          if (data.zonaHoraria) {
-            setTimezone(data.zonaHoraria)
-          }
-          if (data.pais) {
-            setPais(data.pais as CountryCode)
-          }
+        if (!res.ok) return
+        const contentType = res.headers.get("content-type") || ""
+        if (!contentType.includes("application/json")) return
+        const data = await res.json()
+        if (data.moneda && data.moneda in CURRENCIES) {
+          setCurrency(data.moneda as CurrencyCode)
+        }
+        if (data.zonaHoraria) {
+          setTimezone(data.zonaHoraria)
+        }
+        if (data.pais) {
+          setPais(data.pais as CountryCode)
         }
       } catch (error) {
-        if (!controller.signal.aborted) {
-          console.error("Error fetching config:", error)
-        }
+        if (controller.signal.aborted) return
+        if (error instanceof SyntaxError) return
+        console.error("Error fetching config:", error)
       }
     }
 
