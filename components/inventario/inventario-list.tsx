@@ -116,6 +116,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   const [movimientosItem, setMovimientosItem] = useState<{ id: string; nombre: string } | null>(null)
   const [analyticsItem, setAnalyticsItem] = useState<{ id: string; nombre: string } | null>(null)
   const [showScanner, setShowScanner] = useState(false)
+  const [pendingBarcode, setPendingBarcode] = useState<string | null>(null)
   const [labelItems, setLabelItems] = useState<Inventario[] | null>(null)
   const [includeArchived, setIncludeArchived] = useState(false)
   // Default a "list": es la vista que escala con catálogos grandes.
@@ -733,13 +734,16 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
       {showForm && (
         <InventarioForm
           item={editingItem}
+          initialBarcode={editingItem ? null : pendingBarcode}
           onClose={() => {
             setShowForm(false)
             setEditingItem(null)
+            setPendingBarcode(null)
           }}
           onSuccess={() => {
             setShowForm(false)
             setEditingItem(null)
+            setPendingBarcode(null)
             setRefreshKey(k => k + 1)
           }}
           onEditExisting={async (id) => {
@@ -826,8 +830,8 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
               cancelText: "Cancelar",
             })
             if (crear) {
-              sessionStorage.setItem("new-item-barcode", result.code)
               setEditingItem(null)
+              setPendingBarcode(result.code)
               setShowForm(true)
             }
           }

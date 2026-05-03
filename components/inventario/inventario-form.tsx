@@ -75,6 +75,8 @@ const categoriasPorTipo: Record<string, string[]> = {
 
 interface InventarioFormProps {
   item?: Inventario | null
+  // Barcode pre-cargado (p.ej. desde scanner cuando se crea un item nuevo)
+  initialBarcode?: string | null
   onClose: () => void
   onSuccess: () => void
   // Disparado al pedir editar un duplicado detectado. El padre debe cargar
@@ -84,6 +86,7 @@ interface InventarioFormProps {
 
 export function InventarioForm({
   item,
+  initialBarcode,
   onClose,
   onSuccess,
   onEditExisting,
@@ -153,7 +156,7 @@ export function InventarioForm({
           stockMinimo: null,
           stockMaximo: null,
           puntoReorden: null,
-          barcode: null,
+          barcode: initialBarcode ?? null,
         },
   })
 
@@ -221,18 +224,14 @@ export function InventarioForm({
     }
   }, [item, reset])
 
-  // Pick up barcode from scanner for new items
+  // Pre-fill barcode from scanner when creating a new item.
+  // setValue cubre el caso en que el form ya está montado y el padre cambia
+  // initialBarcode (no se reinicializan defaults de useForm).
   useEffect(() => {
-    if (!item) {
-      try {
-        const bc = sessionStorage.getItem("new-item-barcode")
-        if (bc) {
-          sessionStorage.removeItem("new-item-barcode")
-          setValue("barcode", bc, { shouldDirty: true, shouldTouch: true })
-        }
-      } catch { /* ignore */ }
+    if (!item && initialBarcode) {
+      setValue("barcode", initialBarcode, { shouldDirty: true, shouldTouch: true })
     }
-  }, [item, setValue])
+  }, [item, initialBarcode, setValue])
 
   // Duplicate detection — dispara on blur del nombre (cuando el usuario pasa
   // al siguiente input). Fuzzy match por tokens en el backend; tipo/categoría
