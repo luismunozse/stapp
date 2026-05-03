@@ -179,13 +179,15 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
   // Chequeo de duplicados contra inventario existente (debounced).
   // Corre cuando hay tipo + categoría. Por cada fila con nombre de 3+ chars,
   // llama al endpoint fuzzy y guarda matches sobre umbral.
+  // AbortController vive fuera del setTimeout para abortar fetches en vuelo
+  // cuando el usuario sigue tipeando antes de que respondan.
   useEffect(() => {
     if (!tipoDispositivo || !categoria) {
       setMatchesByRow({})
       return
     }
+    const controller = new AbortController()
     const handle = setTimeout(async () => {
-      const controller = new AbortController()
       const entries = await Promise.all(
         rows
           .filter((r) => r.nombre.trim().length >= 3)
@@ -211,13 +213,17 @@ export function InventarioBulkForm({ onClose, onSuccess }: InventarioBulkFormPro
             }
           })
       )
+      if (controller.signal.aborted) return
       const next: Record<string, DuplicateMatch[]> = {}
       for (const [id, matches] of entries) {
         if (matches.length > 0) next[id] = [...matches]
       }
       setMatchesByRow(next)
     }, 500)
-    return () => clearTimeout(handle)
+    return () => {
+      clearTimeout(handle)
+      controller.abort()
+    }
   }, [rows, tipoDispositivo, categoria])
 
   // Duplicados dentro del lote: filas con el mismo nombre normalizado.

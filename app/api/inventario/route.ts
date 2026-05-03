@@ -183,10 +183,15 @@ export async function POST(request: Request) {
             { status: 400 }
           )
         }
-        const match = codigo.match(/^(.+-?)(\d+)$/)
+        // Non-greedy capture: prefix toma lo mínimo posible, dígitos toman
+        // el run final completo. Crítico para que "ABC-099" → "ABC-100"
+        // (con greedy, prefix se comía un "9" y daba "ABC-0910").
+        const match = codigo.match(/^(.+?)(\d+)$/)
         if (match) {
           const prefix = match[1]
           const num = parseInt(match[2], 10) + 1
+          // Pad al ancho del bloque original; si num excede ese ancho,
+          // toString() ya devuelve la longitud necesaria y padStart no recorta.
           codigo = `${prefix}${num.toString().padStart(match[2].length, "0")}`
         } else {
           return NextResponse.json(

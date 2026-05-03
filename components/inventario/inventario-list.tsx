@@ -123,16 +123,20 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   // La preferencia se persiste en localStorage.
   const [viewMode, setViewMode] = useState<"grid" | "list">("list")
 
-  // Hidratar preferencia desde localStorage
+  // Hidratar preferencia desde localStorage. try/catch defensivo: localStorage
+  // puede tirar SecurityError en modo privado/iframe sin permisos.
   useEffect(() => {
     if (typeof window === "undefined") return
-    const saved = localStorage.getItem("inventario-view-mode")
-    if (saved === "grid" || saved === "list") setViewMode(saved)
+    try {
+      const saved = localStorage.getItem("inventario-view-mode")
+      if (saved === "grid" || saved === "list") setViewMode(saved)
+    } catch { /* ignore */ }
   }, [])
   useEffect(() => {
-    if (typeof window !== "undefined") {
+    if (typeof window === "undefined") return
+    try {
       localStorage.setItem("inventario-view-mode", viewMode)
-    }
+    } catch { /* ignore */ }
   }, [viewMode])
 
   // Pagination
@@ -821,6 +825,13 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
         onResult={async (result) => {
           if (result.found && result.item) {
             setEditingItem(result.item)
+            // Si matcheó por codigo y barcode está vacío, sugerir persistir EAN
+            // para evitar fallback en próximos escaneos.
+            if (result.matchedByCodigo && !result.item.barcode) {
+              setPendingBarcode(result.code)
+            } else {
+              setPendingBarcode(null)
+            }
             setShowForm(true)
           } else {
             const crear = await confirm({

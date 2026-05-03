@@ -86,42 +86,23 @@ export async function PATCH(request: Request) {
           { status: 400 }
         )
       }
-      // Hacemos el ajuste por SQL (multiplicador) para evitar round-trip por item.
+      // RPC con expresión SQL atómica: evita race entre read y write
+      // (otra escritura concurrente entre fetch y update ya no se pisa).
       const column = target === "precioCompra" ? "precio_compra" : "precio_venta"
       const factor = 1 + percent / 100
-      // No existe rpc estándar para multiplicar; usamos update con expresión vía rpc helper.
-      // Como Supabase JS no soporta expresiones SQL en update, lo hacemos en una RPC ligera.
-      // Si la RPC no existe todavía, fallback: traer + actualizar uno por uno (mantiene atomicidad por item).
-      const { data: rows, error: fetchError } = await supabaseAdmin
-        .from("inventario")
-        .select(`id, ${column}`)
-        .in("id", ids)
-        .eq("organization_id", organizationId!)
-        .is("deleted_at", null)
-
-      if (fetchError) throw fetchError
-
-      const updates = (rows || []).map((row: any) => {
-        const current = Number(row[column]) || 0
-        const next = Math.max(0, Math.round(current * factor * 100) / 100)
-        return { id: row.id, [column]: next }
+      const { data, error: rpcErr } = await supabaseAdmin.rpc("bulk_price_adjust", {
+        p_organization_id: organizationId!,
+        p_ids: ids,
+        p_column: column,
+        p_factor: factor,
       })
-
-      // Updates en paralelo, máximo 50 a la vez para no saturar
-      const BATCH = 50
-      for (let i = 0; i < updates.length; i += BATCH) {
-        const batch = updates.slice(i, i + BATCH)
-        await Promise.all(
-          batch.map((u: any) =>
-            supabaseAdmin
-              .from("inventario")
-              .update({ [column]: u[column], updated_at: new Date().toISOString() })
-              .eq("id", u.id)
-              .eq("organization_id", organizationId!)
-          )
-        )
+      if (rpcErr) {
+        if (rpcErr.code === "22023") {
+          return NextResponse.json({ error: rpcErr.message }, { status: 400 })
+        }
+        throw rpcErr
       }
-      updatedCount = updates.length
+      updatedCount = (data as { updated: number })?.updated ?? 0
     } else if (action === "set_proveedor") {
       // proveedorId === null → quitar proveedor. String → setearlo.
       const proveedorId = payload?.proveedorId ?? null

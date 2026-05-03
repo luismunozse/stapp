@@ -19,6 +19,7 @@ export async function GET(request: Request) {
 
     // Search by barcode first, fallback to codigo (products may store EAN in either field)
     let item = null
+    let matchedByCodigo = false
     const { data: byBarcode, error: barcodeErr } = await supabaseAdmin
       .from("inventario")
       .select("*, proveedores:proveedor_id(id, nombre)")
@@ -39,13 +40,19 @@ export async function GET(request: Request) {
         .maybeSingle()
       if (codigoErr) throw codigoErr
       item = byCodigo
+      if (item) matchedByCodigo = true
     }
 
     if (!item) {
       return NextResponse.json({ found: false, code })
     }
 
-    return NextResponse.json({ found: true, code, item: formatInventario(item) })
+    return NextResponse.json({
+      found: true,
+      code,
+      matchedByCodigo,
+      item: formatInventario(item),
+    })
   } catch (error) {
     console.error("Error searching by barcode:", error)
     return NextResponse.json({ error: "Error al buscar por código de barras" }, { status: 500 })

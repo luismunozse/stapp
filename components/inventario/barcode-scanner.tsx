@@ -15,6 +15,7 @@ interface ScanResult {
   found: boolean
   code: string
   item?: any
+  matchedByCodigo?: boolean
 }
 
 interface Props {

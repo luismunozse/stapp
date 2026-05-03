@@ -180,12 +180,13 @@ export function InventarioForm({
     }
   }, [tipoDispositivo, categoria, categoriasDisponibles, setValue])
 
-  // Generar código automáticamente para items nuevos
-  const fetchCode = useCallback(async (cat: string, tipo: string) => {
+  // Generar código automáticamente para items nuevos.
+  // Usado también en el reintento de submit cuando hay colisión de código.
+  const fetchCode = useCallback(async (cat: string, tipo: string, signal?: AbortSignal) => {
     if (!cat || !tipo || item) return
     try {
       const params = new URLSearchParams({ categoria: cat, tipoDispositivo: tipo })
-      const res = await fetch(`/api/inventario/next-code?${params}`)
+      const res = await fetch(`/api/inventario/next-code?${params}`, { signal })
       if (res.ok) {
         const data = await res.json()
         if (data.codigo) {
@@ -193,13 +194,21 @@ export function InventarioForm({
         }
       }
     } catch (error) {
+      if ((error as Error)?.name === "AbortError") return
       console.error("Error fetching code:", error)
     }
   }, [item])
 
+  // Debounce + abort: cambios rápidos de tipo/categoría no disparan N requests.
   useEffect(() => {
-    if (!item && categoria && tipoDispositivo) {
-      fetchCode(categoria, tipoDispositivo)
+    if (item || !categoria || !tipoDispositivo) return
+    const controller = new AbortController()
+    const timer = setTimeout(() => {
+      fetchCode(categoria, tipoDispositivo, controller.signal)
+    }, 200)
+    return () => {
+      clearTimeout(timer)
+      controller.abort()
     }
   }, [categoria, tipoDispositivo, item, fetchCode])
 
@@ -224,11 +233,15 @@ export function InventarioForm({
     }
   }, [item, reset])
 
-  // Pre-fill barcode from scanner when creating a new item.
-  // setValue cubre el caso en que el form ya está montado y el padre cambia
-  // initialBarcode (no se reinicializan defaults de useForm).
+  // Pre-fill barcode from scanner.
+  // - Item nuevo: setea siempre.
+  // - Item existente: setea solo si barcode está vacío (caso scanner matcheó
+  //   por codigo y queremos persistir el EAN para próximos escaneos).
   useEffect(() => {
-    if (!item && initialBarcode) {
+    if (!initialBarcode) return
+    if (!item) {
+      setValue("barcode", initialBarcode, { shouldDirty: true, shouldTouch: true })
+    } else if (!item.barcode) {
       setValue("barcode", initialBarcode, { shouldDirty: true, shouldTouch: true })
     }
   }, [item, initialBarcode, setValue])

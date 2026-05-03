@@ -19,7 +19,13 @@ export function useBarcodeScanner({ onScan, enabled = true }: UseBarcodeScannerO
 
     const handleKeyDown = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") {
+        // User typing en input — descartar buffer global para que próximo
+        // scan post-blur arranque limpio.
+        buffer.current = ""
+        lastKeyTime.current = 0
+        return
+      }
 
       const now = Date.now()
 

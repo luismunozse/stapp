@@ -108,15 +108,23 @@ export async function PUT(
       .from("inventario")
       .update(updateData)
       .eq("id", id)
+      .eq("organization_id", organizationId!)
       .select("*, proveedores:proveedor_id(id, nombre)")
       .single()
 
     if (updateError) {
+      // Codigo duplicado: error amigable en vez de 500.
+      if ((updateError as any).code === "23505") {
+        return NextResponse.json(
+          { error: "Ya existe un item con ese código" },
+          { status: 400 }
+        )
+      }
       throw updateError
     }
 
     if (data.stock !== undefined && data.stock !== existingItem.stock) {
-      await supabaseAdmin.from('movimientos_inventario').insert({
+      const { error: movError } = await supabaseAdmin.from('movimientos_inventario').insert({
         inventario_id: id,
         tipo: 'AJUSTE',
         cantidad: data.stock - existingItem.stock,
@@ -126,6 +134,16 @@ export async function PUT(
         usuario_id: userId,
         organization_id: organizationId,
       })
+      // Stock ya quedó actualizado; log explícito si falla auditoría para
+      // no perder el evento en silencio.
+      if (movError) {
+        console.error("Error registrando movimiento de stock (item actualizado igual):", {
+          inventarioId: id,
+          stockAnterior: existingItem.stock,
+          stockPosterior: data.stock,
+          error: movError,
+        })
+      }
     }
 
     return NextResponse.json(formatInventario(item))

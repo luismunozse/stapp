@@ -5,12 +5,15 @@ import { z } from "zod"
 
 // Endpoint dedicado de ajuste rápido de stock.
 // No requiere reenviar el item completo (a diferencia de PUT /api/inventario/[id]).
-// Crea automáticamente un movimiento AJUSTE auditable.
+// Delegado a la RPC adjust_stock_atomic, que aplica SELECT ... FOR UPDATE
+// y registra el movimiento en una sola transacción para evitar race conditions
+// entre ajustes concurrentes.
 const adjustSchema = z.object({
   // Modo "absoluto": setea el stock al valor indicado.
   // Modo "delta": suma/resta al stock actual.
   mode: z.enum(["absolute", "delta"]),
-  value: z.number().int(),
+  // Bound defensivo: evita overflow del INTEGER de Postgres y entradas absurdas.
+  value: z.number().int().min(-1_000_000).max(1_000_000),
   motivo: z.string().max(500).optional(),
   // Tipo de movimiento a registrar. Default AJUSTE; para consolidación de
   // duplicados al crear un item nuevo pasamos "ENTRADA" y referenciaTipo "CONSOLIDACION".
@@ -30,54 +33,46 @@ export async function POST(
     const body = await request.json()
     const { mode, value, motivo, tipo, referenciaTipo } = adjustSchema.parse(body)
 
-    // Verificar que el item pertenece a la organización y está activo
-    const { data: existingItem, error: fetchError } = await supabaseAdmin
-      .from("inventario")
-      .select("id, stock")
-      .eq("id", id)
-      .eq("organization_id", organizationId!)
-      .is("deleted_at", null)
-      .single()
-
-    if (fetchError || !existingItem) {
-      return NextResponse.json({ error: "Item no encontrado" }, { status: 404 })
-    }
-
-    const stockAnterior = existingItem.stock
-    const stockPosterior = mode === "absolute" ? value : stockAnterior + value
-
-    if (stockPosterior < 0) {
-      return NextResponse.json(
-        { error: "El stock no puede quedar negativo" },
-        { status: 400 }
-      )
-    }
-
-    if (stockPosterior === stockAnterior) {
-      return NextResponse.json({ stock: stockAnterior, changed: false })
-    }
-
-    const { error: updateError } = await supabaseAdmin
-      .from("inventario")
-      .update({ stock: stockPosterior, updated_at: new Date().toISOString() })
-      .eq("id", id)
-      .eq("organization_id", organizationId!)
-
-    if (updateError) throw updateError
-
-    await supabaseAdmin.from("movimientos_inventario").insert({
-      inventario_id: id,
-      tipo: tipo || "AJUSTE",
-      cantidad: stockPosterior - stockAnterior,
-      stock_anterior: stockAnterior,
-      stock_posterior: stockPosterior,
-      referencia_tipo: referenciaTipo || "AJUSTE_MANUAL",
-      observaciones: motivo || "Ajuste rápido desde lista",
-      usuario_id: userId,
-      organization_id: organizationId,
+    const { data, error: rpcErr } = await supabaseAdmin.rpc("adjust_stock_atomic", {
+      p_inventario_id: id,
+      p_organization_id: organizationId!,
+      p_user_id: userId!,
+      p_mode: mode,
+      p_value: value,
+      p_motivo: motivo ?? null,
+      p_tipo: tipo ?? "AJUSTE",
+      p_referencia_tipo: referenciaTipo ?? "AJUSTE_MANUAL",
     })
 
-    return NextResponse.json({ stock: stockPosterior, changed: true })
+    if (rpcErr) {
+      // Mapear errores de la RPC a respuestas HTTP coherentes.
+      if (rpcErr.code === "P0002") {
+        return NextResponse.json({ error: "Item no encontrado" }, { status: 404 })
+      }
+      if (rpcErr.code === "P0003") {
+        return NextResponse.json(
+          { error: "El stock no puede quedar negativo" },
+          { status: 400 }
+        )
+      }
+      if (rpcErr.code === "22023") {
+        return NextResponse.json({ error: rpcErr.message }, { status: 400 })
+      }
+      throw rpcErr
+    }
+
+    const result = data as {
+      stock: number
+      changed: boolean
+      stockAnterior: number
+      stockPosterior: number
+      movimientoId: string | null
+    }
+
+    return NextResponse.json({
+      stock: result.stock,
+      changed: result.changed,
+    })
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

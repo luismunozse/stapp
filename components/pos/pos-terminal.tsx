@@ -96,9 +96,17 @@ export function PosTerminal() {
   const cartCount = cartItems.reduce((sum, i) => sum + i.cantidad, 0)
   const cartTotal = cartItems.reduce((sum, i) => sum + i.precioUnitario * i.cantidad, 0)
 
-  // Load held sales from localStorage
+  // Load held sales from localStorage + sync entre tabs.
+  // storage event no dispara en la tab que originó el cambio: cubre el caso
+  // de tener POS abierto en dos tabs y que ambas vean el mismo set.
   useEffect(() => {
     setHeldSales(loadHeldSales())
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== HELD_SALES_KEY) return
+      setHeldSales(loadHeldSales())
+    }
+    window.addEventListener("storage", onStorage)
+    return () => window.removeEventListener("storage", onStorage)
   }, [])
 
   // Auto-switch to cart on mobile when first item is added
@@ -680,8 +688,23 @@ export function PosTerminal() {
       <BarcodeScanner
         open={scannerOpen}
         onOpenChange={setScannerOpen}
-        onResult={(result) => {
-          handleBarcodeScan(result.code)
+        onResult={async (result) => {
+          // Scanner ya consultó la API; reusar resultado en vez de re-fetchear.
+          if (result.found && result.item) {
+            if ((result.item.stock ?? 0) <= 0) {
+              await showError(`"${result.item.nombre}" sin stock disponible`)
+              return
+            }
+            addProduct({
+              id: result.item.id,
+              codigo: result.item.codigo,
+              nombre: result.item.nombre,
+              stock: result.item.stock,
+              precioVenta: result.item.precioVenta,
+            })
+          } else {
+            await showError(`Código "${result.code}" no encontrado en inventario`)
+          }
         }}
       />
 
