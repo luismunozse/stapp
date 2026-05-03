@@ -45,6 +45,12 @@ export function QuickStockAdjust({
       await showError("El delta no puede ser cero")
       return
     }
+    if (mode === "delta" && currentStock + num < 0) {
+      // Pre-check cliente: la API rechaza igual, pero acá damos un mensaje
+      // específico con el valor disponible en vez de un error genérico.
+      await showError(`Stock disponible: ${currentStock}. No alcanza para restar ${Math.abs(num)}.`)
+      return
+    }
     if (mode === "absolute" && num < 0) {
       await showError("El stock no puede ser negativo")
       return

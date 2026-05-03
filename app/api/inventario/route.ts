@@ -73,8 +73,14 @@ export async function GET(request: Request) {
       if (search.trim().length >= 3) {
         query = query.textSearch("search_vector", search, { type: "plain", config: "spanish" })
       } else {
+        // Escape PostgREST .or() metacharacters: una coma sin escapar separa
+        // expresiones, paréntesis abren grupos. Sin esto, búsquedas como
+        // "Smith, John" o "(15)" rompen el parser y devuelven 0 filas o error.
+        // Los comodines % y _ del ILIKE quedan deliberadamente intactos
+        // (no son inyectables: solo afectan el patrón de match).
+        const safeSearch = search.replace(/[,()\\]/g, "\\$&")
         query = query.or(
-          `nombre.ilike.%${search}%,codigo.ilike.%${search}%`
+          `nombre.ilike.%${safeSearch}%,codigo.ilike.%${safeSearch}%`
         )
       }
     }

@@ -17,29 +17,38 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Código requerido" }, { status: 400 })
     }
 
-    // Search by barcode first, fallback to codigo (products may store EAN in either field)
+    // Search by barcode first, fallback to codigo (products may store EAN in either field).
+    // Usamos ILIKE para match case-insensitive: códigos Code 128 alfanuméricos
+    // cargados manualmente pueden quedar en distinta caja que el escaneo.
+    // Escapamos los wildcards (% _) para que ILIKE haga match exacto.
+    // Usamos limit(1) en vez de maybeSingle() porque pueden existir filas con
+    // diferente caja (ABC vs abc); priorizamos un resultado consistente sobre
+    // un error 500 cuando hay duplicados.
+    const escapedCode = code.replace(/[%_\\]/g, "\\$&")
     let item = null
     let matchedByCodigo = false
-    const { data: byBarcode, error: barcodeErr } = await supabaseAdmin
+    const { data: barcodeMatches, error: barcodeErr } = await supabaseAdmin
       .from("inventario")
       .select("*, proveedores:proveedor_id(id, nombre)")
       .eq("organization_id", organizationId!)
-      .eq("barcode", code)
+      .ilike("barcode", escapedCode)
       .is("deleted_at", null)
-      .maybeSingle()
+      .order("created_at", { ascending: true })
+      .limit(1)
     if (barcodeErr) throw barcodeErr
-    item = byBarcode
+    item = barcodeMatches?.[0] ?? null
 
     if (!item) {
-      const { data: byCodigo, error: codigoErr } = await supabaseAdmin
+      const { data: codigoMatches, error: codigoErr } = await supabaseAdmin
         .from("inventario")
         .select("*, proveedores:proveedor_id(id, nombre)")
         .eq("organization_id", organizationId!)
-        .eq("codigo", code)
+        .ilike("codigo", escapedCode)
         .is("deleted_at", null)
-        .maybeSingle()
+        .order("created_at", { ascending: true })
+        .limit(1)
       if (codigoErr) throw codigoErr
-      item = byCodigo
+      item = codigoMatches?.[0] ?? null
       if (item) matchedByCodigo = true
     }
 

@@ -88,8 +88,13 @@ const categoriasPorTipo: Record<string, string[]> = {
   TODOS: ["Pantallas", "Baterías", "Fundas", "Teclados", "Memorias", "Cargadores", "Otros"],
 }
 
-const proveedoresFetcher = (url: string): Promise<ProveedorLite[]> =>
-  fetch(url).then((r) => r.json())
+const proveedoresFetcher = async (url: string): Promise<ProveedorLite[]> => {
+  // Endpoint puede devolver `{error}` ante 401/500. Sin guard, .filter()
+  // rompe en runtime.
+  const res = await fetch(url)
+  const data = await res.json().catch(() => null)
+  return Array.isArray(data) ? data : []
+}
 
 function newRow(overrides: Partial<Row> = {}): Row {
   return {

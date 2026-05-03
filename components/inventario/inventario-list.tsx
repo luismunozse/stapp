@@ -62,8 +62,13 @@ interface ProveedorLite {
   activo?: boolean
 }
 
-const proveedoresFetcher = (url: string): Promise<ProveedorLite[]> =>
-  fetch(url).then((res) => res.json())
+const proveedoresFetcher = async (url: string): Promise<ProveedorLite[]> => {
+  // El endpoint puede devolver `{error: ...}` (401, 500, etc). Sin guard,
+  // SWR setea data = objeto y .filter() rompe en runtime.
+  const res = await fetch(url)
+  const data = await res.json().catch(() => null)
+  return Array.isArray(data) ? data : []
+}
 
 const todasLasCategorias = [
   "Baterías",
@@ -121,17 +126,18 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   const [includeArchived, setIncludeArchived] = useState(false)
   // Default a "list": es la vista que escala con catálogos grandes.
   // La preferencia se persiste en localStorage.
-  const [viewMode, setViewMode] = useState<"grid" | "list">("list")
-
-  // Hidratar preferencia desde localStorage. try/catch defensivo: localStorage
-  // puede tirar SecurityError en modo privado/iframe sin permisos.
-  useEffect(() => {
-    if (typeof window === "undefined") return
+  // Lazy initializer: lee localStorage durante el primer render del cliente
+  // para evitar flicker grid→list (en SSR, typeof window===undefined → fallback).
+  // try/catch defensivo: localStorage puede tirar SecurityError en modo privado.
+  const [viewMode, setViewMode] = useState<"grid" | "list">(() => {
+    if (typeof window === "undefined") return "list"
     try {
       const saved = localStorage.getItem("inventario-view-mode")
-      if (saved === "grid" || saved === "list") setViewMode(saved)
-    } catch { /* ignore */ }
-  }, [])
+      return saved === "grid" || saved === "list" ? saved : "list"
+    } catch {
+      return "list"
+    }
+  })
   useEffect(() => {
     if (typeof window === "undefined") return
     try {
@@ -164,10 +170,13 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   // Selección masiva (bulk actions)
   const [selectedKeys, setSelectedKeys] = useState<string[]>([])
 
-  // Limpiar selección si cambian filtros o página (los ids ya no están visibles)
+  // Limpiar selección si cambian filtros o página (los ids ya no están visibles).
+  // No incluimos sortBy/sortOrder: re-ordenar mantiene los mismos ids visibles
+  // (cuando la página entera cabe en el viewport) o son ids que ya estaban en
+  // la página actual; perder la selección por reordenar es UX molesta.
   useEffect(() => {
     setSelectedKeys([])
-  }, [debouncedSearch, categoria, tipoDispositivo, bajoStock, includeArchived, page, sortBy, sortOrder])
+  }, [debouncedSearch, categoria, tipoDispositivo, bajoStock, includeArchived, page])
 
   // Fetch configurable stock threshold
   useEffect(() => {

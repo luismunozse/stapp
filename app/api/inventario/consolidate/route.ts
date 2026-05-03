@@ -27,19 +27,19 @@ export async function POST(request: Request) {
       )
     }
 
-    // Pre-check de pertenencia a la organización: evita exponer mensajes de
-    // error de la RPC cuando el cliente manda ids ajenos.
+    // Pre-check de pertenencia a la organización: filtramos por org en el
+    // mismo query para no exponer la existencia de ids de otras organizaciones
+    // (timing/respuesta diferenciada permitiría enumerar ids cross-tenant).
+    // Si faltan rows, respondemos 404 sin distinguir "no existe" de "ajeno".
     const { data: checkRows, error: checkErr } = await supabaseAdmin
       .from("inventario")
-      .select("id, organization_id")
+      .select("id")
+      .eq("organization_id", organizationId!)
       .in("id", [sourceId, targetId])
 
     if (checkErr) throw checkErr
     if (!checkRows || checkRows.length !== 2) {
       return NextResponse.json({ error: "Items no encontrados" }, { status: 404 })
-    }
-    if (checkRows.some((r) => r.organization_id !== organizationId)) {
-      return NextResponse.json({ error: "Acceso denegado" }, { status: 403 })
     }
 
     const { data, error: rpcErr } = await supabaseAdmin.rpc(

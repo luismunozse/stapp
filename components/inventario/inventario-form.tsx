@@ -34,8 +34,13 @@ interface DuplicateMatch {
   score: number
 }
 
-const proveedoresFetcher = (url: string): Promise<ProveedorLite[]> =>
-  fetch(url).then((res) => res.json())
+const proveedoresFetcher = async (url: string): Promise<ProveedorLite[]> => {
+  // El endpoint puede devolver `{error: ...}` (401, 500, etc). Sin guard,
+  // SWR setea data = objeto y .filter()/.map() rompen en runtime.
+  const res = await fetch(url)
+  const data = await res.json().catch(() => null)
+  return Array.isArray(data) ? data : []
+}
 
 const inventarioSchema = z.object({
   nombre: z.string().min(1, "El nombre es requerido"),
