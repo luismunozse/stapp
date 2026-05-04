@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
         break
 
       case "subscription_authorized_payment":
-        result = await handlePaymentNotification(String(data?.id || ""))
+        result = await handleAuthorizedPaymentNotification(String(data?.id || ""))
         break
 
       default:
@@ -222,8 +222,16 @@ export interface HandleResult {
  *   (b) Activar/renovar la suscripción → si falla, el pago queda
  *       registrado igual y la suscripción en PENDING_ACTIVATION
  */
+export interface PaymentExternalRef {
+  organization_id?: string
+  billing_period?: string
+  plan_id?: string
+  plan_slug?: string
+}
+
 export async function handlePaymentNotification(
-  paymentId: string
+  paymentId: string,
+  externalRefOverride?: PaymentExternalRef
 ): Promise<HandleResult> {
   if (!paymentId) {
     return { status: "SKIPPED", reason: "missing_payment_id" }
@@ -247,18 +255,20 @@ export async function handlePaymentNotification(
 
   const payment = await response.json()
 
-  // Extraer external_reference
-  let externalRef: {
-    organization_id?: string
-    billing_period?: string
-    plan_id?: string
-    plan_slug?: string
-  }
-  try {
-    externalRef = JSON.parse(payment.external_reference || "{}")
-  } catch {
-    console.error(`[MP webhook] Invalid external_reference for payment ${paymentId}:`, payment.external_reference)
-    return { status: "SKIPPED", reason: "invalid_external_reference" }
+  // Extraer external_reference. Los pagos generados por una suscripción
+  // recurrente no cargan external_reference: lo lleva sólo el preapproval
+  // padre. En ese caso el caller (handleAuthorizedPaymentNotification) lo
+  // inyecta via override después de consultarlo del preapproval.
+  let externalRef: PaymentExternalRef
+  if (externalRefOverride) {
+    externalRef = externalRefOverride
+  } else {
+    try {
+      externalRef = JSON.parse(payment.external_reference || "{}")
+    } catch {
+      console.error(`[MP webhook] Invalid external_reference for payment ${paymentId}:`, payment.external_reference)
+      return { status: "SKIPPED", reason: "invalid_external_reference" }
+    }
   }
 
   const organizationId = externalRef.organization_id
@@ -582,6 +592,136 @@ async function handlePreApprovalNotification(
 
   console.log(`[MP webhook] PreApproval ${preApprovalId} updated to ${status}`)
   return { status: "PROCESSED", organizationId }
+}
+
+/**
+ * Procesa una notificación `subscription_authorized_payment` (cobro recurrente
+ * de una suscripción/preapproval).
+ *
+ * Por qué un handler separado: el `data.id` de este evento NO es un payment id
+ * de `/v1/payments`, es un `authorized_payment` id que vive bajo el preapproval.
+ * Antes mandábamos ese id a `handlePaymentNotification`, que hacía
+ * `GET /v1/payments/{id}` y devolvía 404 → throw → webhook 500 → MP reintenta
+ * 3x → suscripción nunca se renovaba sola.
+ *
+ * Flujo correcto:
+ *   1. GET /authorized_payments/{id} → trae { payment: { id }, preapproval_id, status }
+ *   2. Si status != "processed" (ej. "scheduled" / "recycling" / "rejected"),
+ *      no hay nada que aplicar todavía
+ *   3. GET /preapproval/{preapproval_id} → trae external_reference con
+ *      organization_id / plan_id / plan_slug / billing_period (el payment hijo
+ *      no carga external_reference)
+ *   4. Delegar en handlePaymentNotification(realPaymentId, externalRef) para
+ *      reusar idempotencia + activación/renovación.
+ */
+export async function handleAuthorizedPaymentNotification(
+  authorizedPaymentId: string
+): Promise<HandleResult> {
+  if (!authorizedPaymentId) {
+    return { status: "SKIPPED", reason: "missing_authorized_payment_id" }
+  }
+
+  const response = await fetch(
+    `https://api.mercadopago.com/authorized_payments/${authorizedPaymentId}`,
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.MERCADOPAGO_ACCESS_TOKEN}`,
+      },
+    }
+  )
+
+  if (!response.ok) {
+    const errText = await response.text()
+    console.error(
+      `[MP webhook] Error fetching authorized_payment ${authorizedPaymentId}:`,
+      errText
+    )
+    throw new Error(
+      `MP API error fetching authorized_payment ${authorizedPaymentId}: ${errText}`
+    )
+  }
+
+  const authPayment = await response.json()
+
+  // status posibles: scheduled | processed | recycling | rejected | cancelled.
+  // Sólo "processed" significa que el cobro se concretó. El resto son ruido o
+  // intentos fallidos que MP va a reintentar por su cuenta.
+  if (authPayment.status !== "processed") {
+    console.log(
+      `[MP webhook] authorized_payment ${authorizedPaymentId} status=${authPayment.status} - ignorando`
+    )
+    return {
+      status: "SKIPPED",
+      reason: `authorized_payment_status_${authPayment.status}`,
+    }
+  }
+
+  const realPaymentId = authPayment.payment?.id
+  const preApprovalId = authPayment.preapproval_id
+
+  if (!realPaymentId) {
+    console.error(
+      `[MP webhook] authorized_payment ${authorizedPaymentId} processed pero sin payment.id`
+    )
+    return {
+      status: "SKIPPED",
+      reason: "missing_payment_id_in_authorized_payment",
+    }
+  }
+
+  if (!preApprovalId) {
+    console.error(
+      `[MP webhook] authorized_payment ${authorizedPaymentId} sin preapproval_id`
+    )
+    return { status: "SKIPPED", reason: "missing_preapproval_id" }
+  }
+
+  // El payment generado por una suscripción no carga external_reference,
+  // por eso vamos al preapproval padre a buscarlo.
+  const preApprovalRes = await fetch(
+    `https://api.mercadopago.com/preapproval/${preApprovalId}`,
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.MERCADOPAGO_ACCESS_TOKEN}`,
+      },
+    }
+  )
+
+  if (!preApprovalRes.ok) {
+    const errText = await preApprovalRes.text()
+    console.error(
+      `[MP webhook] Error fetching preapproval ${preApprovalId} (authorized_payment ${authorizedPaymentId}):`,
+      errText
+    )
+    throw new Error(
+      `MP API error fetching preapproval ${preApprovalId}: ${errText}`
+    )
+  }
+
+  const preApproval = await preApprovalRes.json()
+
+  let externalRef: PaymentExternalRef
+  try {
+    externalRef = JSON.parse(preApproval.external_reference || "{}")
+  } catch {
+    console.error(
+      `[MP webhook] Invalid external_reference in preapproval ${preApprovalId}:`,
+      preApproval.external_reference
+    )
+    return { status: "SKIPPED", reason: "invalid_external_reference" }
+  }
+
+  if (!externalRef.organization_id) {
+    console.error(
+      `[MP webhook] preapproval ${preApprovalId} sin organization_id en external_reference`
+    )
+    return { status: "SKIPPED", reason: "missing_organization_id" }
+  }
+
+  // Reusar handlePaymentNotification con el payment id real + external_ref
+  // del preapproval. Idempotencia se mantiene: registra por provider_payment_id
+  // y si ya existe, salta.
+  return await handlePaymentNotification(String(realPaymentId), externalRef)
 }
 
 // GET para verificación de webhook (algunos proveedores lo requieren)
