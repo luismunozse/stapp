@@ -59,6 +59,16 @@ export async function GET(
           *,
           inventario (*)
         ),
+        cotizaciones!cotizaciones_orden_id_fkey (
+          id,
+          estado,
+          deleted_at,
+          items_cotizacion (
+            cantidad,
+            inventario_id,
+            inventario:inventario_id ( precio_compra )
+          )
+        ),
         organizations:organization_id (
           nombre,
           nombre_mostrar,

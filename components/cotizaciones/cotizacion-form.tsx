@@ -30,6 +30,9 @@ interface CotizacionItem {
   descuentoValor?: number
   inventarioId?: string | null
   tipoRepuesto?: "ORIGINAL" | "ALTERNATIVO" | "RECICLADO" | "NO_APLICA"
+  // Solo runtime: capturado al seleccionar del inventario para mostrar margen.
+  // No se persiste en items_cotizacion.
+  precioCompra?: number | null
 }
 
 interface CondicionesTecnicas {
@@ -286,6 +289,11 @@ export function CotizacionForm({
   const subtotalBruto = items.reduce((sum, item) => sum + item.cantidad * item.precioUnitario, 0)
   const subtotalNeto = items.reduce((sum, item) => sum + calcItemNeto(item), 0)
   const descuentoItems = subtotalBruto - subtotalNeto
+  const costoRepuestos = items.reduce(
+    (sum, item) => sum + (Number(item.precioCompra) || 0) * (item.cantidad || 0),
+    0
+  )
+  const tieneCostos = costoRepuestos > 0
 
   const calcDescuentoGlobal = () => {
     if (descuentoGlobalValor <= 0) return 0
@@ -875,6 +883,18 @@ export function CotizacionForm({
                 <span>Total:</span>
                 <span>{formatPrice(total)}</span>
               </div>
+              {tieneCostos && (
+                <div className="pt-2 mt-1 border-t space-y-1">
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Costo repuestos:</span>
+                    <span>{formatPrice(costoRepuestos)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm font-medium text-emerald-600">
+                    <span>Ganancia bruta:</span>
+                    <span>{formatPrice(Math.max(0, subtotalGravable - costoRepuestos))}</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

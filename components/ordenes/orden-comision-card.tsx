@@ -18,6 +18,9 @@ interface OrdenComisionCardProps {
   tecnicoId: string | null | undefined
   costoFinal: number | null | undefined
   repuestos: Repuesto[]
+  // Costo extra (cotizaciones aceptadas linkeadas a inventario).
+  // Server lo precalcula con precio_compra; se suma al costo de repuestos_orden.
+  costoRepuestosExtra?: number
   porcentajeComision: number | null | undefined
   comisionPagada?: boolean
   fechaPagoComision?: string | null
@@ -30,6 +33,7 @@ export function OrdenComisionCard({
   tecnicoId,
   costoFinal,
   repuestos,
+  costoRepuestosExtra,
   porcentajeComision,
   comisionPagada,
   fechaPagoComision,
@@ -41,10 +45,11 @@ export function OrdenComisionCard({
 
   if (!tecnicoId) return null
 
-  const costoRepuestos = (repuestos || []).reduce(
+  const costoRepuestosBase = (repuestos || []).reduce(
     (acc, r) => acc + (Number(r.cantidad) || 0) * (Number(r.precioUnitario) || 0),
     0
   )
+  const costoRepuestos = costoRepuestosBase + (Number(costoRepuestosExtra) || 0)
   const ganancia = Math.max(0, (costoFinal || 0) - costoRepuestos)
   const pct = Number(porcentajeComision ?? 0)
   const comision = Math.round(ganancia * pct) / 100

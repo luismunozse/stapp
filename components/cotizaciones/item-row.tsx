@@ -32,6 +32,7 @@ interface ItemRowProps {
     descuentoValor?: number
     inventarioId?: string | null
     tipoRepuesto?: string
+    precioCompra?: number | null
   }
   index: number
   onUpdate: (index: number, field: string, value: string | number | null) => void
@@ -89,6 +90,7 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
     onUpdate(index, "descripcion", inv.nombre)
     onUpdate(index, "precioUnitario", Number(inv.precioVenta))
     onUpdate(index, "inventarioId", inv.id)
+    onUpdate(index, "precioCompra", Number(inv.precioCompra) || 0)
     setShowInvSearch(false)
     setInvSearch("")
     setInvResults([])
@@ -96,8 +98,15 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
 
   const clearInvLink = () => {
     onUpdate(index, "inventarioId", null)
+    onUpdate(index, "precioCompra", null)
   }
   const hasDiscount = (item.descuentoValor || 0) > 0
+  const costoUnit = Number(item.precioCompra) || 0
+  const costoTotal = costoUnit * (item.cantidad || 0)
+  const margenPct = item.precioUnitario > 0 && costoUnit > 0
+    ? Math.round(((item.precioUnitario - costoUnit) / item.precioUnitario) * 100)
+    : null
+  const showCostInfo = !!item.inventarioId && costoUnit > 0
 
   return (
     <>
@@ -114,13 +123,23 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
                   autoFocus
                 />
                 {invResults.length > 0 && (
-                  <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md max-h-40 overflow-y-auto">
-                    {invResults.map((inv) => (
-                      <button key={inv.id} type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-accent" onClick={() => selectInvItem(inv)}>
-                        <span className="font-medium">{inv.nombre}</span>
-                        <span className="ml-1 text-xs text-muted-foreground">Stock: {inv.stock}{inv.stockReservado > 0 ? ` (disp. ${inv.stock - inv.stockReservado})` : ""}</span>
-                      </button>
-                    ))}
+                  <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md max-h-48 overflow-y-auto">
+                    {invResults.map((inv) => {
+                      const pc = Number(inv.precioCompra) || 0
+                      const pv = Number(inv.precioVenta) || 0
+                      const mPct = pv > 0 && pc > 0 ? Math.round(((pv - pc) / pv) * 100) : null
+                      return (
+                        <button key={inv.id} type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-accent" onClick={() => selectInvItem(inv)}>
+                          <div className="font-medium">{inv.nombre}</div>
+                          <div className="text-xs text-muted-foreground">
+                            Stock: {inv.stock}{inv.stockReservado > 0 ? ` (disp. ${inv.stock - inv.stockReservado})` : ""}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            Costo: {formatPrice(pc)} · Venta: {formatPrice(pv)}{mPct !== null ? ` · ${mPct}%` : ""}
+                          </div>
+                        </button>
+                      )
+                    })}
                   </div>
                 )}
               </div>
@@ -240,6 +259,12 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
             </div>
           </div>
         </div>
+        {showCostInfo && (
+          <div className="text-xs text-muted-foreground flex justify-between">
+            <span>Costo: {formatPrice(costoUnit)} · Total: {formatPrice(costoTotal)}</span>
+            {margenPct !== null && <span className="text-emerald-600">margen {margenPct}%</span>}
+          </div>
+        )}
       </div>
 
       {/* Desktop Layout */}
@@ -268,18 +293,34 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
             </Button>
           </div>
           {showInvSearch && invResults.length > 0 && (
-            <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md max-h-48 overflow-y-auto">
-              {invResults.map((inv) => (
-                <button key={inv.id} type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-accent flex justify-between" onClick={() => selectInvItem(inv)}>
-                  <div>
-                    <span className="font-medium">{inv.nombre}</span>
-                    <span className="ml-2 text-xs text-muted-foreground">{inv.codigo}</span>
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    Stock: {inv.stock}{inv.stockReservado > 0 ? ` (disp. ${inv.stock - inv.stockReservado})` : ""} · {formatPrice(inv.precioVenta)}
-                  </div>
-                </button>
-              ))}
+            <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md max-h-56 overflow-y-auto">
+              {invResults.map((inv) => {
+                const pc = Number(inv.precioCompra) || 0
+                const pv = Number(inv.precioVenta) || 0
+                const mPct = pv > 0 && pc > 0 ? Math.round(((pv - pc) / pv) * 100) : null
+                return (
+                  <button key={inv.id} type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-accent" onClick={() => selectInvItem(inv)}>
+                    <div className="flex justify-between gap-2">
+                      <div>
+                        <span className="font-medium">{inv.nombre}</span>
+                        <span className="ml-2 text-xs text-muted-foreground">{inv.codigo}</span>
+                      </div>
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        Stock: {inv.stock}{inv.stockReservado > 0 ? ` (disp. ${inv.stock - inv.stockReservado})` : ""}
+                      </span>
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      Costo: {formatPrice(pc)} · Venta: {formatPrice(pv)}{mPct !== null ? ` · margen ${mPct}%` : ""}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+          {showCostInfo && (
+            <div className="text-[11px] text-muted-foreground mt-1 flex justify-between gap-2">
+              <span>Costo {formatPrice(costoUnit)} · Total {formatPrice(costoTotal)}</span>
+              {margenPct !== null && <span className="text-emerald-600">margen {margenPct}%</span>}
             </div>
           )}
           {showTipoRepuesto && (

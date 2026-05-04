@@ -44,7 +44,24 @@ export function transformToSnakeCase<T extends Record<string, any>>(obj: T): any
 export function formatOrden(orden: any) {
   if (!orden) return null
 
+  // Costo de repuestos provenientes de cotizaciones ACEPTADAS linkeadas a inventario.
+  // Se suma como prop separada para que la card de comisión lo agregue al costo
+  // que ya calcula desde repuestos_orden. El admin es responsable de no duplicar
+  // (usar tab Repuestos O cotización aceptada, no ambos para el mismo ítem).
+  const cotizacionesActivas = (orden.cotizaciones || []).filter(
+    (c: any) => !c.deleted_at && c.estado === "ACEPTADA"
+  )
+  const costoRepuestosCotizaciones = cotizacionesActivas.reduce((sum: number, c: any) => {
+    const itemsCosto = (c.items_cotizacion || []).reduce((acc: number, it: any) => {
+      const precioCompra = Number(it.inventario?.precio_compra) || 0
+      const cantidad = Number(it.cantidad) || 0
+      return acc + precioCompra * cantidad
+    }, 0)
+    return sum + itemsCosto
+  }, 0)
+
   return {
+    costoRepuestosCotizaciones,
     id: orden.id,
     numeroOrden: orden.numero_orden,
     codigoOrden: orden.codigo_orden,

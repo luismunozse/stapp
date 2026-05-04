@@ -1059,6 +1059,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
               tecnicoId={orden.tecnicoId}
               costoFinal={orden.costoFinal}
               repuestos={(orden as any).repuestos || []}
+              costoRepuestosExtra={(orden as any).costoRepuestosCotizaciones || 0}
               porcentajeComision={(orden as any).porcentajeComision}
               comisionPagada={(orden as any).comisionPagada}
               fechaPagoComision={(orden as any).fechaPagoComision}
@@ -1106,6 +1107,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             tecnicoId={orden.tecnicoId}
             costoFinal={orden.costoFinal}
             repuestos={(orden as any).repuestos || []}
+            costoRepuestosExtra={(orden as any).costoRepuestosCotizaciones || 0}
             porcentajeComision={(orden as any).porcentajeComision}
             comisionPagada={(orden as any).comisionPagada}
             fechaPagoComision={(orden as any).fechaPagoComision}
