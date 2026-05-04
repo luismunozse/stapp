@@ -233,9 +233,11 @@ export function CotizacionForm({
   }
 
   const updateItem = (index: number, field: string, value: string | number | null) => {
-    const newItems = [...items]
-    newItems[index] = { ...newItems[index], [field]: value }
-    setItems(newItems)
+    setItems((prev) => {
+      const next = [...prev]
+      next[index] = { ...next[index], [field]: value }
+      return next
+    })
   }
 
   const removeItem = (index: number) => {
