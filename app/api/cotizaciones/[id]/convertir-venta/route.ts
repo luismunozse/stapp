@@ -91,11 +91,13 @@ export async function POST(
     const clienteTelefono = cliente?.telefono || null
     const clienteId = cliente?.id || null
 
-    // Map cotizacion items to venta items format
+    // Map cotizacion items to venta items format.
+    // inventarioId: priorizar override del request, sino el FK guardado en el item.
+    // Si null: crear_venta_atomica no descuenta stock → la reserva queda fantasma.
     const pItems = data.items.map((reqItem) => {
       const cotItem = itemMap.get(reqItem.cotizacionItemId)!
       return {
-        inventarioId: reqItem.inventarioId || null,
+        inventarioId: reqItem.inventarioId ?? cotItem.inventario_id ?? null,
         descripcion: cotItem.descripcion,
         cantidad: cotItem.cantidad,
         precioUnitario: Number(cotItem.precio_unitario),

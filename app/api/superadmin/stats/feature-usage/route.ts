@@ -18,6 +18,24 @@ const FEATURE_LABELS: Record<string, string> = {
   usa_checklist: "Checklist recepción",
   usa_firma_digital: "Firma digital",
   usa_tracking_publico: "Tracking público",
+  usa_kiosco: "Modo Kiosco",
+}
+
+// Mapa label → columna count correspondiente (para mostrar conteos por feature)
+const FEATURE_COUNT_KEYS: Record<string, string | null> = {
+  usa_ordenes: "ordenes_count",
+  usa_cotizaciones: "cotizaciones_count",
+  usa_garantias: "garantias_count",
+  usa_fotos: "fotos_count",
+  usa_ventas: "ventas_count",
+  usa_inventario: "inventario_count",
+  usa_whatsapp: "whatsapp_count",
+  usa_email_notif: "email_count",
+  usa_facturacion: "facturas_count",
+  usa_checklist: "checklist_count",
+  usa_firma_digital: "firmas_count",
+  usa_tracking_publico: "tracking_count",
+  usa_kiosco: null,
 }
 
 export async function GET() {
@@ -144,12 +162,14 @@ export async function GET() {
         const firmas = firmasCounts[o] || 0
         const tracking = trackingCounts[o] || 0
 
+        const kioscoActive = (kioscoCounts[o] || 0) > 0
         const features = [
           ordenes > 0, cotizaciones > 0, garantias > 0, fotos > 0,
           ventas_ > 0, inventario > 0,
           whatsapp > 0 || !!org.notificaciones_whatsapp,
           emailN > 0 || !!org.notificaciones_email,
           facturas > 0, checklist > 0, firmas > 0, tracking > 0,
+          kioscoActive,
         ]
         const featuresActivas = features.filter(Boolean).length
         const totalFeatures = features.length
@@ -210,6 +230,7 @@ export async function GET() {
     // Organizations con su adoption score
     const organizations = latest.map(r => {
       const org = r.organizations as unknown as { nombre: string; slug: string }
+      const row = r as Record<string, unknown>
       return {
         id: r.organization_id,
         nombre: org?.nombre || "Unknown",
@@ -221,11 +242,17 @@ export async function GET() {
         ventas: r.ventas_count,
         clientes: r.clientes_count,
         tecnicos: r.tecnicos_count,
+        vendedores: (row.vendedores_count as number) || 0,
         fecha: r.fecha,
         features: featureKeys.reduce((acc, key) => {
-          acc[key] = (r as Record<string, unknown>)[key] === true
+          acc[key] = row[key] === true
           return acc
         }, {} as Record<string, boolean>),
+        featureCounts: featureKeys.reduce((acc, key) => {
+          const countKey = FEATURE_COUNT_KEYS[key]
+          acc[key] = countKey ? ((row[countKey] as number) || 0) : 0
+          return acc
+        }, {} as Record<string, number>),
       }
     }).sort((a, b) => a.adoptionScore - b.adoptionScore)
 
@@ -234,14 +261,25 @@ export async function GET() {
       ? Math.round(latest.reduce((s, r) => s + r.adoption_score, 0) / latest.length)
       : 0
     const lowAdoption = latest.filter(r => r.adoption_score < 30).length
+    const midAdoption = latest.filter(r => r.adoption_score >= 30 && r.adoption_score < 70).length
     const highAdoption = latest.filter(r => r.adoption_score >= 70).length
+    const zeroAdoption = latest.filter(r => r.adoption_score === 0).length
+
+    // Última actualización del tracking (max fecha)
+    const lastUpdate = latest.reduce<string | null>((acc, r) => {
+      if (!acc || (r.fecha && r.fecha > acc)) return r.fecha
+      return acc
+    }, null)
 
     return NextResponse.json({
       summary: {
         totalOrgs: latest.length,
         avgAdoption,
         lowAdoption,
+        midAdoption,
         highAdoption,
+        zeroAdoption,
+        lastUpdate,
       },
       featureAdoption,
       organizations,

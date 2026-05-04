@@ -16,6 +16,8 @@ import {
   TrendingUp,
   AlertTriangle,
   Zap,
+  BarChart3,
+  Clock,
 } from "lucide-react"
 import { useSuperadminFetch } from "@/hooks/use-superadmin-fetch"
 import { cn } from "@/lib/utils"
@@ -39,8 +41,10 @@ interface OrgUsage {
   ventas: number
   clientes: number
   tecnicos: number
+  vendedores: number
   fecha: string
   features: Record<string, boolean>
+  featureCounts: Record<string, number>
 }
 
 interface FeatureUsageData {
@@ -48,7 +52,10 @@ interface FeatureUsageData {
     totalOrgs: number
     avgAdoption: number
     lowAdoption: number
+    midAdoption: number
     highAdoption: number
+    zeroAdoption: number
+    lastUpdate: string | null
   }
   featureAdoption: FeatureAdoption[]
   organizations: OrgUsage[]
@@ -91,10 +98,21 @@ export function FeatureUsageContent() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-3xl font-bold">Feature Usage</h1>
           <p className="text-muted-foreground">Adopción de funcionalidades por organización</p>
+          {data?.summary.lastUpdate && (
+            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              Tracking actualizado: {new Date(data.summary.lastUpdate).toLocaleDateString("es-AR", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+              })}
+              <span className="text-muted-foreground/60">· cron diario 3 AM</span>
+            </p>
+          )}
         </div>
         <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
           {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
@@ -104,8 +122,8 @@ export function FeatureUsageContent() {
 
       {/* Summary Cards */}
       {loading && !data ? (
-        <div className="grid gap-4 md:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+          {Array.from({ length: 5 }).map((_, i) => (
             <Card key={i} className="animate-pulse">
               <CardHeader className="pb-2"><div className="h-4 w-20 bg-muted rounded" /></CardHeader>
               <CardContent><div className="h-7 w-12 bg-muted rounded" /></CardContent>
@@ -113,23 +131,27 @@ export function FeatureUsageContent() {
           ))}
         </div>
       ) : data ? (
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Orgs analizadas</CardTitle>
               <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-950"><Puzzle className="h-4 w-4 text-blue-600" /></div>
             </CardHeader>
-            <CardContent><div className="text-2xl font-bold">{data.summary.totalOrgs}</div></CardContent>
+            <CardContent>
+              <div className="text-2xl font-bold">{data.summary.totalOrgs}</div>
+              <p className="text-xs text-muted-foreground">Activas con tracking</p>
+            </CardContent>
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Adopción Promedio</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Adopción promedio</CardTitle>
               <div className="p-2 rounded-lg bg-green-100 dark:bg-green-950"><TrendingUp className="h-4 w-4 text-green-600" /></div>
             </CardHeader>
             <CardContent>
               <div className={`text-2xl font-bold ${adoptionColor(data.summary.avgAdoption)}`}>
                 {data.summary.avgAdoption}%
               </div>
+              <p className="text-xs text-muted-foreground">{Object.keys(data.featureLabels).length} features evaluadas</p>
             </CardContent>
           </Card>
           <Card>
@@ -139,7 +161,17 @@ export function FeatureUsageContent() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-emerald-600">{data.summary.highAdoption}</div>
-              <p className="text-xs text-muted-foreground">70%+ features</p>
+              <p className="text-xs text-muted-foreground">≥ 70% features</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Adopción media</CardTitle>
+              <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-950"><BarChart3 className="h-4 w-4 text-amber-600" /></div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-amber-600">{data.summary.midAdoption}</div>
+              <p className="text-xs text-muted-foreground">30 – 69% features</p>
             </CardContent>
           </Card>
           <Card>
@@ -149,7 +181,14 @@ export function FeatureUsageContent() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-red-600">{data.summary.lowAdoption}</div>
-              <p className="text-xs text-muted-foreground">&lt;30% features</p>
+              <p className="text-xs text-muted-foreground">
+                &lt; 30% features
+                {data.summary.zeroAdoption > 0 && (
+                  <span className="block text-[10px] text-red-500/80">
+                    {data.summary.zeroAdoption} sin uso (0%)
+                  </span>
+                )}
+              </p>
             </CardContent>
           </Card>
         </div>
@@ -186,9 +225,9 @@ export function FeatureUsageContent() {
                   </p>
                 </div>
               ))}
-              {(!data || data.featureAdoption.length === 0) && (
+              {(!data || data.featureAdoption.length === 0) && !loading && (
                 <p className="text-sm text-muted-foreground text-center py-8">
-                  Sin datos. El tracking se ejecuta diariamente a las 3 AM.
+                  Sin organizaciones activas para analizar.
                 </p>
               )}
             </div>
@@ -250,9 +289,10 @@ export function FeatureUsageContent() {
                     {/* Expanded: feature detail */}
                     {expandedOrg === org.id && (
                       <div className="ml-3 mr-3 mb-2 p-3 bg-muted/30 rounded-b-lg border border-t-0">
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                           {Object.entries(data?.featureLabels || {}).map(([key, label]) => {
                             const active = org.features[key]
+                            const count = org.featureCounts?.[key] ?? 0
                             return (
                               <div key={key} className="flex items-center gap-1.5 text-sm">
                                 {active ? (
@@ -263,24 +303,40 @@ export function FeatureUsageContent() {
                                 <span className={active ? "text-foreground" : "text-muted-foreground"}>
                                   {label}
                                 </span>
+                                {active && count > 0 && (
+                                  <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 ml-auto">
+                                    {count.toLocaleString("es-AR")}
+                                  </Badge>
+                                )}
                               </div>
                             )
                           })}
                         </div>
-                        <div className="flex gap-4 mt-3 pt-3 border-t text-xs text-muted-foreground">
-                          <span>{org.tecnicos} tecnico{org.tecnicos !== 1 ? "s" : ""}</span>
-                          <span>{org.ventas} ventas</span>
-                          <span>Actualizado: {org.fecha}</span>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 pt-3 border-t text-xs text-muted-foreground">
+                          <span>{org.tecnicos} técnico{org.tecnicos !== 1 ? "s" : ""}</span>
+                          <span>{org.vendedores} vendedor{org.vendedores !== 1 ? "es" : ""}</span>
+                          <span>{org.clientes.toLocaleString("es-AR")} clientes</span>
+                          <span>{org.ordenes.toLocaleString("es-AR")} órdenes</span>
+                          <span>{org.ventas.toLocaleString("es-AR")} ventas</span>
+                          <span className="ml-auto">
+                            Tracking: {org.fecha
+                              ? new Date(org.fecha).toLocaleDateString("es-AR", {
+                                  day: "2-digit",
+                                  month: "short",
+                                  year: "numeric",
+                                })
+                              : "—"}
+                          </span>
                         </div>
                       </div>
                     )}
                   </div>
                 ))}
-                {filteredOrgs.length === 0 && (
+                {filteredOrgs.length === 0 && !loading && (
                   <p className="text-center text-muted-foreground py-8">
                     {data?.organizations.length === 0
-                      ? "Sin datos. El tracking se ejecuta diariamente a las 3 AM."
-                      : "No hay organizaciónes que coincidan"}
+                      ? "Sin organizaciones activas para analizar."
+                      : "No hay organizaciones que coincidan con la búsqueda."}
                   </p>
                 )}
               </div>
