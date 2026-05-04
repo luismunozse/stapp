@@ -582,6 +582,12 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             context={{
               organizationId: "",
               organizationName: (orden as any).organizationName || "",
+              organizationSlug: (() => {
+                if (typeof window === "undefined") return undefined
+                const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
+                const h = window.location.hostname
+                return h.endsWith(`.${rootDomain}`) ? h.replace(`.${rootDomain}`, "") : undefined
+              })(),
               orden: {
                 id: orden.id,
                 numeroOrden: orden.numeroOrden,
@@ -589,6 +595,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                 dispositivo: orden.dispositivo,
                 presupuesto: orden.presupuesto,
                 fechaCompletado: orden.fechaCompletado ? new Date(orden.fechaCompletado as any) : null,
+                publicToken: orden.publicToken,
               },
               cliente: {
                 id: orden.cliente!.id,
