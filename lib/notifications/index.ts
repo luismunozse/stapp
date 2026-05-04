@@ -326,6 +326,7 @@ export async function createNotificationContext(
       estado: orden.estado as any,
       presupuesto: orden.presupuesto,
       fechaCompletado: orden.fecha_completado,
+      publicToken: orden.public_token,
     },
     ...(garantia && {
       garantia: {

@@ -287,6 +287,7 @@ function generateEstadoMessage(ctx: NotificationContext): string {
       break
   }
 
+  mensaje += appendOrdenLinks(getOrdenLinks(ctx))
   mensaje += `\n\n${ctx.organizationName}`
 
   return mensaje
@@ -296,13 +297,15 @@ function generatePresupuestoMessage(ctx: NotificationContext): string {
   const formatCurrency = (amount: number) =>
     formatCurrencyValue(amount, (ctx.moneda as CurrencyCode) || DEFAULT_CURRENCY)
 
+  const links = getOrdenLinks(ctx)
+
   return `Hola ${ctx.cliente.nombre}, le informamos el presupuesto para la reparacion de su ${ctx.orden!.dispositivo}:
 
 *Presupuesto: ${formatCurrency(ctx.orden!.presupuesto || 0)}*
 
 Orden #${ctx.orden!.numeroOrden}
 
-Por favor confirmenos si desea proceder con la reparacion.
+Por favor confirmenos si desea proceder con la reparacion.${appendOrdenLinks(links)}
 
 ${ctx.organizationName}`
 }
@@ -317,6 +320,7 @@ Valida hasta: ${formatDate(ctx.garantia!.fechaVencimiento)}`
 
   if (ctx.orden) {
     mensaje += `\n\nOrden #${ctx.orden.numeroOrden}\nDispositivo: ${ctx.orden.dispositivo}`
+    mensaje += appendOrdenLinks(getOrdenLinks(ctx))
   }
 
   mensaje += `\n\nConserve este mensaje como comprobante.\n\n${ctx.organizationName}`
@@ -325,35 +329,35 @@ Valida hasta: ${formatDate(ctx.garantia!.fechaVencimiento)}`
 }
 
 function generateRecordatorioMessage(ctx: NotificationContext): string {
+  const links = getOrdenLinks(ctx)
+
   return `Hola ${ctx.cliente.nombre}, le recordamos que su ${ctx.orden!.dispositivo} esta listo para retirar.
 
 Orden #${ctx.orden!.numeroOrden}
 
-Puede pasar por nuestro local en horario de atencion. Lo esperamos!
+Puede pasar por nuestro local en horario de atencion. Lo esperamos!${appendOrdenLinks(links)}
 
 ${ctx.organizationName}`
 }
 
 function generateSeguimientoMessage(ctx: NotificationContext): string {
+  const links = getOrdenLinks(ctx)
+
   return `Hola ${ctx.cliente.nombre}, nos comunicamos por su ${ctx.orden!.dispositivo} (Orden #${ctx.orden!.numeroOrden}).
 
-[Escriba su mensaje aqui]
+[Escriba su mensaje aqui]${appendOrdenLinks(links)}
 
 ${ctx.organizationName}`
 }
 
 function generateEntregaCompletadaMessage(ctx: NotificationContext): string {
-  const baseUrl = getBaseUrl(ctx)
-  const pdfUrl = `${baseUrl}/api/ordenes/${ctx.orden!.id}/comprobante-entrega`
+  const links = getOrdenLinks(ctx)
   const esRetiro = ctx.orden!.estado === "ENTREGADO_SIN_REPARACION"
 
   if (esRetiro) {
     return `Hola ${ctx.cliente.nombre}, confirmamos el retiro de su ${ctx.orden!.dispositivo} sin reparacion.
 
-*Orden #${ctx.orden!.numeroOrden} - RETIRADO SIN REPARACION*
-
-Puede descargar su comprobante de retiro aqui:
-${pdfUrl}
+*Orden #${ctx.orden!.numeroOrden} - RETIRADO SIN REPARACION*${links ? `\n\nDescargar comprobante:\n${links.pdfUrl}\n\nSeguimiento: ${links.trackingUrl}` : ""}
 
 Gracias por habernos consultado.
 
@@ -362,10 +366,7 @@ ${ctx.organizationName}`
 
   return `Hola ${ctx.cliente.nombre}, confirmamos la entrega de su ${ctx.orden!.dispositivo}.
 
-*Orden #${ctx.orden!.numeroOrden} - ENTREGADO*
-
-Puede descargar su comprobante de entrega aqui:
-${pdfUrl}
+*Orden #${ctx.orden!.numeroOrden} - ENTREGADO*${links ? `\n\nDescargar comprobante:\n${links.pdfUrl}\n\nSeguimiento: ${links.trackingUrl}` : ""}
 
 Gracias por confiar en nosotros!
 
@@ -390,6 +391,20 @@ function getBaseUrl(ctx: NotificationContext): string {
     return `https://${ctx.organizationSlug}.${rootDomain}`
   }
   return `https://${rootDomain}`
+}
+
+function getOrdenLinks(ctx: NotificationContext): { trackingUrl: string; pdfUrl: string } | null {
+  if (!ctx.orden?.publicToken) return null
+  const baseUrl = getBaseUrl(ctx)
+  return {
+    trackingUrl: `${baseUrl}/seguimiento/${ctx.orden.publicToken}`,
+    pdfUrl: `${baseUrl}/api/public/ordenes/${ctx.orden.publicToken}/pdf`,
+  }
+}
+
+function appendOrdenLinks(links: { trackingUrl: string; pdfUrl: string } | null): string {
+  if (!links) return ""
+  return `\n\nSeguimiento: ${links.trackingUrl}\nDescargar orden: ${links.pdfUrl}`
 }
 
 function generateVentaConfirmacionMessage(ctx: NotificationContext): string {
@@ -487,6 +502,7 @@ function generateRecordatorioPagoMessage(ctx: NotificationContext): string {
 
   if (ctx.orden) {
     mensaje += `\n\nOrden #${ctx.orden.numeroOrden} - ${ctx.orden.dispositivo}`
+    mensaje += appendOrdenLinks(getOrdenLinks(ctx))
   }
 
   mensaje += `\n\nPuede acercarse a nuestro local o consultarnos por medios de pago disponibles.`
@@ -503,6 +519,7 @@ function generateConfirmacionPagoMessage(ctx: NotificationContext): string {
 
   if (ctx.orden) {
     mensaje += `\n\nOrden #${ctx.orden.numeroOrden} - ${ctx.orden.dispositivo}`
+    mensaje += appendOrdenLinks(getOrdenLinks(ctx))
   }
 
   if (ctx.pago?.saldoPendiente && ctx.pago.saldoPendiente > 0) {
@@ -530,6 +547,7 @@ function generateLinkPagoMessage(ctx: NotificationContext): string {
 
   if (ctx.orden) {
     mensaje += `\n\nOrden #${ctx.orden.numeroOrden}`
+    mensaje += appendOrdenLinks(getOrdenLinks(ctx))
   }
 
   mensaje += `\n\n${ctx.organizationName}`
@@ -618,6 +636,7 @@ function generateSolicitudInfoMessage(ctx: NotificationContext): string {
     mensaje += `\n\n[Detalle lo que necesita: fotos, contrasena, descripcion del problema, etc.]`
   }
 
+  mensaje += appendOrdenLinks(getOrdenLinks(ctx))
   mensaje += `\n\nAgradecemos su pronta respuesta.`
   mensaje += `\n\n${ctx.organizationName}`
 
@@ -625,18 +644,22 @@ function generateSolicitudInfoMessage(ctx: NotificationContext): string {
 }
 
 function generateRepuestoDisponibleMessage(ctx: NotificationContext): string {
+  const links = getOrdenLinks(ctx)
+
   return `Hola ${ctx.cliente.nombre}, buenas noticias!
 
 El repuesto *${ctx.repuesto?.nombre || "necesario"}* para su ${ctx.orden!.dispositivo} ya esta disponible.
 
 Orden #${ctx.orden!.numeroOrden}
 
-Retomamos la reparacion de inmediato. Le avisaremos cuando este listo.
+Retomamos la reparacion de inmediato. Le avisaremos cuando este listo.${appendOrdenLinks(links)}
 
 ${ctx.organizationName}`
 }
 
 function generateRepuestoNoDisponibleMessage(ctx: NotificationContext): string {
+  const links = getOrdenLinks(ctx)
+
   return `Hola ${ctx.cliente.nombre}, le informamos sobre su ${ctx.orden!.dispositivo} (Orden #${ctx.orden!.numeroOrden}).
 
 Lamentablemente el repuesto *${ctx.repuesto?.nombre || "necesario"}* no se encuentra disponible o esta discontinuado.
@@ -645,7 +668,7 @@ Podemos ofrecerle las siguientes opciones:
 - Buscar un repuesto alternativo compatible
 - Devolver el equipo sin cargo
 
-Por favor indiquenos como desea proceder.
+Por favor indiquenos como desea proceder.${appendOrdenLinks(links)}
 
 ${ctx.organizationName}`
 }
@@ -663,6 +686,7 @@ function generateAvisoDemoraMessage(ctx: NotificationContext): string {
     mensaje += `\nNueva fecha estimada: ${formatDate(ctx.demora.nuevaFechaEstimada)}`
   }
 
+  mensaje += appendOrdenLinks(getOrdenLinks(ctx))
   mensaje += `\n\nPedimos disculpas por la demora. Estamos trabajando para resolverlo lo antes posible.`
   mensaje += `\n\n${ctx.organizationName}`
 
@@ -670,13 +694,15 @@ function generateAvisoDemoraMessage(ctx: NotificationContext): string {
 }
 
 function generateReingresoGarantiaMessage(ctx: NotificationContext): string {
+  const links = getOrdenLinks(ctx)
+
   return `Hola ${ctx.cliente.nombre}, lamentamos que tenga inconvenientes con su ${ctx.orden!.dispositivo}.
 
 Su reparacion esta cubierta por garantia (valida hasta ${formatDateValue(ctx.garantia!.fechaVencimiento, ctx.zonaHoraria)}).
 
 Puede traer su equipo para que lo revisemos sin costo adicional. No necesita turno, solo acerquese en horario de atencion.
 
-Orden original #${ctx.orden!.numeroOrden}
+Orden original #${ctx.orden!.numeroOrden}${appendOrdenLinks(links)}
 
 ${ctx.organizationName}`
 }
@@ -694,11 +720,13 @@ ${ctx.organizationName}`
 }
 
 function generateSeguimientoPresupuestoRechazadoMessage(ctx: NotificationContext): string {
+  const links = getOrdenLinks(ctx)
+
   return `Hola ${ctx.cliente.nombre}, nos comunicamos por su ${ctx.orden!.dispositivo} (Orden #${ctx.orden!.numeroOrden}).
 
 Entendemos que el presupuesto anterior no se ajustaba a sus necesidades. Queremos informarle que podemos evaluar alternativas para resolver el problema de su equipo.
 
-Puede responder este mensaje si desea que revisemos otras opciones.
+Puede responder este mensaje si desea que revisemos otras opciones.${appendOrdenLinks(links)}
 
 ${ctx.organizationName}`
 }

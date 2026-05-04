@@ -65,6 +65,7 @@ export interface NotificationContext {
     estadoAnterior?: EstadoOrden
     presupuesto?: number | null
     fechaCompletado?: Date | null
+    publicToken?: string | null
   }
   venta?: {
     id: string
