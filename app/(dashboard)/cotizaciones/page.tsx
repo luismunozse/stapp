@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -137,6 +137,7 @@ export default function CotizacionesPage() {
   const [linkingCotizacion, setLinkingCotizacion] = useState<Cotizacion | null>(null)
   const [linkOrdenId, setLinkOrdenId] = useState<string | null>(null)
   const [linkLoading, setLinkLoading] = useState(false)
+  const formRef = useRef<HTMLDivElement | null>(null)
   const [search, setSearch] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
   const [estadoFilter, setEstadoFilter] = useState("TODOS")
@@ -166,6 +167,28 @@ export default function CotizacionesPage() {
   useEffect(() => {
     setPage(1)
   }, [estadoFilter])
+
+  // Scroll form into view when opening create/edit
+  useEffect(() => {
+    if (showForm || editingCotizacion) {
+      requestAnimationFrame(() => {
+        formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+      })
+    }
+  }, [showForm, editingCotizacion])
+
+  const openEditForm = useCallback((cotizacion: Cotizacion) => {
+    setShowForm(false)
+    setShowTipoSelector(false)
+    setEditingCotizacion(cotizacion)
+  }, [])
+
+  const openCreateForm = useCallback((tipo: "ORDEN" | "PRESUPUESTO") => {
+    setEditingCotizacion(null)
+    setFormTipo(tipo)
+    setShowTipoSelector(false)
+    setShowForm(true)
+  }, [])
 
   const swrKey = `/api/cotizaciones?page=${page}&limit=20&estado=${estadoFilter}&search=${encodeURIComponent(debouncedSearch)}`
   const { data: response, isLoading: loading, mutate } = useSWR<PaginatedResponse>(
@@ -459,11 +482,7 @@ export default function CotizacionesPage() {
             <button
               type="button"
               className="text-left p-4 border rounded-lg hover:border-primary hover:bg-muted/50 transition-colors"
-              onClick={() => {
-                setFormTipo("ORDEN")
-                setShowTipoSelector(false)
-                setShowForm(true)
-              }}
+              onClick={() => openCreateForm("ORDEN")}
             >
               <div className="flex items-center gap-2 font-medium mb-1">
                 <Wrench className="h-4 w-4 text-primary" />
@@ -477,11 +496,7 @@ export default function CotizacionesPage() {
             <button
               type="button"
               className="text-left p-4 border rounded-lg hover:border-primary hover:bg-muted/50 transition-colors"
-              onClick={() => {
-                setFormTipo("PRESUPUESTO")
-                setShowTipoSelector(false)
-                setShowForm(true)
-              }}
+              onClick={() => openCreateForm("PRESUPUESTO")}
             >
               <div className="flex items-center gap-2 font-medium mb-1">
                 <FileText className="h-4 w-4 text-primary" />
@@ -497,42 +512,46 @@ export default function CotizacionesPage() {
       </Dialog>
 
       {/* Form */}
-      {showForm && (
-        <CotizacionForm
-          tipo={formTipo}
-          onClose={() => setShowForm(false)}
-          onSuccess={() => {
-            setShowForm(false)
-            mutate()
-          }}
-        />
-      )}
+      <div ref={formRef}>
+        {showForm && !editingCotizacion && (
+          <CotizacionForm
+            key={`new-${formTipo}`}
+            tipo={formTipo}
+            onClose={() => setShowForm(false)}
+            onSuccess={() => {
+              setShowForm(false)
+              mutate()
+            }}
+          />
+        )}
 
-      {editingCotizacion && (
-        <CotizacionForm
-          tipo={editingCotizacion.tipo || "ORDEN"}
-          ordenId={editingCotizacion.ordenId || undefined}
-          initialData={{
-            id: editingCotizacion.id,
-            items: editingCotizacion.items,
-            notas: editingCotizacion.notas,
-            fechaVencimiento: editingCotizacion.fechaVencimiento,
-            terminos: editingCotizacion.terminos || undefined,
-            descuentoGlobalTipo: editingCotizacion.descuentoGlobalTipo || undefined,
-            descuentoGlobalValor: editingCotizacion.descuentoGlobalValor || undefined,
-            ivaPorcentaje: editingCotizacion.ivaPorcentaje || undefined,
-            clienteId: editingCotizacion.clienteId || undefined,
-            sectorId: editingCotizacion.sectorId || undefined,
-            equipo: editingCotizacion.equipo || undefined,
-            checklist: editingCotizacion.checklist || undefined,
-          }}
-          onClose={() => setEditingCotizacion(null)}
-          onSuccess={() => {
-            setEditingCotizacion(null)
-            mutate()
-          }}
-        />
-      )}
+        {editingCotizacion && (
+          <CotizacionForm
+            key={`edit-${editingCotizacion.id}`}
+            tipo={editingCotizacion.tipo || "ORDEN"}
+            ordenId={editingCotizacion.ordenId || undefined}
+            initialData={{
+              id: editingCotizacion.id,
+              items: editingCotizacion.items,
+              notas: editingCotizacion.notas,
+              fechaVencimiento: editingCotizacion.fechaVencimiento,
+              terminos: editingCotizacion.terminos || undefined,
+              descuentoGlobalTipo: editingCotizacion.descuentoGlobalTipo || undefined,
+              descuentoGlobalValor: editingCotizacion.descuentoGlobalValor || undefined,
+              ivaPorcentaje: editingCotizacion.ivaPorcentaje || undefined,
+              clienteId: editingCotizacion.clienteId || undefined,
+              sectorId: editingCotizacion.sectorId || undefined,
+              equipo: editingCotizacion.equipo || undefined,
+              checklist: editingCotizacion.checklist || undefined,
+            }}
+            onClose={() => setEditingCotizacion(null)}
+            onSuccess={() => {
+              setEditingCotizacion(null)
+              mutate()
+            }}
+          />
+        )}
+      </div>
 
       {/* List */}
       {loading ? (
@@ -636,7 +655,7 @@ export default function CotizacionesPage() {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  onClick={() => setEditingCotizacion(cotizacion)}
+                                  onClick={() => openEditForm(cotizacion)}
                                   title="Editar"
                                 >
                                   <Edit className="h-4 w-4" />
@@ -879,7 +898,7 @@ export default function CotizacionesPage() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => setEditingCotizacion(cotizacion)}
+                          onClick={() => openEditForm(cotizacion)}
                         >
                           <Edit className="mr-2 h-3 w-3" />
                           Editar
