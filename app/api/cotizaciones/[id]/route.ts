@@ -57,9 +57,51 @@ const updateCotizacionSchema = z.object({
   ivaPorcentaje: z.number().min(0).max(100).optional(),
   tipoCambio: z.number().positive().nullable().optional(),
   sectorId: z.string().nullable().optional(),
+  ordenId: z.string().nullable().optional(),
   equipo: equipoSchema.optional(),
   checklist: checklistSchema.nullable().optional(),
 })
+
+async function recalcPresupuestoOrden(ordenId: string) {
+  const { data: allCots } = await supabaseAdmin
+    .from("cotizaciones")
+    .select("total")
+    .eq("orden_id", ordenId)
+    .is("deleted_at", null)
+    .neq("estado", "RECHAZADA")
+  const total = (allCots || []).reduce((sum, c) => sum + Number(c.total), 0)
+
+  if ((allCots?.length || 0) > 0) {
+    await supabaseAdmin
+      .from("ordenes_servicio")
+      .update({ presupuesto: total, costo_final: total })
+      .eq("id", ordenId)
+  } else {
+    const { data: orden } = await supabaseAdmin
+      .from("ordenes_servicio")
+      .select("estado")
+      .eq("id", ordenId)
+      .single()
+    if (orden && (orden.estado === "PRESUPUESTADO" || orden.estado === "APROBADO")) {
+      await supabaseAdmin
+        .from("ordenes_servicio")
+        .update({
+          estado: "EN_DIAGNOSTICO",
+          presupuesto: null,
+          costo_final: null,
+          presupuesto_aprobado_portal: false,
+          presupuesto_firma_url: null,
+          presupuesto_fecha_aprobacion: null,
+        })
+        .eq("id", ordenId)
+    } else {
+      await supabaseAdmin
+        .from("ordenes_servicio")
+        .update({ presupuesto: null, costo_final: null })
+        .eq("id", ordenId)
+    }
+  }
+}
 
 function calcItemNeto(item: { cantidad: number; precioUnitario: number; descuentoTipo?: string; descuentoValor?: number }) {
   const bruto = item.cantidad * item.precioUnitario
@@ -189,7 +231,7 @@ export async function PUT(
     // Verify cotizacion exists and belongs to org
     const { data: existing, error: fetchError } = await supabaseAdmin
       .from("cotizaciones")
-      .select("id, estado, tipo, organization_id, created_by, iva_porcentaje, descuento_global_tipo, descuento_global_valor")
+      .select("id, estado, tipo, organization_id, created_by, iva_porcentaje, descuento_global_tipo, descuento_global_valor, orden_id")
       .eq("id", id)
       .eq("organization_id", organizationId!)
       .single()
@@ -244,6 +286,43 @@ export async function PUT(
     if (data.ivaPorcentaje !== undefined) updateData.iva_porcentaje = data.ivaPorcentaje
     if (data.tipoCambio !== undefined) updateData.tipo_cambio = data.tipoCambio
     if (data.sectorId !== undefined) updateData.sector_id = data.sectorId
+
+    // Reasignación de orden (vincular/desvincular). Solo tipo ORDEN.
+    let ordenIdChanged = false
+    const oldOrdenId: string | null = existing.orden_id || null
+    const newOrdenId: string | null | undefined = data.ordenId === undefined
+      ? undefined
+      : (data.ordenId || null)
+    if (newOrdenId !== undefined && newOrdenId !== oldOrdenId) {
+      if (existing.tipo === "PRESUPUESTO") {
+        return NextResponse.json(
+          { error: "No se puede vincular un presupuesto a una orden. Convertilo a orden primero." },
+          { status: 400 }
+        )
+      }
+      if (["ACEPTADA", "RECHAZADA"].includes(existing.estado)) {
+        return NextResponse.json(
+          { error: "No se puede reasignar una cotización aceptada o rechazada" },
+          { status: 400 }
+        )
+      }
+      if (newOrdenId) {
+        const { data: ordenTarget, error: ordenErr } = await supabaseAdmin
+          .from("ordenes_servicio")
+          .select("id, organization_id")
+          .eq("id", newOrdenId)
+          .eq("organization_id", organizationId!)
+          .single()
+        if (ordenErr || !ordenTarget) {
+          return NextResponse.json(
+            { error: "Orden destino no encontrada" },
+            { status: 404 }
+          )
+        }
+      }
+      updateData.orden_id = newOrdenId
+      ordenIdChanged = true
+    }
 
     // Equipo/checklist sólo aplican a PRESUPUESTO.
     if (existing.tipo === "PRESUPUESTO") {
@@ -317,27 +396,18 @@ export async function PUT(
       throw updateError
     }
 
-    // Sync presupuesto on linked order when items/totals change — sum ALL cotizaciones
+    // Recalc presupuesto en órdenes afectadas (items o reasignación de orden_id)
+    const ordenesARecalcular = new Set<string>()
+    if (ordenIdChanged) {
+      if (oldOrdenId) ordenesARecalcular.add(oldOrdenId)
+      if (newOrdenId) ordenesARecalcular.add(newOrdenId)
+    }
     if (data.items && updateData.total != null) {
-      const { data: cotForSync } = await supabaseAdmin
-        .from("cotizaciones")
-        .select("orden_id")
-        .eq("id", id)
-        .single()
-
-      if (cotForSync?.orden_id) {
-        const { data: allCots } = await supabaseAdmin
-          .from("cotizaciones")
-          .select("total")
-          .eq("orden_id", cotForSync.orden_id)
-          .is("deleted_at", null)
-          .neq("estado", "RECHAZADA")
-        const totalPresupuesto = (allCots || []).reduce((sum, c) => sum + Number(c.total), 0)
-        await supabaseAdmin
-          .from("ordenes_servicio")
-          .update({ presupuesto: totalPresupuesto, costo_final: totalPresupuesto })
-          .eq("id", cotForSync.orden_id)
-      }
+      const efectiva = ordenIdChanged ? newOrdenId : oldOrdenId
+      if (efectiva) ordenesARecalcular.add(efectiva)
+    }
+    for (const oid of ordenesARecalcular) {
+      await recalcPresupuestoOrden(oid)
     }
 
     // If changing to RECHAZADA from ACEPTADA, release reservations

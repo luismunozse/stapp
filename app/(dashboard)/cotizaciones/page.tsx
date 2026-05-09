@@ -31,6 +31,7 @@ import {
   LayoutList,
   FileText,
   Wrench,
+  Paperclip,
 } from "lucide-react"
 import {
   Dialog,
@@ -43,6 +44,7 @@ import { useCurrency } from "@/contexts/currency-context"
 import { CotizacionForm } from "@/components/cotizaciones/cotizacion-form"
 import { CotizacionApprovalDialog } from "@/components/cotizaciones/cotizacion-approval-dialog"
 import { ConvertirVentaDialog } from "@/components/cotizaciones/convertir-venta-dialog"
+import { OrdenSelector, type OrdenLite } from "@/components/cotizaciones/orden-selector"
 import { SignatureDisplay } from "@/components/firma/signature-display"
 import { useModal } from "@/contexts/modal-context"
 
@@ -132,6 +134,9 @@ export default function CotizacionesPage() {
   const [convertingOrdenId, setConvertingOrdenId] = useState<string | null>(null)
   const [approvingCotizacion, setApprovingCotizacion] = useState<Cotizacion | null>(null)
   const [convertingCotizacion, setConvertingCotizacion] = useState<Cotizacion | null>(null)
+  const [linkingCotizacion, setLinkingCotizacion] = useState<Cotizacion | null>(null)
+  const [linkOrdenId, setLinkOrdenId] = useState<string | null>(null)
+  const [linkLoading, setLinkLoading] = useState(false)
   const [search, setSearch] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
   const [estadoFilter, setEstadoFilter] = useState("TODOS")
@@ -318,6 +323,31 @@ export default function CotizacionesPage() {
       await showError("Error al convertir en orden")
     } finally {
       setConvertingOrdenId(null)
+    }
+  }
+
+  const handleVincularOrden = async () => {
+    if (!linkingCotizacion || !linkOrdenId) return
+    setLinkLoading(true)
+    try {
+      const res = await fetch(`/api/cotizaciones/${linkingCotizacion.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ordenId: linkOrdenId }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        await showError(err.error || "Error al vincular orden")
+        return
+      }
+      await showSuccess("Cotización vinculada a la orden")
+      setLinkingCotizacion(null)
+      setLinkOrdenId(null)
+      mutate()
+    } catch {
+      await showError("Error al vincular orden")
+    } finally {
+      setLinkLoading(false)
     }
   }
 
@@ -668,6 +698,17 @@ export default function CotizacionesPage() {
                                   <Wrench className="h-4 w-4" />
                                 </Button>
                               )}
+                              {cotizacion.tipo !== "PRESUPUESTO" && !cotizacion.ordenId && ["BORRADOR", "ENVIADA"].includes(cotizacion.estado) && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-blue-600 hover:text-blue-700"
+                                  onClick={() => { setLinkOrdenId(null); setLinkingCotizacion(cotizacion) }}
+                                  title="Vincular a orden existente"
+                                >
+                                  <Paperclip className="h-4 w-4" />
+                                </Button>
+                              )}
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -898,6 +939,17 @@ export default function CotizacionesPage() {
                           {convertingOrdenId === cotizacion.id ? "Creando orden..." : "Convertir a orden"}
                         </Button>
                       )}
+                      {cotizacion.tipo !== "PRESUPUESTO" && !cotizacion.ordenId && ["BORRADOR", "ENVIADA"].includes(cotizacion.estado) && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-blue-600 hover:text-blue-700"
+                          onClick={() => { setLinkOrdenId(null); setLinkingCotizacion(cotizacion) }}
+                        >
+                          <Paperclip className="mr-2 h-3 w-3" />
+                          Vincular a orden
+                        </Button>
+                      )}
                       {canDelete && (
                         <Button
                           size="sm"
@@ -1000,6 +1052,49 @@ export default function CotizacionesPage() {
           total={convertingCotizacion.total}
         />
       )}
+
+      {/* Vincular a orden Dialog */}
+      <Dialog
+        open={!!linkingCotizacion}
+        onOpenChange={(open) => {
+          if (!open) {
+            setLinkingCotizacion(null)
+            setLinkOrdenId(null)
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Vincular cotización a orden</DialogTitle>
+            <DialogDescription>
+              Asociá {linkingCotizacion?.numeroCotizacion} a una orden de servicio existente.
+              El presupuesto de la orden se recalcula al confirmar.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <OrdenSelector
+              value={linkOrdenId}
+              onChange={(id, _orden: OrdenLite | null) => setLinkOrdenId(id)}
+              disabled={linkLoading}
+            />
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                variant="outline"
+                onClick={() => { setLinkingCotizacion(null); setLinkOrdenId(null) }}
+                disabled={linkLoading}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleVincularOrden}
+                disabled={!linkOrdenId || linkLoading}
+              >
+                {linkLoading ? "Vinculando..." : "Vincular"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

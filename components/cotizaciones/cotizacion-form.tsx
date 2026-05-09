@@ -19,6 +19,7 @@ import { useCurrency } from "@/contexts/currency-context"
 import { useModal } from "@/contexts/modal-context"
 import { ItemRow, calcItemNeto } from "./item-row"
 import { ClienteSelector } from "./cliente-selector"
+import { OrdenSelector, type OrdenLite } from "./orden-selector"
 import { ChecklistPicker, type ChecklistPickerValue } from "./checklist-picker"
 
 interface CotizacionItem {
@@ -140,7 +141,8 @@ export function CotizacionForm({
   const [tiposDispositivo, setTiposDispositivo] = useState<Array<{ id: string; codigo: string; nombre: string }>>([])
 
   const isEditing = !!initialData?.id
-  const isStandalone = !ordenId
+  const [linkedOrdenId, setLinkedOrdenId] = useState<string | null>(ordenId || null)
+  const isStandalone = !linkedOrdenId
 
   // Cargar tipos de dispositivo (solo para PRESUPUESTO)
   useEffect(() => {
@@ -372,7 +374,7 @@ export function CotizacionForm({
         tipoCambio: tipoCambio || undefined,
       }
 
-      if (ordenId) payload.ordenId = ordenId
+      if (linkedOrdenId) payload.ordenId = linkedOrdenId
       if (isStandalone && clienteId) payload.clienteId = clienteId
       if (selectedSectorId) payload.sectorId = selectedSectorId
 
@@ -442,6 +444,33 @@ export function CotizacionForm({
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Orden selector: solo creación, tipo ORDEN, abierto desde /cotizaciones (sin ordenId pre-set) */}
+          {!isEditing && !isPresupuesto && !ordenId && (
+            <OrdenSelector
+              value={linkedOrdenId}
+              onChange={(id, orden: OrdenLite | null) => {
+                setLinkedOrdenId(id)
+                if (orden) {
+                  if (orden.clienteId) {
+                    setClienteId(orden.clienteId)
+                    if (orden.cliente) {
+                      setClienteObj({
+                        tipoCliente: orden.cliente.tipoCliente,
+                        razonSocial: orden.cliente.razonSocial,
+                      })
+                    }
+                  }
+                  if (orden.sectorId) setSelectedSectorId(orden.sectorId)
+                } else {
+                  setClienteId(null)
+                  setClienteObj(null)
+                  setSelectedSectorId("")
+                }
+              }}
+              disabled={loading}
+            />
+          )}
+
           {/* Cliente selector for standalone (only when creating, not editing) */}
           {isStandalone && !isEditing && (
             <>
