@@ -48,6 +48,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
   const [cotizacionValidezDias, setCotizacionValidezDias] = useState("30")
   const [cotizacionTerminos, setCotizacionTerminos] = useState("")
   const [recepcionTerminos, setRecepcionTerminos] = useState("")
+  const [comprobanteTerminos, setComprobanteTerminos] = useState("")
   const [garantiaDiasDefault, setGarantiaDiasDefault] = useState("30")
   const [politicaAbandonoDiasDefault, setPoliticaAbandonoDiasDefault] = useState("60")
   const [anticipoPorcentajeDefault, setAnticipoPorcentajeDefault] = useState("50")
@@ -77,6 +78,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
         setCotizacionValidezDias(String(data.cotizacionValidezDias ?? 30))
         setCotizacionTerminos(data.cotizacionTerminos || "")
         setRecepcionTerminos(data.recepcionTerminos || "")
+        setComprobanteTerminos(data.comprobanteTerminos || "")
         setGarantiaDiasDefault(String(data.garantiaDiasDefault ?? 30))
         setPoliticaAbandonoDiasDefault(String(data.politicaAbandonoDiasDefault ?? 60))
         setAnticipoPorcentajeDefault(String(data.anticipoPorcentajeDefault ?? 50))
@@ -164,7 +166,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
       const res = await fetch("/api/configuracion", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais }),
+        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais }),
       })
 
       if (res.ok) {
@@ -583,6 +585,31 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
             />
             <p className="text-xs sm:text-sm text-muted-foreground mt-1">
               Escriba cada termino en una linea separada. Si se deja vacio se usaran los terminos por defecto.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="text-base sm:text-lg">Comprobante Termico (Impresora)</CardTitle>
+          <CardDescription className="text-xs sm:text-sm">
+            Terminos y condiciones que se imprimen al pie del ticket termico de la orden de servicio.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-4 sm:p-6 pt-0 space-y-4">
+          <div>
+            <Label htmlFor="comprobanteTerminos" className="text-sm">Terminos y Condiciones</Label>
+            <Textarea
+              id="comprobanteTerminos"
+              value={comprobanteTerminos}
+              onChange={(e) => setComprobanteTerminos(e.target.value)}
+              placeholder={"1. Conserve este comprobante para retirar su equipo.\n2. No nos responsabilizamos por datos perdidos.\n3. El presupuesto puede variar segun el diagnostico.\n4. Equipos sin retirar a los 60 dias seran considerados abandonados."}
+              rows={5}
+              disabled={!allowEdit}
+            />
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+              Se imprime al final del ticket. Si se deja vacio no aparece ninguna seccion de terminos.
             </p>
           </div>
         </CardContent>

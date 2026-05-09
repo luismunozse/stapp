@@ -24,6 +24,7 @@ interface ThermalPrintOrdenProps {
     organizationLogoUrl?: string | null
     organizationTelefono?: string | null
     organizationDireccion?: string | null
+    organizationComprobanteTerminos?: string | null
   }
 }
 
@@ -48,6 +49,7 @@ interface PreviewData {
   costoFinal: number | null
   fechaPrometida: string | null
   seguimientoUrl: string | null
+  terminosCondiciones: string | null
 }
 
 function formatMoney(amount: number): string {
@@ -91,6 +93,7 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
       fechaPrometida: orden.fechaPrometida
         ? new Date(orden.fechaPrometida).toLocaleDateString("es-AR")
         : null,
+      terminosCondiciones: orden.organizationComprobanteTerminos ?? null,
     }
   }, [orden])
 
@@ -120,6 +123,7 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
       direccionEmpresa: preview.direccionEmpresa,
       logoRaster,
       qrUrl: preview.seguimientoUrl,
+      terminosCondiciones: preview.terminosCondiciones,
     }
   }
 
@@ -319,6 +323,14 @@ function ReceiptPreview({ data }: { data: PreviewData }) {
           <div className="text-center text-[10px]">Escanea para ver el estado</div>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={qrDataUrl} alt="QR seguimiento" className="mx-auto my-1" style={{ width: "150px", height: "150px" }} />
+          <Sep />
+        </>
+      )}
+
+      {data.terminosCondiciones && (
+        <>
+          <div className="font-bold">TERMINOS Y CONDICIONES</div>
+          <div className="whitespace-pre-wrap break-words text-[10px]">{data.terminosCondiciones}</div>
           <Sep />
         </>
       )}

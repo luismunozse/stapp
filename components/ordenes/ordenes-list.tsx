@@ -17,11 +17,13 @@ import {
   X,
   CheckSquare,
   Printer,
+  DollarSign,
 } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { OrdenForm } from "./orden-form"
+import { CobrarMultipleDialog } from "./cobrar-multiple-dialog"
 import { useModal } from "@/contexts/modal-context"
 import { ExportButton } from "@/components/export/export-button"
 import { OrdenMobileCard } from "./orden-mobile-card"
@@ -106,6 +108,7 @@ export function OrdenesList() {
   // Bulk actions
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkUpdating, setBulkUpdating] = useState(false)
+  const [showCobrarMultiple, setShowCobrarMultiple] = useState(false)
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -774,6 +777,35 @@ export function OrdenesList() {
         />
       )}
 
+      {/* Cobro múltiple de órdenes seleccionadas */}
+      {showCobrarMultiple && (
+        <CobrarMultipleDialog
+          open={showCobrarMultiple}
+          onOpenChange={(open) => setShowCobrarMultiple(open)}
+          ordenesPreseleccionadas={ordenes
+            .filter(o => selectedIds.has(o.id))
+            .map(o => ({
+              id: o.id,
+              numeroOrden: o.numeroOrden,
+              codigoOrden: o.codigoOrden,
+              dispositivo: o.dispositivo,
+              costoFinal: o.costoFinal || 0,
+              totalCobrado: o.totalCobrado || 0,
+              descuentoCobro: o.descuentoCobro || 0,
+              pendiente: Math.max(0, (o.costoFinal || 0) - (o.totalCobrado || 0) - (o.descuentoCobro || 0)),
+              estadoCobro: o.estadoCobro || "PENDIENTE",
+              estado: o.estado,
+            }))
+            .filter(o => o.pendiente > 0)
+          }
+          onSuccess={() => {
+            setShowCobrarMultiple(false)
+            setSelectedIds(new Set())
+            mutate()
+          }}
+        />
+      )}
+
       {/* Total count + bulk actions */}
       {!isLoading && total > 0 && (
         <div className="flex items-center justify-between gap-4">
@@ -805,6 +837,17 @@ export function OrdenesList() {
                     ))}
                   </SelectContent>
                 </Select>
+                {!isTecnico && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs gap-1.5"
+                    onClick={() => setShowCobrarMultiple(true)}
+                  >
+                    <DollarSign className="h-3.5 w-3.5" />
+                    Cobrar
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="sm"

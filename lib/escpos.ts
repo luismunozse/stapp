@@ -178,6 +178,8 @@ export interface OrdenTicketData {
   logoRaster?: Uint8Array | null
   /** URL for tracking QR (printed near footer) */
   qrUrl?: string | null
+  /** Custom terms and conditions printed at the bottom */
+  terminosCondiciones?: string | null
 }
 
 export function generateOrdenTicketCommands(data: OrdenTicketData, printerWidth: 58 | 80 = 80): Uint8Array {
@@ -282,6 +284,16 @@ export function generateOrdenTicketCommands(data: OrdenTicketData, printerWidth:
     add(line("Escanea para ver el estado"))
     buf.push(...qrCommands(data.qrUrl, 7))
     add([LF])
+    add(separator(W))
+  }
+
+  // === TERMINOS Y CONDICIONES ===
+  if (data.terminosCondiciones) {
+    add(CMD.ALIGN_LEFT)
+    add(CMD.BOLD_ON)
+    add(line("TERMINOS Y CONDICIONES"))
+    add(CMD.BOLD_OFF)
+    for (const l of wrapText(data.terminosCondiciones, W)) add(line(l))
     add(separator(W))
   }
 

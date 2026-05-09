@@ -32,8 +32,9 @@ interface OrdenPendiente {
 interface CobrarMultipleDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  clienteId: string
-  clienteNombre: string
+  clienteId?: string
+  clienteNombre?: string
+  ordenesPreseleccionadas?: OrdenPendiente[]
   onSuccess: () => void
 }
 
@@ -42,14 +43,18 @@ export function CobrarMultipleDialog({
   onOpenChange,
   clienteId,
   clienteNombre,
+  ordenesPreseleccionadas,
   onSuccess,
 }: CobrarMultipleDialogProps) {
   const { formatPrice } = useCurrency()
   const { offlineFetch } = useOffline()
-  const [loading, setLoading] = useState(true)
+  const modoPreseleccion = !!ordenesPreseleccionadas
+  const [loading, setLoading] = useState(!modoPreseleccion)
   const [submitting, setSubmitting] = useState(false)
-  const [ordenes, setOrdenes] = useState<OrdenPendiente[]>([])
-  const [seleccionadas, setSeleccionadas] = useState<Set<string>>(new Set())
+  const [ordenes, setOrdenes] = useState<OrdenPendiente[]>(ordenesPreseleccionadas || [])
+  const [seleccionadas, setSeleccionadas] = useState<Set<string>>(
+    new Set((ordenesPreseleccionadas || []).map(o => o.id))
+  )
   const [observaciones, setObservaciones] = useState("")
   const [saldoCuenta, setSaldoCuenta] = useState(0)
 
@@ -61,9 +66,10 @@ export function CobrarMultipleDialog({
 
   const [pagosLines, setPagosLines] = useState<PagoLineItem[]>([createPagoLine(0)])
 
-  // Fetch ordenes pendientes
+  // Fetch ordenes pendientes (solo cuando no hay preseleccionadas)
   useEffect(() => {
-    if (!open) return
+    if (!open || modoPreseleccion) return
+    if (!clienteId) return
     const fetchData = async () => {
       setLoading(true)
       try {
@@ -85,7 +91,7 @@ export function CobrarMultipleDialog({
       finally { setLoading(false) }
     }
     fetchData()
-  }, [open, clienteId])
+  }, [open, clienteId, modoPreseleccion])
 
   // Update pagos amount when selection changes
   useEffect(() => {
@@ -192,7 +198,7 @@ export function CobrarMultipleDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <DollarSign className="h-5 w-5" />
-            Cobro Unificado - {clienteNombre}
+            {clienteNombre ? `Cobro Unificado - ${clienteNombre}` : `Cobro de ${ordenes.length} orden${ordenes.length !== 1 ? "es" : ""}`}
           </DialogTitle>
         </DialogHeader>
 

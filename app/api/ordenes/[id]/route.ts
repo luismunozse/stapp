@@ -74,7 +74,8 @@ export async function GET(
           nombre_mostrar,
           logo_url,
           telefono,
-          direccion
+          direccion,
+          comprobante_terminos
         )
       `)
       .eq("id", id)
@@ -104,6 +105,7 @@ export async function GET(
       organizationLogoUrl: org?.logo_url || null,
       organizationTelefono: org?.telefono || null,
       organizationDireccion: org?.direccion || null,
+      organizationComprobanteTerminos: org?.comprobante_terminos || null,
     }, {
       headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
     })

@@ -35,6 +35,7 @@ export async function GET() {
         cotizacion_validez_dias,
         cotizacion_terminos,
         recepcion_terminos,
+        comprobante_terminos,
         garantia_dias_default,
         politica_abandono_dias_default,
         anticipo_porcentaje_default,
@@ -86,6 +87,7 @@ export async function GET() {
       cotizacionValidezDias: organization.cotizacion_validez_dias ?? 30,
       cotizacionTerminos: organization.cotizacion_terminos || "",
       recepcionTerminos: organization.recepcion_terminos || "",
+      comprobanteTerminos: organization.comprobante_terminos || "",
       garantiaDiasDefault: organization.garantia_dias_default ?? 30,
       politicaAbandonoDiasDefault: organization.politica_abandono_dias_default ?? 60,
       anticipoPorcentajeDefault: organization.anticipo_porcentaje_default ?? 50,
@@ -113,7 +115,7 @@ export async function PUT(request: Request) {
         { status: 413 }
       )
     }
-    const { logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais } = body
+    const { logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais } = body
 
     const updateData: Record<string, any> = {}
 
@@ -217,6 +219,10 @@ export async function PUT(request: Request) {
       updateData.recepcion_terminos = recepcionTerminos || null
     }
 
+    if (comprobanteTerminos !== undefined) {
+      updateData.comprobante_terminos = comprobanteTerminos || null
+    }
+
     if (garantiaDiasDefault !== undefined) {
       const val = parseInt(garantiaDiasDefault)
       if (!isNaN(val) && val >= 0) {
@@ -243,7 +249,7 @@ export async function PUT(request: Request) {
     }
 
     const selectCols = "id, logo_url, logo_path, nombre_mostrar, telefono, direccion, ciudad, provincia, codigo_postal, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, garantia_dias_default, politica_abandono_dias_default, anticipo_porcentaje_default, pais"
-    const selectColsFull = selectCols + ", recepcion_terminos"
+    const selectColsFull = selectCols + ", recepcion_terminos, comprobante_terminos"
 
     // Solo actualizar si hay cambios
     if (Object.keys(updateData).length === 0) {
@@ -271,6 +277,7 @@ export async function PUT(request: Request) {
         cotizacionValidezDias: org?.cotizacion_validez_dias ?? 30,
         cotizacionTerminos: org?.cotizacion_terminos || "",
         recepcionTerminos: org?.recepcion_terminos || "",
+        comprobanteTerminos: org?.comprobante_terminos || "",
         garantiaDiasDefault: org?.garantia_dias_default ?? 30,
         politicaAbandonoDiasDefault: org?.politica_abandono_dias_default ?? 60,
         anticipoPorcentajeDefault: org?.anticipo_porcentaje_default ?? 50,
@@ -324,6 +331,7 @@ export async function PUT(request: Request) {
       cotizacionValidezDias: organization.cotizacion_validez_dias ?? 30,
       cotizacionTerminos: organization.cotizacion_terminos || "",
       recepcionTerminos: organization.recepcion_terminos || "",
+      comprobanteTerminos: organization.comprobante_terminos || "",
       garantiaDiasDefault: organization.garantia_dias_default ?? 30,
       politicaAbandonoDiasDefault: organization.politica_abandono_dias_default ?? 60,
       anticipoPorcentajeDefault: organization.anticipo_porcentaje_default ?? 50,
