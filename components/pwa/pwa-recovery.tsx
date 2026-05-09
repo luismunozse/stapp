@@ -1,8 +1,14 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
+import { usePathname } from "next/navigation"
 import { RefreshCw, WifiOff, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
+
+// Rutas donde PWARecovery debe quedarse fuera (gestos pull-to-refresh y botón
+// flotante interfieren con UX, ej: POS dispara reload al deslizar en el dialog
+// de cobro o al tocar accidentalmente el botón flotante).
+const DISABLED_PATHS = ["/pos"]
 
 // Detectar si estamos en modo PWA standalone
 function isStandalone() {
@@ -15,6 +21,9 @@ function isStandalone() {
 }
 
 export function PWARecovery() {
+  const pathname = usePathname()
+  const isDisabledPath = DISABLED_PATHS.some((p) => pathname === p || pathname?.startsWith(p + "/"))
+
   const [isOnline, setIsOnline] = useState(true)
   const [isPWA, setIsPWA] = useState(false)
   const [showRefreshHint, setShowRefreshHint] = useState(false)
@@ -77,7 +86,7 @@ export function PWARecovery() {
   }, [pullDistance])
 
   useEffect(() => {
-    if (!isPWA) return
+    if (!isPWA || isDisabledPath) return
 
     document.addEventListener("touchstart", handleTouchStart, { passive: true })
     document.addEventListener("touchmove", handleTouchMove, { passive: true })
@@ -88,7 +97,7 @@ export function PWARecovery() {
       document.removeEventListener("touchmove", handleTouchMove)
       document.removeEventListener("touchend", handleTouchEnd)
     }
-  }, [isPWA, handleTouchStart, handleTouchMove, handleTouchEnd])
+  }, [isPWA, isDisabledPath, handleTouchStart, handleTouchMove, handleTouchEnd])
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
@@ -112,8 +121,8 @@ export function PWARecovery() {
     }
   }
 
-  // No mostrar nada si no es PWA
-  if (!isPWA) return null
+  // No mostrar nada si no es PWA o si la ruta lo deshabilita (ej: /pos)
+  if (!isPWA || isDisabledPath) return null
 
   return (
     <>
