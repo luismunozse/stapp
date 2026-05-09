@@ -54,6 +54,7 @@ export function OnboardingWizard() {
 
   useEffect(() => {
     fetchProgress()
+    fetchOrgData()
   }, [])
 
   const fetchProgress = async () => {
@@ -61,6 +62,15 @@ export function OnboardingWizard() {
     if (res.ok) {
       const data = await res.json()
       setProgress(data)
+    }
+  }
+
+  const fetchOrgData = async () => {
+    const res = await fetch("/api/configuracion")
+    if (res.ok) {
+      const data = await res.json()
+      if (data.nombreEmpresa) setOrgName(data.nombreEmpresa)
+      if (data.logoUrl) setLogoPreview(data.logoUrl)
     }
   }
 

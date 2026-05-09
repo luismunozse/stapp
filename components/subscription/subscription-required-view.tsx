@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Link from "next/link"
 import { signOut } from "next-auth/react"
 
 import { Clock, AlertTriangle, CreditCard, LogOut, Check, X, CheckCircle2, ArrowRight, Zap } from "lucide-react"
@@ -146,7 +147,13 @@ export function SubscriptionRequiredView({
       {/* Header */}
       <header className="p-4 border-b">
         <div className="container max-w-6xl mx-auto flex items-center justify-between">
-          <BusinessLogo size="sm" showText />
+          <Link
+            href="/dashboard"
+            className="rounded-md transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            aria-label="Ir al dashboard"
+          >
+            <BusinessLogo size="sm" showText />
+          </Link>
           <Button variant="ghost" size="sm" onClick={handleLogout}>
             <LogOut className="h-4 w-4 mr-2" />
             Cerrar sesión

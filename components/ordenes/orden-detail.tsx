@@ -238,7 +238,9 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
         { event: "*", schema: "public", table: "repuestos_orden", filter: `orden_id=eq.${ordenId}` },
         () => { fetchOrden() }
       )
-      .subscribe()
+      .subscribe((status, err) => {
+        if (err) console.warn("[realtime] orden-detail subscribe error:", err)
+      })
 
     channelRef.current = channel
     return () => {
