@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
-import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
-import { sendNewLeadNotification } from "@/lib/email"
+import { supabaseAdmin } from "@/lib/supabase"
+import { upsertLeadFromConversation } from "@/lib/chatbot/upsert-lead"
 
 const leadCaptureSchema = z.object({
   sessionId: z.string().min(1, "Session ID es requerido"),
@@ -19,31 +19,16 @@ export async function POST(request: Request) {
     const body = await request.json()
     const data = leadCaptureSchema.parse(body)
 
-    // Validar que al menos tenga email o teléfono
-    if (!data.email && !data.telefono) {
+    if (!data.nombre && !data.email && !data.telefono && !data.empresa) {
       return NextResponse.json(
-        { error: "Debés proporcionar al menos un email o teléfono" },
+        { error: "Se requiere al menos uno: nombre, email, teléfono o empresa" },
         { status: 400 }
       )
     }
 
-    // Verificar que la conversación existe y pertenece a la sesión
-    const { data: conversacion } = await supabaseAdmin
-      .from("chatbot_conversaciones")
-      .select("*")
-      .eq("id", data.conversacionId)
-      .eq("session_id", data.sessionId)
-      .single()
+    let nombre = data.nombre
 
-    if (!conversacion) {
-      return NextResponse.json(
-        { error: "Conversación no encontrada" },
-        { status: 404 }
-      )
-    }
-
-    // Si no viene nombre, intentar extraerlo del historial de la conversación
-    if (!data.nombre) {
+    if (!nombre) {
       const { data: mensajes } = await supabaseAdmin
         .from("chatbot_mensajes")
         .select("tipo, contenido")
@@ -53,173 +38,51 @@ export async function POST(request: Request) {
         .limit(20)
 
       if (mensajes) {
-        const namePatterns = [
-          /(?:me llamo|mi nombre es|soy)\s+([A-ZÁÉÍÓÚÑa-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑa-záéíóúñ]+)?)/i,
-        ]
+        const namePattern = /(?:me llamo|mi nombre es)\s+([A-ZÁÉÍÓÚÑa-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑa-záéíóúñ]+){0,2})/i
         for (const msg of mensajes) {
-          for (const pattern of namePatterns) {
-            const match = msg.contenido.match(pattern)
-            if (match) {
-              data.nombre = match[1].trim()
-              break
-            }
+          const match = msg.contenido.match(namePattern)
+          if (match) {
+            nombre = match[1].trim()
+            break
           }
-          if (data.nombre) break
         }
       }
 
-      // Fallback: usar la parte local del email como nombre legible
-      if (!data.nombre && data.email) {
+      if (!nombre && data.email) {
         const localPart = data.email.split("@")[0]
-        // Convertir "juan.perez" o "juan_perez" a "Juan Perez"
         const formatted = localPart
           .replace(/[._-]/g, " ")
           .replace(/\b\w/g, (c) => c.toUpperCase())
-        if (formatted.length >= 2) {
-          data.nombre = formatted
-        }
+        if (formatted.length >= 2) nombre = formatted
       }
     }
 
-    // Helper para enviar notificación sin bloquear
-    const notifyLead = (leadData: typeof data, origen: string) => {
-      sendNewLeadNotification({
-        nombre: leadData.nombre,
-        email: leadData.email,
-        telefono: leadData.telefono,
-        empresa: leadData.empresa,
-        interes: leadData.interes,
-        origen,
-      }).catch((err) => console.error("[Lead] Error enviando notificación:", err))
+    const result = await upsertLeadFromConversation(data.conversacionId, data.sessionId, {
+      nombre,
+      email: data.email,
+      telefono: data.telefono,
+      empresa: data.empresa,
+      interes: data.interes ?? "Consulta desde chatbot",
+      planInteres: data.planInteres,
+    })
+
+    if (!result) {
+      return NextResponse.json(
+        { error: "No se pudo capturar el lead. Verificá la conversación." },
+        { status: 404 }
+      )
     }
-
-    // Verificar si ya existe un lead para esta conversación
-    if (conversacion.lead_id) {
-      // Actualizar el lead existente con nueva información (solo campos no vacíos)
-      const updateFields: Record<string, string | null> = {}
-      if (data.nombre) updateFields.nombre = data.nombre
-      if (data.email) updateFields.email = data.email
-      if (data.telefono) updateFields.telefono = data.telefono
-      if (data.empresa) updateFields.empresa = data.empresa
-      if (data.interes) updateFields.interes = data.interes
-      if (data.planInteres) updateFields.plan_interes = data.planInteres
-
-      if (Object.keys(updateFields).length === 0) {
-        return NextResponse.json({ success: true, leadId: conversacion.lead_id, message: "Sin datos nuevos" })
-      }
-
-      const { data: leadExistente, error: updateError } = await supabaseAdmin
-        .from("leads")
-        .update(updateFields)
-        .eq("id", conversacion.lead_id)
-        .select()
-        .single()
-
-      if (updateError) throw updateError
-
-      // Notificar si se agregó email o teléfono nuevo (dato de contacto importante)
-      if (updateFields.email || updateFields.telefono) {
-        notifyLead(data, "Chatbot (datos actualizados)")
-      }
-
-      return NextResponse.json({
-        success: true,
-        leadId: leadExistente.id,
-        message: "Lead actualizado correctamente",
-      })
-    }
-
-    // Buscar lead existente por email o teléfono (deduplicación)
-    let existingLead = null
-    if (data.email) {
-      const { data: byEmail } = await supabaseAdmin
-        .from("leads")
-        .select("id")
-        .eq("email", data.email)
-        .limit(1)
-        .single()
-      existingLead = byEmail
-    }
-    if (!existingLead && data.telefono) {
-      const { data: byPhone } = await supabaseAdmin
-        .from("leads")
-        .select("id")
-        .eq("telefono", data.telefono)
-        .limit(1)
-        .single()
-      existingLead = byPhone
-    }
-
-    if (existingLead) {
-      // Actualizar lead existente y vincular a esta conversación
-      const updateFields: Record<string, string | null> = {}
-      if (data.nombre) updateFields.nombre = data.nombre
-      if (data.email) updateFields.email = data.email
-      if (data.telefono) updateFields.telefono = data.telefono
-      if (data.empresa) updateFields.empresa = data.empresa
-      if (data.interes) updateFields.interes = data.interes
-      if (data.planInteres) updateFields.plan_interes = data.planInteres
-
-      if (Object.keys(updateFields).length > 0) {
-        await supabaseAdmin.from("leads").update(updateFields).eq("id", existingLead.id)
-      }
-
-      await supabaseAdmin
-        .from("chatbot_conversaciones")
-        .update({ lead_id: existingLead.id, lead_capturado: true })
-        .eq("id", data.conversacionId)
-
-      // Notificar que un lead existente volvió a chatear
-      notifyLead(data, "Chatbot (lead recurrente)")
-
-      return NextResponse.json({
-        success: true,
-        leadId: existingLead.id,
-        message: "Lead existente vinculado y actualizado",
-      })
-    }
-
-    // Crear nuevo lead
-    const { data: lead, error: leadError } = await supabaseAdmin
-      .from("leads")
-      .insert({
-        nombre: data.nombre || null,
-        email: data.email || null,
-        telefono: data.telefono || null,
-        empresa: data.empresa || null,
-        estado: "NUEVO",
-        origen: "CHATBOT",
-        interes: data.interes || null,
-        plan_interes: data.planInteres || null,
-      })
-      .select()
-      .single()
-
-    if (leadError) throw leadError
-
-    // Actualizar conversación con el lead_id
-    await supabaseAdmin
-      .from("chatbot_conversaciones")
-      .update({
-        lead_id: lead.id,
-        lead_capturado: true,
-      })
-      .eq("id", data.conversacionId)
-
-    // Enviar notificación por email al admin (no bloquear la respuesta)
-    notifyLead(data, "Chatbot")
 
     return NextResponse.json({
       success: true,
-      leadId: lead.id,
-      message: "Lead capturado exitosamente",
+      leadId: result.leadId,
+      message: result.created
+        ? "Lead capturado exitosamente"
+        : "Lead actualizado correctamente",
     })
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: error.errors[0].message },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: error.errors[0].message }, { status: 400 })
     }
     console.error("Error capturando lead:", error)
     return NextResponse.json(

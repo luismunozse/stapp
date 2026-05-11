@@ -25,6 +25,9 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const estado = searchParams.get("estado")
     const origen = searchParams.get("origen")
+    const urgencia = searchParams.get("urgencia")
+    const minScoreRaw = searchParams.get("minScore")
+    const sort = searchParams.get("sort") || "score_desc"
     const search = searchParams.get("search")
     const limit = parseInt(searchParams.get("limit") || "50")
     const offset = parseInt(searchParams.get("offset") || "0")
@@ -32,8 +35,17 @@ export async function GET(request: NextRequest) {
     let query = supabaseAdmin
       .from("leads")
       .select("*, chatbot_conversaciones(id, session_id, created_at, lead_capturado)", { count: "exact" })
-      .order("created_at", { ascending: false })
       .range(offset, offset + limit - 1)
+
+    if (sort === "score_desc") {
+      query = query.order("score", { ascending: false }).order("created_at", { ascending: false })
+    } else if (sort === "score_asc") {
+      query = query.order("score", { ascending: true }).order("created_at", { ascending: false })
+    } else if (sort === "created_asc") {
+      query = query.order("created_at", { ascending: true })
+    } else {
+      query = query.order("created_at", { ascending: false })
+    }
 
     if (estado && estado !== "TODOS") {
       query = query.eq("estado", estado)
@@ -41,6 +53,17 @@ export async function GET(request: NextRequest) {
 
     if (origen && origen !== "TODOS") {
       query = query.eq("origen", origen)
+    }
+
+    if (urgencia && urgencia !== "TODOS") {
+      query = query.eq("urgencia", urgencia)
+    }
+
+    if (minScoreRaw) {
+      const minScore = parseInt(minScoreRaw)
+      if (Number.isFinite(minScore) && minScore > 0) {
+        query = query.gte("score", minScore)
+      }
     }
 
     if (search) {

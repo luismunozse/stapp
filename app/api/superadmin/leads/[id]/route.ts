@@ -23,6 +23,16 @@ export async function GET(
       return NextResponse.json({ error: "Lead no encontrado" }, { status: 404 })
     }
 
+    if (lead.visto === false) {
+      supabaseAdmin
+        .from("leads")
+        .update({ visto: true })
+        .eq("id", id)
+        .then(({ error: markError }) => {
+          if (markError) console.error("Error marking lead as visto:", markError)
+        })
+    }
+
     // Obtener conversaciones vinculadas con mensajes en un solo query (nested select)
     const { data: conversacionesConMensajes } = await supabaseAdmin
       .from("chatbot_conversaciones")

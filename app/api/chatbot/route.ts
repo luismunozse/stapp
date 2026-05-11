@@ -4,9 +4,8 @@ import { z } from "zod"
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai"
 import { headers } from "next/headers"
 import { getPremiumPrices } from "@/lib/pricing"
-
-// NO usar requireAuth() - este endpoint es público
-// Usando gemini-2.0-flash
+import { extractLeadData, shouldExtract, type ChatTurn } from "@/lib/chatbot/extract-lead-data"
+import { upsertLeadFromConversation } from "@/lib/chatbot/upsert-lead"
 
 const chatRequestSchema = z.object({
   sessionId: z.string().min(1, "Session ID es requerido"),
@@ -14,13 +13,11 @@ const chatRequestSchema = z.object({
   conversacionId: z.string().nullable().optional(),
 })
 
-// Inicializar Gemini
 if (!process.env.GOOGLE_GEMINI_API_KEY) {
   console.error("[Chatbot] GOOGLE_GEMINI_API_KEY no está configurada en .env")
 }
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API_KEY || "")
 
-// Rate limiting simple en memoria (en producción usar Redis)
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>()
 
 function checkRateLimit(identifier: string): boolean {
@@ -28,14 +25,11 @@ function checkRateLimit(identifier: string): boolean {
   const limit = rateLimitMap.get(identifier)
 
   if (!limit || now > limit.resetTime) {
-    rateLimitMap.set(identifier, { count: 1, resetTime: now + 60000 }) // 1 minuto
+    rateLimitMap.set(identifier, { count: 1, resetTime: now + 60000 })
     return true
   }
 
-  if (limit.count >= 20) {
-    // 20 mensajes por minuto
-    return false
-  }
+  if (limit.count >= 20) return false
 
   limit.count++
   return true
@@ -48,7 +42,6 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { sessionId, message, conversacionId } = chatRequestSchema.parse(body)
 
-    // Rate limiting por sessionId
     if (!checkRateLimit(sessionId)) {
       return NextResponse.json(
         { error: "Demasiados mensajes. Esperá un momento." },
@@ -56,18 +49,16 @@ export async function POST(request: Request) {
       )
     }
 
-    // Obtener metadata de la request
     const headersList = await headers()
     const ip = headersList.get("x-forwarded-for") || headersList.get("x-real-ip") || "unknown"
     const userAgent = headersList.get("user-agent") || "unknown"
     const referrer = headersList.get("referer") || headersList.get("referrer") || null
 
-    // Obtener o crear conversación
-    let conversacion: any
+    let conversacion: { id: string; session_id: string } | null = null
     if (conversacionId) {
       const { data } = await supabaseAdmin
         .from("chatbot_conversaciones")
-        .select("*")
+        .select("id, session_id")
         .eq("id", conversacionId)
         .eq("session_id", sessionId)
         .single()
@@ -83,21 +74,19 @@ export async function POST(request: Request) {
           user_agent: userAgent,
           referrer: referrer,
         })
-        .select()
+        .select("id, session_id")
         .single()
 
       if (error) throw error
       conversacion = data
     }
 
-    // Guardar mensaje del usuario
     await supabaseAdmin.from("chatbot_mensajes").insert({
       conversacion_id: conversacion.id,
       tipo: "USER",
       contenido: message,
     })
 
-    // Obtener historial de la conversación (últimos 10 mensajes para contexto)
     const { data: historial } = await supabaseAdmin
       .from("chatbot_mensajes")
       .select("tipo, contenido")
@@ -105,34 +94,20 @@ export async function POST(request: Request) {
       .order("created_at", { ascending: false })
       .limit(10)
 
-    // Construir contexto para Gemini
-    const contextPrompt = await buildContextPrompt()
-    const conversationHistory =
-      historial
-        ?.reverse()
-        .map((m) => `${m.tipo === "USER" ? "Usuario" : "Santi"}: ${m.contenido}`)
-        .join("\n") || ""
+    const orderedHistory: ChatTurn[] = (historial ?? []).slice().reverse()
 
-    // Llamar a Gemini con configuración de seguridad más permisiva
+    const contextPrompt = await buildContextPrompt()
+    const conversationHistory = orderedHistory
+      .map((m) => `${m.tipo === "USER" ? "Usuario" : "Santi"}: ${m.contenido}`)
+      .join("\n")
+
     const model = genAI.getGenerativeModel({
       model: "gemini-2.0-flash",
       safetySettings: [
-        {
-          category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-          threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-        },
-        {
-          category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-          threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-        },
-        {
-          category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-          threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-        },
-        {
-          category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-          threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-        },
+        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
       ],
     })
 
@@ -148,50 +123,37 @@ Instrucciones:
 - Usá español argentino informal pero profesional (vos, "querés", "tenés", etc.)
 - Si ya tenés suficiente información del usuario, agradecer y confirmar que alguien lo contactará pronto`
 
-    console.log("[Chatbot] Sending prompt to Gemini...")
+    const runExtract = shouldExtract(message, orderedHistory.length > 1)
+
+    console.log("[Chatbot] Sending prompt to Gemini...", { runExtract })
+
+    const [mainResult, extractResult] = await Promise.allSettled([
+      model.generateContent(fullPrompt),
+      runExtract ? extractLeadData(orderedHistory) : Promise.resolve(null),
+    ])
+
     let assistantMessage: string
-
-    try {
-      const result = await model.generateContent(fullPrompt)
-      const response = result.response
-
-      console.log("[Chatbot] Gemini response received:", {
-        hasCandidates: !!response?.candidates,
-        candidatesLength: response?.candidates?.length,
-        hasText: !!response?.text,
-      })
-
-      if (!response?.candidates?.[0]?.content?.parts?.[0]?.text) {
-        console.error("[Chatbot] Gemini response blocked or empty:", {
-          candidates: response?.candidates,
-          promptFeedback: response?.promptFeedback,
-        })
-        throw new Error("Respuesta bloqueada o vacía")
+    if (mainResult.status === "fulfilled") {
+      try {
+        const response = mainResult.value.response
+        if (!response?.candidates?.[0]?.content?.parts?.[0]?.text) {
+          console.error("[Chatbot] Gemini response blocked or empty")
+          throw new Error("Respuesta bloqueada o vacía")
+        }
+        assistantMessage = response.text()
+      } catch (err) {
+        console.error("[Chatbot] response parse error:", err)
+        assistantMessage = fallbackMessage(null)
       }
-
-      assistantMessage = response.text()
-    } catch (geminiError: any) {
-      console.error("[Chatbot] Gemini API error:", geminiError?.message || geminiError)
-
-      // Fallback response when API is unavailable or quota exceeded
-      if (geminiError?.status === 429 || geminiError?.message?.includes("429")) {
-        assistantMessage = "¡Hola! En este momento tenemos mucha demanda y no puedo responderte al instante. " +
-          "Si querés, podés escribirnos a contacto@stapp.com.ar o visitá nuestra página para más info sobre STApp. " +
-          "¡Gracias por tu paciencia!"
-      } else {
-        assistantMessage = "Disculpá, estoy teniendo algunos problemas técnicos. " +
-          "Podés intentar de nuevo en unos segundos o escribirnos a contacto@stapp.com.ar. ¡Gracias!"
-      }
+    } else {
+      const reason = mainResult.reason as { status?: number; message?: string } | undefined
+      console.error("[Chatbot] Gemini API error:", reason?.message || reason)
+      assistantMessage = fallbackMessage(reason ?? null)
     }
 
-    console.log("[Chatbot] Assistant message:", assistantMessage?.substring(0, 100))
-
     const timeElapsed = Date.now() - startTime
-
-    // Detectar intención
     const intencion = detectIntention(message, assistantMessage)
 
-    // Guardar respuesta del asistente
     await supabaseAdmin.from("chatbot_mensajes").insert({
       conversacion_id: conversacion.id,
       tipo: "ASSISTANT",
@@ -202,11 +164,52 @@ Instrucciones:
       confianza: intencion.confianza,
     })
 
+    let leadCaptured = false
+    let leadScore = 0
+    if (extractResult.status === "fulfilled" && extractResult.value) {
+      const extracted = extractResult.value
+      leadScore = extracted.score
+      const interesMap: Record<string, string> = {
+        solicitar_demo: "Solicitud de demo",
+        preguntar_precio: "Consulta de precios",
+        comparar_planes: "Comparación de planes",
+        como_empezar: "Quiere empezar a usar STApp",
+        lead_calificado: "Tiene taller/negocio - Lead calificado",
+      }
+
+      const upsertResult = await upsertLeadFromConversation(conversacion.id, sessionId, {
+        nombre: extracted.nombre,
+        email: extracted.email,
+        telefono: extracted.telefono,
+        empresa: extracted.empresa,
+        interes: interesMap[intencion.tipo] ?? null,
+        score: extracted.score,
+        cantidadTecnicos: extracted.cantidad_tecnicos,
+        ciudad: extracted.ciudad,
+        sistemaActual: extracted.sistema_actual,
+        urgencia: extracted.urgencia,
+        resumen: extracted.resumen,
+      })
+
+      if (upsertResult) {
+        leadCaptured = true
+        console.log("[Chatbot] Lead upsert:", {
+          leadId: upsertResult.leadId,
+          created: upsertResult.created,
+          score: extracted.score,
+        })
+      }
+    } else if (extractResult.status === "rejected") {
+      console.error("[Chatbot] extract failed:", extractResult.reason)
+    }
+
     return NextResponse.json({
       message: assistantMessage,
       conversacionId: conversacion.id,
       sessionId: sessionId,
       intencion: intencion.tipo,
+      leadCaptured,
+      leadScore,
     })
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -215,6 +218,16 @@ Instrucciones:
     console.error("Error en chatbot:", error)
     return NextResponse.json({ error: "Error al procesar el mensaje. Por favor intentá de nuevo." }, { status: 500 })
   }
+}
+
+function fallbackMessage(reason: { status?: number; message?: string } | null): string {
+  if (reason?.status === 429 || reason?.message?.includes("429")) {
+    return "¡Hola! En este momento tenemos mucha demanda y no puedo responderte al instante. " +
+      "Si querés, podés escribirnos a contacto@stapp.com.ar o visitá nuestra página para más info sobre STApp. " +
+      "¡Gracias por tu paciencia!"
+  }
+  return "Disculpá, estoy teniendo algunos problemas técnicos. " +
+    "Podés intentar de nuevo en unos segundos o escribirnos a contacto@stapp.com.ar. ¡Gracias!"
 }
 
 async function buildContextPrompt(): Promise<string> {
@@ -435,6 +448,10 @@ Tu objetivo secundario (además de ayudar) es capturar datos de contacto de pote
    - Email (principal para seguimiento)
    - Teléfono/WhatsApp (si no da email)
    - Nombre del taller/empresa (si surge naturalmente)
+   - Cantidad de técnicos / tamaño del taller (si conversacion fluye)
+   - Ciudad (si surge)
+   - Sistema actual de gestión (excel, papel, otro software)
+   - Urgencia / cuándo lo necesita
 
 6. FRASES NATURALES PARA PEDIR DATOS:
    - "Por cierto, ¿cómo te llamás?"
@@ -442,6 +459,8 @@ Tu objetivo secundario (además de ayudar) es capturar datos de contacto de pote
    - "¿Querés que te agende una demo? Solo necesito tu nombre y email"
    - "¿Tenés un WhatsApp? Así te paso toda la data por ahí"
    - "¿Para qué taller es? Así te puedo hacer una recomendación más personalizada"
+   - "¿Cuántos técnicos trabajan con vos? Para sugerirte la configuración ideal"
+   - "¿Estás usando algún sistema hoy o todavía papel/Excel?"
 
 Si el usuario quiere hablar con una persona, indicale que puede escribirnos por WhatsApp al +54 9 11 6962-5733.
 
@@ -459,10 +478,9 @@ REGLA ANTI-LAGUNAS: Si el usuario pregunta algo sobre STApp que no tenés en tu 
 REGLA DE FACTURACIÓN AFIP: STApp tiene facturación integrada con numeración automática e IVA discriminado, pero NO tiene integración directa con AFIP para factura electrónica. Las facturas se generan dentro de STApp y se exportan a PDF. Si el usuario pregunta específicamente por factura electrónica AFIP, aclará esto honestamente y mencioná que es una funcionalidad que se está evaluando incorporar.`
 }
 
-function detectIntention(userMessage: string, assistantResponse: string): { tipo: string; confianza: number } {
+function detectIntention(userMessage: string, _assistantResponse: string): { tipo: string; confianza: number } {
   const msg = userMessage.toLowerCase()
 
-  // Señal de compra / interés alto
   if (
     msg.includes("contratar") ||
     msg.includes("comprar") ||
@@ -478,12 +496,10 @@ function detectIntention(userMessage: string, assistantResponse: string): { tipo
     return { tipo: "solicitar_demo", confianza: 0.95 }
   }
 
-  // Solicitud de demo
   if (msg.includes("demo") || msg.includes("probar") || msg.includes("prueba") || msg.includes("testear")) {
     return { tipo: "solicitar_demo", confianza: 0.9 }
   }
 
-  // Preguntas sobre precios
   if (
     msg.includes("precio") ||
     msg.includes("costo") ||
@@ -495,7 +511,6 @@ function detectIntention(userMessage: string, assistantResponse: string): { tipo
     return { tipo: "preguntar_precio", confianza: 0.85 }
   }
 
-  // Comparación de planes
   if (
     msg.includes("diferencia") ||
     msg.includes("plan") ||
@@ -506,7 +521,6 @@ function detectIntention(userMessage: string, assistantResponse: string): { tipo
     return { tipo: "comparar_planes", confianza: 0.8 }
   }
 
-  // Preguntar cómo empezar / registro / login
   if (
     msg.includes("empezar") ||
     msg.includes("comenzar") ||
@@ -521,7 +535,6 @@ function detectIntention(userMessage: string, assistantResponse: string): { tipo
     return { tipo: "como_empezar", confianza: 0.85 }
   }
 
-  // Información de contacto proporcionada
   if (
     msg.includes("@") ||
     /\d{3,}/.test(msg) ||
@@ -533,7 +546,6 @@ function detectIntention(userMessage: string, assistantResponse: string): { tipo
     return { tipo: "proporcionar_contacto", confianza: 0.95 }
   }
 
-  // Preguntas sobre seguridad
   if (
     msg.includes("segur") ||
     msg.includes("2fa") ||
@@ -545,7 +557,6 @@ function detectIntention(userMessage: string, assistantResponse: string): { tipo
     return { tipo: "pregunta_seguridad", confianza: 0.8 }
   }
 
-  // Preguntas sobre WhatsApp / notificaciones
   if (
     msg.includes("whatsapp") ||
     msg.includes("notificacion") ||
@@ -556,7 +567,6 @@ function detectIntention(userMessage: string, assistantResponse: string): { tipo
     return { tipo: "pregunta_comunicaciones", confianza: 0.8 }
   }
 
-  // Preguntas sobre reportes / analytics
   if (
     msg.includes("reporte") ||
     msg.includes("estadístic") ||
@@ -567,7 +577,6 @@ function detectIntention(userMessage: string, assistantResponse: string): { tipo
     return { tipo: "pregunta_reportes", confianza: 0.8 }
   }
 
-  // Preguntas sobre impresión / etiquetas / impresoras
   if (
     msg.includes("imprimi") ||
     msg.includes("impresora") ||
@@ -581,7 +590,6 @@ function detectIntention(userMessage: string, assistantResponse: string): { tipo
     return { tipo: "pregunta_impresion", confianza: 0.8 }
   }
 
-  // Preguntas sobre facturación / cobros
   if (
     msg.includes("factur") ||
     msg.includes("cobr") ||
@@ -592,7 +600,6 @@ function detectIntention(userMessage: string, assistantResponse: string): { tipo
     return { tipo: "pregunta_facturacion", confianza: 0.8 }
   }
 
-  // Preguntas sobre app móvil / offline
   if (
     msg.includes("app") ||
     msg.includes("celular") ||
@@ -605,7 +612,6 @@ function detectIntention(userMessage: string, assistantResponse: string): { tipo
     return { tipo: "pregunta_mobile", confianza: 0.8 }
   }
 
-  // Menciona que tiene un taller/negocio (lead calificado)
   if (
     msg.includes("mi taller") ||
     msg.includes("mi service") ||
@@ -621,7 +627,6 @@ function detectIntention(userMessage: string, assistantResponse: string): { tipo
     return { tipo: "lead_calificado", confianza: 0.9 }
   }
 
-  // Pregunta sobre funcionalidades generales
   if (
     msg.includes("funciona") ||
     msg.includes("característica") ||
@@ -634,11 +639,9 @@ function detectIntention(userMessage: string, assistantResponse: string): { tipo
     return { tipo: "pregunta_funcionalidad", confianza: 0.75 }
   }
 
-  // Saludo inicial
   if (msg.includes("hola") || msg.includes("buenas") || msg.includes("buenos días") || msg.includes("buenas tardes")) {
     return { tipo: "saludo", confianza: 0.9 }
   }
 
-  // Pregunta general
   return { tipo: "pregunta_general", confianza: 0.7 }
 }

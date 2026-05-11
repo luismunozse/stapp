@@ -15,6 +15,11 @@ import {
   Loader2,
   Save,
   ExternalLink,
+  Flame,
+  Sparkles,
+  MapPin,
+  Users as UsersIcon,
+  Wrench,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -62,6 +67,25 @@ interface Lead {
   notas: string | null
   created_at: string
   ultima_interaccion: string | null
+  score: number
+  urgencia: "alta" | "media" | "baja" | null
+  ciudad: string | null
+  sistema_actual: string | null
+  cantidad_tecnicos: number | null
+  resumen_conversacion: string | null
+}
+
+const urgenciaColors: Record<string, string> = {
+  alta: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-200",
+  media: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-200",
+  baja: "bg-slate-500/10 text-slate-700 dark:text-slate-400 border-slate-200",
+}
+
+function scoreBadgeClass(score: number): string {
+  if (score >= 80) return "bg-red-500/10 text-red-700 dark:text-red-400 border-red-200"
+  if (score >= 60) return "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-200"
+  if (score >= 40) return "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-200"
+  return "bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-200"
 }
 
 interface LeadDetailResponse {
@@ -137,8 +161,32 @@ export function LeadDetailContent({ leadId }: { leadId: string }) {
             })} via {lead.origen}
           </p>
         </div>
+        <Badge variant="outline" className={cn("text-sm font-semibold gap-1", scoreBadgeClass(lead.score))}>
+          <Sparkles className="w-3 h-3" />
+          Score {lead.score}
+        </Badge>
+        {lead.urgencia && (
+          <Badge variant="outline" className={cn("text-sm gap-1", urgenciaColors[lead.urgencia])}>
+            <Flame className="w-3 h-3" />
+            {lead.urgencia}
+          </Badge>
+        )}
         <Badge className={cn("text-sm", estadoColors[lead.estado])}>{lead.estado}</Badge>
       </div>
+
+      {lead.resumen_conversacion && (
+        <Card className={cn(lead.score >= 80 && "border-red-200 bg-red-50/50 dark:bg-red-950/20")}>
+          <CardContent className="pt-4 pb-4">
+            <div className="flex items-start gap-3">
+              <Bot className="w-5 h-5 text-purple-500 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-xs font-medium text-muted-foreground mb-1">Resumen del chatbot</p>
+                <p className="text-sm">{lead.resumen_conversacion}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Left: Info + Actions */}
@@ -180,6 +228,37 @@ export function LeadDetailContent({ leadId }: { leadId: string }) {
               )}
             </CardContent>
           </Card>
+
+          {(lead.ciudad || lead.sistema_actual || lead.cantidad_tecnicos !== null) && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Calificación</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {lead.ciudad && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <MapPin className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">Ciudad:</span>
+                    <span>{lead.ciudad}</span>
+                  </div>
+                )}
+                {lead.cantidad_tecnicos !== null && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <UsersIcon className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">Técnicos:</span>
+                    <span>{lead.cantidad_tecnicos}</span>
+                  </div>
+                )}
+                {lead.sistema_actual && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Wrench className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">Sistema actual:</span>
+                    <span>{lead.sistema_actual}</span>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Actions */}
           <Card>

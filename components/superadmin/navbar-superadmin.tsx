@@ -33,6 +33,7 @@ import { cn } from "@/lib/utils"
 import { useFocusTrap } from "@/hooks/use-focus-trap"
 import { useEscapeKey } from "@/hooks/use-escape-key"
 import { TicketBadge } from "@/components/superadmin/ticket-badge"
+import { LeadsHotBadge } from "@/components/superadmin/leads-hot-badge"
 import { GlobalSearch } from "@/components/superadmin/global-search"
 
 const navItems = [
@@ -130,6 +131,7 @@ export function NavbarSuperadmin({ userEmail }: NavbarSuperadminProps) {
                   <Icon className="mr-3 h-5 w-5" />
                   {item.label}
                   {item.href === "/superadmin/soporte" && <TicketBadge />}
+                  {item.href === "/superadmin/leads" && <LeadsHotBadge />}
                 </Link>
               )
             })}
@@ -222,6 +224,7 @@ export function NavbarSuperadmin({ userEmail }: NavbarSuperadminProps) {
                   <Icon className="mr-3 h-5 w-5" />
                   {item.label}
                   {item.href === "/superadmin/soporte" && <TicketBadge />}
+                  {item.href === "/superadmin/leads" && <LeadsHotBadge />}
                 </Link>
               )
             })}

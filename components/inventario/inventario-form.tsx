@@ -13,6 +13,7 @@ import { X, ChevronDown, ChevronUp, Plus, Check, Loader2, ImagePlus, Trash2, Pac
 import type { Inventario } from "@/types"
 import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
 import { compressImage } from "@/lib/image-compression"
+import { validateBarcode, computeEAN13CheckDigit } from "@/lib/barcode-validation"
 import useSWR from "swr"
 
 interface ProveedorLite {
@@ -53,7 +54,23 @@ const inventarioSchema = z.object({
   stockMinimo: z.number().int().min(0).nullable().optional(),
   stockMaximo: z.number().int().min(0).nullable().optional(),
   puntoReorden: z.number().int().min(0).nullable().optional(),
-  barcode: z.string().nullable().optional(),
+  barcode: z
+    .string()
+    .nullable()
+    .optional()
+    .refine(
+      (v) => {
+        if (!v) return true
+        const err = validateBarcode(v.trim())
+        return err === null
+      },
+      (v) => {
+        const err = validateBarcode((v ?? "").trim())
+        if (!err) return { message: "" }
+        const label = err.kind === "invalid_ean13" ? "EAN-13" : err.kind === "invalid_ean8" ? "EAN-8" : "UPC-A"
+        return { message: `Dígito verificador ${label} inválido. ¿Quisiste ingresar ${err.expected}?` }
+      },
+    ),
 })
 
 type InventarioFormData = z.infer<typeof inventarioSchema>
@@ -953,6 +970,31 @@ export function InventarioForm({
               })}
               placeholder="Escanear o ingresar código de barras"
             />
+            {errors.barcode && (
+              <p className="text-sm text-destructive mt-1">{errors.barcode.message}</p>
+            )}
+            {(() => {
+              const v = (watch("barcode") || "").trim()
+              if (!v || errors.barcode) return null
+              if (/^\d{12}$/.test(v)) {
+                const check = computeEAN13CheckDigit(v)
+                if (check) {
+                  return (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      12 dígitos detectados. Para EAN-13 agregá dígito verificador:{" "}
+                      <button
+                        type="button"
+                        className="font-mono underline text-primary hover:text-primary/80"
+                        onClick={() => setValue("barcode", v + check, { shouldDirty: true, shouldValidate: true })}
+                      >
+                        {v + check}
+                      </button>
+                    </p>
+                  )
+                }
+              }
+              return null
+            })()}
           </div>
 
           <div className="flex gap-2 justify-end pt-2">

@@ -38,6 +38,7 @@ interface Props {
 }
 
 type LabelSize = "50x30" | "40x25" | "38x25" | "60x40"
+type BarcodeFormat = "AUTO" | "CODE128" | "EAN13" | "EAN8" | "UPC"
 
 const LABEL_SIZES: Record<LabelSize, { label: string; widthMm: number; heightMm: number }> = {
   "40x25": { label: "40 × 25 mm", widthMm: 40, heightMm: 25 },
@@ -46,12 +47,33 @@ const LABEL_SIZES: Record<LabelSize, { label: string; widthMm: number; heightMm:
   "60x40": { label: "60 × 40 mm", widthMm: 60, heightMm: 40 },
 }
 
-function generateBarcodeSVG(value: string, widthMm: number, heightMm: number): string {
+const FORMAT_LABELS: Record<BarcodeFormat, string> = {
+  AUTO: "Auto-detectar",
+  CODE128: "CODE128 (alfanumérico)",
+  EAN13: "EAN-13 (13 dígitos)",
+  EAN8: "EAN-8 (8 dígitos)",
+  UPC: "UPC-A (12 dígitos)",
+}
+
+function detectFormat(code: string): "CODE128" | "EAN13" | "EAN8" | "UPC" {
+  if (/^\d{13}$/.test(code)) return "EAN13"
+  if (/^\d{12}$/.test(code)) return "UPC"
+  if (/^\d{8}$/.test(code)) return "EAN8"
+  return "CODE128"
+}
+
+function generateBarcodeSVG(
+  value: string,
+  widthMm: number,
+  heightMm: number,
+  format: BarcodeFormat,
+): string {
   try {
     if (typeof document === "undefined") return ""
+    const resolved = format === "AUTO" ? detectFormat(value) : format
     const svgNode = document.createElementNS("http://www.w3.org/2000/svg", "svg")
     JsBarcode(svgNode, value, {
-      format: "CODE128",
+      format: resolved,
       displayValue: false,
       margin: 0,
       height: Math.max(30, heightMm * 2),
@@ -66,6 +88,7 @@ function generateBarcodeSVG(value: string, widthMm: number, heightMm: number): s
 export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
   const { formatPrice } = useCurrency()
   const [size, setSize] = useState<LabelSize>("50x30")
+  const [format, setFormat] = useState<BarcodeFormat>("AUTO")
   const [showName, setShowName] = useState(true)
   const [showPrice, setShowPrice] = useState(true)
   const [showCode, setShowCode] = useState(true)
@@ -87,13 +110,17 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
 
   const handlePrint = useCallback(() => {
     const labelsHTML: string[] = []
+    const skipped: string[] = []
     for (const item of items) {
       const qty = quantities[item.id] || 0
       if (qty <= 0) continue
       const code = (item.barcode || item.codigo || "").trim()
       if (!code) continue
-      const svg = generateBarcodeSVG(code, sizeConfig.widthMm, sizeConfig.heightMm)
-      if (!svg) continue
+      const svg = generateBarcodeSVG(code, sizeConfig.widthMm, sizeConfig.heightMm, format)
+      if (!svg) {
+        skipped.push(`${item.nombre} (${code})`)
+        continue
+      }
 
       const labelHTML = `
         <div class="label">
@@ -106,6 +133,12 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
       for (let i = 0; i < qty; i++) {
         labelsHTML.push(labelHTML)
       }
+    }
+
+    if (skipped.length > 0) {
+      alert(
+        `No se pudieron generar etiquetas para ${skipped.length} ítem(s) por formato inválido:\n\n${skipped.join("\n")}\n\nVerificá que el código coincida con el formato seleccionado (ej: EAN-13 requiere 13 dígitos numéricos con dígito verificador válido).`,
+      )
     }
 
     if (labelsHTML.length === 0) return
@@ -165,7 +198,7 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
     if (!w) return
     w.document.write(html)
     w.document.close()
-  }, [items, quantities, sizeConfig, showName, showCode, showPrice, formatPrice])
+  }, [items, quantities, sizeConfig, format, showName, showCode, showPrice, formatPrice])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -196,6 +229,22 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
             </div>
 
             <div className="space-y-1.5">
+              <Label>Formato de código</Label>
+              <Select value={format} onValueChange={(v) => setFormat(v as BarcodeFormat)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(FORMAT_LABELS).map(([key, label]) => (
+                    <SelectItem key={key} value={key}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5 sm:col-span-2">
               <Label>Mostrar en la etiqueta</Label>
               <div className="flex flex-wrap items-center gap-3 pt-2">
                 <label className="flex items-center gap-1.5 text-sm cursor-pointer">
