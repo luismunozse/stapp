@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useCallback } from "react"
+import { useState, useMemo, useCallback, useEffect } from "react"
 import JsBarcode from "jsbarcode"
 import {
   Dialog,
@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { Printer } from "lucide-react"
+import { Printer, AlertTriangle } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 
 interface LabelItem {
@@ -62,26 +62,81 @@ function detectFormat(code: string): "CODE128" | "EAN13" | "EAN8" | "UPC" {
   return "CODE128"
 }
 
+function checkCompatibility(code: string, format: BarcodeFormat): { ok: boolean; reason?: string } {
+  const trimmed = code.trim()
+  if (!trimmed) return { ok: false, reason: "Sin código" }
+  if (format === "AUTO" || format === "CODE128") return { ok: true }
+  const onlyDigits = trimmed.replace(/\D/g, "")
+  const lengthRules: Record<string, number> = { EAN13: 13, EAN8: 8, UPC: 12 }
+  const expected = lengthRules[format]
+  if (onlyDigits.length !== expected) {
+    return { ok: false, reason: `Necesita ${expected} dígitos (tiene ${onlyDigits.length || trimmed.length})` }
+  }
+  if (onlyDigits !== trimmed) {
+    return { ok: false, reason: "Contiene caracteres no numéricos" }
+  }
+  return { ok: true }
+}
+
+interface BarcodeResult {
+  svg: string
+  error?: string
+  resolvedFormat?: string
+}
+
 function generateBarcodeSVG(
-  value: string,
+  rawValue: string,
   widthMm: number,
   heightMm: number,
   format: BarcodeFormat,
-): string {
+): BarcodeResult {
+  if (typeof document === "undefined") return { svg: "", error: "SSR sin document" }
+
+  // Sanitización: EAN/UPC solo dígitos. Removemos espacios/guiones que vienen
+  // de copy-paste (ej "779 0001 000017" → "7790001000017").
+  let value = rawValue.trim()
+  const resolved = format === "AUTO" ? detectFormat(value) : format
+  if (resolved === "EAN13" || resolved === "EAN8" || resolved === "UPC") {
+    value = value.replace(/\D/g, "")
+  }
+
+  if (!value) return { svg: "", error: "Código vacío", resolvedFormat: resolved }
+
+  // Validación previa: JsBarcode tira excepción genérica sin detalle.
+  const lengthRules: Record<string, number> = { EAN13: 13, EAN8: 8, UPC: 12 }
+  const expectedLen = lengthRules[resolved]
+  if (expectedLen && value.length !== expectedLen) {
+    return {
+      svg: "",
+      error: `${resolved} requiere ${expectedLen} dígitos, recibió ${value.length} ("${value}")`,
+      resolvedFormat: resolved,
+    }
+  }
+
   try {
-    if (typeof document === "undefined") return ""
-    const resolved = format === "AUTO" ? detectFormat(value) : format
     const svgNode = document.createElementNS("http://www.w3.org/2000/svg", "svg")
+    let jsbErr: string | undefined
     JsBarcode(svgNode, value, {
       format: resolved,
       displayValue: false,
       margin: 0,
       height: Math.max(30, heightMm * 2),
       width: Math.max(1, Math.round(widthMm / 40)),
+      valid: (isValid: boolean) => {
+        if (!isValid) jsbErr = `JsBarcode rechazó ${resolved}: "${value}" (checksum o formato inválido)`
+      },
     })
-    return svgNode.outerHTML
-  } catch {
-    return ""
+    if (jsbErr) return { svg: "", error: jsbErr, resolvedFormat: resolved }
+    if (!svgNode.hasChildNodes()) {
+      return { svg: "", error: `JsBarcode no generó nodos para ${resolved}: "${value}"`, resolvedFormat: resolved }
+    }
+    return { svg: svgNode.outerHTML, resolvedFormat: resolved }
+  } catch (e) {
+    return {
+      svg: "",
+      error: `Excepción JsBarcode (${resolved}): ${e instanceof Error ? e.message : String(e)}`,
+      resolvedFormat: resolved,
+    }
   }
 }
 
@@ -97,6 +152,24 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
   )
 
   const sizeConfig = LABEL_SIZES[size]
+
+  // Cero cantidad para items incompatibles con formato actual.
+  // Evita que click "Imprimir" tire alert por items que el usuario no ve descartados.
+  useEffect(() => {
+    setQuantities((prev) => {
+      let changed = false
+      const next = { ...prev }
+      for (const item of items) {
+        const code = item.barcode || item.codigo || ""
+        const compat = checkCompatibility(code, format)
+        if (!compat.ok && (next[item.id] ?? 0) > 0) {
+          next[item.id] = 0
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [format, items])
 
   const totalLabels = useMemo(
     () => items.reduce((sum, i) => sum + (quantities[i.id] || 0), 0),
@@ -116,16 +189,18 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
       if (qty <= 0) continue
       const code = (item.barcode || item.codigo || "").trim()
       if (!code) continue
-      const svg = generateBarcodeSVG(code, sizeConfig.widthMm, sizeConfig.heightMm, format)
-      if (!svg) {
-        skipped.push(`${item.nombre} (${code})`)
+      const result = generateBarcodeSVG(code, sizeConfig.widthMm, sizeConfig.heightMm, format)
+      if (!result.svg) {
+        const reason = result.error || "motivo desconocido"
+        console.error(`[labels-print] item="${item.nombre}" code="${code}" → ${reason}`)
+        skipped.push(`${item.nombre} (${code}): ${reason}`)
         continue
       }
 
       const labelHTML = `
         <div class="label">
           ${showName ? `<div class="name">${escapeHtml(item.nombre)}</div>` : ""}
-          <div class="barcode">${svg}</div>
+          <div class="barcode">${result.svg}</div>
           ${showCode ? `<div class="code">${escapeHtml(code)}</div>` : ""}
           ${showPrice ? `<div class="price">${formatPrice(item.precioVenta)}</div>` : ""}
         </div>
@@ -137,7 +212,7 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
 
     if (skipped.length > 0) {
       alert(
-        `No se pudieron generar etiquetas para ${skipped.length} ítem(s) por formato inválido:\n\n${skipped.join("\n")}\n\nVerificá que el código coincida con el formato seleccionado (ej: EAN-13 requiere 13 dígitos numéricos con dígito verificador válido).`,
+        `No se pudieron generar ${skipped.length} etiqueta(s):\n\n${skipped.join("\n\n")}\n\nVer consola del navegador para detalle. Verificá que el código coincida con el formato seleccionado.`,
       )
     }
 
@@ -270,7 +345,9 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
             </div>
             <div className="divide-y max-h-[280px] overflow-y-auto">
               {items.map((item) => {
-                const hasCode = !!(item.barcode || item.codigo)
+                const code = item.barcode || item.codigo || ""
+                const hasCode = !!code
+                const compat = hasCode ? checkCompatibility(code, format) : { ok: false, reason: "Sin código" }
                 return (
                   <div
                     key={item.id}
@@ -279,10 +356,14 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
                     <div className="min-w-0">
                       <div className="text-sm font-medium truncate">{item.nombre}</div>
                       <div className="text-[11px] font-mono text-muted-foreground truncate">
-                        {item.barcode || item.codigo || (
-                          <span className="text-destructive">Sin código</span>
-                        )}
+                        {code || <span className="text-destructive">Sin código</span>}
                       </div>
+                      {!compat.ok && hasCode && (
+                        <div className="flex items-center gap-1 mt-0.5 text-[11px] text-amber-600">
+                          <AlertTriangle className="h-3 w-3 shrink-0" />
+                          <span>{compat.reason}</span>
+                        </div>
+                      )}
                     </div>
                     <Input
                       type="number"
@@ -290,7 +371,7 @@ export function LabelsPrintDialog({ open, onOpenChange, items }: Props) {
                       max={999}
                       value={quantities[item.id] ?? 0}
                       onChange={(e) => updateQty(item.id, e.target.value)}
-                      disabled={!hasCode}
+                      disabled={!hasCode || !compat.ok}
                       className="h-8 text-center"
                     />
                   </div>
