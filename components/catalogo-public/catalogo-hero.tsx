@@ -84,10 +84,16 @@ export function CatalogoHero({ bannerUrl, logoUrl, titulo, descripcion, whatsapp
                 <span className="hidden sm:inline">Compartir</span>
               </Button>
               {whatsappLink && (
-                <Button asChild size="sm" className="gap-1.5" style={{ backgroundColor: brandColor }}>
+                <Button
+                  asChild
+                  size="icon"
+                  className="h-9 w-9"
+                  style={{ backgroundColor: brandColor }}
+                  aria-label="Contactar por WhatsApp"
+                  title="Contactar por WhatsApp"
+                >
                   <a href={whatsappLink} target="_blank" rel="noreferrer">
-                    <WhatsAppIcon className="h-4 w-4" />
-                    Contactar
+                    <WhatsAppIcon className="h-5 w-5" />
                   </a>
                 </Button>
               )}
@@ -117,10 +123,16 @@ export function CatalogoHero({ bannerUrl, logoUrl, titulo, descripcion, whatsapp
               <span className="hidden sm:inline">Compartir</span>
             </Button>
             {whatsappLink && (
-              <Button asChild className="gap-2 flex-1 sm:flex-none" style={{ backgroundColor: brandColor }}>
+              <Button
+                asChild
+                size="icon"
+                className="h-10 w-10 shrink-0"
+                style={{ backgroundColor: brandColor }}
+                aria-label="Contactar por WhatsApp"
+                title="Contactar por WhatsApp"
+              >
                 <a href={whatsappLink} target="_blank" rel="noreferrer">
-                  <WhatsAppIcon className="h-4 w-4" />
-                  Contactar
+                  <WhatsAppIcon className="h-5 w-5" />
                 </a>
               </Button>
             )}

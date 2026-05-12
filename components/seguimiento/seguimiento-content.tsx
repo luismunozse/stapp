@@ -99,6 +99,7 @@ const estadoLabels: Record<string, string> = {
   REPARADO: "Listo para retirar",
   ENTREGADO: "Entregado",
   ENTREGADO_SIN_REPARACION: "Retirado sin reparación",
+  ENTREGADO_SIN_COBRO: "Retirado sin cobro",
   CANCELADO: "Cancelado",
   SIN_REPARACION: "Sin reparación",
 }
@@ -113,6 +114,7 @@ const estadoDescriptions: Record<string, string> = {
   REPARADO: "Tu equipo está listo. Ya podés pasar a retirarlo.",
   ENTREGADO: "Equipo entregado. ¡Gracias por confiar en nosotros!",
   ENTREGADO_SIN_REPARACION: "El equipo fue retirado sin reparación.",
+  ENTREGADO_SIN_COBRO: "El equipo fue retirado sin cobro.",
   CANCELADO: "La orden fue cancelada. Contactanos si tenés consultas.",
   SIN_REPARACION: "Lamentablemente no fue posible reparar el equipo.",
 }
@@ -127,6 +129,7 @@ const estadoColors: Record<string, { text: string; bg: string; border: string }>
   REPARADO: { text: "text-green-600 dark:text-green-400", bg: "bg-green-50 dark:bg-green-950/40", border: "border-green-300 dark:border-green-800" },
   ENTREGADO: { text: "text-green-700 dark:text-green-400", bg: "bg-green-50 dark:bg-green-950/40", border: "border-green-200 dark:border-green-800" },
   ENTREGADO_SIN_REPARACION: { text: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-950/40", border: "border-amber-200 dark:border-amber-800" },
+  ENTREGADO_SIN_COBRO: { text: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-950/40", border: "border-amber-200 dark:border-amber-800" },
   CANCELADO: { text: "text-red-600 dark:text-red-400", bg: "bg-red-50 dark:bg-red-950/40", border: "border-red-200 dark:border-red-800" },
   SIN_REPARACION: { text: "text-red-600 dark:text-red-400", bg: "bg-red-50 dark:bg-red-950/40", border: "border-red-200 dark:border-red-800" },
 }
@@ -140,6 +143,8 @@ const estadoIcons: Record<string, typeof Smartphone> = {
   ESPERANDO_REPUESTO: Clock,
   REPARADO: CheckCircle2,
   ENTREGADO: Truck,
+  ENTREGADO_SIN_REPARACION: Truck,
+  ENTREGADO_SIN_COBRO: Truck,
 }
 
 const estadoFlow = [
@@ -394,9 +399,9 @@ export function SeguimientoContent({ token }: { token: string }) {
   }
 
   const DeviceIcon = tipoDispositivoIcons[data.tipoDispositivo] || Package
-  const isRetiro = data.estado === "ENTREGADO_SIN_REPARACION"
+  const isRetiro = data.estado === "ENTREGADO_SIN_REPARACION" || data.estado === "ENTREGADO_SIN_COBRO"
   const isTerminal = data.estado === "CANCELADO" || data.estado === "SIN_REPARACION"
-  const isCompleted = data.estado === "ENTREGADO" || data.estado === "ENTREGADO_SIN_REPARACION"
+  const isCompleted = data.estado === "ENTREGADO" || data.estado === "ENTREGADO_SIN_REPARACION" || data.estado === "ENTREGADO_SIN_COBRO"
   const isReady = data.estado === "REPARADO"
   const estadoParaProgreso = data.estado === "ESPERANDO_REPUESTO" ? "EN_REPARACION" : data.estado
   const currentIndex = estadoFlow.indexOf(estadoParaProgreso)
@@ -493,10 +498,10 @@ export function SeguimientoContent({ token }: { token: string }) {
               </div>
               <div>
                 <p className="font-bold text-lg text-amber-700 dark:text-amber-400">
-                  Retirado sin reparación
+                  {estadoLabels[data.estado] || "Retirado sin reparación"}
                 </p>
                 <p className="text-sm text-muted-foreground mt-0.5">
-                  {estadoDescriptions.ENTREGADO_SIN_REPARACION}
+                  {estadoDescriptions[data.estado] || estadoDescriptions.ENTREGADO_SIN_REPARACION}
                 </p>
               </div>
             </div>
