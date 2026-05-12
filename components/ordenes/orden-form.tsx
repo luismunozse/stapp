@@ -81,6 +81,7 @@ interface OrdenFormProps {
 interface OrdenCreadaData {
   id: string
   numeroOrden: number
+  codigoOrden?: string
   dispositivo: string
   problemaReportado: string
   presupuesto?: number | null
@@ -92,6 +93,21 @@ interface OrdenCreadaData {
   }
   telefonoContacto?: string | null
   organizationName?: string
+  // Campos extra para comprobante térmico
+  tipoDispositivo?: string
+  marca?: string | null
+  color?: string | null
+  imei?: string | null
+  accesorios?: string | null
+  observaciones?: string | null
+  estado?: string
+  costoFinal?: number | null
+  fechaIngreso?: string | null
+  clienteId?: string
+  organizationLogoUrl?: string | null
+  organizationTelefono?: string | null
+  organizationDireccion?: string | null
+  organizationComprobanteTerminos?: string | null
 }
 
 export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
@@ -587,6 +603,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
       setOrdenCreada({
         id: nuevaOrden.id,
         numeroOrden: nuevaOrden.numeroOrden,
+        codigoOrden: nuevaOrden.codigoOrden || undefined,
         dispositivo: data.dispositivo,
         problemaReportado: data.problemaReportado,
         presupuesto: data.presupuesto && data.presupuesto > 0 ? data.presupuesto : null,
@@ -598,6 +615,21 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
         },
         telefonoContacto: data.telefonoContacto || null,
         organizationName: nuevaOrden.organizationName || undefined,
+        // Campos extra para comprobante térmico
+        clienteId: data.clienteId,
+        tipoDispositivo: data.tipoDispositivo,
+        marca: data.marca || null,
+        color: data.color || null,
+        imei: data.imei || null,
+        accesorios: accesoriosLabels.length > 0 ? accesoriosLabels.join(", ") : null,
+        observaciones: data.observaciones || null,
+        estado: nuevaOrden.estado || "RECIBIDO",
+        costoFinal: nuevaOrden.costoFinal ?? null,
+        fechaIngreso: nuevaOrden.fechaIngreso || null,
+        organizationLogoUrl: nuevaOrden.organizationLogoUrl ?? null,
+        organizationTelefono: nuevaOrden.organizationTelefono ?? null,
+        organizationDireccion: nuevaOrden.organizationDireccion ?? null,
+        organizationComprobanteTerminos: nuevaOrden.organizationComprobanteTerminos ?? null,
       })
       setShowOrdenCreadaModal(true)
     } catch (error) {

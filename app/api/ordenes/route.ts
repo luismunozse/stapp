@@ -367,10 +367,10 @@ export async function POST(request: Request) {
       fotos_ingreso: data.fotos?.length || 0,
     })
 
-    // Obtener nombre de la organización para el mensaje de WhatsApp
+    // Obtener datos de la organización para el mensaje de WhatsApp y comprobante térmico
     const { data: org } = await supabaseAdmin
       .from("organizations")
-      .select("nombre, nombre_mostrar")
+      .select("nombre, nombre_mostrar, logo_url, telefono, direccion, comprobante_terminos")
       .eq("id", organizationId!)
       .single()
 
@@ -386,8 +386,14 @@ export async function POST(request: Request) {
       problemaReportado: orden.problema_reportado,
       fechaIngreso: orden.fecha_ingreso,
       fechaPrometida: orden.fecha_prometida,
+      costoFinal: orden.costo_final,
+      telefonoContacto: orden.telefono_contacto,
       publicToken: orden.public_token,
       organizationName: org?.nombre_mostrar || org?.nombre || null,
+      organizationLogoUrl: org?.logo_url ?? null,
+      organizationTelefono: org?.telefono ?? null,
+      organizationDireccion: org?.direccion ?? null,
+      organizationComprobanteTerminos: org?.comprobante_terminos ?? null,
     }
 
     return NextResponse.json(ordenFormatted, { status: 201 })

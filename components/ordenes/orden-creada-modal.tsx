@@ -22,8 +22,10 @@ import {
   Tag,
 } from "lucide-react"
 import { printDeviceLabel } from "./print-label"
+import { ThermalPrintOrden } from "./thermal-print-orden"
 import { generateWhatsAppUrl, formatPhoneForWhatsApp } from "@/lib/notifications/whatsapp-templates"
 import { useCurrency } from "@/contexts/currency-context"
+import type { OrdenServicio } from "@/types"
 
 // WhatsApp icon SVG component
 function WhatsAppIcon({ className }: { className?: string }) {
@@ -54,6 +56,21 @@ interface OrdenCreadaData {
   }
   telefonoContacto?: string | null
   organizationName?: string
+  // Campos extra para comprobante térmico
+  tipoDispositivo?: string
+  marca?: string | null
+  color?: string | null
+  imei?: string | null
+  accesorios?: string | null
+  observaciones?: string | null
+  estado?: string
+  costoFinal?: number | null
+  fechaIngreso?: string | null
+  clienteId?: string
+  organizationLogoUrl?: string | null
+  organizationTelefono?: string | null
+  organizationDireccion?: string | null
+  organizationComprobanteTerminos?: string | null
 }
 
 interface OrdenCreadaModalProps {
@@ -94,6 +111,48 @@ Le avisaremos sobre el avance de la reparacion.
 ${orden.organizationName || "Servicio Tecnico"}`
 
   return mensaje
+}
+
+function buildThermalOrden(orden: OrdenCreadaData) {
+  const fechaIngreso = orden.fechaIngreso ? new Date(orden.fechaIngreso) : new Date()
+  const fechaPrometida = orden.fechaPrometida ? new Date(orden.fechaPrometida) : null
+  return {
+    id: orden.id,
+    numeroOrden: orden.numeroOrden,
+    codigoOrden: orden.codigoOrden,
+    clienteId: orden.clienteId || "",
+    dispositivo: orden.dispositivo,
+    tipoDispositivo: (orden.tipoDispositivo || "OTRO") as OrdenServicio["tipoDispositivo"],
+    marca: orden.marca ?? null,
+    color: orden.color ?? null,
+    imei: orden.imei ?? null,
+    accesorios: orden.accesorios ?? null,
+    telefonoContacto: orden.telefonoContacto ?? null,
+    problemaReportado: orden.problemaReportado,
+    estado: (orden.estado || "RECIBIDO") as OrdenServicio["estado"],
+    presupuesto: orden.presupuesto ?? null,
+    costoFinal: orden.costoFinal ?? null,
+    fechaIngreso,
+    fechaPrometida,
+    observaciones: orden.observaciones ?? null,
+    publicToken: orden.publicToken ?? null,
+    cliente: {
+      id: orden.clienteId || "",
+      nombre: orden.cliente.nombre,
+      telefono: orden.cliente.telefono,
+    },
+    organizationName: orden.organizationName ?? null,
+    organizationLogoUrl: orden.organizationLogoUrl ?? null,
+    organizationTelefono: orden.organizationTelefono ?? null,
+    organizationDireccion: orden.organizationDireccion ?? null,
+    organizationComprobanteTerminos: orden.organizationComprobanteTerminos ?? null,
+  } as unknown as OrdenServicio & {
+    organizationName?: string | null
+    organizationLogoUrl?: string | null
+    organizationTelefono?: string | null
+    organizationDireccion?: string | null
+    organizationComprobanteTerminos?: string | null
+  }
 }
 
 export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps) {
@@ -227,11 +286,11 @@ export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps
             )}
           </div>
 
-          {/* Ver PDF, Imprimir, Etiqueta */}
-          <div className="flex gap-2">
+          {/* Ver PDF, Imprimir, Etiqueta, Térmica */}
+          <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
-              className="flex-1"
+              className="flex-1 min-w-[110px]"
               onClick={handleDownloadPDF}
               disabled={downloading}
             >
@@ -244,7 +303,7 @@ export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps
             </Button>
             <Button
               variant="outline"
-              className="flex-1"
+              className="flex-1 min-w-[110px]"
               onClick={handlePrint}
               disabled={printing}
             >
@@ -257,12 +316,15 @@ export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps
             </Button>
             <Button
               variant="outline"
-              className="flex-1"
+              className="flex-1 min-w-[110px]"
               onClick={handlePrintLabel}
             >
               <Tag className="mr-2 h-4 w-4" />
               Etiqueta
             </Button>
+            <div className="flex-1 min-w-[110px] [&>button]:w-full [&>button]:h-10">
+              <ThermalPrintOrden orden={buildThermalOrden(orden)} />
+            </div>
           </div>
 
           {/* Mensaje para WhatsApp */}
