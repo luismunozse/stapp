@@ -27,6 +27,8 @@ import {
   ShoppingCart,
   Calendar,
   ArchiveRestore,
+  Star,
+  Truck,
 } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { ProveedorForm } from "./proveedor-form"
@@ -48,6 +50,11 @@ interface Proveedor {
   ingresosBrutos?: string | null
   condicionPago?: string | null
   diasPago?: number | null
+  leadTimeDias?: number | null
+  pedidoMinimo?: number | null
+  rating?: number | null
+  tags?: string[] | null
+  logoUrl?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -60,7 +67,7 @@ interface ProveedorStats {
 }
 
 type StatsMap = Record<string, ProveedorStats>
-type SortKey = "nombre" | "totalComprado" | "productos" | "ultimaCompra"
+type SortKey = "nombre" | "totalComprado" | "productos" | "ultimaCompra" | "rating"
 type EstadoFilter = "todos" | "activos" | "inactivos"
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
@@ -77,6 +84,7 @@ export function ProveedoresList() {
   const [search, setSearch] = useState("")
   const [estadoFilter, setEstadoFilter] = useState<EstadoFilter>("activos")
   const [sortBy, setSortBy] = useState<SortKey>("nombre")
+  const [tagFilter, setTagFilter] = useState<string>("__all__")
 
   const { data: proveedores = [], isLoading: loading, mutate } = useSWR<Proveedor[]>(
     "/api/proveedores", fetcher,
@@ -88,13 +96,22 @@ export function ProveedoresList() {
     { revalidateOnFocus: false, dedupingInterval: 5000 }
   )
 
+  const allTags = useMemo(() => {
+    const set = new Set<string>()
+    for (const p of proveedores) {
+      for (const t of p.tags || []) set.add(t)
+    }
+    return Array.from(set).sort()
+  }, [proveedores])
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     const out = proveedores.filter((p) => {
       if (estadoFilter === "activos" && !p.activo) return false
       if (estadoFilter === "inactivos" && p.activo) return false
+      if (tagFilter !== "__all__" && !(p.tags || []).includes(tagFilter)) return false
       if (q) {
-        const hay = `${p.nombre} ${p.razonSocial || ""} ${p.cuit || ""} ${p.telefono || ""} ${p.email || ""} ${p.whatsapp || ""}`.toLowerCase()
+        const hay = `${p.nombre} ${p.razonSocial || ""} ${p.cuit || ""} ${p.telefono || ""} ${p.email || ""} ${p.whatsapp || ""} ${(p.tags || []).join(" ")}`.toLowerCase()
         if (!hay.includes(q)) return false
       }
       return true
@@ -113,13 +130,15 @@ export function ProveedoresList() {
           const tb = sb?.ultimaCompra ? new Date(sb.ultimaCompra).getTime() : 0
           return tb - ta
         }
+        case "rating":
+          return (b.rating ?? 0) - (a.rating ?? 0)
         case "nombre":
         default:
           return a.nombre.localeCompare(b.nombre, "es")
       }
     })
     return out
-  }, [proveedores, statsMap, search, estadoFilter, sortBy])
+  }, [proveedores, statsMap, search, estadoFilter, sortBy, tagFilter])
 
   const handleToggleActivo = async (id: string, activo: boolean) => {
     await fetch(`/api/proveedores/${id}`, {
@@ -163,8 +182,22 @@ export function ProveedoresList() {
               <SelectItem value="totalComprado">Más comprado</SelectItem>
               <SelectItem value="productos">Más productos</SelectItem>
               <SelectItem value="ultimaCompra">Compra reciente</SelectItem>
+              <SelectItem value="rating">Mejor rating</SelectItem>
             </SelectContent>
           </Select>
+          {allTags.length > 0 && (
+            <Select value={tagFilter} onValueChange={setTagFilter}>
+              <SelectTrigger className="w-full sm:w-[160px]">
+                <SelectValue placeholder="Tag" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Todos los tags</SelectItem>
+                {allTags.map((t) => (
+                  <SelectItem key={t} value={t}>{t}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
         <Button onClick={() => { setEditingProveedor(null); setShowForm(true) }}>
           <Plus className="mr-2 h-4 w-4" />
@@ -191,10 +224,52 @@ export function ProveedoresList() {
         <div className="text-center py-8 text-muted-foreground">Cargando...</div>
       ) : filtered.length === 0 ? (
         <Card>
-          <CardContent className="py-8 text-center text-muted-foreground">
-            {proveedores.length === 0
-              ? "No hay proveedores registrados. Agregá uno para comenzar."
-              : "Sin resultados con los filtros aplicados."}
+          <CardContent className="py-12 text-center space-y-4">
+            {proveedores.length === 0 ? (
+              <>
+                <div className="mx-auto h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Package className="h-8 w-8 text-primary" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="font-semibold text-base">Empezá a registrar tus proveedores</h3>
+                  <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+                    Llevá un control de contactos, precios, condiciones de pago y órdenes de compra. Vinculá items de inventario y compará precios entre proveedores.
+                  </p>
+                </div>
+                <div className="flex gap-2 justify-center flex-wrap pt-2">
+                  <Button onClick={() => { setEditingProveedor(null); setShowForm(true) }}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Crear primer proveedor
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground pt-2">
+                  Tip: cargá el CUIT y condición IVA para facturación A.
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="mx-auto h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                  <Search className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="font-semibold text-sm">Sin resultados</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Ningún proveedor coincide con los filtros aplicados.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSearch("")
+                    setEstadoFilter("todos")
+                    setTagFilter("__all__")
+                  }}
+                >
+                  Limpiar filtros
+                </Button>
+              </>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -207,19 +282,59 @@ export function ProveedoresList() {
                   <div className="flex items-start justify-between gap-2">
                     <Link
                       href={`/proveedores/${proveedor.id}`}
-                      className="flex-1 min-w-0 group"
+                      className="flex items-start gap-2 flex-1 min-w-0 group"
                     >
+                      <div className="h-10 w-10 rounded-md border bg-muted/30 flex items-center justify-center overflow-hidden shrink-0">
+                        {proveedor.logoUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={proveedor.logoUrl} alt={proveedor.nombre} className="h-full w-full object-contain" />
+                        ) : (
+                          <Package className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
                       <CardTitle className="text-sm sm:text-base flex items-center gap-2 group-hover:text-primary transition-colors">
                         <span className="truncate">{proveedor.nombre}</span>
                         {!proveedor.activo && (
                           <Badge variant="secondary" className="text-[10px] shrink-0">Inactivo</Badge>
                         )}
                       </CardTitle>
-                      {proveedor.cuit && (
-                        <div className="text-[11px] text-muted-foreground font-mono mt-0.5">
-                          CUIT {proveedor.cuit}
+                      <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                        {proveedor.rating != null && (
+                          <span className="flex items-center gap-0.5">
+                            {[1, 2, 3, 4, 5].map((n) => (
+                              <Star
+                                key={n}
+                                className={`h-3 w-3 ${n <= proveedor.rating! ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground/30"}`}
+                              />
+                            ))}
+                          </span>
+                        )}
+                        {proveedor.cuit && (
+                          <span className="text-[11px] text-muted-foreground font-mono">
+                            {proveedor.cuit}
+                          </span>
+                        )}
+                        {proveedor.leadTimeDias != null && (
+                          <span className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground">
+                            <Truck className="h-3 w-3" />
+                            {proveedor.leadTimeDias}d
+                          </span>
+                        )}
+                      </div>
+                      {proveedor.tags && proveedor.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {proveedor.tags.slice(0, 4).map((t) => (
+                            <Badge key={t} variant="outline" className="text-[9px] px-1 py-0">
+                              {t}
+                            </Badge>
+                          ))}
+                          {proveedor.tags.length > 4 && (
+                            <span className="text-[10px] text-muted-foreground">+{proveedor.tags.length - 4}</span>
+                          )}
                         </div>
                       )}
+                      </div>
                     </Link>
                     <div className="flex gap-1 shrink-0">
                       <Button

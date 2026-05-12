@@ -29,7 +29,12 @@ import {
   TrendingDown,
   TrendingUp,
   ArrowLeftRight,
+  Star,
+  Truck,
 } from "lucide-react"
+import { ProveedorContactosTab } from "./proveedor-contactos-tab"
+import { ProveedorAdjuntosTab } from "./proveedor-adjuntos-tab"
+import { ProveedorCatalogoTab } from "./proveedor-catalogo-tab"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { ProveedorForm } from "./proveedor-form"
 import { useModal } from "@/contexts/modal-context"
@@ -51,6 +56,11 @@ interface Proveedor {
   ingresosBrutos?: string | null
   condicionPago?: string | null
   diasPago?: number | null
+  leadTimeDias?: number | null
+  pedidoMinimo?: number | null
+  rating?: number | null
+  tags?: string[] | null
+  logoUrl?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -250,12 +260,37 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
           <Button variant="ghost" size="icon" asChild>
             <Link href="/proveedores"><ArrowLeft className="h-4 w-4" /></Link>
           </Button>
+          <div className="h-12 w-12 sm:h-14 sm:w-14 rounded-md border bg-muted/30 flex items-center justify-center overflow-hidden shrink-0">
+            {proveedor.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={proveedor.logoUrl} alt={proveedor.nombre} className="h-full w-full object-contain" />
+            ) : (
+              <Package className="h-5 w-5 text-muted-foreground" />
+            )}
+          </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl sm:text-2xl font-bold truncate">{proveedor.nombre}</h1>
               {!proveedor.activo && <Badge variant="secondary">Inactivo</Badge>}
+              {proveedor.rating != null && (
+                <span className="flex items-center gap-0.5">
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <Star
+                      key={n}
+                      className={`h-4 w-4 ${n <= proveedor.rating! ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground/30"}`}
+                    />
+                  ))}
+                </span>
+              )}
             </div>
-            <p className="text-xs sm:text-sm text-muted-foreground">
+            {proveedor.tags && proveedor.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-1">
+                {proveedor.tags.map((t) => (
+                  <Badge key={t} variant="outline" className="text-[10px]">{t}</Badge>
+                ))}
+              </div>
+            )}
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
               Alta: {formatDate(proveedor.createdAt)}
             </p>
           </div>
@@ -326,10 +361,13 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
 
       {/* Tabs */}
       <Tabs defaultValue="info">
-        <TabsList>
+        <TabsList className="flex-wrap h-auto">
           <TabsTrigger value="info">Información</TabsTrigger>
+          <TabsTrigger value="contactos">Contactos</TabsTrigger>
           <TabsTrigger value="productos">Productos ({stats?.productosCount ?? 0})</TabsTrigger>
-          <TabsTrigger value="ordenes">Órdenes de compra ({stats?.ordenesCount ?? 0})</TabsTrigger>
+          <TabsTrigger value="catalogo">Catálogo</TabsTrigger>
+          <TabsTrigger value="ordenes">Órdenes ({stats?.ordenesCount ?? 0})</TabsTrigger>
+          <TabsTrigger value="adjuntos">Adjuntos</TabsTrigger>
           <TabsTrigger value="comparativa">Comparativa ({comparativa.length})</TabsTrigger>
         </TabsList>
 
@@ -412,6 +450,25 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
             </Card>
           )}
 
+          {(proveedor.leadTimeDias != null || proveedor.pedidoMinimo != null) && (
+            <Card>
+              <CardContent className="p-4 sm:p-6 space-y-3">
+                <h3 className="font-semibold text-sm flex items-center gap-2">
+                  <Truck className="h-4 w-4" />
+                  Operativa
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                  {proveedor.leadTimeDias != null && (
+                    <FiscalField label="Lead time" value={`${proveedor.leadTimeDias} día${proveedor.leadTimeDias === 1 ? "" : "s"}`} />
+                  )}
+                  {proveedor.pedidoMinimo != null && (
+                    <FiscalField label="Pedido mínimo" value={formatPrice(proveedor.pedidoMinimo)} />
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {proveedor.notas && (
             <Card>
               <CardContent className="p-4 sm:p-6">
@@ -436,6 +493,18 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="contactos">
+          <ProveedorContactosTab proveedorId={proveedorId} />
+        </TabsContent>
+
+        <TabsContent value="catalogo">
+          <ProveedorCatalogoTab proveedorId={proveedorId} />
+        </TabsContent>
+
+        <TabsContent value="adjuntos">
+          <ProveedorAdjuntosTab proveedorId={proveedorId} />
         </TabsContent>
 
         <TabsContent value="productos">

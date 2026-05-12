@@ -14,10 +14,18 @@ const CONDICION_IVA = [
 
 const CONDICION_PAGO = ["CONTADO", "CTA_CTE", "TRANSFERENCIA", "CHEQUE", "OTRO"] as const
 
+const whatsappValidator = z
+  .string()
+  .optional()
+  .refine(
+    (v) => !v || /^\d{10,15}$/.test(v.replace(/\D/g, "")),
+    "WhatsApp inválido: 10-15 dígitos"
+  )
+
 const proveedorSchema = z.object({
   nombre: z.string().min(1, "El nombre es requerido"),
   telefono: z.string().optional(),
-  whatsapp: z.string().optional(),
+  whatsapp: whatsappValidator,
   email: z.string().email("Email inválido").optional().or(z.literal("")),
   direccion: z.string().optional(),
   website: z.string().url("URL inválida").optional().or(z.literal("")),
@@ -29,6 +37,10 @@ const proveedorSchema = z.object({
   ingresosBrutos: z.string().optional(),
   condicionPago: z.enum(CONDICION_PAGO).optional().or(z.literal("")),
   diasPago: z.number().int().min(0).max(365).optional().nullable(),
+  leadTimeDias: z.number().int().min(0).max(365).optional().nullable(),
+  pedidoMinimo: z.number().min(0).optional().nullable(),
+  rating: z.number().int().min(1).max(5).optional().nullable(),
+  tags: z.array(z.string().min(1).max(40)).max(20).optional(),
 })
 
 export async function GET() {
@@ -69,7 +81,7 @@ export async function POST(request: Request) {
       .insert({
         nombre: data.nombre,
         telefono: data.telefono || null,
-        whatsapp: data.whatsapp || null,
+        whatsapp: data.whatsapp ? data.whatsapp.replace(/\D/g, "") : null,
         email: data.email || null,
         direccion: data.direccion || null,
         website: data.website || null,
@@ -81,6 +93,10 @@ export async function POST(request: Request) {
         ingresos_brutos: data.ingresosBrutos || null,
         condicion_pago: data.condicionPago || null,
         dias_pago: data.diasPago ?? null,
+        lead_time_dias: data.leadTimeDias ?? null,
+        pedido_minimo: data.pedidoMinimo ?? null,
+        rating: data.rating ?? null,
+        tags: data.tags && data.tags.length > 0 ? data.tags : null,
         organization_id: organizationId!,
       })
       .select()

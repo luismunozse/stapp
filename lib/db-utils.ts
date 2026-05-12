@@ -380,9 +380,68 @@ export function formatProveedor(proveedor: any) {
     ingresosBrutos: proveedor.ingresos_brutos ?? null,
     condicionPago: proveedor.condicion_pago ?? null,
     diasPago: proveedor.dias_pago ?? null,
+    leadTimeDias: proveedor.lead_time_dias ?? null,
+    pedidoMinimo: proveedor.pedido_minimo != null ? Number(proveedor.pedido_minimo) : null,
+    rating: proveedor.rating ?? null,
+    tags: proveedor.tags ?? null,
+    logoUrl: proveedor.logo_url ?? null,
+    logoPath: proveedor.logo_path ?? null,
     organizationId: proveedor.organization_id,
     createdAt: proveedor.created_at,
     updatedAt: proveedor.updated_at,
+  }
+}
+
+export function formatProveedorContacto(c: any) {
+  if (!c) return null
+  return {
+    id: c.id,
+    proveedorId: c.proveedor_id,
+    nombre: c.nombre,
+    cargo: c.cargo ?? null,
+    telefono: c.telefono ?? null,
+    whatsapp: c.whatsapp ?? null,
+    email: c.email ?? null,
+    notas: c.notas ?? null,
+    principal: !!c.principal,
+    createdAt: c.created_at,
+    updatedAt: c.updated_at,
+  }
+}
+
+export function formatProveedorAdjunto(a: any) {
+  if (!a) return null
+  return {
+    id: a.id,
+    proveedorId: a.proveedor_id,
+    nombre: a.nombre,
+    descripcion: a.descripcion ?? null,
+    fileUrl: a.file_url,
+    filePath: a.file_path,
+    mime: a.mime ?? null,
+    sizeBytes: a.size_bytes != null ? Number(a.size_bytes) : null,
+    uploadedBy: a.uploaded_by ?? null,
+    createdAt: a.created_at,
+  }
+}
+
+export function formatProveedorCatalogoItem(i: any) {
+  if (!i) return null
+  return {
+    id: i.id,
+    proveedorId: i.proveedor_id,
+    inventarioId: i.inventario_id ?? null,
+    codigoProveedor: i.codigo_proveedor ?? null,
+    nombre: i.nombre,
+    descripcion: i.descripcion ?? null,
+    precioReferencia: i.precio_referencia != null ? Number(i.precio_referencia) : null,
+    moneda: i.moneda ?? "ARS",
+    unidad: i.unidad ?? null,
+    notas: i.notas ?? null,
+    precioActualizadoAt: i.precio_actualizado_at ?? null,
+    inventario: i.inventario ? { id: i.inventario.id, codigo: i.inventario.codigo, nombre: i.inventario.nombre } : null,
+    createdAt: i.created_at,
+    updatedAt: i.updated_at,
   }
 }
 

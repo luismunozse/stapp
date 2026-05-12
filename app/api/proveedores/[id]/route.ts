@@ -14,10 +14,18 @@ const CONDICION_IVA = [
 
 const CONDICION_PAGO = ["CONTADO", "CTA_CTE", "TRANSFERENCIA", "CHEQUE", "OTRO"] as const
 
+const whatsappValidator = z
+  .string()
+  .optional()
+  .refine(
+    (v) => !v || /^\d{10,15}$/.test(v.replace(/\D/g, "")),
+    "WhatsApp inválido: 10-15 dígitos"
+  )
+
 const proveedorUpdateSchema = z.object({
   nombre: z.string().min(1, "El nombre es requerido").optional(),
   telefono: z.string().optional(),
-  whatsapp: z.string().optional(),
+  whatsapp: whatsappValidator,
   email: z.string().email("Email inválido").optional().or(z.literal("")),
   direccion: z.string().optional(),
   website: z.string().url("URL inválida").optional().or(z.literal("")),
@@ -29,6 +37,10 @@ const proveedorUpdateSchema = z.object({
   ingresosBrutos: z.string().optional(),
   condicionPago: z.enum(CONDICION_PAGO).optional().or(z.literal("")),
   diasPago: z.number().int().min(0).max(365).optional().nullable(),
+  leadTimeDias: z.number().int().min(0).max(365).optional().nullable(),
+  pedidoMinimo: z.number().min(0).optional().nullable(),
+  rating: z.number().int().min(1).max(5).optional().nullable(),
+  tags: z.array(z.string().min(1).max(40)).max(20).optional().nullable(),
 })
 
 export async function GET(
@@ -96,7 +108,7 @@ export async function PUT(
     const updateData: Record<string, any> = {}
     if (data.nombre !== undefined) updateData.nombre = data.nombre
     if (data.telefono !== undefined) updateData.telefono = data.telefono || null
-    if (data.whatsapp !== undefined) updateData.whatsapp = data.whatsapp || null
+    if (data.whatsapp !== undefined) updateData.whatsapp = data.whatsapp ? data.whatsapp.replace(/\D/g, "") : null
     if (data.email !== undefined) updateData.email = data.email || null
     if (data.direccion !== undefined) updateData.direccion = data.direccion || null
     if (data.website !== undefined) updateData.website = data.website || null
@@ -108,6 +120,10 @@ export async function PUT(
     if (data.ingresosBrutos !== undefined) updateData.ingresos_brutos = data.ingresosBrutos || null
     if (data.condicionPago !== undefined) updateData.condicion_pago = data.condicionPago || null
     if (data.diasPago !== undefined) updateData.dias_pago = data.diasPago ?? null
+    if (data.leadTimeDias !== undefined) updateData.lead_time_dias = data.leadTimeDias ?? null
+    if (data.pedidoMinimo !== undefined) updateData.pedido_minimo = data.pedidoMinimo ?? null
+    if (data.rating !== undefined) updateData.rating = data.rating ?? null
+    if (data.tags !== undefined) updateData.tags = data.tags && data.tags.length > 0 ? data.tags : null
 
     const { data: proveedor, error: updateError } = await supabaseAdmin
       .from("proveedores")
