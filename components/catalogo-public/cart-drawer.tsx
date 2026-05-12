@@ -136,9 +136,11 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
           notas: notas.trim() || undefined,
           cuponCodigo: cuponAplicado?.codigo,
           items: cart.items.map((i) => {
-            const ex = extras[i.id]
+            const k = cart.cartKey(i)
+            const ex = extras[k]
             return {
               itemId: i.id,
+              varianteId: i.varianteId ?? undefined,
               cantidad: i.cantidad,
               comentario: ex?.comentario?.trim() || undefined,
               adjuntos: ex?.adjuntos?.length ? ex.adjuntos : undefined,
@@ -197,12 +199,13 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                 ) : (
                   <div className="p-4 space-y-3">
                     {cart.items.map((item) => {
-                      const ex = getExtras(item.id)
+                      const k = cart.cartKey(item)
+                      const ex = getExtras(k)
                       const hasExtras = ex.comentario.length > 0 || ex.adjuntos.length > 0
-                      const isExpanded = expanded[item.id] || hasExtras
-                      const isUploading = uploadingItem === item.id
+                      const isExpanded = expanded[k] || hasExtras
+                      const isUploading = uploadingItem === k
                       return (
-                        <div key={item.id} className="border rounded-lg p-2 space-y-2">
+                        <div key={k} className="border rounded-lg p-2 space-y-2">
                           <div className="flex gap-3">
                             <div className="w-16 h-16 rounded-md bg-muted overflow-hidden shrink-0">
                               {item.imagen_url && (
@@ -218,6 +221,9 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                             </div>
                             <div className="flex-1 min-w-0">
                               <h3 className="text-sm font-medium line-clamp-2">{item.nombre}</h3>
+                              {item.varianteEtiqueta && (
+                                <p className="text-xs text-muted-foreground">{item.varianteEtiqueta}</p>
+                              )}
                               <div className="text-sm font-semibold mt-0.5" style={{ color: brandColor }}>
                                 {formatPrecio(item.precio * item.cantidad)}
                               </div>
@@ -226,7 +232,7 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                                   variant="outline"
                                   size="icon"
                                   className="h-7 w-7"
-                                  onClick={() => cart.setCantidad(item.id, item.cantidad - 1)}
+                                  onClick={() => cart.setCantidad(k, item.cantidad - 1)}
                                 >
                                   <Minus className="h-3 w-3" />
                                 </Button>
@@ -235,7 +241,7 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                                   variant="outline"
                                   size="icon"
                                   className="h-7 w-7"
-                                  onClick={() => cart.setCantidad(item.id, item.cantidad + 1)}
+                                  onClick={() => cart.setCantidad(k, item.cantidad + 1)}
                                   disabled={item.stock_disponible != null && item.cantidad >= item.stock_disponible}
                                 >
                                   <Plus className="h-3 w-3" />
@@ -244,7 +250,7 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                                   variant="ghost"
                                   size="icon"
                                   className="h-7 w-7 ml-auto"
-                                  onClick={() => cart.remove(item.id)}
+                                  onClick={() => cart.remove(k)}
                                 >
                                   <Trash2 className="h-3 w-3 text-destructive" />
                                 </Button>
@@ -254,7 +260,7 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
 
                           {!isExpanded ? (
                             <button
-                              onClick={() => setExpanded((prev) => ({ ...prev, [item.id]: true }))}
+                              onClick={() => setExpanded((prev) => ({ ...prev, [k]: true }))}
                               className="w-full text-left text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 transition-colors"
                             >
                               <MessageSquare className="h-3 w-3" />
@@ -264,7 +270,7 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                             <div className="space-y-2 pt-1 border-t">
                               <Textarea
                                 value={ex.comentario}
-                                onChange={(e) => setExtra(item.id, { comentario: e.target.value })}
+                                onChange={(e) => setExtra(k, { comentario: e.target.value })}
                                 rows={2}
                                 maxLength={500}
                                 placeholder="Comentario (ej: pantalla rota lado superior)"
@@ -277,7 +283,7 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                                     <img src={url} alt="" className="w-full h-full object-cover" />
                                     <button
                                       type="button"
-                                      onClick={() => removeAdjunto(item.id, url)}
+                                      onClick={() => removeAdjunto(k, url)}
                                       className="absolute inset-0 bg-black/50 opacity-0 group-hover/img:opacity-100 flex items-center justify-center transition-opacity"
                                       aria-label="Quitar foto"
                                     >
@@ -289,7 +295,7 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                                   <>
                                     <button
                                       type="button"
-                                      onClick={() => fileInputsRef.current[item.id]?.click()}
+                                      onClick={() => fileInputsRef.current[k]?.click()}
                                       disabled={isUploading}
                                       className="h-14 w-14 rounded-md border-2 border-dashed flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-foreground transition-colors disabled:opacity-50"
                                       aria-label="Agregar foto"
@@ -302,7 +308,7 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                                     </button>
                                     <input
                                       ref={(el) => {
-                                        fileInputsRef.current[item.id] = el
+                                        fileInputsRef.current[k] = el
                                       }}
                                       type="file"
                                       accept="image/jpeg,image/png,image/webp"
@@ -310,7 +316,7 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                                       className="hidden"
                                       onChange={(e) => {
                                         const f = e.target.files?.[0]
-                                        if (f) handleUpload(item.id, f)
+                                        if (f) handleUpload(k, f)
                                         e.target.value = ""
                                       }}
                                     />

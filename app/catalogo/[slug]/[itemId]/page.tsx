@@ -29,7 +29,8 @@ async function _fetchItem(slug: string, itemId: string) {
     .select(`
       id, tipo, nombre, descripcion, categoria_id, precio, precio_hasta,
       imagen_url, imagenes, etiquetas, stock, destacado, inventario_id,
-      inventario:inventario(stock)
+      inventario:inventario(stock),
+      variantes:catalogo_variantes(id, etiqueta, sku, precio, stock, imagen_url, activo, orden)
     `)
     .eq("id", itemId)
     .eq("organization_id", config.organization_id)
@@ -38,12 +39,41 @@ async function _fetchItem(slug: string, itemId: string) {
 
   if (!itemRaw) return null
 
-  const stockReal =
-    itemRaw.inventario_id && (itemRaw as any).inventario
+  const variantesActivas = ((itemRaw as any).variantes ?? [])
+    .filter((v: any) => v.activo)
+    .sort((a: any, b: any) => a.orden - b.orden)
+  const tieneVariantes = variantesActivas.length > 0
+  const stockVariantes = tieneVariantes
+    ? variantesActivas.reduce((s: number | null, v: any) => {
+        if (v.stock == null) return null
+        return s == null ? null : s + v.stock
+      }, 0)
+    : null
+  const stockReal = tieneVariantes
+    ? stockVariantes
+    : itemRaw.inventario_id && (itemRaw as any).inventario
       ? (itemRaw as any).inventario.stock
       : itemRaw.stock
-  const { inventario, ...rest } = itemRaw as any
-  const item = { ...rest, stock_disponible: stockReal }
+  const precioMin = tieneVariantes
+    ? variantesActivas.reduce((m: number | null, v: any) => {
+        if (v.precio == null) return m
+        return m == null ? Number(v.precio) : Math.min(m, Number(v.precio))
+      }, null) ?? itemRaw.precio
+    : itemRaw.precio
+  const { inventario, variantes, ...rest } = itemRaw as any
+  const item = {
+    ...rest,
+    precio: precioMin,
+    stock_disponible: stockReal,
+    variantes: variantesActivas.map((v: any) => ({
+      id: v.id,
+      etiqueta: v.etiqueta,
+      sku: v.sku,
+      precio: v.precio,
+      stock: v.stock,
+      imagen_url: v.imagen_url,
+    })),
+  }
 
   const { data: org } = await supabaseAdmin
     .from("organizations")

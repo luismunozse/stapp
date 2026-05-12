@@ -9,6 +9,9 @@ import {
   formatInventario,
   formatUser,
   formatProveedor,
+  formatProveedorContacto,
+  formatProveedorAdjunto,
+  formatProveedorCatalogoItem,
 } from '../db-utils'
 
 describe('snakeToCamel', () => {
@@ -391,5 +394,175 @@ describe('formatProveedor', () => {
 
   it('retorna null para input null', () => {
     expect(formatProveedor(null)).toBe(null)
+  })
+
+  it('formatea campos fiscales (AR)', () => {
+    const result = formatProveedor({
+      id: 'p',
+      nombre: 'X',
+      activo: true,
+      organization_id: 'o',
+      razon_social: 'Razón SA',
+      cuit: '30-12345678-9',
+      condicion_iva: 'RESPONSABLE_INSCRIPTO',
+      ingresos_brutos: '123',
+      condicion_pago: 'CTA_CTE',
+      dias_pago: 30,
+    })
+    expect(result?.razonSocial).toBe('Razón SA')
+    expect(result?.cuit).toBe('30-12345678-9')
+    expect(result?.condicionIva).toBe('RESPONSABLE_INSCRIPTO')
+    expect(result?.ingresosBrutos).toBe('123')
+    expect(result?.condicionPago).toBe('CTA_CTE')
+    expect(result?.diasPago).toBe(30)
+  })
+
+  it('formatea campos operativos + clasificación + logo', () => {
+    const result = formatProveedor({
+      id: 'p',
+      nombre: 'X',
+      activo: true,
+      organization_id: 'o',
+      lead_time_dias: 7,
+      pedido_minimo: '12500.50',
+      rating: 4,
+      tags: ['mayorista', 'repuestos'],
+      logo_url: 'https://cdn/test.png',
+      logo_path: 'path/to/logo.png',
+    })
+    expect(result?.leadTimeDias).toBe(7)
+    expect(result?.pedidoMinimo).toBe(12500.5)
+    expect(result?.rating).toBe(4)
+    expect(result?.tags).toEqual(['mayorista', 'repuestos'])
+    expect(result?.logoUrl).toBe('https://cdn/test.png')
+    expect(result?.logoPath).toBe('path/to/logo.png')
+  })
+
+  it('null para campos opcionales no cargados', () => {
+    const result = formatProveedor({
+      id: 'p',
+      nombre: 'X',
+      activo: true,
+      organization_id: 'o',
+    })
+    expect(result?.razonSocial).toBe(null)
+    expect(result?.diasPago).toBe(null)
+    expect(result?.leadTimeDias).toBe(null)
+    expect(result?.pedidoMinimo).toBe(null)
+    expect(result?.rating).toBe(null)
+    expect(result?.tags).toBe(null)
+    expect(result?.logoUrl).toBe(null)
+  })
+})
+
+describe('formatProveedorContacto', () => {
+  it('retorna null para input null', () => {
+    expect(formatProveedorContacto(null)).toBe(null)
+  })
+
+  it('formatea contacto completo', () => {
+    const result = formatProveedorContacto({
+      id: 'c1',
+      proveedor_id: 'p1',
+      nombre: 'Juan',
+      cargo: 'Ventas',
+      telefono: '111',
+      whatsapp: '5491111',
+      email: 'j@x.com',
+      notas: 'Solo mañanas',
+      principal: true,
+      created_at: '2026-01-01',
+      updated_at: '2026-01-02',
+    })
+    expect(result?.id).toBe('c1')
+    expect(result?.proveedorId).toBe('p1')
+    expect(result?.nombre).toBe('Juan')
+    expect(result?.cargo).toBe('Ventas')
+    expect(result?.principal).toBe(true)
+  })
+
+  it('default principal = false si no está', () => {
+    const result = formatProveedorContacto({
+      id: 'c1', proveedor_id: 'p1', nombre: 'X',
+    })
+    expect(result?.principal).toBe(false)
+  })
+
+  it('null para campos opcionales vacíos', () => {
+    const result = formatProveedorContacto({
+      id: 'c1', proveedor_id: 'p1', nombre: 'X', principal: false,
+    })
+    expect(result?.cargo).toBe(null)
+    expect(result?.telefono).toBe(null)
+    expect(result?.email).toBe(null)
+  })
+})
+
+describe('formatProveedorAdjunto', () => {
+  it('retorna null para input null', () => {
+    expect(formatProveedorAdjunto(null)).toBe(null)
+  })
+
+  it('formatea adjunto y convierte size a number', () => {
+    const result = formatProveedorAdjunto({
+      id: 'a1',
+      proveedor_id: 'p1',
+      nombre: 'Lista abril',
+      descripcion: 'PDF lista',
+      file_url: 'https://x/a',
+      file_path: 'path/a',
+      mime: 'application/pdf',
+      size_bytes: '123456',
+      uploaded_by: 'u1',
+      created_at: '2026-01-01',
+    })
+    expect(result?.id).toBe('a1')
+    expect(result?.proveedorId).toBe('p1')
+    expect(result?.fileUrl).toBe('https://x/a')
+    expect(result?.filePath).toBe('path/a')
+    expect(result?.sizeBytes).toBe(123456)
+    expect(typeof result?.sizeBytes).toBe('number')
+  })
+})
+
+describe('formatProveedorCatalogoItem', () => {
+  it('retorna null para input null', () => {
+    expect(formatProveedorCatalogoItem(null)).toBe(null)
+  })
+
+  it('formatea item con inventario vinculado', () => {
+    const result = formatProveedorCatalogoItem({
+      id: 'i1',
+      proveedor_id: 'p1',
+      inventario_id: 'inv1',
+      codigo_proveedor: 'SKU-123',
+      nombre: 'Producto X',
+      descripcion: 'desc',
+      precio_referencia: '999.99',
+      moneda: 'ARS',
+      unidad: 'caja',
+      notas: null,
+      precio_actualizado_at: '2026-01-15',
+      inventario: { id: 'inv1', codigo: 'COD-1', nombre: 'Item inv' },
+      created_at: '2026-01-01',
+      updated_at: '2026-01-15',
+    })
+    expect(result?.id).toBe('i1')
+    expect(result?.codigoProveedor).toBe('SKU-123')
+    expect(result?.precioReferencia).toBe(999.99)
+    expect(result?.moneda).toBe('ARS')
+    expect(result?.unidad).toBe('caja')
+    expect(result?.inventarioId).toBe('inv1')
+    expect(result?.inventario?.codigo).toBe('COD-1')
+    expect(result?.precioActualizadoAt).toBe('2026-01-15')
+  })
+
+  it('moneda default ARS si null', () => {
+    const result = formatProveedorCatalogoItem({
+      id: 'i1', proveedor_id: 'p1', nombre: 'X',
+    })
+    expect(result?.moneda).toBe('ARS')
+    expect(result?.precioReferencia).toBe(null)
+    expect(result?.inventario).toBe(null)
   })
 })

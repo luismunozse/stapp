@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { useState, useEffect, useRef, useMemo } from "react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -7,6 +8,15 @@ import { Badge } from "@/components/ui/badge"
 import { Plus, Minus, ShoppingCart, Package, Wrench, MessageCircle, Star, Share2, ChevronLeft, ChevronRight, Copy, Heart } from "lucide-react"
 import { toast } from "sonner"
 import type { CartItem } from "./use-cart"
+
+interface Variante {
+  id: string
+  etiqueta: string
+  sku: string | null
+  precio: number | null
+  stock: number | null
+  imagen_url: string | null
+}
 
 interface Item {
   id: string
@@ -21,6 +31,7 @@ interface Item {
   etiquetas: string[]
   stock_disponible: number | null
   destacado: boolean
+  variantes?: Variante[]
 }
 
 interface Props {
@@ -54,12 +65,17 @@ export function ItemDetailDialog({
 }: Props) {
   const [cantidad, setCantidad] = useState(1)
   const [imgIdx, setImgIdx] = useState(0)
+  const [varianteId, setVarianteId] = useState<string | null>(null)
   const touchStartX = useRef<number | null>(null)
 
   useEffect(() => {
     if (open) {
       setCantidad(1)
       setImgIdx(0)
+      // Pre-seleccionar primera variante con stock disponible
+      const variantes = item?.variantes ?? []
+      const primera = variantes.find((v) => v.stock == null || v.stock > 0) ?? variantes[0]
+      setVarianteId(primera?.id ?? null)
     }
   }, [open, item?.id])
 
@@ -84,20 +100,36 @@ export function ItemDetailDialog({
 
   if (!item) return null
 
-  const galeria = [item.imagen_url, ...(item.imagenes ?? [])].filter(Boolean) as string[]
-  const agotado = item.stock_disponible === 0
-  const sinPrecio = item.precio == null
-  const stockMax = item.stock_disponible ?? Infinity
+  const variantes = item.variantes ?? []
+  const tieneVariantes = variantes.length > 0
+  const varianteSel = tieneVariantes ? variantes.find((v) => v.id === varianteId) ?? null : null
+
+  const galeriaBase = [item.imagen_url, ...(item.imagenes ?? [])].filter(Boolean) as string[]
+  const galeria = varianteSel?.imagen_url
+    ? [varianteSel.imagen_url, ...galeriaBase.filter((u) => u !== varianteSel.imagen_url)]
+    : galeriaBase
+
+  const precioEfectivo = varianteSel?.precio != null ? Number(varianteSel.precio) : item.precio != null ? Number(item.precio) : null
+  const stockEfectivo = tieneVariantes
+    ? varianteSel?.stock ?? null
+    : item.stock_disponible
+
+  const sinPrecio = precioEfectivo == null
+  const agotado = stockEfectivo === 0
+  const stockMax = stockEfectivo ?? Infinity
+  const debeElegirVariante = tieneVariantes && !varianteSel
 
   const handleAdd = () => {
-    if (sinPrecio || agotado) return
+    if (sinPrecio || agotado || debeElegirVariante) return
     onAdd({
       id: item.id,
       nombre: item.nombre,
-      precio: Number(item.precio),
+      precio: precioEfectivo!,
       cantidad,
-      imagen_url: item.imagen_url,
-      stock_disponible: item.stock_disponible,
+      imagen_url: varianteSel?.imagen_url ?? item.imagen_url,
+      stock_disponible: stockEfectivo,
+      varianteId: varianteSel?.id ?? null,
+      varianteEtiqueta: varianteSel?.etiqueta ?? null,
     })
   }
 
@@ -105,9 +137,9 @@ export function ItemDetailDialog({
     typeof window !== "undefined" ? `${window.location.origin}/catalogo/${slug}/${item.id}` : ""
 
   const precioTexto = (() => {
-    if (item.precio == null) return "(consultar precio)"
-    const base = formatPrecio(Number(item.precio))
-    return item.precio_hasta != null ? `desde ${base}` : base
+    if (precioEfectivo == null) return "(consultar precio)"
+    const base = formatPrecio(precioEfectivo)
+    return tieneVariantes ? base : item.precio_hasta != null ? `desde ${base}` : base
   })()
 
   const shareText = `Hola! Vi "${item.nombre}" ${precioTexto} en el catálogo: ${itemUrl}`
@@ -168,13 +200,12 @@ export function ItemDetailDialog({
           onTouchEnd={onTouchEnd}
         >
           {galeria[imgIdx] ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <Image
               src={galeria[imgIdx]}
               alt={item.nombre}
-              loading="lazy"
-              decoding="async"
-              className="w-full h-full object-cover"
+              fill
+              sizes="(max-width: 768px) 100vw, 672px"
+              className="object-cover"
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-6xl text-muted-foreground">
@@ -275,9 +306,13 @@ export function ItemDetailDialog({
               ) : (
                 <>
                   <div className="text-2xl font-bold" style={{ color: brandColor }}>
-                    {item.precio_hasta != null ? `Desde ${formatPrecio(Number(item.precio))}` : formatPrecio(Number(item.precio))}
+                    {tieneVariantes
+                      ? formatPrecio(precioEfectivo!)
+                      : item.precio_hasta != null
+                        ? `Desde ${formatPrecio(precioEfectivo!)}`
+                        : formatPrecio(precioEfectivo!)}
                   </div>
-                  {item.precio_hasta != null && (
+                  {item.precio_hasta != null && !tieneVariantes && (
                     <div className="text-xs text-muted-foreground">hasta {formatPrecio(Number(item.precio_hasta))}</div>
                   )}
                 </>
@@ -289,6 +324,35 @@ export function ItemDetailDialog({
             <p className="text-sm text-muted-foreground whitespace-pre-line">{item.descripcion}</p>
           )}
 
+          {tieneVariantes && (
+            <div>
+              <div className="text-xs font-medium mb-1.5">
+                Variante: {varianteSel ? <span className="text-foreground">{varianteSel.etiqueta}</span> : <span className="text-destructive">elegí una opción</span>}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {variantes.map((v) => {
+                  const sinStock = v.stock === 0
+                  const active = v.id === varianteId
+                  return (
+                    <button
+                      key={v.id}
+                      type="button"
+                      onClick={() => !sinStock && setVarianteId(v.id)}
+                      disabled={sinStock}
+                      className={`px-3 py-1.5 rounded-md text-xs border transition-colors ${
+                        active ? "text-white" : sinStock ? "bg-muted text-muted-foreground line-through" : "bg-background hover:bg-muted"
+                      }`}
+                      style={active ? { backgroundColor: brandColor, borderColor: brandColor } : undefined}
+                      title={sinStock ? "Sin stock" : undefined}
+                    >
+                      {v.etiqueta}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {item.etiquetas.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {item.etiquetas.map((tag) => (
@@ -297,12 +361,12 @@ export function ItemDetailDialog({
             </div>
           )}
 
-          {item.tipo === "PRODUCTO" && item.stock_disponible != null && (
+          {item.tipo === "PRODUCTO" && stockEfectivo != null && (
             <div className="text-sm">
               {agotado ? (
                 <Badge variant="secondary">Sin stock</Badge>
-              ) : item.stock_disponible <= 5 ? (
-                <span className="text-orange-600">Quedan {item.stock_disponible} unidades</span>
+              ) : stockEfectivo <= 5 ? (
+                <span className="text-orange-600">Quedan {stockEfectivo} unidades</span>
               ) : (
                 <span className="text-green-600">Stock disponible</span>
               )}
@@ -363,14 +427,14 @@ export function ItemDetailDialog({
                     onClick={() => onSelectRelated(sg.id)}
                     className="text-left rounded-lg border bg-card overflow-hidden hover:shadow-md transition group"
                   >
-                    <div className="aspect-square bg-muted">
+                    <div className="aspect-square bg-muted relative">
                       {sg.imagen_url && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
+                        <Image
                           src={sg.imagen_url}
                           alt={sg.nombre}
-                          loading="lazy"
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          fill
+                          sizes="(max-width: 640px) 50vw, 25vw"
+                          className="object-cover group-hover:scale-105 transition-transform"
                         />
                       )}
                     </div>

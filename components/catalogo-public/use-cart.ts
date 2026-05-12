@@ -9,9 +9,15 @@ export interface CartItem {
   cantidad: number
   imagen_url?: string | null
   stock_disponible: number | null
+  varianteId?: string | null
+  varianteEtiqueta?: string | null
 }
 
 const STORAGE_PREFIX = "stapp:catalogo-cart:"
+
+function cartKey(item: Pick<CartItem, "id" | "varianteId">) {
+  return item.varianteId ? `${item.id}::${item.varianteId}` : item.id
+}
 
 function readCart(slug: string): CartItem[] {
   if (typeof window === "undefined") return []
@@ -48,25 +54,26 @@ export function useCart(slug: string) {
 
   const add = useCallback((item: Omit<CartItem, "cantidad">, cantidad = 1) => {
     setItems((prev) => {
-      const existing = prev.find((i) => i.id === item.id)
+      const k = cartKey(item)
+      const existing = prev.find((i) => cartKey(i) === k)
       if (existing) {
         const max = item.stock_disponible ?? Infinity
         const nueva = Math.min(max, existing.cantidad + cantidad)
-        return prev.map((i) => (i.id === item.id ? { ...i, cantidad: nueva } : i))
+        return prev.map((i) => (cartKey(i) === k ? { ...i, cantidad: nueva } : i))
       }
       return [...prev, { ...item, cantidad }]
     })
   }, [])
 
-  const remove = useCallback((id: string) => {
-    setItems((prev) => prev.filter((i) => i.id !== id))
+  const remove = useCallback((key: string) => {
+    setItems((prev) => prev.filter((i) => cartKey(i) !== key))
   }, [])
 
-  const setCantidad = useCallback((id: string, cantidad: number) => {
+  const setCantidad = useCallback((key: string, cantidad: number) => {
     setItems((prev) => {
-      if (cantidad <= 0) return prev.filter((i) => i.id !== id)
+      if (cantidad <= 0) return prev.filter((i) => cartKey(i) !== key)
       return prev.map((i) => {
-        if (i.id !== id) return i
+        if (cartKey(i) !== key) return i
         const max = i.stock_disponible ?? Infinity
         return { ...i, cantidad: Math.min(max, cantidad) }
       })
@@ -78,5 +85,5 @@ export function useCart(slug: string) {
   const total = items.reduce((s, i) => s + i.precio * i.cantidad, 0)
   const count = items.reduce((s, i) => s + i.cantidad, 0)
 
-  return { items, add, remove, setCantidad, clear, total, count, hydrated }
+  return { items, add, remove, setCantidad, clear, total, count, hydrated, cartKey }
 }

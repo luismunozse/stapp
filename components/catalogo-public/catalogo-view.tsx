@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import Fuse from "fuse.js"
 import { motion, AnimatePresence } from "framer-motion"
 import { ShoppingCart } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -50,6 +51,14 @@ interface CatalogoData {
     etiquetas: string[]
     stock_disponible: number | null
     destacado: boolean
+    variantes?: Array<{
+      id: string
+      etiqueta: string
+      sku: string | null
+      precio: number | null
+      stock: number | null
+      imagen_url: string | null
+    }>
   }>
 }
 
@@ -102,21 +111,33 @@ export function CatalogoView({ data }: { data: CatalogoData }) {
     return Array.from(set).sort()
   }, [data.items])
 
+  const fuse = useMemo(
+    () =>
+      new Fuse(data.items, {
+        keys: [
+          { name: "nombre", weight: 0.6 },
+          { name: "etiquetas", weight: 0.25 },
+          { name: "descripcion", weight: 0.15 },
+        ],
+        threshold: 0.38,
+        ignoreLocation: true,
+        minMatchCharLength: 2,
+        useExtendedSearch: false,
+        includeScore: false,
+      }),
+    [data.items]
+  )
+
   const itemsFiltrados = useMemo(() => {
-    const searchNorm = search.trim().toLowerCase()
-    const searchTokens = searchNorm.length > 0 ? searchNorm.split(/\s+/).filter(Boolean) : []
-    let arr = data.items.filter((it) => {
+    const searchNorm = search.trim()
+    const baseList = searchNorm.length === 0
+      ? data.items
+      : searchNorm.length === 1
+        ? data.items.filter((i) => i.nombre.toLowerCase().includes(searchNorm.toLowerCase()))
+        : fuse.search(searchNorm).map((r) => r.item)
+
+    let arr = baseList.filter((it) => {
       if (categoriaActiva && it.categoria_id !== categoriaActiva) return false
-      if (searchTokens.length > 0) {
-        const haystack = [
-          it.nombre,
-          it.descripcion ?? "",
-          ...(it.etiquetas ?? []),
-        ]
-          .join(" ")
-          .toLowerCase()
-        if (!searchTokens.every((tok) => haystack.includes(tok))) return false
-      }
       if (soloDisponibles && it.stock_disponible === 0) return false
       if (soloFavoritos && !favoritos.ids.has(it.id)) return false
       if (tagsActivos.length > 0 && !tagsActivos.some((t) => it.etiquetas.includes(t))) return false
@@ -139,7 +160,7 @@ export function CatalogoView({ data }: { data: CatalogoData }) {
     // recomendados: ya viene ordenado del server (destacado DESC, orden ASC)
 
     return arr
-  }, [data.items, search, categoriaActiva, soloDisponibles, soloFavoritos, favoritos.ids, tagsActivos, precioRange, precioMin, precioMax, sort])
+  }, [data.items, fuse, search, categoriaActiva, soloDisponibles, soloFavoritos, favoritos.ids, tagsActivos, precioRange, precioMin, precioMax, sort])
 
   // Items recientemente vistos (que sigan existiendo en el catálogo)
   const itemsRecientes = useMemo(() => {
@@ -175,6 +196,11 @@ export function CatalogoView({ data }: { data: CatalogoData }) {
 
   const handleQuickAdd = (item: CatalogoData["items"][number]) => {
     if (item.precio == null) return
+    // Si tiene variantes, abrir detalle en vez de quick-add (cliente debe elegir)
+    if (item.variantes && item.variantes.length > 0) {
+      openDetalle(item.id)
+      return
+    }
     cart.add({
       id: item.id,
       nombre: item.nombre,

@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/switch"
 import { Upload, Loader2, ImageOff, X, Star } from "lucide-react"
 import { toast } from "sonner"
 import type { CatalogoItem, CatalogoCategoria } from "@/types/database"
+import { CatalogoVariantesEditor } from "./catalogo-variantes-editor"
 
 interface Props {
   item: CatalogoItem | null
@@ -272,6 +273,12 @@ export function CatalogoItemDialog({ item, categorias, open, onClose, onSaved }:
               <p className="text-xs text-muted-foreground mt-1">
                 Si lo dejás vacío, no se trackea stock. 0 = agotado.
               </p>
+            </div>
+          )}
+
+          {item && tipo === "PRODUCTO" && (
+            <div className="pt-2 border-t">
+              <CatalogoVariantesEditor itemId={item.id} />
             </div>
           )}
 

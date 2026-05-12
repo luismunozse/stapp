@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { motion } from "framer-motion"
 import { Plus, Star, Check, Heart } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
@@ -58,13 +59,12 @@ export function ItemCard({ item, onClick, onQuickAdd, formatPrecio, brandColor, 
       <button onClick={onClick} className="block w-full text-left">
         <div className="aspect-square bg-muted relative">
           {item.imagen_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <Image
               src={item.imagen_url}
               alt={item.nombre}
-              loading="lazy"
-              decoding="async"
-              className="w-full h-full object-cover transition-transform group-hover:scale-105"
+              fill
+              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+              className="object-cover transition-transform group-hover:scale-105"
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-3xl text-muted-foreground">

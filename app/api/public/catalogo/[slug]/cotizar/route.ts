@@ -22,6 +22,7 @@ const cotizarSchema = z.object({
   cuponCodigo: z.string().min(3).max(32).optional(),
   items: z.array(z.object({
     itemId: z.string(),
+    varianteId: z.string().nullable().optional(),
     cantidad: z.number().int().positive(),
     comentario: z.string().max(500).optional(),
     adjuntos: z.array(z.string().url()).max(5).optional(),
@@ -63,10 +64,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   const organizationId = config.organization_id
 
   // 2. Cargar items del carrito + validar existencia y stock
-  const itemIds = data.items.map((i) => i.itemId)
+  const itemIds = Array.from(new Set(data.items.map((i) => i.itemId)))
   const { data: catalogItems, error: itemsErr } = await supabaseAdmin
     .from("catalogo_items")
-    .select("id, nombre, precio, stock, inventario_id, activo, tipo, inventario:inventario(id, stock, nombre)")
+    .select(`
+      id, nombre, precio, stock, inventario_id, activo, tipo,
+      inventario:inventario(id, stock, nombre),
+      variantes:catalogo_variantes(id, etiqueta, sku, precio, stock, activo)
+    `)
     .in("id", itemIds)
     .eq("organization_id", organizationId)
 
@@ -84,9 +89,40 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   // Mapa para lookup rápido
   const itemMap = new Map(catalogItems.map((it: any) => [it.id, it]))
 
-  // 3. Validar stock disponible
+  // 3. Validar stock + variante + precio
   for (const cartItem of data.items) {
     const item: any = itemMap.get(cartItem.itemId)
+    const variantesActivas: any[] = (item.variantes ?? []).filter((v: any) => v.activo)
+    const tieneVariantes = variantesActivas.length > 0
+
+    if (tieneVariantes && !cartItem.varianteId) {
+      return NextResponse.json({
+        error: `Falta elegir variante para "${item.nombre}"`,
+      }, { status: 400 })
+    }
+
+    if (cartItem.varianteId) {
+      const variante = variantesActivas.find((v) => v.id === cartItem.varianteId)
+      if (!variante) {
+        return NextResponse.json({
+          error: `Variante no disponible para "${item.nombre}"`,
+        }, { status: 400 })
+      }
+      const precioEfectivo = variante.precio != null ? Number(variante.precio) : item.precio
+      if (precioEfectivo == null) {
+        return NextResponse.json({
+          error: `"${item.nombre} - ${variante.etiqueta}" requiere consulta de precio.`,
+        }, { status: 400 })
+      }
+      if (variante.stock != null && variante.stock < cartItem.cantidad) {
+        return NextResponse.json({
+          error: `Stock insuficiente para "${item.nombre} - ${variante.etiqueta}" (disponible: ${variante.stock})`,
+        }, { status: 409 })
+      }
+      continue
+    }
+
+    // Sin variantes: validar stock + precio del item base
     const stockReal = item.inventario_id && item.inventario
       ? item.inventario.stock
       : item.stock
@@ -95,11 +131,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
         error: `Stock insuficiente para "${item.nombre}" (disponible: ${stockReal})`,
       }, { status: 409 })
     }
-  }
-
-  // 4. Validar que tenga precio (no se puede cotizar items sin precio)
-  for (const cartItem of data.items) {
-    const item: any = itemMap.get(cartItem.itemId)
     if (item.precio == null) {
       return NextResponse.json({
         error: `"${item.nombre}" requiere consulta de precio. Contactá directamente.`,
@@ -141,12 +172,23 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   // 6. Calcular totales
   const itemsCalculados = data.items.map((cartItem) => {
     const item: any = itemMap.get(cartItem.itemId)
-    const precioUnitario = Number(item.precio)
+    const variantesActivas: any[] = (item.variantes ?? []).filter((v: any) => v.activo)
+    const variante = cartItem.varianteId
+      ? variantesActivas.find((v) => v.id === cartItem.varianteId)
+      : null
+    const precioUnitario = variante?.precio != null
+      ? Number(variante.precio)
+      : Number(item.precio)
     const subtotal = precioUnitario * cartItem.cantidad
+    const descripcion = variante
+      ? `${item.nombre} — ${variante.etiqueta}`
+      : item.nombre
     return {
       catalogoItemId: item.id,
       inventarioId: item.inventario_id,
-      descripcion: item.nombre,
+      varianteId: variante?.id ?? null,
+      varianteEtiqueta: variante?.etiqueta ?? null,
+      descripcion,
       cantidad: cartItem.cantidad,
       precioUnitario,
       subtotal,
@@ -236,6 +278,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       tipo_repuesto: "NO_APLICA",
       comentario_cliente: i.comentarioCliente,
       adjuntos: i.adjuntos,
+      variante_id: i.varianteId,
+      variante_etiqueta: i.varianteEtiqueta,
     })))
 
   if (itemsInsertErr) {
@@ -250,7 +294,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   // 9. Decrementar stock atómico via RPC (FOR UPDATE lock anti-race)
   const { error: stockErr } = await supabaseAdmin.rpc("reservar_stock_catalogo", {
     p_organization_id: organizationId,
-    p_items: data.items.map((i) => ({ item_id: i.itemId, cantidad: i.cantidad })),
+    p_items: data.items.map((i) => ({
+      item_id: i.itemId,
+      variante_id: i.varianteId ?? null,
+      cantidad: i.cantidad,
+    })),
   })
 
   if (stockErr) {

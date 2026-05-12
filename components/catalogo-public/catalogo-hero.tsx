@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { MessageCircle, Share2, Check } from "lucide-react"
 import { useState } from "react"
@@ -43,19 +44,22 @@ export function CatalogoHero({ bannerUrl, logoUrl, titulo, descripcion, whatsapp
     return (
       <header className="relative">
         <div className="aspect-[3/1] sm:aspect-[4/1] relative overflow-hidden bg-muted">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={bannerUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+          <Image
+            src={bannerUrl}
+            alt=""
+            fill
+            priority
+            sizes="100vw"
+            className="object-cover"
+          />
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
         </div>
         <div className="container mx-auto max-w-5xl px-4 -mt-20 sm:-mt-24 relative pb-6">
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-end">
             {logoUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={logoUrl}
-                alt={titulo}
-                className="h-20 w-20 sm:h-24 sm:w-24 rounded-2xl object-cover bg-white border-4 border-background shadow-lg"
-              />
+              <div className="relative h-20 w-20 sm:h-24 sm:w-24 rounded-2xl overflow-hidden bg-white border-4 border-background shadow-lg shrink-0">
+                <Image src={logoUrl} alt={titulo} fill sizes="96px" className="object-cover" priority />
+              </div>
             )}
             <div className="flex-1 min-w-0 text-white sm:pb-2">
               <h1 className="text-2xl sm:text-4xl font-bold drop-shadow-lg">{titulo}</h1>
@@ -86,12 +90,9 @@ export function CatalogoHero({ bannerUrl, logoUrl, titulo, descripcion, whatsapp
       <div className="container mx-auto max-w-5xl px-4 py-8">
         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
           {logoUrl && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={logoUrl}
-              alt={titulo}
-              className="h-16 w-16 rounded-xl object-cover bg-white border shadow-sm"
-            />
+            <div className="relative h-16 w-16 rounded-xl overflow-hidden bg-white border shadow-sm shrink-0">
+              <Image src={logoUrl} alt={titulo} fill sizes="64px" className="object-cover" priority />
+            </div>
           )}
           <div className="flex-1 min-w-0">
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{titulo}</h1>

@@ -55,6 +55,7 @@
     "driver.js": "^1.4.0",
     "exceljs": "^4.4.0",
     "framer-motion": "^12.30.0",
+    "fuse.js": "^7.3.0",
     "html2canvas": "^1.4.1",
     "jsbarcode": "^3.12.3",
     "jspdf": "^4.0.0",
