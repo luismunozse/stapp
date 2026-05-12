@@ -59,6 +59,17 @@ export function ItemDetailDialog({
     }
   }, [open, item?.id])
 
+  useEffect(() => {
+    if (!open || !item?.id) return
+    // Tracking de vista de item. Fire & forget.
+    fetch(`/api/public/catalogo/${slug}/view`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ itemId: item.id }),
+      keepalive: true,
+    }).catch(() => {})
+  }, [open, item?.id, slug])
+
   // Cross-sell: 4 items aleatorios de la misma categoría (excluyendo el actual)
   const sugeridos = useMemo(() => {
     if (!item) return []

@@ -159,6 +159,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       public_token: publicToken,
       tipo: "PRESUPUESTO",
       estado: "ENVIADA",
+      origen: "CATALOGO_PUBLICO",
       notas: data.notas?.trim() || "Solicitud desde catálogo público",
       subtotal,
       iva,

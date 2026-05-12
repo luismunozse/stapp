@@ -12,6 +12,7 @@ import { useRef } from "react"
 import { toast } from "sonner"
 import QRCode from "qrcode"
 import type { CatalogoConfig } from "@/types/database"
+import { CatalogoStatsCard } from "./catalogo-stats-card"
 
 export function CatalogoCompartirTab() {
   const [config, setConfig] = useState<CatalogoConfig | null>(null)
@@ -306,6 +307,10 @@ export function CatalogoCompartirTab() {
           )}
         </CardContent>
       </Card>
+
+      <div className="lg:col-span-3">
+        <CatalogoStatsCard />
+      </div>
     </div>
   )
 }

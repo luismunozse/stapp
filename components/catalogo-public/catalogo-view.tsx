@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { ShoppingCart } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -74,6 +74,16 @@ export function CatalogoView({ data }: { data: CatalogoData }) {
   }, [data.items])
 
   const [precioRange, setPrecioRange] = useState<[number, number]>([precioMin, precioMax])
+
+  useEffect(() => {
+    // Tracking de vista del catálogo (una vez por carga). Fire & forget.
+    fetch(`/api/public/catalogo/${data.config.slug}/view`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+      keepalive: true,
+    }).catch(() => {})
+  }, [data.config.slug])
 
   // Tags únicos de items activos
   const tags = useMemo(() => {
