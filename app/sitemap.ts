@@ -119,7 +119,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     })),
   ]
 
-  // Catálogos públicos activos
+  // Catálogos públicos activos (1 query catálogos + 1 query items en batch)
   const catalogoUrls: MetadataRoute.Sitemap = []
   try {
     const { data: catalogos } = await supabaseAdmin
@@ -127,25 +127,32 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       .select("slug, updated_at, organization_id")
       .eq("activo", true)
 
-    for (const cat of catalogos ?? []) {
+    const cats = catalogos ?? []
+    const orgIds = cats.map((c) => c.organization_id)
+    const slugByOrg = new Map(cats.map((c) => [c.organization_id, c.slug]))
+
+    for (const cat of cats) {
       catalogoUrls.push({
         url: `${baseUrl}/catalogo/${cat.slug}`,
         lastModified: new Date(cat.updated_at),
         changeFrequency: "weekly",
         priority: 0.7,
       })
+    }
 
-      // Items activos del catálogo (para SEO de productos)
+    if (orgIds.length > 0) {
       const { data: items } = await supabaseAdmin
         .from("catalogo_items")
-        .select("id, updated_at")
-        .eq("organization_id", cat.organization_id)
+        .select("id, updated_at, organization_id")
+        .in("organization_id", orgIds)
         .eq("activo", true)
-        .limit(1000)
+        .limit(50000)
 
       for (const it of items ?? []) {
+        const slug = slugByOrg.get(it.organization_id)
+        if (!slug) continue
         catalogoUrls.push({
-          url: `${baseUrl}/catalogo/${cat.slug}/${it.id}`,
+          url: `${baseUrl}/catalogo/${slug}/${it.id}`,
           lastModified: new Date(it.updated_at),
           changeFrequency: "weekly",
           priority: 0.6,

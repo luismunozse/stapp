@@ -90,6 +90,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title: titulo,
     description: descripcion,
+    manifest: `/catalogo/${slug}/manifest.webmanifest`,
+    appleWebApp: {
+      capable: true,
+      title: titulo.length > 20 ? titulo.slice(0, 20) : titulo,
+      statusBarStyle: "default",
+    },
     openGraph: {
       title: titulo,
       description: descripcion,

@@ -11,6 +11,8 @@ import { CatalogoFilters, type SortOption } from "./catalogo-filters"
 import { MiniCart } from "./mini-cart"
 import { ItemCard } from "./item-card"
 import { useCart, type CartItem } from "./use-cart"
+import { useRecientes, useFavoritos } from "./use-catalogo-storage"
+import { Clock, Heart } from "lucide-react"
 
 interface CatalogoData {
   config: {
@@ -53,13 +55,21 @@ interface CatalogoData {
 
 export function CatalogoView({ data }: { data: CatalogoData }) {
   const cart = useCart(data.config.slug)
+  const recientes = useRecientes(data.config.slug)
+  const favoritos = useFavoritos(data.config.slug)
   const [search, setSearch] = useState("")
   const [categoriaActiva, setCategoriaActiva] = useState<string | null>(null)
   const [sort, setSort] = useState<SortOption>("recomendados")
   const [tagsActivos, setTagsActivos] = useState<string[]>([])
   const [soloDisponibles, setSoloDisponibles] = useState(false)
+  const [soloFavoritos, setSoloFavoritos] = useState(false)
   const [cartOpen, setCartOpen] = useState(false)
   const [detalleId, setDetalleId] = useState<string | null>(null)
+
+  const openDetalle = (id: string) => {
+    setDetalleId(id)
+    recientes.push(id)
+  }
 
   const titulo = data.config.titulo || data.organizacion.nombre_mostrar || data.organizacion.nombre
   const moneda = data.organizacion.moneda || "ARS"
@@ -93,10 +103,22 @@ export function CatalogoView({ data }: { data: CatalogoData }) {
   }, [data.items])
 
   const itemsFiltrados = useMemo(() => {
+    const searchNorm = search.trim().toLowerCase()
+    const searchTokens = searchNorm.length > 0 ? searchNorm.split(/\s+/).filter(Boolean) : []
     let arr = data.items.filter((it) => {
       if (categoriaActiva && it.categoria_id !== categoriaActiva) return false
-      if (search && !it.nombre.toLowerCase().includes(search.toLowerCase())) return false
+      if (searchTokens.length > 0) {
+        const haystack = [
+          it.nombre,
+          it.descripcion ?? "",
+          ...(it.etiquetas ?? []),
+        ]
+          .join(" ")
+          .toLowerCase()
+        if (!searchTokens.every((tok) => haystack.includes(tok))) return false
+      }
       if (soloDisponibles && it.stock_disponible === 0) return false
+      if (soloFavoritos && !favoritos.ids.has(it.id)) return false
       if (tagsActivos.length > 0 && !tagsActivos.some((t) => it.etiquetas.includes(t))) return false
       if (precioRange[0] > precioMin || precioRange[1] < precioMax) {
         if (it.precio != null) {
@@ -117,7 +139,17 @@ export function CatalogoView({ data }: { data: CatalogoData }) {
     // recomendados: ya viene ordenado del server (destacado DESC, orden ASC)
 
     return arr
-  }, [data.items, search, categoriaActiva, soloDisponibles, tagsActivos, precioRange, precioMin, precioMax, sort])
+  }, [data.items, search, categoriaActiva, soloDisponibles, soloFavoritos, favoritos.ids, tagsActivos, precioRange, precioMin, precioMax, sort])
+
+  // Items recientemente vistos (que sigan existiendo en el catálogo)
+  const itemsRecientes = useMemo(() => {
+    if (recientes.ids.length === 0) return []
+    const map = new Map(data.items.map((i) => [i.id, i]))
+    return recientes.ids
+      .map((id) => map.get(id))
+      .filter((it): it is NonNullable<typeof it> => !!it)
+      .slice(0, 8)
+  }, [recientes.ids, data.items])
 
   const itemDetalle = data.items.find((i) => i.id === detalleId) ?? null
 
@@ -127,6 +159,7 @@ export function CatalogoView({ data }: { data: CatalogoData }) {
     sort !== "recomendados" ||
     tagsActivos.length > 0 ||
     soloDisponibles ||
+    soloFavoritos ||
     precioRange[0] !== precioMin ||
     precioRange[1] !== precioMax
 
@@ -136,6 +169,7 @@ export function CatalogoView({ data }: { data: CatalogoData }) {
     setSort("recomendados")
     setTagsActivos([])
     setSoloDisponibles(false)
+    setSoloFavoritos(false)
     setPrecioRange([precioMin, precioMax])
   }
 
@@ -195,6 +229,24 @@ export function CatalogoView({ data }: { data: CatalogoData }) {
       <main className="container mx-auto max-w-6xl px-4 py-6 pb-32 lg:pb-12">
         <div className="flex gap-6">
           <div className="flex-1 min-w-0">
+            {(favoritos.count > 0 || soloFavoritos) && (
+              <div className="flex items-center gap-2 mb-3">
+                <button
+                  onClick={() => setSoloFavoritos((v) => !v)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm border transition-colors ${
+                    soloFavoritos ? "text-white" : "bg-background hover:bg-muted"
+                  }`}
+                  style={
+                    soloFavoritos
+                      ? { backgroundColor: data.config.color_primary, borderColor: data.config.color_primary }
+                      : undefined
+                  }
+                >
+                  <Heart className={`h-3.5 w-3.5 ${soloFavoritos ? "fill-current" : ""}`} />
+                  Favoritos ({favoritos.count})
+                </button>
+              </div>
+            )}
             {itemsFiltrados.length === 0 ? (
               <div className="text-center py-20 text-muted-foreground">
                 <p className="mb-3">No hay items que coincidan con tu búsqueda.</p>
@@ -219,14 +271,64 @@ export function CatalogoView({ data }: { data: CatalogoData }) {
                     <ItemCard
                       key={item.id}
                       item={item}
-                      onClick={() => setDetalleId(item.id)}
+                      onClick={() => openDetalle(item.id)}
                       onQuickAdd={() => handleQuickAdd(item)}
                       formatPrecio={formatPrecio}
                       brandColor={data.config.color_primary}
+                      isFav={favoritos.has(item.id)}
+                      onToggleFav={() => favoritos.toggle(item.id)}
                     />
                   ))}
                 </AnimatePresence>
               </motion.div>
+            )}
+
+            {itemsRecientes.length > 0 && !hasActiveFilters && (
+              <section className="mt-10 pt-6 border-t">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold flex items-center gap-1.5">
+                    <Clock className="h-4 w-4 text-muted-foreground" />
+                    Vistos recientemente
+                  </h3>
+                  <button
+                    onClick={recientes.clear}
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Limpiar
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {itemsRecientes.map((it) => (
+                    <button
+                      key={it.id}
+                      onClick={() => openDetalle(it.id)}
+                      className="text-left rounded-lg border bg-card overflow-hidden hover:shadow-md transition group"
+                    >
+                      <div className="aspect-square bg-muted">
+                        {it.imagen_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={it.imagen_url}
+                            alt={it.nombre}
+                            loading="lazy"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-2xl text-muted-foreground">
+                            {it.tipo === "PRODUCTO" ? "📦" : "🛠️"}
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-2">
+                        <p className="text-xs font-medium line-clamp-1">{it.nombre}</p>
+                        <p className="text-xs font-bold" style={{ color: data.config.color_primary }}>
+                          {it.precio != null ? formatPrecio(Number(it.precio)) : "Consultar"}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </section>
             )}
 
             <p className="text-center text-xs text-muted-foreground mt-12">
@@ -282,7 +384,9 @@ export function CatalogoView({ data }: { data: CatalogoData }) {
         whatsapp={data.config.whatsapp}
         slug={data.config.slug}
         relatedItems={data.items}
-        onSelectRelated={(id) => setDetalleId(id)}
+        onSelectRelated={(id) => openDetalle(id)}
+        isFav={itemDetalle ? favoritos.has(itemDetalle.id) : false}
+        onToggleFav={itemDetalle ? () => favoritos.toggle(itemDetalle.id) : () => {}}
       />
 
       <CartDrawer

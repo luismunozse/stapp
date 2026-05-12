@@ -4,6 +4,16 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { formatProveedor } from "@/lib/db-utils"
 import { z } from "zod"
 
+const CONDICION_IVA = [
+  "RESPONSABLE_INSCRIPTO",
+  "MONOTRIBUTO",
+  "EXENTO",
+  "NO_RESPONSABLE",
+  "CONSUMIDOR_FINAL",
+] as const
+
+const CONDICION_PAGO = ["CONTADO", "CTA_CTE", "TRANSFERENCIA", "CHEQUE", "OTRO"] as const
+
 const proveedorUpdateSchema = z.object({
   nombre: z.string().min(1, "El nombre es requerido").optional(),
   telefono: z.string().optional(),
@@ -13,6 +23,12 @@ const proveedorUpdateSchema = z.object({
   website: z.string().url("URL inválida").optional().or(z.literal("")),
   notas: z.string().optional(),
   activo: z.boolean().optional(),
+  razonSocial: z.string().optional(),
+  cuit: z.string().optional(),
+  condicionIva: z.enum(CONDICION_IVA).optional().or(z.literal("")),
+  ingresosBrutos: z.string().optional(),
+  condicionPago: z.enum(CONDICION_PAGO).optional().or(z.literal("")),
+  diasPago: z.number().int().min(0).max(365).optional().nullable(),
 })
 
 export async function GET(
@@ -86,6 +102,12 @@ export async function PUT(
     if (data.website !== undefined) updateData.website = data.website || null
     if (data.notas !== undefined) updateData.notas = data.notas || null
     if (data.activo !== undefined) updateData.activo = data.activo
+    if (data.razonSocial !== undefined) updateData.razon_social = data.razonSocial || null
+    if (data.cuit !== undefined) updateData.cuit = data.cuit || null
+    if (data.condicionIva !== undefined) updateData.condicion_iva = data.condicionIva || null
+    if (data.ingresosBrutos !== undefined) updateData.ingresos_brutos = data.ingresosBrutos || null
+    if (data.condicionPago !== undefined) updateData.condicion_pago = data.condicionPago || null
+    if (data.diasPago !== undefined) updateData.dias_pago = data.diasPago ?? null
 
     const { data: proveedor, error: updateError } = await supabaseAdmin
       .from("proveedores")
@@ -123,6 +145,8 @@ export async function DELETE(
     if (error) return error
 
     const { id } = await params
+    const url = new URL(request.url)
+    const force = url.searchParams.get("force") === "1"
 
     // Verificar que el proveedor pertenece a la organización
     const { data: existingProveedor, error: fetchError } = await supabaseAdmin
@@ -137,6 +161,36 @@ export async function DELETE(
         { error: "Proveedor no encontrado" },
         { status: 404 }
       )
+    }
+
+    // Bloquear hard delete si tiene referencias salvo force=1.
+    // Inventario tiene ON DELETE SET NULL en proveedor_id, pero igual avisamos.
+    // Órdenes de compra: ON DELETE SET NULL. Avisamos también.
+    if (!force) {
+      const [{ count: invCount }, { count: ocCount }] = await Promise.all([
+        supabaseAdmin
+          .from("inventario")
+          .select("id", { count: "exact", head: true })
+          .eq("organization_id", organizationId!)
+          .eq("proveedor_id", id)
+          .is("deleted_at", null),
+        supabaseAdmin
+          .from("ordenes_compra")
+          .select("id", { count: "exact", head: true })
+          .eq("organization_id", organizationId!)
+          .eq("proveedor_id", id),
+      ])
+      if ((invCount || 0) > 0 || (ocCount || 0) > 0) {
+        return NextResponse.json(
+          {
+            error: "El proveedor tiene referencias",
+            productos: invCount || 0,
+            ordenes: ocCount || 0,
+            hint: "Usá archivar o reenviá con ?force=1",
+          },
+          { status: 409 }
+        )
+      }
     }
 
     const { error: deleteError } = await supabaseAdmin

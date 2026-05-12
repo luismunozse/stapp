@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useCallback, useEffect } from "react"
+import { useSearchParams, useRouter } from "next/navigation"
 import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -38,9 +39,12 @@ const ESTADO_BADGE: Record<string, { label: string; variant: "default" | "second
 }
 
 export function OrdenesCompraList() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const [estadoFilter, setEstadoFilter] = useState<string>("all")
   const [showForm, setShowForm] = useState(false)
   const [draftItems, setDraftItems] = useState<any[] | undefined>(undefined)
+  const [initialProveedorId, setInitialProveedorId] = useState<string | null>(null)
   const [recibirOC, setRecibirOC] = useState<OrdenCompra | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const { formatPrice, formatDate } = useCurrency()
@@ -56,6 +60,16 @@ export function OrdenesCompraList() {
       }
     } catch { /* ignore */ }
   }, [])
+
+  // Quick OC from proveedor card: ?nueva=1&proveedorId=...
+  useEffect(() => {
+    if (searchParams.get("nueva") === "1") {
+      setInitialProveedorId(searchParams.get("proveedorId"))
+      setShowForm(true)
+      // Limpiar query para que no re-abra al cerrar
+      router.replace("/ordenes-compra")
+    }
+  }, [searchParams, router])
 
   const params = new URLSearchParams()
   params.append("limit", "50")
@@ -169,9 +183,10 @@ export function OrdenesCompraList() {
   if (showForm) {
     return (
       <OrdenCompraForm
-        onClose={() => { setShowForm(false); setDraftItems(undefined) }}
-        onCreated={() => { setShowForm(false); setDraftItems(undefined); refresh() }}
+        onClose={() => { setShowForm(false); setDraftItems(undefined); setInitialProveedorId(null) }}
+        onCreated={() => { setShowForm(false); setDraftItems(undefined); setInitialProveedorId(null); refresh() }}
         initialItems={draftItems}
+        initialProveedorId={initialProveedorId}
       />
     )
   }

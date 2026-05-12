@@ -8,11 +8,13 @@ import { Badge } from "@/components/ui/badge"
 import { EmptyState } from "@/components/ui/empty-state"
 import {
   Plus, Search, Pencil, Trash2, ImageOff, Package, Wrench, GripVertical,
-  CheckSquare, Square, X, Eye, EyeOff, Star, FolderInput, Loader2,
+  CheckSquare, Square, X, Eye, EyeOff, Star, FolderInput, Loader2, Copy, MoreVertical,
+  Download, LayoutGrid, Rows3, AlertTriangle,
 } from "lucide-react"
 import { toast } from "sonner"
 import type { CatalogoItem, CatalogoCategoria } from "@/types/database"
 import { CatalogoItemDialog } from "./catalogo-item-dialog"
+import { CatalogoImportInventarioDialog } from "./catalogo-import-inventario-dialog"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
@@ -36,6 +38,9 @@ export function CatalogoItemsTab() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkLoading, setBulkLoading] = useState(false)
   const [bulkConfirm, setBulkConfirm] = useState<BulkAction | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
+  const [onlyMissingImage, setOnlyMissingImage] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -62,12 +67,14 @@ export function CatalogoItemsTab() {
     if (filterCategoria && it.categoria_id !== filterCategoria) return false
     if (filterEstado === "activo" && !it.activo) return false
     if (filterEstado === "inactivo" && it.activo) return false
+    if (onlyMissingImage && !!it.imagen_url) return false
     if (search && !it.nombre.toLowerCase().includes(search.toLowerCase())) return false
     return true
   })
 
-  const hasFilters = !!search || !!filterTipo || !!filterCategoria || !!filterEstado
-  const canReorder = !hasFilters && selected.size === 0
+  const sinImagenCount = items.filter((i) => !i.imagen_url && i.activo).length
+  const hasFilters = !!search || !!filterTipo || !!filterCategoria || !!filterEstado || onlyMissingImage
+  const canReorder = !hasFilters && selected.size === 0 && viewMode === "grid"
 
   const handleReorder = async (next: ItemConCategoria[]) => {
     setItems(next)
@@ -97,6 +104,19 @@ export function CatalogoItemsTab() {
       toast.error("Error al eliminar")
     }
     setDeleteId(null)
+  }
+
+  const handleDuplicate = async (id: string) => {
+    const t = toast.loading("Duplicando...")
+    try {
+      const res = await fetch(`/api/catalogo/items/${id}/duplicate`, { method: "POST" })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Error al duplicar")
+      toast.success("Item duplicado (inactivo)", { id: t })
+      await load()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al duplicar", { id: t })
+    }
   }
 
   const toggleSelect = (id: string, e?: React.MouseEvent) => {
@@ -195,11 +215,35 @@ export function CatalogoItemsTab() {
           <option value="activo">Solo activos</option>
           <option value="inactivo">Solo inactivos</option>
         </select>
+        <Button variant="outline" onClick={() => setImportOpen(true)} className="gap-1.5">
+          <Download className="h-4 w-4" />
+          <span className="hidden sm:inline">Importar inventario</span>
+          <span className="sm:hidden">Importar</span>
+        </Button>
         <Button onClick={() => setCreating(true)} className="gap-1.5">
           <Plus className="h-4 w-4" />
           Nuevo item
         </Button>
       </div>
+
+      {sinImagenCount > 0 && !onlyMissingImage && (
+        <div className="flex items-center justify-between gap-3 rounded-md border border-orange-200 bg-orange-50 dark:border-orange-900/40 dark:bg-orange-950/30 px-3 py-2 text-sm">
+          <div className="flex items-center gap-2 text-orange-700 dark:text-orange-200">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span>
+              {sinImagenCount} item{sinImagenCount > 1 ? "s" : ""} activo{sinImagenCount > 1 ? "s" : ""} sin foto. Convierten mejor con imagen.
+            </span>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setOnlyMissingImage(true)}
+            className="text-orange-700 dark:text-orange-200 hover:bg-orange-100 dark:hover:bg-orange-900/30"
+          >
+            Revisar
+          </Button>
+        </div>
+      )}
 
       {filtered.length > 0 && (
         <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -210,7 +254,40 @@ export function CatalogoItemsTab() {
             {allVisibleSelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
             {allVisibleSelected ? "Deseleccionar todo" : `Seleccionar ${filtered.length} visible${filtered.length > 1 ? "s" : ""}`}
           </button>
-          <span>{filtered.length} de {items.length} items</span>
+          <div className="flex items-center gap-3">
+            {onlyMissingImage && (
+              <button
+                onClick={() => setOnlyMissingImage(false)}
+                className="inline-flex items-center gap-1 text-orange-700 hover:text-orange-900 dark:text-orange-300"
+              >
+                <X className="h-3 w-3" />
+                Filtro "sin foto"
+              </button>
+            )}
+            <span>{filtered.length} de {items.length} items</span>
+            <div className="inline-flex rounded-md border bg-background p-0.5">
+              <button
+                onClick={() => setViewMode("grid")}
+                className={`h-6 w-6 inline-flex items-center justify-center rounded-sm transition-colors ${
+                  viewMode === "grid" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}
+                aria-label="Vista grilla"
+                title="Vista grilla"
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => setViewMode("list")}
+                className={`h-6 w-6 inline-flex items-center justify-center rounded-sm transition-colors ${
+                  viewMode === "list" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}
+                aria-label="Vista lista"
+                title="Vista lista"
+              >
+                <Rows3 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -233,6 +310,117 @@ export function CatalogoItemsTab() {
           description={items.length === 0 ? "Creá tu primer producto o servicio." : "Probá ajustar los filtros."}
           action={items.length === 0 ? { label: "Crear item", onClick: () => setCreating(true) } : undefined}
         />
+      ) : viewMode === "list" ? (
+        <div className="rounded-md border overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
+              <tr>
+                <th className="w-10 px-2 py-2"></th>
+                <th className="w-12 px-2 py-2"></th>
+                <th className="text-left px-2 py-2 font-medium">Nombre</th>
+                <th className="text-left px-2 py-2 font-medium hidden md:table-cell">Categoría</th>
+                <th className="text-right px-2 py-2 font-medium">Precio</th>
+                <th className="text-right px-2 py-2 font-medium hidden sm:table-cell">Stock</th>
+                <th className="text-center px-2 py-2 font-medium hidden sm:table-cell">Estado</th>
+                <th className="w-20 px-2 py-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((item) => {
+                const isSelected = selected.has(item.id)
+                return (
+                  <tr
+                    key={item.id}
+                    className={`border-t hover:bg-muted/30 transition-colors ${
+                      isSelected ? "bg-primary/5" : ""
+                    }`}
+                  >
+                    <td className="px-2 py-1.5">
+                      <button
+                        onClick={() => toggleSelect(item.id)}
+                        className={`h-5 w-5 rounded border-2 flex items-center justify-center ${
+                          isSelected ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40"
+                        }`}
+                        aria-label={isSelected ? "Deseleccionar" : "Seleccionar"}
+                      >
+                        {isSelected && <CheckSquare className="h-3 w-3" />}
+                      </button>
+                    </td>
+                    <td className="px-2 py-1.5">
+                      <div className="h-10 w-10 rounded bg-muted overflow-hidden flex items-center justify-center">
+                        {item.imagen_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={item.imagen_url} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <ImageOff className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-2 py-1.5">
+                      <div className="flex items-center gap-1.5">
+                        {item.tipo === "PRODUCTO" ? (
+                          <Package className="h-3 w-3 text-muted-foreground shrink-0" />
+                        ) : (
+                          <Wrench className="h-3 w-3 text-muted-foreground shrink-0" />
+                        )}
+                        <span className="font-medium truncate">{item.nombre}</span>
+                        {item.destacado && <Star className="h-3 w-3 fill-current text-amber-500 shrink-0" />}
+                      </div>
+                    </td>
+                    <td className="px-2 py-1.5 hidden md:table-cell text-muted-foreground truncate max-w-[140px]">
+                      {item.categoria?.nombre ?? "—"}
+                    </td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">
+                      {item.precio == null
+                        ? <span className="text-muted-foreground italic text-xs">Consultar</span>
+                        : `$${Number(item.precio).toLocaleString("es-AR")}`}
+                    </td>
+                    <td className="px-2 py-1.5 hidden sm:table-cell text-right tabular-nums">
+                      {item.tipo === "SERVICIO"
+                        ? <span className="text-muted-foreground text-xs">—</span>
+                        : item.stock == null
+                          ? <span className="text-muted-foreground text-xs">—</span>
+                          : item.stock === 0
+                            ? <span className="text-destructive">0</span>
+                            : item.stock}
+                    </td>
+                    <td className="px-2 py-1.5 hidden sm:table-cell text-center">
+                      {item.activo ? (
+                        <Badge variant="outline" className="text-xs">Activo</Badge>
+                      ) : (
+                        <Badge variant="secondary" className="text-xs">Inactivo</Badge>
+                      )}
+                    </td>
+                    <td className="px-2 py-1.5">
+                      <div className="flex gap-1 justify-end">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditing(item)}>
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-7 w-7">
+                              <MoreVertical className="h-3 w-3" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleDuplicate(item.id)}>
+                              <Copy className="h-3.5 w-3.5 mr-2" />
+                              Duplicar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setDeleteId(item.id)}>
+                              <Trash2 className="h-3.5 w-3.5 mr-2 text-destructive" />
+                              <span className="text-destructive">Eliminar</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
       ) : (
         <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((item, idx) => {
@@ -271,8 +459,13 @@ export function CatalogoItemsTab() {
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={item.imagen_url} alt={item.nombre} className="w-full h-full object-cover" />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+                    <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-muted-foreground">
                       <ImageOff className="h-8 w-8" />
+                      {item.activo && (
+                        <span className="text-[10px] uppercase tracking-wide font-medium text-orange-600 dark:text-orange-400">
+                          Falta foto
+                        </span>
+                      )}
                     </div>
                   )}
                   <Badge variant={item.tipo === "PRODUCTO" ? "default" : "secondary"} className="absolute bottom-2 left-2 gap-1">
@@ -311,9 +504,23 @@ export function CatalogoItemsTab() {
                       <Pencil className="h-3 w-3" />
                       Editar
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => setDeleteId(item.id)}>
-                      <Trash2 className="h-3 w-3 text-destructive" />
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" aria-label="Más acciones">
+                          <MoreVertical className="h-3 w-3" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleDuplicate(item.id)}>
+                          <Copy className="h-3.5 w-3.5 mr-2" />
+                          Duplicar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setDeleteId(item.id)}>
+                          <Trash2 className="h-3.5 w-3.5 mr-2 text-destructive" />
+                          <span className="text-destructive">Eliminar</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </CardContent>
               </Card>
@@ -413,6 +620,13 @@ export function CatalogoItemsTab() {
           onSaved={() => { load(); setCreating(false); setEditing(null) }}
         />
       )}
+
+      <CatalogoImportInventarioDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImported={load}
+        categorias={categorias}
+      />
 
       <ConfirmDialog
         open={!!deleteId}

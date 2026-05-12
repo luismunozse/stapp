@@ -4,6 +4,16 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { formatProveedor } from "@/lib/db-utils"
 import { z } from "zod"
 
+const CONDICION_IVA = [
+  "RESPONSABLE_INSCRIPTO",
+  "MONOTRIBUTO",
+  "EXENTO",
+  "NO_RESPONSABLE",
+  "CONSUMIDOR_FINAL",
+] as const
+
+const CONDICION_PAGO = ["CONTADO", "CTA_CTE", "TRANSFERENCIA", "CHEQUE", "OTRO"] as const
+
 const proveedorSchema = z.object({
   nombre: z.string().min(1, "El nombre es requerido"),
   telefono: z.string().optional(),
@@ -13,6 +23,12 @@ const proveedorSchema = z.object({
   website: z.string().url("URL inválida").optional().or(z.literal("")),
   notas: z.string().optional(),
   activo: z.boolean().optional().default(true),
+  razonSocial: z.string().optional(),
+  cuit: z.string().optional(),
+  condicionIva: z.enum(CONDICION_IVA).optional().or(z.literal("")),
+  ingresosBrutos: z.string().optional(),
+  condicionPago: z.enum(CONDICION_PAGO).optional().or(z.literal("")),
+  diasPago: z.number().int().min(0).max(365).optional().nullable(),
 })
 
 export async function GET() {
@@ -59,6 +75,12 @@ export async function POST(request: Request) {
         website: data.website || null,
         notas: data.notas || null,
         activo: data.activo,
+        razon_social: data.razonSocial || null,
+        cuit: data.cuit || null,
+        condicion_iva: data.condicionIva || null,
+        ingresos_brutos: data.ingresosBrutos || null,
+        condicion_pago: data.condicionPago || null,
+        dias_pago: data.diasPago ?? null,
         organization_id: organizationId!,
       })
       .select()

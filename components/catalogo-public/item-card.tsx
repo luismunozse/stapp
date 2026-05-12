@@ -1,7 +1,7 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { Plus, Star, Check } from "lucide-react"
+import { Plus, Star, Check, Heart } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { useState } from "react"
 
@@ -26,9 +26,11 @@ interface Props {
   onQuickAdd: () => void
   formatPrecio: (n: number) => string
   brandColor: string
+  isFav?: boolean
+  onToggleFav?: () => void
 }
 
-export function ItemCard({ item, onClick, onQuickAdd, formatPrecio, brandColor }: Props) {
+export function ItemCard({ item, onClick, onQuickAdd, formatPrecio, brandColor, isFav, onToggleFav }: Props) {
   const [added, setAdded] = useState(false)
   const agotado = item.stock_disponible === 0
   const sinPrecio = item.precio == null
@@ -77,6 +79,24 @@ export function ItemCard({ item, onClick, onQuickAdd, formatPrecio, brandColor }
               <Star className="h-3 w-3 fill-current" />
               Destacado
             </Badge>
+          )}
+          {onToggleFav && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                e.preventDefault()
+                onToggleFav()
+              }}
+              className={`absolute top-2 right-2 h-8 w-8 rounded-full backdrop-blur flex items-center justify-center transition-all ${
+                isFav
+                  ? "bg-white/95 text-rose-500"
+                  : "bg-background/70 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-rose-500"
+              }`}
+              aria-label={isFav ? "Quitar de favoritos" : "Agregar a favoritos"}
+            >
+              <Heart className={`h-4 w-4 transition-transform ${isFav ? "fill-current scale-110" : ""}`} />
+            </button>
           )}
           {agotado && (
             <div className="absolute inset-0 bg-background/60 flex items-center justify-center">

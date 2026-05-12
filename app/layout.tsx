@@ -170,12 +170,16 @@ export default async function RootLayout({
   const hostname = headersList.get("host") || ""
   const subdomain = extractSubdomain(hostname)
   const isTenant = !!subdomain && subdomain !== "admin"
+  // El catálogo público define su propio manifest por slug en /catalogo/[slug]/manifest.webmanifest
+  // (vía Metadata API). Evitamos inyectar el manifest STApp ahí para no duplicar.
+  const pathname = headersList.get("x-pathname") || headersList.get("next-url") || ""
+  const isCatalogPath = pathname.startsWith("/catalogo/")
 
   return (
     <html lang="es" suppressHydrationWarning>
       <head>
-        {/* Manifest solo en subdominios de tenant (PWA instalable) */}
-        {isTenant && <link rel="manifest" href="/manifest.json" />}
+        {/* Manifest solo en subdominios de tenant (PWA instalable), no en catálogo público */}
+        {isTenant && !isCatalogPath && <link rel="manifest" href="/manifest.json" />}
 
         {/* Open Search Description */}
         <link

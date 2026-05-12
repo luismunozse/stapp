@@ -17,7 +17,7 @@ import {
 import {
   Plus,
   Edit,
-  Trash2,
+  Archive,
   Phone,
   Mail,
   Globe,
@@ -26,10 +26,10 @@ import {
   Package,
   ShoppingCart,
   Calendar,
+  ArchiveRestore,
 } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { ProveedorForm } from "./proveedor-form"
-import { useModal } from "@/contexts/modal-context"
 import { useCurrency } from "@/contexts/currency-context"
 
 interface Proveedor {
@@ -42,6 +42,12 @@ interface Proveedor {
   website?: string | null
   notas?: string | null
   activo: boolean
+  razonSocial?: string | null
+  cuit?: string | null
+  condicionIva?: string | null
+  ingresosBrutos?: string | null
+  condicionPago?: string | null
+  diasPago?: number | null
   createdAt: string
   updatedAt: string
 }
@@ -65,7 +71,6 @@ function formatDate(iso: string | null | undefined) {
 }
 
 export function ProveedoresList() {
-  const { confirm } = useModal()
   const { formatPrice } = useCurrency()
   const [showForm, setShowForm] = useState(false)
   const [editingProveedor, setEditingProveedor] = useState<Proveedor | null>(null)
@@ -89,7 +94,7 @@ export function ProveedoresList() {
       if (estadoFilter === "activos" && !p.activo) return false
       if (estadoFilter === "inactivos" && p.activo) return false
       if (q) {
-        const hay = `${p.nombre} ${p.telefono || ""} ${p.email || ""} ${p.whatsapp || ""}`.toLowerCase()
+        const hay = `${p.nombre} ${p.razonSocial || ""} ${p.cuit || ""} ${p.telefono || ""} ${p.email || ""} ${p.whatsapp || ""}`.toLowerCase()
         if (!hay.includes(q)) return false
       }
       return true
@@ -116,20 +121,13 @@ export function ProveedoresList() {
     return out
   }, [proveedores, statsMap, search, estadoFilter, sortBy])
 
-  const handleDelete = async (id: string, nombre: string) => {
-    const s = statsMap[id]
-    const refs = (s?.productosCount || 0) + (s?.ordenesCount || 0)
-    const confirmed = await confirm({
-      title: "Eliminar proveedor",
-      description: refs > 0
-        ? `"${nombre}" tiene ${s?.productosCount || 0} productos y ${s?.ordenesCount || 0} órdenes asociadas. ¿Eliminar igualmente?`
-        : `¿Eliminar "${nombre}"? Esta acción no se puede deshacer.`,
-      confirmText: "Eliminar",
-      variant: "danger",
+  const handleToggleActivo = async (id: string, activo: boolean) => {
+    await fetch(`/api/proveedores/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ activo: !activo }),
     })
-    if (!confirmed) return
-    const res = await fetch(`/api/proveedores/${id}`, { method: "DELETE" })
-    if (res.ok) mutate()
+    mutate()
   }
 
   return (
@@ -217,8 +215,24 @@ export function ProveedoresList() {
                           <Badge variant="secondary" className="text-[10px] shrink-0">Inactivo</Badge>
                         )}
                       </CardTitle>
+                      {proveedor.cuit && (
+                        <div className="text-[11px] text-muted-foreground font-mono mt-0.5">
+                          CUIT {proveedor.cuit}
+                        </div>
+                      )}
                     </Link>
                     <div className="flex gap-1 shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        asChild
+                        title="Nueva orden de compra"
+                      >
+                        <Link href={`/ordenes-compra?nueva=1&proveedorId=${proveedor.id}`}>
+                          <ShoppingCart className="h-3.5 w-3.5" />
+                        </Link>
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -235,10 +249,14 @@ export function ProveedoresList() {
                         variant="ghost"
                         size="icon"
                         className="h-7 w-7"
-                        onClick={() => handleDelete(proveedor.id, proveedor.nombre)}
-                        title="Eliminar"
+                        onClick={() => handleToggleActivo(proveedor.id, proveedor.activo)}
+                        title={proveedor.activo ? "Archivar" : "Reactivar"}
                       >
-                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                        {proveedor.activo ? (
+                          <Archive className="h-3.5 w-3.5" />
+                        ) : (
+                          <ArchiveRestore className="h-3.5 w-3.5 text-emerald-600" />
+                        )}
                       </Button>
                     </div>
                   </div>

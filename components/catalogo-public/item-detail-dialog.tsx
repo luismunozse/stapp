@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from "react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Minus, ShoppingCart, Package, Wrench, MessageCircle, Star, Share2, ChevronLeft, ChevronRight } from "lucide-react"
+import { Plus, Minus, ShoppingCart, Package, Wrench, MessageCircle, Star, Share2, ChevronLeft, ChevronRight, Copy, Heart } from "lucide-react"
 import { toast } from "sonner"
 import type { CartItem } from "./use-cart"
 
@@ -34,6 +34,8 @@ interface Props {
   slug: string
   relatedItems: Item[]
   onSelectRelated: (id: string) => void
+  isFav?: boolean
+  onToggleFav?: () => void
 }
 
 export function ItemDetailDialog({
@@ -47,6 +49,8 @@ export function ItemDetailDialog({
   slug,
   relatedItems,
   onSelectRelated,
+  isFav,
+  onToggleFav,
 }: Props) {
   const [cantidad, setCantidad] = useState(1)
   const [imgIdx, setImgIdx] = useState(0)
@@ -97,25 +101,46 @@ export function ItemDetailDialog({
     })
   }
 
+  const itemUrl =
+    typeof window !== "undefined" ? `${window.location.origin}/catalogo/${slug}/${item.id}` : ""
+
+  const precioTexto = (() => {
+    if (item.precio == null) return "(consultar precio)"
+    const base = formatPrecio(Number(item.precio))
+    return item.precio_hasta != null ? `desde ${base}` : base
+  })()
+
+  const shareText = `Hola! Vi "${item.nombre}" ${precioTexto} en el catálogo: ${itemUrl}`
+
   const handleShare = async () => {
-    const url = `${window.location.origin}/catalogo/${slug}/${item.id}`
     if (navigator.share) {
       try {
-        await navigator.share({ title: item.nombre, url })
+        await navigator.share({ title: item.nombre, text: shareText, url: itemUrl })
       } catch { /* cancel */ }
       return
     }
     try {
-      await navigator.clipboard.writeText(url)
+      await navigator.clipboard.writeText(itemUrl)
       toast.success("Link copiado")
     } catch {
       toast.error("No se pudo copiar")
     }
   }
 
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(itemUrl)
+      toast.success("Link copiado")
+    } catch {
+      toast.error("No se pudo copiar")
+    }
+  }
+
+  const shareWhatsAppUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`
+
   const whatsappLink = whatsapp
     ? `https://wa.me/${whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(
-        `Hola! Vi "${item.nombre}" en su catálogo. Quería consultar más info.`
+        `Hola! Me interesa "${item.nombre}" ${precioTexto}. Link: ${itemUrl}`
       )}`
     : null
 
@@ -186,13 +211,45 @@ export function ItemDetailDialog({
             </>
           )}
 
-          <button
-            onClick={handleShare}
-            className="absolute top-2 right-2 h-9 w-9 rounded-full bg-background/80 backdrop-blur flex items-center justify-center hover:bg-background transition"
-            aria-label="Compartir"
-          >
-            <Share2 className="h-4 w-4" />
-          </button>
+          <div className="absolute top-2 right-2 flex gap-1.5">
+            {onToggleFav && (
+              <button
+                onClick={onToggleFav}
+                className={`h-9 w-9 rounded-full backdrop-blur flex items-center justify-center transition ${
+                  isFav ? "bg-white/95 text-rose-500" : "bg-background/80 hover:bg-background"
+                }`}
+                aria-label={isFav ? "Quitar de favoritos" : "Agregar a favoritos"}
+                title={isFav ? "Quitar de favoritos" : "Agregar a favoritos"}
+              >
+                <Heart className={`h-4 w-4 ${isFav ? "fill-current" : ""}`} />
+              </button>
+            )}
+            <a
+              href={shareWhatsAppUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="h-9 w-9 rounded-full bg-background/80 backdrop-blur flex items-center justify-center hover:bg-background transition"
+              aria-label="Compartir por WhatsApp"
+              title="Compartir por WhatsApp"
+            >
+              <MessageCircle className="h-4 w-4" />
+            </a>
+            <button
+              onClick={handleCopyLink}
+              className="h-9 w-9 rounded-full bg-background/80 backdrop-blur flex items-center justify-center hover:bg-background transition"
+              aria-label="Copiar link"
+              title="Copiar link del item"
+            >
+              <Copy className="h-4 w-4" />
+            </button>
+            <button
+              onClick={handleShare}
+              className="h-9 w-9 rounded-full bg-background/80 backdrop-blur flex items-center justify-center hover:bg-background transition"
+              aria-label="Compartir"
+            >
+              <Share2 className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         <div className="p-6 space-y-4">

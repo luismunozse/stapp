@@ -24,6 +24,11 @@ import {
   Calendar,
   Plus,
   AlertTriangle,
+  Calculator,
+  FileSpreadsheet,
+  TrendingDown,
+  TrendingUp,
+  ArrowLeftRight,
 } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { ProveedorForm } from "./proveedor-form"
@@ -40,8 +45,37 @@ interface Proveedor {
   website?: string | null
   notas?: string | null
   activo: boolean
+  razonSocial?: string | null
+  cuit?: string | null
+  condicionIva?: string | null
+  ingresosBrutos?: string | null
+  condicionPago?: string | null
+  diasPago?: number | null
   createdAt: string
   updatedAt: string
+}
+
+const CONDICION_IVA_LABEL: Record<string, string> = {
+  RESPONSABLE_INSCRIPTO: "Responsable Inscripto",
+  MONOTRIBUTO: "Monotributo",
+  EXENTO: "Exento",
+  NO_RESPONSABLE: "No Responsable",
+  CONSUMIDOR_FINAL: "Consumidor Final",
+}
+
+const CONDICION_PAGO_LABEL: Record<string, string> = {
+  CONTADO: "Contado",
+  CTA_CTE: "Cuenta corriente",
+  TRANSFERENCIA: "Transferencia",
+  CHEQUE: "Cheque",
+  OTRO: "Otro",
+}
+
+function pagoLabel(p?: Proveedor | null): string {
+  if (!p?.condicionPago) return "—"
+  const base = CONDICION_PAGO_LABEL[p.condicionPago] || p.condicionPago
+  if (p.diasPago != null && p.diasPago > 0) return `${base} · ${p.diasPago} días`
+  return base
 }
 
 interface Stats {
@@ -73,6 +107,27 @@ interface OrdenCompra {
   fechaEmision: string
   fechaRecepcionEsperada?: string | null
   total: number
+}
+
+interface ComparativaItem {
+  codigo: string
+  nombre: string
+  mine: {
+    itemId: string
+    precioCompra: number | null
+    precioVenta: number | null
+    stock: number
+  } | null
+  others: Array<{
+    proveedorId: string
+    proveedorNombre: string
+    itemId: string
+    precioCompra: number | null
+    precioVenta: number | null
+    stock: number
+  }>
+  minPrecioCompra: number | null
+  mineIsCheapest: boolean
 }
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
@@ -122,14 +177,33 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
   )
   const ordenes: OrdenCompra[] = ocResp?.data || []
 
+  const { data: comparativaResp } = useSWR<{ items: ComparativaItem[] }>(
+    `/api/proveedores/${proveedorId}/comparativa`,
+    fetcher,
+    { revalidateOnFocus: false }
+  )
+  const comparativa: ComparativaItem[] = comparativaResp?.items || []
+  const cheaperCount = comparativa.filter((c) => c.mine != null && !c.mineIsCheapest && c.minPrecioCompra != null && c.mine.precioCompra != null).length
+  const cheapestCount = comparativa.filter((c) => c.mineIsCheapest).length
+
   const handleDelete = async () => {
     if (!proveedor) return
+    const refs = (stats?.productosCount || 0) + (stats?.ordenesCount || 0)
+    if (refs > 0) {
+      const okForce = await confirm({
+        title: "Eliminar permanentemente",
+        description: `Este proveedor tiene ${stats?.productosCount || 0} productos y ${stats?.ordenesCount || 0} órdenes asociadas. Al eliminarlo se desvincularán (no se borran). ¿Continuar?`,
+        confirmText: "Eliminar igualmente",
+        variant: "danger",
+      })
+      if (!okForce) return
+      const res = await fetch(`/api/proveedores/${proveedorId}?force=1`, { method: "DELETE" })
+      if (res.ok) router.push("/proveedores")
+      return
+    }
     const ok = await confirm({
       title: "Eliminar proveedor",
-      description:
-        (stats?.productosCount || 0) + (stats?.ordenesCount || 0) > 0
-          ? `Este proveedor tiene ${stats?.productosCount || 0} productos y ${stats?.ordenesCount || 0} órdenes asociadas. ¿Eliminar igualmente?`
-          : "¿Estás seguro de eliminar este proveedor?",
+      description: "¿Eliminar este proveedor? Esta acción no se puede deshacer.",
       confirmText: "Eliminar",
       variant: "danger",
     })
@@ -187,6 +261,11 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
           </div>
         </div>
         <div className="flex gap-2 flex-wrap">
+          <Button size="sm" asChild>
+            <Link href={`/ordenes-compra?nueva=1&proveedorId=${proveedorId}`}>
+              <ShoppingCart className="h-4 w-4 mr-2" />Nueva OC
+            </Link>
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
             <Edit className="h-4 w-4 mr-2" />Editar
           </Button>
@@ -251,6 +330,7 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
           <TabsTrigger value="info">Información</TabsTrigger>
           <TabsTrigger value="productos">Productos ({stats?.productosCount ?? 0})</TabsTrigger>
           <TabsTrigger value="ordenes">Órdenes de compra ({stats?.ordenesCount ?? 0})</TabsTrigger>
+          <TabsTrigger value="comparativa">Comparativa ({comparativa.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="info" className="space-y-4">
@@ -306,6 +386,31 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
               )}
             </CardContent>
           </Card>
+
+          {(proveedor.razonSocial || proveedor.cuit || proveedor.condicionIva || proveedor.ingresosBrutos || proveedor.condicionPago || proveedor.diasPago != null) && (
+            <Card>
+              <CardContent className="p-4 sm:p-6 space-y-3">
+                <h3 className="font-semibold text-sm">Datos fiscales y condiciones</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                  {proveedor.razonSocial && (
+                    <FiscalField label="Razón social" value={proveedor.razonSocial} />
+                  )}
+                  {proveedor.cuit && (
+                    <FiscalField label="CUIT" value={proveedor.cuit} mono />
+                  )}
+                  {proveedor.condicionIva && (
+                    <FiscalField label="Condición IVA" value={CONDICION_IVA_LABEL[proveedor.condicionIva] || proveedor.condicionIva} />
+                  )}
+                  {proveedor.ingresosBrutos && (
+                    <FiscalField label="Ingresos Brutos" value={proveedor.ingresosBrutos} mono />
+                  )}
+                  {(proveedor.condicionPago || proveedor.diasPago != null) && (
+                    <FiscalField label="Condición de pago" value={pagoLabel(proveedor)} />
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {proveedor.notas && (
             <Card>
@@ -365,9 +470,19 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
               )}
             </CardContent>
           </Card>
-          <div className="mt-3 text-right">
+          <div className="mt-3 flex flex-wrap gap-2 justify-end">
             <Button variant="outline" size="sm" asChild>
               <Link href="/inventario">Ver inventario</Link>
+            </Button>
+            <Button variant="outline" size="sm" asChild disabled={inventario.length === 0}>
+              <Link href={`/proveedores/${proveedorId}/ajuste-precios`}>
+                <Calculator className="h-4 w-4 mr-1" />Ajuste masivo
+              </Link>
+            </Button>
+            <Button size="sm" asChild>
+              <Link href="/inventario/importar-precios">
+                <FileSpreadsheet className="h-4 w-4 mr-1" />Importar lista
+              </Link>
             </Button>
           </div>
         </TabsContent>
@@ -412,13 +527,128 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
               </Link>
             </Button>
             <Button size="sm" asChild>
-              <Link href={`/ordenes-compra`}>
+              <Link href={`/ordenes-compra?nueva=1&proveedorId=${proveedorId}`}>
                 <Plus className="h-4 w-4 mr-1" />Nueva OC
               </Link>
             </Button>
           </div>
         </TabsContent>
+
+        <TabsContent value="comparativa">
+          <Card>
+            <CardContent className="p-4 sm:p-6 space-y-3">
+              <div className="flex items-center gap-2 flex-wrap text-sm">
+                <ArrowLeftRight className="h-4 w-4 text-muted-foreground" />
+                <span className="font-semibold">Productos compartidos con otros proveedores:</span>
+                <Badge variant="outline">{comparativa.length}</Badge>
+                {cheapestCount > 0 && (
+                  <Badge variant="default" className="bg-emerald-600">
+                    <TrendingDown className="h-3 w-3 mr-1" />
+                    {cheapestCount} más baratos acá
+                  </Badge>
+                )}
+                {cheaperCount > 0 && (
+                  <Badge variant="destructive">
+                    <TrendingUp className="h-3 w-3 mr-1" />
+                    {cheaperCount} más caros acá
+                  </Badge>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Match por código de inventario. Sólo items presentes en ≥2 proveedores.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="mt-3">
+            <CardContent className="p-0">
+              {comparativa.length === 0 ? (
+                <div className="py-8 text-center text-sm text-muted-foreground">
+                  No hay productos compartidos con otros proveedores.
+                </div>
+              ) : (
+                <div className="overflow-auto">
+                  <table className="w-full text-xs sm:text-sm">
+                    <thead className="bg-muted/50 sticky top-0">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Código</th>
+                        <th className="px-3 py-2 text-left">Producto</th>
+                        <th className="px-3 py-2 text-right">Mi costo</th>
+                        <th className="px-3 py-2 text-left">Otros proveedores</th>
+                        <th className="px-3 py-2 text-right">Mejor precio</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {comparativa.map((c) => {
+                        const cheapest = c.mineIsCheapest
+                        const dif =
+                          c.mine?.precioCompra != null && c.minPrecioCompra != null && c.minPrecioCompra > 0
+                            ? ((c.mine.precioCompra - c.minPrecioCompra) / c.minPrecioCompra) * 100
+                            : null
+                        return (
+                          <tr key={c.codigo} className="border-t">
+                            <td className="px-3 py-2 font-mono text-[11px] whitespace-nowrap">{c.codigo}</td>
+                            <td className="px-3 py-2 max-w-[240px] truncate" title={c.nombre}>{c.nombre}</td>
+                            <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">
+                              {c.mine?.precioCompra != null ? (
+                                <span className={cheapest ? "text-emerald-600 font-semibold" : ""}>
+                                  {formatPrice(c.mine.precioCompra)}
+                                </span>
+                              ) : (
+                                "—"
+                              )}
+                              {dif != null && dif > 0 && (
+                                <span className="ml-1 text-[10px] text-red-500">+{dif.toFixed(0)}%</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2">
+                              <div className="flex flex-wrap gap-1.5">
+                                {c.others.map((o) => (
+                                  <span
+                                    key={o.itemId}
+                                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] border ${
+                                      o.precioCompra != null && o.precioCompra === c.minPrecioCompra
+                                        ? "border-emerald-500/50 bg-emerald-500/10"
+                                        : "border-muted-foreground/20 bg-muted/30"
+                                    }`}
+                                    title={o.proveedorNombre}
+                                  >
+                                    <Link
+                                      href={`/proveedores/${o.proveedorId}`}
+                                      className="hover:underline truncate max-w-[120px]"
+                                    >
+                                      {o.proveedorNombre}
+                                    </Link>
+                                    <span className="tabular-nums">
+                                      {o.precioCompra != null ? formatPrice(o.precioCompra) : "—"}
+                                    </span>
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap font-semibold text-emerald-700 dark:text-emerald-400">
+                              {c.minPrecioCompra != null ? formatPrice(c.minPrecioCompra) : "—"}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
+    </div>
+  )
+}
+
+function FiscalField({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div>
+      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className={mono ? "font-mono text-sm" : "text-sm"}>{value}</div>
     </div>
   )
 }
