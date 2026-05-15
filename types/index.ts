@@ -486,3 +486,59 @@ export interface ArqueoCaja {
   diferencia: number
 }
 
+// ============================================
+// Turnos / Agenda
+// ============================================
+export type TipoTurno =
+  | "visita_diagnostico"
+  | "reparacion_onsite"
+  | "retiro"
+  | "entrega"
+  | "mantenimiento"
+
+export type EstadoTurno =
+  | "agendado"
+  | "confirmado"
+  | "en_camino"
+  | "realizado"
+  | "orden_generada"
+  | "cancelado"
+  | "no_show"
+
+export interface ClienteSnapshot {
+  nombre: string
+  telefono: string
+  email?: string | null
+  direccion?: string | null
+  dni?: string | null
+}
+
+export interface Turno {
+  id: string
+  organizationId: string
+  clienteId: string | null
+  clienteSnapshot: ClienteSnapshot | null
+  tecnicoId: string | null
+  inicio: string
+  fin: string | null
+  direccion: string | null
+  tipo: TipoTurno
+  tipoDispositivo: string | null
+  marca: string | null
+  modelo: string | null
+  problemaReportado: string | null
+  fotosPrevias: string[]
+  estado: EstadoTurno
+  ordenId: string | null
+  notas: string | null
+  createdBy: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface TurnoConRelaciones extends Turno {
+  cliente?: { id: string; nombre: string; telefono: string } | null
+  tecnico?: { id: string; nombre: string } | null
+  orden?: { id: string; numeroOrden: number; codigoOrden: string | null } | null
+}
+

@@ -907,6 +907,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
               selectable
               selectedKeys={selectedKeys}
               onSelectionChange={setSelectedKeys}
+              onRowClick={(item) => setAnalyticsItem({ id: item.id, nombre: item.nombre })}
               rowClassName={(item) => {
                 const isArchived = !!item.deletedAt
                 const sinStock = item.stock === 0
@@ -932,7 +933,19 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                   const isArchived = !!item.deletedAt
 
                   return (
-                    <Card key={item.id} className={`overflow-hidden ${sinStock && !isArchived ? "border-destructive/30 bg-destructive/5" : ""} ${isArchived ? "opacity-50" : ""}`}>
+                    <Card
+                      key={item.id}
+                      className={`overflow-hidden cursor-pointer transition-shadow hover:shadow-md hover:border-primary/40 ${sinStock && !isArchived ? "border-destructive/30 bg-destructive/5" : ""} ${isArchived ? "opacity-50" : ""}`}
+                      onClick={() => setAnalyticsItem({ id: item.id, nombre: item.nombre })}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault()
+                          setAnalyticsItem({ id: item.id, nombre: item.nombre })
+                        }
+                      }}
+                    >
                       {/* Hero image */}
                       <div className="aspect-[16/9] w-full bg-muted/40 flex items-center justify-center border-b">
                         {item.imagenUrl ? (
@@ -984,7 +997,8 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                                 variant="ghost"
                                 size="icon"
                                 className="h-7 w-7"
-                                onClick={() => {
+                                onClick={(e) => {
+                                  e.stopPropagation()
                                   setEditingItem(item)
                                   setShowForm(true)
                                 }}
@@ -997,7 +1011,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                               size="icon"
                               className="h-7 w-7 text-muted-foreground hover:text-destructive"
                               title="Eliminar"
-                              onClick={() => handleDelete(item.id, item.nombre)}
+                              onClick={(e) => { e.stopPropagation(); handleDelete(item.id, item.nombre) }}
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
@@ -1080,7 +1094,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                             variant="ghost"
                             size="sm"
                             className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
-                            onClick={() => setAnalyticsItem({ id: item.id, nombre: item.nombre })}
+                            onClick={(e) => { e.stopPropagation(); setAnalyticsItem({ id: item.id, nombre: item.nombre }) }}
                           >
                             <TrendingUp className="mr-1 h-3 w-3" />
                             Analytics
@@ -1089,7 +1103,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                             variant="ghost"
                             size="sm"
                             className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
-                            onClick={() => setMovimientosItem({ id: item.id, nombre: item.nombre })}
+                            onClick={(e) => { e.stopPropagation(); setMovimientosItem({ id: item.id, nombre: item.nombre }) }}
                           >
                             <History className="mr-1 h-3 w-3" />
                             Movimientos

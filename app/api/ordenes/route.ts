@@ -43,6 +43,9 @@ const ordenSchema = z.object({
   sectorId: z.string().optional(),
   telefonoContacto: z.string().optional(),
   tecnicoId: z.string().optional(),
+  // Origen: turno previo (visita on-site agendada). Si viene, al crear la orden
+  // se vincula y el turno pasa a estado 'orden_generada' (trigger SQL).
+  fromTurnoId: z.string().optional(),
 })
 
 export async function GET(request: Request) {
@@ -248,6 +251,28 @@ export async function POST(request: Request) {
     const body = await request.json()
     const data = ordenSchema.parse(body)
 
+    // Si la orden se origina en un turno: validar que pertenece a la org y que
+    // todavía no fue vinculado a otra orden.
+    let turnoOrigen: { id: string; tecnico_id: string | null } | null = null
+    if (data.fromTurnoId) {
+      const { data: turnoCheck } = await supabaseAdmin
+        .from("turnos")
+        .select("id, organization_id, orden_id, tecnico_id")
+        .eq("id", data.fromTurnoId)
+        .eq("organization_id", organizationId!)
+        .maybeSingle()
+      if (!turnoCheck) {
+        return NextResponse.json({ error: "Turno origen no encontrado" }, { status: 400 })
+      }
+      if (turnoCheck.orden_id) {
+        return NextResponse.json(
+          { error: "Turno ya tiene orden generada" },
+          { status: 400 },
+        )
+      }
+      turnoOrigen = { id: turnoCheck.id, tecnico_id: turnoCheck.tecnico_id }
+    }
+
     // Obtener siguiente número de orden con prefijo por tipo de dispositivo
     const { codigo: codigoOrden, numero: numeroOrden } = await getNextOrderNumberByType(
       organizationId!,
@@ -316,6 +341,18 @@ export async function POST(request: Request) {
 
     if (dbError) {
       throw dbError
+    }
+
+    // Vincular turno origen (trigger SQL sincroniza estado a 'orden_generada')
+    if (turnoOrigen) {
+      const { error: linkError } = await supabaseAdmin
+        .from("turnos")
+        .update({ orden_id: orden.id })
+        .eq("id", turnoOrigen.id)
+        .eq("organization_id", organizationId!)
+      if (linkError) {
+        console.error("Error linking turno to orden:", linkError)
+      }
     }
 
     // Si hay seña, crear cobro_orden y actualizar total_cobrado

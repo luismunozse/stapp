@@ -965,9 +965,9 @@ export function InventarioForm({
             )}
           </div>
 
-          <div>
-            <Label htmlFor="ubicacion" className="flex items-center gap-1">
-              <MapPin className="h-3.5 w-3.5" />
+          <div className="space-y-1.5">
+            <Label htmlFor="ubicacion" className="flex items-center gap-1.5 text-sm font-medium">
+              <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
               Ubicación en depósito
             </Label>
             <Input
@@ -978,8 +978,11 @@ export function InventarioForm({
               placeholder="Ej: Rack 1 / Fila 2 / Columna 3"
               maxLength={200}
             />
+            <p className="text-xs text-muted-foreground">
+              Dónde está físicamente el repuesto en tu depósito.
+            </p>
             {errors.ubicacion && (
-              <p className="text-sm text-destructive mt-1">{errors.ubicacion.message}</p>
+              <p className="text-sm text-destructive">{errors.ubicacion.message}</p>
             )}
           </div>
 
