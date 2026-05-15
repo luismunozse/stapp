@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import useSWR from "swr"
 import {
   Dialog,
@@ -80,6 +80,18 @@ export function TurnoFormDialog({
   const [modelo, setModelo] = useState("")
   const [problemaReportado, setProblemaReportado] = useState("")
   const [notas, setNotas] = useState("")
+  // Recurrencia
+  const [recurrente, setRecurrente] = useState(false)
+  const [recFrecuencia, setRecFrecuencia] = useState<"diaria" | "semanal" | "mensual">("semanal")
+  const [recIntervalo, setRecIntervalo] = useState("1")
+  const [recTotal, setRecTotal] = useState("4")
+  // Disponibilidad
+  const [dispCheck, setDispCheck] = useState<null | {
+    disponible: boolean
+    fueraDeHorario: boolean
+    razonHorario?: string
+    conflictos: Array<{ id: string; inicio: string; clienteNombre: string | null }>
+  }>(null)
 
   const { data: tecnicosData } = useSWR<TecnicoOpt[] | { tecnicos?: TecnicoOpt[] }>(
     open ? "/api/tecnicos" : null,
@@ -107,6 +119,10 @@ export function TurnoFormDialog({
       setModelo(turno.modelo || "")
       setProblemaReportado(turno.problemaReportado || "")
       setNotas(turno.notas || "")
+      setRecurrente(false)
+      setRecFrecuencia("semanal")
+      setRecIntervalo("1")
+      setRecTotal("4")
     } else {
       setClienteId(null)
       setUsarSnapshot(false)
@@ -123,9 +139,35 @@ export function TurnoFormDialog({
       setModelo("")
       setProblemaReportado("")
       setNotas("")
+      setRecurrente(false)
+      setRecFrecuencia("semanal")
+      setRecIntervalo("1")
+      setRecTotal("4")
     }
     setError(null)
+    setDispCheck(null)
   }, [open, turno, defaultInicio])
+
+  // Check disponibilidad cuando hay técnico + inicio
+  useEffect(() => {
+    if (!tecnicoId || !inicio) {
+      setDispCheck(null)
+      return
+    }
+    let cancelled = false
+    const url = new URL("/api/turnos/disponibilidad", window.location.origin)
+    url.searchParams.set("tecnicoId", tecnicoId)
+    url.searchParams.set("inicio", new Date(inicio).toISOString())
+    if (fin) url.searchParams.set("fin", new Date(fin).toISOString())
+    if (turno?.id) url.searchParams.set("excludeTurnoId", turno.id)
+    const t = setTimeout(() => {
+      fetch(url.toString())
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (!cancelled && d) setDispCheck(d) })
+        .catch(() => {})
+    }, 300)
+    return () => { cancelled = true; clearTimeout(t) }
+  }, [tecnicoId, inicio, fin, turno?.id])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -165,6 +207,21 @@ export function TurnoFormDialog({
       }
     } else {
       payload.clienteId = clienteId
+    }
+
+    // Recurrencia (sólo al crear)
+    if (!isEdit && recurrente) {
+      const intervalo = parseInt(recIntervalo) || 1
+      const total = parseInt(recTotal) || 1
+      if (total < 2 || total > 52) {
+        setError("Total de ocurrencias debe estar entre 2 y 52")
+        return
+      }
+      payload.recurrencia = {
+        frecuencia: recFrecuencia,
+        intervalo,
+        total,
+      }
     }
 
     setSaving(true)
@@ -346,6 +403,81 @@ export function TurnoFormDialog({
               rows={2}
             />
           </div>
+
+          {/* Recurrencia (solo al crear) */}
+          {!isEdit && (
+            <div className="border-t pt-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={recurrente}
+                  onChange={(e) => setRecurrente(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300"
+                />
+                <span className="text-sm font-medium">Repetir (mantenimiento periódico)</span>
+              </label>
+              {recurrente && (
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  <div>
+                    <Label className="text-xs">Frecuencia</Label>
+                    <Select value={recFrecuencia} onValueChange={(v) => setRecFrecuencia(v as any)}>
+                      <SelectTrigger className="h-9">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="diaria">Diaria</SelectItem>
+                        <SelectItem value="semanal">Semanal</SelectItem>
+                        <SelectItem value="mensual">Mensual</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Cada</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      max="12"
+                      value={recIntervalo}
+                      onChange={(e) => setRecIntervalo(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Total ocurrencias</Label>
+                    <Input
+                      type="number"
+                      min="2"
+                      max="52"
+                      value={recTotal}
+                      onChange={(e) => setRecTotal(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Disponibilidad warning */}
+          {dispCheck && (dispCheck.conflictos.length > 0 || dispCheck.fueraDeHorario) && (
+            <div className="text-sm rounded p-2 border bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900 text-amber-900 dark:text-amber-200">
+              {dispCheck.fueraDeHorario && (
+                <p>⚠️ {dispCheck.razonHorario || "Fuera del horario laboral del técnico"}</p>
+              )}
+              {dispCheck.conflictos.length > 0 && (
+                <div className="mt-1">
+                  <p>⚠️ Conflicto con {dispCheck.conflictos.length} turno{dispCheck.conflictos.length !== 1 ? "s" : ""} del mismo técnico:</p>
+                  <ul className="list-disc list-inside text-xs mt-1">
+                    {dispCheck.conflictos.slice(0, 3).map((c) => (
+                      <li key={c.id}>
+                        {new Date(c.inicio).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })}
+                        {c.clienteNombre ? ` — ${c.clienteNombre}` : ""}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <p className="text-xs mt-1 opacity-80">Se puede guardar igualmente.</p>
+            </div>
+          )}
 
           {error && (
             <div className="text-sm text-red-600 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded p-2">

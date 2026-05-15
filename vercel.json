@@ -33,6 +33,10 @@
     {
       "path": "/api/cron/recordatorios",
       "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/cron/turnos-recordatorios",
+      "schedule": "0 * * * *"
     }
   ]
 }

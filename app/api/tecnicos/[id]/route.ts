@@ -26,6 +26,7 @@ export async function GET(
         fecha_ingreso_tecnico,
         porcentaje_comision,
         created_at,
+        horario_laboral,
         ordenes_servicio:ordenes_servicio!tecnico_id ( estado )
       `)
       .eq("id", id)
@@ -56,6 +57,7 @@ export async function GET(
       fechaIngresoTecnico: tecnico.fecha_ingreso_tecnico ?? null,
       porcentajeComision: Number(tecnico.porcentaje_comision ?? 0),
       createdAt: tecnico.created_at,
+      horarioLaboral: tecnico.horario_laboral ?? null,
       ordenesActivas,
       ordenesCompletadas,
     })
@@ -86,6 +88,7 @@ export async function PUT(
       telefono,
       especialidades,
       fechaIngresoTecnico,
+      horarioLaboral,
     } = body
 
     if (porcentajeComision !== undefined) {
@@ -146,12 +149,19 @@ export async function PUT(
       )
     }
     if (fechaIngresoTecnico !== undefined) updateData.fecha_ingreso_tecnico = fechaIngresoTecnico || null
+    if (horarioLaboral !== undefined) {
+      // Validación liviana: objeto con claves de día -> array de {de, a}
+      if (horarioLaboral !== null && typeof horarioLaboral !== "object") {
+        return NextResponse.json({ error: "horarioLaboral inválido" }, { status: 400 })
+      }
+      updateData.horario_laboral = horarioLaboral || null
+    }
 
     const { data: updatedTecnico, error: updateError } = await supabaseAdmin
       .from("users")
       .update(updateData)
       .eq("id", id)
-      .select("id, nombre, email, porcentaje_comision, telefono, especialidades, fecha_ingreso_tecnico, activo")
+      .select("id, nombre, email, porcentaje_comision, telefono, especialidades, fecha_ingreso_tecnico, activo, horario_laboral")
       .single()
 
     if (updateError) {

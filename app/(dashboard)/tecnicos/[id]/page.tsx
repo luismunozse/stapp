@@ -28,6 +28,7 @@ import { TecnicoComisiones } from "@/components/tecnicos/tecnico-comisiones"
 import { TecnicoInsights } from "@/components/tecnicos/tecnico-insights"
 import { TecnicoHistorial } from "@/components/tecnicos/tecnico-historial"
 import { ReasignarOrdenesDialog } from "@/components/tecnicos/reasignar-ordenes-dialog"
+import { HorarioLaboralEditor } from "@/components/tecnicos/horario-laboral-editor"
 import { useModal } from "@/contexts/modal-context"
 
 interface TecnicoDetalle {
@@ -43,6 +44,7 @@ interface TecnicoDetalle {
   createdAt: string
   ordenesActivas: number
   ordenesCompletadas: number
+  horarioLaboral?: Record<string, Array<{ de: string; a: string }>> | null
 }
 
 const formatDate = (dateStr: string) => {
@@ -363,6 +365,15 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
             readOnly={!isAdmin}
           />
         </div>
+      )}
+
+      {/* Horario laboral (sólo admin) */}
+      {isAdmin && (
+        <HorarioLaboralEditor
+          tecnicoId={tecnico.id}
+          initial={(tecnico.horarioLaboral as any) || null}
+          onSaved={fetchTecnico}
+        />
       )}
 
       {/* Historial */}

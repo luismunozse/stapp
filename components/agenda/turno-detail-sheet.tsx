@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Loader2, FileText, Pencil, Trash2, ExternalLink } from "lucide-react"
+import { Loader2, FileText, Pencil, Trash2, ExternalLink, Bell } from "lucide-react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import type { EstadoTurno, TipoTurno, TurnoConRelaciones } from "@/types"
@@ -119,6 +119,27 @@ export function TurnoDetailSheet({ open, onClose, turno, onChanged, onEdit }: Tu
 
   const handleGenerarOrden = () => {
     router.push(`/ordenes?fromTurno=${turno.id}`)
+  }
+
+  const handleReenviarConfirmacion = async () => {
+    if (busy) return
+    setError(null)
+    setBusy(true)
+    try {
+      const res = await fetch(`/api/turnos/${turno.id}/notificar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tipo: "confirmacion" }),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error || "Error al enviar")
+      }
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -261,6 +282,12 @@ export function TurnoDetailSheet({ open, onClose, turno, onChanged, onEdit }: Tu
               <Button variant="outline" onClick={() => onEdit(turno)} disabled={busy}>
                 <Pencil className="mr-2 h-4 w-4" />
                 Editar
+              </Button>
+            )}
+            {(turno.cliente?.telefono || turno.clienteSnapshot?.telefono) && (
+              <Button variant="outline" onClick={handleReenviarConfirmacion} disabled={busy}>
+                <Bell className="mr-2 h-4 w-4" />
+                Reenviar aviso
               </Button>
             )}
             {!tieneOrden && (

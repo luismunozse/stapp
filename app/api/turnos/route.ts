@@ -3,6 +3,7 @@ import { z } from "zod"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger } from "@/lib/audit"
+import { notifyTurno } from "@/lib/turnos/notifications"
 
 const clienteSnapshotSchema = z.object({
   nombre: z.string().min(1),
@@ -10,6 +11,12 @@ const clienteSnapshotSchema = z.object({
   email: z.string().email().nullable().optional(),
   direccion: z.string().nullable().optional(),
   dni: z.string().nullable().optional(),
+})
+
+const recurrenciaSchema = z.object({
+  frecuencia: z.enum(["diaria", "semanal", "mensual"]),
+  intervalo: z.number().int().min(1).max(12),
+  total: z.number().int().min(2).max(52),
 })
 
 const turnoCreateSchema = z.object({
@@ -32,10 +39,36 @@ const turnoCreateSchema = z.object({
   problemaReportado: z.string().optional(),
   fotosPrevias: z.array(z.string()).optional(),
   notas: z.string().optional(),
+  recurrencia: recurrenciaSchema.optional(),
 }).refine(
   (d) => d.clienteId || d.clienteSnapshot,
   { message: "Debe indicar clienteId o clienteSnapshot" },
 )
+
+function generarFechasRecurrencia(
+  inicio: Date,
+  fin: Date | null,
+  rec: { frecuencia: "diaria" | "semanal" | "mensual"; intervalo: number; total: number } | undefined,
+): Array<{ inicio: Date; fin: Date | null }> {
+  if (!rec) return [{ inicio, fin }]
+  const out: Array<{ inicio: Date; fin: Date | null }> = []
+  const duracionMs = fin ? fin.getTime() - inicio.getTime() : 0
+  for (let i = 0; i < rec.total; i++) {
+    const next = new Date(inicio)
+    if (rec.frecuencia === "diaria") {
+      next.setDate(next.getDate() + i * rec.intervalo)
+    } else if (rec.frecuencia === "semanal") {
+      next.setDate(next.getDate() + i * 7 * rec.intervalo)
+    } else if (rec.frecuencia === "mensual") {
+      next.setMonth(next.getMonth() + i * rec.intervalo)
+    }
+    out.push({
+      inicio: next,
+      fin: duracionMs > 0 ? new Date(next.getTime() + duracionMs) : null,
+    })
+  }
+  return out
+}
 
 function formatTurno(t: any) {
   return {
@@ -173,34 +206,51 @@ export async function POST(request: Request) {
       }
     }
 
-    const { data: turno, error: dbError } = await supabaseAdmin
+    // Generar lista de fechas (1 si no hay recurrencia, N si sí)
+    const fechas = generarFechasRecurrencia(
+      new Date(data.inicio),
+      data.fin ? new Date(data.fin) : null,
+      data.recurrencia,
+    )
+    const serieId = data.recurrencia ? crypto.randomUUID() : null
+
+    const rows = fechas.map((f, idx) => ({
+      organization_id: organizationId!,
+      cliente_id: data.clienteId || null,
+      cliente_snapshot: data.clienteSnapshot || null,
+      tecnico_id: tecnicoAsignadoId,
+      inicio: f.inicio.toISOString(),
+      fin: f.fin ? f.fin.toISOString() : null,
+      direccion: data.direccion || null,
+      tipo: data.tipo,
+      tipo_dispositivo: data.tipoDispositivo || null,
+      marca: data.marca || null,
+      modelo: data.modelo || null,
+      problema_reportado: data.problemaReportado || null,
+      fotos_previas: data.fotosPrevias || [],
+      notas: data.notas || null,
+      created_by: userId!,
+      serie_id: serieId,
+      // Sólo la primera fila guarda la config completa de recurrencia
+      recurrencia: idx === 0 && data.recurrencia ? data.recurrencia : null,
+    }))
+
+    const { data: insertados, error: dbError } = await supabaseAdmin
       .from("turnos")
-      .insert({
-        organization_id: organizationId!,
-        cliente_id: data.clienteId || null,
-        cliente_snapshot: data.clienteSnapshot || null,
-        tecnico_id: tecnicoAsignadoId,
-        inicio: data.inicio,
-        fin: data.fin || null,
-        direccion: data.direccion || null,
-        tipo: data.tipo,
-        tipo_dispositivo: data.tipoDispositivo || null,
-        marca: data.marca || null,
-        modelo: data.modelo || null,
-        problema_reportado: data.problemaReportado || null,
-        fotos_previas: data.fotosPrevias || [],
-        notas: data.notas || null,
-        created_by: userId!,
-      })
+      .insert(rows)
       .select(`
         *,
         clientes (id, nombre, telefono),
         users:tecnico_id (id, nombre),
         ordenes_servicio:orden_id (id, numero_orden, codigo_orden)
       `)
-      .single()
 
     if (dbError) throw dbError
+    if (!insertados || insertados.length === 0) {
+      throw new Error("No se pudo crear el turno")
+    }
+
+    const turno = insertados[0]
 
     const audit = createAuditLogger(organizationId!, userId!, request)
     await audit.create("turnos", turno.id, {
@@ -208,9 +258,23 @@ export async function POST(request: Request) {
       tecnico_id: turno.tecnico_id,
       cliente_id: turno.cliente_id,
       tipo: turno.tipo,
+      serie_total: insertados.length,
     })
 
-    return NextResponse.json(formatTurno(turno), { status: 201 })
+    // Notificación de confirmación al cliente (fire-and-forget)
+    // Para series sólo se notifica el primer turno; los recordatorios
+    // 24h cubren los demás.
+    notifyTurno(turno.id, "confirmacion").catch((e) => {
+      console.error("Error notifying turno confirmacion:", e)
+    })
+
+    return NextResponse.json(
+      {
+        ...formatTurno(turno),
+        serieTotal: insertados.length,
+      },
+      { status: 201 },
+    )
   } catch (err) {
     if (err instanceof z.ZodError) {
       return NextResponse.json({ error: err.errors[0].message }, { status: 400 })

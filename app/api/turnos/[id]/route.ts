@@ -3,6 +3,7 @@ import { z } from "zod"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger } from "@/lib/audit"
+import { notifyTurno } from "@/lib/turnos/notifications"
 
 const turnoPatchSchema = z.object({
   clienteId: z.string().min(1).nullable().optional(),
@@ -198,6 +199,18 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
 
     const audit = createAuditLogger(organizationId!, userId!, request)
     await audit.update("turnos", id, actual, turno)
+
+    // Notificaciones automáticas según cambios relevantes
+    const cambioInicio = data.inicio !== undefined && actual.inicio !== turno.inicio
+    const cambioEstadoCancelado = data.estado === "cancelado" && actual.estado !== "cancelado"
+    const cambioEstadoEnCamino = data.estado === "en_camino" && actual.estado !== "en_camino"
+    if (cambioInicio) {
+      notifyTurno(id, "reprogramado").catch((e) => console.error("notif reprog:", e))
+    } else if (cambioEstadoCancelado) {
+      notifyTurno(id, "cancelado").catch((e) => console.error("notif cancel:", e))
+    } else if (cambioEstadoEnCamino) {
+      notifyTurno(id, "tecnico_en_camino").catch((e) => console.error("notif camino:", e))
+    }
 
     return NextResponse.json(formatTurno(turno))
   } catch (err) {
