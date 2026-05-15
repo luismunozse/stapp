@@ -20,6 +20,7 @@ const inventarioSchema = z.object({
   stockMaximo: z.number().int().min(0).nullable().optional(),
   puntoReorden: z.number().int().min(0).nullable().optional(),
   barcode: z.string().nullable().optional(),
+  ubicacion: z.string().max(200).nullable().optional(),
 })
 
 export async function GET(
@@ -103,6 +104,10 @@ export async function PUT(
     if (data.stockMaximo !== undefined) updateData.stock_maximo = data.stockMaximo
     if (data.puntoReorden !== undefined) updateData.punto_reorden = data.puntoReorden
     if (data.barcode !== undefined) updateData.barcode = data.barcode
+    if (data.ubicacion !== undefined) {
+      const trimmed = (data.ubicacion ?? "").trim()
+      updateData.ubicacion = trimmed.length > 0 ? trimmed : null
+    }
 
     const { data: item, error: updateError } = await supabaseAdmin
       .from("inventario")

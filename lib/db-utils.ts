@@ -204,6 +204,7 @@ export function formatInventario(item: any) {
     stockMaximo: item.stock_maximo ?? null,
     puntoReorden: item.punto_reorden ?? null,
     barcode: item.barcode ?? null,
+    ubicacion: item.ubicacion ?? null,
     deletedAt: item.deleted_at ?? null,
     deletedBy: item.deleted_by ?? null,
     organizationId: item.organization_id,

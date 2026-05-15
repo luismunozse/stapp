@@ -179,6 +179,7 @@ export interface Inventario {
   stockMaximo?: number | null
   puntoReorden?: number | null
   barcode?: string | null
+  ubicacion?: string | null
   deletedAt?: string | null
   deletedBy?: string | null
 }

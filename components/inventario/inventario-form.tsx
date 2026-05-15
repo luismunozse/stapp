@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { X, ChevronDown, ChevronUp, Plus, Check, Loader2, ImagePlus, Trash2, Package, AlertTriangle, PlusCircle, Pencil } from "lucide-react"
+import { X, ChevronDown, ChevronUp, Plus, Check, Loader2, ImagePlus, Trash2, Package, AlertTriangle, PlusCircle, Pencil, MapPin } from "lucide-react"
 import type { Inventario } from "@/types"
 import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
 import { compressImage } from "@/lib/image-compression"
@@ -54,6 +54,7 @@ const inventarioSchema = z.object({
   stockMinimo: z.number().int().min(0).nullable().optional(),
   stockMaximo: z.number().int().min(0).nullable().optional(),
   puntoReorden: z.number().int().min(0).nullable().optional(),
+  ubicacion: z.string().max(200, "Máximo 200 caracteres").nullable().optional(),
   barcode: z
     .string()
     .nullable()
@@ -166,6 +167,7 @@ export function InventarioForm({
           stockMaximo: item.stockMaximo ?? null,
           puntoReorden: item.puntoReorden ?? null,
           barcode: item.barcode ?? null,
+          ubicacion: item.ubicacion ?? null,
         }
       : {
           nombre: "",
@@ -179,6 +181,7 @@ export function InventarioForm({
           stockMaximo: null,
           puntoReorden: null,
           barcode: initialBarcode ?? null,
+          ubicacion: null,
         },
   })
 
@@ -248,6 +251,7 @@ export function InventarioForm({
         stockMaximo: item.stockMaximo ?? null,
         puntoReorden: item.puntoReorden ?? null,
         barcode: item.barcode ?? null,
+        ubicacion: item.ubicacion ?? null,
       })
       setImagenPreview(item.imagenUrl || null)
       setPendingFile(null)
@@ -958,6 +962,24 @@ export function InventarioForm({
                   />
                 </div>
               </div>
+            )}
+          </div>
+
+          <div>
+            <Label htmlFor="ubicacion" className="flex items-center gap-1">
+              <MapPin className="h-3.5 w-3.5" />
+              Ubicación en depósito
+            </Label>
+            <Input
+              id="ubicacion"
+              {...register("ubicacion", {
+                setValueAs: (v: string) => v === "" || v === null ? null : v,
+              })}
+              placeholder="Ej: Rack 1 / Fila 2 / Columna 3"
+              maxLength={200}
+            />
+            {errors.ubicacion && (
+              <p className="text-sm text-destructive mt-1">{errors.ubicacion.message}</p>
             )}
           </div>
 

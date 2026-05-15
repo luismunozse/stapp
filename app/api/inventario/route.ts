@@ -21,6 +21,7 @@ const inventarioSchema = z.object({
   stockMaximo: z.number().int().min(0).nullable().optional(),
   puntoReorden: z.number().int().min(0).nullable().optional(),
   barcode: z.string().nullable().optional(),
+  ubicacion: z.string().max(200).nullable().optional(),
 })
 
 export async function GET(request: Request) {
@@ -59,7 +60,7 @@ export async function GET(request: Request) {
     let query = supabaseAdmin
       .from("inventario")
       .select(
-        "id, codigo, nombre, descripcion, categoria, tipo_dispositivo, stock, stock_reservado, precio_compra, precio_venta, proveedor, proveedor_id, imagen_url, imagen_path, stock_minimo, stock_maximo, punto_reorden, deleted_at, deleted_by, created_at, proveedores:proveedor_id(id, nombre)",
+        "id, codigo, nombre, descripcion, categoria, tipo_dispositivo, stock, stock_reservado, precio_compra, precio_venta, proveedor, proveedor_id, imagen_url, imagen_path, stock_minimo, stock_maximo, punto_reorden, ubicacion, deleted_at, deleted_by, created_at, proveedores:proveedor_id(id, nombre)",
         { count: "exact" }
       )
       .eq("organization_id", organizationId!)
@@ -170,6 +171,7 @@ export async function POST(request: Request) {
           stock_maximo: data.stockMaximo ?? null,
           punto_reorden: data.puntoReorden ?? null,
           barcode: data.barcode ?? null,
+          ubicacion: data.ubicacion?.trim() || null,
           organization_id: organizationId!,
         })
         .select("*, proveedores:proveedor_id(id, nombre)")

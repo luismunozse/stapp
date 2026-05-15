@@ -29,6 +29,7 @@ import {
   Trash2,
   X,
   MoreHorizontal,
+  MapPin,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -1013,6 +1014,12 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                           </Badge>
                           {item.proveedor && (
                             <span className="text-[10px] text-muted-foreground truncate">{item.proveedor}</span>
+                          )}
+                          {item.ubicacion && (
+                            <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground truncate" title={item.ubicacion}>
+                              <MapPin className="h-2.5 w-2.5" />
+                              {item.ubicacion}
+                            </span>
                           )}
                         </div>
 
