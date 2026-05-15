@@ -21,7 +21,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import { OrdenForm } from "./orden-form"
 import { CobrarMultipleDialog } from "./cobrar-multiple-dialog"
 import { useModal } from "@/contexts/modal-context"
@@ -91,12 +91,20 @@ const SEARCH_PLACEHOLDERS = [
 
 export function OrdenesList() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const pathname = usePathname()
   const { formatPrice, formatDate } = useCurrency()
   const { data: session } = useSession()
   const isTecnico = session?.user?.role === "TECNICO"
   const [showForm, setShowForm] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
   const { confirm, showError } = useModal()
+
+  // Si llega ?fromTurno=<id>, abrir form de creación con prefill desde turno
+  const fromTurnoId = searchParams?.get("fromTurno") || null
+  useEffect(() => {
+    if (fromTurnoId) setShowForm(true)
+  }, [fromTurnoId])
 
   // Placeholder rotativo cada 3 segundos
   const [placeholderIdx, setPlaceholderIdx] = useState(0)
@@ -781,10 +789,15 @@ export function OrdenesList() {
       {/* Form Modal */}
       {showForm && (
         <OrdenForm
-          onClose={() => setShowForm(false)}
+          fromTurnoId={fromTurnoId || undefined}
+          onClose={() => {
+            setShowForm(false)
+            if (fromTurnoId) router.replace(pathname)
+          }}
           onSuccess={() => {
             setShowForm(false)
-            mutate() // Revalidar datos con SWR
+            if (fromTurnoId) router.replace(pathname)
+            mutate()
           }}
         />
       )}

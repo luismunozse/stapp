@@ -76,6 +76,7 @@ type OrdenFormData = z.infer<typeof ordenSchema>
 interface OrdenFormProps {
   onClose: () => void
   onSuccess: () => void
+  fromTurnoId?: string
 }
 
 interface OrdenCreadaData {
@@ -110,7 +111,7 @@ interface OrdenCreadaData {
   organizationComprobanteTerminos?: string | null
 }
 
-export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
+export function OrdenForm({ onClose, onSuccess, fromTurnoId }: OrdenFormProps) {
   const { offlineFetch } = useOffline()
   const { data: session } = useSession()
   const isTecnicoRole = session?.user?.role === "TECNICO"
@@ -141,6 +142,11 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
   const [checklistOpen, setChecklistOpen] = useState(true)
   const [currentStep, setCurrentStep] = useState(1)
   const totalSteps = 3
+  // Prefill desde turno
+  const [turnoPrefill, setTurnoPrefill] = useState<null | {
+    requiereCrearCliente: boolean
+    clienteSnapshot: { nombre: string; telefono: string; email?: string | null } | null
+  }>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const { tipos: tiposDispositivo, loading: tiposLoading } = useTiposDispositivo()
@@ -170,6 +176,46 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
   })
 
   const tipoDispositivo = watch("tipoDispositivo")
+
+  // Prefill desde turno (si la orden nace de una visita agendada)
+  useEffect(() => {
+    if (!fromTurnoId) return
+    let cancelled = false
+    fetch(`/api/turnos/${fromTurnoId}/prefill-orden`, { cache: "no-store" })
+      .then(async (r) => {
+        if (!r.ok) {
+          const j = await r.json().catch(() => ({}))
+          throw new Error(j.error || "No se pudo cargar el turno")
+        }
+        return r.json()
+      })
+      .then((d) => {
+        if (cancelled) return
+        setTurnoPrefill({
+          requiereCrearCliente: !!d.requiereCrearCliente,
+          clienteSnapshot: d.clienteSnapshot || null,
+        })
+        if (d.cliente) {
+          setSelectedClienteObj(d.cliente)
+          setValue("clienteId", d.cliente.id, { shouldValidate: true })
+        }
+        if (d.orden?.tipoDispositivo) setValue("tipoDispositivo", d.orden.tipoDispositivo)
+        if (d.orden?.dispositivo) setValue("dispositivo", d.orden.dispositivo)
+        if (d.orden?.marca) setValue("marca", d.orden.marca)
+        if (d.orden?.problemaReportado) setValue("problemaReportado", d.orden.problemaReportado)
+        if (d.orden?.observaciones) setValue("observaciones", d.orden.observaciones)
+        if (d.orden?.telefonoContacto) setValue("telefonoContacto", d.orden.telefonoContacto)
+        if (d.orden?.tecnicoId) setSelectedTecnicoId(d.orden.tecnicoId)
+        if (d.orden?.fechaPrometida) {
+          setValue("fechaPrometida", String(d.orden.fechaPrometida).slice(0, 10))
+        }
+      })
+      .catch((err) => {
+        alert(err.message || "Error al cargar datos del turno")
+      })
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fromTurnoId])
 
   // Get the selected tipo object and its config
   const tipoSeleccionado = useMemo(
@@ -546,6 +592,7 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
         metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
         sectorId: selectedSectorId || undefined,
         tecnicoId: !isTecnicoRole && selectedTecnicoId ? selectedTecnicoId : undefined,
+        fromTurnoId: fromTurnoId || undefined,
       }
 
       const res = await offlineFetch("/api/ordenes", {
@@ -671,6 +718,28 @@ export function OrdenForm({ onClose, onSuccess }: OrdenFormProps) {
         </div>
       </CardHeader>
       <CardContent>
+        {fromTurnoId && (
+          <div className="mb-4 p-3 rounded-lg border border-primary/30 bg-primary/5">
+            <p className="text-sm font-medium">Origen: turno agendado</p>
+            <p className="text-xs text-muted-foreground">
+              Los datos se cargaron desde el turno. Revisalos antes de crear la orden.
+            </p>
+            {turnoPrefill?.requiereCrearCliente && turnoPrefill.clienteSnapshot && (
+              <div className="mt-2 p-2 rounded bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900">
+                <p className="text-xs text-amber-900 dark:text-amber-200 font-medium">
+                  Este turno usa un cliente sin registrar.
+                </p>
+                <p className="text-xs text-amber-800 dark:text-amber-300 mt-1">
+                  Datos: <strong>{turnoPrefill.clienteSnapshot.nombre}</strong> · {turnoPrefill.clienteSnapshot.telefono}
+                  {turnoPrefill.clienteSnapshot.email ? ` · ${turnoPrefill.clienteSnapshot.email}` : ""}
+                </p>
+                <p className="text-xs text-amber-800 dark:text-amber-300 mt-1">
+                  Creá primero el cliente con estos datos usando el botón <strong>+</strong> al lado del buscador de cliente.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
         <form onSubmit={(e) => {
           e.preventDefault()
           if (currentStep < totalSteps) {

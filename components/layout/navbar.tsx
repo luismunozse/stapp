@@ -36,6 +36,7 @@ import {
   Truck,
   Percent,
   BookMarked,
+  CalendarDays,
 } from "lucide-react"
 import { useState, useEffect, useRef, useCallback } from "react"
 import { cn } from "@/lib/utils"
@@ -58,7 +59,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
 
-type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; roles?: string[] }
+type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; roles?: string[]; featureFlag?: "moduloAgenda" }
 
 type NavSection = { label: string; items: NavItem[] }
 
@@ -66,6 +67,7 @@ type NavSection = { label: string; items: NavItem[] }
 const navItems: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/ordenes", label: "Órdenes", icon: ClipboardList },
+  { href: "/agenda", label: "Agenda", icon: CalendarDays, featureFlag: "moduloAgenda" },
   { href: "/clientes", label: "Clientes", icon: Users, roles: ["ADMIN", "VENDEDOR", "TECNICO"] },
   { href: "/tecnicos", label: "Técnicos", icon: Wrench, roles: ["ADMIN"] },
   { href: "/tecnicos", label: "Mi desempeño", icon: TrendingUp, roles: ["TECNICO"] },
@@ -94,6 +96,7 @@ const navSections: NavSection[] = [
     items: [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/ordenes", label: "Órdenes", icon: ClipboardList },
+      { href: "/agenda", label: "Agenda", icon: CalendarDays, featureFlag: "moduloAgenda" },
       { href: "/clientes", label: "Clientes", icon: Users, roles: ["ADMIN", "VENDEDOR", "TECNICO"] },
       { href: "/inventario", label: "Inventario", icon: Package, roles: ["ADMIN"] },
       { href: "/ventas", label: "Ventas / POS", icon: ShoppingCart, roles: ["ADMIN", "VENDEDOR"] },
@@ -154,6 +157,26 @@ export function Navbar() {
   // disparado desde /perfil después de un cambio.
   const [liveName, setLiveName] = useState<string | null>(null)
   const [liveAvatar, setLiveAvatar] = useState<string | null>(null)
+  const [orgFeatures, setOrgFeatures] = useState<{ moduloAgenda: boolean }>({
+    moduloAgenda: false,
+  })
+
+  useEffect(() => {
+    let cancelled = false
+    fetch("/api/org/features", { cache: "no-store" })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (cancelled || !d) return
+        setOrgFeatures({ moduloAgenda: !!d.moduloAgenda })
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+
+  const isFeatureEnabled = useCallback((flag?: NavItem["featureFlag"]) => {
+    if (!flag) return true
+    return !!orgFeatures[flag]
+  }, [orgFeatures])
 
   useEffect(() => {
     let cancelled = false
@@ -201,7 +224,9 @@ export function Navbar() {
   }, [mobileMenuOpen])
 
   const allNavItems = [
-    ...navItems.filter(item => !item.roles || item.roles.includes(userRole)),
+    ...navItems.filter(item =>
+      (!item.roles || item.roles.includes(userRole)) && isFeatureEnabled(item.featureFlag),
+    ),
     ...(userRole === "ADMIN" || userRole === "VENDEDOR" ? [
       { href: "/proveedores", label: "Proveedores", icon: Store }
     ] : []),
@@ -210,10 +235,12 @@ export function Navbar() {
     ] : [])
   ]
 
-  // Build grouped sections filtered by role, adding Proveedores and Configuración to Gestión
+  // Build grouped sections filtered by role + feature flags
   const filteredSections = navSections.map(section => ({
     ...section,
-    items: section.items.filter(item => !item.roles || item.roles.includes(userRole)),
+    items: section.items.filter(item =>
+      (!item.roles || item.roles.includes(userRole)) && isFeatureEnabled(item.featureFlag),
+    ),
   })).filter(section => section.items.length > 0)
 
   // Add extra items to "Más" section

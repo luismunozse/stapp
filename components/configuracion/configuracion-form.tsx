@@ -52,6 +52,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
   const [garantiaDiasDefault, setGarantiaDiasDefault] = useState("30")
   const [politicaAbandonoDiasDefault, setPoliticaAbandonoDiasDefault] = useState("60")
   const [anticipoPorcentajeDefault, setAnticipoPorcentajeDefault] = useState("50")
+  const [moduloAgenda, setModuloAgenda] = useState(false)
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -82,6 +83,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
         setGarantiaDiasDefault(String(data.garantiaDiasDefault ?? 30))
         setPoliticaAbandonoDiasDefault(String(data.politicaAbandonoDiasDefault ?? 60))
         setAnticipoPorcentajeDefault(String(data.anticipoPorcentajeDefault ?? 50))
+        setModuloAgenda(!!data.moduloAgenda)
         // Usar logoUrl si existe, o logoData para compatibilidad
         if (data.logoUrl) {
           setPreview(data.logoUrl)
@@ -166,7 +168,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
       const res = await fetch("/api/configuracion", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais }),
+        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda }),
       })
 
       if (res.ok) {
@@ -462,6 +464,34 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
               Se utilizara en toda la app, PDFs y notificaciones
             </p>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="text-base sm:text-lg">Módulos opcionales</CardTitle>
+          <CardDescription className="text-xs sm:text-sm">
+            Activá funcionalidades específicas según tu rubro.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-4 sm:p-6 pt-0">
+          <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors">
+            <input
+              type="checkbox"
+              checked={moduloAgenda}
+              onChange={(e) => setModuloAgenda(e.target.checked)}
+              disabled={!allowEdit}
+              className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+            />
+            <div className="flex-1">
+              <div className="text-sm font-medium">Agenda de turnos</div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                Para servicios on-site (gastronomía, refrigeración, heladería, fabricadoras de helado).
+                Permite agendar visitas, retiros y entregas antes de crear la orden.
+                Al activarse, aparece la sección <strong>Agenda</strong> en el menú.
+              </div>
+            </div>
+          </label>
         </CardContent>
       </Card>
 

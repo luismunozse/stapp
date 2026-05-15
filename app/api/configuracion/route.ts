@@ -39,7 +39,8 @@ export async function GET() {
         garantia_dias_default,
         politica_abandono_dias_default,
         anticipo_porcentaje_default,
-        pais
+        pais,
+        modulo_agenda
       `)
       .eq("id", organizationId!)
       .single()
@@ -92,6 +93,7 @@ export async function GET() {
       politicaAbandonoDiasDefault: organization.politica_abandono_dias_default ?? 60,
       anticipoPorcentajeDefault: organization.anticipo_porcentaje_default ?? 50,
       pais: organization.pais || "AR",
+      moduloAgenda: !!organization.modulo_agenda,
     })
   } catch (error) {
     console.error("Error fetching config:", error)
@@ -115,7 +117,7 @@ export async function PUT(request: Request) {
         { status: 413 }
       )
     }
-    const { logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais } = body
+    const { logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda } = body
 
     const updateData: Record<string, any> = {}
 
@@ -248,7 +250,11 @@ export async function PUT(request: Request) {
       updateData.pais = pais
     }
 
-    const selectCols = "id, logo_url, logo_path, nombre_mostrar, telefono, direccion, ciudad, provincia, codigo_postal, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, garantia_dias_default, politica_abandono_dias_default, anticipo_porcentaje_default, pais"
+    if (moduloAgenda !== undefined) {
+      updateData.modulo_agenda = !!moduloAgenda
+    }
+
+    const selectCols = "id, logo_url, logo_path, nombre_mostrar, telefono, direccion, ciudad, provincia, codigo_postal, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, garantia_dias_default, politica_abandono_dias_default, anticipo_porcentaje_default, pais, modulo_agenda"
     const selectColsFull = selectCols + ", recepcion_terminos, comprobante_terminos"
 
     // Solo actualizar si hay cambios
@@ -282,6 +288,7 @@ export async function PUT(request: Request) {
         politicaAbandonoDiasDefault: org?.politica_abandono_dias_default ?? 60,
         anticipoPorcentajeDefault: org?.anticipo_porcentaje_default ?? 50,
         pais: org?.pais || "AR",
+        moduloAgenda: !!org?.modulo_agenda,
       })
     }
 
@@ -336,6 +343,7 @@ export async function PUT(request: Request) {
       politicaAbandonoDiasDefault: organization.politica_abandono_dias_default ?? 60,
       anticipoPorcentajeDefault: organization.anticipo_porcentaje_default ?? 50,
       pais: organization.pais || "AR",
+      moduloAgenda: !!organization.modulo_agenda,
     })
   } catch (error: any) {
     console.error("Error updating config:", error)
