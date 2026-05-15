@@ -191,9 +191,10 @@ export async function GET(request: Request) {
         `imei.ilike.%${search}%`,
       ]
 
-      // Si el search es numérico, buscar por numero_orden exacto
+      // Si el search es numérico y entra en rango INT32, buscar por numero_orden exacto.
+      // Evita errores de PostgREST cuando se buscan IMEIs/seriales largos.
       const searchNum = parseInt(search, 10)
-      if (!isNaN(searchNum)) {
+      if (!isNaN(searchNum) && searchNum >= 0 && searchNum <= 2147483647 && /^\d+$/.test(search)) {
         filters.push(`numero_orden.eq.${searchNum}`)
       }
 
