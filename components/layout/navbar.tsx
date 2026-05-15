@@ -163,14 +163,22 @@ export function Navbar() {
 
   useEffect(() => {
     let cancelled = false
-    fetch("/api/org/features", { cache: "no-store" })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => {
-        if (cancelled || !d) return
-        setOrgFeatures({ moduloAgenda: !!d.moduloAgenda })
-      })
-      .catch(() => {})
-    return () => { cancelled = true }
+    const loadFeatures = () => {
+      fetch("/api/org/features", { cache: "no-store" })
+        .then(r => r.ok ? r.json() : null)
+        .then(d => {
+          if (cancelled || !d) return
+          setOrgFeatures({ moduloAgenda: !!d.moduloAgenda })
+        })
+        .catch(() => {})
+    }
+    loadFeatures()
+    const onUpdated = () => loadFeatures()
+    window.addEventListener("stapp:org-features-updated", onUpdated)
+    return () => {
+      cancelled = true
+      window.removeEventListener("stapp:org-features-updated", onUpdated)
+    }
   }, [])
 
   const isFeatureEnabled = useCallback((flag?: NavItem["featureFlag"]) => {

@@ -174,6 +174,11 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
       if (res.ok) {
         setMessage({ type: "success", text: "Configuración guardada exitosamente" })
         fetchConfig()
+        // Notificar al sidebar que las features de la org cambiaron
+        // (ej: activar/desactivar módulo agenda muestra/oculta el item del menú)
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("stapp:org-features-updated"))
+        }
       } else {
         const error = await res.json()
         setMessage({ type: "error", text: error.error || "Error al guardar" })
