@@ -1156,6 +1156,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             numeroOrden: orden.numeroOrden,
             codigoOrden: orden.codigoOrden,
             dispositivo: orden.dispositivo,
+            estado: orden.estado,
             cliente: {
               nombre: orden.cliente?.nombre || "Sin nombre",
               telefono: orden.cliente?.telefono || "",

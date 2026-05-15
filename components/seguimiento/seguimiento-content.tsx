@@ -54,6 +54,15 @@ import {
 } from "lucide-react"
 import { getSupabaseClient } from "@/lib/supabase-client"
 import type { RealtimeChannel } from "@supabase/supabase-js"
+import {
+  classifyEstado,
+  shouldShowTimeRemaining,
+  getTimeRemaining as computeTimeRemaining,
+  getRetiroStepper,
+  getRetiroLabel,
+  ESTADO_FLOW,
+} from "@/lib/seguimiento-state"
+import { ShieldCheck, ThumbsDown } from "lucide-react"
 
 // Lazy load enhanced components
 const VisualTimeline = dynamic(
@@ -147,15 +156,7 @@ const estadoIcons: Record<string, typeof Smartphone> = {
   ENTREGADO_SIN_COBRO: Truck,
 }
 
-const estadoFlow = [
-  "RECIBIDO",
-  "EN_DIAGNOSTICO",
-  "PRESUPUESTADO",
-  "APROBADO",
-  "EN_REPARACION",
-  "REPARADO",
-  "ENTREGADO",
-]
+const estadoFlow = ESTADO_FLOW
 
 const estadoShortLabels: Record<string, string> = {
   RECIBIDO: "Recibido",
@@ -217,6 +218,7 @@ interface TrackingData {
   marca?: string
   color?: string
   estado: string
+  motivoSinCobro?: string | null
   problemaReportado: string
   diagnostico?: string | null
   accesorios?: string
@@ -269,18 +271,6 @@ interface TrackingData {
   }
 }
 
-function getTimeRemaining(fechaPrometida: string): { text: string; urgency: "normal" | "soon" | "overdue" } | null {
-  const now = new Date()
-  const target = new Date(fechaPrometida)
-  const diffMs = target.getTime() - now.getTime()
-  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
-
-  if (diffDays < 0) return { text: `${Math.abs(diffDays)} día${Math.abs(diffDays) !== 1 ? "s" : ""} de atraso`, urgency: "overdue" }
-  if (diffDays === 0) return { text: "Hoy", urgency: "soon" }
-  if (diffDays === 1) return { text: "Mañana", urgency: "soon" }
-  if (diffDays <= 3) return { text: `${diffDays} días`, urgency: "soon" }
-  return { text: `${diffDays} días`, urgency: "normal" }
-}
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export function SeguimientoContent({ token }: { token: string }) {
@@ -399,13 +389,8 @@ export function SeguimientoContent({ token }: { token: string }) {
   }
 
   const DeviceIcon = tipoDispositivoIcons[data.tipoDispositivo] || Package
-  const isRetiro = data.estado === "ENTREGADO_SIN_REPARACION" || data.estado === "ENTREGADO_SIN_COBRO"
-  const isTerminal = data.estado === "CANCELADO" || data.estado === "SIN_REPARACION"
-  const isCompleted = data.estado === "ENTREGADO" || data.estado === "ENTREGADO_SIN_REPARACION" || data.estado === "ENTREGADO_SIN_COBRO"
-  const isReady = data.estado === "REPARADO"
-  const estadoParaProgreso = data.estado === "ESPERANDO_REPUESTO" ? "EN_REPARACION" : data.estado
-  const currentIndex = estadoFlow.indexOf(estadoParaProgreso)
-  const progressPercent = isTerminal ? 0 : isCompleted ? 100 : Math.round(((currentIndex) / (estadoFlow.length - 1)) * 100)
+  const estadoClass = classifyEstado(data.estado)
+  const { isRetiro, isTerminal, isCompleted, isReady, currentIndex, progressPercent } = estadoClass
   const activeCotizacion = data.cotizaciones?.find(c => c.estado === "ENVIADA")
   const rejectedCotizacion = !activeCotizacion
     ? data.cotizaciones?.find(c => c.estado === "RECHAZADA")
@@ -415,8 +400,8 @@ export function SeguimientoContent({ token }: { token: string }) {
   const CurrentStateIcon = estadoIcons[data.estado] || Circle
   const colors = estadoColors[data.estado] || estadoColors.RECIBIDO
 
-  const timeRemaining = data.fechaPrometida && !isCompleted && !isTerminal && !isReady
-    ? getTimeRemaining(data.fechaPrometida)
+  const timeRemaining = shouldShowTimeRemaining(estadoClass)
+    ? computeTimeRemaining(data.fechaPrometida)
     : null
 
   const whatsappUrl = data.organizacion.telefono
@@ -498,10 +483,14 @@ export function SeguimientoContent({ token }: { token: string }) {
               </div>
               <div>
                 <p className="font-bold text-lg text-amber-700 dark:text-amber-400">
-                  {estadoLabels[data.estado] || "Retirado sin reparación"}
+                  {data.estado === "ENTREGADO_SIN_COBRO"
+                    ? getRetiroLabel(data.motivoSinCobro).title
+                    : estadoLabels[data.estado] || "Retirado sin reparación"}
                 </p>
                 <p className="text-sm text-muted-foreground mt-0.5">
-                  {estadoDescriptions[data.estado] || estadoDescriptions.ENTREGADO_SIN_REPARACION}
+                  {data.estado === "ENTREGADO_SIN_COBRO"
+                    ? getRetiroLabel(data.motivoSinCobro).description
+                    : estadoDescriptions[data.estado] || estadoDescriptions.ENTREGADO_SIN_REPARACION}
                 </p>
               </div>
             </div>
@@ -613,24 +602,40 @@ export function SeguimientoContent({ token }: { token: string }) {
         <Card>
           <CardContent className="px-2 sm:px-3 py-4">
             <div className="flex items-start justify-between">
-              {[
-                { key: "RECIBIDO", label: "Recibido", icon: Package },
-                { key: "DIAGNOSTICO", label: "Diagnostico", icon: Search },
-                { key: "SIN_REPARACION", label: "Sin reparacion", icon: XCircle },
-                { key: "RETIRADO", label: "Retirado", icon: Truck },
-              ].map((step, index, arr) => (
-                <div key={step.key} className="flex flex-col items-center relative flex-1">
-                  {index < arr.length - 1 && (
-                    <div className="absolute top-[11px] left-[calc(50%+11px)] right-[calc(-50%+11px)] h-[2px] bg-amber-500" />
-                  )}
-                  <div className="relative z-10 flex items-center justify-center h-6 w-6 rounded-full bg-amber-500 text-white">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                  </div>
-                  <p className="mt-1 text-center leading-tight text-amber-600 dark:text-amber-400 text-[9px] sm:text-[10px] font-medium">
-                    {step.label}
-                  </p>
-                </div>
-              ))}
+              {(() => {
+                const stepperIconMap: Record<string, typeof Package> = {
+                  Package,
+                  Search,
+                  ClipboardCheck,
+                  Settings,
+                  CheckCircle2,
+                  XCircle,
+                  ThumbsDown,
+                  ShieldCheck,
+                  Truck,
+                }
+                // Si es ENTREGADO_SIN_COBRO usamos el camino según motivo,
+                // sino fallback al camino legacy "sin reparación".
+                const steps = data.estado === "ENTREGADO_SIN_COBRO"
+                  ? getRetiroStepper(data.motivoSinCobro)
+                  : getRetiroStepper("NO_REPARABLE")
+                return steps.map((step, index, arr) => {
+                  const StepIcon = stepperIconMap[step.icon] || CheckCircle2
+                  return (
+                    <div key={step.key} className="flex flex-col items-center relative flex-1">
+                      {index < arr.length - 1 && (
+                        <div className="absolute top-[11px] left-[calc(50%+11px)] right-[calc(-50%+11px)] h-[2px] bg-amber-500" />
+                      )}
+                      <div className="relative z-10 flex items-center justify-center h-6 w-6 rounded-full bg-amber-500 text-white">
+                        <StepIcon className="h-3.5 w-3.5" />
+                      </div>
+                      <p className="mt-1 text-center leading-tight text-amber-600 dark:text-amber-400 text-[9px] sm:text-[10px] font-medium">
+                        {step.label}
+                      </p>
+                    </div>
+                  )
+                })
+              })()}
             </div>
           </CardContent>
         </Card>
@@ -639,8 +644,9 @@ export function SeguimientoContent({ token }: { token: string }) {
           <CardContent className="px-2 sm:px-3 py-4">
             <div className="flex items-start justify-between">
               {estadoFlow.map((estado, index) => {
-                const isPast = index < currentIndex
-                const isCurrent = index === currentIndex
+                // Si la orden está completada, todos los pasos cuentan como past
+                const isPast = isCompleted ? true : index < currentIndex
+                const isCurrent = !isCompleted && index === currentIndex
                 const StepIcon = estadoIcons[estado] || Circle
 
                 return (

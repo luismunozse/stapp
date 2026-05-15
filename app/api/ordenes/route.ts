@@ -188,6 +188,7 @@ export async function GET(request: Request) {
         `dispositivo.ilike.%${search}%`,
         `codigo_orden.ilike.%${search}%`,
         `marca.ilike.%${search}%`,
+        `imei.ilike.%${search}%`,
       ]
 
       // Si el search es numérico, buscar por numero_orden exacto

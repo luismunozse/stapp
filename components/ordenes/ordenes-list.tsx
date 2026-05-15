@@ -85,6 +85,8 @@ const SEARCH_PLACEHOLDERS = [
   "Buscar por cliente: Diego Alanis...",
   "Buscar por dispositivo: Galaxy A55...",
   "Buscar por teléfono: 351789...",
+  "Buscar por IMEI: 358273...",
+  "Buscar por N° de Serie: SN12345...",
 ]
 
 export function OrdenesList() {

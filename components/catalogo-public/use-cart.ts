@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
+import { cartKey } from "@/lib/catalogo-validators"
 
 export interface CartItem {
   id: string
@@ -14,10 +15,6 @@ export interface CartItem {
 }
 
 const STORAGE_PREFIX = "stapp:catalogo-cart:"
-
-function cartKey(item: Pick<CartItem, "id" | "varianteId">) {
-  return item.varianteId ? `${item.id}::${item.varianteId}` : item.id
-}
 
 function readCart(slug: string): CartItem[] {
   if (typeof window === "undefined") return []

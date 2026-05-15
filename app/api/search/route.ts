@@ -42,9 +42,9 @@ export async function GET(request: Request) {
       if (type === "all" || type === "ordenes") {
         const { data: ordenes } = await supabaseAdmin
           .from("ordenes_servicio")
-          .select("id, numero_orden, dispositivo, estado, problema_reportado, marca, clientes(nombre)")
+          .select("id, numero_orden, dispositivo, estado, problema_reportado, marca, imei, clientes(nombre)")
           .eq("organization_id", organizationId!)
-          .or(`dispositivo.ilike.%${q}%,problema_reportado.ilike.%${q}%,marca.ilike.%${q}%`)
+          .or(`dispositivo.ilike.%${q}%,problema_reportado.ilike.%${q}%,marca.ilike.%${q}%,imei.ilike.%${q}%`)
           .limit(limit)
 
         results.ordenes = (ordenes || []).map((o: Record<string, unknown>) => ({

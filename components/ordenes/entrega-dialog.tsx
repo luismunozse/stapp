@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import {
   Dialog,
   DialogContent,
@@ -14,6 +14,15 @@ import { Label } from "@/components/ui/label"
 import { SignaturePad } from "@/components/firma/signature-pad"
 import { Input } from "@/components/ui/input"
 import { Loader2, PackageCheck, PackageX, AlertTriangle, Shield, HandCoins } from "lucide-react"
+import { defaultMotivoSinCobro, type MotivoSinCobro } from "@/lib/seguimiento-state"
+
+const MOTIVO_OPTIONS: Array<{ value: MotivoSinCobro; label: string; hint: string }> = [
+  { value: "NO_REPARABLE", label: "No reparable", hint: "El equipo no se pudo reparar." },
+  { value: "CORTESIA", label: "Cortesía del taller", hint: "Reparado pero decidimos no cobrar." },
+  { value: "GARANTIA", label: "Garantía vigente", hint: "Reingreso bajo garantía, sin cargo." },
+  { value: "CLIENTE_DESISTIO", label: "Cliente desistió", hint: "Cliente aprobó y luego se arrepintió." },
+  { value: "OTRO", label: "Otro motivo", hint: "" },
+]
 
 interface EntregaDialogProps {
   open: boolean
@@ -24,6 +33,7 @@ interface EntregaDialogProps {
     numeroOrden: number
     codigoOrden?: string
     dispositivo: string
+    estado?: string
     cliente: {
       nombre: string
       telefono: string
@@ -55,6 +65,15 @@ export function EntregaDialog({
   const [conGarantia, setConGarantia] = useState(!esRetiro && !sinCobro)
   const [diasGarantia, setDiasGarantia] = useState(30)
   const [notasGarantia, setNotasGarantia] = useState("")
+  const [motivoSinCobro, setMotivoSinCobro] = useState<MotivoSinCobro>(
+    () => defaultMotivoSinCobro(orden.estado)
+  )
+
+  useEffect(() => {
+    if (open && sinCobro) {
+      setMotivoSinCobro(defaultMotivoSinCobro(orden.estado))
+    }
+  }, [open, sinCobro, orden.estado])
 
   const tienePendiente = !esRetiro && !sinCobro && orden.estadoCobro && orden.estadoCobro !== "COBRADO" && (orden.pendienteCobro || 0) > 0
 
@@ -85,6 +104,7 @@ export function EntregaDialog({
           firmaEncargadoMime: firmaEncargadoMime || null,
           notasEntrega: notasEntrega || null,
           sinCobro: sinCobro || undefined,
+          motivoSinCobro: sinCobro ? motivoSinCobro : undefined,
           ...(conGarantia && !esRetiro && !sinCobro ? {
             diasGarantia,
             notasGarantia: notasGarantia || null,
@@ -141,17 +161,42 @@ export function EntregaDialog({
         <div className="space-y-4">
           {/* Banner informativo de entrega sin cobro */}
           {sinCobro && (
-            <div className="flex items-start gap-2 p-3 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 text-sm">
-              <HandCoins className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
-              <div>
-                <p className="font-medium text-green-800 dark:text-green-300">
-                  Entrega sin cobro
-                </p>
-                <p className="text-green-700 dark:text-green-400 text-xs mt-0.5">
-                  El equipo será entregado sin cargo al cliente. No se generará cobro por esta reparación.
-                </p>
+            <>
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 text-sm">
+                <HandCoins className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
+                <div>
+                  <p className="font-medium text-green-800 dark:text-green-300">
+                    Entrega sin cobro
+                  </p>
+                  <p className="text-green-700 dark:text-green-400 text-xs mt-0.5">
+                    El equipo será entregado sin cargo al cliente. No se generará cobro por esta reparación.
+                  </p>
+                </div>
               </div>
-            </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="motivo-sin-cobro" className="text-sm font-medium">
+                  Motivo de la entrega sin cobro
+                </Label>
+                <select
+                  id="motivo-sin-cobro"
+                  value={motivoSinCobro}
+                  onChange={(e) => setMotivoSinCobro(e.target.value as MotivoSinCobro)}
+                  disabled={loading}
+                  className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                >
+                  {MOTIVO_OPTIONS.map((m) => (
+                    <option key={m.value} value={m.value}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+                {(() => {
+                  const hint = MOTIVO_OPTIONS.find((m) => m.value === motivoSinCobro)?.hint
+                  return hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null
+                })()}
+              </div>
+            </>
           )}
 
           {/* Banner informativo de retiro sin reparación */}

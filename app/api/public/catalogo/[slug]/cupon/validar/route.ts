@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
+import { isValidSlug, isValidCuponCodigo } from "@/lib/catalogo-validators"
 
 const schema = z.object({
   codigo: z.string().min(3).max(32),
@@ -10,7 +11,7 @@ const schema = z.object({
 export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
 
-  if (!slug || !/^[a-z0-9]([a-z0-9-]{1,48}[a-z0-9])?$/.test(slug)) {
+  if (!isValidSlug(slug)) {
     return NextResponse.json({ ok: false, error: "Slug inválido" }, { status: 400 })
   }
 
@@ -20,7 +21,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   }
 
   const parsed = schema.safeParse(body)
-  if (!parsed.success) {
+  if (!parsed.success || !isValidCuponCodigo(parsed.data.codigo)) {
     return NextResponse.json({ ok: false, error: "Datos inválidos" }, { status: 400 })
   }
 

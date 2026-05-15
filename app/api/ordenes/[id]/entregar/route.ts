@@ -14,6 +14,10 @@ const entregarSchema = z.object({
   diasGarantia: z.number().int().positive().optional(),
   notasGarantia: z.string().optional().nullable(),
   sinCobro: z.boolean().optional(),
+  motivoSinCobro: z
+    .enum(["NO_REPARABLE", "CORTESIA", "GARANTIA", "CLIENTE_DESISTIO", "OTRO"])
+    .optional()
+    .nullable(),
 })
 
 export async function POST(
@@ -65,6 +69,25 @@ export async function POST(
     const esRetiro = orden.estado === "SIN_REPARACION" && !sinCobro
     const nuevoEstado = sinCobro ? "ENTREGADO_SIN_COBRO" : esRetiro ? "ENTREGADO_SIN_REPARACION" : "ENTREGADO"
 
+    // Motivo sin cobro: si vino explícito lo usamos, sino derivamos del estado origen.
+    // Para entregas con cobro normal, dejamos NULL.
+    let motivoSinCobro: string | null = null
+    if (sinCobro) {
+      if (data.motivoSinCobro) {
+        motivoSinCobro = data.motivoSinCobro
+      } else {
+        // Sugerencia automática (mirror de defaultMotivoSinCobro)
+        const e = orden.estado
+        if (e === "SIN_REPARACION") motivoSinCobro = "NO_REPARABLE"
+        else if (e === "REPARADO") motivoSinCobro = "CORTESIA"
+        else if (e === "PRESUPUESTADO" || e === "APROBADO" || e === "EN_REPARACION" || e === "ESPERANDO_REPUESTO") {
+          motivoSinCobro = "CLIENTE_DESISTIO"
+        } else {
+          motivoSinCobro = "OTRO"
+        }
+      }
+    }
+
     // Actualizar orden con datos de entrega
     const { data: updatedOrden, error: updateError } = await supabaseAdmin
       .from("ordenes_servicio")
@@ -77,6 +100,7 @@ export async function POST(
         firma_encargado_entrega_mime: data.firmaEncargadoMime || null,
         entregado_por_user_id: userId,
         notas_entrega: data.notasEntrega,
+        motivo_sin_cobro: motivoSinCobro,
       })
       .eq("id", id)
       .select(`*, clientes(*), users:entregado_por_user_id(id, nombre, email)`)
