@@ -17,6 +17,7 @@ import {
   Plus,
   CalendarDays,
   CalendarRange,
+  Calendar as CalendarIcon,
   List,
   AlertCircle,
   Truck,
@@ -27,10 +28,15 @@ import {
   format,
   startOfWeek,
   endOfWeek,
+  startOfMonth,
+  endOfMonth,
   addDays,
   addWeeks,
   subWeeks,
+  addMonths,
+  subMonths,
   isToday,
+  isSameMonth,
   parseISO,
 } from "date-fns"
 import { es } from "date-fns/locale"
@@ -47,7 +53,7 @@ const HOUR_END = 21
 const HOUR_HEIGHT = 56 // px por hora
 const TOTAL_HEIGHT = (HOUR_END - HOUR_START) * HOUR_HEIGHT
 
-type Vista = "dia" | "semana" | "lista"
+type Vista = "dia" | "semana" | "mes" | "lista"
 
 interface TurnosResp { turnos: TurnoConRelaciones[] }
 
@@ -84,6 +90,19 @@ export function AgendaView() {
   const { rangeStart, rangeEnd, days } = useMemo(() => {
     if (vista === "dia") {
       return { rangeStart: cursor, rangeEnd: cursor, days: [cursor] }
+    }
+    if (vista === "mes") {
+      const mStart = startOfMonth(cursor)
+      const mEnd = endOfMonth(cursor)
+      const gridStart = startOfWeek(mStart, { weekStartsOn: 1 })
+      const gridEnd = endOfWeek(mEnd, { weekStartsOn: 1 })
+      const arr: Date[] = []
+      let d = gridStart
+      while (d <= gridEnd) {
+        arr.push(d)
+        d = addDays(d, 1)
+      }
+      return { rangeStart: gridStart, rangeEnd: gridEnd, days: arr }
     }
     const start = startOfWeek(cursor, { weekStartsOn: 1 })
     const end = endOfWeek(cursor, { weekStartsOn: 1 })
@@ -157,8 +176,16 @@ export function AgendaView() {
   }, [statsData])
 
   // Navegación
-  const onPrev = () => setCursor(vista === "dia" ? addDays(cursor, -1) : subWeeks(cursor, 1))
-  const onNext = () => setCursor(vista === "dia" ? addDays(cursor, 1) : addWeeks(cursor, 1))
+  const onPrev = () => setCursor(
+    vista === "dia" ? addDays(cursor, -1)
+    : vista === "mes" ? subMonths(cursor, 1)
+    : subWeeks(cursor, 1),
+  )
+  const onNext = () => setCursor(
+    vista === "dia" ? addDays(cursor, 1)
+    : vista === "mes" ? addMonths(cursor, 1)
+    : addWeeks(cursor, 1),
+  )
   const onHoy = () => setCursor(new Date())
 
   const handleNuevoSlot = (day: Date, hour?: number) => {
@@ -189,6 +216,9 @@ export function AgendaView() {
   const labelRango = useMemo(() => {
     if (vista === "dia") {
       return format(cursor, "EEEE d 'de' MMMM yyyy", { locale: es })
+    }
+    if (vista === "mes") {
+      return format(cursor, "MMMM yyyy", { locale: es })
     }
     const start = startOfWeek(cursor, { weekStartsOn: 1 })
     const end = endOfWeek(cursor, { weekStartsOn: 1 })
@@ -226,6 +256,7 @@ export function AgendaView() {
           <div className="inline-flex rounded-md border bg-card p-0.5">
             <VistaBtn active={vista === "dia"} onClick={() => setVista("dia")} icon={<Clock className="h-3.5 w-3.5" />} label="Día" />
             <VistaBtn active={vista === "semana"} onClick={() => setVista("semana")} icon={<CalendarRange className="h-3.5 w-3.5" />} label="Semana" />
+            <VistaBtn active={vista === "mes"} onClick={() => setVista("mes")} icon={<CalendarIcon className="h-3.5 w-3.5" />} label="Mes" />
             <VistaBtn active={vista === "lista"} onClick={() => setVista("lista")} icon={<List className="h-3.5 w-3.5" />} label="Lista" />
           </div>
 
@@ -288,6 +319,16 @@ export function AgendaView() {
           isLoading={isLoading}
           onClick={(t) => setDetailTurno(t)}
           onNuevo={(d) => handleNuevoSlot(d)}
+        />
+      ) : vista === "mes" ? (
+        <MesView
+          cursor={cursor}
+          days={days}
+          turnosPorDia={turnosPorDia}
+          isLoading={isLoading}
+          onTurnoClick={(t) => setDetailTurno(t)}
+          onDayClick={(d) => { setCursor(d); setVista("dia") }}
+          onNuevoEnDia={(d) => handleNuevoSlot(d)}
         />
       ) : (
         <TimelineView
@@ -481,6 +522,131 @@ function TimelineView({
             )
           })}
         </div>
+      </div>
+    </div>
+  )
+}
+
+function MesView({
+  cursor, days, turnosPorDia, isLoading, onTurnoClick, onDayClick, onNuevoEnDia,
+}: {
+  cursor: Date
+  days: Date[]
+  turnosPorDia: Map<string, TurnoConRelaciones[]>
+  isLoading: boolean
+  onTurnoClick: (t: TurnoConRelaciones) => void
+  onDayClick: (day: Date) => void
+  onNuevoEnDia: (day: Date) => void
+}) {
+  const weeks: Date[][] = useMemo(() => {
+    const out: Date[][] = []
+    for (let i = 0; i < days.length; i += 7) {
+      out.push(days.slice(i, i + 7))
+    }
+    return out
+  }, [days])
+
+  const ESTADO_DOT: Record<string, string> = {
+    agendado: "bg-blue-500",
+    confirmado: "bg-cyan-500",
+    en_camino: "bg-amber-500",
+    realizado: "bg-emerald-500",
+    orden_generada: "bg-violet-500",
+    cancelado: "bg-zinc-400",
+    no_show: "bg-red-500",
+  }
+
+  return (
+    <div className="border rounded-lg bg-card overflow-hidden relative">
+      {isLoading && (
+        <div className="absolute inset-0 z-10 bg-background/60 backdrop-blur-sm flex items-center justify-center text-sm text-muted-foreground">
+          Cargando…
+        </div>
+      )}
+      {/* Header días */}
+      <div className="grid grid-cols-7 border-b bg-muted/30">
+        {WEEKDAYS_SHORT.map((d) => (
+          <div key={d} className="px-2 py-2 text-center text-[10px] text-muted-foreground uppercase tracking-wide border-l first:border-l-0">
+            {d}
+          </div>
+        ))}
+      </div>
+
+      {/* Grid semanas */}
+      <div className="grid grid-cols-7 auto-rows-fr">
+        {weeks.flat().map((day) => {
+          const key = format(day, "yyyy-MM-dd")
+          const turnos = turnosPorDia.get(key) || []
+          const isCurMonth = isSameMonth(day, cursor)
+          const today = isToday(day)
+          const maxVisible = 3
+          const visibles = turnos.slice(0, maxVisible)
+          const extra = turnos.length - maxVisible
+
+          return (
+            <div
+              key={key}
+              className={`
+                border-l border-t first:border-l-0 min-h-[110px] flex flex-col
+                ${isCurMonth ? "bg-card" : "bg-muted/20"}
+                ${today ? "ring-2 ring-inset ring-primary/40" : ""}
+              `}
+            >
+              <button
+                type="button"
+                onClick={() => onDayClick(day)}
+                className="flex items-center justify-between px-1.5 py-1 hover:bg-accent/40 transition-colors"
+              >
+                <span className={`
+                  text-xs font-semibold
+                  ${!isCurMonth ? "text-muted-foreground/50" : ""}
+                  ${today ? "text-primary" : ""}
+                `}>
+                  {format(day, "d")}
+                </span>
+                {turnos.length > 0 && (
+                  <span className="text-[9px] text-muted-foreground">{turnos.length}</span>
+                )}
+              </button>
+
+              <div className="flex-1 px-1 pb-1 space-y-0.5 overflow-hidden">
+                {visibles.map((t) => {
+                  const clienteNombre = t.cliente?.nombre || t.clienteSnapshot?.nombre || "Sin cliente"
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => onTurnoClick(t)}
+                      className={`
+                        w-full flex items-center gap-1 px-1 py-0.5 rounded text-[10px]
+                        hover:bg-accent transition-colors text-left
+                      `}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${ESTADO_DOT[t.estado] || "bg-zinc-400"}`} />
+                      <span className="font-medium shrink-0">{format(parseISO(t.inicio), "HH:mm")}</span>
+                      <span className="truncate opacity-80">{clienteNombre}</span>
+                    </button>
+                  )
+                })}
+                {extra > 0 && (
+                  <button
+                    onClick={() => onDayClick(day)}
+                    className="w-full text-left px-1 text-[10px] text-muted-foreground hover:text-foreground"
+                  >
+                    +{extra} más
+                  </button>
+                )}
+                {turnos.length === 0 && isCurMonth && (
+                  <button
+                    onClick={() => onNuevoEnDia(day)}
+                    className="w-full opacity-0 hover:opacity-100 transition-opacity text-[10px] text-muted-foreground hover:text-primary text-left px-1"
+                  >
+                    + agregar
+                  </button>
+                )}
+              </div>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
