@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import useSWR from "swr"
 import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
@@ -16,11 +16,12 @@ import {
   ChevronRight,
   Plus,
   CalendarDays,
+  CalendarRange,
+  List,
+  AlertCircle,
+  Truck,
+  CheckCircle2,
   Clock,
-  User,
-  Wrench,
-  MapPin,
-  FileText,
 } from "lucide-react"
 import {
   format,
@@ -30,61 +31,87 @@ import {
   addWeeks,
   subWeeks,
   isToday,
-  isSameDay,
   parseISO,
 } from "date-fns"
 import { es } from "date-fns/locale"
 import { TurnoFormDialog } from "./turno-form-dialog"
 import { TurnoDetailSheet } from "./turno-detail-sheet"
-import type { EstadoTurno, TipoTurno, TurnoConRelaciones } from "@/types"
+import { TurnoBlock } from "./turno-block"
+import type { TurnoConRelaciones } from "@/types"
 
 const fetcher = (u: string) => fetch(u).then(r => r.json())
 
-const TIPO_LABELS: Record<TipoTurno, string> = {
-  visita_diagnostico: "Diagnóstico",
-  reparacion_onsite: "Reparación on-site",
-  retiro: "Retiro",
-  entrega: "Entrega",
-  mantenimiento: "Mantenimiento",
-}
+const WEEKDAYS_SHORT = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
+const HOUR_START = 7
+const HOUR_END = 21
+const HOUR_HEIGHT = 56 // px por hora
+const TOTAL_HEIGHT = (HOUR_END - HOUR_START) * HOUR_HEIGHT
 
-const ESTADO_DOT_COLORS: Record<EstadoTurno, string> = {
-  agendado: "bg-blue-500",
-  confirmado: "bg-cyan-500",
-  en_camino: "bg-amber-500",
-  realizado: "bg-emerald-500",
-  orden_generada: "bg-violet-500",
-  cancelado: "bg-zinc-400",
-  no_show: "bg-red-500",
-}
+type Vista = "dia" | "semana" | "lista"
 
-const WEEKDAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
+interface TurnosResp { turnos: TurnoConRelaciones[] }
+
+function turnoStylePx(t: TurnoConRelaciones): React.CSSProperties {
+  const ini = parseISO(t.inicio)
+  const finDate = t.fin ? parseISO(t.fin) : new Date(ini.getTime() + 60 * 60 * 1000)
+  const inicioMin = ini.getHours() * 60 + ini.getMinutes()
+  const finMin = Math.max(
+    inicioMin + 25,
+    finDate.getHours() * 60 + finDate.getMinutes(),
+  )
+  const startOffsetMin = HOUR_START * 60
+  const top = ((inicioMin - startOffsetMin) / 60) * HOUR_HEIGHT
+  const height = Math.max(24, ((finMin - inicioMin) / 60) * HOUR_HEIGHT - 2)
+  return { top: `${top}px`, height: `${height}px` }
+}
 
 export function AgendaView() {
   const { data: session } = useSession()
   const isAdmin = session?.user?.role === "ADMIN"
 
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }))
+  const [vista, setVista] = useState<Vista>("semana")
+  const [cursor, setCursor] = useState(new Date())
   const [filterTecnico, setFilterTecnico] = useState<string>("_todos_")
   const [filterEstado, setFilterEstado] = useState<string>("_todos_")
-  const [selectedDay, setSelectedDay] = useState<Date | null>(new Date())
+  const [filterTipo, setFilterTipo] = useState<string>("_todos_")
 
   const [formOpen, setFormOpen] = useState(false)
   const [editTurno, setEditTurno] = useState<TurnoConRelaciones | null>(null)
   const [detailTurno, setDetailTurno] = useState<TurnoConRelaciones | null>(null)
   const [defaultInicio, setDefaultInicio] = useState<Date | null>(null)
 
-  const desde = format(weekStart, "yyyy-MM-dd")
-  const hasta = format(endOfWeek(weekStart, { weekStartsOn: 1 }), "yyyy-MM-dd")
+  // Rango según vista
+  const { rangeStart, rangeEnd, days } = useMemo(() => {
+    if (vista === "dia") {
+      return { rangeStart: cursor, rangeEnd: cursor, days: [cursor] }
+    }
+    const start = startOfWeek(cursor, { weekStartsOn: 1 })
+    const end = endOfWeek(cursor, { weekStartsOn: 1 })
+    return {
+      rangeStart: start,
+      rangeEnd: end,
+      days: Array.from({ length: 7 }, (_, i) => addDays(start, i)),
+    }
+  }, [vista, cursor])
+
+  const desde = format(rangeStart, "yyyy-MM-dd")
+  const hasta = format(rangeEnd, "yyyy-MM-dd")
 
   const queryParts = [`desde=${desde}`, `hasta=${hasta}`]
   if (filterTecnico !== "_todos_") queryParts.push(`tecnicoId=${filterTecnico}`)
   if (filterEstado !== "_todos_") queryParts.push(`estado=${filterEstado}`)
 
-  const { data, isLoading, mutate } = useSWR<{ turnos: TurnoConRelaciones[] }>(
+  const { data, isLoading, mutate } = useSWR<TurnosResp>(
     `/api/turnos?${queryParts.join("&")}`,
     fetcher,
     { revalidateOnFocus: true, refreshInterval: 60000 },
+  )
+
+  // Stats globales (semana actual visible)
+  const { data: statsData } = useSWR<TurnosResp>(
+    `/api/turnos?desde=${format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd")}&hasta=${format(endOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd")}`,
+    fetcher,
+    { refreshInterval: 120000 },
   )
 
   const { data: tecnicosData } = useSWR<any>(
@@ -95,15 +122,15 @@ export function AgendaView() {
     return Array.isArray(tecnicosData) ? tecnicosData : (tecnicosData?.tecnicos || [])
   }, [tecnicosData])
 
-  const turnos = data?.turnos || []
-
-  const days = useMemo(() => {
-    return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
-  }, [weekStart])
+  const turnosFiltrados = useMemo(() => {
+    const all = data?.turnos || []
+    if (filterTipo === "_todos_") return all
+    return all.filter(t => t.tipo === filterTipo)
+  }, [data, filterTipo])
 
   const turnosPorDia = useMemo(() => {
     const map = new Map<string, TurnoConRelaciones[]>()
-    for (const t of turnos) {
+    for (const t of turnosFiltrados) {
       const key = format(parseISO(t.inicio), "yyyy-MM-dd")
       if (!map.has(key)) map.set(key, [])
       map.get(key)!.push(t)
@@ -112,16 +139,37 @@ export function AgendaView() {
       list.sort((a, b) => a.inicio.localeCompare(b.inicio))
     }
     return map
-  }, [turnos])
+  }, [turnosFiltrados])
 
-  const turnosSeleccionados = useMemo(() => {
-    if (!selectedDay) return []
-    return turnosPorDia.get(format(selectedDay, "yyyy-MM-dd")) || []
-  }, [selectedDay, turnosPorDia])
+  const stats = useMemo(() => {
+    const all = statsData?.turnos || []
+    const hoyKey = format(new Date(), "yyyy-MM-dd")
+    const hoy = all.filter(t => format(parseISO(t.inicio), "yyyy-MM-dd") === hoyKey && t.estado !== "cancelado")
+    const enCamino = all.filter(t => t.estado === "en_camino")
+    const realizados = all.filter(t => t.estado === "realizado" || t.estado === "orden_generada")
+    const sinAsignar = all.filter(t => !t.tecnicoId && t.estado !== "cancelado" && t.estado !== "no_show")
+    return {
+      hoy: hoy.length,
+      enCamino: enCamino.length,
+      realizados: realizados.length,
+      sinAsignar: sinAsignar.length,
+    }
+  }, [statsData])
 
-  const handleNuevo = (paraFecha?: Date) => {
+  // Navegación
+  const onPrev = () => setCursor(vista === "dia" ? addDays(cursor, -1) : subWeeks(cursor, 1))
+  const onNext = () => setCursor(vista === "dia" ? addDays(cursor, 1) : addWeeks(cursor, 1))
+  const onHoy = () => setCursor(new Date())
+
+  const handleNuevoSlot = (day: Date, hour?: number) => {
     setEditTurno(null)
-    setDefaultInicio(paraFecha || selectedDay || new Date())
+    const d = new Date(day)
+    if (hour !== undefined) {
+      d.setHours(hour, 0, 0, 0)
+    } else {
+      d.setHours(9, 0, 0, 0)
+    }
+    setDefaultInicio(d)
     setFormOpen(true)
   }
 
@@ -132,44 +180,55 @@ export function AgendaView() {
     setFormOpen(true)
   }
 
+  const horas = useMemo(() => {
+    const arr: number[] = []
+    for (let h = HOUR_START; h < HOUR_END; h++) arr.push(h)
+    return arr
+  }, [])
+
+  const labelRango = useMemo(() => {
+    if (vista === "dia") {
+      return format(cursor, "EEEE d 'de' MMMM yyyy", { locale: es })
+    }
+    const start = startOfWeek(cursor, { weekStartsOn: 1 })
+    const end = endOfWeek(cursor, { weekStartsOn: 1 })
+    const sameMonth = start.getMonth() === end.getMonth()
+    if (sameMonth) {
+      return `${format(start, "d")} – ${format(end, "d 'de' MMMM yyyy", { locale: es })}`
+    }
+    return `${format(start, "d 'de' MMM", { locale: es })} – ${format(end, "d 'de' MMM yyyy", { locale: es })}`
+  }, [cursor, vista])
+
   return (
     <div className="space-y-4">
-      {/* Filtros + acciones */}
-      <div className="flex flex-wrap items-center gap-2 justify-between">
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setWeekStart(subWeeks(weekStart, 1))}
-            aria-label="Semana anterior"
-          >
+      {/* Stats chips */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <StatCard icon={<CalendarDays className="h-4 w-4" />} label="Hoy" value={stats.hoy} tone="blue" />
+        <StatCard icon={<Truck className="h-4 w-4" />} label="En camino" value={stats.enCamino} tone="amber" />
+        <StatCard icon={<CheckCircle2 className="h-4 w-4" />} label="Realizados" value={stats.realizados} tone="emerald" sub="semana" />
+        <StatCard icon={<AlertCircle className="h-4 w-4" />} label="Sin técnico" value={stats.sinAsignar} tone="red" sub="semana" />
+      </div>
+
+      {/* Toolbar */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-center gap-1">
+          <Button variant="outline" size="icon" onClick={onPrev} aria-label="Anterior" className="h-9 w-9">
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              const today = new Date()
-              setWeekStart(startOfWeek(today, { weekStartsOn: 1 }))
-              setSelectedDay(today)
-            }}
-          >
-            Hoy
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setWeekStart(addWeeks(weekStart, 1))}
-            aria-label="Semana siguiente"
-          >
+          <Button variant="ghost" size="sm" onClick={onHoy} className="h-9">Hoy</Button>
+          <Button variant="outline" size="icon" onClick={onNext} aria-label="Siguiente" className="h-9 w-9">
             <ChevronRight className="h-4 w-4" />
           </Button>
-          <span className="text-sm font-medium capitalize ml-2">
-            {format(weekStart, "MMMM yyyy", { locale: es })}
-          </span>
+          <span className="text-sm font-medium capitalize ml-3">{labelRango}</span>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-md border bg-card p-0.5">
+            <VistaBtn active={vista === "dia"} onClick={() => setVista("dia")} icon={<Clock className="h-3.5 w-3.5" />} label="Día" />
+            <VistaBtn active={vista === "semana"} onClick={() => setVista("semana")} icon={<CalendarRange className="h-3.5 w-3.5" />} label="Semana" />
+            <VistaBtn active={vista === "lista"} onClick={() => setVista("lista")} icon={<List className="h-3.5 w-3.5" />} label="Lista" />
+          </div>
+
           {isAdmin && (
             <Select value={filterTecnico} onValueChange={setFilterTecnico}>
               <SelectTrigger className="w-[160px] h-9">
@@ -183,12 +242,27 @@ export function AgendaView() {
               </SelectContent>
             </Select>
           )}
+
+          <Select value={filterTipo} onValueChange={setFilterTipo}>
+            <SelectTrigger className="w-[140px] h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_todos_">Todos los tipos</SelectItem>
+              <SelectItem value="visita_diagnostico">Diagnóstico</SelectItem>
+              <SelectItem value="reparacion_onsite">Reparación on-site</SelectItem>
+              <SelectItem value="retiro">Retiro</SelectItem>
+              <SelectItem value="entrega">Entrega</SelectItem>
+              <SelectItem value="mantenimiento">Mantenimiento</SelectItem>
+            </SelectContent>
+          </Select>
+
           <Select value={filterEstado} onValueChange={setFilterEstado}>
             <SelectTrigger className="w-[140px] h-9">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="_todos_">Todos</SelectItem>
+              <SelectItem value="_todos_">Todos los estados</SelectItem>
               <SelectItem value="agendado">Agendado</SelectItem>
               <SelectItem value="confirmado">Confirmado</SelectItem>
               <SelectItem value="en_camino">En camino</SelectItem>
@@ -198,131 +272,33 @@ export function AgendaView() {
               <SelectItem value="no_show">No se presentó</SelectItem>
             </SelectContent>
           </Select>
-          <Button onClick={() => handleNuevo()}>
+
+          <Button onClick={() => handleNuevoSlot(new Date())}>
             <Plus className="mr-2 h-4 w-4" />
             Nuevo turno
           </Button>
         </div>
       </div>
 
-      {/* Grilla semana */}
-      <div className="border rounded-lg overflow-hidden bg-card">
-        <div className="grid grid-cols-7 border-b">
-          {days.map((day, i) => {
-            const key = format(day, "yyyy-MM-dd")
-            const turnosDelDia = turnosPorDia.get(key) || []
-            const isSelected = selectedDay && isSameDay(day, selectedDay)
-            const today = isToday(day)
-
-            return (
-              <button
-                key={key}
-                onClick={() => setSelectedDay(day)}
-                className={`
-                  p-3 text-left border-r last:border-r-0 transition-colors min-h-[80px]
-                  ${isSelected ? "bg-primary/10" : "hover:bg-accent/40"}
-                  ${today ? "font-semibold" : ""}
-                `}
-              >
-                <div className="flex items-baseline justify-between mb-1">
-                  <span className="text-xs text-muted-foreground">{WEEKDAYS[i]}</span>
-                  <span className={`text-lg ${today ? "text-primary" : ""}`}>
-                    {format(day, "d")}
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {turnosDelDia.slice(0, 6).map((t) => (
-                    <span
-                      key={t.id}
-                      className={`w-2 h-2 rounded-full ${ESTADO_DOT_COLORS[t.estado]}`}
-                    />
-                  ))}
-                  {turnosDelDia.length > 6 && (
-                    <span className="text-[10px] text-muted-foreground">+{turnosDelDia.length - 6}</span>
-                  )}
-                </div>
-                {turnosDelDia.length > 0 && (
-                  <p className="text-[11px] text-muted-foreground mt-1">
-                    {turnosDelDia.length} turno{turnosDelDia.length !== 1 ? "s" : ""}
-                  </p>
-                )}
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Lista del día seleccionado */}
-      {selectedDay && (
-        <div className="border rounded-lg bg-card">
-          <div className="px-4 py-3 border-b flex items-center justify-between">
-            <h3 className="font-semibold capitalize">
-              {format(selectedDay, "EEEE d 'de' MMMM", { locale: es })}
-            </h3>
-            <Button size="sm" variant="outline" onClick={() => {
-              const d = new Date(selectedDay)
-              d.setHours(9, 0, 0, 0)
-              handleNuevo(d)
-            }}>
-              <Plus className="mr-1 h-3 w-3" />
-              Agregar
-            </Button>
-          </div>
-          {isLoading ? (
-            <div className="p-8 text-center text-sm text-muted-foreground">Cargando...</div>
-          ) : turnosSeleccionados.length === 0 ? (
-            <div className="p-8 text-center text-sm text-muted-foreground">
-              <CalendarDays className="h-8 w-8 mx-auto mb-2 opacity-40" />
-              Sin turnos para este día
-            </div>
-          ) : (
-            <div className="divide-y">
-              {turnosSeleccionados.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => setDetailTurno(t)}
-                  className="w-full text-left p-4 hover:bg-accent/40 transition-colors flex gap-3 items-start"
-                >
-                  <div className={`shrink-0 w-1 h-12 rounded-full ${ESTADO_DOT_COLORS[t.estado]}`} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 flex-wrap mb-1">
-                      <span className="font-medium text-sm flex items-center gap-1">
-                        <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                        {format(parseISO(t.inicio), "HH:mm")}
-                        {t.fin && ` — ${format(parseISO(t.fin), "HH:mm")}`}
-                      </span>
-                      <span className="text-xs px-1.5 py-0.5 rounded bg-muted">
-                        {TIPO_LABELS[t.tipo]}
-                      </span>
-                      {t.orden && (
-                        <span className="text-xs px-1.5 py-0.5 rounded bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300 flex items-center gap-1">
-                          <FileText className="h-3 w-3" />
-                          {t.orden.codigoOrden || `#${t.orden.numeroOrden}`}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm flex items-center gap-1 truncate">
-                      <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                      {t.cliente?.nombre || t.clienteSnapshot?.nombre || "Sin cliente"}
-                    </p>
-                    {t.tecnico && (
-                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                        <Wrench className="h-3 w-3" />
-                        {t.tecnico.nombre}
-                      </p>
-                    )}
-                    {t.direccion && (
-                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5 truncate">
-                        <MapPin className="h-3 w-3 shrink-0" />
-                        {t.direccion}
-                      </p>
-                    )}
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+      {/* Vista */}
+      {vista === "lista" ? (
+        <ListaView
+          days={days}
+          turnosPorDia={turnosPorDia}
+          isLoading={isLoading}
+          onClick={(t) => setDetailTurno(t)}
+          onNuevo={(d) => handleNuevoSlot(d)}
+        />
+      ) : (
+        <TimelineView
+          vista={vista}
+          days={days}
+          horas={horas}
+          turnosPorDia={turnosPorDia}
+          isLoading={isLoading}
+          onTurnoClick={(t) => setDetailTurno(t)}
+          onSlotClick={handleNuevoSlot}
+        />
       )}
 
       <TurnoFormDialog
@@ -340,6 +316,222 @@ export function AgendaView() {
         onChanged={() => { mutate(); setDetailTurno(null) }}
         onEdit={handleEditFromDetail}
       />
+    </div>
+  )
+}
+
+// ============================================
+// Subcomponentes
+// ============================================
+
+function VistaBtn({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`
+        inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors
+        ${active ? "bg-primary text-primary-foreground" : "hover:bg-accent"}
+      `}
+    >
+      {icon}
+      <span className="hidden sm:inline">{label}</span>
+    </button>
+  )
+}
+
+function StatCard({
+  icon, label, value, tone, sub,
+}: {
+  icon: React.ReactNode
+  label: string
+  value: number
+  tone: "blue" | "amber" | "emerald" | "red"
+  sub?: string
+}) {
+  const tones = {
+    blue: "bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border-blue-200/50 dark:border-blue-900/50",
+    amber: "bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 border-amber-200/50 dark:border-amber-900/50",
+    emerald: "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 border-emerald-200/50 dark:border-emerald-900/50",
+    red: "bg-red-50 dark:bg-red-950/30 text-red-800 dark:text-red-300 border-red-200/50 dark:border-red-900/50",
+  }
+  return (
+    <div className={`rounded-lg border p-3 ${tones[tone]}`}>
+      <div className="flex items-center gap-1.5 text-xs font-medium opacity-80">
+        {icon}
+        {label}
+        {sub && <span className="text-[10px] opacity-70 ml-auto">{sub}</span>}
+      </div>
+      <div className="text-2xl font-bold mt-1">{value}</div>
+    </div>
+  )
+}
+
+function TimelineView({
+  vista, days, horas, turnosPorDia, isLoading, onTurnoClick, onSlotClick,
+}: {
+  vista: Vista
+  days: Date[]
+  horas: number[]
+  turnosPorDia: Map<string, TurnoConRelaciones[]>
+  isLoading: boolean
+  onTurnoClick: (t: TurnoConRelaciones) => void
+  onSlotClick: (day: Date, hour: number) => void
+}) {
+  // Marcador "ahora"
+  const [now, setNow] = useState(new Date())
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 60000)
+    return () => clearInterval(t)
+  }, [])
+
+  const nowOffsetPx = useMemo(() => {
+    const h = now.getHours()
+    const m = now.getMinutes()
+    if (h < HOUR_START || h >= HOUR_END) return null
+    const min = h * 60 + m
+    return ((min - HOUR_START * 60) / 60) * HOUR_HEIGHT
+  }, [now])
+
+  return (
+    <div className="border rounded-lg bg-card overflow-hidden">
+      {/* Header con días */}
+      <div className="grid border-b bg-muted/30" style={{ gridTemplateColumns: `48px repeat(${days.length}, 1fr)` }}>
+        <div />
+        {days.map((day) => {
+          const today = isToday(day)
+          return (
+            <div key={day.toISOString()} className="px-2 py-2 text-center border-l">
+              <div className="text-[10px] text-muted-foreground uppercase tracking-wide">
+                {WEEKDAYS_SHORT[(day.getDay() + 6) % 7]}
+              </div>
+              <div className={`text-base font-semibold ${today ? "text-primary" : ""}`}>
+                {format(day, "d")}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Grid horario */}
+      <div className="relative overflow-auto" style={{ maxHeight: "min(70vh, 700px)" }}>
+        {isLoading && (
+          <div className="absolute inset-0 z-10 bg-background/60 backdrop-blur-sm flex items-center justify-center text-sm text-muted-foreground">
+            Cargando…
+          </div>
+        )}
+        <div
+          className="grid relative"
+          style={{
+            gridTemplateColumns: `48px repeat(${days.length}, 1fr)`,
+            height: `${TOTAL_HEIGHT}px`,
+          }}
+        >
+          {/* Columna de horas */}
+          <div className="relative">
+            {horas.map((h) => (
+              <div
+                key={h}
+                className="absolute left-0 right-0 text-[10px] text-muted-foreground pr-1 text-right"
+                style={{ top: `${(h - HOUR_START) * HOUR_HEIGHT - 5}px` }}
+              >
+                {h.toString().padStart(2, "0")}:00
+              </div>
+            ))}
+          </div>
+
+          {/* Columnas día */}
+          {days.map((day) => {
+            const key = format(day, "yyyy-MM-dd")
+            const turnos = turnosPorDia.get(key) || []
+            const today = isToday(day)
+            return (
+              <div key={key} className="relative border-l">
+                {/* Grid lines */}
+                {horas.map((h) => (
+                  <div
+                    key={h}
+                    className="absolute left-0 right-0 border-t border-border/50 hover:bg-accent/30 cursor-pointer"
+                    style={{ top: `${(h - HOUR_START) * HOUR_HEIGHT}px`, height: `${HOUR_HEIGHT}px` }}
+                    onClick={() => onSlotClick(day, h)}
+                    title={`Crear turno a las ${h}:00`}
+                  />
+                ))}
+                {/* Línea "ahora" */}
+                {today && nowOffsetPx != null && (
+                  <div
+                    className="absolute left-0 right-0 z-10 pointer-events-none"
+                    style={{ top: `${nowOffsetPx}px` }}
+                  >
+                    <div className="h-px bg-red-500" />
+                    <div className="absolute -left-1 -top-1 w-2 h-2 rounded-full bg-red-500" />
+                  </div>
+                )}
+                {/* Turnos */}
+                {turnos.map((t) => (
+                  <TurnoBlock
+                    key={t.id}
+                    turno={t}
+                    onClick={() => onTurnoClick(t)}
+                    style={turnoStylePx(t)}
+                    variant="calendar"
+                    compact={vista === "semana"}
+                  />
+                ))}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ListaView({
+  days, turnosPorDia, isLoading, onClick, onNuevo,
+}: {
+  days: Date[]
+  turnosPorDia: Map<string, TurnoConRelaciones[]>
+  isLoading: boolean
+  onClick: (t: TurnoConRelaciones) => void
+  onNuevo: (day: Date) => void
+}) {
+  const diasConData = days.filter(d => (turnosPorDia.get(format(d, "yyyy-MM-dd")) || []).length > 0)
+
+  if (isLoading) {
+    return <div className="text-center py-12 text-sm text-muted-foreground">Cargando…</div>
+  }
+  if (diasConData.length === 0) {
+    return (
+      <div className="border rounded-lg bg-card p-12 text-center">
+        <CalendarDays className="h-10 w-10 mx-auto mb-3 opacity-30" />
+        <p className="text-sm text-muted-foreground mb-3">Sin turnos en este rango</p>
+        <Button size="sm" onClick={() => onNuevo(new Date())}>
+          <Plus className="mr-1 h-3 w-3" />
+          Crear turno
+        </Button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      {diasConData.map((day) => {
+        const key = format(day, "yyyy-MM-dd")
+        const turnos = turnosPorDia.get(key) || []
+        return (
+          <div key={key} className="border rounded-lg bg-card overflow-hidden">
+            <div className="px-4 py-2 bg-muted/40 border-b flex items-center justify-between">
+              <h3 className="text-sm font-semibold capitalize">
+                {format(day, "EEEE d 'de' MMMM", { locale: es })}
+              </h3>
+              <span className="text-xs text-muted-foreground">{turnos.length} turno{turnos.length !== 1 ? "s" : ""}</span>
+            </div>
+            {turnos.map((t) => (
+              <TurnoBlock key={t.id} turno={t} onClick={() => onClick(t)} variant="list" />
+            ))}
+          </div>
+        )
+      })}
     </div>
   )
 }
