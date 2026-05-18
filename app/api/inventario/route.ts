@@ -170,7 +170,7 @@ export async function POST(request: Request) {
           stock_minimo: data.stockMinimo ?? null,
           stock_maximo: data.stockMaximo ?? null,
           punto_reorden: data.puntoReorden ?? null,
-          barcode: data.barcode ?? null,
+          barcode: data.barcode?.trim() || null,
           ubicacion: data.ubicacion?.trim() || null,
           organization_id: organizationId!,
         })

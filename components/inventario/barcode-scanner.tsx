@@ -125,8 +125,14 @@ export function BarcodeScanner({ open, onOpenChange, onResult }: Props) {
         return
       }
 
-      // Skip modifier-only or non-printable keys (Shift/Ctrl/Alt/Arrow/F-keys)
-      if (e.key.length !== 1) return
+      // Resolve char preferring e.code for digit keys. Layouts ES/Latam
+      // emiten "!\"·$%&/()=" con Shift+digit, lo que rompe EAN regex.
+      // e.code es independiente del layout: Digit0..9 / Numpad0..9.
+      let ch: string | null = null
+      const digitMatch = e.code.match(/^Digit(\d)$/) || e.code.match(/^Numpad(\d)$/)
+      if (digitMatch) ch = digitMatch[1]
+      else if (e.key.length === 1) ch = e.key
+      else return
 
       // Long gap = new input session
       if (gap > RESET_GAP) {
@@ -135,7 +141,7 @@ export function BarcodeScanner({ open, onOpenChange, onResult }: Props) {
         fastChars = 0
       }
 
-      buf += e.key
+      buf += ch
 
       // Promote to scanner-mode after 3 fast consecutive chars
       if (gap < FAST_GAP) {

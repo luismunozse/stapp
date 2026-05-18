@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatCliente } from "@/lib/db-utils"
-import { enforcePlanLimit } from "@/lib/plan-limits"
+import { enforcePlanLimit, isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
 import { z } from "zod"
 
 const clienteSchema = z.object({
@@ -114,6 +114,10 @@ export async function POST(request: Request) {
           { error: "Ya existe un cliente con ese teléfono" },
           { status: 400 }
         )
+      }
+      // Trigger atomico de limite (race condition)
+      if (isPlanLimitError(dbError)) {
+        return planLimitErrorResponse(dbError)
       }
       throw dbError
     }

@@ -55,23 +55,11 @@ const inventarioSchema = z.object({
   stockMaximo: z.number().int().min(0).nullable().optional(),
   puntoReorden: z.number().int().min(0).nullable().optional(),
   ubicacion: z.string().max(200, "Máximo 200 caracteres").nullable().optional(),
-  barcode: z
-    .string()
-    .nullable()
-    .optional()
-    .refine(
-      (v) => {
-        if (!v) return true
-        const err = validateBarcode(v.trim())
-        return err === null
-      },
-      (v) => {
-        const err = validateBarcode((v ?? "").trim())
-        if (!err) return { message: "" }
-        const label = err.kind === "invalid_ean13" ? "EAN-13" : err.kind === "invalid_ean8" ? "EAN-8" : "UPC-A"
-        return { message: `Dígito verificador ${label} inválido. ¿Quisiste ingresar ${err.expected}?` }
-      },
-    ),
+  // Validación de checksum NO bloquea: el form muestra sugerencia inline
+  // (ver bloque debajo del input). Códigos internos / impresos sin checksum
+  // estricto deben poder guardarse igual; bloquearlos fue causa de "no se
+  // registran EAN-13" en codes genéricos no-GS1.
+  barcode: z.string().nullable().optional(),
 })
 
 type InventarioFormData = z.infer<typeof inventarioSchema>
@@ -991,16 +979,36 @@ export function InventarioForm({
             <Input
               id="barcode"
               {...register("barcode", {
-                setValueAs: (v: string) => v === "" || v === null ? null : v,
+                setValueAs: (v: string) => {
+                  if (v === null || v === undefined) return null
+                  const t = String(v).trim()
+                  return t === "" ? null : t
+                },
               })}
               placeholder="Escanear o ingresar código de barras"
+              inputMode="text"
+              autoComplete="off"
             />
-            {errors.barcode && (
-              <p className="text-sm text-destructive mt-1">{errors.barcode.message}</p>
-            )}
             {(() => {
               const v = (watch("barcode") || "").trim()
-              if (!v || errors.barcode) return null
+              if (!v) return null
+              const err = validateBarcode(v)
+              if (err) {
+                const label = err.kind === "invalid_ean13" ? "EAN-13" : err.kind === "invalid_ean8" ? "EAN-8" : "UPC-A"
+                return (
+                  <div className="mt-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200 dark:border-amber-800">
+                    Dígito verificador {label} no cierra. Sugerido:{" "}
+                    <button
+                      type="button"
+                      className="font-mono underline hover:opacity-80"
+                      onClick={() => setValue("barcode", err.expected, { shouldDirty: true, shouldValidate: true })}
+                    >
+                      {err.expected}
+                    </button>
+                    . Podés guardar tal cual si es un código interno.
+                  </div>
+                )
+              }
               if (/^\d{12}$/.test(v)) {
                 const check = computeEAN13CheckDigit(v)
                 if (check) {

@@ -144,11 +144,44 @@ const FREE_PLAN_LIMITS: Record<string, number> = {
   storageMb: 100,
 }
 
+// Reset atómico del contador mensual de órdenes si periodo_inicio quedó del mes
+// anterior. El trigger ON INSERT en ordenes_servicio también hace esto, pero
+// solo si el INSERT llega a ejecutarse — sin este reset previo, el pre-check
+// de checkPlanLimit lee el contador stale del mes pasado y deja al usuario
+// bloqueado en plan Free (15/15) sin posibilidad de crear órdenes el mes nuevo.
+async function resetOrdenesMesIfNeeded(organizationId: string): Promise<void> {
+  const { error } = await supabaseAdmin.rpc("reset_ordenes_mes_if_needed", {
+    org_id: organizationId,
+  })
+
+  // Fallback si la RPC todavía no existe en este entorno: hacer el UPDATE
+  // condicional desde la app. Es idempotente y atómico a nivel de fila.
+  if (error) {
+    const monthStart = new Date()
+    monthStart.setUTCDate(1)
+    monthStart.setUTCHours(0, 0, 0, 0)
+    await supabaseAdmin
+      .from("organization_usage")
+      .update({
+        ordenes_mes_actual: 0,
+        periodo_inicio: monthStart.toISOString(),
+      })
+      .eq("organization_id", organizationId)
+      .lt("periodo_inicio", monthStart.toISOString())
+  }
+}
+
 // Verificar si una organización puede realizar una acción según su plan
 export async function checkPlanLimit(
   organizationId: string,
   limitType: "ordenes" | "tecnicos" | "clientes" | "vendedores" | "storage"
 ): Promise<{ allowed: boolean; current: number; limit: number | null; message?: string }> {
+  // Para órdenes: resetear contador mensual si periodo_inicio < mes actual.
+  // Debe correr ANTES de getUsageInfo para que la lectura sea consistente.
+  if (limitType === "ordenes") {
+    await resetOrdenesMesIfNeeded(organizationId)
+  }
+
   const subscription = await getSubscriptionInfo(organizationId)
   const usage = await getUsageInfo(organizationId)
 
@@ -416,15 +449,19 @@ export async function isPremium(organizationId: string): Promise<boolean> {
   return false
 }
 
-// Actualizar uso de storage
+// Actualizar uso de storage.
+// Retorna { error } cuando la RPC raisea (ej. PLAN_LIMIT_EXCEEDED:storage:...).
+// El caller decide si rollbackear el upload + DB row o si convertir a 403.
 export async function updateStorageUsage(
   organizationId: string,
   bytesAdded: number
-) {
+): Promise<{ error: { message?: string; code?: string; details?: string | null; hint?: string | null } | null }> {
   const mbAdded = bytesAdded / (1024 * 1024)
 
-  await supabaseAdmin.rpc("update_storage_usage", {
+  const { error } = await supabaseAdmin.rpc("update_storage_usage", {
     org_id: organizationId,
     mb_added: mbAdded,
   })
+
+  return { error: error ?? null }
 }

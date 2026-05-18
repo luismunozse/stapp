@@ -5,7 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { getNextOrderNumberByType } from "@/lib/counters"
 import { createAuditLogger } from "@/lib/audit"
 import { uploadOrderPhoto, base64ToBuffer } from "@/lib/storage"
-import { enforcePlanLimit } from "@/lib/plan-limits"
+import { enforcePlanLimit, isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
 import { formatOrden } from "@/lib/db-utils"
 import { z } from "zod"
 
@@ -340,6 +340,11 @@ export async function POST(request: Request) {
       .single()
 
     if (dbError) {
+      // El trigger update_ordenes_count rollbackea el INSERT si se excede el
+      // limite del plan (race condition que el pre-check TS no atrapa).
+      if (isPlanLimitError(dbError)) {
+        return planLimitErrorResponse(dbError)
+      }
       throw dbError
     }
 

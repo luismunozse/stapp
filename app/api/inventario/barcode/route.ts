@@ -11,7 +11,8 @@ export async function GET(request: Request) {
     if (error) return error
 
     const { searchParams } = new URL(request.url)
-    const code = searchParams.get("code")
+    const rawCode = searchParams.get("code")
+    const code = (rawCode ?? "").trim()
 
     if (!code) {
       return NextResponse.json({ error: "Código requerido" }, { status: 400 })

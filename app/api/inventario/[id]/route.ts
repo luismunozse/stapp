@@ -103,7 +103,10 @@ export async function PUT(
     if (data.stockMinimo !== undefined) updateData.stock_minimo = data.stockMinimo
     if (data.stockMaximo !== undefined) updateData.stock_maximo = data.stockMaximo
     if (data.puntoReorden !== undefined) updateData.punto_reorden = data.puntoReorden
-    if (data.barcode !== undefined) updateData.barcode = data.barcode
+    if (data.barcode !== undefined) {
+      const trimmed = (data.barcode ?? "").trim()
+      updateData.barcode = trimmed.length > 0 ? trimmed : null
+    }
     if (data.ubicacion !== undefined) {
       const trimmed = (data.ubicacion ?? "").trim()
       updateData.ubicacion = trimmed.length > 0 ? trimmed : null

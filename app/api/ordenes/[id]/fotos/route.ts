@@ -3,7 +3,7 @@ import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { uploadOrderPhoto, deleteFile, base64ToBuffer } from "@/lib/storage"
 import { formatFoto } from "@/lib/db-utils"
-import { enforcePlanLimit } from "@/lib/plan-limits"
+import { enforcePlanLimit, isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
 import { updateStorageUsage } from "@/lib/subscriptions"
 import { z } from "zod"
 
@@ -139,8 +139,18 @@ export async function POST(
       throw dbError
     }
 
-    // Actualizar uso de storage
-    await updateStorageUsage(organizationId!, buffer.length)
+    // Actualizar uso de storage. La RPC raisea si se excede el limite del
+    // plan (race condition que el pre-check TS no atrapa). En ese caso,
+    // rollbackear: borrar el archivo subido y el row recien insertado.
+    const { error: storageRpcError } = await updateStorageUsage(organizationId!, buffer.length)
+    if (storageRpcError) {
+      if (isPlanLimitError(storageRpcError)) {
+        await deleteFile("FOTOS_ORDENES", path)
+        await supabaseAdmin.from("fotos_orden").delete().eq("id", foto.id)
+        return planLimitErrorResponse(storageRpcError)
+      }
+      console.error("Error updating storage usage:", storageRpcError)
+    }
 
     return NextResponse.json(formatFoto(foto), { status: 201 })
   } catch (error) {

@@ -36,11 +36,19 @@ export function useBarcodeScanner({ onScan, enabled = true }: UseBarcodeScannerO
         return
       }
 
-      if (e.key.length === 1) {
+      // Resolve char. Para teclas de dígito usamos e.code (Digit0..9 / Numpad0..9)
+      // independiente del layout: en ES/Latam Shift+1..0 emite "!\"·$%&/()=", lo
+      // que rompe el match de EAN13 en la búsqueda posterior.
+      let ch: string | null = null
+      const digitMatch = e.code.match(/^Digit(\d)$/) || e.code.match(/^Numpad(\d)$/)
+      if (digitMatch) ch = digitMatch[1]
+      else if (e.key.length === 1) ch = e.key
+
+      if (ch) {
         if (now - lastKeyTime.current > 150) {
           buffer.current = ""
         }
-        buffer.current += e.key
+        buffer.current += ch
         lastKeyTime.current = now
       }
     }

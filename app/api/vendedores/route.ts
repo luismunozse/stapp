@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
-import { enforcePlanLimit } from "@/lib/plan-limits"
+import { enforcePlanLimit, isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
 import bcrypt from "bcryptjs"
 import { z } from "zod"
 
@@ -152,6 +152,10 @@ export async function POST(request: Request) {
       .single()
 
     if (dbError) {
+      // Trigger atomico de limite (race condition)
+      if (isPlanLimitError(dbError)) {
+        return planLimitErrorResponse(dbError)
+      }
       throw dbError
     }
 

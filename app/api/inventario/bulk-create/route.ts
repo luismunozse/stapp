@@ -101,7 +101,7 @@ export async function POST(request: Request) {
             stock_minimo: data.stockMinimo ?? null,
             stock_maximo: data.stockMaximo ?? null,
             punto_reorden: data.puntoReorden ?? null,
-            barcode: data.barcode ?? null,
+            barcode: data.barcode?.trim() || null,
             organization_id: organizationId!,
           })
           .select("*, proveedores:proveedor_id(id, nombre)")
