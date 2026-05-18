@@ -907,7 +907,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
               selectable
               selectedKeys={selectedKeys}
               onSelectionChange={setSelectedKeys}
-              onRowClick={(item) => setAnalyticsItem({ id: item.id, nombre: item.nombre })}
+              onRowClick={(item) => { setEditingItem(item); setShowForm(true) }}
               rowClassName={(item) => {
                 const isArchived = !!item.deletedAt
                 const sinStock = item.stock === 0
@@ -936,13 +936,14 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                     <Card
                       key={item.id}
                       className={`overflow-hidden cursor-pointer transition-shadow hover:shadow-md hover:border-primary/40 ${sinStock && !isArchived ? "border-destructive/30 bg-destructive/5" : ""} ${isArchived ? "opacity-50" : ""}`}
-                      onClick={() => setAnalyticsItem({ id: item.id, nombre: item.nombre })}
+                      onClick={() => { setEditingItem(item); setShowForm(true) }}
                       role="button"
                       tabIndex={0}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === " ") {
                           e.preventDefault()
-                          setAnalyticsItem({ id: item.id, nombre: item.nombre })
+                          setEditingItem(item)
+                          setShowForm(true)
                         }
                       }}
                     >
