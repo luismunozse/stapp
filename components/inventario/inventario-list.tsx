@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useMemo } from "react"
+import Link from "next/link"
 import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -31,6 +32,15 @@ import {
   MoreHorizontal,
   MapPin,
   ArrowLeftRight,
+  ClipboardCheck,
+  Sparkles,
+  BarChart3,
+  ScrollText,
+  Images,
+  Calendar,
+  Hash,
+  Layers,
+  Boxes,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -50,6 +60,12 @@ import { InventarioAnalyticsModal } from "./inventario-analytics-modal"
 import { BarcodeScanner } from "./barcode-scanner"
 import { LabelsPrintDialog } from "./labels-print-dialog"
 import { TransferirStockDialog } from "./transferir-stock-dialog"
+import { AuditHistorial } from "./audit-historial"
+import { GaleriaImagenes } from "./galeria-imagenes"
+import { LotesDialog } from "./lotes-dialog"
+import { SeriesDialog } from "./series-dialog"
+import { VariantesDialog } from "./variantes-dialog"
+import { KitDialog } from "./kit-dialog"
 import { ImportModal } from "@/components/import/import-modal"
 import { ExportButton } from "@/components/export/export-button"
 import { useCurrency } from "@/contexts/currency-context"
@@ -124,6 +140,12 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   const [movimientosItem, setMovimientosItem] = useState<{ id: string; nombre: string } | null>(null)
   const [analyticsItem, setAnalyticsItem] = useState<{ id: string; nombre: string } | null>(null)
   const [transferirItem, setTransferirItem] = useState<{ id: string; nombre: string } | null>(null)
+  const [auditItem, setAuditItem] = useState<{ id: string; nombre: string } | null>(null)
+  const [galeriaItem, setGaleriaItem] = useState<{ id: string; nombre: string } | null>(null)
+  const [lotesItem, setLotesItem] = useState<{ id: string; nombre: string } | null>(null)
+  const [seriesItem, setSeriesItem] = useState<{ id: string; nombre: string } | null>(null)
+  const [variantesItem, setVariantesItem] = useState<{ id: string; nombre: string } | null>(null)
+  const [kitItem, setKitItem] = useState<{ id: string; nombre: string } | null>(null)
   const [showScanner, setShowScanner] = useState(false)
   const [pendingBarcode, setPendingBarcode] = useState<string | null>(null)
   const [labelItems, setLabelItems] = useState<Inventario[] | null>(null)
@@ -519,6 +541,40 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                   <History className="h-4 w-4 mr-2" />
                   Movimientos
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setAuditItem({ id: item.id, nombre: item.nombre })}>
+                  <ScrollText className="h-4 w-4 mr-2" />
+                  Historial de cambios
+                </DropdownMenuItem>
+                {!isArchived && (
+                  <DropdownMenuItem onClick={() => setGaleriaItem({ id: item.id, nombre: item.nombre })}>
+                    <Images className="h-4 w-4 mr-2" />
+                    Galería
+                  </DropdownMenuItem>
+                )}
+                {!isArchived && item.trackeaLotes && (
+                  <DropdownMenuItem onClick={() => setLotesItem({ id: item.id, nombre: item.nombre })}>
+                    <Calendar className="h-4 w-4 mr-2" />
+                    Lotes / Vencimientos
+                  </DropdownMenuItem>
+                )}
+                {!isArchived && item.trackeaSeries && (
+                  <DropdownMenuItem onClick={() => setSeriesItem({ id: item.id, nombre: item.nombre })}>
+                    <Hash className="h-4 w-4 mr-2" />
+                    Números de serie
+                  </DropdownMenuItem>
+                )}
+                {!isArchived && item.tieneVariantes && (
+                  <DropdownMenuItem onClick={() => setVariantesItem({ id: item.id, nombre: item.nombre })}>
+                    <Layers className="h-4 w-4 mr-2" />
+                    Variantes
+                  </DropdownMenuItem>
+                )}
+                {!isArchived && item.esKit && (
+                  <DropdownMenuItem onClick={() => setKitItem({ id: item.id, nombre: item.nombre })}>
+                    <Boxes className="h-4 w-4 mr-2" />
+                    Componentes del kit
+                  </DropdownMenuItem>
+                )}
                 {!isArchived && (
                   <DropdownMenuItem onClick={() => setTransferirItem({ id: item.id, nombre: item.nombre })}>
                     <ArrowLeftRight className="h-4 w-4 mr-2" />
@@ -714,6 +770,42 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
               <span className="sm:hidden">Importar</span>
             </Button>
           )}
+          <Link href="/inventario/conteos">
+            <Button variant="outline" className="gap-2">
+              <ClipboardCheck className="h-4 w-4" />
+              <span className="hidden sm:inline">Conteos</span>
+            </Button>
+          </Link>
+          <Link href="/inventario/reposicion">
+            <Button variant="outline" className="gap-2">
+              <Sparkles className="h-4 w-4" />
+              <span className="hidden sm:inline">Reposición</span>
+            </Button>
+          </Link>
+          <Link href="/inventario/analisis-abc">
+            <Button variant="outline" className="gap-2">
+              <BarChart3 className="h-4 w-4" />
+              <span className="hidden sm:inline">ABC</span>
+            </Button>
+          </Link>
+          <Link href="/inventario/lotes">
+            <Button variant="outline" className="gap-2">
+              <Calendar className="h-4 w-4" />
+              <span className="hidden sm:inline">Lotes</span>
+            </Button>
+          </Link>
+          <Link href="/inventario/series">
+            <Button variant="outline" className="gap-2">
+              <Hash className="h-4 w-4" />
+              <span className="hidden sm:inline">Series</span>
+            </Button>
+          </Link>
+          <Link href="/inventario/kits">
+            <Button variant="outline" className="gap-2">
+              <Boxes className="h-4 w-4" />
+              <span className="hidden sm:inline">Kits</span>
+            </Button>
+          </Link>
           <div className="flex items-center border rounded-md">
             <Button
               variant={viewMode === "grid" ? "default" : "ghost"}
@@ -830,6 +922,65 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
           onOpenChange={(open) => { if (!open) setTransferirItem(null) }}
           inventarioId={transferirItem.id}
           inventarioNombre={transferirItem.nombre}
+          onSuccess={() => setRefreshKey((k) => k + 1)}
+        />
+      )}
+
+      {auditItem && (
+        <AuditHistorial
+          open={!!auditItem}
+          onOpenChange={(open) => { if (!open) setAuditItem(null) }}
+          inventarioId={auditItem.id}
+          inventarioNombre={auditItem.nombre}
+        />
+      )}
+
+      {galeriaItem && (
+        <GaleriaImagenes
+          open={!!galeriaItem}
+          onOpenChange={(open) => { if (!open) setGaleriaItem(null) }}
+          inventarioId={galeriaItem.id}
+          inventarioNombre={galeriaItem.nombre}
+          onChange={() => setRefreshKey((k) => k + 1)}
+        />
+      )}
+
+      {lotesItem && (
+        <LotesDialog
+          open={!!lotesItem}
+          onOpenChange={(open) => { if (!open) setLotesItem(null) }}
+          inventarioId={lotesItem.id}
+          inventarioNombre={lotesItem.nombre}
+          onSuccess={() => setRefreshKey((k) => k + 1)}
+        />
+      )}
+
+      {seriesItem && (
+        <SeriesDialog
+          open={!!seriesItem}
+          onOpenChange={(open) => { if (!open) setSeriesItem(null) }}
+          inventarioId={seriesItem.id}
+          inventarioNombre={seriesItem.nombre}
+          onSuccess={() => setRefreshKey((k) => k + 1)}
+        />
+      )}
+
+      {variantesItem && (
+        <VariantesDialog
+          open={!!variantesItem}
+          onOpenChange={(open) => { if (!open) setVariantesItem(null) }}
+          inventarioId={variantesItem.id}
+          inventarioNombre={variantesItem.nombre}
+          onChange={() => setRefreshKey((k) => k + 1)}
+        />
+      )}
+
+      {kitItem && (
+        <KitDialog
+          open={!!kitItem}
+          onOpenChange={(open) => { if (!open) setKitItem(null) }}
+          inventarioId={kitItem.id}
+          inventarioNombre={kitItem.nombre}
           onSuccess={() => setRefreshKey((k) => k + 1)}
         />
       )}

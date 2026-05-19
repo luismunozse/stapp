@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatInventario } from "@/lib/db-utils"
+import { createAuditLogger } from "@/lib/audit"
+import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { z } from "zod"
 
 const inventarioSchema = z.object({
@@ -143,7 +145,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { error, organizationId } = await requireAdmin()
+    const { error, organizationId, userId } = await requireAdmin()
     if (error) return error
 
     const body = await request.json()
@@ -211,6 +213,39 @@ export async function POST(request: Request) {
       }
 
       throw dbError
+    }
+
+    // Audit log fire-and-forget
+    if (inventario && userId) {
+      createAuditLogger(organizationId!, userId, request)
+        .create("inventario", inventario.id, {
+          codigo: inventario.codigo,
+          nombre: inventario.nombre,
+          categoria: inventario.categoria,
+          tipo_dispositivo: inventario.tipo_dispositivo,
+          stock: inventario.stock,
+          precio_compra: inventario.precio_compra,
+          precio_venta: inventario.precio_venta,
+          proveedor_id: inventario.proveedor_id,
+          barcode: inventario.barcode,
+        })
+        .catch(() => {})
+    }
+
+    // Webhook outbound: inventario.created (fire-and-forget)
+    if (inventario) {
+      emitWebhookEvent(organizationId!, "inventario.created", {
+        id: inventario.id,
+        codigo: inventario.codigo,
+        nombre: inventario.nombre,
+        categoria: inventario.categoria,
+        tipoDispositivo: inventario.tipo_dispositivo,
+        stock: inventario.stock,
+        precioVenta: inventario.precio_venta,
+        precioCompra: inventario.precio_compra,
+        proveedorId: inventario.proveedor_id,
+        barcode: inventario.barcode,
+      }).catch(() => {})
     }
 
     return NextResponse.json(formatInventario(inventario), { status: 201 })

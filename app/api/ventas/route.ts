@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger } from "@/lib/audit"
+import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { formatVenta } from "@/lib/db-utils"
 import { z } from "zod"
 
@@ -274,6 +275,16 @@ export async function POST(request: Request) {
       .select("nombre, nombre_mostrar")
       .eq("id", organizationId!)
       .single()
+
+    // Webhook outbound: venta.completada (fire-and-forget)
+    emitWebhookEvent(organizationId!, "venta.completada", {
+      id: ventaId,
+      numeroVenta: ventaCompleta?.numero_venta ?? null,
+      clienteNombre: data.clienteNombre,
+      total,
+      metodoPago: data.metodoPago,
+      items: data.items.length,
+    }).catch(() => {})
 
     // Formatear respuesta
     const response = {

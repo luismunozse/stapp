@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { z } from "zod"
 
 // Endpoint dedicado de ajuste rápido de stock.
@@ -67,6 +68,34 @@ export async function POST(
       stockAnterior: number
       stockPosterior: number
       movimientoId: string | null
+    }
+
+    // Webhook outbound: inventario.stock_bajo
+    // Limitación documentada: solo se dispara desde acá (endpoint API).
+    // Ajustes hechos por SQL directo o triggers internos NO emiten — para eso
+    // habría que migrar al trigger 168 con pg_notify, decisión postergada
+    // por simplicidad (sin LISTEN dedicado en runtime).
+    if (result.changed) {
+      const { data: item } = await supabaseAdmin
+        .from("inventario")
+        .select("id, codigo, nombre, stock, punto_reorden, stock_minimo, organization_id")
+        .eq("id", id)
+        .single()
+      if (item && item.organization_id === organizationId) {
+        // Disparar solo en cruce hacia abajo. Si ya estaba por debajo y
+        // bajó más, igual disparamos (consumer puede deduplicar por id+stock).
+        const threshold = item.punto_reorden ?? item.stock_minimo
+        if (threshold !== null && threshold !== undefined && item.stock <= threshold) {
+          emitWebhookEvent(organizationId!, "inventario.stock_bajo", {
+            id: item.id,
+            codigo: item.codigo,
+            nombre: item.nombre,
+            stock: item.stock,
+            puntoReorden: item.punto_reorden,
+            stockMinimo: item.stock_minimo,
+          }).catch(() => {})
+        }
+      }
     }
 
     return NextResponse.json({

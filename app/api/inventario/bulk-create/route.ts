@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatInventario } from "@/lib/db-utils"
+import { createAuditLogger } from "@/lib/audit"
 import { z } from "zod"
 
 const CATEGORIA_PREFIJOS: Record<string, string> = {
@@ -64,7 +65,7 @@ function prefixFor(categoria: string, tipo: string) {
 
 export async function POST(request: Request) {
   try {
-    const { error, organizationId } = await requireAdmin()
+    const { error, organizationId, userId } = await requireAdmin()
     if (error) return error
 
     const body = await request.json()
@@ -72,6 +73,7 @@ export async function POST(request: Request) {
 
     const created: unknown[] = []
     const errors: { index: number; nombre: string; error: string }[] = []
+    const auditLogger = userId ? createAuditLogger(organizationId!, userId, request) : null
 
     // Procesar secuencial para que get_next_inventory_code vea inserts previos
     // y no asigne códigos duplicados dentro del mismo lote.
@@ -109,6 +111,18 @@ export async function POST(request: Request) {
 
         if (insertError) throw insertError
         created.push(formatInventario(inserted))
+        if (auditLogger) {
+          auditLogger.create("inventario", inserted.id, {
+            codigo: inserted.codigo,
+            nombre: inserted.nombre,
+            categoria: inserted.categoria,
+            tipo_dispositivo: inserted.tipo_dispositivo,
+            stock: inserted.stock,
+            precio_compra: inserted.precio_compra,
+            precio_venta: inserted.precio_venta,
+            origen: "bulk-create",
+          }).catch(() => {})
+        }
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Error desconocido"
         errors.push({ index: i, nombre: data.nombre, error: msg })

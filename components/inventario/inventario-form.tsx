@@ -60,6 +60,11 @@ const inventarioSchema = z.object({
   // estricto deben poder guardarse igual; bloquearlos fue causa de "no se
   // registran EAN-13" en codes genéricos no-GS1.
   barcode: z.string().nullable().optional(),
+  trackeaLotes: z.boolean().optional(),
+  trackeaSeries: z.boolean().optional(),
+  tieneVariantes: z.boolean().optional(),
+  esKit: z.boolean().optional(),
+  tipoKit: z.enum(["ENSAMBLADO", "VIRTUAL"]).nullable().optional(),
 })
 
 type InventarioFormData = z.infer<typeof inventarioSchema>
@@ -156,6 +161,11 @@ export function InventarioForm({
           puntoReorden: item.puntoReorden ?? null,
           barcode: item.barcode ?? null,
           ubicacion: item.ubicacion ?? null,
+          trackeaLotes: item.trackeaLotes ?? false,
+          trackeaSeries: item.trackeaSeries ?? false,
+          tieneVariantes: item.tieneVariantes ?? false,
+          esKit: item.esKit ?? false,
+          tipoKit: item.tipoKit ?? null,
         }
       : {
           nombre: "",
@@ -170,6 +180,11 @@ export function InventarioForm({
           puntoReorden: null,
           barcode: initialBarcode ?? null,
           ubicacion: null,
+          trackeaLotes: false,
+          trackeaSeries: false,
+          tieneVariantes: false,
+          esKit: false,
+          tipoKit: null,
         },
   })
 
@@ -240,6 +255,11 @@ export function InventarioForm({
         puntoReorden: item.puntoReorden ?? null,
         barcode: item.barcode ?? null,
         ubicacion: item.ubicacion ?? null,
+        trackeaLotes: item.trackeaLotes ?? false,
+        trackeaSeries: item.trackeaSeries ?? false,
+        tieneVariantes: item.tieneVariantes ?? false,
+        esKit: item.esKit ?? false,
+        tipoKit: item.tipoKit ?? null,
       })
       setImagenPreview(item.imagenUrl || null)
       setPendingFile(null)
@@ -1029,6 +1049,77 @@ export function InventarioForm({
               return null
             })()}
           </div>
+
+          {/* Tracking avanzado — opt-in por item */}
+          <details className="border rounded-md">
+            <summary className="cursor-pointer text-sm font-medium px-3 py-2 hover:bg-muted/40">
+              Tracking avanzado
+            </summary>
+            <div className="p-3 space-y-2 border-t">
+              <p className="text-xs text-muted-foreground">
+                Activá sólo las features que vas a usar. Cada una habilita su dialog en el menú del item.
+              </p>
+              <label className="flex items-center justify-between gap-3 p-2 rounded hover:bg-muted/30 cursor-pointer">
+                <div>
+                  <div className="text-sm">Trackear lotes / vencimientos</div>
+                  <div className="text-[11px] text-muted-foreground">Cada entrada asocia un # de lote y fecha de vencimiento.</div>
+                </div>
+                <input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  {...register("trackeaLotes")}
+                />
+              </label>
+              <label className="flex items-center justify-between gap-3 p-2 rounded hover:bg-muted/30 cursor-pointer">
+                <div>
+                  <div className="text-sm">Trackear números de serie</div>
+                  <div className="text-[11px] text-muted-foreground">1 fila por unidad con S/N único. Útil para garantías.</div>
+                </div>
+                <input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  {...register("trackeaSeries")}
+                />
+              </label>
+              <label className="flex items-center justify-between gap-3 p-2 rounded hover:bg-muted/30 cursor-pointer">
+                <div>
+                  <div className="text-sm">Tiene variantes</div>
+                  <div className="text-[11px] text-muted-foreground">Color/talle/capacidad con stock + precio + barcode propios.</div>
+                </div>
+                <input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  {...register("tieneVariantes")}
+                />
+              </label>
+              <label className="flex items-center justify-between gap-3 p-2 rounded hover:bg-muted/30 cursor-pointer">
+                <div>
+                  <div className="text-sm">Es kit / combo</div>
+                  <div className="text-[11px] text-muted-foreground">Item compuesto por N componentes con cantidades.</div>
+                </div>
+                <input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  {...register("esKit")}
+                />
+              </label>
+              {watch("esKit") && (
+                <div className="pl-3">
+                  <Label className="text-xs">Tipo de kit</Label>
+                  <Select
+                    value={watch("tipoKit") ?? "ENSAMBLADO"}
+                    onValueChange={(v) => setValue("tipoKit", v as "ENSAMBLADO" | "VIRTUAL", { shouldDirty: true })}
+                  >
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ENSAMBLADO">Ensamblado (stock propio)</SelectItem>
+                      <SelectItem value="VIRTUAL">Virtual (descuenta componentes)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+          </details>
 
           <div className="flex gap-2 justify-end pt-2">
             <Button type="button" variant="outline" onClick={onClose}>

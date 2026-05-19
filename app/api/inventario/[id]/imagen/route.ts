@@ -59,23 +59,39 @@ export async function POST(
       file.type
     )
 
-    // Actualizar el row. Primero guardamos la nueva URL/path y después borramos
-    // la imagen vieja (fail-safe: si el delete falla, la nueva ya quedó persistida).
-    const { error: updateError } = await supabaseAdmin
-      .from("inventario")
-      .update({
-        imagen_url: url,
-        imagen_path: path,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", id)
-      .eq("organization_id", organizationId!)
+    // Multi-imagen: la imagen vieja principal se reemplaza. Estrategia:
+    // 1) Buscar fila principal previa (si existe) + borrar fila + path bucket.
+    // 2) Insertar nueva como principal → trigger sync_inventario_imagen_principal
+    //    actualiza inventario.imagen_url/path automáticamente.
+    const { data: prevPrincipal } = await supabaseAdmin
+      .from("inventario_imagenes")
+      .select("id, path")
+      .eq("inventario_id", id)
+      .eq("es_principal", true)
+      .maybeSingle()
 
-    if (updateError) throw updateError
-
-    if (item.imagen_path && item.imagen_path !== path) {
+    if (prevPrincipal) {
+      await supabaseAdmin.from("inventario_imagenes").delete().eq("id", prevPrincipal.id)
+      if (prevPrincipal.path) {
+        await deleteInventarioImage(prevPrincipal.path)
+      }
+    } else if (item.imagen_path) {
+      // Legacy fallback: item con imagen_url pre-migración 173 sin fila espejo
       await deleteInventarioImage(item.imagen_path)
     }
+
+    const { error: insErr } = await supabaseAdmin
+      .from("inventario_imagenes")
+      .insert({
+        inventario_id: id,
+        url,
+        path,
+        orden: 0,
+        es_principal: true,
+        organization_id: organizationId!,
+      })
+
+    if (insErr) throw insErr
 
     return NextResponse.json({ imagenUrl: url, imagenPath: path })
   } catch (err) {
@@ -110,21 +126,33 @@ export async function DELETE(
       return NextResponse.json({ error: "Item no encontrado" }, { status: 404 })
     }
 
-    if (item.imagen_path) {
-      await deleteInventarioImage(item.imagen_path)
-    }
-
-    const { error: updateError } = await supabaseAdmin
-      .from("inventario")
-      .update({
-        imagen_url: null,
-        imagen_path: null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", id)
+    // Borrar toda la galería + paths del bucket. Trigger sincroniza el cache
+    // de inventario.imagen_url/path a NULL al borrar la última fila.
+    const { data: imgs } = await supabaseAdmin
+      .from("inventario_imagenes")
+      .select("path")
+      .eq("inventario_id", id)
       .eq("organization_id", organizationId!)
 
-    if (updateError) throw updateError
+    const { error: delErr } = await supabaseAdmin
+      .from("inventario_imagenes")
+      .delete()
+      .eq("inventario_id", id)
+      .eq("organization_id", organizationId!)
+    if (delErr) throw delErr
+
+    for (const i of imgs || []) {
+      if (i.path) await deleteInventarioImage(i.path)
+    }
+
+    // Legacy fallback si no había filas en la galería
+    if ((imgs?.length ?? 0) === 0 && item.imagen_path) {
+      await deleteInventarioImage(item.imagen_path)
+      await supabaseAdmin
+        .from("inventario")
+        .update({ imagen_url: null, imagen_path: null })
+        .eq("id", id)
+    }
 
     return NextResponse.json({ success: true })
   } catch (err) {

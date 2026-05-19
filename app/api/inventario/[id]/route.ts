@@ -2,7 +2,34 @@ import { NextResponse } from "next/server"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatInventario } from "@/lib/db-utils"
+import { createAuditLogger, diffObjects } from "@/lib/audit"
+import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { z } from "zod"
+
+// Campos auditados (excluye stock — ya cubierto por movimientos_inventario).
+// Cambios en estos campos generan un audit_log UPDATE.
+const AUDITED_FIELDS = [
+  "codigo",
+  "nombre",
+  "descripcion",
+  "categoria",
+  "tipo_dispositivo",
+  "precio_compra",
+  "precio_venta",
+  "proveedor",
+  "proveedor_id",
+  "stock_minimo",
+  "stock_maximo",
+  "punto_reorden",
+  "barcode",
+  "ubicacion",
+] as const
+
+function pickAudited(row: Record<string, any>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const k of AUDITED_FIELDS) out[k] = row[k]
+  return out
+}
 
 const inventarioSchema = z.object({
   codigo: z.string().min(1).optional(),
@@ -21,6 +48,12 @@ const inventarioSchema = z.object({
   puntoReorden: z.number().int().min(0).nullable().optional(),
   barcode: z.string().nullable().optional(),
   ubicacion: z.string().max(200).nullable().optional(),
+  trackeaLotes: z.boolean().optional(),
+  trackeaSeries: z.boolean().optional(),
+  diasAlertaVencimiento: z.number().int().min(1).max(365).nullable().optional(),
+  tieneVariantes: z.boolean().optional(),
+  esKit: z.boolean().optional(),
+  tipoKit: z.enum(["ENSAMBLADO", "VIRTUAL"]).nullable().optional(),
 })
 
 export async function GET(
@@ -70,10 +103,10 @@ export async function PUT(
     const body = await request.json()
     const data = inventarioSchema.parse(body)
 
-    // Verificar que el item pertenece a la organización y no está archivado
+    // Verificar pertenencia y traer snapshot completo para diff de auditoría
     const { data: existingItem, error: fetchError } = await supabaseAdmin
       .from("inventario")
-      .select("id, stock")
+      .select("*")
       .eq("id", id)
       .eq("organization_id", organizationId!)
       .is("deleted_at", null)
@@ -111,6 +144,12 @@ export async function PUT(
       const trimmed = (data.ubicacion ?? "").trim()
       updateData.ubicacion = trimmed.length > 0 ? trimmed : null
     }
+    if (data.trackeaLotes !== undefined) updateData.trackea_lotes = data.trackeaLotes
+    if (data.trackeaSeries !== undefined) updateData.trackea_series = data.trackeaSeries
+    if (data.diasAlertaVencimiento !== undefined) updateData.dias_alerta_vencimiento = data.diasAlertaVencimiento
+    if (data.tieneVariantes !== undefined) updateData.tiene_variantes = data.tieneVariantes
+    if (data.esKit !== undefined) updateData.es_kit = data.esKit
+    if (data.tipoKit !== undefined) updateData.tipo_kit = data.tipoKit
 
     const { data: item, error: updateError } = await supabaseAdmin
       .from("inventario")
@@ -129,6 +168,30 @@ export async function PUT(
         )
       }
       throw updateError
+    }
+
+    // Audit log: si cambió algún campo no-stock relevante, registrar UPDATE
+    if (item && userId) {
+      const before = pickAudited(existingItem)
+      const after = pickAudited(item)
+      const diff = diffObjects(before, after)
+      if (Object.keys(diff.after).length > 0) {
+        createAuditLogger(organizationId!, userId, request)
+          .update("inventario", id, before, after)
+          .catch(() => {})
+        // Webhook outbound: solo si cambió algún campo NO-stock relevante.
+        // changes: diff field → {before, after} para que el consumidor sepa qué pasó.
+        const changes: Record<string, { before: unknown; after: unknown }> = {}
+        for (const k of Object.keys(diff.after)) {
+          changes[k] = { before: diff.before[k], after: diff.after[k] }
+        }
+        emitWebhookEvent(organizationId!, "inventario.updated", {
+          id: item.id,
+          codigo: item.codigo,
+          nombre: item.nombre,
+          changes,
+        }).catch(() => {})
+      }
     }
 
     if (data.stock !== undefined && data.stock !== existingItem.stock) {
@@ -182,11 +245,10 @@ export async function DELETE(
     const url = new URL(request.url)
     const archive = url.searchParams.get("archive") === "true"
 
-    // Verificar que el item existe y pertenece a la organización (incluye archivados
-    // porque permitimos hard-delete sobre items ya archivados).
+    // Verificar pertenencia + snapshot completo para audit log
     const { data: existing, error: fetchError } = await supabaseAdmin
       .from("inventario")
-      .select("id, deleted_at")
+      .select("*")
       .eq("id", id)
       .eq("organization_id", organizationId!)
       .maybeSingle()
@@ -205,6 +267,18 @@ export async function DELETE(
         .update({ deleted_at: new Date().toISOString(), deleted_by: userId })
         .eq("id", id)
       if (updateError) throw updateError
+      if (userId) {
+        createAuditLogger(organizationId!, userId, request)
+          .delete("inventario", id, { ...pickAudited(existing), accion: "ARCHIVADO" })
+          .catch(() => {})
+      }
+      // Webhook outbound: inventario.archived (soft-delete)
+      emitWebhookEvent(organizationId!, "inventario.archived", {
+        id,
+        codigo: existing.codigo,
+        nombre: existing.nombre,
+        archivedBy: userId ?? null,
+      }).catch(() => {})
       return NextResponse.json({ success: true, archived: true })
     }
 
@@ -238,6 +312,13 @@ export async function DELETE(
         },
         { status: 409 }
       )
+    }
+
+    // Audit del hard delete (antes de borrar; el log sobrevive al item)
+    if (userId) {
+      createAuditLogger(organizationId!, userId, request)
+        .delete("inventario", id, { ...pickAudited(existing), accion: "ELIMINADO" })
+        .catch(() => {})
     }
 
     // Sin referencias bloqueantes: hard delete.

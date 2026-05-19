@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger, diffObjects } from "@/lib/audit"
+import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { queueNotification } from "@/lib/notifications/queue"
 import { formatOrden } from "@/lib/db-utils"
 import { esTransicionValida, getMensajeTransicionInvalida, validarCamposRequeridos } from "@/lib/orden-state-machine"
@@ -330,6 +331,18 @@ export async function PUT(
     // Notificaciones al cliente
     const cliente = orden.clientes as any
     const org = orden.organizations as any
+
+    // Webhook outbound: orden.estado_cambiado (fire-and-forget)
+    if (estadoFinal && estadoFinal !== orden.estado) {
+      emitWebhookEvent(organizationId!, "orden.estado_cambiado", {
+        id,
+        numeroOrden: orden.numero_orden ?? null,
+        estadoAnterior: orden.estado,
+        estadoNuevo: estadoFinal,
+        dispositivo: orden.dispositivo ?? null,
+        clienteId: (orden.clientes as any)?.id ?? null,
+      }).catch(() => {})
+    }
 
     // Notificación de cambio de estado
     if (estadoFinal && estadoFinal !== orden.estado) {

@@ -180,6 +180,12 @@ export interface Inventario {
   puntoReorden?: number | null
   barcode?: string | null
   ubicacion?: string | null
+  trackeaLotes?: boolean
+  trackeaSeries?: boolean
+  diasAlertaVencimiento?: number | null
+  tieneVariantes?: boolean
+  esKit?: boolean
+  tipoKit?: "ENSAMBLADO" | "VIRTUAL" | null
   deletedAt?: string | null
   deletedBy?: string | null
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { z } from "zod"
 
 const aprobarSchema = z.object({
@@ -80,6 +81,16 @@ export async function POST(
         console.error("Error reserving stock for cotizacion:", reserveErr)
       }
     }
+
+    // Webhook outbound: cotizacion.aceptada (fire-and-forget)
+    emitWebhookEvent(organizationId!, "cotizacion.aceptada", {
+      id: updatedCotizacion.id,
+      numeroCotizacion: updatedCotizacion.numero_cotizacion ?? null,
+      tipo: updatedCotizacion.tipo,
+      total: updatedCotizacion.total,
+      clienteId: (updatedCotizacion.clientes as any)?.id ?? null,
+      ordenId: updatedCotizacion.orden_id ?? null,
+    }).catch(() => {})
 
     const orden = updatedCotizacion.ordenes_servicio as any
     return NextResponse.json({
