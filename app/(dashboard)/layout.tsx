@@ -2,6 +2,7 @@ import { Navbar } from "@/components/layout/navbar"
 import { SidebarProvider } from "@/components/layout/sidebar-context"
 import { SidebarMain } from "@/components/layout/sidebar-main"
 import { TrialBanner } from "@/components/subscription/trial-banner"
+import { UsageWarningBanner } from "@/components/subscription/usage-warning-banner"
 import { PolicyChangeModal } from "@/components/subscription/policy-change-modal"
 import { SkipLinks } from "@/components/shared/skip-links"
 import { ApkDownloadBanner } from "@/components/shared/apk-download-banner"
@@ -115,6 +116,9 @@ export default async function DashboardLayout({
                 : "pt-[calc(3.5rem+env(safe-area-inset-top,0px))] lg:pt-0"
             }
           >
+            {/* Aviso de uso cuando se acerca a límites del plan Free (>=80%).
+                No se muestra si ya hay trial banner — ese ya empuja al upgrade. */}
+            {!showTrialBanner && !showMaintenanceBanner && <UsageWarningBanner />}
             {children}
           </SidebarMain>
           {/* Modal de cambio de políticas - se muestra una sola vez */}

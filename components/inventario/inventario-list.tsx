@@ -30,6 +30,7 @@ import {
   X,
   MoreHorizontal,
   MapPin,
+  ArrowLeftRight,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -48,6 +49,7 @@ import { MovimientosHistorial } from "./movimientos-historial"
 import { InventarioAnalyticsModal } from "./inventario-analytics-modal"
 import { BarcodeScanner } from "./barcode-scanner"
 import { LabelsPrintDialog } from "./labels-print-dialog"
+import { TransferirStockDialog } from "./transferir-stock-dialog"
 import { ImportModal } from "@/components/import/import-modal"
 import { ExportButton } from "@/components/export/export-button"
 import { useCurrency } from "@/contexts/currency-context"
@@ -121,6 +123,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   const [editingItem, setEditingItem] = useState<Inventario | null>(null)
   const [movimientosItem, setMovimientosItem] = useState<{ id: string; nombre: string } | null>(null)
   const [analyticsItem, setAnalyticsItem] = useState<{ id: string; nombre: string } | null>(null)
+  const [transferirItem, setTransferirItem] = useState<{ id: string; nombre: string } | null>(null)
   const [showScanner, setShowScanner] = useState(false)
   const [pendingBarcode, setPendingBarcode] = useState<string | null>(null)
   const [labelItems, setLabelItems] = useState<Inventario[] | null>(null)
@@ -517,6 +520,12 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                   Movimientos
                 </DropdownMenuItem>
                 {!isArchived && (
+                  <DropdownMenuItem onClick={() => setTransferirItem({ id: item.id, nombre: item.nombre })}>
+                    <ArrowLeftRight className="h-4 w-4 mr-2" />
+                    Transferir stock
+                  </DropdownMenuItem>
+                )}
+                {!isArchived && (
                   <DropdownMenuItem onClick={() => setLabelItems([item])}>
                     <Tag className="h-4 w-4 mr-2" />
                     Imprimir etiqueta
@@ -812,6 +821,16 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
           onOpenChange={(open) => { if (!open) setAnalyticsItem(null) }}
           inventarioId={analyticsItem.id}
           inventarioNombre={analyticsItem.nombre}
+        />
+      )}
+
+      {transferirItem && (
+        <TransferirStockDialog
+          open={!!transferirItem}
+          onOpenChange={(open) => { if (!open) setTransferirItem(null) }}
+          inventarioId={transferirItem.id}
+          inventarioNombre={transferirItem.nombre}
+          onSuccess={() => setRefreshKey((k) => k + 1)}
         />
       )}
 

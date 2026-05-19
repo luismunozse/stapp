@@ -1,0 +1,160 @@
+"use client"
+
+import { useEffect, useState } from "react"
+import Link from "next/link"
+import { AlertTriangle, X, ArrowRight } from "lucide-react"
+import { cn } from "@/lib/utils"
+
+interface UsageData {
+  usage: {
+    ordenesMesActual: number
+    tecnicos: number
+    vendedores: number
+    clientes: number
+    storageMb: number
+  }
+  limits: {
+    ordenes: number | null
+    tecnicos: number | null
+    vendedores: number | null
+    clientes: number | null
+    storageMb: number | null
+  }
+  percentages: {
+    ordenes: number | null
+    tecnicos: number | null
+    clientes: number | null
+    storage: number | null
+  }
+  planType: "FREE" | "PREMIUM"
+}
+
+interface Warning {
+  key: string
+  label: string
+  current: number
+  limit: number
+  percentage: number
+}
+
+const LABELS: Record<string, string> = {
+  ordenes: "órdenes este mes",
+  tecnicos: "técnicos",
+  vendedores: "vendedores",
+  clientes: "clientes",
+  storage: "almacenamiento (MB)",
+}
+
+const WARNING_THRESHOLD = 80
+const CRITICAL_THRESHOLD = 95
+const DISMISS_KEY = "stapp-usage-warning-dismissed"
+
+export function UsageWarningBanner() {
+  const [warnings, setWarnings] = useState<Warning[]>([])
+  const [dismissed, setDismissed] = useState<Record<string, number>>({})
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(DISMISS_KEY)
+      if (raw) setDismissed(JSON.parse(raw))
+    } catch {}
+
+    fetch("/api/subscriptions/usage", { cache: "no-store" })
+      .then(r => (r.ok ? r.json() : null))
+      .then((data: UsageData | null) => {
+        if (!data || data.planType === "PREMIUM") {
+          setLoaded(true)
+          return
+        }
+
+        const found: Warning[] = []
+        const push = (key: string, current: number, limit: number | null) => {
+          if (limit === null || limit <= 0) return
+          const pct = Math.round((current / limit) * 100)
+          if (pct >= WARNING_THRESHOLD) {
+            found.push({ key, label: LABELS[key], current, limit, percentage: pct })
+          }
+        }
+
+        push("ordenes", data.usage.ordenesMesActual, data.limits.ordenes)
+        push("clientes", data.usage.clientes, data.limits.clientes)
+        push("tecnicos", data.usage.tecnicos, data.limits.tecnicos)
+        push("vendedores", data.usage.vendedores, data.limits.vendedores)
+        push("storage", Math.round(data.usage.storageMb), data.limits.storageMb)
+
+        setWarnings(found)
+        setLoaded(true)
+      })
+      .catch(() => setLoaded(true))
+  }, [])
+
+  if (!loaded || warnings.length === 0) return null
+
+  // Dismissable solo si pct < 95. Críticas siempre se muestran.
+  const visible = warnings.filter(w => {
+    if (w.percentage >= CRITICAL_THRESHOLD) return true
+    const dismissTs = dismissed[w.key]
+    if (!dismissTs) return true
+    // Re-mostrar tras 24h
+    return Date.now() - dismissTs > 24 * 60 * 60 * 1000
+  })
+
+  if (visible.length === 0) return null
+
+  const dismiss = (key: string) => {
+    const next = { ...dismissed, [key]: Date.now() }
+    setDismissed(next)
+    try {
+      sessionStorage.setItem(DISMISS_KEY, JSON.stringify(next))
+    } catch {}
+  }
+
+  // Mostrar la más crítica primero
+  const sorted = [...visible].sort((a, b) => b.percentage - a.percentage)
+  const top = sorted[0]
+  const isCritical = top.percentage >= CRITICAL_THRESHOLD
+
+  return (
+    <div
+      className={cn(
+        "w-full px-4 py-2 border-b flex items-center gap-3 text-sm",
+        isCritical
+          ? "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800 text-red-900 dark:text-red-200"
+          : "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200"
+      )}
+    >
+      <AlertTriangle className="h-4 w-4 shrink-0" />
+      <div className="flex-1 min-w-0">
+        <span className="font-medium">
+          {isCritical ? "Casi sin espacio: " : "Atención: "}
+        </span>
+        <span>
+          Llevás <strong>{top.current}</strong> de <strong>{top.limit}</strong> {top.label} (
+          {top.percentage}%) en tu plan Free.
+          {sorted.length > 1 && ` +${sorted.length - 1} otro${sorted.length > 2 ? "s" : ""} cerca del límite.`}
+        </span>
+      </div>
+      <Link
+        href="/configuracion/billing"
+        className={cn(
+          "inline-flex items-center gap-1 px-2.5 py-1 rounded-md font-semibold text-xs shrink-0 transition-colors",
+          isCritical
+            ? "bg-red-600 hover:bg-red-700 text-white"
+            : "bg-amber-600 hover:bg-amber-700 text-white"
+        )}
+      >
+        Ver planes <ArrowRight className="h-3 w-3" />
+      </Link>
+      {!isCritical && (
+        <button
+          onClick={() => dismiss(top.key)}
+          className="opacity-60 hover:opacity-100 shrink-0"
+          aria-label="Cerrar aviso"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      )}
+    </div>
+  )
+}

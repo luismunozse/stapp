@@ -51,6 +51,7 @@ import { useSidebar } from "@/components/layout/sidebar-context"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { UserAvatar } from "@/components/shared/user-avatar"
 import { DeadlineCalendar } from "@/components/ordenes/deadline-calendar"
+import { PlanBadge } from "@/components/billing/plan-badge"
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -455,6 +456,7 @@ export function Navbar() {
       <div className={cn(
         "hidden lg:flex items-center gap-2 fixed top-3 right-4 z-40"
       )}>
+        <PlanBadge />
         <GlobalSearch />
         <DeadlineCalendar />
         <NotificationBell />
@@ -515,6 +517,7 @@ export function Navbar() {
             </Link>
           </div>
           <div className="flex items-center gap-1">
+            <PlanBadge compact />
             <GlobalSearch />
             <DeadlineCalendar />
             <NotificationBell />

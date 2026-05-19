@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import { requireAuth } from "@/lib/auth-utils"
 import { isPremium } from "@/lib/subscriptions"
 import { ReportesAvanzadosView } from "@/components/reportes-avanzados/reportes-avanzados-view"
+import { FeatureLockedView } from "@/components/billing/feature-locked-view"
 
 export const dynamic = "force-dynamic"
 
@@ -12,12 +13,24 @@ export default async function ReportesAvanzadosPage() {
     redirect("/login")
   }
 
-  // Verificar si es Premium
   const premium = await isPremium(organizationId)
 
   if (!premium) {
-    // Redirigir a billing con mensaje
-    redirect("/configuracion/billing?upgrade=reportes-avanzados")
+    return (
+      <div className="container py-8">
+        <FeatureLockedView
+          featureName="Reportes avanzados"
+          description="Detectá patrones de falla, tiempos de reparación y rentabilidad por técnico — datos que tu plan Free no expone."
+          benefits={[
+            "Tiempo de reparación por tipo de equipo y técnico",
+            "Tasa de retorno y fallas más comunes",
+            "Rentabilidad por orden y predicción de repuestos",
+            "Performance de vendedores y comisiones consolidadas",
+          ]}
+          upgradeKey="reportes-avanzados"
+        />
+      </div>
+    )
   }
 
   return (
