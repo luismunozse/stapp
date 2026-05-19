@@ -5,13 +5,14 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Save, Bell, Mail } from "lucide-react"
+import { Save, Bell, Mail, Package } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 
 interface NotificationConfig {
   notificacionesEmail: boolean
   notificacionesWhatsapp: boolean
   diasRecordatorio: number
+  notifStockBajo: boolean
 }
 
 interface NotificationSettingsProps {
@@ -178,6 +179,30 @@ export function NotificationSettings({ allowEdit = true }: NotificationSettingsP
               className="sr-only peer"
             />
             <div className="w-11 h-6 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 dark:peer-focus:ring-green-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 dark:after:border-gray-600 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+          </label>
+        </div>
+
+        <div className="flex items-center justify-between p-3 sm:p-4 border rounded-lg gap-3">
+          <div className="flex items-start gap-2 sm:gap-3 min-w-0">
+            <Package className="h-4 w-4 sm:h-5 sm:w-5 text-red-600 mt-0.5 shrink-0" />
+            <div className="min-w-0">
+              <Label className="text-sm sm:text-base">Stock bajo</Label>
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                Aviso in-app a admins cuando un item cruza su umbral (punto de reorden / stock mínimo / global). Cooldown 24h por item.
+              </p>
+            </div>
+          </div>
+          <label className={`relative inline-flex items-center shrink-0 ${allowEdit ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}>
+            <input
+              type="checkbox"
+              checked={config.notifStockBajo}
+              onChange={(e) =>
+                setConfig({ ...config, notifStockBajo: e.target.checked })
+              }
+              disabled={!allowEdit}
+              className="sr-only peer"
+            />
+            <div className="w-11 h-6 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 dark:peer-focus:ring-red-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 dark:after:border-gray-600 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
           </label>
         </div>
 
