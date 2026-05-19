@@ -485,10 +485,18 @@ export function InventarioForm({
       const url = item ? `/api/inventario/${item.id}` : "/api/inventario"
       const method = item ? "PUT" : "POST"
 
+      // Fallback explícito de barcode: si RHF entregó null/undefined pero el
+      // input visual tiene contenido (por setValue() programático del scanner
+      // u otra interacción que no dispara setValueAs), leemos via watch() y
+      // normalizamos antes de enviar.
+      const barcodeFromWatch = (watch("barcode") || "").toString().trim()
+      const normalizedBarcode = barcodeFromWatch.length > 0 ? barcodeFromWatch : null
+
       const payload = item
-        ? { ...data }
+        ? { ...data, barcode: normalizedBarcode }
         : {
             ...data,
+            barcode: normalizedBarcode,
             codigo: generatedCode,
             descripcion: "",
           }

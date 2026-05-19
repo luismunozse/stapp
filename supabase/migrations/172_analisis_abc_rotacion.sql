@@ -122,20 +122,22 @@ BEGIN
     FROM base b
   ),
   total_revenue AS (
-    SELECT SUM(revenue) AS total FROM with_rotacion
+    -- Alias wr requerido: sin él, `revenue` colisiona con la columna del
+    -- RETURNS TABLE (ERRCODE 42702 ambiguous).
+    SELECT SUM(wr.revenue) AS total FROM with_rotacion wr
   ),
   ranked AS (
     SELECT
       w.*,
       CASE
-        WHEN COALESCE((SELECT total FROM total_revenue), 0) = 0 THEN 0
-        ELSE ROUND((w.revenue / (SELECT total FROM total_revenue)) * 100, 4)
+        WHEN COALESCE((SELECT tr.total FROM total_revenue tr), 0) = 0 THEN 0
+        ELSE ROUND((w.revenue / (SELECT tr.total FROM total_revenue tr)) * 100, 4)
       END AS pct_rev,
       CASE
-        WHEN COALESCE((SELECT total FROM total_revenue), 0) = 0 THEN 0
+        WHEN COALESCE((SELECT tr.total FROM total_revenue tr), 0) = 0 THEN 0
         ELSE ROUND(
           (SUM(w.revenue) OVER (ORDER BY w.revenue DESC, w.id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
-            / (SELECT total FROM total_revenue)) * 100,
+            / (SELECT tr.total FROM total_revenue tr)) * 100,
           4
         )
       END AS pct_acum
