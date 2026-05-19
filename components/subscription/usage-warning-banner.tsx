@@ -115,41 +115,47 @@ export function UsageWarningBanner() {
   const top = sorted[0]
   const isCritical = top.percentage >= CRITICAL_THRESHOLD
 
+  // Padding derecho en lg para no quedar debajo del toolbar fijo top-3 right-4
+  // que contiene PlanBadge + GlobalSearch + DeadlineCalendar + Notif + Theme + Avatar.
   return (
     <div
       className={cn(
-        "w-full px-4 py-2 border-b flex items-center gap-3 text-sm",
+        "w-full pl-4 pr-3 lg:pr-[34rem] py-2 border-b flex items-center gap-2 sm:gap-3 text-xs sm:text-sm",
         isCritical
           ? "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800 text-red-900 dark:text-red-200"
           : "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200"
       )}
     >
       <AlertTriangle className="h-4 w-4 shrink-0" />
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 truncate">
         <span className="font-medium">
-          {isCritical ? "Casi sin espacio: " : "Atención: "}
+          {isCritical ? "Límite alcanzado: " : "Aviso: "}
         </span>
         <span>
-          Llevás <strong>{top.current}</strong> de <strong>{top.limit}</strong> {top.label} (
-          {top.percentage}%) en tu plan Free.
-          {sorted.length > 1 && ` +${sorted.length - 1} otro${sorted.length > 2 ? "s" : ""} cerca del límite.`}
+          <strong>{top.current}/{top.limit}</strong> {top.label}
+          <span className="hidden sm:inline"> ({top.percentage}%) — plan Free</span>
+          {sorted.length > 1 && (
+            <span className="hidden md:inline"> · +{sorted.length - 1} más</span>
+          )}
         </span>
       </div>
       <Link
         href="/configuracion/billing"
         className={cn(
-          "inline-flex items-center gap-1 px-2.5 py-1 rounded-md font-semibold text-xs shrink-0 transition-colors",
+          "inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-md font-semibold text-xs shrink-0 transition-colors",
           isCritical
             ? "bg-red-600 hover:bg-red-700 text-white"
             : "bg-amber-600 hover:bg-amber-700 text-white"
         )}
       >
-        Ver planes <ArrowRight className="h-3 w-3" />
+        <span className="hidden sm:inline">Ver planes</span>
+        <span className="sm:hidden">Upgrade</span>
+        <ArrowRight className="h-3 w-3" />
       </Link>
       {!isCritical && (
         <button
           onClick={() => dismiss(top.key)}
-          className="opacity-60 hover:opacity-100 shrink-0"
+          className="opacity-60 hover:opacity-100 shrink-0 p-0.5"
           aria-label="Cerrar aviso"
         >
           <X className="h-4 w-4" />
