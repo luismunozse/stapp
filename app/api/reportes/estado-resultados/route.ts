@@ -87,7 +87,7 @@ export async function GET(request: Request) {
         repuestos_orden (cantidad, precio_unitario)
       `)
       .eq("organization_id", organizationId!)
-      .in("estado", ["REPARADO", "ENTREGADO"])
+      .in("estado", ["REPARADO", "ENTREGADO", "ENTREGADO_SIN_REPARACION"])
       .not("costo_final", "is", null)
       .gt("costo_final", 0)
       .gte("created_at", desdeISO)

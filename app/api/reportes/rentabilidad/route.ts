@@ -25,7 +25,7 @@ export async function GET() {
       `)
       .eq("organization_id", organizationId!)
       .not("costo_final", "is", null)
-      .in("estado", ["REPARADO", "ENTREGADO"])
+      .in("estado", ["REPARADO", "ENTREGADO", "ENTREGADO_SIN_REPARACION"])
 
     if (!ordenes || ordenes.length === 0) {
       return NextResponse.json({ data: [], margenPromedio: 0 })
