@@ -79,7 +79,7 @@ export async function parseExcel(base64Data: string): Promise<ParseResult> {
     if (!worksheet) {
       return {
         data: [],
-        errors: ['No sheets found in Excel file'],
+        errors: ['El archivo Excel no contiene hojas válidas. Si es formato .xls (Excel 97-2003), convertilo a .xlsx o exportá como CSV.'],
         totalRows: 0,
       }
     }
@@ -116,9 +116,13 @@ export async function parseExcel(base64Data: string): Promise<ParseResult> {
       totalRows: data.length,
     }
   } catch (error) {
+    const msg = error instanceof Error ? error.message : 'Error parsing Excel'
+    const friendly = /zip|central directory|signature|end of central/i.test(msg)
+      ? 'Archivo Excel inválido o corrupto. Verificá que sea formato .xlsx (no .xls antiguo) y volvé a guardarlo desde Excel/LibreOffice.'
+      : msg
     return {
       data: [],
-      errors: [error instanceof Error ? error.message : 'Error parsing Excel'],
+      errors: [friendly],
       totalRows: 0,
     }
   }

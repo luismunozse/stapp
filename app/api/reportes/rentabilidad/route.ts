@@ -21,6 +21,7 @@ export async function GET() {
       .from("ordenes_servicio")
       .select(`
         id, tipo_dispositivo, costo_final,
+        porcentaje_comision, tecnico_id,
         repuestos_orden (cantidad, precio_unitario)
       `)
       .eq("organization_id", organizationId!)
@@ -32,23 +33,32 @@ export async function GET() {
     }
 
     // Calcular rentabilidad por tipo de dispositivo
+    // Costos incluyen: repuestos consumidos + comisión técnico devengada.
     const porTipo: Record<string, { ingresos: number; costos: number; count: number }> = {}
 
-    for (const orden of ordenes) {
+    for (const orden of ordenes as any[]) {
       const tipo = orden.tipo_dispositivo || "OTRO"
-      const ingreso = orden.costo_final || 0
+      const ingreso = parseFloat(orden.costo_final || "0")
 
-      // Sumar costo de repuestos
-      const repuestos = orden.repuestos_orden as Array<{ cantidad: number; precio_unitario: number }> || []
+      const repuestos = (orden.repuestos_orden || []) as Array<{ cantidad: number; precio_unitario: number }>
       const costoRepuestos = repuestos.reduce(
         (acc, r) => acc + (r.cantidad * r.precio_unitario), 0
       )
+
+      let comision = 0
+      if (orden.tecnico_id && ingreso > 0) {
+        const pct = parseFloat(orden.porcentaje_comision || "0")
+        if (pct > 0) {
+          const ganancia = Math.max(0, ingreso - costoRepuestos)
+          comision = (ganancia * pct) / 100
+        }
+      }
 
       if (!porTipo[tipo]) {
         porTipo[tipo] = { ingresos: 0, costos: 0, count: 0 }
       }
       porTipo[tipo].ingresos += ingreso
-      porTipo[tipo].costos += costoRepuestos
+      porTipo[tipo].costos += costoRepuestos + comision
       porTipo[tipo].count++
     }
 

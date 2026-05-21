@@ -31,11 +31,25 @@ export async function POST(request: Request) {
     const body = await request.json()
     const data = executeSchema.parse(body)
 
-    // Parse file
+    // Detect by filename + mime. Excel 97-2003 (.xls) no soportado por ExcelJS.
+    const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    const lowerName = data.filename.toLowerCase()
+    const isCsv = lowerName.endsWith('.csv') || data.mime === 'text/csv' || data.mime.includes('csv')
+    const isXlsx = lowerName.endsWith('.xlsx') || data.mime === XLSX_MIME || data.mime.includes('spreadsheet')
+    const isLegacyXls = (lowerName.endsWith('.xls') && !lowerName.endsWith('.xlsx')) ||
+      (data.mime === 'application/vnd.ms-excel' && !isCsv && !isXlsx)
+
+    if (isLegacyXls) {
+      return NextResponse.json(
+        { error: "Formato .xls (Excel 97-2003) no soportado. Guardá el archivo como .xlsx o exportá a CSV." },
+        { status: 400 }
+      )
+    }
+
     let parseResult
-    if (data.mime.includes('csv')) {
+    if (isCsv) {
       parseResult = await parseCSV(data.file)
-    } else if (data.mime.includes('spreadsheet') || data.mime.includes('excel')) {
+    } else if (isXlsx) {
       parseResult = await parseExcel(data.file)
     } else {
       return NextResponse.json(
@@ -46,7 +60,7 @@ export async function POST(request: Request) {
 
     if (parseResult.errors.length > 0 || parseResult.data.length === 0) {
       return NextResponse.json(
-        { error: "Archivo inválido o vacío" },
+        { error: parseResult.errors[0] ?? "Archivo inválido o vacío" },
         { status: 400 }
       )
     }

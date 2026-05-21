@@ -52,13 +52,14 @@ export async function GET(request: Request) {
       }))
     }
 
-    // Obtener ingresos de facturas de servicio
+    // Obtener ingresos de facturas de servicio + cobros directos (dedupe por orden)
     let facturasData: any[] = []
+    let cobrosData: any[] = []
     if (!tipo || tipo === "SERVICIO") {
       let facturasQuery = supabaseAdmin
         .from("facturas")
         .select(`
-          id, numero_factura, total, estado_pago, fecha,
+          id, numero_factura, total, estado_pago, fecha, orden_id,
           ordenes_servicio!inner (
             id, organization_id,
             clientes (nombre)
@@ -72,28 +73,68 @@ export async function GET(request: Request) {
         facturasQuery = facturasQuery.lte("fecha", fechaHasta.toISOString())
       }
 
-      const { data } = await facturasQuery
-      facturasData = (data || []).map((f: any) => ({
-        id: f.id,
+      let cobrosQuery = supabaseAdmin
+        .from("cobros_orden")
+        .select(`
+          id, monto, created_at, orden_id, metodo_pago,
+          ordenes_servicio!inner (
+            id, organization_id, numero_orden, codigo_orden,
+            clientes (nombre)
+          )
+        `)
+        .eq("organization_id", organizationId!)
+        .neq("anulado", true)
+        .gte("created_at", fechaDesde.toISOString())
+        .order("created_at", { ascending: false })
+
+      if (fechaHasta) {
+        cobrosQuery = cobrosQuery.lte("created_at", fechaHasta.toISOString())
+      }
+
+      const [facturasR, cobrosR] = await Promise.all([facturasQuery, cobrosQuery])
+      const facturasRaw = (facturasR.data || []) as any[]
+      const cobrosRaw = (cobrosR.data || []) as any[]
+
+      // Dedupe: si una orden tiene cobro directo en el período, no contar su factura
+      const ordenesConCobro = new Set(cobrosRaw.map((c) => c.orden_id))
+
+      facturasData = facturasRaw
+        .filter((f) => !ordenesConCobro.has(f.orden_id))
+        .map((f) => ({
+          id: f.id,
+          tipoIngreso: "SERVICIO" as const,
+          numero: f.numero_factura,
+          clienteNombre: f.ordenes_servicio?.clientes?.nombre || "Sin cliente",
+          monto: parseFloat(f.total),
+          descuento: 0,
+          metodoPago: "PENDIENTE",
+          estado: f.estado_pago,
+          fecha: f.fecha,
+        }))
+
+      cobrosData = cobrosRaw.map((c) => ({
+        id: c.id,
         tipoIngreso: "SERVICIO" as const,
-        numero: f.numero_factura,
-        clienteNombre: f.ordenes_servicio?.clientes?.nombre || "Sin cliente",
-        monto: parseFloat(f.total),
+        numero: c.ordenes_servicio?.codigo_orden || String(c.ordenes_servicio?.numero_orden || ""),
+        clienteNombre: c.ordenes_servicio?.clientes?.nombre || "Sin cliente",
+        monto: parseFloat(c.monto),
         descuento: 0,
-        metodoPago: "PENDIENTE",
-        estado: f.estado_pago,
-        fecha: f.fecha,
+        metodoPago: c.metodo_pago || "EFECTIVO",
+        estado: "COBRADO",
+        fecha: c.created_at,
       }))
     }
 
     // Combinar y ordenar por fecha
-    const ingresos = [...ventasData, ...facturasData].sort(
+    const ingresos = [...ventasData, ...facturasData, ...cobrosData].sort(
       (a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
     )
 
     // Calcular resumen
     const totalVentas = ventasData.reduce((sum, v) => sum + v.monto, 0)
-    const totalServicios = facturasData.reduce((sum, f) => sum + f.monto, 0)
+    const totalServiciosFacturas = facturasData.reduce((sum, f) => sum + f.monto, 0)
+    const totalServiciosCobros = cobrosData.reduce((sum, c) => sum + c.monto, 0)
+    const totalServicios = totalServiciosFacturas + totalServiciosCobros
     const totalDescuentos = ventasData.reduce((sum, v) => sum + v.descuento, 0)
 
     return NextResponse.json({
@@ -104,7 +145,7 @@ export async function GET(request: Request) {
         totalServicios,
         totalDescuentos,
         cantidadVentas: ventasData.length,
-        cantidadServicios: facturasData.length,
+        cantidadServicios: facturasData.length + cobrosData.length,
         cantidadTotal: ingresos.length,
       },
     })

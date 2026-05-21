@@ -29,6 +29,7 @@ interface EstadoResultadosData {
   gananciaBruta: number
   margenBruto: number
   costosFinancieros?: { ventas: number; servicios: number; total: number }
+  comisiones?: { tecnicos: number; vendedores: number; total: number }
   gastos: {
     fijos: number
     variables: number
@@ -167,6 +168,10 @@ export function EstadoResultados() {
           [{ content: "Total gastos operativos", styles: { fontStyle: "bold" } }, { content: `-${fmt(data.gastos.total)}`, styles: { fontStyle: "bold" } }],
           ...(data.costosFinancieros && data.costosFinancieros.total > 0 ? [
             ["Costo terminales (cuotas)", `-${fmt(data.costosFinancieros.total)}`],
+          ] : []),
+          ...(data.comisiones && data.comisiones.total > 0 ? [
+            ...(data.comisiones.tecnicos > 0 ? [["Comisión técnicos", `-${fmt(data.comisiones.tecnicos)}`]] : []),
+            ...(data.comisiones.vendedores > 0 ? [["Comisión vendedores", `-${fmt(data.comisiones.vendedores)}`]] : []),
           ] : []),
           [
             {
@@ -378,6 +383,18 @@ export function EstadoResultados() {
                       <Row label="Costo terminales (servicios)" value={`-${formatPrice(data.costosFinancieros.servicios)}`} muted />
                     )}
                     <Row label="Total costos financieros" value={`-${formatPrice(data.costosFinancieros.total)}`} bold muted />
+                  </>
+                )}
+                {data.comisiones && data.comisiones.total > 0 && (
+                  <>
+                    <Divider />
+                    {data.comisiones.tecnicos > 0 && (
+                      <Row label="Comisión técnicos" value={`-${formatPrice(data.comisiones.tecnicos)}`} muted />
+                    )}
+                    {data.comisiones.vendedores > 0 && (
+                      <Row label="Comisión vendedores" value={`-${formatPrice(data.comisiones.vendedores)}`} muted />
+                    )}
+                    <Row label="Total comisiones" value={`-${formatPrice(data.comisiones.total)}`} bold muted />
                   </>
                 )}
                 <Divider />

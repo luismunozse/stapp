@@ -174,7 +174,7 @@ const getDashboardData = unstable_cache(
         `)
         .eq("organization_id", organizationId)
         .not("tecnico_id", "is", null)
-        .in("estado", ["RECIBIDO", "EN_DIAGNOSTICO", "PRESUPUESTADO", "APROBADO", "EN_REPARACION", "ESPERANDO_REPUESTO", "REPARADO"]),
+        .in("estado", ["RECIBIDO", "EN_DIAGNOSTICO", "PRESUPUESTADO", "APROBADO", "EN_REPARACION", "ESPERANDO_REPUESTO", "REPARADO", "ENTREGADO", "ENTREGADO_SIN_REPARACION", "ENTREGADO_SIN_COBRO"]),
       // Órdenes con cobro pendiente (para antigüedad de deuda)
       supabaseAdmin
         .from("ordenes_servicio")
@@ -185,7 +185,7 @@ const getDashboardData = unstable_cache(
         `)
         .eq("organization_id", organizationId)
         .in("estado_cobro", ["PENDIENTE", "PARCIAL"])
-        .in("estado", ["REPARADO", "ENTREGADO"])
+        .in("estado", ["REPARADO", "ENTREGADO", "ENTREGADO_SIN_REPARACION"])
         .gt("costo_final", 0),
       // Órdenes con fecha prometida vencida
       supabaseAdmin
@@ -367,7 +367,7 @@ export default async function DashboardPage() {
         .select("id", { count: "exact", head: true })
         .eq("organization_id", organizationId)
         .eq("tecnico_id", userId)
-        .in("estado", ["REPARADO", "ENTREGADO"])
+        .in("estado", ["REPARADO", "ENTREGADO", "ENTREGADO_SIN_REPARACION", "ENTREGADO_SIN_COBRO"])
         .gte("fecha_ingreso", primerDiaMes.toISOString()),
       supabaseAdmin
         .from("ordenes_servicio")
@@ -402,7 +402,7 @@ export default async function DashboardPage() {
         .select("fecha_ingreso, fecha_completado")
         .eq("organization_id", organizationId)
         .eq("tecnico_id", userId)
-        .in("estado", ["REPARADO", "ENTREGADO"])
+        .in("estado", ["REPARADO", "ENTREGADO", "ENTREGADO_SIN_REPARACION", "ENTREGADO_SIN_COBRO"])
         .not("fecha_completado", "is", null)
         .gte("fecha_ingreso", primerDiaMes.toISOString()),
     ])
@@ -550,6 +550,7 @@ export default async function DashboardPage() {
     REPARADO: 0,
     ENTREGADO: 0,
     ENTREGADO_SIN_REPARACION: 0,
+    ENTREGADO_SIN_COBRO: 0,
     CANCELADO: 0,
     SIN_REPARACION: 0,
   }
@@ -618,7 +619,7 @@ export default async function DashboardPage() {
     if (!tecnicosMap[tecnicoId]) {
       tecnicosMap[tecnicoId] = { nombre, ordenes: 0, completadas: 0 }
     }
-    if (orden.estado === "REPARADO" || orden.estado === "ENTREGADO") {
+    if (["REPARADO", "ENTREGADO", "ENTREGADO_SIN_REPARACION", "ENTREGADO_SIN_COBRO"].includes(orden.estado)) {
       tecnicosMap[tecnicoId].completadas++
     } else {
       tecnicosMap[tecnicoId].ordenes++

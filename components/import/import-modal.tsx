@@ -51,13 +51,16 @@ export function ImportModal({ entityType, onClose, onSuccess }: ImportModalProps
 
     setError("")
 
-    // Validate file type
-    const validTypes = [
-      'text/csv',
-      'application/vnd.ms-excel',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    ]
-    if (!validTypes.includes(selectedFile.type)) {
+    const name = selectedFile.name.toLowerCase()
+    const isCsv = name.endsWith('.csv') || selectedFile.type === 'text/csv'
+    const isXlsx = name.endsWith('.xlsx') || selectedFile.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    const isLegacyXls = name.endsWith('.xls') && !isXlsx
+
+    if (isLegacyXls) {
+      setError('Formato .xls (Excel 97-2003) no soportado. Guardá el archivo como .xlsx o exportá a CSV desde Excel/LibreOffice.')
+      return
+    }
+    if (!isCsv && !isXlsx) {
       setError('Formato de archivo no válido. Use CSV o Excel (.xlsx)')
       return
     }
@@ -78,12 +81,12 @@ export function ImportModal({ entityType, onClose, onSuccess }: ImportModalProps
       setFileBase64(base64)
 
       // Get preview
-      await getPreview(base64, selectedFile.type)
+      await getPreview(base64, selectedFile.type, selectedFile.name)
     }
     reader.readAsDataURL(selectedFile)
   }
 
-  const getPreview = async (base64: string, mime: string) => {
+  const getPreview = async (base64: string, mime: string, filename: string) => {
     try {
       const res = await fetch('/api/import/preview', {
         method: 'POST',
@@ -91,6 +94,7 @@ export function ImportModal({ entityType, onClose, onSuccess }: ImportModalProps
         body: JSON.stringify({
           file: base64,
           mime,
+          filename,
           entityType,
         }),
       })
@@ -228,7 +232,7 @@ export function ImportModal({ entityType, onClose, onSuccess }: ImportModalProps
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".csv,.xlsx,.xls"
+                  accept=".csv,.xlsx"
                   onChange={handleFileSelect}
                   className="hidden"
                 />

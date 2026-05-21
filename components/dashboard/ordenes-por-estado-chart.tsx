@@ -14,6 +14,7 @@ interface OrdenesData {
   REPARADO: number
   ENTREGADO: number
   ENTREGADO_SIN_REPARACION: number
+  ENTREGADO_SIN_COBRO: number
   CANCELADO: number
   SIN_REPARACION: number
 }
@@ -32,6 +33,7 @@ const ESTADO_CONFIG: Record<string, { label: string; color: string }> = {
   REPARADO: { label: "Reparado", color: "#22c55e" },
   ENTREGADO: { label: "Entregado", color: "#6b7280" },
   ENTREGADO_SIN_REPARACION: { label: "Retirado s/rep", color: "#d97706" },
+  ENTREGADO_SIN_COBRO: { label: "Entregado s/cobro", color: "#a3a3a3" },
   CANCELADO: { label: "Cancelado", color: "#ef4444" },
   SIN_REPARACION: { label: "Sin Reparación", color: "#dc2626" },
 }

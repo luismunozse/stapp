@@ -51,20 +51,23 @@ export async function GET(request: Request) {
       .from("ventas")
       .select(`
         id, total, created_at, estado,
+        porcentaje_comision, vendedor_id,
         items_venta (cantidad, precio_unitario, costo_unitario_snapshot)
       `)
       .eq("organization_id", organizationId!)
-      .neq("estado", "ANULADA")
+      .eq("estado", "COMPLETADA")
       .gte("created_at", desdeISO)
       .lte("created_at", hastaISO)
 
     let ingresosVentas = 0
     let costoProductos = 0
+    let comisionVendedores = 0
     let itemsConCostoConocido = 0
     let itemsSinCostoConocido = 0
 
     for (const v of ventas || []) {
-      ingresosVentas += parseFloat(v.total || "0")
+      const total = parseFloat(v.total || "0")
+      ingresosVentas += total
       const items = (v.items_venta || []) as any[]
       for (const it of items) {
         const cantidad = it.cantidad || 0
@@ -75,31 +78,59 @@ export async function GET(request: Request) {
           itemsSinCostoConocido++
         }
       }
+
+      // Comisión vendedor devengada: total * pct / 100
+      if (v.vendedor_id) {
+        const pct = parseFloat(v.porcentaje_comision || "0")
+        if (pct > 0) {
+          comisionVendedores += (total * pct) / 100
+        }
+      }
     }
 
     // ========================================
     // 2. SERVICIOS (órdenes) en el período
     // ========================================
+    // Devengado: usar fecha_completado (cuando llegó a estado terminal).
+    // Incluye:
+    //   - REPARADO / ENTREGADO: cobro normal
+    //   - ENTREGADO_SIN_REPARACION: diagnóstico/revisión cobrado sin reparar
+    //   - ENTREGADO_SIN_COBRO: ingreso 0 pero puede tener repuestos consumidos
     const { data: ordenes } = await supabaseAdmin
       .from("ordenes_servicio")
       .select(`
-        id, costo_final, created_at, estado,
+        id, costo_final, fecha_completado, estado,
+        porcentaje_comision, tecnico_id,
         repuestos_orden (cantidad, precio_unitario)
       `)
       .eq("organization_id", organizationId!)
-      .in("estado", ["REPARADO", "ENTREGADO", "ENTREGADO_SIN_REPARACION"])
-      .not("costo_final", "is", null)
-      .gt("costo_final", 0)
-      .gte("created_at", desdeISO)
-      .lte("created_at", hastaISO)
+      .in("estado", ["REPARADO", "ENTREGADO", "ENTREGADO_SIN_REPARACION", "ENTREGADO_SIN_COBRO"])
+      .not("fecha_completado", "is", null)
+      .gte("fecha_completado", desdeISO)
+      .lte("fecha_completado", hastaISO)
 
     let ingresosServicios = 0
     let costoRepuestos = 0
+    let comisionTecnicos = 0
     for (const o of ordenes || []) {
-      ingresosServicios += parseFloat(o.costo_final || "0")
+      const ingreso = o.estado === "ENTREGADO_SIN_COBRO" ? 0 : parseFloat(o.costo_final || "0")
+      ingresosServicios += ingreso
+
       const reps = (o.repuestos_orden || []) as any[]
+      let costoRepO = 0
       for (const r of reps) {
-        costoRepuestos += (r.cantidad || 0) * parseFloat(r.precio_unitario || "0")
+        costoRepO += (r.cantidad || 0) * parseFloat(r.precio_unitario || "0")
+      }
+      costoRepuestos += costoRepO
+
+      // Comisión técnico devengada (no requiere estar pagada).
+      // Sólo aplica si hay técnico, % > 0 e ingreso > 0.
+      if (o.tecnico_id && ingreso > 0) {
+        const pct = parseFloat(o.porcentaje_comision || "0")
+        if (pct > 0) {
+          const ganancia = Math.max(0, ingreso - costoRepO)
+          comisionTecnicos += (ganancia * pct) / 100
+        }
       }
     }
 
@@ -131,7 +162,7 @@ export async function GET(request: Request) {
       .not("costo_financiero_monto", "is", null)
       .gt("costo_financiero_monto", 0)
 
-    // Filtrar por ventas de esta org y período
+    // Filtrar por ventas COMPLETADAS de esta org y período (alineado con sec 1)
     let costosFinancierosVentas = 0
     if (pagosVentaCF && pagosVentaCF.length > 0) {
       const ventaIds = [...new Set(pagosVentaCF.map(p => p.venta_id))]
@@ -139,7 +170,7 @@ export async function GET(request: Request) {
         .from("ventas")
         .select("id")
         .eq("organization_id", organizationId!)
-        .neq("estado", "ANULADA")
+        .eq("estado", "COMPLETADA")
         .gte("created_at", desdeISO)
         .lte("created_at", hastaISO)
         .in("id", ventaIds)
@@ -152,7 +183,7 @@ export async function GET(request: Request) {
       }
     }
 
-    // Pagos de facturas (servicios) con costo financiero
+    // Pagos de facturas (servicios) con costo financiero — alineado por fecha_completado de la orden
     const { data: pagosParcialCF } = await supabaseAdmin
       .from("pagos_parciales")
       .select("costo_financiero_monto, factura_id")
@@ -164,14 +195,18 @@ export async function GET(request: Request) {
       const facturaIds = [...new Set(pagosParcialCF.map(p => p.factura_id))]
       const { data: facturasValidas } = await supabaseAdmin
         .from("facturas")
-        .select("id, ordenes_servicio!inner(organization_id)")
-        .gte("created_at", desdeISO)
-        .lte("created_at", hastaISO)
+        .select("id, ordenes_servicio!inner(organization_id, fecha_completado, estado)")
         .in("id", facturaIds)
 
       const facturaIdsValidos = new Set(
         (facturasValidas || [])
-          .filter(f => (f.ordenes_servicio as any)?.organization_id === organizationId)
+          .filter(f => {
+            const os = (f.ordenes_servicio as any)
+            if (!os || os.organization_id !== organizationId) return false
+            if (!os.fecha_completado) return false
+            const fc = new Date(os.fecha_completado).toISOString()
+            return fc >= desdeISO && fc <= hastaISO
+          })
           .map(f => f.id)
       )
       for (const p of pagosParcialCF) {
@@ -249,8 +284,9 @@ export async function GET(request: Request) {
     const totalIngresos = ingresosVentas + ingresosServicios + otrosIngresos
     const totalCostos = costoProductos + costoRepuestos
     const gananciaBruta = totalIngresos - totalCostos
+    const totalComisiones = comisionTecnicos + comisionVendedores
     const totalGastos = gastosFijos + gastosVariables
-    const gananciaNeta = gananciaBruta - totalGastos - totalCostosFinancieros
+    const gananciaNeta = gananciaBruta - totalGastos - totalCostosFinancieros - totalComisiones
 
     const margenBruto = totalIngresos > 0 ? (gananciaBruta / totalIngresos) * 100 : 0
     const margenNeto = totalIngresos > 0 ? (gananciaNeta / totalIngresos) * 100 : 0
@@ -277,6 +313,11 @@ export async function GET(request: Request) {
         ventas: round(costosFinancierosVentas),
         servicios: round(costosFinancierosServicios),
         total: round(totalCostosFinancieros),
+      },
+      comisiones: {
+        tecnicos: round(comisionTecnicos),
+        vendedores: round(comisionVendedores),
+        total: round(totalComisiones),
       },
       gastos: {
         fijos: round(gastosFijos),

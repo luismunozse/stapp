@@ -34,6 +34,8 @@ interface TendenciaData {
     costoProductos: number
     costoRepuestos: number
     gastos: number
+    comisiones: number
+    costosFinancieros: number
     gananciaBruta: number
     gananciaNeta: number
   }>
@@ -41,6 +43,8 @@ interface TendenciaData {
     ingresos: number
     costos: number
     gastos: number
+    comisiones: number
+    costosFinancieros: number
     gananciaBruta: number
     gananciaNeta: number
   }

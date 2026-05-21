@@ -42,6 +42,7 @@ export async function GET(request: Request) {
       costoRepuestos: number
       gastos: number
       costosFinancieros: number
+      comisiones: number
       gananciaBruta: number
       gananciaNeta: number
     }
@@ -62,6 +63,7 @@ export async function GET(request: Request) {
         costoRepuestos: 0,
         gastos: 0,
         costosFinancieros: 0,
+        comisiones: 0,
         gananciaBruta: 0,
         gananciaNeta: 0,
       }
@@ -72,15 +74,16 @@ export async function GET(request: Request) {
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
     }
 
-    // 1. Ventas (ingresos por ventas + costo de mercadería)
+    // 1. Ventas (ingresos por ventas + costo de mercadería + comisión vendedor)
     const { data: ventas } = await supabaseAdmin
       .from("ventas")
       .select(`
         id, total, created_at, estado,
+        porcentaje_comision, vendedor_id,
         items_venta (cantidad, costo_unitario_snapshot)
       `)
       .eq("organization_id", organizationId!)
-      .neq("estado", "ANULADA")
+      .eq("estado", "COMPLETADA")
       .gte("created_at", desdeISO)
       .lte("created_at", hastaISO)
 
@@ -88,7 +91,8 @@ export async function GET(request: Request) {
       const key = keyFor(v.created_at)
       const bucket = buckets[key]
       if (!bucket) continue
-      bucket.ingresosVentas += parseFloat(v.total || "0")
+      const total = parseFloat(v.total || "0")
+      bucket.ingresosVentas += total
       const items = (v.items_venta || []) as any[]
       for (const it of items) {
         const cantidad = it.cantidad || 0
@@ -96,30 +100,47 @@ export async function GET(request: Request) {
           bucket.costoProductos += cantidad * parseFloat(it.costo_unitario_snapshot)
         }
       }
+      if (v.vendedor_id) {
+        const pct = parseFloat(v.porcentaje_comision || "0")
+        if (pct > 0) bucket.comisiones += (total * pct) / 100
+      }
     }
 
-    // 2. Servicios/órdenes (ingresos por reparación + costo de repuestos)
+    // 2. Servicios/órdenes — devengado por fecha_completado
+    //    Incluye estados terminales con ingreso o costo de repuestos.
     const { data: ordenes } = await supabaseAdmin
       .from("ordenes_servicio")
       .select(`
-        id, costo_final, created_at, estado,
+        id, costo_final, fecha_completado, estado,
+        porcentaje_comision, tecnico_id,
         repuestos_orden (cantidad, precio_unitario)
       `)
       .eq("organization_id", organizationId!)
-      .in("estado", ["REPARADO", "ENTREGADO", "ENTREGADO_SIN_REPARACION"])
-      .not("costo_final", "is", null)
-      .gt("costo_final", 0)
-      .gte("created_at", desdeISO)
-      .lte("created_at", hastaISO)
+      .in("estado", ["REPARADO", "ENTREGADO", "ENTREGADO_SIN_REPARACION", "ENTREGADO_SIN_COBRO"])
+      .not("fecha_completado", "is", null)
+      .gte("fecha_completado", desdeISO)
+      .lte("fecha_completado", hastaISO)
 
     for (const o of ordenes || []) {
-      const key = keyFor(o.created_at)
+      const key = keyFor(o.fecha_completado)
       const bucket = buckets[key]
       if (!bucket) continue
-      bucket.ingresosServicios += parseFloat(o.costo_final || "0")
+      const ingreso = o.estado === "ENTREGADO_SIN_COBRO" ? 0 : parseFloat(o.costo_final || "0")
+      bucket.ingresosServicios += ingreso
+
       const reps = (o.repuestos_orden || []) as any[]
+      let costoRepO = 0
       for (const r of reps) {
-        bucket.costoRepuestos += (r.cantidad || 0) * parseFloat(r.precio_unitario || "0")
+        costoRepO += (r.cantidad || 0) * parseFloat(r.precio_unitario || "0")
+      }
+      bucket.costoRepuestos += costoRepO
+
+      if (o.tecnico_id && ingreso > 0) {
+        const pct = parseFloat(o.porcentaje_comision || "0")
+        if (pct > 0) {
+          const ganancia = Math.max(0, ingreso - costoRepO)
+          bucket.comisiones += (ganancia * pct) / 100
+        }
       }
     }
 
@@ -145,17 +166,22 @@ export async function GET(request: Request) {
     }
 
     // 4. Costos financieros (comisiones de terminales)
+    //    Bucketing por fecha de devengado del parent (created_at venta / fecha_completado orden)
+    //    para alinear con ingresos.
     const { data: pagosVentaCF } = await supabaseAdmin
       .from("pagos_venta")
-      .select("costo_financiero_monto, fecha, ventas!inner(organization_id)")
+      .select("costo_financiero_monto, ventas!inner(organization_id, estado, created_at)")
       .eq("ventas.organization_id", organizationId!)
+      .eq("ventas.estado", "COMPLETADA")
       .not("costo_financiero_monto", "is", null)
       .gt("costo_financiero_monto", 0)
-      .gte("fecha", desdeISO)
-      .lte("fecha", hastaISO)
+      .gte("ventas.created_at", desdeISO)
+      .lte("ventas.created_at", hastaISO)
 
-    for (const p of pagosVentaCF || []) {
-      const key = keyFor(p.fecha)
+    for (const p of (pagosVentaCF || []) as any[]) {
+      const ventaCreated = p.ventas?.created_at
+      if (!ventaCreated) continue
+      const key = keyFor(ventaCreated)
       const bucket = buckets[key]
       if (!bucket) continue
       bucket.costosFinancieros += parseFloat(p.costo_financiero_monto || "0")
@@ -163,15 +189,18 @@ export async function GET(request: Request) {
 
     const { data: pagosParcialCF } = await supabaseAdmin
       .from("pagos_parciales")
-      .select("costo_financiero_monto, fecha, facturas!inner(ordenes_servicio!inner(organization_id))")
+      .select("costo_financiero_monto, facturas!inner(ordenes_servicio!inner(organization_id, fecha_completado))")
       .eq("facturas.ordenes_servicio.organization_id", organizationId!)
       .not("costo_financiero_monto", "is", null)
       .gt("costo_financiero_monto", 0)
-      .gte("fecha", desdeISO)
-      .lte("fecha", hastaISO)
+      .not("facturas.ordenes_servicio.fecha_completado", "is", null)
+      .gte("facturas.ordenes_servicio.fecha_completado", desdeISO)
+      .lte("facturas.ordenes_servicio.fecha_completado", hastaISO)
 
-    for (const p of pagosParcialCF || []) {
-      const key = keyFor(p.fecha)
+    for (const p of (pagosParcialCF || []) as any[]) {
+      const fc = p.facturas?.ordenes_servicio?.fecha_completado
+      if (!fc) continue
+      const key = keyFor(fc)
       const bucket = buckets[key]
       if (!bucket) continue
       bucket.costosFinancieros += parseFloat(p.costo_financiero_monto || "0")
@@ -184,7 +213,7 @@ export async function GET(request: Request) {
         b.ingresos = b.ingresosVentas + b.ingresosServicios + b.ingresosOtros
         b.costos = b.costoProductos + b.costoRepuestos
         b.gananciaBruta = b.ingresos - b.costos
-        b.gananciaNeta = b.gananciaBruta - b.gastos - b.costosFinancieros
+        b.gananciaNeta = b.gananciaBruta - b.gastos - b.costosFinancieros - b.comisiones
         return {
           mes: b.mes,
           mesCompleto: b.mesCompleto,
@@ -196,6 +225,8 @@ export async function GET(request: Request) {
           costoProductos: round(b.costoProductos),
           costoRepuestos: round(b.costoRepuestos),
           gastos: round(b.gastos),
+          comisiones: round(b.comisiones),
+          costosFinancieros: round(b.costosFinancieros),
           gananciaBruta: round(b.gananciaBruta),
           gananciaNeta: round(b.gananciaNeta),
         }
@@ -207,10 +238,12 @@ export async function GET(request: Request) {
         ingresos: acc.ingresos + m.ingresos,
         costos: acc.costos + m.costos,
         gastos: acc.gastos + m.gastos,
+        comisiones: acc.comisiones + m.comisiones,
+        costosFinancieros: acc.costosFinancieros + m.costosFinancieros,
         gananciaBruta: acc.gananciaBruta + m.gananciaBruta,
         gananciaNeta: acc.gananciaNeta + m.gananciaNeta,
       }),
-      { ingresos: 0, costos: 0, gastos: 0, gananciaBruta: 0, gananciaNeta: 0 }
+      { ingresos: 0, costos: 0, gastos: 0, comisiones: 0, costosFinancieros: 0, gananciaBruta: 0, gananciaNeta: 0 }
     )
 
     return NextResponse.json({
@@ -224,6 +257,8 @@ export async function GET(request: Request) {
         ingresos: round(totales.ingresos),
         costos: round(totales.costos),
         gastos: round(totales.gastos),
+        comisiones: round(totales.comisiones),
+        costosFinancieros: round(totales.costosFinancieros),
         gananciaBruta: round(totales.gananciaBruta),
         gananciaNeta: round(totales.gananciaNeta),
       },
