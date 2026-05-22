@@ -15,22 +15,32 @@ export function isSuperadminEmail(email: string | null | undefined): boolean {
 /**
  * Verifica si la IP está en la whitelist de superadmin.
  *
- * Fail-closed en producción: si SUPERADMIN_IP_WHITELIST no está definida y
- * NODE_ENV=production, RECHAZA todo. Antes el default era permitir todo, lo
- * que dejaba al panel sin restricción de red si alguien olvidaba setear la
- * env var en prod.
+ * La whitelist es defensa en profundidad opcional. El acceso al panel ya
+ * está protegido por:
+ *   1. SUPERADMIN_EMAILS (allowlist por email)
+ *   2. Auth NextAuth + sesión
+ *   3. 2FA (si está activado)
  *
- * En entornos no-prod (dev, preview, test), si no hay whitelist se permite
- * todo para no romper el flujo de desarrollo local.
+ * Si SUPERADMIN_IP_WHITELIST no está definida, permite todo (admin móvil OK).
+ * Si está definida explícitamente a "*", permite todo (escape hatch claro).
+ * Si tiene IPs, exige match estricto.
  *
- * Si la whitelist se setea explícitamente a "*", se permite todo en
- * cualquier entorno (escape hatch para deploys que no pueden fijar IPs,
- * como Vercel preview con IPs dinámicas).
+ * En producción sin whitelist se loguea un WARN para visibilidad — antes
+ * el fail-open era completamente silencioso.
  */
+let warnedMissingWhitelist = false
 export function isIpWhitelisted(ip: string | null): boolean {
   const whitelist = process.env.SUPERADMIN_IP_WHITELIST
   if (!whitelist) {
-    return process.env.NODE_ENV !== "production"
+    if (process.env.NODE_ENV === "production" && !warnedMissingWhitelist) {
+      console.warn(
+        "[superadmin-auth] SUPERADMIN_IP_WHITELIST no configurada. " +
+          "Acceso protegido solo por email allowlist + 2FA. " +
+          "Para restringir por IP, setear la env var con IPs separadas por coma o '*' para deshabilitar."
+      )
+      warnedMissingWhitelist = true
+    }
+    return true
   }
   const trimmed = whitelist.trim()
   if (trimmed === "*") return true
