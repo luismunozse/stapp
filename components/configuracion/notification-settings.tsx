@@ -4,15 +4,26 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Save, Bell, Mail, Package } from "lucide-react"
+import { Save, Bell, Mail, Package, MessageSquare, RotateCcw } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
+import {
+  DEFAULT_PLANTILLA_VENTA,
+  DEFAULT_PLANTILLA_VENTA_CORTO,
+} from "@/lib/whatsapp/plantillas-venta"
+
+interface PlantillasWhatsapp {
+  comprobante_venta?: string
+  comprobante_venta_corto?: string
+}
 
 interface NotificationConfig {
   notificacionesEmail: boolean
   notificacionesWhatsapp: boolean
   diasRecordatorio: number
   notifStockBajo: boolean
+  plantillasWhatsapp?: PlantillasWhatsapp
 }
 
 interface NotificationSettingsProps {
@@ -227,6 +238,105 @@ export function NotificationSettings({ allowEdit = true }: NotificationSettingsP
               className="w-20 sm:w-24"
             />
             <span className="text-xs sm:text-sm text-muted-foreground">dias</span>
+          </div>
+        </div>
+
+        <div className="p-3 sm:p-4 border rounded-lg space-y-3">
+          <div className="flex items-start gap-2 sm:gap-3">
+            <MessageSquare className="h-4 w-4 sm:h-5 sm:w-5 text-green-600 mt-0.5 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <Label className="text-sm sm:text-base">Plantilla WhatsApp — Comprobante de venta</Label>
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                Mensaje predeterminado al compartir un comprobante. Variables disponibles:
+                {" "}
+                <code className="text-[10px] sm:text-xs">{"{cliente}"}</code>{" "}
+                <code className="text-[10px] sm:text-xs">{"{numero}"}</code>{" "}
+                <code className="text-[10px] sm:text-xs">{"{total}"}</code>{" "}
+                <code className="text-[10px] sm:text-xs">{"{items}"}</code>{" "}
+                <code className="text-[10px] sm:text-xs">{"{metodo_pago}"}</code>{" "}
+                <code className="text-[10px] sm:text-xs">{"{garantias}"}</code>{" "}
+                <code className="text-[10px] sm:text-xs">{"{empresa}"}</code>{" "}
+                <code className="text-[10px] sm:text-xs">{"{fecha}"}</code>
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <Label className="text-xs text-muted-foreground">Mensaje completo (texto)</Label>
+            <Textarea
+              value={config.plantillasWhatsapp?.comprobante_venta ?? ""}
+              onChange={(e) =>
+                setConfig({
+                  ...config,
+                  plantillasWhatsapp: {
+                    ...config.plantillasWhatsapp,
+                    comprobante_venta: e.target.value,
+                  },
+                })
+              }
+              disabled={!allowEdit}
+              rows={8}
+              placeholder={DEFAULT_PLANTILLA_VENTA}
+              className="font-mono text-xs mt-1"
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={!allowEdit}
+              onClick={() =>
+                setConfig({
+                  ...config,
+                  plantillasWhatsapp: {
+                    ...config.plantillasWhatsapp,
+                    comprobante_venta: DEFAULT_PLANTILLA_VENTA,
+                  },
+                })
+              }
+              className="mt-1 h-7 text-xs"
+            >
+              <RotateCcw className="mr-1.5 h-3 w-3" />
+              Restaurar predeterminado
+            </Button>
+          </div>
+
+          <div>
+            <Label className="text-xs text-muted-foreground">Mensaje corto (al compartir imagen)</Label>
+            <Textarea
+              value={config.plantillasWhatsapp?.comprobante_venta_corto ?? ""}
+              onChange={(e) =>
+                setConfig({
+                  ...config,
+                  plantillasWhatsapp: {
+                    ...config.plantillasWhatsapp,
+                    comprobante_venta_corto: e.target.value,
+                  },
+                })
+              }
+              disabled={!allowEdit}
+              rows={3}
+              placeholder={DEFAULT_PLANTILLA_VENTA_CORTO}
+              className="font-mono text-xs mt-1"
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={!allowEdit}
+              onClick={() =>
+                setConfig({
+                  ...config,
+                  plantillasWhatsapp: {
+                    ...config.plantillasWhatsapp,
+                    comprobante_venta_corto: DEFAULT_PLANTILLA_VENTA_CORTO,
+                  },
+                })
+              }
+              className="mt-1 h-7 text-xs"
+            >
+              <RotateCcw className="mr-1.5 h-3 w-3" />
+              Restaurar predeterminado
+            </Button>
           </div>
         </div>
 

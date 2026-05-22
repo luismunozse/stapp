@@ -20,6 +20,11 @@ import {
 import type { VentaCreadaData } from "./venta-form"
 import { useCurrency } from "@/contexts/currency-context"
 import { PosTicketShare } from "@/components/pos/pos-ticket-share"
+import {
+  buildVentaContext,
+  renderVentaMessage,
+  type VentaForTemplate,
+} from "@/lib/whatsapp/plantillas-venta"
 
 // WhatsApp icon SVG component
 function WhatsAppIcon({ className }: { className?: string }) {
@@ -41,37 +46,13 @@ interface VentaCreadaModalProps {
   venta: VentaCreadaData | null
 }
 
-const metodoPagoLabel: Record<string, string> = {
-  EFECTIVO: "Efectivo",
-  TRANSFERENCIA: "Transferencia",
-  TARJETA: "Tarjeta",
-}
-
-function generateVentaMessage(venta: VentaCreadaData, formatPrice: (amount: number) => string): string {
-  let mensaje = `Hola ${venta.clienteNombre}, gracias por tu compra!\n\n`
-  mensaje += `*COMPROBANTE DE VENTA #${venta.numeroVenta}*\n\n`
-
-  venta.items.forEach((item) => {
-    mensaje += `- ${item.descripcion} x${item.cantidad}: ${formatPrice(item.cantidad * item.precioUnitario)}\n`
-  })
-
-  if (venta.descuento > 0) {
-    mensaje += `\nDescuento: -${formatPrice(venta.descuento)}`
-  }
-
-  mensaje += `\n*Total: ${formatPrice(venta.total)}*`
-  mensaje += `\nMetodo de pago: ${metodoPagoLabel[venta.metodoPago] || venta.metodoPago}`
-
-  if (venta.garantias.length > 0) {
-    mensaje += `\n\n*Garantias:*`
-    venta.garantias.forEach((g) => {
-      mensaje += `\n- Garantia #${g.numeroGarantia} (${g.diasValidez} dias)`
-    })
-  }
-
-  mensaje += `\n\nGracias por tu preferencia!\n${venta.organizationName || "Servicio Tecnico"}`
-
-  return mensaje
+function generateVentaMessage(
+  venta: VentaCreadaData,
+  formatPrice: (amount: number) => string,
+  plantilla?: string | null,
+): string {
+  const ctx = buildVentaContext(venta as VentaForTemplate, formatPrice)
+  return renderVentaMessage(plantilla, ctx)
 }
 
 export function VentaCreadaModal({ open, onClose, venta }: VentaCreadaModalProps) {
@@ -79,12 +60,29 @@ export function VentaCreadaModal({ open, onClose, venta }: VentaCreadaModalProps
   const [copied, setCopied] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [mensaje, setMensaje] = useState("")
+  const [plantilla, setPlantilla] = useState<{ comprobante_venta?: string; comprobante_venta_corto?: string }>({})
+
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    fetch("/api/notificaciones/config")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.plantillasWhatsapp) {
+          setPlantilla(data.plantillasWhatsapp)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [open])
 
   useEffect(() => {
     if (venta) {
-      setMensaje(generateVentaMessage(venta, formatPrice))
+      setMensaje(generateVentaMessage(venta, formatPrice, plantilla.comprobante_venta))
     }
-  }, [venta])
+  }, [venta, plantilla.comprobante_venta])
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(mensaje)
@@ -173,7 +171,7 @@ export function VentaCreadaModal({ open, onClose, venta }: VentaCreadaModalProps
           </Button>
 
           {/* Enviar ticket como imagen por WhatsApp */}
-          <PosTicketShare ventaData={venta} />
+          <PosTicketShare ventaData={venta} plantillaCorta={plantilla.comprobante_venta_corto} />
 
           {/* Mensaje de texto para WhatsApp (alternativa) */}
           <details className="text-sm">

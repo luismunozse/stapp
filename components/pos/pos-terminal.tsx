@@ -72,6 +72,22 @@ export function PosTerminal() {
   const [heldSales, setHeldSales] = useState<HeldSale[]>([])
   const [showShortcuts, setShowShortcuts] = useState(false)
   const [successData, setSuccessData] = useState<any>(null)
+  const [plantillaCorta, setPlantillaCorta] = useState<string | undefined>(undefined)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch("/api/notificaciones/config")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.plantillasWhatsapp?.comprobante_venta_corto) {
+          setPlantillaCorta(data.plantillasWhatsapp.comprobante_venta_corto)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // Mobile tab state
   const [mobileTab, setMobileTab] = useState<MobileTab>("products")
@@ -766,7 +782,7 @@ export function PosTerminal() {
               )}
 
               {/* WhatsApp share as image + download image */}
-              <PosTicketShare ventaData={successData} />
+              <PosTicketShare ventaData={successData} plantillaCorta={plantillaCorta} />
 
               <Button onClick={handleSuccessClose} className="h-12 text-lg font-semibold">
                 Nueva Venta

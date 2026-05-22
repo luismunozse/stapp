@@ -134,6 +134,7 @@ export interface OrdenServicio {
   fechaPrometida?: Date | null
   fechaCompletado?: Date | null
   observaciones?: string | null
+  notasInternas?: string | null
   diagnostico?: string | null
   metadata?: Record<string, any>
   sectorId?: string | null

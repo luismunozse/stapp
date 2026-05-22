@@ -101,7 +101,11 @@ export async function GET(request: Request) {
       .select(`
         id, costo_final, fecha_completado, estado,
         porcentaje_comision, tecnico_id,
-        repuestos_orden (cantidad, precio_unitario)
+        repuestos_orden (cantidad, precio_unitario),
+        cotizaciones (
+          estado, deleted_at,
+          items_cotizacion (cantidad, inventario:inventario_id(precio_compra))
+        )
       `)
       .eq("organization_id", organizationId!)
       .in("estado", ["REPARADO", "ENTREGADO", "ENTREGADO_SIN_REPARACION", "ENTREGADO_SIN_COBRO"])
@@ -112,14 +116,22 @@ export async function GET(request: Request) {
     let ingresosServicios = 0
     let costoRepuestos = 0
     let comisionTecnicos = 0
-    for (const o of ordenes || []) {
+    for (const o of (ordenes || []) as any[]) {
       const ingreso = o.estado === "ENTREGADO_SIN_COBRO" ? 0 : parseFloat(o.costo_final || "0")
       ingresosServicios += ingreso
 
-      const reps = (o.repuestos_orden || []) as any[]
       let costoRepO = 0
-      for (const r of reps) {
+      // Repuestos directos (tab Repuestos). precio_unitario = precio_compra (mig 151).
+      for (const r of (o.repuestos_orden || [])) {
         costoRepO += (r.cantidad || 0) * parseFloat(r.precio_unitario || "0")
+      }
+      // Repuestos via cotizaciones ACEPTADAS linkeadas a inventario.
+      for (const c of (o.cotizaciones || [])) {
+        if (c.deleted_at || c.estado !== "ACEPTADA") continue
+        for (const it of (c.items_cotizacion || [])) {
+          if (!it.inventario) continue
+          costoRepO += (it.cantidad || 0) * parseFloat(it.inventario.precio_compra || "0")
+        }
       }
       costoRepuestos += costoRepO
 

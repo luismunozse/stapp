@@ -94,6 +94,7 @@ export function formatOrden(orden: any) {
     comisionPagada: !!orden.comision_pagada,
     fechaPagoComision: orden.fecha_pago_comision || null,
     observaciones: orden.observaciones,
+    notasInternas: orden.notas_internas,
     diagnostico: orden.diagnostico,
     // Relaciones
     cliente: orden.clientes ? formatCliente(orden.clientes) : undefined,

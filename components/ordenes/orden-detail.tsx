@@ -38,6 +38,7 @@ import {
   Printer,
   Tag,
   HandCoins,
+  Lock,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -110,6 +111,9 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const [editingDiagnostico, setEditingDiagnostico] = useState(false)
   const [diagnosticoText, setDiagnosticoText] = useState("")
   const [savingDiagnostico, setSavingDiagnostico] = useState(false)
+  const [editingNotasInternas, setEditingNotasInternas] = useState(false)
+  const [notasInternasText, setNotasInternasText] = useState("")
+  const [savingNotasInternas, setSavingNotasInternas] = useState(false)
 
   const isAdmin = session?.user?.role === "ADMIN"
   const userRole = session?.user?.role
@@ -167,6 +171,32 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
       toast.error("Error al guardar")
     } finally {
       setSavingDiagnostico(false)
+    }
+  }
+
+  const handleSaveNotasInternas = async () => {
+    if (!orden || notasInternasText.trim() === (orden.notasInternas || "")) {
+      setEditingNotasInternas(false)
+      return
+    }
+    setSavingNotasInternas(true)
+    try {
+      const res = await fetch(`/api/ordenes/${orden.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notasInternas: notasInternasText.trim() || null }),
+      })
+      if (res.ok) {
+        setOrden({ ...orden, notasInternas: notasInternasText.trim() || null })
+        setEditingNotasInternas(false)
+        toast.success("Notas internas actualizadas")
+      } else {
+        toast.error("Error al guardar")
+      }
+    } catch {
+      toast.error("Error al guardar")
+    } finally {
+      setSavingNotasInternas(false)
     }
   }
 
@@ -936,6 +966,55 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                   <p className="text-sm whitespace-pre-wrap">{orden.observaciones}</p>
                 </div>
               )}
+
+              {/* Notas internas - solo uso interno, no visible al cliente */}
+              <div className="mt-4 pt-4 border-t">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2 text-xs font-medium text-amber-700 dark:text-amber-400 uppercase tracking-wider">
+                    <Lock className="h-3.5 w-3.5" />
+                    Notas internas
+                    <span className="text-[10px] font-normal normal-case text-muted-foreground">(no visibles para el cliente)</span>
+                  </div>
+                  {!editingNotasInternas && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-muted-foreground hover:text-foreground"
+                      onClick={() => {
+                        setNotasInternasText(orden.notasInternas || "")
+                        setEditingNotasInternas(true)
+                      }}
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+                {editingNotasInternas ? (
+                  <div className="space-y-2">
+                    <textarea
+                      className="w-full min-h-[80px] p-2 text-sm border rounded-md resize-y bg-amber-50/40 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900"
+                      value={notasInternasText}
+                      onChange={(e) => setNotasInternasText(e.target.value)}
+                      placeholder="Notas privadas del equipo (no se muestran al cliente)..."
+                      disabled={savingNotasInternas}
+                      autoFocus
+                    />
+                    <div className="flex gap-2 justify-end">
+                      <Button variant="ghost" size="sm" onClick={() => setEditingNotasInternas(false)} disabled={savingNotasInternas}>
+                        <X className="h-3 w-3 mr-1" />Cancelar
+                      </Button>
+                      <Button size="sm" onClick={handleSaveNotasInternas} disabled={savingNotasInternas}>
+                        {savingNotasInternas ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Check className="h-3 w-3 mr-1" />}
+                        Guardar
+                      </Button>
+                    </div>
+                  </div>
+                ) : orden.notasInternas ? (
+                  <p className="text-sm whitespace-pre-wrap bg-amber-50/40 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-md p-2">{orden.notasInternas}</p>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">Sin notas internas. Haz clic en el lapiz para agregar.</p>
+                )}
+              </div>
             </CardContent>
           </Card>
 

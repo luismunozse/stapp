@@ -5,6 +5,11 @@ import html2canvas from "html2canvas"
 import { Button } from "@/components/ui/button"
 import { Loader2, Share2, Download, ImageIcon } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
+import {
+  buildVentaContext,
+  renderVentaMessageCorto,
+  type VentaForTemplate,
+} from "@/lib/whatsapp/plantillas-venta"
 
 function WhatsAppIcon({ className }: { className?: string }) {
   return (
@@ -44,9 +49,10 @@ interface TicketShareProps {
     organizationName?: string
     garantias?: Array<{ numeroGarantia: string | number; diasValidez: number }>
   }
+  plantillaCorta?: string | null
 }
 
-export function PosTicketShare({ ventaData }: TicketShareProps) {
+export function PosTicketShare({ ventaData, plantillaCorta }: TicketShareProps) {
   const { formatPrice } = useCurrency()
   const ticketRef = useRef<HTMLDivElement>(null)
   const [generating, setGenerating] = useState(false)
@@ -89,11 +95,13 @@ export function PosTicketShare({ ventaData }: TicketShareProps) {
       if (!blob) throw new Error("No se pudo generar la imagen")
 
       const file = new File([blob], `ticket-venta-${ventaData.numeroVenta}.png`, { type: "image/png" })
+      const ctx = buildVentaContext(ventaData as VentaForTemplate, formatPrice)
+      const mensajeCorto = renderVentaMessageCorto(plantillaCorta, ctx)
 
       // Try Web Share API (works on mobile, shares directly to WhatsApp)
       if (navigator.share && navigator.canShare?.({ files: [file] })) {
         await navigator.share({
-          text: `Comprobante de venta #${ventaData.numeroVenta} - ${formatPrice(ventaData.total)}`,
+          text: mensajeCorto,
           files: [file],
         })
       } else {
@@ -109,9 +117,7 @@ export function PosTicketShare({ ventaData }: TicketShareProps) {
 
         // Open WhatsApp with text message
         const phone = ventaData.clienteTelefono.replace(/\D/g, "")
-        const msg = encodeURIComponent(
-          `Hola ${ventaData.clienteNombre}, gracias por tu compra!\nVenta #${ventaData.numeroVenta} por ${formatPrice(ventaData.total)}.\nTe enviamos el comprobante como imagen.`
-        )
+        const msg = encodeURIComponent(mensajeCorto)
         window.open(`https://wa.me/54${phone}?text=${msg}`, "_blank")
       }
     } catch (err: any) {

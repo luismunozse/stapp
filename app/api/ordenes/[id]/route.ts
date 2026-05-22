@@ -30,6 +30,7 @@ const updateOrdenSchema = z.object({
   costoFinal: z.number().min(0, "El costo final no puede ser negativo").optional().nullable(),
   fechaPrometida: z.string().optional().nullable(),
   observaciones: z.string().optional().nullable(),
+  notasInternas: z.string().optional().nullable(),
   diagnostico: z.string().optional().nullable(),
   problemaReportado: z.string().min(1, "El problema reportado no puede estar vacío").optional(),
   telefonoContacto: z.string().optional().nullable(),
@@ -220,6 +221,7 @@ export async function PUT(
     if (data.presupuesto !== undefined) updateData.presupuesto = data.presupuesto
     if (data.costoFinal !== undefined) updateData.costo_final = data.costoFinal
     if (data.observaciones !== undefined) updateData.observaciones = data.observaciones
+    if (data.notasInternas !== undefined) updateData.notas_internas = data.notasInternas
     if (data.diagnostico !== undefined) updateData.diagnostico = data.diagnostico
     if (data.problemaReportado !== undefined) updateData.problema_reportado = data.problemaReportado
     if (data.telefonoContacto !== undefined) updateData.telefono_contacto = data.telefonoContacto

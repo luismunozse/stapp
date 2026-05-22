@@ -34,6 +34,7 @@ const ordenSchema = z.object({
   presupuesto: z.number().optional(),
   fechaPrometida: z.string().optional(),
   observaciones: z.string().optional(),
+  notasInternas: z.string().optional(),
   fotos: z.array(fotoSchema).optional(),
   // Nuevos campos para presupuesto aceptado
   presupuestoAceptado: z.boolean().optional(),
@@ -322,6 +323,7 @@ export async function POST(request: Request) {
           ? new Date(`${data.fechaPrometida}T12:00:00Z`).toISOString()
           : null,
         observaciones: data.observaciones || null,
+        notas_internas: data.notasInternas || null,
         public_token: publicToken,
         // Nuevos campos
         estado: estadoInicial,

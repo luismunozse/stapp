@@ -170,7 +170,35 @@ Faltan tests de los endpoints refactorizados. Recomendación:
 
 ---
 
-## 6. Otros gaps menores
+## 6. Items de cotización SIN link a inventario
+
+**Estado actual** (post-fix 2026-05): reportes financieros suman costo de repuestos via:
+1. `repuestos_orden` (precio_unitario = `inventario.precio_compra`, mig 151).
+2. `items_cotizacion` de cotizaciones ACEPTADAS, **sólo si tienen `inventario_id` NOT NULL** → costo = `cantidad × inventario.precio_compra`.
+
+**Gap**: items de cotización cargados a mano (sin link a inventario) tienen `precio_unitario` que es precio al cliente, pero **no hay columna para costo de compra**. El sistema no puede contarlos como costo real, por lo que inflan ganancia bruta.
+
+**Modelo propuesto**:
+```sql
+ALTER TABLE items_cotizacion
+  ADD COLUMN costo_unitario DECIMAL(10,2),
+  ADD COLUMN costo_unitario_origen TEXT CHECK (costo_unitario_origen IN ('MANUAL','INVENTARIO_SNAPSHOT'));
+
+-- Trigger snapshot al aceptar cotización (si tiene inventario_id):
+-- copia inventario.precio_compra a items_cotizacion.costo_unitario.
+
+-- Reportes pasan a usar COALESCE(it.costo_unitario, it.inventario.precio_compra, 0).
+```
+
+**UI**:
+- Al cargar item manual en cotización, campo opcional "Costo de compra" además de "Precio".
+- Tip: si dejás en blanco, el sistema no podrá calcular margen real.
+
+**Migración data histórica**: items existentes sin `costo_unitario` quedan como hoy (0 costo). Banner en finanzas avisa "X items de cotización sin costo registrado".
+
+---
+
+## 7. Otros gaps menores
 
 - **`gastos_recurrentes`**: ya hay job, verificar que crea movimientos con `afecta_rentabilidad = true` correcto.
 - **Multi-moneda**: ingresos en USD vs ARS no se convierten. Si crece, requiere tabla `cotizaciones_diarias` y conversión en reportes.

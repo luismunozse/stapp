@@ -69,6 +69,7 @@ const ordenSchema = z.object({
   presupuesto: z.union([z.number().positive(), z.nan(), z.undefined()]).optional(),
   fechaPrometida: z.string().optional(),
   observaciones: z.string().optional(),
+  notasInternas: z.string().optional(),
 })
 
 type OrdenFormData = z.infer<typeof ordenSchema>
@@ -588,6 +589,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId }: OrdenFormProps) {
         sena: presupuestoAceptado && sena ? sena : undefined,
         metodoPagoSena: presupuestoAceptado && sena ? metodoPagoSena : undefined,
         observaciones: data.observaciones || undefined,
+        notasInternas: data.notasInternas || undefined,
         telefonoContacto: data.telefonoContacto || undefined,
         metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
         sectorId: selectedSectorId || undefined,
@@ -1315,6 +1317,23 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId }: OrdenFormProps) {
               placeholder="Observaciones adicionales..."
               rows={2}
             />
+            <p className="text-xs text-muted-foreground mt-1">
+              Visible para el cliente en el comprobante y portal de seguimiento.
+            </p>
+          </div>
+
+          {/* Notas internas */}
+          <div>
+            <Label htmlFor="notasInternas">Notas internas</Label>
+            <Textarea
+              id="notasInternas"
+              {...register("notasInternas")}
+              placeholder="Solo uso interno (no se muestran al cliente)..."
+              rows={2}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Uso interno del equipo. No aparece en comprobantes, PDFs ni portal del cliente.
+            </p>
           </div>
           </>)}
 

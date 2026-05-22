@@ -22,7 +22,11 @@ export async function GET() {
       .select(`
         id, tipo_dispositivo, costo_final,
         porcentaje_comision, tecnico_id,
-        repuestos_orden (cantidad, precio_unitario)
+        repuestos_orden (cantidad, precio_unitario),
+        cotizaciones (
+          estado, deleted_at,
+          items_cotizacion (cantidad, inventario:inventario_id(precio_compra))
+        )
       `)
       .eq("organization_id", organizationId!)
       .not("costo_final", "is", null)
@@ -33,17 +37,24 @@ export async function GET() {
     }
 
     // Calcular rentabilidad por tipo de dispositivo
-    // Costos incluyen: repuestos consumidos + comisión técnico devengada.
+    // Costos incluyen: repuestos consumidos + cotizaciones aceptadas (inv) + comisión técnico.
     const porTipo: Record<string, { ingresos: number; costos: number; count: number }> = {}
 
     for (const orden of ordenes as any[]) {
       const tipo = orden.tipo_dispositivo || "OTRO"
       const ingreso = parseFloat(orden.costo_final || "0")
 
-      const repuestos = (orden.repuestos_orden || []) as Array<{ cantidad: number; precio_unitario: number }>
-      const costoRepuestos = repuestos.reduce(
-        (acc, r) => acc + (r.cantidad * r.precio_unitario), 0
-      )
+      let costoRepuestos = 0
+      for (const r of (orden.repuestos_orden || [])) {
+        costoRepuestos += (r.cantidad || 0) * parseFloat(r.precio_unitario || "0")
+      }
+      for (const c of (orden.cotizaciones || [])) {
+        if (c.deleted_at || c.estado !== "ACEPTADA") continue
+        for (const it of (c.items_cotizacion || [])) {
+          if (!it.inventario) continue
+          costoRepuestos += (it.cantidad || 0) * parseFloat(it.inventario.precio_compra || "0")
+        }
+      }
 
       let comision = 0
       if (orden.tecnico_id && ingreso > 0) {
