@@ -60,7 +60,7 @@ export function VentaCreadaModal({ open, onClose, venta }: VentaCreadaModalProps
   const [copied, setCopied] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [mensaje, setMensaje] = useState("")
-  const [plantilla, setPlantilla] = useState<{ comprobante_venta?: string; comprobante_venta_corto?: string }>({})
+  const [plantilla, setPlantilla] = useState<{ venta_comprobante?: string; venta_comprobante_corto?: string }>({})
 
   useEffect(() => {
     if (!open) return
@@ -80,9 +80,9 @@ export function VentaCreadaModal({ open, onClose, venta }: VentaCreadaModalProps
 
   useEffect(() => {
     if (venta) {
-      setMensaje(generateVentaMessage(venta, formatPrice, plantilla.comprobante_venta))
+      setMensaje(generateVentaMessage(venta, formatPrice, plantilla.venta_comprobante))
     }
-  }, [venta, plantilla.comprobante_venta])
+  }, [venta, plantilla.venta_comprobante])
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(mensaje)
@@ -171,7 +171,7 @@ export function VentaCreadaModal({ open, onClose, venta }: VentaCreadaModalProps
           </Button>
 
           {/* Enviar ticket como imagen por WhatsApp */}
-          <PosTicketShare ventaData={venta} plantillaCorta={plantilla.comprobante_venta_corto} />
+          <PosTicketShare ventaData={venta} plantillaCorta={plantilla.venta_comprobante_corto} />
 
           {/* Mensaje de texto para WhatsApp (alternativa) */}
           <details className="text-sm">

@@ -2,11 +2,127 @@ import { formatCurrencyValue, type CurrencyCode, DEFAULT_CURRENCY } from "@/lib/
 import { formatDateValue } from "@/lib/timezone"
 import { formatPhoneForCountry } from "@/lib/countries"
 import { EstadoOrden, NotificationContext, MetodoPagoVenta } from "./types"
+import { renderTemplate } from "@/lib/whatsapp/plantillas-catalog"
 
 export interface WhatsAppTemplate {
   id: string
   nombre: string
   mensaje: string
+}
+
+/**
+ * Mapeo de IDs legacy (usados por la UI del diálogo) a las keys del catálogo
+ * de plantillas configurables. Si la organización tiene una plantilla custom
+ * en plantillas_whatsapp[<catalogKey>], se usa esa en lugar del default.
+ */
+const LEGACY_ID_TO_CATALOG_KEY: Record<string, string> = {
+  estado_actual: "orden_estado_actual",
+  presupuesto: "orden_presupuesto",
+  listo_retirar: "orden_listo_retirar",
+  entrega_completada: "orden_entrega_completada",
+  seguimiento: "orden_seguimiento",
+  solicitud_info: "orden_solicitud_info",
+  repuesto_disponible: "orden_repuesto_disponible",
+  repuesto_no_disponible: "orden_repuesto_no_disponible",
+  aviso_demora: "orden_aviso_demora",
+  seguimiento_presupuesto_rechazado: "orden_seguimiento_rechazado",
+  garantia: "garantia_creada",
+  reingreso_garantia: "garantia_reingreso",
+  venta_confirmacion: "venta_comprobante",
+  venta_garantia: "venta_garantias",
+  venta_agradecimiento: "venta_agradecimiento",
+  recordatorio_pago: "cobranza_recordatorio_pago",
+  confirmacion_pago: "cobranza_confirmacion_pago",
+  link_pago: "cobranza_link_pago",
+  bienvenida_cliente: "bienvenida_cliente",
+  respuesta_consulta: "respuesta_consulta",
+  mantenimiento_preventivo: "mantenimiento_preventivo",
+  promocion: "promocion",
+  encuesta_satisfaccion: "encuesta_satisfaccion",
+  felicitacion: "felicitacion",
+  cliente_inactivo: "cliente_inactivo",
+}
+
+function buildVarsFromContext(ctx: NotificationContext): Record<string, string | number> {
+  const formatCurrency = (amount: number | null | undefined) =>
+    formatCurrencyValue(amount ?? 0, (ctx.moneda as CurrencyCode) || DEFAULT_CURRENCY)
+  const formatDate = (date: Date | null | undefined) =>
+    date ? formatDateValue(date, ctx.zonaHoraria) : ""
+
+  const links = ctx.orden ? getOrdenLinks(ctx) : null
+
+  const vars: Record<string, string | number> = {
+    cliente: ctx.cliente.nombre || "",
+    empresa: ctx.organizationName || "",
+    fecha: new Date().toLocaleDateString("es-AR"),
+  }
+
+  if (ctx.orden) {
+    vars.numero_orden = ctx.orden.numeroOrden
+    vars.dispositivo = ctx.orden.dispositivo || ""
+    vars.estado = estadoLabels[ctx.orden.estado] || ""
+    vars.presupuesto = ctx.orden.presupuesto ? formatCurrency(ctx.orden.presupuesto) : ""
+    vars.link_seguimiento = links?.trackingUrl || ""
+    vars.link_pdf = links?.pdfUrl || ""
+  }
+
+  if (ctx.garantia) {
+    vars.garantia_dias = ctx.garantia.diasValidez
+    vars.garantia_fecha = formatDate(ctx.garantia.fechaVencimiento)
+  }
+
+  if (ctx.pago) {
+    vars.monto_pago = ctx.pago.monto ? formatCurrency(ctx.pago.monto) : ""
+    vars.saldo = ctx.pago.saldoPendiente ? formatCurrency(ctx.pago.saldoPendiente) : "Al día"
+    vars.link_pago = ctx.pago.linkPago || ""
+  }
+
+  if (ctx.repuesto) {
+    vars.repuesto = ctx.repuesto.nombre || "necesario"
+  }
+
+  if (ctx.demora) {
+    vars.motivo_demora = ctx.demora.motivo || ""
+  }
+
+  if (ctx.promocion) {
+    vars.promo_titulo = ctx.promocion.titulo || ""
+    vars.promo_descripcion = ctx.promocion.descripcion || ""
+  }
+
+  if (ctx.venta) {
+    vars.numero_venta = String(ctx.venta.numeroVenta).padStart(4, "0")
+    vars.total = formatCurrency(ctx.venta.total)
+    vars.metodo_pago = metodoPagoLabels[ctx.venta.metodoPago] || ctx.venta.metodoPago
+    vars.items = ctx.venta.items
+      .map((i) => `- ${i.descripcion} x${i.cantidad}`)
+      .join("\n")
+    vars.garantias = ctx.venta.garantias.length
+      ? ctx.venta.garantias
+          .map((g) => `- Garantía #${g.numeroGarantia} (${g.diasValidez} días)`)
+          .join("\n")
+      : ""
+  }
+
+  return vars
+}
+
+/**
+ * Aplica el override del usuario (si existe) reemplazando el mensaje generado.
+ */
+function applyOverride(
+  legacyId: string,
+  defaultMessage: string,
+  ctx: NotificationContext,
+  plantillasOverride?: Record<string, string> | null,
+): string {
+  if (!plantillasOverride) return defaultMessage
+  const catalogKey = LEGACY_ID_TO_CATALOG_KEY[legacyId]
+  if (!catalogKey) return defaultMessage
+  const override = plantillasOverride[catalogKey]
+  if (!override || !override.trim()) return defaultMessage
+  const vars = buildVarsFromContext(ctx)
+  return renderTemplate(override, vars)
 }
 
 const estadoLabels: Record<EstadoOrden, string> = {
@@ -24,15 +140,19 @@ const estadoLabels: Record<EstadoOrden, string> = {
   SIN_REPARACION: "sin posibilidad de reparacion",
 }
 
-export function getWhatsAppTemplates(ctx: NotificationContext): WhatsAppTemplate[] {
+export function getWhatsAppTemplates(
+  ctx: NotificationContext,
+  plantillasOverride?: Record<string, string> | null,
+): WhatsAppTemplate[] {
   const templates: WhatsAppTemplate[] = []
+  const ov = (id: string, msg: string) => applyOverride(id, msg, ctx, plantillasOverride)
 
   if (ctx.orden) {
     // Plantilla de estado actual
     templates.push({
       id: "estado_actual",
       nombre: `Estado: ${estadoLabels[ctx.orden.estado]}`,
-      mensaje: generateEstadoMessage(ctx),
+      mensaje: ov("estado_actual", generateEstadoMessage(ctx)),
     })
 
     // Plantilla de presupuesto (si existe)
@@ -40,7 +160,7 @@ export function getWhatsAppTemplates(ctx: NotificationContext): WhatsAppTemplate
       templates.push({
         id: "presupuesto",
         nombre: "Informar presupuesto",
-        mensaje: generatePresupuestoMessage(ctx),
+        mensaje: ov("presupuesto", generatePresupuestoMessage(ctx)),
       })
     }
 
@@ -49,7 +169,7 @@ export function getWhatsAppTemplates(ctx: NotificationContext): WhatsAppTemplate
       templates.push({
         id: "listo_retirar",
         nombre: "Recordatorio de retiro",
-        mensaje: generateRecordatorioMessage(ctx),
+        mensaje: ov("listo_retirar", generateRecordatorioMessage(ctx)),
       })
     }
 
@@ -58,7 +178,7 @@ export function getWhatsAppTemplates(ctx: NotificationContext): WhatsAppTemplate
       templates.push({
         id: "entrega_completada",
         nombre: ctx.orden.estado === "ENTREGADO_SIN_REPARACION" ? "Comprobante de retiro" : "Comprobante de entrega",
-        mensaje: generateEntregaCompletadaMessage(ctx),
+        mensaje: ov("entrega_completada", generateEntregaCompletadaMessage(ctx)),
       })
     }
 
@@ -66,7 +186,7 @@ export function getWhatsAppTemplates(ctx: NotificationContext): WhatsAppTemplate
     templates.push({
       id: "seguimiento",
       nombre: "Mensaje de seguimiento",
-      mensaje: generateSeguimientoMessage(ctx),
+      mensaje: ov("seguimiento", generateSeguimientoMessage(ctx)),
     })
   }
 
@@ -74,7 +194,7 @@ export function getWhatsAppTemplates(ctx: NotificationContext): WhatsAppTemplate
     templates.push({
       id: "garantia",
       nombre: "Informar garantia",
-      mensaje: generateGarantiaMessage(ctx),
+      mensaje: ov("garantia", generateGarantiaMessage(ctx)),
     })
   }
 
@@ -83,13 +203,13 @@ export function getWhatsAppTemplates(ctx: NotificationContext): WhatsAppTemplate
     templates.push({
       id: "bienvenida_cliente",
       nombre: "Bienvenida nuevo cliente",
-      mensaje: generateBienvenidaMessage(ctx),
+      mensaje: ov("bienvenida_cliente", generateBienvenidaMessage(ctx)),
     })
 
     templates.push({
       id: "respuesta_consulta",
       nombre: "Respuesta a consulta",
-      mensaje: generateRespuestaConsultaMessage(ctx),
+      mensaje: ov("respuesta_consulta", generateRespuestaConsultaMessage(ctx)),
     })
   }
 
@@ -99,21 +219,21 @@ export function getWhatsAppTemplates(ctx: NotificationContext): WhatsAppTemplate
       templates.push({
         id: "recordatorio_pago",
         nombre: "Recordatorio de pago",
-        mensaje: generateRecordatorioPagoMessage(ctx),
+        mensaje: ov("recordatorio_pago", generateRecordatorioPagoMessage(ctx)),
       })
     }
 
     templates.push({
       id: "confirmacion_pago",
       nombre: "Confirmacion de pago",
-      mensaje: generateConfirmacionPagoMessage(ctx),
+      mensaje: ov("confirmacion_pago", generateConfirmacionPagoMessage(ctx)),
     })
 
     if (ctx.pago.linkPago) {
       templates.push({
         id: "link_pago",
         nombre: "Enviar link de pago",
-        mensaje: generateLinkPagoMessage(ctx),
+        mensaje: ov("link_pago", generateLinkPagoMessage(ctx)),
       })
     }
   }
@@ -123,27 +243,27 @@ export function getWhatsAppTemplates(ctx: NotificationContext): WhatsAppTemplate
     templates.push({
       id: "mantenimiento_preventivo",
       nombre: "Recordatorio mantenimiento",
-      mensaje: generateMantenimientoMessage(ctx),
+      mensaje: ov("mantenimiento_preventivo", generateMantenimientoMessage(ctx)),
     })
 
     if (ctx.promocion) {
       templates.push({
         id: "promocion",
         nombre: "Promocion / Oferta",
-        mensaje: generatePromocionMessage(ctx),
+        mensaje: ov("promocion", generatePromocionMessage(ctx)),
       })
     }
 
     templates.push({
       id: "felicitacion",
       nombre: "Felicitacion",
-      mensaje: generateFelicitacionMessage(ctx),
+      mensaje: ov("felicitacion", generateFelicitacionMessage(ctx)),
     })
 
     templates.push({
       id: "cliente_inactivo",
       nombre: "Cliente inactivo",
-      mensaje: generateClienteInactivoMessage(ctx),
+      mensaje: ov("cliente_inactivo", generateClienteInactivoMessage(ctx)),
     })
   }
 
@@ -152,7 +272,7 @@ export function getWhatsAppTemplates(ctx: NotificationContext): WhatsAppTemplate
     templates.push({
       id: "encuesta_satisfaccion",
       nombre: "Encuesta de satisfaccion",
-      mensaje: generateEncuestaMessage(ctx),
+      mensaje: ov("encuesta_satisfaccion", generateEncuestaMessage(ctx)),
     })
   }
 
@@ -161,7 +281,7 @@ export function getWhatsAppTemplates(ctx: NotificationContext): WhatsAppTemplate
     templates.push({
       id: "solicitud_info",
       nombre: "Solicitar informacion",
-      mensaje: generateSolicitudInfoMessage(ctx),
+      mensaje: ov("solicitud_info", generateSolicitudInfoMessage(ctx)),
     })
 
     // Repuesto: disponible en ESPERANDO_REPUESTO o si acaba de cambiar desde ese estado
@@ -170,13 +290,13 @@ export function getWhatsAppTemplates(ctx: NotificationContext): WhatsAppTemplate
         templates.push({
           id: "repuesto_disponible",
           nombre: "Repuesto disponible",
-          mensaje: generateRepuestoDisponibleMessage(ctx),
+          mensaje: ov("repuesto_disponible", generateRepuestoDisponibleMessage(ctx)),
         })
       } else {
         templates.push({
           id: "repuesto_no_disponible",
           nombre: "Repuesto no disponible",
-          mensaje: generateRepuestoNoDisponibleMessage(ctx),
+          mensaje: ov("repuesto_no_disponible", generateRepuestoNoDisponibleMessage(ctx)),
         })
       }
     }
@@ -185,7 +305,7 @@ export function getWhatsAppTemplates(ctx: NotificationContext): WhatsAppTemplate
       templates.push({
         id: "aviso_demora",
         nombre: "Aviso de demora",
-        mensaje: generateAvisoDemoraMessage(ctx),
+        mensaje: ov("aviso_demora", generateAvisoDemoraMessage(ctx)),
       })
     }
 
@@ -193,7 +313,7 @@ export function getWhatsAppTemplates(ctx: NotificationContext): WhatsAppTemplate
       templates.push({
         id: "reingreso_garantia",
         nombre: "Re-ingreso por garantia",
-        mensaje: generateReingresoGarantiaMessage(ctx),
+        mensaje: ov("reingreso_garantia", generateReingresoGarantiaMessage(ctx)),
       })
     }
 
@@ -202,7 +322,7 @@ export function getWhatsAppTemplates(ctx: NotificationContext): WhatsAppTemplate
       templates.push({
         id: "seguimiento_presupuesto_rechazado",
         nombre: "Seguimiento presupuesto rechazado",
-        mensaje: generateSeguimientoPresupuestoRechazadoMessage(ctx),
+        mensaje: ov("seguimiento_presupuesto_rechazado", generateSeguimientoPresupuestoRechazadoMessage(ctx)),
       })
     }
   }
@@ -212,7 +332,7 @@ export function getWhatsAppTemplates(ctx: NotificationContext): WhatsAppTemplate
     templates.push({
       id: "venta_confirmacion",
       nombre: "Confirmacion de compra",
-      mensaje: generateVentaConfirmacionMessage(ctx),
+      mensaje: ov("venta_confirmacion", generateVentaConfirmacionMessage(ctx)),
     })
 
     // Si tiene garantías
@@ -220,14 +340,14 @@ export function getWhatsAppTemplates(ctx: NotificationContext): WhatsAppTemplate
       templates.push({
         id: "venta_garantia",
         nombre: "Informar garantias",
-        mensaje: generateVentaGarantiaMessage(ctx),
+        mensaje: ov("venta_garantia", generateVentaGarantiaMessage(ctx)),
       })
     }
 
     templates.push({
       id: "venta_agradecimiento",
       nombre: "Agradecimiento",
-      mensaje: generateVentaAgradecimientoMessage(ctx),
+      mensaje: ov("venta_agradecimiento", generateVentaAgradecimientoMessage(ctx)),
     })
   }
 

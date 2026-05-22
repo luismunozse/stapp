@@ -1,6 +1,70 @@
 import { supabaseAdmin } from "@/lib/supabase"
 import { Resend } from "resend"
 import { formatDateValue } from "@/lib/timezone"
+import { renderTemplate } from "@/lib/whatsapp/plantillas-catalog"
+
+/**
+ * Mapeo de NotificationType (legacy) a la key del catálogo de plantillas.
+ * Si el override existe se renderiza con las variables del context.
+ */
+const TIPO_TO_CATALOG_KEY: Record<string, string> = {
+  CAMBIO_ESTADO: "orden_estado_actual",
+  PRESUPUESTO_DEFINIDO: "orden_presupuesto",
+  GARANTIA_CREADA: "garantia_creada",
+  RECORDATORIO_RETIRO: "orden_listo_retirar",
+  BIENVENIDA_CLIENTE: "bienvenida_cliente",
+  RESPUESTA_CONSULTA: "respuesta_consulta",
+  RECORDATORIO_PAGO: "cobranza_recordatorio_pago",
+  CONFIRMACION_PAGO: "cobranza_confirmacion_pago",
+  LINK_PAGO: "cobranza_link_pago",
+  MANTENIMIENTO_PREVENTIVO: "mantenimiento_preventivo",
+  PROMOCION: "promocion",
+  ENCUESTA_SATISFACCION: "encuesta_satisfaccion",
+  FELICITACION: "felicitacion",
+  SOLICITUD_INFO: "orden_solicitud_info",
+  REPUESTO_DISPONIBLE: "orden_repuesto_disponible",
+  REPUESTO_NO_DISPONIBLE: "orden_repuesto_no_disponible",
+  AVISO_DEMORA: "orden_aviso_demora",
+  REINGRESO_GARANTIA: "garantia_reingreso",
+  CLIENTE_INACTIVO: "cliente_inactivo",
+  SEGUIMIENTO_PRESUPUESTO_RECHAZADO: "orden_seguimiento_rechazado",
+}
+
+function resolvePlantillaForTipo(
+  tipo: string,
+  context: any,
+  plantillasOverride: Record<string, string> | null | undefined,
+): string | null {
+  if (!plantillasOverride) return null
+  const key = TIPO_TO_CATALOG_KEY[tipo]
+  if (!key) return null
+  const tpl = plantillasOverride[key]
+  if (!tpl || !tpl.trim()) return null
+
+  const vars: Record<string, string | number> = {
+    cliente: context.cliente?.nombre || "",
+    empresa: context.organizationName || "",
+    fecha: new Date().toLocaleDateString("es-AR"),
+  }
+
+  if (context.orden) {
+    vars.numero_orden = context.orden.numeroOrden ?? ""
+    vars.dispositivo = context.orden.dispositivo || ""
+    vars.estado = formatEstado(context.orden.estado || "")
+    vars.presupuesto = context.orden.presupuesto != null
+      ? `$${Number(context.orden.presupuesto).toLocaleString()}`
+      : ""
+  }
+
+  if (context.garantia) {
+    vars.garantia_dias = context.garantia.diasValidez ?? ""
+    vars.garantia_fecha = context.garantia.fechaVencimiento
+      ? formatDateValue(context.garantia.fechaVencimiento, context.zonaHoraria)
+      : ""
+  }
+
+  return renderTemplate(tpl, vars)
+}
 
 let _resend: Resend | null = null
 function getResend(): Resend {
@@ -55,7 +119,7 @@ export async function sendNotificationDirect(params: NotificationParams) {
   // Obtener configuración de la organización
   const { data: orgConfig } = await supabaseAdmin
     .from("organizations")
-    .select("notificaciones_email, notificaciones_whatsapp")
+    .select("notificaciones_email, notificaciones_whatsapp, plantillas_whatsapp")
     .eq("id", organizationId)
     .single()
 
@@ -125,14 +189,16 @@ export async function sendNotificationDirect(params: NotificationParams) {
 
         const accessToken = decrypt(waConfig.access_token_encrypted)
         const template = NOTIFICATION_TEMPLATES[tipo]
-        const fallbackText = template
-          ? template.getFallbackText({
-              ...context.orden,
-              organizationName: context.organizationName,
-              moneda: context.moneda,
-              ...context.garantia,
-            })
-          : generateWhatsAppMessage(tipo, context)
+        const overrideText = resolvePlantillaForTipo(tipo, context, orgConfig.plantillas_whatsapp)
+        const fallbackText = overrideText
+          ?? (template
+            ? template.getFallbackText({
+                ...context.orden,
+                organizationName: context.organizationName,
+                moneda: context.moneda,
+                ...context.garantia,
+              })
+            : generateWhatsAppMessage(tipo, context))
 
         const result = await sendTextMessage(
           waConfig.phone_number_id,
@@ -165,7 +231,8 @@ export async function sendNotificationDirect(params: NotificationParams) {
         }
       } else {
         // Fallback: generar URL
-        const message = generateWhatsAppMessage(tipo, context)
+        const overrideTextWa = resolvePlantillaForTipo(tipo, context, orgConfig.plantillas_whatsapp)
+        const message = overrideTextWa ?? generateWhatsAppMessage(tipo, context)
         const cleanPhone = context.cliente.telefono.replace(/\D/g, "")
         const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`
 

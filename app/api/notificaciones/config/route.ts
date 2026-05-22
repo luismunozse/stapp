@@ -3,12 +3,9 @@ import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
 
-const plantillasSchema = z
-  .object({
-    comprobante_venta: z.string().max(2000).optional(),
-    comprobante_venta_corto: z.string().max(500).optional(),
-  })
-  .optional()
+// Acepta cualquier key del catálogo de plantillas. La validación de keys
+// válidas se hace en el front (el catálogo es source of truth).
+const plantillasSchema = z.record(z.string(), z.string().max(4000)).optional()
 
 const configSchema = z.object({
   notificacionesEmail: z.boolean().optional(),

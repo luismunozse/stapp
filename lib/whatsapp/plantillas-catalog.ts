@@ -1,0 +1,563 @@
+/**
+ * Catálogo de plantillas de WhatsApp configurables por organización.
+ *
+ * Cada plantilla tiene:
+ *  - key: identificador único (también es la key en plantillas_whatsapp JSONB)
+ *  - label: nombre legible
+ *  - category: agrupación para la UI
+ *  - description: descripción breve
+ *  - variables: listado de variables soportadas (para el chip clickable en UI)
+ *  - defaultText: texto por defecto con placeholders {variable}
+ *
+ * El renderer reemplaza variables {nombre} en el texto.
+ * Si la organización tiene un override en plantillas_whatsapp[key], se usa ese
+ * texto. Si no, se usa defaultText.
+ */
+
+export type PlantillaCategory =
+  | "ordenes"
+  | "ventas"
+  | "turnos"
+  | "cobranza"
+  | "marketing"
+  | "operativo"
+
+export interface PlantillaVariable {
+  key: string
+  label: string
+  example?: string
+}
+
+export interface PlantillaDefinition {
+  key: string
+  label: string
+  category: PlantillaCategory
+  description: string
+  variables: PlantillaVariable[]
+  defaultText: string
+}
+
+const VAR_CLIENTE: PlantillaVariable = { key: "cliente", label: "Nombre del cliente", example: "Juan Pérez" }
+const VAR_EMPRESA: PlantillaVariable = { key: "empresa", label: "Nombre del negocio", example: "GuruTech" }
+const VAR_NUMERO_ORDEN: PlantillaVariable = { key: "numero_orden", label: "Número de orden", example: "1234" }
+const VAR_DISPOSITIVO: PlantillaVariable = { key: "dispositivo", label: "Dispositivo", example: "iPhone 12" }
+const VAR_ESTADO: PlantillaVariable = { key: "estado", label: "Estado de la orden", example: "Listo para retirar" }
+const VAR_PRESUPUESTO: PlantillaVariable = { key: "presupuesto", label: "Presupuesto", example: "$45.000" }
+const VAR_GARANTIA_DIAS: PlantillaVariable = { key: "garantia_dias", label: "Días de garantía", example: "90" }
+const VAR_GARANTIA_FECHA: PlantillaVariable = { key: "garantia_fecha", label: "Fecha de vencimiento", example: "31/12/2026" }
+const VAR_LINK_SEGUIMIENTO: PlantillaVariable = { key: "link_seguimiento", label: "Link de seguimiento", example: "https://..." }
+const VAR_LINK_PDF: PlantillaVariable = { key: "link_pdf", label: "Link al PDF", example: "https://..." }
+const VAR_MONTO_PAGO: PlantillaVariable = { key: "monto_pago", label: "Monto del pago", example: "$10.000" }
+const VAR_SALDO: PlantillaVariable = { key: "saldo", label: "Saldo pendiente", example: "$5.000" }
+const VAR_LINK_PAGO: PlantillaVariable = { key: "link_pago", label: "Link de pago", example: "https://..." }
+const VAR_REPUESTO: PlantillaVariable = { key: "repuesto", label: "Nombre del repuesto", example: "Pantalla" }
+const VAR_MOTIVO_DEMORA: PlantillaVariable = { key: "motivo_demora", label: "Motivo de demora", example: "Falta repuesto" }
+const VAR_PROMO_TITULO: PlantillaVariable = { key: "promo_titulo", label: "Título de promoción", example: "20% OFF" }
+const VAR_PROMO_DESC: PlantillaVariable = { key: "promo_descripcion", label: "Descripción de promoción" }
+const VAR_NUMERO_VENTA: PlantillaVariable = { key: "numero_venta", label: "Número de venta", example: "0042" }
+const VAR_TOTAL: PlantillaVariable = { key: "total", label: "Total de la venta", example: "$50.000" }
+const VAR_ITEMS: PlantillaVariable = { key: "items", label: "Lista de items" }
+const VAR_METODO_PAGO: PlantillaVariable = { key: "metodo_pago", label: "Método de pago", example: "Efectivo" }
+const VAR_GARANTIAS: PlantillaVariable = { key: "garantias", label: "Lista de garantías" }
+const VAR_FECHA: PlantillaVariable = { key: "fecha", label: "Fecha actual", example: "22/05/2026" }
+const VAR_TURNO_FECHA: PlantillaVariable = { key: "turno_fecha", label: "Fecha del turno", example: "Lun 25/05" }
+const VAR_TURNO_HORA: PlantillaVariable = { key: "turno_hora", label: "Hora del turno", example: "14:30" }
+const VAR_TURNO_SERVICIO: PlantillaVariable = { key: "turno_servicio", label: "Servicio del turno", example: "Diagnóstico" }
+
+export const PLANTILLAS_CATALOG: PlantillaDefinition[] = [
+  // === Órdenes ===
+  {
+    key: "orden_estado_actual",
+    label: "Cambio de estado de orden",
+    category: "ordenes",
+    description: "Se envía cuando la orden cambia de estado.",
+    variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_ESTADO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra {estado}.
+
+Seguimiento: {link_seguimiento}
+
+{empresa}`,
+  },
+  {
+    key: "orden_presupuesto",
+    label: "Informar presupuesto",
+    category: "ordenes",
+    description: "Aviso al cliente con el monto del presupuesto definido.",
+    variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_PRESUPUESTO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, le informamos el presupuesto para la reparación de su {dispositivo}:
+
+*Presupuesto: {presupuesto}*
+
+Orden #{numero_orden}
+
+Por favor confirmenos si desea proceder con la reparación.
+Seguimiento: {link_seguimiento}
+
+{empresa}`,
+  },
+  {
+    key: "orden_listo_retirar",
+    label: "Listo para retirar",
+    category: "ordenes",
+    description: "Se envía cuando el equipo está reparado y listo para entregar.",
+    variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, le recordamos que su {dispositivo} está listo para retirar.
+
+Orden #{numero_orden}
+
+Puede pasar por nuestro local en horario de atención. Lo esperamos!
+Seguimiento: {link_seguimiento}
+
+{empresa}`,
+  },
+  {
+    key: "orden_entrega_completada",
+    label: "Comprobante de entrega",
+    category: "ordenes",
+    description: "Se envía cuando se entrega el equipo al cliente.",
+    variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_PDF, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, confirmamos la entrega de su {dispositivo}.
+
+*Orden #{numero_orden} - ENTREGADO*
+
+Descargar comprobante: {link_pdf}
+Seguimiento: {link_seguimiento}
+
+Gracias por confiar en nosotros!
+
+{empresa}`,
+  },
+  {
+    key: "orden_seguimiento",
+    label: "Mensaje de seguimiento",
+    category: "ordenes",
+    description: "Mensaje genérico de seguimiento para una orden.",
+    variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, nos comunicamos por su {dispositivo} (Orden #{numero_orden}).
+
+[Escriba su mensaje aquí]
+
+Seguimiento: {link_seguimiento}
+
+{empresa}`,
+  },
+  {
+    key: "orden_solicitud_info",
+    label: "Solicitar información",
+    category: "operativo",
+    description: "Pedido de información adicional al cliente.",
+    variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, nos comunicamos por su {dispositivo} (Orden #{numero_orden}).
+
+Necesitamos información adicional para continuar con el servicio.
+[Detalle lo que necesita: fotos, contraseña, descripción del problema, etc.]
+
+Agradecemos su pronta respuesta.
+
+{empresa}`,
+  },
+  {
+    key: "orden_repuesto_disponible",
+    label: "Repuesto disponible",
+    category: "operativo",
+    description: "Aviso de que el repuesto necesario llegó.",
+    variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_REPUESTO, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, buenas noticias!
+
+El repuesto *{repuesto}* para su {dispositivo} ya está disponible.
+
+Orden #{numero_orden}
+
+Retomamos la reparación de inmediato. Le avisaremos cuando esté listo.
+
+{empresa}`,
+  },
+  {
+    key: "orden_repuesto_no_disponible",
+    label: "Repuesto no disponible",
+    category: "operativo",
+    description: "Aviso de que el repuesto no está disponible.",
+    variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_REPUESTO, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, le informamos sobre su {dispositivo} (Orden #{numero_orden}).
+
+Lamentablemente el repuesto *{repuesto}* no se encuentra disponible o está discontinuado.
+
+Podemos ofrecerle:
+- Buscar un repuesto alternativo compatible
+- Devolver el equipo sin cargo
+
+Por favor indíquenos cómo desea proceder.
+
+{empresa}`,
+  },
+  {
+    key: "orden_aviso_demora",
+    label: "Aviso de demora",
+    category: "operativo",
+    description: "Aviso al cliente cuando la reparación se demora.",
+    variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_MOTIVO_DEMORA, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, le informamos que la reparación de su {dispositivo} (Orden #{numero_orden}) está tomando más tiempo del estimado.
+
+Motivo: {motivo_demora}
+
+Pedimos disculpas por la demora. Estamos trabajando para resolverlo lo antes posible.
+
+{empresa}`,
+  },
+  {
+    key: "orden_seguimiento_rechazado",
+    label: "Seguimiento presupuesto rechazado",
+    category: "operativo",
+    description: "Seguimiento cuando el cliente rechazó el presupuesto.",
+    variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, nos comunicamos por su {dispositivo} (Orden #{numero_orden}).
+
+Entendemos que el presupuesto anterior no se ajustaba a sus necesidades. Podemos evaluar alternativas para resolver el problema de su equipo.
+
+Puede responder este mensaje si desea que revisemos otras opciones.
+
+{empresa}`,
+  },
+
+  // === Garantías ===
+  {
+    key: "garantia_creada",
+    label: "Garantía emitida",
+    category: "ordenes",
+    description: "Aviso al cliente con los datos de la garantía.",
+    variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_GARANTIA_DIAS, VAR_GARANTIA_FECHA, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, su reparación cuenta con garantía:
+
+*{garantia_dias} días de garantía*
+Válida hasta: {garantia_fecha}
+
+Orden #{numero_orden}
+Dispositivo: {dispositivo}
+
+Conserve este mensaje como comprobante.
+
+{empresa}`,
+  },
+  {
+    key: "garantia_reingreso",
+    label: "Reingreso por garantía",
+    category: "ordenes",
+    description: "Aviso para reingresos por garantía vigente.",
+    variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_GARANTIA_FECHA, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, lamentamos que tenga inconvenientes con su {dispositivo}.
+
+Su reparación está cubierta por garantía (válida hasta {garantia_fecha}).
+
+Puede traer su equipo para que lo revisemos sin costo adicional. No necesita turno, sólo acérquese en horario de atención.
+
+Orden original #{numero_orden}
+
+{empresa}`,
+  },
+
+  // === Ventas ===
+  {
+    key: "venta_comprobante",
+    label: "Comprobante de venta (texto completo)",
+    category: "ventas",
+    description: "Mensaje completo al compartir un comprobante de venta.",
+    variables: [VAR_CLIENTE, VAR_NUMERO_VENTA, VAR_ITEMS, VAR_TOTAL, VAR_METODO_PAGO, VAR_GARANTIAS, VAR_EMPRESA, VAR_FECHA],
+    defaultText: `Hola {cliente}, gracias por tu compra!
+
+*COMPROBANTE DE VENTA #{numero_venta}*
+
+{items}
+
+*Total: {total}*
+Método de pago: {metodo_pago}
+
+{garantias}
+
+Gracias por tu preferencia!
+{empresa}`,
+  },
+  {
+    key: "venta_comprobante_corto",
+    label: "Comprobante de venta (al compartir imagen)",
+    category: "ventas",
+    description: "Mensaje corto que acompaña a la imagen del ticket compartido.",
+    variables: [VAR_CLIENTE, VAR_NUMERO_VENTA, VAR_TOTAL, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, gracias por tu compra!
+Venta #{numero_venta} por {total}.
+Te enviamos el comprobante como imagen.`,
+  },
+  {
+    key: "venta_garantias",
+    label: "Informar garantías de venta",
+    category: "ventas",
+    description: "Aviso con los certificados de garantía de una venta.",
+    variables: [VAR_CLIENTE, VAR_NUMERO_VENTA, VAR_GARANTIAS, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, su compra (V{numero_venta}) incluye garantía:
+
+{garantias}
+
+Conserve estos certificados como comprobante.
+
+{empresa}`,
+  },
+  {
+    key: "venta_agradecimiento",
+    label: "Agradecimiento post-venta",
+    category: "ventas",
+    description: "Mensaje de agradecimiento luego de una venta.",
+    variables: [VAR_CLIENTE, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, gracias por elegirnos!
+
+Esperamos que disfrute su compra. Si tiene alguna consulta, no dude en contactarnos.
+
+Lo esperamos pronto!
+
+{empresa}`,
+  },
+
+  // === Cobranza ===
+  {
+    key: "cobranza_recordatorio_pago",
+    label: "Recordatorio de pago",
+    category: "cobranza",
+    description: "Recordatorio de saldo pendiente.",
+    variables: [VAR_CLIENTE, VAR_SALDO, VAR_NUMERO_ORDEN, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, le recordamos que tiene un saldo pendiente de *{saldo}*.
+
+Orden #{numero_orden}
+
+Puede acercarse a nuestro local o consultarnos por medios de pago disponibles.
+
+{empresa}`,
+  },
+  {
+    key: "cobranza_confirmacion_pago",
+    label: "Confirmación de pago",
+    category: "cobranza",
+    description: "Confirmación de pago recibido.",
+    variables: [VAR_CLIENTE, VAR_MONTO_PAGO, VAR_SALDO, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, confirmamos la recepción de su pago por *{monto_pago}*.
+
+Saldo restante: {saldo}
+
+Gracias!
+
+{empresa}`,
+  },
+  {
+    key: "cobranza_link_pago",
+    label: "Enviar link de pago",
+    category: "cobranza",
+    description: "Mensaje con link para que el cliente pague.",
+    variables: [VAR_CLIENTE, VAR_MONTO_PAGO, VAR_LINK_PAGO, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, le enviamos el link para realizar el pago:
+
+*Monto: {monto_pago}*
+
+{link_pago}
+
+{empresa}`,
+  },
+
+  // === Turnos ===
+  {
+    key: "turno_confirmacion",
+    label: "Confirmación de turno",
+    category: "turnos",
+    description: "Confirmación cuando el cliente reserva un turno.",
+    variables: [VAR_CLIENTE, VAR_TURNO_FECHA, VAR_TURNO_HORA, VAR_TURNO_SERVICIO, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, le confirmamos su turno:
+
+*{turno_servicio}*
+{turno_fecha} a las {turno_hora}
+
+Lo esperamos!
+
+{empresa}`,
+  },
+  {
+    key: "turno_recordatorio",
+    label: "Recordatorio de turno",
+    category: "turnos",
+    description: "Recordatorio enviado antes del turno.",
+    variables: [VAR_CLIENTE, VAR_TURNO_FECHA, VAR_TURNO_HORA, VAR_TURNO_SERVICIO, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, le recordamos su turno:
+
+*{turno_servicio}*
+{turno_fecha} a las {turno_hora}
+
+Lo esperamos! Si necesita reprogramar, avísenos cuanto antes.
+
+{empresa}`,
+  },
+  {
+    key: "turno_cancelacion",
+    label: "Cancelación de turno",
+    category: "turnos",
+    description: "Aviso cuando se cancela un turno.",
+    variables: [VAR_CLIENTE, VAR_TURNO_FECHA, VAR_TURNO_HORA, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, le informamos que su turno del {turno_fecha} a las {turno_hora} fue cancelado.
+
+Puede reprogramar contactándonos.
+
+{empresa}`,
+  },
+
+  // === Marketing / Captación / Retención ===
+  {
+    key: "bienvenida_cliente",
+    label: "Bienvenida cliente nuevo",
+    category: "marketing",
+    description: "Mensaje de bienvenida a clientes nuevos.",
+    variables: [VAR_CLIENTE, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, bienvenido/a a {empresa}!
+
+Gracias por confiar en nosotros. Somos especialistas en reparación y servicio técnico.
+
+Puede contactarnos por este medio para cualquier consulta.
+
+{empresa}`,
+  },
+  {
+    key: "respuesta_consulta",
+    label: "Respuesta a consulta",
+    category: "marketing",
+    description: "Respuesta genérica a una consulta inicial.",
+    variables: [VAR_CLIENTE, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, gracias por su consulta.
+
+[Detalle su respuesta aquí]
+
+Si desea traer su equipo para una revisión sin cargo, estamos a su disposición.
+
+{empresa}`,
+  },
+  {
+    key: "mantenimiento_preventivo",
+    label: "Recordatorio mantenimiento preventivo",
+    category: "marketing",
+    description: "Aviso para recordar mantenimiento preventivo.",
+    variables: [VAR_CLIENTE, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, desde {empresa} queremos recordarle que es buen momento para un chequeo preventivo de su equipo.
+
+El mantenimiento preventivo ayuda a evitar fallas y prolongar la vida útil de su equipo.
+
+Consulte por turno disponible!
+
+{empresa}`,
+  },
+  {
+    key: "promocion",
+    label: "Promoción / Oferta",
+    category: "marketing",
+    description: "Mensaje para difundir una promoción.",
+    variables: [VAR_CLIENTE, VAR_PROMO_TITULO, VAR_PROMO_DESC, VAR_EMPRESA],
+    defaultText: `Hola {cliente}!
+
+*{promo_titulo}*
+{promo_descripcion}
+
+No dude en consultarnos!
+
+{empresa}`,
+  },
+  {
+    key: "encuesta_satisfaccion",
+    label: "Encuesta de satisfacción",
+    category: "marketing",
+    description: "Pedido de feedback post-servicio.",
+    variables: [VAR_CLIENTE, VAR_DISPOSITIVO, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, nos importa su opinión!
+
+Queremos saber cómo fue su experiencia con la reparación de su {dispositivo}.
+
+Del 1 al 5, ¿qué tan satisfecho está? (1 = Muy insatisfecho, 5 = Excelente)
+
+Su opinión nos ayuda a mejorar. Gracias!
+
+{empresa}`,
+  },
+  {
+    key: "felicitacion",
+    label: "Felicitación / Saludo",
+    category: "marketing",
+    description: "Saludo personalizado (cumpleaños, fin de año, etc).",
+    variables: [VAR_CLIENTE, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, desde {empresa} queremos desearle un muy feliz día!
+
+Gracias por ser parte de nuestra comunidad de clientes.
+
+Como regalo, tiene un descuento especial en su próximo servicio. Consulte por mensaje!
+
+{empresa}`,
+  },
+  {
+    key: "cliente_inactivo",
+    label: "Cliente inactivo",
+    category: "marketing",
+    description: "Mensaje de reactivación para clientes que no visitan hace tiempo.",
+    variables: [VAR_CLIENTE, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, hace tiempo que no nos visita y lo extrañamos!
+
+En {empresa} seguimos a su disposición para cualquier servicio técnico o consulta.
+
+Recuerde que ofrecemos diagnóstico sin cargo. Traiga su equipo y lo revisamos sin compromiso.
+
+Lo esperamos!
+
+{empresa}`,
+  },
+]
+
+export const CATEGORIES: Record<PlantillaCategory, { label: string; description: string }> = {
+  ordenes: { label: "Órdenes", description: "Notificaciones sobre el flujo de reparación" },
+  ventas: { label: "Ventas", description: "Comprobantes y agradecimientos de venta" },
+  turnos: { label: "Turnos", description: "Confirmaciones y recordatorios de turnos" },
+  cobranza: { label: "Cobranza", description: "Pagos, saldos y links de pago" },
+  operativo: { label: "Operativo", description: "Repuestos, demoras e información" },
+  marketing: { label: "Marketing", description: "Captación, retención y fidelización" },
+}
+
+export function getPlantilla(key: string): PlantillaDefinition | undefined {
+  return PLANTILLAS_CATALOG.find((p) => p.key === key)
+}
+
+export function getPlantillasByCategory(): Record<PlantillaCategory, PlantillaDefinition[]> {
+  const grouped = {} as Record<PlantillaCategory, PlantillaDefinition[]>
+  for (const cat of Object.keys(CATEGORIES) as PlantillaCategory[]) {
+    grouped[cat] = PLANTILLAS_CATALOG.filter((p) => p.category === cat)
+  }
+  return grouped
+}
+
+/**
+ * Renderiza un texto reemplazando variables {variable} con valores del contexto.
+ * Variables no encontradas en el contexto se dejan vacías.
+ */
+export function renderTemplate(
+  text: string,
+  ctx: Record<string, string | number | null | undefined>,
+): string {
+  return text
+    .replace(/\{(\w+)\}/g, (_, key) => {
+      const v = ctx[key]
+      if (v === null || v === undefined) return ""
+      return String(v)
+    })
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+}
+
+/**
+ * Resuelve el texto para una plantilla: si hay override del usuario en
+ * plantillasOverride, se renderiza; si no, se renderiza el defaultText.
+ */
+export function resolvePlantilla(
+  key: string,
+  ctx: Record<string, string | number | null | undefined>,
+  plantillasOverride?: Record<string, string> | null,
+): string {
+  const def = getPlantilla(key)
+  const tpl = plantillasOverride?.[key]?.trim() || def?.defaultText || ""
+  return renderTemplate(tpl, ctx)
+}

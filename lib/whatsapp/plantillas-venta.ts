@@ -1,19 +1,13 @@
 /**
  * Renderizador de plantillas WhatsApp para comprobantes de venta.
- * Reemplaza variables {nombre} en plantilla custom de la organizacion.
- * Fallback a texto por defecto si no hay plantilla configurada.
+ * Usa el catálogo central de plantillas (lib/whatsapp/plantillas-catalog.ts).
+ *
+ * Keys del catálogo:
+ *  - venta_comprobante: texto completo (modal venta creada)
+ *  - venta_comprobante_corto: texto corto que acompaña la imagen
  */
 
-export interface VentaTemplateContext {
-  cliente: string
-  numero: string | number
-  total: string
-  items: string
-  metodoPago: string
-  garantias: string
-  empresa: string
-  fecha: string
-}
+import { resolvePlantilla, getPlantilla } from "./plantillas-catalog"
 
 const METODO_LABELS: Record<string, string> = {
   EFECTIVO: "Efectivo",
@@ -37,6 +31,17 @@ export interface VentaForTemplate {
   organizationName?: string
 }
 
+export interface VentaTemplateContext {
+  cliente: string
+  numero_venta: string
+  total: string
+  items: string
+  metodo_pago: string
+  garantias: string
+  empresa: string
+  fecha: string
+}
+
 export function buildVentaContext(
   venta: VentaForTemplate,
   formatPrice: (amount: number) => string,
@@ -50,65 +55,48 @@ export function buildVentaContext(
     totalTxt = `${formatPrice(venta.total)} (Descuento: -${formatPrice(venta.descuento)})`
   }
 
-  const garantiasTxt = (venta.garantias && venta.garantias.length > 0)
+  const garantiasTxt = venta.garantias && venta.garantias.length > 0
     ? venta.garantias.map((g) => `- Garantía #${g.numeroGarantia} (${g.diasValidez} días)`).join("\n")
     : ""
 
   return {
     cliente: venta.clienteNombre || "",
-    numero: venta.numeroVenta,
+    numero_venta: String(venta.numeroVenta),
     total: totalTxt,
     items: itemsTxt,
-    metodoPago: METODO_LABELS[venta.metodoPago] || venta.metodoPago,
+    metodo_pago: METODO_LABELS[venta.metodoPago] || venta.metodoPago,
     garantias: garantiasTxt,
     empresa: venta.organizationName || "Servicio Técnico",
     fecha: new Date().toLocaleDateString("es-AR"),
   }
 }
 
-export function renderPlantilla(template: string, ctx: VentaTemplateContext): string {
-  return template
-    .replace(/\{cliente\}/g, ctx.cliente)
-    .replace(/\{numero\}/g, String(ctx.numero))
-    .replace(/\{total\}/g, ctx.total)
-    .replace(/\{items\}/g, ctx.items)
-    .replace(/\{metodo_pago\}/g, ctx.metodoPago)
-    .replace(/\{garantias\}/g, ctx.garantias)
-    .replace(/\{empresa\}/g, ctx.empresa)
-    .replace(/\{fecha\}/g, ctx.fecha)
-}
-
-export const DEFAULT_PLANTILLA_VENTA = `Hola {cliente}, gracias por tu compra!
-
-*COMPROBANTE DE VENTA #{numero}*
-
-{items}
-
-*Total: {total}*
-Método de pago: {metodo_pago}
-
-{garantias}
-
-Gracias por tu preferencia!
-{empresa}`
-
-export const DEFAULT_PLANTILLA_VENTA_CORTO =
-  `Hola {cliente}, gracias por tu compra!\nVenta #{numero} por {total}.\nTe enviamos el comprobante como imagen.`
-
 export function renderVentaMessage(
-  plantilla: string | undefined | null,
+  plantillaOverride: string | undefined | null,
   ctx: VentaTemplateContext,
 ): string {
-  const tpl = (plantilla && plantilla.trim()) ? plantilla : DEFAULT_PLANTILLA_VENTA
-  return renderPlantilla(tpl, ctx)
-    .replace(/\n{3,}/g, "\n\n")
-    .trim()
+  return resolvePlantilla(
+    "venta_comprobante",
+    ctx as unknown as Record<string, string>,
+    plantillaOverride && plantillaOverride.trim()
+      ? { venta_comprobante: plantillaOverride }
+      : null,
+  )
 }
 
 export function renderVentaMessageCorto(
-  plantilla: string | undefined | null,
+  plantillaOverride: string | undefined | null,
   ctx: VentaTemplateContext,
 ): string {
-  const tpl = (plantilla && plantilla.trim()) ? plantilla : DEFAULT_PLANTILLA_VENTA_CORTO
-  return renderPlantilla(tpl, ctx).trim()
+  return resolvePlantilla(
+    "venta_comprobante_corto",
+    ctx as unknown as Record<string, string>,
+    plantillaOverride && plantillaOverride.trim()
+      ? { venta_comprobante_corto: plantillaOverride }
+      : null,
+  )
 }
+
+// Exports legacy para placeholder UI (deprecados, ahora se obtienen del catálogo).
+export const DEFAULT_PLANTILLA_VENTA = getPlantilla("venta_comprobante")?.defaultText ?? ""
+export const DEFAULT_PLANTILLA_VENTA_CORTO = getPlantilla("venta_comprobante_corto")?.defaultText ?? ""

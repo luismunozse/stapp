@@ -79,8 +79,8 @@ export function PosTerminal() {
     fetch("/api/notificaciones/config")
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        if (!cancelled && data?.plantillasWhatsapp?.comprobante_venta_corto) {
-          setPlantillaCorta(data.plantillasWhatsapp.comprobante_venta_corto)
+        if (!cancelled && data?.plantillasWhatsapp?.venta_comprobante_corto) {
+          setPlantillaCorta(data.plantillasWhatsapp.venta_comprobante_corto)
         }
       })
       .catch(() => {})

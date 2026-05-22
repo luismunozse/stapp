@@ -25,8 +25,9 @@ export function WhatsAppDialog({ context, onClose }: WhatsAppDialogProps) {
   const [hasWaApi, setHasWaApi] = useState(false)
   const [sendingApi, setSendingApi] = useState(false)
   const [apiResult, setApiResult] = useState<{ success: boolean; message: string } | null>(null)
+  const [plantillasOverride, setPlantillasOverride] = useState<Record<string, string> | null>(null)
 
-  const templates = getWhatsAppTemplates(context)
+  const templates = getWhatsAppTemplates(context, plantillasOverride)
 
   // Check if WA Business API is configured
   useEffect(() => {
@@ -35,6 +36,18 @@ export function WhatsAppDialog({ context, onClose }: WhatsAppDialogProps) {
       .then((data) => {
         if (data?.isConfigured && data?.isVerified) {
           setHasWaApi(true)
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  // Fetch plantillas personalizadas
+  useEffect(() => {
+    fetch("/api/notificaciones/config")
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (data?.plantillasWhatsapp) {
+          setPlantillasOverride(data.plantillasWhatsapp)
         }
       })
       .catch(() => {})
