@@ -46,6 +46,13 @@ export const CRON_JOBS: CronJobDefinition[] = [
     schedule: "11:00 AM",
     description: "Welcome, tips, trial expiring, win-back",
   },
+  {
+    id: "subscription-sweep",
+    name: "Subscription Sweep",
+    path: "/api/cron/subscription-sweep",
+    schedule: "6:00 AM",
+    description: "Downgradea MANUAL vencidas y marca externas PAST_DUE",
+  },
 ]
 
 /** Paths válidos para el endpoint run-cron */

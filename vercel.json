@@ -37,6 +37,10 @@
     {
       "path": "/api/cron/turnos-recordatorios",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/subscription-sweep",
+      "schedule": "0 6 * * *"
     }
   ]
 }

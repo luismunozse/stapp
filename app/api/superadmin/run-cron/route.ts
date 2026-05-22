@@ -11,6 +11,7 @@ import { GET as featureUsageCron } from "@/app/api/cron/feature-usage/route"
 import { GET as trialManagementCron } from "@/app/api/cron/trial-management/route"
 import { GET as recordatoriosCron } from "@/app/api/cron/recordatorios/route"
 import { GET as lifecycleEmailsCron } from "@/app/api/cron/lifecycle-emails/route"
+import { GET as subscriptionSweepCron } from "@/app/api/cron/subscription-sweep/route"
 
 const CRON_HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "/api/cron/engagement": engagementCron,
@@ -18,6 +19,7 @@ const CRON_HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "/api/cron/trial-management": trialManagementCron,
   "/api/cron/recordatorios": recordatoriosCron,
   "/api/cron/lifecycle-emails": lifecycleEmailsCron,
+  "/api/cron/subscription-sweep": subscriptionSweepCron,
 }
 
 export const maxDuration = 60
