@@ -24,7 +24,7 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 interface EstadoResultadosData {
   periodo: { desde: string; hasta: string }
-  ingresos: { ventas: number; servicios: number; otros: number; total: number }
+  ingresos: { ventas: number; servicios: number; serviciosAdelantos?: number; otros: number; total: number }
   costos: { productos: number; repuestos: number; total: number }
   gananciaBruta: number
   margenBruto: number
@@ -362,6 +362,11 @@ export function EstadoResultados() {
               <CardContent className="space-y-1 text-sm">
                 <Row label="Ventas de productos" value={formatPrice(data.ingresos.ventas)} />
                 <Row label="Servicios (órdenes)" value={formatPrice(data.ingresos.servicios)} />
+                {(data.ingresos.serviciosAdelantos ?? 0) > 0 && (
+                  <div className="text-xs text-muted-foreground pl-3 -mt-1">
+                    Incluye {formatPrice(data.ingresos.serviciosAdelantos!)} de cobros adelantados (órdenes abiertas)
+                  </div>
+                )}
                 <Row label="Otros ingresos" value={formatPrice(data.ingresos.otros)} />
                 <Row label="Total ingresos" value={formatPrice(data.ingresos.total)} bold />
                 <Divider />

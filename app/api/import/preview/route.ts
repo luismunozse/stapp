@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { parseCSV, parseExcel } from "@/lib/csv-parser"
-import { validateClienteRow, validateInventarioRow, validateCSVHeaders } from "@/lib/csv-validator"
+import { validateClienteRow, validateInventarioRow, validateCSVHeaders, normalizeHeaders, normalizeRow } from "@/lib/csv-validator"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { z } from "zod"
 
@@ -70,18 +70,22 @@ export async function POST(request: Request) {
       )
     }
 
-    // Validate headers
-    const headers = Object.keys(parseResult.data[0])
-    const headerValidation = validateCSVHeaders(headers, data.entityType)
+    // Normalizar headers (acepta aliases: "código"→"codigo", "precio compra"→"precioCompra", etc.)
+    const originalHeaders = Object.keys(parseResult.data[0])
+    const { canonicalHeaders, mapping, unmapped } = normalizeHeaders(originalHeaders, data.entityType)
+
+    const headerValidation = validateCSVHeaders(canonicalHeaders, data.entityType)
     if (!headerValidation.valid) {
       return NextResponse.json(
-        { error: headerValidation.error },
+        { error: headerValidation.error, unmapped },
         { status: 400 }
       )
     }
 
+    const normalizedRows = parseResult.data.map(r => normalizeRow(r, mapping))
+
     // Validate first 5 rows for preview
-    const previewRows = parseResult.data.slice(0, 5)
+    const previewRows = normalizedRows.slice(0, 5)
     const validatedPreview = previewRows.map((row, index) => {
       const validation = data.entityType === 'CLIENTES'
         ? validateClienteRow(row, index)
@@ -98,7 +102,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       totalRows: parseResult.totalRows,
       preview: validatedPreview,
-      headers,
+      headers: canonicalHeaders,
+      unmappedColumns: unmapped,
     })
   } catch (error) {
     if (error instanceof z.ZodError) {

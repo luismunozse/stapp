@@ -63,6 +63,7 @@ export async function GET(request: Request) {
         .eq("status", "ACTIVE")
         .not("payment_provider", "is", null)
         .eq("plans.tipo", "PREMIUM")
+        .or(`current_period_end.is.null,current_period_end.gt.${new Date().toISOString()}`)
 
       if (premiumErr) throw premiumErr
       premiumOrgIds = (premiumSubs || []).map((s) => s.organization_id)
@@ -400,6 +401,7 @@ export async function GET(request: Request) {
           .eq("status", "ACTIVE")
           .not("payment_provider", "is", null)
           .eq("plans.tipo", "PREMIUM")
+          .or(`current_period_end.is.null,current_period_end.gt.${new Date().toISOString()}`)
         premiumCount = premSubs?.length || 0
       }
 

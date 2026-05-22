@@ -50,6 +50,33 @@ export async function parseCSV(base64Data: string): Promise<ParseResult> {
   }
 }
 
+function detectHeaderRowIndex(rows: (string | number | null)[][]): number {
+  // Scan primeras 10 filas. Header = fila con más celdas string no-numéricas.
+  const limit = Math.min(rows.length, 10)
+  let best = 0
+  let bestScore = -1
+  for (let i = 0; i < limit; i++) {
+    const row = rows[i]
+    if (!row || row.length === 0) continue
+    const filled = row.filter(c => c !== null && c !== undefined && String(c).trim() !== '')
+    if (filled.length < 2) continue // Banner típico (una celda merged) → skip
+    const stringy = filled.filter(c => {
+      const s = String(c).trim()
+      if (!s) return false
+      // Header cell: texto corto, no es solo número, no es fecha
+      if (/^-?\d+([.,]\d+)?$/.test(s)) return false
+      if (s.length > 60) return false
+      return true
+    }).length
+    const score = stringy - (filled.length - stringy) * 0.5
+    if (score > bestScore) {
+      bestScore = score
+      best = i
+    }
+  }
+  return best
+}
+
 function resolveCellValue(value: ExcelJS.CellValue): string | number | null {
   if (value === null || value === undefined) return null
   if (typeof value === 'number' || typeof value === 'string' || typeof value === 'boolean') {
@@ -85,7 +112,7 @@ export async function parseExcel(base64Data: string): Promise<ParseResult> {
     }
 
     const allRows: (string | number | null)[][] = []
-    worksheet.eachRow((row) => {
+    worksheet.eachRow({ includeEmpty: false }, (row) => {
       // row.values is 1-based; index 0 is undefined
       const values = (row.values as ExcelJS.CellValue[]).slice(1)
       allRows.push(values.map(resolveCellValue))
@@ -99,8 +126,12 @@ export async function parseExcel(base64Data: string): Promise<ParseResult> {
       }
     }
 
-    const headers = allRows[0].map(h => String(h ?? '').trim())
-    const dataRows = allRows.slice(1)
+    // Auto-detectar fila de headers. Plantillas externas suelen tener
+    // banner/título arriba (fila merged, logo, fecha). Header real es la
+    // primera fila donde la mayoría de celdas son strings cortos no numéricos.
+    const headerRowIndex = detectHeaderRowIndex(allRows)
+    const headers = allRows[headerRowIndex].map(h => String(h ?? '').trim())
+    const dataRows = allRows.slice(headerRowIndex + 1)
 
     const data: ParsedRow[] = dataRows.map((row) => {
       const obj: ParsedRow = {}

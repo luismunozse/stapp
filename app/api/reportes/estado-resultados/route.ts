@@ -89,13 +89,12 @@ export async function GET(request: Request) {
     }
 
     // ========================================
-    // 2. SERVICIOS (órdenes) en el período
+    // 2. SERVICIOS (órdenes) — modelo HÍBRIDO devengado + cobros adelantados
     // ========================================
-    // Devengado: usar fecha_completado (cuando llegó a estado terminal).
-    // Incluye:
-    //   - REPARADO / ENTREGADO: cobro normal
-    //   - ENTREGADO_SIN_REPARACION: diagnóstico/revisión cobrado sin reparar
-    //   - ENTREGADO_SIN_COBRO: ingreso 0 pero puede tener repuestos consumidos
+    // (A) Órdenes terminales en período: ingreso = costo_final - cobros_previos_al_periodo
+    //     (resta lo ya contado como adelanto en períodos anteriores).
+    // (B) Cobros en período de órdenes NO terminales en período: ingreso adelanto.
+    // Evita doble counting cross-período.
     const { data: ordenes } = await supabaseAdmin
       .from("ordenes_servicio")
       .select(`
@@ -113,19 +112,36 @@ export async function GET(request: Request) {
       .gte("fecha_completado", desdeISO)
       .lte("fecha_completado", hastaISO)
 
+    // Cobros previos al inicio del período para órdenes terminales en período
+    const terminalIds = (ordenes || []).map((o: any) => o.id)
+    const cobrosPreviosByOrden = new Map<string, number>()
+    if (terminalIds.length > 0) {
+      const { data: cobrosPrev } = await supabaseAdmin
+        .from("cobros_orden")
+        .select("orden_id, monto")
+        .in("orden_id", terminalIds)
+        .neq("anulado", true)
+        .lt("created_at", desdeISO)
+      for (const c of (cobrosPrev || []) as any[]) {
+        cobrosPreviosByOrden.set(c.orden_id, (cobrosPreviosByOrden.get(c.orden_id) || 0) + Number(c.monto))
+      }
+    }
+
     let ingresosServicios = 0
+    let ingresosAdelantos = 0
     let costoRepuestos = 0
     let comisionTecnicos = 0
+
     for (const o of (ordenes || []) as any[]) {
-      const ingreso = o.estado === "ENTREGADO_SIN_COBRO" ? 0 : parseFloat(o.costo_final || "0")
+      const cobrosPrev = cobrosPreviosByOrden.get(o.id) || 0
+      const costoFinal = parseFloat(o.costo_final || "0")
+      const ingreso = o.estado === "ENTREGADO_SIN_COBRO" ? 0 : Math.max(0, costoFinal - cobrosPrev)
       ingresosServicios += ingreso
 
       let costoRepO = 0
-      // Repuestos directos (tab Repuestos). precio_unitario = precio_compra (mig 151).
       for (const r of (o.repuestos_orden || [])) {
         costoRepO += (r.cantidad || 0) * parseFloat(r.precio_unitario || "0")
       }
-      // Repuestos via cotizaciones ACEPTADAS linkeadas a inventario.
       for (const c of (o.cotizaciones || [])) {
         if (c.deleted_at || c.estado !== "ACEPTADA") continue
         for (const it of (c.items_cotizacion || [])) {
@@ -135,16 +151,33 @@ export async function GET(request: Request) {
       }
       costoRepuestos += costoRepO
 
-      // Comisión técnico devengada (no requiere estar pagada).
-      // Sólo aplica si hay técnico, % > 0 e ingreso > 0.
-      if (o.tecnico_id && ingreso > 0) {
+      // Comisión técnico sobre ganancia devengada (costo_final completo, no neto).
+      // El % es contractual y se devenga con el trabajo, no con el cobro.
+      if (o.tecnico_id && costoFinal > 0 && o.estado !== "ENTREGADO_SIN_COBRO") {
         const pct = parseFloat(o.porcentaje_comision || "0")
         if (pct > 0) {
-          const ganancia = Math.max(0, ingreso - costoRepO)
+          const ganancia = Math.max(0, costoFinal - costoRepO)
           comisionTecnicos += (ganancia * pct) / 100
         }
       }
     }
+
+    // (B) Cobros adelantados: cobros en período de órdenes NO terminales en período.
+    const terminalIdsSet = new Set(terminalIds)
+    const { data: cobrosPeriodo } = await supabaseAdmin
+      .from("cobros_orden")
+      .select("orden_id, monto, created_at")
+      .eq("organization_id", organizationId!)
+      .neq("anulado", true)
+      .gte("created_at", desdeISO)
+      .lte("created_at", hastaISO)
+
+    for (const c of (cobrosPeriodo || []) as any[]) {
+      if (terminalIdsSet.has(c.orden_id)) continue // ya contado en (A)
+      ingresosAdelantos += parseFloat(c.monto || "0")
+    }
+
+    ingresosServicios += ingresosAdelantos
 
     // ========================================
     // 3. OTROS INGRESOS (movimientos manuales tipo INGRESO)
@@ -311,6 +344,7 @@ export async function GET(request: Request) {
       ingresos: {
         ventas: round(ingresosVentas),
         servicios: round(ingresosServicios),
+        serviciosAdelantos: round(ingresosAdelantos),
         otros: round(otrosIngresos),
         total: round(totalIngresos),
       },

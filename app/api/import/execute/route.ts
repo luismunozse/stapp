@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { parseCSV, parseExcel } from "@/lib/csv-parser"
-import { validateClienteRow, validateInventarioRow } from "@/lib/csv-validator"
+import { validateClienteRow, validateInventarioRow, validateCSVHeaders, normalizeHeaders, normalizeRow, resolveTipoDispositivo } from "@/lib/csv-validator"
 import { uploadImportFile, base64ToBuffer } from "@/lib/storage"
 import { enforcePlanLimit } from "@/lib/plan-limits"
 import { hasPlanFeature } from "@/lib/subscriptions"
@@ -64,6 +64,18 @@ export async function POST(request: Request) {
         { status: 400 }
       )
     }
+
+    // Normalizar headers + rows (acepta aliases comunes).
+    const originalHeaders = Object.keys(parseResult.data[0])
+    const { canonicalHeaders, mapping } = normalizeHeaders(originalHeaders, data.entityType)
+    const headerValidation = validateCSVHeaders(canonicalHeaders, data.entityType)
+    if (!headerValidation.valid) {
+      return NextResponse.json(
+        { error: headerValidation.error },
+        { status: 400 }
+      )
+    }
+    parseResult.data = parseResult.data.map(r => normalizeRow(r, mapping))
 
     // Upload file to storage
     const buffer = base64ToBuffer(data.file)
@@ -163,18 +175,22 @@ export async function POST(request: Request) {
             continue
           }
 
+          // Defaults para columnas requeridas en DB pero opcionales en CSV.
+          // Plantillas externas suelen omitir tipoDispositivo/precioCompra/categoria.
+          const proveedorFinal = validation.data.proveedor || validation.data.marca || null
+
           const { error: insertError } = await supabaseAdmin
             .from('inventario')
             .insert({
               codigo: validation.data.codigo,
               nombre: validation.data.nombre,
               descripcion: validation.data.descripcion || null,
-              categoria: validation.data.categoria,
-              tipo_dispositivo: validation.data.tipoDispositivo,
+              categoria: validation.data.categoria || 'GENERAL',
+              tipo_dispositivo: resolveTipoDispositivo(validation.data.tipoDispositivo),
               stock: validation.data.stock,
-              precio_compra: validation.data.precioCompra,
+              precio_compra: validation.data.precioCompra ?? 0,
               precio_venta: validation.data.precioVenta,
-              proveedor: validation.data.proveedor || null,
+              proveedor: proveedorFinal,
               organization_id: organizationId!,
             })
 

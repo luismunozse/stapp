@@ -43,7 +43,8 @@ export async function GET() {
         .select("id, plans!inner(tipo)", { count: "exact", head: true })
         .eq("status", "ACTIVE")
         .not("payment_provider", "is", null)
-        .eq("plans.tipo", "PREMIUM"),
+        .eq("plans.tipo", "PREMIUM")
+        .or(`current_period_end.is.null,current_period_end.gt.${new Date().toISOString()}`),
 
       // 4 - Ingresos del mes actual
       supabaseAdmin
@@ -84,7 +85,7 @@ export async function GET() {
       // isEffectivelyPremium.
       supabaseAdmin
         .from("subscriptions")
-        .select("id, payment_provider, plans!inner(tipo)")
+        .select("id, payment_provider, current_period_end, plans!inner(tipo)")
         .eq("status", "ACTIVE"),
     ])
 
@@ -140,12 +141,15 @@ export async function GET() {
     // todo lo demás (incluyendo Premium en trial) cuenta como Free.
     // Misma definición que lib/subscription-status.ts.
     const planDistData = planDistResult?.data || []
+    const nowIso = new Date()
     let premium = 0
     let free = 0
     for (const s of planDistData as Array<Record<string, unknown>>) {
       const plans = Array.isArray(s.plans) ? s.plans[0] : s.plans
       const tipo = (plans as Record<string, unknown> | null)?.tipo
-      if (tipo === "PREMIUM" && s.payment_provider != null) {
+      const cpe = s.current_period_end as string | null | undefined
+      const expired = cpe ? new Date(cpe) <= nowIso : false
+      if (tipo === "PREMIUM" && s.payment_provider != null && !expired) {
         premium++
       } else {
         free++

@@ -108,6 +108,8 @@ export async function GET(request: Request) {
 
     // 2. Servicios/órdenes — devengado por fecha_completado
     //    Incluye estados terminales con ingreso o costo de repuestos.
+    // (A) Órdenes terminales por fecha_completado.
+    //     Para el bucket mensual, ingreso = costo_final - cobros_previos_al_mes.
     const { data: ordenes } = await supabaseAdmin
       .from("ordenes_servicio")
       .select(`
@@ -125,11 +127,41 @@ export async function GET(request: Request) {
       .gte("fecha_completado", desdeISO)
       .lte("fecha_completado", hastaISO)
 
+    // Cobros previos por orden (estrictamente antes del inicio de cada mes destino).
+    // Para simplificar: agrupar cobros por orden_id ordenados por fecha,
+    // y al procesar cada orden sumar cobros con fecha < inicio del mes de fecha_completado.
+    const terminalIds = (ordenes || []).map((o: any) => o.id)
+    const cobrosByOrden = new Map<string, Array<{ fecha: string; monto: number }>>()
+    if (terminalIds.length > 0) {
+      const { data: cobrosTerm } = await supabaseAdmin
+        .from("cobros_orden")
+        .select("orden_id, monto, created_at")
+        .in("orden_id", terminalIds)
+        .neq("anulado", true)
+      for (const c of (cobrosTerm || []) as any[]) {
+        const list = cobrosByOrden.get(c.orden_id) || []
+        list.push({ fecha: c.created_at, monto: parseFloat(c.monto || "0") })
+        cobrosByOrden.set(c.orden_id, list)
+      }
+    }
+
+    const inicioMesDe = (iso: string) => {
+      const d = new Date(iso)
+      return new Date(d.getFullYear(), d.getMonth(), 1).toISOString()
+    }
+
     for (const o of (ordenes || []) as any[]) {
       const key = keyFor(o.fecha_completado)
       const bucket = buckets[key]
       if (!bucket) continue
-      const ingreso = o.estado === "ENTREGADO_SIN_COBRO" ? 0 : parseFloat(o.costo_final || "0")
+
+      const inicioMes = inicioMesDe(o.fecha_completado)
+      const cobrosPrev = (cobrosByOrden.get(o.id) || [])
+        .filter((c) => c.fecha < inicioMes)
+        .reduce((s, c) => s + c.monto, 0)
+
+      const costoFinal = parseFloat(o.costo_final || "0")
+      const ingreso = o.estado === "ENTREGADO_SIN_COBRO" ? 0 : Math.max(0, costoFinal - cobrosPrev)
       bucket.ingresosServicios += ingreso
 
       let costoRepO = 0
@@ -145,13 +177,40 @@ export async function GET(request: Request) {
       }
       bucket.costoRepuestos += costoRepO
 
-      if (o.tecnico_id && ingreso > 0) {
+      // Comisión técnico sobre ganancia bruta devengada (costo_final completo, no neto).
+      if (o.tecnico_id && costoFinal > 0 && o.estado !== "ENTREGADO_SIN_COBRO") {
         const pct = parseFloat(o.porcentaje_comision || "0")
         if (pct > 0) {
-          const ganancia = Math.max(0, ingreso - costoRepO)
+          const ganancia = Math.max(0, costoFinal - costoRepO)
           bucket.comisiones += (ganancia * pct) / 100
         }
       }
+    }
+
+    // (B) Cobros adelantados: cobros en el período de órdenes que NO completaron en ese mes.
+    const { data: cobrosPeriodo } = await supabaseAdmin
+      .from("cobros_orden")
+      .select("orden_id, monto, created_at")
+      .eq("organization_id", organizationId!)
+      .neq("anulado", true)
+      .gte("created_at", desdeISO)
+      .lte("created_at", hastaISO)
+
+    // Index: ordenes terminales por mes
+    const terminalByMonth = new Map<string, Set<string>>()
+    for (const o of (ordenes || []) as any[]) {
+      const k = keyFor(o.fecha_completado)
+      if (!terminalByMonth.has(k)) terminalByMonth.set(k, new Set())
+      terminalByMonth.get(k)!.add(o.id)
+    }
+
+    for (const c of (cobrosPeriodo || []) as any[]) {
+      const key = keyFor(c.created_at)
+      const bucket = buckets[key]
+      if (!bucket) continue
+      const terminalesDelMes = terminalByMonth.get(key)
+      if (terminalesDelMes?.has(c.orden_id)) continue // ya contado en (A) de ese mes
+      bucket.ingresosServicios += parseFloat(c.monto || "0")
     }
 
     // 3. Movimientos manuales de caja (otros ingresos + gastos operativos)

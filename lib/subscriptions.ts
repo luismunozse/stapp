@@ -11,7 +11,7 @@ export interface SubscriptionInfo {
   tierOrder: number
   status: "ACTIVE" | "CANCELED" | "PAST_DUE" | "TRIALING"
   billingPeriod: "MONTHLY" | "YEARLY" | null
-  paymentProvider: "MERCADOPAGO" | "REBILL" | null
+  paymentProvider: "MERCADOPAGO" | "REBILL" | "MANUAL" | null
   currentPeriodEnd: string | null
   trialEnd: string | null
   cancelAtPeriodEnd: boolean
@@ -283,6 +283,16 @@ export async function hasPlanFeature(
     return false
   }
 
+  // ACTIVE Premium con período vencido = sin acceso a features premium
+  if (
+    subscription.status === "ACTIVE" &&
+    subscription.planTipo === "PREMIUM" &&
+    subscription.currentPeriodEnd &&
+    new Date(subscription.currentPeriodEnd) <= new Date()
+  ) {
+    return false
+  }
+
   // Chequear el flag específico en el JSONB del plan
   return subscription.featureFlags?.[featureKey] === true
 }
@@ -385,7 +395,27 @@ export async function hasValidAccess(organizationId: string): Promise<{
     return { hasAccess: false, reason: "past_due", trialInfo }
   }
 
-  // TRIALING (no expirado) o ACTIVE = tiene acceso
+  // ACTIVE con período vencido: la sub no se renovó. Sin esto, una sub MANUAL
+  // queda Premium para siempre (no hay webhook que la mueva a PAST_DUE).
+  //   - MANUAL vencido → downgrade a Free (el admin la setea a mano; si no
+  //     renovó, asumimos churn → mantiene acceso a plan gratis).
+  //   - MERCADOPAGO/REBILL vencido → PAST_DUE y bloqueo (esperamos que el
+  //     webhook resuelva el cobro; no descartar histórico de pago).
+  if (
+    subscription.status === "ACTIVE" &&
+    subscription.planTipo === "PREMIUM" &&
+    subscription.currentPeriodEnd &&
+    new Date(subscription.currentPeriodEnd) <= new Date()
+  ) {
+    if (subscription.paymentProvider === "MANUAL") {
+      await downgradeToFree(organizationId)
+      return { hasAccess: true, trialInfo }
+    }
+    await markPastDue(organizationId)
+    return { hasAccess: false, reason: "past_due", trialInfo }
+  }
+
+  // TRIALING (no expirado) o ACTIVE vigente = tiene acceso
   return { hasAccess: true, trialInfo }
 }
 
@@ -427,14 +457,34 @@ async function downgradeToFree(organizationId: string): Promise<void> {
   }
 }
 
+/**
+ * Marca una sub como PAST_DUE. Usado cuando vence el período de una sub
+ * externa (MercadoPago/Rebill) sin que el webhook la renueve.
+ */
+async function markPastDue(organizationId: string): Promise<void> {
+  try {
+    if (await isSuperadminOrg(organizationId)) return
+    await supabaseAdmin
+      .from("subscriptions")
+      .update({ status: "PAST_DUE", updated_at: new Date().toISOString() })
+      .eq("organization_id", organizationId)
+      .eq("status", "ACTIVE")
+  } catch (error) {
+    console.error("[Subscriptions] Error marking past_due:", error)
+  }
+}
+
 // Verificar si la organización tiene plan Premium (o está en trial activo)
 export async function isPremium(organizationId: string): Promise<boolean> {
   const subscription = await getSubscriptionInfo(organizationId)
 
   if (!subscription) return false
 
-  // Premium pagado y activo
+  // Premium pagado y activo, con período vigente
   if (subscription.planTipo === "PREMIUM" && subscription.status === "ACTIVE") {
+    if (subscription.currentPeriodEnd) {
+      return new Date(subscription.currentPeriodEnd) > new Date()
+    }
     return true
   }
 

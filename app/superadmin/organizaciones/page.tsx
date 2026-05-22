@@ -27,7 +27,7 @@ import { useSuperadminFetch, useSuperadminMutation } from "@/hooks/use-superadmi
 import { useLastUpdated } from "@/hooks/use-last-updated"
 import { LastUpdated } from "@/components/superadmin/last-updated"
 import type { OrganizationListItem, OrganizationsKpis } from "@/types/superadmin"
-import { getEffectivePlanLabel, isEffectivelyPremium, isTrialExpired } from "@/lib/subscription-status"
+import { getEffectivePlanLabel, isEffectivelyPremium, isTrialExpired, isActiveExpired } from "@/lib/subscription-status"
 
 const PAGE_SIZE = 20
 
@@ -353,7 +353,7 @@ export default function OrganizacionesPage() {
       render: (org) => {
         const label = getEffectivePlanLabel(org.subscription)
         const isPremium = isEffectivelyPremium(org.subscription)
-        const isExpired = isTrialExpired(org.subscription)
+        const isExpired = isTrialExpired(org.subscription) || isActiveExpired(org.subscription)
 
         return (
           <Badge variant={isPremium ? "default" : isExpired ? "destructive" : "secondary"}>

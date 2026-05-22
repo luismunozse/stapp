@@ -42,6 +42,7 @@ export function ImportModal({ entityType, onClose, onSuccess }: ImportModalProps
   const [progress, setProgress] = useState(0)
   const [results, setResults] = useState<ImportResults | null>(null)
   const [error, setError] = useState<string>("")
+  const [unmappedColumns, setUnmappedColumns] = useState<string[]>([])
 
   const entityLabel = entityType === 'CLIENTES' ? 'Clientes' : 'Inventario'
 
@@ -110,6 +111,7 @@ export function ImportModal({ entityType, onClose, onSuccess }: ImportModalProps
 
       setPreview(data.preview)
       setTotalRows(data.totalRows)
+      setUnmappedColumns(data.unmappedColumns ?? [])
       setStep('preview')
     } catch (error) {
       console.error('Error getting preview:', error)
@@ -278,11 +280,19 @@ export function ImportModal({ entityType, onClose, onSuccess }: ImportModalProps
                     setFileBase64('')
                     setPreview([])
                     setError("")
+                    setUnmappedColumns([])
                   }}
                 >
                   Cambiar archivo
                 </Button>
               </div>
+
+              {unmappedColumns.length > 0 && (
+                <div className="bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-300 px-4 py-3 rounded-lg text-sm">
+                  <p className="font-medium mb-1">Columnas ignoradas (no se pudieron mapear):</p>
+                  <p className="text-xs">{unmappedColumns.join(', ')}</p>
+                </div>
+              )}
 
               <div>
                 <Label>Vista previa (primeras 5 filas)</Label>

@@ -22,18 +22,39 @@ export interface SubscriptionLike {
  * Una suscripción es "Premium efectiva" sólo si:
  *  - el plan asociado es de tipo PREMIUM,
  *  - está en estado ACTIVE,
- *  - tiene un payment_provider registrado (MERCADOPAGO, REBILL o MANUAL).
+ *  - tiene un payment_provider registrado (MERCADOPAGO, REBILL o MANUAL),
+ *  - el período actual no venció (current_period_end > now). Sin esto, una
+ *    sub MANUAL vencida quedaría "Activa" para siempre porque no hay webhook
+ *    que la mueva a PAST_DUE/CANCELED.
  *
- * Cualquier otro caso (TRIALING, CANCELED, PAST_DUE, sin sub, plan FREE)
- * cuenta como Free a los efectos de la lista.
+ * Cualquier otro caso (TRIALING, CANCELED, PAST_DUE, sin sub, plan FREE,
+ * o ACTIVE con período vencido) cuenta como Free a los efectos de la lista.
  */
 export function isEffectivelyPremium(sub: SubscriptionLike | null | undefined): boolean {
   if (!sub) return false
-  return (
-    sub.plans?.tipo === "PREMIUM" &&
-    sub.status === "ACTIVE" &&
-    !!sub.payment_provider
-  )
+  if (
+    sub.plans?.tipo !== "PREMIUM" ||
+    sub.status !== "ACTIVE" ||
+    !sub.payment_provider
+  ) {
+    return false
+  }
+  if (sub.current_period_end) {
+    return new Date(sub.current_period_end) > new Date()
+  }
+  return true
+}
+
+/**
+ * True si la sub está marcada ACTIVE pero su current_period_end ya pasó.
+ * Caso típico: pago MANUAL al que nadie renovó, o webhook externo caído.
+ */
+export function isActiveExpired(sub: SubscriptionLike | null | undefined): boolean {
+  if (!sub) return false
+  if (sub.status !== "ACTIVE") return false
+  if (sub.plans?.tipo !== "PREMIUM") return false
+  if (!sub.current_period_end) return false
+  return new Date(sub.current_period_end) <= new Date()
 }
 
 /**
@@ -62,18 +83,23 @@ export function isTrialExpired(sub: SubscriptionLike | null | undefined): boolea
   return new Date(sub.trial_end) <= new Date()
 }
 
-export type EffectivePlanLabel = "Premium" | "Free (trial)" | "Trial expirado" | "Free" | string
+export type EffectivePlanLabel = "Premium" | "Free (trial)" | "Trial expirado" | "Premium vencido" | "Free" | string
 
 /**
  * Devuelve la etiqueta a mostrar en la columna "Plan" del panel superadmin.
  *
  * - Premium pagado: nombre del plan (ej: "Profesional")
+ * - Premium con período vencido: "Plan vencido"
  * - Trial activo: "Plan (trial)" (ej: "Profesional (trial)")
  * - Trial expirado: "Trial expirado"
  * - Sin suscripción: "Free"
  */
 export function getEffectivePlanLabel(sub: SubscriptionLike | null | undefined): EffectivePlanLabel {
   if (isEffectivelyPremium(sub)) return sub?.plans?.nombre || "Premium"
+  if (isActiveExpired(sub)) {
+    const planName = sub?.plans?.nombre || "Premium"
+    return `${planName} vencido`
+  }
   if (isTrialExpired(sub)) return "Trial expirado"
   if (isPremiumTrial(sub)) {
     const planName = sub?.plans?.nombre || "Premium"

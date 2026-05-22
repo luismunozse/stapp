@@ -50,7 +50,8 @@ export async function GET() {
         .select("id, plans!inner(tipo)", { count: "exact", head: true })
         .eq("status", "ACTIVE")
         .not("payment_provider", "is", null)
-        .eq("plans.tipo", "PREMIUM"),
+        .eq("plans.tipo", "PREMIUM")
+        .or(`current_period_end.is.null,current_period_end.gt.${new Date().toISOString()}`),
 
       // Ingresos del mes actual
       supabaseAdmin

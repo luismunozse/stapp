@@ -46,7 +46,7 @@ import { useSuperadminFetch, useSuperadminMutation } from "@/hooks/use-superadmi
 import { useLastUpdated } from "@/hooks/use-last-updated"
 import { LastUpdated } from "@/components/superadmin/last-updated"
 import type { SubscriptionListItem } from "@/types/superadmin"
-import { getEffectivePlanLabel, isEffectivelyPremium, isTrialExpired } from "@/lib/subscription-status"
+import { getEffectivePlanLabel, isEffectivelyPremium, isTrialExpired, isActiveExpired } from "@/lib/subscription-status"
 import { toast } from "sonner"
 
 const PAGE_SIZE = 20
@@ -313,8 +313,12 @@ export default function SuscripcionesPage() {
   const getStatusBadge = (sub: ExtendedSubscriptionItem) => {
     const now = new Date()
     switch (sub.status) {
-      case "ACTIVE":
+      case "ACTIVE": {
+        if (isActiveExpired(sub)) {
+          return <Badge variant="destructive">Vencida</Badge>
+        }
         return <Badge variant="default">Activa</Badge>
+      }
       case "TRIALING": {
         if (sub.trial_end) {
           const trialEnd = new Date(sub.trial_end)
@@ -379,11 +383,14 @@ export default function SuscripcionesPage() {
     {
       key: "plans",
       header: "Plan",
-      render: (sub) => (
-        <Badge variant={isEffectivelyPremium(sub) ? "default" : isTrialExpired(sub) ? "destructive" : "secondary"}>
-          {getEffectivePlanLabel(sub)}
-        </Badge>
-      ),
+      render: (sub) => {
+        const expired = isTrialExpired(sub) || isActiveExpired(sub)
+        return (
+          <Badge variant={isEffectivelyPremium(sub) ? "default" : expired ? "destructive" : "secondary"}>
+            {getEffectivePlanLabel(sub)}
+          </Badge>
+        )
+      },
     },
     {
       key: "status",
