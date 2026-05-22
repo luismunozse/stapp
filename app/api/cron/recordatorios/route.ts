@@ -4,6 +4,7 @@ import {
   NotificationService,
   createNotificationContext,
 } from "@/lib/notifications"
+import { requireCronAuth } from "@/lib/cron-auth"
 
 // Este endpoint puede ser llamado por:
 // 1. Vercel Cron Jobs
@@ -11,13 +12,8 @@ import {
 // 3. Manualmente desde el dashboard
 
 export async function GET(request: Request) {
-  // Verificar API key para seguridad
-  const authHeader = request.headers.get("authorization")
-  const expectedKey = process.env.CRON_SECRET
-
-  if (expectedKey && authHeader !== `Bearer ${expectedKey}`) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 })
-  }
+  const authError = requireCronAuth(request)
+  if (authError) return authError
 
   try {
     // Obtener todas las organizaciones con sus configuraciones

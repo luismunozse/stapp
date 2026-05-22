@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { getSuperadminOrgId } from "@/lib/superadmin-org"
 
 export async function GET() {
   try {
@@ -17,22 +18,32 @@ export async function GET() {
     const now = new Date()
     const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1)
 
+    // Id de la org del panel para filtrar de queries que joinean por
+    // organization_id (ej. users). En queries directas sobre organizations
+    // usamos .neq("slug","superadmin") directamente.
+    const superadminOrgId = await getSuperadminOrgId()
+
+    const totalUsersQuery = supabaseAdmin
+      .from("users")
+      .select("id", { count: "exact", head: true })
+    if (superadminOrgId) totalUsersQuery.neq("organization_id", superadminOrgId)
+
     const results = await Promise.allSettled([
-      // 0 - Total organizaciones
+      // 0 - Total organizaciones (excluye org del panel admin)
       supabaseAdmin
         .from("organizations")
-        .select("id", { count: "exact", head: true }),
+        .select("id", { count: "exact", head: true })
+        .neq("slug", "superadmin"),
 
       // 1 - Organizaciones activas
       supabaseAdmin
         .from("organizations")
         .select("id", { count: "exact", head: true })
-        .eq("activo", true),
+        .eq("activo", true)
+        .neq("slug", "superadmin"),
 
-      // 2 - Total usuarios
-      supabaseAdmin
-        .from("users")
-        .select("id", { count: "exact", head: true }),
+      // 2 - Total usuarios (excluye los del panel admin)
+      totalUsersQuery,
 
       // 3 - Suscripciones Premium efectivas (mismo criterio que
       // lib/subscription-status.ts:isEffectivelyPremium para mantener
@@ -57,12 +68,14 @@ export async function GET() {
       supabaseAdmin
         .from("organizations")
         .select("id", { count: "exact", head: true })
-        .gte("created_at", primerDiaMes.toISOString()),
+        .gte("created_at", primerDiaMes.toISOString())
+        .neq("slug", "superadmin"),
 
       // 6 - Organizaciones recientes
       supabaseAdmin
         .from("organizations")
         .select("id, nombre, slug, activo, created_at")
+        .neq("slug", "superadmin")
         .order("created_at", { ascending: false })
         .limit(5),
 
@@ -77,7 +90,8 @@ export async function GET() {
       supabaseAdmin
         .from("organizations")
         .select("id, created_at")
-        .gte("created_at", sixMonthsAgo.toISOString()),
+        .gte("created_at", sixMonthsAgo.toISOString())
+        .neq("slug", "superadmin"),
 
       // 9 - All active subscriptions with plan type + payment provider
       // (for plan distribution chart). Necesitamos payment_provider para

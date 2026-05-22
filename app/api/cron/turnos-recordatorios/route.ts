@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { notifyTurno } from "@/lib/turnos/notifications"
+import { requireCronAuth } from "@/lib/cron-auth"
 
 // Cron: recorre turnos con inicio en las próximas ~24h que aún no
 // recibieron recordatorio_24h, y dispara la notificación.
@@ -14,11 +15,8 @@ import { notifyTurno } from "@/lib/turnos/notifications"
 // del mismo tipo + turno.
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization")
-  const expectedKey = process.env.CRON_SECRET
-  if (expectedKey && authHeader !== `Bearer ${expectedKey}`) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 })
-  }
+  const authError = requireCronAuth(request)
+  if (authError) return authError
 
   const now = new Date()
   const desde = new Date(now.getTime() + 23 * 60 * 60 * 1000)

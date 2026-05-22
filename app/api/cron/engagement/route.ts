@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
+import { requireCronAuth } from "@/lib/cron-auth"
 
 export const maxDuration = 60
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization")
-  const expectedKey = process.env.CRON_SECRET
-  if (expectedKey && authHeader !== `Bearer ${expectedKey}`) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 })
-  }
+  const authError = requireCronAuth(request)
+  if (authError) return authError
 
   try {
     const yesterday = new Date()
@@ -21,6 +19,7 @@ export async function GET(request: Request) {
       .from("organizations")
       .select("id")
       .eq("activo", true)
+      .neq("slug", "superadmin")
 
     let processed = 0
 

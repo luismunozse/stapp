@@ -18,17 +18,30 @@ export async function POST(request: Request) {
 
     const { ids } = parsed.data
 
-    // Obtener nombres para el log
+    // Obtener nombres + slug para guard + log
     const { data: orgs } = await supabaseAdmin
       .from("organizations")
-      .select("id, nombre")
+      .select("id, nombre, slug")
       .in("id", ids)
+
+    // Guard: filtrar la org del panel admin del set a borrar
+    const protectedIds = (orgs || [])
+      .filter((o) => o.slug === "superadmin")
+      .map((o) => o.id)
+    const targetIds = ids.filter((id) => !protectedIds.includes(id))
+
+    if (targetIds.length === 0) {
+      return NextResponse.json(
+        { error: "Ninguna organización válida para eliminar (la del panel admin está protegida)" },
+        { status: 400 }
+      )
+    }
 
     // Eliminar organizaciones (CASCADE borra todo)
     const { error: deleteError, count } = await supabaseAdmin
       .from("organizations")
       .delete({ count: "exact" })
-      .in("id", ids)
+      .in("id", targetIds)
 
     if (deleteError) {
       console.error("Bulk delete error:", deleteError)

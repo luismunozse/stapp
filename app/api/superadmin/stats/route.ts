@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { getSuperadminOrgId } from "@/lib/superadmin-org"
 import type { SuperadminStats } from "@/types/superadmin"
 
 export async function GET() {
@@ -14,6 +15,12 @@ export async function GET() {
       1
     )
 
+    const superadminOrgId = await getSuperadminOrgId()
+    const totalUsersQuery = supabaseAdmin
+      .from("users")
+      .select("id", { count: "exact", head: true })
+    if (superadminOrgId) totalUsersQuery.neq("organization_id", superadminOrgId)
+
     const [
       totalOrgsResult,
       activeOrgsResult,
@@ -23,21 +30,21 @@ export async function GET() {
       newOrgsThisMonthResult,
       recentPaymentsResult,
     ] = await Promise.all([
-      // Total organizaciones
+      // Total organizaciones (excluye org del panel admin)
       supabaseAdmin
         .from("organizations")
-        .select("id", { count: "exact", head: true }),
+        .select("id", { count: "exact", head: true })
+        .neq("slug", "superadmin"),
 
       // Organizaciones activas
       supabaseAdmin
         .from("organizations")
         .select("id", { count: "exact", head: true })
-        .eq("activo", true),
+        .eq("activo", true)
+        .neq("slug", "superadmin"),
 
-      // Total usuarios
-      supabaseAdmin
-        .from("users")
-        .select("id", { count: "exact", head: true }),
+      // Total usuarios (excluye los del panel admin)
+      totalUsersQuery,
 
       // Suscripciones activas (PREMIUM efectivas).
       // Misma definición que lib/subscription-status.ts:isEffectivelyPremium
@@ -64,7 +71,8 @@ export async function GET() {
       supabaseAdmin
         .from("organizations")
         .select("id", { count: "exact", head: true })
-        .gte("created_at", primerDiaMes.toISOString()),
+        .gte("created_at", primerDiaMes.toISOString())
+        .neq("slug", "superadmin"),
 
       // Últimos 5 pagos
       supabaseAdmin

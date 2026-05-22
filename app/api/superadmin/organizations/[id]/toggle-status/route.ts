@@ -24,7 +24,7 @@ export async function POST(
     // Obtener estado anterior para el log
     const { data: orgBefore } = await supabaseAdmin
       .from("organizations")
-      .select("activo, nombre")
+      .select("activo, nombre, slug")
       .eq("id", id)
       .single()
 
@@ -32,6 +32,14 @@ export async function POST(
       return NextResponse.json(
         { error: "Organización no encontrada" },
         { status: 404 }
+      )
+    }
+
+    // Guard: nunca desactivar la org del panel admin
+    if (orgBefore.slug === "superadmin") {
+      return NextResponse.json(
+        { error: "No se puede cambiar el estado de la organización del panel admin" },
+        { status: 403 }
       )
     }
 

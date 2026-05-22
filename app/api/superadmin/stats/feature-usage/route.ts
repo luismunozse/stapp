@@ -82,6 +82,7 @@ export async function GET() {
         .from("organizations")
         .select("id, nombre, slug, notificaciones_whatsapp, notificaciones_email")
         .eq("activo", true)
+        .neq("slug", "superadmin")
 
       if (!orgs || orgs.length === 0) {
         return NextResponse.json({

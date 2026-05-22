@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { parseCSV, parseExcel } from "@/lib/csv-parser"
-import { validateClienteRow, validateInventarioRow, validateCSVHeaders, normalizeHeaders, normalizeRow, resolveTipoDispositivo } from "@/lib/csv-validator"
+import { validateClienteRow, validateInventarioRow, validateCSVHeaders, normalizeHeaders, normalizeRow, resolveTipoDispositivo, generateCodigo } from "@/lib/csv-validator"
 import { uploadImportFile, base64ToBuffer } from "@/lib/storage"
 import { enforcePlanLimit } from "@/lib/plan-limits"
 import { hasPlanFeature } from "@/lib/subscriptions"
@@ -159,20 +159,29 @@ export async function POST(request: Request) {
           results.success.push({ row: rowNumber, data: row })
         } else {
           // INVENTARIO
-          const { data: existing } = await supabaseAdmin
-            .from('inventario')
-            .select('id')
-            .eq('organization_id', organizationId!)
-            .eq('codigo', validation.data.codigo)
-            .single()
+          // Generar código si no vino. Retry hasta 3 veces si colisiona con UNIQUE.
+          let codigoFinal: string = (validation.data.codigo || '').trim()
+          const codigoAutogen = !codigoFinal
+          if (codigoAutogen) {
+            codigoFinal = generateCodigo(validation.data.nombre)
+          }
 
-          if (existing) {
-            results.skipped.push({
-              row: rowNumber,
-              reason: 'Ya existe un item con ese código',
-              data: row,
-            })
-            continue
+          if (!codigoAutogen) {
+            const { data: existing } = await supabaseAdmin
+              .from('inventario')
+              .select('id')
+              .eq('organization_id', organizationId!)
+              .eq('codigo', codigoFinal)
+              .single()
+
+            if (existing) {
+              results.skipped.push({
+                row: rowNumber,
+                reason: 'Ya existe un item con ese código',
+                data: row,
+              })
+              continue
+            }
           }
 
           // Defaults para columnas requeridas en DB pero opcionales en CSV.
@@ -182,7 +191,7 @@ export async function POST(request: Request) {
           const { error: insertError } = await supabaseAdmin
             .from('inventario')
             .insert({
-              codigo: validation.data.codigo,
+              codigo: codigoFinal,
               nombre: validation.data.nombre,
               descripcion: validation.data.descripcion || null,
               categoria: validation.data.categoria || 'GENERAL',

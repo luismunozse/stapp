@@ -28,7 +28,7 @@ const optionalNonNegNumber = (label: string) =>
   }, z.number().min(0, `${label} debe ser mayor o igual a 0`).optional())
 
 const inventarioRowSchema = z.object({
-  codigo: z.string().min(1, 'El código es requerido'),
+  codigo: z.string().optional().or(z.null()).or(z.literal('')),
   nombre: z.string().min(1, 'El nombre es requerido'),
   descripcion: z.string().optional().or(z.null()).or(z.literal('')),
   categoria: z.string().optional().or(z.null()).or(z.literal('')),
@@ -63,6 +63,18 @@ const inventarioRowSchema = z.object({
 
 // Tipo dispositivo enum del schema. Importaciones libres usan 'TODOS' por default.
 const TIPOS_DISPOSITIVO_VALIDOS = new Set(['CELULAR', 'COMPUTADORA', 'TABLET', 'CONSOLA', 'SMARTWATCH', 'TODOS'])
+
+export function generateCodigo(nombre: string): string {
+  const slug = (nombre || 'item')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 20) || 'item'
+  const rand = Math.random().toString(36).slice(2, 8).toUpperCase()
+  return `AUTO-${slug}-${rand}`
+}
 
 export function resolveTipoDispositivo(raw: unknown): string {
   if (typeof raw !== 'string') return 'TODOS'
@@ -199,7 +211,7 @@ export function validateCSVHeaders(
 ): { valid: boolean; error?: string } {
   const requiredHeaders = entityType === 'CLIENTES'
     ? ['nombre', 'telefono']
-    : ['codigo', 'nombre', 'precioVenta']
+    : ['nombre', 'precioVenta']
 
   const missingHeaders = requiredHeaders.filter(h => !headers.includes(h))
 

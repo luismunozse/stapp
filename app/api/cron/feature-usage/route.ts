@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
+import { requireCronAuth } from "@/lib/cron-auth"
 
 export const maxDuration = 60
 
@@ -35,11 +36,8 @@ async function countRows(
 }
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization")
-  const expectedKey = process.env.CRON_SECRET
-  if (expectedKey && authHeader !== `Bearer ${expectedKey}`) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 })
-  }
+  const authError = requireCronAuth(request)
+  if (authError) return authError
 
   console.log("[feature-usage] Iniciando cron de feature usage")
 
@@ -50,6 +48,7 @@ export async function GET(request: Request) {
       .from("organizations")
       .select("id, notificaciones_whatsapp, notificaciones_email")
       .eq("activo", true)
+      .neq("slug", "superadmin")
 
     if (orgsError) {
       console.error("[feature-usage] Error consultando orgs:", orgsError)

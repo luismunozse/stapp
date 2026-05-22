@@ -26,13 +26,15 @@ interface CotizacionItem {
   descripcion: string
   cantidad: number
   precioUnitario: number
+  // Costo de compra (cost). Para items linkeados se snapshot al ACEPTAR via trigger.
+  // Para manuales, admin lo carga acá. NULL = costo desconocido.
+  costoUnitario?: number | null
   unidad?: string
   descuentoTipo?: string
   descuentoValor?: number
   inventarioId?: string | null
   tipoRepuesto?: "ORIGINAL" | "ALTERNATIVO" | "RECICLADO" | "NO_APLICA"
   // Solo runtime: capturado al seleccionar del inventario para mostrar margen.
-  // No se persiste en items_cotizacion.
   precioCompra?: number | null
 }
 
@@ -359,6 +361,7 @@ export function CotizacionForm({
           descripcion: item.descripcion,
           cantidad: item.cantidad,
           precioUnitario: item.precioUnitario,
+          costoUnitario: item.costoUnitario ?? item.precioCompra ?? null,
           unidad: item.unidad || "Unidad",
           descuentoTipo: item.descuentoTipo || "porcentaje",
           descuentoValor: item.descuentoValor || 0,

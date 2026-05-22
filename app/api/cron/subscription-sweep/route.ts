@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
+import { requireCronAuth } from "@/lib/cron-auth"
 
 // Cron diario: barre subscriptions ACTIVE con current_period_end vencido.
 //   - MANUAL  → downgrade plan a Free (admin no renovó → asumimos churn)
@@ -21,11 +22,8 @@ type Sub = {
 }
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization")
-  const expectedKey = process.env.CRON_SECRET
-  if (expectedKey && authHeader !== `Bearer ${expectedKey}`) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 })
-  }
+  const authError = requireCronAuth(request)
+  if (authError) return authError
 
   try {
     const nowIso = new Date().toISOString()

@@ -198,7 +198,59 @@ ALTER TABLE items_cotizacion
 
 ---
 
-## 7. Otros gaps menores
+## 7. Promedio ponderado de `inventario.precio_compra`
+
+**Estado actual**: `inventario.precio_compra` es una sola columna sin snapshot histórico ni cálculo ponderado. Cada compra del mismo SKU pisa o ignora el precio anterior. Si comprás:
+- 10 unidades a $80
+- 10 unidades a $120
+
+`precio_compra` queda en lo último (depende de cómo lo escribís). No refleja costo real promedio.
+
+Para repuestos consumidos: ya hay snapshot al insertar (mig 151 en `repuestos_orden`, mig 182 en `items_cotizacion`). Eso protege la HISTORIA. Pero para nuevas órdenes, toman el `precio_compra` actual del inventario — que puede no reflejar el cost real si los lotes mezclados tienen costos distintos.
+
+**Modelo propuesto** (weighted average):
+```sql
+-- Trigger en movimientos_inventario tipo ENTRADA/COMPRA_RECIBIDA:
+-- precio_compra_nuevo = (stock_prev * precio_prev + cantidad_in * costo_in) / (stock_prev + cantidad_in)
+
+-- Requiere que el movimiento de entrada cargue costo_unitario:
+ALTER TABLE movimientos_inventario
+  ADD COLUMN costo_unitario DECIMAL(10,2);
+
+CREATE OR REPLACE FUNCTION actualizar_precio_compra_promedio()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_stock_prev INT;
+  v_precio_prev NUMERIC;
+  v_nuevo NUMERIC;
+BEGIN
+  IF NEW.tipo IN ('ENTRADA','COMPRA_RECIBIDA') AND NEW.costo_unitario IS NOT NULL THEN
+    SELECT stock, precio_compra INTO v_stock_prev, v_precio_prev
+    FROM inventario WHERE id = NEW.inventario_id FOR UPDATE;
+
+    IF v_stock_prev > 0 AND v_precio_prev > 0 THEN
+      v_nuevo := (v_stock_prev * v_precio_prev + NEW.cantidad * NEW.costo_unitario)
+                 / (v_stock_prev + NEW.cantidad);
+    ELSE
+      v_nuevo := NEW.costo_unitario;
+    END IF;
+
+    UPDATE inventario SET precio_compra = ROUND(v_nuevo, 2) WHERE id = NEW.inventario_id;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+```
+
+**UI**:
+- En módulo "Compras / Recepción de mercadería" cargar `costo_unitario` por línea.
+- Alternativa: FIFO/LIFO en vez de promedio. Más complejo, requiere lotes.
+
+**Defer**: requiere flujo de compras con costos discriminados que hoy no existe completamente. Postergar hasta tener compras maduras.
+
+---
+
+## 8. Otros gaps menores
 
 - **`gastos_recurrentes`**: ya hay job, verificar que crea movimientos con `afecta_rentabilidad = true` correcto.
 - **Multi-moneda**: ingresos en USD vs ARS no se convierten. Si crece, requiere tabla `cotizaciones_diarias` y conversión en reportes.

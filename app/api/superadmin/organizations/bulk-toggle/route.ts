@@ -19,10 +19,26 @@ export async function POST(request: Request) {
 
     const { ids, activo } = parsed.data
 
+    // Guard: filtrar la org del panel admin para no desactivarla
+    const { data: protectedOrgs } = await supabaseAdmin
+      .from("organizations")
+      .select("id")
+      .in("id", ids)
+      .eq("slug", "superadmin")
+    const protectedIds = (protectedOrgs || []).map((o) => o.id)
+    const targetIds = ids.filter((id) => !protectedIds.includes(id))
+
+    if (targetIds.length === 0) {
+      return NextResponse.json(
+        { error: "Ninguna organización válida (la del panel admin está protegida)" },
+        { status: 400 }
+      )
+    }
+
     const { data, error: dbError } = await supabaseAdmin
       .from("organizations")
       .update({ activo })
-      .in("id", ids)
+      .in("id", targetIds)
       .select("id")
 
     if (dbError) throw dbError

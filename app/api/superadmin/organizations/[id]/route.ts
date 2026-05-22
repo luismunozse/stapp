@@ -216,6 +216,14 @@ export async function DELETE(
       )
     }
 
+    // Guard: nunca borrar la org del panel admin
+    if (org.slug === "superadmin") {
+      return NextResponse.json(
+        { error: "No se puede eliminar la organización del panel admin" },
+        { status: 403 }
+      )
+    }
+
     // Limpiar archivos de storage (best effort, no bloquea el delete)
     const bucketsToClean = [
       STORAGE_BUCKETS.FOTOS_ORDENES,

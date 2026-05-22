@@ -13,13 +13,28 @@ export function isSuperadminEmail(email: string | null | undefined): boolean {
 }
 
 /**
- * Verifica si la IP está en la whitelist de superadmin (si está configurada).
- * Si SUPERADMIN_IP_WHITELIST no está definida, permite todo.
+ * Verifica si la IP está en la whitelist de superadmin.
+ *
+ * Fail-closed en producción: si SUPERADMIN_IP_WHITELIST no está definida y
+ * NODE_ENV=production, RECHAZA todo. Antes el default era permitir todo, lo
+ * que dejaba al panel sin restricción de red si alguien olvidaba setear la
+ * env var en prod.
+ *
+ * En entornos no-prod (dev, preview, test), si no hay whitelist se permite
+ * todo para no romper el flujo de desarrollo local.
+ *
+ * Si la whitelist se setea explícitamente a "*", se permite todo en
+ * cualquier entorno (escape hatch para deploys que no pueden fijar IPs,
+ * como Vercel preview con IPs dinámicas).
  */
 export function isIpWhitelisted(ip: string | null): boolean {
   const whitelist = process.env.SUPERADMIN_IP_WHITELIST
-  if (!whitelist) return true // Sin whitelist = todo permitido
-  const allowedIps = whitelist.split(",").map((i) => i.trim())
+  if (!whitelist) {
+    return process.env.NODE_ENV !== "production"
+  }
+  const trimmed = whitelist.trim()
+  if (trimmed === "*") return true
+  const allowedIps = trimmed.split(",").map((i) => i.trim()).filter(Boolean)
   return allowedIps.includes(ip || "")
 }
 

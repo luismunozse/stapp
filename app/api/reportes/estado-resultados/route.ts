@@ -103,7 +103,7 @@ export async function GET(request: Request) {
         repuestos_orden (cantidad, precio_unitario),
         cotizaciones (
           estado, deleted_at,
-          items_cotizacion (cantidad, inventario:inventario_id(precio_compra))
+          items_cotizacion (cantidad, costo_unitario, inventario:inventario_id(precio_compra))
         )
       `)
       .eq("organization_id", organizationId!)
@@ -145,8 +145,12 @@ export async function GET(request: Request) {
       for (const c of (o.cotizaciones || [])) {
         if (c.deleted_at || c.estado !== "ACEPTADA") continue
         for (const it of (c.items_cotizacion || [])) {
-          if (!it.inventario) continue
-          costoRepO += (it.cantidad || 0) * parseFloat(it.inventario.precio_compra || "0")
+          // Preferir snapshot (costo_unitario). Fallback: inventario.precio_compra actual.
+          const costo = it.costo_unitario != null
+            ? parseFloat(it.costo_unitario)
+            : (it.inventario ? parseFloat(it.inventario.precio_compra || "0") : 0)
+          if (costo <= 0) continue
+          costoRepO += (it.cantidad || 0) * costo
         }
       }
       costoRepuestos += costoRepO

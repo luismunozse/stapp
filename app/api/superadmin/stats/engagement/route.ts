@@ -17,11 +17,12 @@ export async function GET() {
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
 
     const results = await Promise.allSettled([
-      // 0 - Organizaciones con info
+      // 0 - Organizaciones con info (excluye org del panel admin)
       supabaseAdmin
         .from("organizations")
         .select("id, nombre, slug, activo, created_at")
-        .eq("activo", true),
+        .eq("activo", true)
+        .neq("slug", "superadmin"),
 
       // 1 - Suscripciones con plan y trial_end
       supabaseAdmin

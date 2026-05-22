@@ -39,6 +39,7 @@ import {
   Tag,
   HandCoins,
   Lock,
+  AlertTriangle,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -1141,6 +1142,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             readOnly={userRole === "TECNICO"}
           />
 
+          {isAdmin && <DobleCargaWarning orden={orden} />}
+
           {isAdmin && (
             <OrdenComisionCard
               ordenId={orden.id}
@@ -1156,6 +1159,12 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           )}
         </div>
       </div>
+
+      {isAdmin && (
+        <div className="lg:hidden">
+          <DobleCargaWarning orden={orden} />
+        </div>
+      )}
 
       {/* Mobile: Costos (below content) */}
       <div className="lg:hidden space-y-4">
@@ -1249,6 +1258,44 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
         />
       )}
 
+    </div>
+  )
+}
+
+// Warning si mismo item de inventario aparece en repuestos_orden Y en cotización ACEPTADA.
+// Provoca doble cuento de costo en reportes. Admin debe quitar de uno de los dos lados.
+function DobleCargaWarning({ orden }: { orden: any }) {
+  const repuestoIds = new Set<string>(
+    ((orden as any).repuestos || [])
+      .map((r: any) => r.inventarioId)
+      .filter((id: any): id is string => !!id)
+  )
+  const cotizaciones = ((orden as any).cotizaciones || []) as any[]
+  const duplicados: Array<{ id: string; nombre: string }> = []
+  const vistos = new Set<string>()
+  for (const c of cotizaciones) {
+    if (c.deleted_at || c.estado !== "ACEPTADA") continue
+    const items = (c.items_cotizacion || []) as any[]
+    for (const it of items) {
+      const invId = it.inventario_id
+      if (!invId || !repuestoIds.has(invId) || vistos.has(invId)) continue
+      vistos.add(invId)
+      duplicados.push({ id: invId, nombre: it.descripcion || it.inventario?.nombre || "Item" })
+    }
+  }
+  if (duplicados.length === 0) return null
+  return (
+    <div className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-lg p-3">
+      <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+      <div>
+        <div className="font-medium mb-1">Posible doble carga de repuestos</div>
+        <div>
+          {duplicados.length === 1 ? "El item " : "Los items "}
+          <strong>{duplicados.map((d) => d.nombre).join(", ")}</strong>
+          {duplicados.length === 1 ? " está" : " están"} en una cotización ACEPTADA y también en el tab Repuestos.
+          Reportes de costo lo van a contar dos veces. Eliminá de un lado.
+        </div>
+      </div>
     </div>
   )
 }

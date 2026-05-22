@@ -9,6 +9,7 @@ const itemSchema = z.object({
   descripcion: z.string().min(1, "Descripción requerida"),
   cantidad: z.number().int().positive("Cantidad debe ser mayor a 0"),
   precioUnitario: z.number().positive("Precio debe ser mayor a 0"),
+  costoUnitario: z.number().min(0).nullable().optional(),
   unidad: z.string().optional(),
   descuentoTipo: z.enum(["porcentaje", "fijo"]).optional(),
   descuentoValor: z.number().min(0).optional(),
@@ -161,6 +162,7 @@ function formatCotizacion(c: any) {
       descripcion: i.descripcion,
       cantidad: i.cantidad,
       precioUnitario: i.precio_unitario,
+      costoUnitario: i.costo_unitario != null ? Number(i.costo_unitario) : null,
       subtotal: i.subtotal,
       unidad: i.unidad,
       descuentoTipo: i.descuento_tipo,
@@ -371,11 +373,12 @@ export async function PUT(
       await supabaseAdmin
         .from("items_cotizacion")
         .insert(
-          items.map((item) => ({
+          items.map((item: any) => ({
             cotizacion_id: id,
             descripcion: item.descripcion,
             cantidad: item.cantidad,
             precio_unitario: item.precioUnitario,
+            costo_unitario: item.costoUnitario ?? null,
             subtotal: item.subtotal,
             unidad: item.unidad || "Unidad",
             descuento_tipo: item.descuentoTipo || "porcentaje",

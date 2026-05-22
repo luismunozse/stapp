@@ -27,6 +27,7 @@ interface ItemRowProps {
     descripcion: string
     cantidad: number
     precioUnitario: number
+    costoUnitario?: number | null
     unidad?: string
     descuentoTipo?: string
     descuentoValor?: number
@@ -229,6 +230,24 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
             />
           </div>
         </div>
+        {!item.inventarioId && (
+          <div>
+            <label className="text-xs text-muted-foreground">Costo unitario (opcional, para margen)</label>
+            <Input
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="0.00"
+              value={item.costoUnitario ?? ""}
+              onChange={(e) => {
+                const v = e.target.value
+                onUpdate(index, "costoUnitario", v === "" ? null : (parseFloat(v) || 0))
+              }}
+              disabled={disabled}
+              className="h-9"
+            />
+          </div>
+        )}
         <div className="flex items-center gap-2">
           <label className="text-xs text-muted-foreground shrink-0">Desc.</label>
           <Input
@@ -321,6 +340,24 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
             <div className="text-[11px] text-muted-foreground mt-1 flex justify-between gap-2">
               <span>Costo {formatPrice(costoUnit)} · Total {formatPrice(costoTotal)}</span>
               {margenPct !== null && <span className="text-emerald-600">margen {margenPct}%</span>}
+            </div>
+          )}
+          {!item.inventarioId && (
+            <div className="mt-1 flex items-center gap-1">
+              <span className="text-[11px] text-muted-foreground shrink-0">Costo:</span>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="opcional"
+                value={item.costoUnitario ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value
+                  onUpdate(index, "costoUnitario", v === "" ? null : (parseFloat(v) || 0))
+                }}
+                disabled={disabled}
+                className="h-7 text-xs"
+              />
             </div>
           )}
           {showTipoRepuesto && (

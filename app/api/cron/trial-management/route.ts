@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
+import { requireCronAuth } from "@/lib/cron-auth"
 
 const ENVIALOSIMPLE_API_URL = "https://backend.envialosimple.email/api/v1/mail/send"
 const EMAIL_FROM = process.env.EMAIL_FROM || "noreply@stapp.com.ar"
@@ -35,11 +36,8 @@ async function wasAlreadySent(orgId: string, emailType: string): Promise<boolean
 export const maxDuration = 60
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization")
-  const expectedKey = process.env.CRON_SECRET
-  if (expectedKey && authHeader !== `Bearer ${expectedKey}`) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 })
-  }
+  const authError = requireCronAuth(request)
+  if (authError) return authError
 
   try {
     const now = new Date()
