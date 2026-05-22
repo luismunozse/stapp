@@ -77,14 +77,16 @@ export async function POST(request: Request) {
     }
     parseResult.data = parseResult.data.map(r => normalizeRow(r, mapping))
 
-    // Upload file to storage
+    // Upload file to storage. Si falla (bucket sin crear / policies / cuota),
+    // seguimos con import; histórico queda sin file_path.
     const buffer = base64ToBuffer(data.file)
-    const { path: filePath } = await uploadImportFile(
-      organizationId!,
-      buffer,
-      data.mime,
-      data.filename
-    )
+    let filePath: string | null = null
+    try {
+      const upload = await uploadImportFile(organizationId!, buffer, data.mime, data.filename)
+      filePath = upload.path
+    } catch (uploadErr) {
+      console.warn("Import upload skipped:", uploadErr instanceof Error ? uploadErr.message : uploadErr)
+    }
 
     // Process rows
     const results = {
@@ -226,7 +228,7 @@ export async function POST(request: Request) {
         user_id: userId!,
         entity_type: data.entityType,
         filename: data.filename,
-        file_path: filePath,
+        file_path: filePath ?? '',
         file_size: buffer.length,
         total_rows: parseResult.totalRows,
         success_count: results.success.length,

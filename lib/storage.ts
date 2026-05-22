@@ -165,6 +165,30 @@ export async function uploadSignature(
 }
 
 /**
+ * Crear bucket csv-imports si no existe. Idempotente.
+ * Migration 012 lo crea via SQL, pero entornos donde no se aplicó
+ * (dev fresh, branch nuevo) lo necesitan en runtime.
+ */
+async function ensureCsvImportsBucket(): Promise<void> {
+  const { data } = await supabaseAdmin.storage.getBucket(STORAGE_BUCKETS.CSV_IMPORTS)
+  if (data) return
+
+  const { error } = await supabaseAdmin.storage.createBucket(STORAGE_BUCKETS.CSV_IMPORTS, {
+    public: false,
+    fileSizeLimit: 5 * 1024 * 1024,
+    allowedMimeTypes: [
+      'text/csv',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    ],
+  })
+  // Race: si otro request lo creó entre getBucket y createBucket, ignorar
+  if (error && !/already exists|duplicate/i.test(error.message)) {
+    throw new Error(`Error creating csv-imports bucket: ${error.message}`)
+  }
+}
+
+/**
  * Subir archivo de importación (CSV/Excel)
  * Path: csv-imports/{orgId}/{uuid}.{ext}
  */
@@ -174,6 +198,8 @@ export async function uploadImportFile(
   mime: string,
   originalName: string
 ): Promise<UploadResult> {
+  await ensureCsvImportsBucket()
+
   const ext = mime.includes('csv') ? 'csv' : 'xlsx'
   const fileName = `${uuidv4()}.${ext}`
   const path = `${orgId}/${fileName}`
