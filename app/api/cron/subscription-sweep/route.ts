@@ -21,13 +21,29 @@ type Sub = {
   organizations: { slug: string } | { slug: string }[] | null
 }
 
+type TrialingSub = {
+  id: string
+  organization_id: string
+  plan_id: string
+  trial_end: string | null
+  payment_provider: string | null
+  current_period_end: string | null
+  organizations: { slug: string } | { slug: string }[] | null
+}
+
 export async function GET(request: Request) {
   const authError = requireCronAuth(request)
   if (authError) return authError
 
   try {
     const nowIso = new Date().toISOString()
-    const results = { downgradedManual: 0, markedPastDue: 0, skipped: 0, failed: 0 }
+    const results = {
+      downgradedManual: 0,
+      markedPastDue: 0,
+      skipped: 0,
+      failed: 0,
+      downgradedTrialLimbo: 0,
+    }
 
     const { data: freePlan, error: planErr } = await supabaseAdmin
       .from("plans")
@@ -134,6 +150,81 @@ export async function GET(request: Request) {
         results.markedPastDue++
       } else {
         results.skipped++
+      }
+    }
+
+    // ============================================
+    // 2da pasada: TRIALING limbo
+    // ----------------------------------------------
+    // Trials cuyo trial_end venció hace más de 7 días (grace window)
+    // y siguen en TRIALING porque el usuario nunca hizo clic en /reactivar.
+    // El cron trial-management ya les envió el email de reactivación; pasados
+    // 7 días sin acción, los bajamos al plan Free para liberar el feature gate.
+    // ============================================
+    const graceCutoffIso = new Date(
+      Date.now() - 7 * 24 * 60 * 60 * 1000
+    ).toISOString()
+
+    const { data: trialingLimbo, error: limboErr } = await supabaseAdmin
+      .from("subscriptions")
+      .select(`
+        id, organization_id, plan_id, trial_end, payment_provider, current_period_end,
+        organizations!inner ( slug )
+      `)
+      .eq("status", "TRIALING")
+      .not("trial_end", "is", null)
+      .lt("trial_end", graceCutoffIso)
+      .neq("organizations.slug", "superadmin")
+
+    if (limboErr) {
+      console.error("[subscription-sweep] limbo select error:", limboErr)
+    } else {
+      const limboList = (trialingLimbo || []) as TrialingSub[]
+
+      for (const sub of limboList) {
+        const slug = Array.isArray(sub.organizations)
+          ? sub.organizations[0]?.slug
+          : sub.organizations?.slug
+
+        const { error: upErr } = await supabaseAdmin
+          .from("subscriptions")
+          .update({
+            plan_id: freePlan.id,
+            status: "ACTIVE",
+            trial_end: null,
+            payment_provider: null,
+            current_period_end: null,
+            billing_period: null,
+            updated_at: nowIso,
+          })
+          .eq("id", sub.id)
+
+        if (upErr) {
+          console.error(
+            `[subscription-sweep] FAIL downgrade trial limbo ${slug}:`,
+            upErr.message
+          )
+          results.failed++
+          continue
+        }
+
+        await supabaseAdmin.from("subscription_history").insert({
+          subscription_id: sub.id,
+          organization_id: sub.organization_id,
+          action: "DOWNGRADED",
+          previous_status: "TRIALING",
+          new_status: "ACTIVE",
+          details: {
+            reason: "cron_sweep_trial_limbo",
+            previous_plan_id: sub.plan_id,
+            new_plan_id: freePlan.id,
+            trial_end: sub.trial_end,
+            grace_days: 7,
+          },
+          performed_by: "system:cron",
+        })
+
+        results.downgradedTrialLimbo++
       }
     }
 

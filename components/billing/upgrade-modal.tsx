@@ -130,13 +130,16 @@ export function UpgradeModal({ open, onClose, planSlug = "profesional" }: Upgrad
   }
 
   const features = [
-    { icon: Zap, text: "Órdenes ilimitadas" },
-    { icon: Zap, text: "Técnicos ilimitados" },
-    { icon: Zap, text: "Clientes ilimitados" },
-    { icon: Zap, text: "Reportes avanzados" },
-    { icon: Zap, text: "5GB almacenamiento" },
-    { icon: Zap, text: "Notificaciones WhatsApp" },
-    { icon: Zap, text: "Logo personalizado" },
+    { icon: Zap, text: "Órdenes ILIMITADAS (vs 30)" },
+    { icon: Zap, text: "Clientes ILIMITADOS (vs 200)" },
+    { icon: Zap, text: "Técnicos y vendedores ilimitados" },
+    { icon: Zap, text: "Notificaciones WhatsApp automáticas" },
+    { icon: Zap, text: "Reportes avanzados (rentabilidad, etc)" },
+    { icon: Zap, text: "Import/Export masivo" },
+    { icon: Zap, text: "Logo personalizado en órdenes" },
+    { icon: Zap, text: "Cuenta corriente clientes" },
+    { icon: Zap, text: "Garantías y firma digital" },
+    { icon: Zap, text: "Almacenamiento 5GB" },
     { icon: Zap, text: "Soporte prioritario" },
   ]
 

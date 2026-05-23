@@ -135,12 +135,14 @@ export async function getUsageInfo(organizationId: string): Promise<UsageInfo> {
   }
 }
 
-// Límites por defecto del plan FREE (cuando no hay suscripción)
+// Límites por defecto del plan FREE (cuando no hay suscripción).
+// Deben coincidir con lo seteado en plans.slug='free' por la última migración
+// (ver supabase/migrations/187_free_plan_v2_loosen.sql).
 const FREE_PLAN_LIMITS: Record<string, number> = {
-  ordenes: 15,
+  ordenes: 30,
   tecnicos: 1,
   vendedores: 1,
-  clientes: 30,
+  clientes: 200,
   storageMb: 100,
 }
 
@@ -171,11 +173,19 @@ async function resetOrdenesMesIfNeeded(organizationId: string): Promise<void> {
   }
 }
 
+export type UpgradeAction = "upgrade_free_to_profesional" | "activate_trial" | null
+
 // Verificar si una organización puede realizar una acción según su plan
 export async function checkPlanLimit(
   organizationId: string,
   limitType: "ordenes" | "tecnicos" | "clientes" | "vendedores" | "storage"
-): Promise<{ allowed: boolean; current: number; limit: number | null; message?: string }> {
+): Promise<{
+  allowed: boolean
+  current: number
+  limit: number | null
+  message?: string
+  upgradeAction?: UpgradeAction
+}> {
   // Para órdenes: resetear contador mensual si periodo_inicio < mes actual.
   // Debe correr ANTES de getUsageInfo para que la lectura sea consistente.
   if (limitType === "ordenes") {
@@ -237,22 +247,45 @@ export async function checkPlanLimit(
 
   // Si no hay límite (Premium), permitir
   if (limit === null) {
-    return { allowed: true, current, limit: null }
+    return { allowed: true, current, limit: null, upgradeAction: null }
   }
 
   const allowed = current < limit
 
-  // Sugerencia de upgrade dinámica según el plan actual
+  if (allowed) {
+    return { allowed, current, limit, upgradeAction: null }
+  }
+
+  // Sugerencia de upgrade dinámica según el plan actual.
+  // - Free → upgrade a Profesional (CTA fuerte, mensaje con beneficios).
+  // - Otro plan (trial/limbo) → activar el plan (mensaje más suave).
   const currentSlug = subscription?.planSlug || "free"
-  const upgradeTarget = "Profesional"
+  const upgradeAction: UpgradeAction =
+    currentSlug === "free" ? "upgrade_free_to_profesional" : "activate_trial"
+
+  // Label legible del tipo de límite para el mensaje.
+  const limitLabels: Record<string, string> = {
+    ordenes: "órdenes",
+    clientes: "clientes",
+    tecnicos: "técnicos",
+    vendedores: "vendedores",
+    storage: "almacenamiento (MB)",
+  }
+  const label = limitLabels[limitType] || limitType
+
+  let message: string
+  if (currentSlug === "free") {
+    message = `Llegaste al límite del plan Free (${limit} ${label}). Actualizá a Profesional para obtener ${label} ilimitados y desbloquear WhatsApp, reportes, garantías y más.`
+  } else {
+    message = `Llegaste al límite de ${limit} ${label} de tu plan. Activá el plan Profesional para seguir creciendo sin restricciones.`
+  }
 
   return {
     allowed,
     current,
     limit,
-    message: allowed
-      ? undefined
-      : `Has alcanzado el límite de ${limit} ${limitType} de tu plan. Actualizá a ${upgradeTarget} para continuar.`,
+    message,
+    upgradeAction,
   }
 }
 

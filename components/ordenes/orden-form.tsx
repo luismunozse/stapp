@@ -16,6 +16,8 @@ import { X, Plus, Camera, Upload, Trash2, Loader2, Lock, Grid3X3, ClipboardCheck
 import { PatternLock } from "@/components/ui/pattern-lock"
 import { ClienteSelector } from "@/components/cotizaciones/cliente-selector"
 import { OrdenCreadaModal } from "./orden-creada-modal"
+import { UpgradeModal } from "@/components/billing/upgrade-modal"
+import { usePlanLimitError } from "@/lib/hooks/use-plan-limit-error"
 import { compressImage } from "@/lib/image-compression"
 import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
 import { SignaturePad } from "@/components/firma/signature-pad"
@@ -124,6 +126,8 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId }: OrdenFormProps) {
   const [passwordType, setPasswordType] = useState<"text" | "pattern">("text")
   const [showOrdenCreadaModal, setShowOrdenCreadaModal] = useState(false)
   const [ordenCreada, setOrdenCreada] = useState<OrdenCreadaData | null>(null)
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
+  const planLimitError = usePlanLimitError()
   const [presupuestoAceptado, setPresupuestoAceptado] = useState(false)
   const [sena, setSena] = useState<number | undefined>(undefined)
   const [metodoPagoSena, setMetodoPagoSena] = useState<string>("EFECTIVO")
@@ -612,7 +616,14 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId }: OrdenFormProps) {
       }
 
       if (!res.ok) {
-        const error = await res.json()
+        // Detectar errores de límite de plan y abrir el upgrade modal en vez
+        // de un alert genérico. Si no es plan-limit, fallback al alert.
+        const handled = await planLimitError.handle(res)
+        if (handled.shouldUpgrade) {
+          setShowUpgradeModal(true)
+          return
+        }
+        const error = await res.json().catch(() => ({}))
         alert(error.error || "Error al crear orden")
         return
       }
@@ -1609,6 +1620,13 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId }: OrdenFormProps) {
           onSuccess()
         }}
         orden={ordenCreada}
+      />
+
+      {/* Upgrade modal contextual: se abre cuando el backend retorna
+          PLAN_LIMIT_EXCEEDED al crear órdenes (ver usePlanLimitError). */}
+      <UpgradeModal
+        open={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
       />
     </Card>
   )

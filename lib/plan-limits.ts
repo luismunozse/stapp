@@ -37,12 +37,16 @@ export function planLimitErrorResponse(error: SupabaseLikeError): NextResponse {
   return NextResponse.json(
     {
       error: limit
-        ? `Has alcanzado el límite de ${limit} ${limitType} de tu plan. Actualizá a Profesional para continuar.`
+        ? `Llegaste al límite del plan Free (${limit} ${limitType}). Actualizá a Profesional para obtener ${limitType} ilimitados y desbloquear WhatsApp, reportes, garantías y más.`
         : "Has alcanzado el límite de tu plan.",
       code: "PLAN_LIMIT_EXCEEDED",
       limitType,
       current,
       limit,
+      // Default conservador: si el trigger raiseó es porque el plan capa →
+      // mejor CTA es upgrade. El frontend puede igualmente decidir según el
+      // plan activo (que ya consulta del store de subscription).
+      upgradeAction: "upgrade_free_to_profesional",
     },
     { status: 403 }
   )
@@ -63,6 +67,9 @@ export async function enforcePlanLimit(
         limitType,
         current: result.current,
         limit: result.limit,
+        // Hint estructurada para que el frontend abra el modal de upgrade
+        // contextual sin tener que parsear el string del mensaje.
+        upgradeAction: result.upgradeAction ?? "upgrade_free_to_profesional",
       },
       { status: 403 }
     )
