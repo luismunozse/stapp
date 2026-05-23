@@ -71,7 +71,7 @@ export default function CajaPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="flex flex-col gap-3">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold">Caja Diaria</h1>
           <p className="text-sm text-muted-foreground">Resumen de ingresos y egresos del día</p>

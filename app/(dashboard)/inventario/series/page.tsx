@@ -78,7 +78,7 @@ export default function SeriesGlobalPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="flex flex-col gap-3">
         <div className="flex items-center gap-3">
           <Link href="/inventario">
             <Button variant="ghost" size="icon">

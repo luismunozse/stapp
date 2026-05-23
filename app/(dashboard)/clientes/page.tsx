@@ -11,17 +11,19 @@ export default function ClientesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="flex flex-col gap-3">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold">Clientes</h1>
           <p className="text-sm text-muted-foreground">
             Gestiona tus clientes y su información
           </p>
         </div>
-        <Button variant="outline" onClick={() => setShowSegmentacion(true)} className="gap-1.5 w-full sm:w-auto">
-          <PieChart className="h-4 w-4" />
-          Segmentación
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setShowSegmentacion(true)} className="gap-1.5 w-full sm:w-auto">
+            <PieChart className="h-4 w-4" />
+            Segmentación
+          </Button>
+        </div>
       </div>
 
       <ClientesList />

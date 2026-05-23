@@ -178,7 +178,7 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div className="flex flex-col gap-3">
         <div className="flex items-center gap-3 sm:gap-4">
           {isAdmin && (
             <Button variant="ghost" size="icon" asChild className="shrink-0">
