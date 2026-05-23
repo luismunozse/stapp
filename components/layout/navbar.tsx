@@ -378,27 +378,29 @@ export function Navbar() {
               collapsed ? "px-2 space-y-1" : "px-3 space-y-0.5"
             )}>
               {filteredSections.map((section) => {
-                const isSectionCollapsed = section.label && collapsedSections[section.label]
+                const userCollapsed = section.label ? !!collapsedSections[section.label] : false
                 const hasActiveChild = section.items.some(
                   item => pathname === item.href || pathname.startsWith(item.href + "/")
                 )
+                // Auto-expand when section contains the active route, even if user collapsed it
+                const isSectionCollapsed = userCollapsed && !hasActiveChild
 
                 return (
-                  <div key={section.label || "_top"} className={section.label ? "mt-3 first:mt-0" : ""}>
+                  <div key={section.label || "_top"} className={section.label ? "mt-4 first:mt-0" : ""}>
                     {/* Section header */}
                     {section.label && !collapsed && (
                       <button
                         onClick={() => toggleSection(section.label)}
                         className={cn(
-                          "flex items-center justify-between w-full px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded-md transition-colors",
-                          hasActiveChild && isSectionCollapsed
-                            ? "text-primary"
-                            : "text-sidebar-foreground/50 hover:text-sidebar-foreground/70"
+                          "flex items-center justify-between w-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] rounded-md transition-colors",
+                          hasActiveChild
+                            ? "text-primary/90"
+                            : "text-sidebar-foreground/55 hover:text-sidebar-foreground/85"
                         )}
                       >
                         <span>{section.label}</span>
                         <ChevronDown className={cn(
-                          "h-3 w-3 transition-transform duration-200",
+                          "h-3 w-3 transition-transform duration-200 opacity-70",
                           isSectionCollapsed && "-rotate-90"
                         )} />
                       </button>
@@ -424,14 +426,18 @@ export function Navbar() {
                               id={`nav-${item.href.replace("/", "")}`}
                               href={item.href}
                               className={cn(
-                                "flex items-center text-sm font-medium rounded-lg transition-colors duration-150",
+                                "relative flex items-center text-sm font-medium rounded-lg transition-colors duration-150",
                                 collapsed ? "justify-center px-2 py-2" : "px-3 py-2",
                                 isActive
-                                  ? "bg-primary text-primary-foreground"
-                                  : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:bg-sidebar-accent/80 active:scale-[0.98] transition-transform"
+                                  ? "bg-primary/10 text-primary font-semibold before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-1 before:rounded-r-full before:bg-primary"
+                                  : "text-sidebar-foreground/85 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:bg-sidebar-accent/80 active:scale-[0.98] transition-transform"
                               )}
                             >
-                              <Icon className={cn("h-5 w-5 shrink-0", !collapsed && "mr-3")} />
+                              <Icon className={cn(
+                                "h-5 w-5 shrink-0",
+                                !collapsed && "mr-3",
+                                isActive ? "text-primary" : "text-sidebar-foreground/70"
+                              )} />
                               {!collapsed && (
                                 <span className="truncate">{item.label}</span>
                               )}
@@ -576,7 +582,7 @@ export function Navbar() {
             </div>
             <div className="mt-3"><PlanBadge /></div>
           </div>
-          <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto">
+          <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
             {allNavItems.map((item) => {
               const Icon = item.icon
               const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
@@ -586,14 +592,17 @@ export function Navbar() {
                   href={item.href}
                   onClick={() => setMobileMenuOpen(false)}
                   className={cn(
-                    "flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-colors touch-target",
+                    "relative flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors touch-target",
                     "active:scale-[0.98] active:bg-accent/80",
                     isActive
-                      ? "bg-primary text-primary-foreground"
-                      : "text-foreground hover:bg-accent hover:text-accent-foreground"
+                      ? "bg-primary/10 text-primary font-semibold before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-1 before:rounded-r-full before:bg-primary"
+                      : "text-foreground/85 hover:bg-accent hover:text-accent-foreground"
                   )}
                 >
-                  <Icon className="mr-3 h-5 w-5 flex-shrink-0" />
+                  <Icon className={cn(
+                    "mr-3 h-5 w-5 flex-shrink-0",
+                    isActive ? "text-primary" : "text-foreground/65"
+                  )} />
                   {item.label}
                 </Link>
               )
