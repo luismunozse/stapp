@@ -8,12 +8,26 @@ import { Calendar as CalendarIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
+import { Input } from "@/components/ui/input"
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { Label } from "@/components/ui/label"
+
+function useIsTouchDevice() {
+  const [isTouch, setIsTouch] = React.useState(false)
+  React.useEffect(() => {
+    if (typeof window === "undefined") return
+    const mq = window.matchMedia("(hover: none) and (pointer: coarse)")
+    setIsTouch(mq.matches)
+    const handler = (e: MediaQueryListEvent) => setIsTouch(e.matches)
+    mq.addEventListener("change", handler)
+    return () => mq.removeEventListener("change", handler)
+  }, [])
+  return isTouch
+}
 
 interface DatePickerProps {
   id?: string
@@ -41,6 +55,7 @@ export function DatePicker({
   className,
 }: DatePickerProps) {
   const [open, setOpen] = React.useState(false)
+  const isTouch = useIsTouchDevice()
 
   // Convertir string YYYY-MM-DD a Date
   const selectedDate = React.useMemo(() => {
@@ -78,6 +93,30 @@ export function DatePicker({
       onChange?.("")
     }
     setOpen(false)
+  }
+
+  if (isTouch) {
+    return (
+      <div className={cn("space-y-2", className)}>
+        {label && (
+          <Label htmlFor={id}>
+            {label}
+            {required && <span className="text-destructive ml-1">*</span>}
+          </Label>
+        )}
+        <Input
+          id={id}
+          type="date"
+          value={value || ""}
+          onChange={(e) => onChange?.(e.target.value)}
+          min={min}
+          max={max}
+          required={required}
+          disabled={disabled}
+          placeholder={placeholder}
+        />
+      </div>
+    )
   }
 
   return (
@@ -152,6 +191,7 @@ export function DateRangePicker({
   className,
 }: DateRangePickerProps) {
   const [open, setOpen] = React.useState(false)
+  const isTouch = useIsTouchDevice()
 
   const fromDate = React.useMemo(() => {
     if (!from) return undefined
@@ -192,6 +232,37 @@ export function DateRangePicker({
       return `${format(fromDate, "dd MMM yyyy", { locale: es })} - ...`
     }
     return placeholder
+  }
+
+  if (isTouch) {
+    return (
+      <div className={cn("space-y-2", className)}>
+        {label && <Label htmlFor={id}>{label}</Label>}
+        <div className="flex items-center gap-2">
+          <Input
+            id={id}
+            type="date"
+            value={from || ""}
+            onChange={(e) =>
+              onChange?.({ from: e.target.value, to: to || "" })
+            }
+            disabled={disabled}
+            placeholder={placeholder}
+            className="flex-1"
+          />
+          <span className="text-muted-foreground text-sm">—</span>
+          <Input
+            type="date"
+            value={to || ""}
+            onChange={(e) =>
+              onChange?.({ from: from || "", to: e.target.value })
+            }
+            disabled={disabled}
+            className="flex-1"
+          />
+        </div>
+      </div>
+    )
   }
 
   return (

@@ -151,7 +151,7 @@ export function DataTable<T>({
         />
         <div ref={scrollRef} className="overflow-x-auto scroll-smooth">
           <table className="w-full text-sm">
-            <thead>
+            <thead className="sticky top-14 sm:top-0 z-10 bg-background">
               <tr className="border-b bg-muted/50">
                 {selectable && (
                   <th className={cn("w-12 text-left", cellPad)}>

@@ -13,6 +13,7 @@ import { GuidedTour } from "@/components/guided-tour"
 import { OfflineProvider } from "@/contexts/offline-context"
 import { OfflineBanner } from "@/components/offline/offline-banner"
 import { SyncStatusIndicator } from "@/components/offline/sync-status-indicator"
+import { CapacitorBackButtonHandler } from "@/components/capacitor/back-button-handler"
 import { auth } from "@/lib/auth"
 import { isSuperadminEmail } from "@/lib/superadmin-auth"
 import { hasValidAccess, getTrialInfo, getSubscriptionInfo } from "@/lib/subscriptions"
@@ -91,7 +92,7 @@ export default async function DashboardLayout({
   return (
     <SidebarProvider>
       <OfflineProvider>
-        <div className="min-h-screen bg-muted/30 dark:bg-background">
+        <div className="min-h-dvh bg-muted/30 dark:bg-background">
           <SkipLinks />
           <OfflineBanner />
           <Navbar />
@@ -135,6 +136,8 @@ export default async function DashboardLayout({
           <GuidedTour />
           {/* Indicador de operaciones offline pendientes */}
           <SyncStatusIndicator />
+          {/* Handler del botón "Atrás" hardware (Android/Capacitor) */}
+          <CapacitorBackButtonHandler />
         </div>
       </OfflineProvider>
     </SidebarProvider>

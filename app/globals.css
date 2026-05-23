@@ -261,7 +261,6 @@
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
-    overflow-x: hidden;
   }
 
   /* Smooth transitions for theme changes */
@@ -449,6 +448,14 @@
   .safe-top {
     padding-top: env(safe-area-inset-top, 0px);
   }
+
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
 }
 
 /* Branded spinner - usa el color primario del brand */
@@ -473,5 +480,39 @@
 @layer utilities {
   .clickable-card {
     @apply transition-all duration-200 cursor-pointer hover:shadow-lg;
+  }
+}
+
+/* Touch device polish */
+@media (pointer: coarse) {
+  button[data-touch-icon],
+  [role="button"][data-touch-icon] {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* Backdrop-blur fallback on low-end Android — drops blur, keeps opaque bg */
+@supports not (backdrop-filter: blur(8px)) {
+  .backdrop-blur,
+  .backdrop-blur-sm,
+  .backdrop-blur-md {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background-color: hsl(var(--background) / 0.97);
+  }
+}
+
+/* Mobile-readable caption (13px on mobile, 12px on sm+) */
+@layer utilities {
+  .text-caption-mobile {
+    @apply text-[13px] sm:text-xs text-muted-foreground;
+  }
+}
+
+/* Mobile-friendly small label cluster */
+@layer utilities {
+  .label-mobile-sm {
+    @apply text-[13px] sm:text-xs;
   }
 }

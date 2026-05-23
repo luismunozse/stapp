@@ -2,15 +2,20 @@
 
 import { useEffect, useRef } from "react"
 import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
 import { isNativePlatform, getPlatform } from "@/lib/capacitor"
 
 /**
  * Hook que registra push notifications en plataformas nativas (Capacitor).
  * Requiere @capacitor/push-notifications instalado.
  * En web no hace nada.
+ *
+ * También maneja el deep-linking cuando el usuario toca una notificación:
+ * lee `notification.data.path` y navega a esa ruta.
  */
 export function usePushNotifications() {
   const { data: session } = useSession()
+  const router = useRouter()
   const registeredRef = useRef(false)
 
   useEffect(() => {
@@ -51,9 +56,27 @@ export function usePushNotifications() {
           console.error("Push registration error:", err)
         })
 
+        // Deep-linking: cuando el usuario toca la notificación, leer
+        // `notification.data.path` y navegar a esa ruta dentro de la app.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const actionListener = await PushNotifications.addListener("pushNotificationActionPerformed", (action: any) => {
+          try {
+            const path: string | undefined = action?.notification?.data?.path
+            if (path && typeof path === "string" && path.startsWith("/")) {
+              // Usamos router.push para navegación SPA cuando es una ruta interna.
+              router.push(path)
+            } else if (path && /^https?:\/\//i.test(path)) {
+              window.location.href = path
+            }
+          } catch (err) {
+            console.error("Error handling push action:", err)
+          }
+        })
+
         cleanup = () => {
           tokenListener.remove()
           errorListener.remove()
+          actionListener.remove()
         }
       } catch {
         // @capacitor/push-notifications not installed - skip silently
@@ -65,5 +88,5 @@ export function usePushNotifications() {
     return () => {
       cleanup?.()
     }
-  }, [session?.user?.id])
+  }, [session?.user?.id, router])
 }

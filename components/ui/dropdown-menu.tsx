@@ -13,9 +13,10 @@ const DropdownMenuTrigger = PopoverTrigger
 const DropdownMenuContent = React.forwardRef<
   React.ElementRef<typeof PopoverContent>,
   React.ComponentPropsWithoutRef<typeof PopoverContent>
->(({ className, ...props }, ref) => (
+>(({ className, collisionPadding = 16, ...props }, ref) => (
   <PopoverContent
     ref={ref}
+    collisionPadding={collisionPadding}
     className={cn("w-56 p-1", className)}
     {...props}
   />

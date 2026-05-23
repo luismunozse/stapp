@@ -1,5 +1,6 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
+// Note: `webDir: 'public'` is only a fallback bundle; real loading comes from `server.url` (remote shell at stapp.com.ar).
 const config: CapacitorConfig = {
   appId: 'ar.com.stapp.app',
   appName: 'STApp',
@@ -12,7 +13,7 @@ const config: CapacitorConfig = {
   plugins: {
     SplashScreen: {
       launchShowDuration: 2000,
-      launchAutoHide: true,
+      launchAutoHide: false,
       backgroundColor: '#ffffff',
       showSpinner: true,
       spinnerColor: '#3b82f6',
