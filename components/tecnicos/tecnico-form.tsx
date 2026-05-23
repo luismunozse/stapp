@@ -294,7 +294,7 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
             </p>
           </div>
 
-          <FormActionBar className="pt-4">
+          <FormActionBar inDialog className="pt-4">
             <Button
               type="button"
               variant="outline"

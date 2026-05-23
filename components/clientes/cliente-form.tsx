@@ -310,7 +310,7 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
             />
           </div>
 
-          <FormActionBar>
+          <FormActionBar inDialog>
             <Button type="button" variant="outline" onClick={onClose}>
               Cancelar
             </Button>

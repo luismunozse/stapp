@@ -235,7 +235,7 @@ export function VendedorForm({ open, onOpenChange, vendedor, onSuccess }: Vended
               )}
             </div>
           )}
-          <FormActionBar className="pt-4">
+          <FormActionBar inDialog className="pt-4">
             <Button
               type="button"
               variant="outline"

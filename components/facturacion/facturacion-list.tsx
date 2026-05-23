@@ -182,7 +182,7 @@ export function FacturacionList() {
         <Card>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="sticky top-14 sm:top-0 z-10 bg-background">
+              <thead className="sticky top-[calc(3.5rem+env(safe-area-inset-top,0px))] sm:top-0 z-10 bg-background">
                 <tr className="border-b bg-muted/50">
                   <th className="text-left p-3 font-medium">Factura</th>
                   <th className="text-left p-3 font-medium">Orden</th>
