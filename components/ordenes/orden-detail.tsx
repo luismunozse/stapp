@@ -213,11 +213,32 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
     }
   }
 
-  const handleShareWhatsApp = () => {
+  const handleShareWhatsApp = async () => {
     const contactPhone = orden?.telefonoContacto || orden?.cliente?.telefono
     if (!seguimientoUrl || !contactPhone) return
     const codigoDisplay = orden.codigoOrden || `#${orden.numeroOrden}`
-    const message = `Hola ${orden.cliente?.nombre}, desde acá podés seguir el estado de tu equipo (Orden ${codigoDisplay}):\n${seguimientoUrl}`
+
+    let message: string
+    try {
+      const [{ resolvePlantilla }, configRes] = await Promise.all([
+        import("@/lib/whatsapp/plantillas-catalog"),
+        fetch("/api/notificaciones/config"),
+      ])
+      const config = configRes.ok ? await configRes.json() : null
+      message = resolvePlantilla(
+        "orden_compartir_seguimiento",
+        {
+          cliente: orden.cliente?.nombre || "",
+          codigo_orden: codigoDisplay,
+          link_seguimiento_publico: seguimientoUrl,
+          empresa: (orden as any).organizacion?.nombre || "",
+        },
+        config?.plantillasWhatsapp ?? null,
+      )
+    } catch {
+      message = `Hola ${orden.cliente?.nombre}, desde acá podés seguir el estado de tu equipo (Orden ${codigoDisplay}):\n${seguimientoUrl}`
+    }
+
     const phone = contactPhone.replace(/\D/g, "")
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank")
   }

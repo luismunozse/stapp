@@ -166,18 +166,32 @@ export async function GET(request: Request) {
       }
     }
 
-    // (B) Cobros adelantados: cobros en período de órdenes NO terminales en período.
+    // (B) Cobros adelantados: cobros en período de órdenes NO completadas y NO canceladas.
+    //     Excluye:
+    //       - Terminales del período actual (ya en (A))
+    //       - Terminales con fecha_completado <= hasta (ya devengaron full costo_final en su mes)
+    //       - CANCELADO / SIN_REPARACION (nunca devengarán)
     const terminalIdsSet = new Set(terminalIds)
     const { data: cobrosPeriodo } = await supabaseAdmin
       .from("cobros_orden")
-      .select("orden_id, monto, created_at")
-      .eq("organization_id", organizationId!)
+      .select("orden_id, monto, ordenes_servicio!inner(estado, fecha_completado, organization_id)")
+      .eq("ordenes_servicio.organization_id", organizationId!)
       .neq("anulado", true)
       .gte("created_at", desdeISO)
       .lte("created_at", hastaISO)
 
+    const ESTADOS_NUNCA_DEVENGAN = new Set(["CANCELADO", "SIN_REPARACION"])
+    const ESTADOS_TERMINALES_DEV = new Set(["REPARADO", "ENTREGADO", "ENTREGADO_SIN_REPARACION", "ENTREGADO_SIN_COBRO"])
+
     for (const c of (cobrosPeriodo || []) as any[]) {
-      if (terminalIdsSet.has(c.orden_id)) continue // ya contado en (A)
+      if (terminalIdsSet.has(c.orden_id)) continue // ya contado en (A) del período actual
+      const os = c.ordenes_servicio
+      if (!os) continue
+      if (ESTADOS_NUNCA_DEVENGAN.has(os.estado)) continue // nunca devengará
+      // Órdenes ya terminales con devengado en período anterior:
+      if (ESTADOS_TERMINALES_DEV.has(os.estado) && os.fecha_completado && os.fecha_completado <= hastaISO) {
+        continue
+      }
       ingresosAdelantos += parseFloat(c.monto || "0")
     }
 

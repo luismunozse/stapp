@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { createAuditLogger } from "@/lib/audit"
 import { z } from "zod"
 
 const bulkSchema = z.object({
   // Los ids del inventario son cuids (TEXT), no uuids — validamos solo que no sean vacíos.
   ids: z.array(z.string().min(1)).min(1, "Se requiere al menos un item"),
-  action: z.enum(["archive", "set_category", "price_adjust", "set_proveedor"]),
+  action: z.enum(["archive", "set_category", "price_adjust", "set_proveedor", "delete"]),
   payload: z
     .object({
       categoria: z.string().optional(),
@@ -44,6 +45,7 @@ export async function PATCH(request: Request) {
     }
 
     let updatedCount = 0
+    let blocked: Array<{ id: string; codigo: string | null; nombre: string | null }> = []
 
     if (action === "archive") {
       const { data, error: dbError } = await supabaseAdmin
@@ -134,9 +136,88 @@ export async function PATCH(request: Request) {
 
       if (dbError) throw dbError
       updatedCount = data?.length || 0
+    } else if (action === "delete") {
+      // Hard-delete bulk: bloquear ids con FK RESTRICT (mismo set que single delete).
+      // items_venta / items_cotizacion son SET NULL, movimientos / historial son CASCADE.
+      const [repuestos, devoluciones, ordenesCompra] = await Promise.all([
+        supabaseAdmin.from("repuestos_orden").select("inventario_id").in("inventario_id", ids),
+        supabaseAdmin.from("items_devolucion").select("inventario_id").in("inventario_id", ids),
+        supabaseAdmin.from("items_orden_compra").select("inventario_id").in("inventario_id", ids),
+      ])
+      if (repuestos.error) throw repuestos.error
+      if (devoluciones.error) throw devoluciones.error
+      if (ordenesCompra.error) throw ordenesCompra.error
+
+      const blockedSet = new Set<string>()
+      for (const r of repuestos.data ?? []) blockedSet.add(r.inventario_id as string)
+      for (const r of devoluciones.data ?? []) blockedSet.add(r.inventario_id as string)
+      for (const r of ordenesCompra.data ?? []) blockedSet.add(r.inventario_id as string)
+
+      const safeIds = ids.filter((id) => !blockedSet.has(id))
+      const blockedIds = ids.filter((id) => blockedSet.has(id))
+
+      if (blockedIds.length > 0) {
+        const { data: blkRows, error: blkErr } = await supabaseAdmin
+          .from("inventario")
+          .select("id, codigo, nombre")
+          .in("id", blockedIds)
+          .eq("organization_id", organizationId!)
+        if (blkErr) throw blkErr
+        blocked = (blkRows ?? []) as typeof blocked
+      }
+
+      if (safeIds.length > 0) {
+        // Snapshot para audit antes de borrar
+        const snapshots: Record<string, { codigo: string | null; nombre: string | null }> = {}
+        if (userId) {
+          const { data: snapRows } = await supabaseAdmin
+            .from("inventario")
+            .select("id, codigo, nombre")
+            .in("id", safeIds)
+            .eq("organization_id", organizationId!)
+          for (const row of snapRows ?? []) {
+            snapshots[row.id as string] = { codigo: row.codigo, nombre: row.nombre }
+          }
+        }
+
+        const { error: delError } = await supabaseAdmin
+          .from("inventario")
+          .delete()
+          .in("id", safeIds)
+          .eq("organization_id", organizationId!)
+        if (delError) {
+          // Fallback defensivo: FK nueva apareció entre chequeo y delete.
+          if ((delError as any).code === "23503") {
+            return NextResponse.json(
+              {
+                error: "Algunos items adquirieron referencias nuevas. Reintentá o archivalos.",
+                code: "HAS_REFERENCES",
+                canArchive: true,
+              },
+              { status: 409 }
+            )
+          }
+          throw delError
+        }
+        updatedCount = safeIds.length
+
+        if (userId) {
+          const logger = createAuditLogger(organizationId!, userId, request)
+          for (const id of safeIds) {
+            const snap = snapshots[id]
+            logger
+              .delete("inventario", id, {
+                codigo: snap?.codigo ?? null,
+                nombre: snap?.nombre ?? null,
+                accion: "ELIMINADO_MASIVO",
+              })
+              .catch(() => {})
+          }
+        }
+      }
     }
 
-    return NextResponse.json({ updated: updatedCount })
+    return NextResponse.json({ updated: updatedCount, blocked })
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

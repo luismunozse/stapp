@@ -454,7 +454,9 @@ export function Navbar() {
 
       {/* Desktop Top-Right Bar */}
       <div className={cn(
-        "hidden lg:flex items-center gap-2 fixed top-3 right-4 z-40"
+        "hidden lg:flex items-center gap-1.5 fixed top-3 right-4 z-40",
+        "bg-background/85 backdrop-blur-md border border-border/60 rounded-full shadow-sm",
+        "px-2 py-1"
       )}>
         <PlanBadge />
         <GlobalSearch />

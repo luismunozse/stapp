@@ -250,7 +250,38 @@ $$ LANGUAGE plpgsql;
 
 ---
 
-## 8. Otros gaps menores
+## 8. Costo financiero en `cobros_orden`
+
+**Estado actual**: reportes financieros cuentan CF (comisión terminales) de:
+- `pagos_venta.costo_financiero_monto` (ventas con tarjeta)
+- `pagos_parciales.costo_financiero_monto` (cobros de facturas)
+
+**Gap**: `cobros_orden` (cobro directo a orden sin factura) tiene `recargo_porcentaje` y `monto_original` pero NO tiene `costo_financiero_monto`. Si admin cobra orden con tarjeta directo (sin facturar), el CF no entra en reportes.
+
+**Opciones**:
+1. Agregar columna `costo_financiero_monto` y `costo_financiero_porcentaje` a `cobros_orden`, replicar lógica de pagos_venta.
+2. Interpretar `recargo_porcentaje` como CF cuando admin lo absorbe (no lo pasa al cliente). Requiere flag `recargo_absorbido_por_comerciante BOOLEAN`.
+
+**Defer**: bajo impacto si la mayoría facturan o no usan tarjeta directa.
+
+---
+
+## 9. Edge cases del modelo híbrido
+
+Implementación actual de "híbrido" (devengado + cobros adelanto) tiene supuestos:
+
+1. **Refunds sobre adelantos NO existen**: si admin cobró $300 adelanto y después cancela la órden, debe anular el cobro (`cobros_orden.anulado = true`). Si no anula, $300 quedan como ingreso fantasma. Mitigado parcialmente: ya excluimos cobros de órdenes CANCELADO/SIN_REPARACION del cálculo, pero el cobro sigue en caja física → descuadre vs realidad.
+   **Acción recomendada**: UI confirmación al cancelar orden con cobros pendientes → forzar a anular o registrar refund.
+
+2. **Cobro cross-mes después de completed**: si órden completó marzo y admin cobra abril una cuota adicional, NO cuenta en abril (correcto, ya devengado). Pero si admin pretendía que sea ingreso real abril, queda invisible. Asume contabilidad devengado pura.
+
+3. **Cotización ACEPTADA luego RECHAZADA**: items linkeados liberan stock vía RPC. Snapshot de `costo_unitario` queda pero la cotización ya no se cuenta (reportes filtran `estado === 'ACEPTADA'`). Si admin re-acepta, trigger no re-snapshot (check `IS NULL`). OK.
+
+4. **Trigger snapshot solo dispara on UPDATE OF estado**: cotización creada directamente en ACEPTADA (importación, migración data) no snapshot. Workaround: trigger AFTER INSERT OR UPDATE.
+
+---
+
+## 10. Otros gaps menores
 
 - **`gastos_recurrentes`**: ya hay job, verificar que crea movimientos con `afecta_rentabilidad = true` correcto.
 - **Multi-moneda**: ingresos en USD vs ARS no se convierten. Si crece, requiere tabla `cotizaciones_diarias` y conversión en reportes.

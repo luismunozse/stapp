@@ -63,6 +63,12 @@ const VAR_FECHA: PlantillaVariable = { key: "fecha", label: "Fecha actual", exam
 const VAR_TURNO_FECHA: PlantillaVariable = { key: "turno_fecha", label: "Fecha del turno", example: "Lun 25/05" }
 const VAR_TURNO_HORA: PlantillaVariable = { key: "turno_hora", label: "Hora del turno", example: "14:30" }
 const VAR_TURNO_SERVICIO: PlantillaVariable = { key: "turno_servicio", label: "Servicio del turno", example: "Diagnóstico" }
+const VAR_TURNO_VENTANA: PlantillaVariable = { key: "turno_ventana", label: "Ventana horaria", example: " (hasta 16:00)" }
+const VAR_TURNO_DIRECCION: PlantillaVariable = { key: "turno_direccion", label: "Dirección del turno", example: "Av. Siempre Viva 123" }
+const VAR_TURNO_TECNICO: PlantillaVariable = { key: "turno_tecnico", label: "Técnico asignado", example: "Carlos" }
+const VAR_TURNO_EQUIPO: PlantillaVariable = { key: "turno_equipo", label: "Equipo del turno", example: "Notebook Dell" }
+const VAR_LINK_SEGUIMIENTO_PUBLICO: PlantillaVariable = { key: "link_seguimiento_publico", label: "Link público de seguimiento", example: "https://..." }
+const VAR_CODIGO_ORDEN: PlantillaVariable = { key: "codigo_orden", label: "Código/número de orden", example: "ORD-1234" }
 
 export const PLANTILLAS_CATALOG: PlantillaDefinition[] = [
   // === Órdenes ===
@@ -124,6 +130,17 @@ Descargar comprobante: {link_pdf}
 Seguimiento: {link_seguimiento}
 
 Gracias por confiar en nosotros!
+
+{empresa}`,
+  },
+  {
+    key: "orden_compartir_seguimiento",
+    label: "Compartir link de seguimiento",
+    category: "ordenes",
+    description: "Mensaje al compartir el link público de seguimiento de una orden.",
+    variables: [VAR_CLIENTE, VAR_CODIGO_ORDEN, VAR_LINK_SEGUIMIENTO_PUBLICO, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, desde acá podés seguir el estado de tu equipo (Orden {codigo_orden}):
+{link_seguimiento_publico}
 
 {empresa}`,
   },
@@ -364,43 +381,74 @@ Gracias!
     key: "turno_confirmacion",
     label: "Confirmación de turno",
     category: "turnos",
-    description: "Confirmación cuando el cliente reserva un turno.",
-    variables: [VAR_CLIENTE, VAR_TURNO_FECHA, VAR_TURNO_HORA, VAR_TURNO_SERVICIO, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, le confirmamos su turno:
+    description: "Confirmación cuando se agenda un turno.",
+    variables: [VAR_CLIENTE, VAR_TURNO_FECHA, VAR_TURNO_VENTANA, VAR_TURNO_DIRECCION, VAR_TURNO_TECNICO, VAR_TURNO_EQUIPO, VAR_EMPRESA],
+    defaultText: `*{empresa}*
+Tu turno fue agendado ✅
 
-*{turno_servicio}*
-{turno_fecha} a las {turno_hora}
+📅 {turno_fecha}{turno_ventana}
+📍 {turno_direccion}
+👤 Técnico: {turno_tecnico}
+🔧 Equipo: {turno_equipo}
 
-Lo esperamos!
-
-{empresa}`,
+Cualquier cambio, avisanos. ¡Gracias!`,
   },
   {
-    key: "turno_recordatorio",
-    label: "Recordatorio de turno",
+    key: "turno_recordatorio_24h",
+    label: "Recordatorio de turno (24h antes)",
     category: "turnos",
-    description: "Recordatorio enviado antes del turno.",
-    variables: [VAR_CLIENTE, VAR_TURNO_FECHA, VAR_TURNO_HORA, VAR_TURNO_SERVICIO, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, le recordamos su turno:
+    description: "Recordatorio enviado un día antes del turno.",
+    variables: [VAR_CLIENTE, VAR_TURNO_FECHA, VAR_TURNO_VENTANA, VAR_TURNO_DIRECCION, VAR_TURNO_TECNICO, VAR_TURNO_EQUIPO, VAR_EMPRESA],
+    defaultText: `*{empresa}*
+Te recordamos tu turno de mañana ⏰
 
-*{turno_servicio}*
-{turno_fecha} a las {turno_hora}
-
-Lo esperamos! Si necesita reprogramar, avísenos cuanto antes.
-
-{empresa}`,
+📅 {turno_fecha}{turno_ventana}
+📍 {turno_direccion}
+👤 Técnico: {turno_tecnico}
+🔧 Equipo: {turno_equipo}`,
   },
   {
-    key: "turno_cancelacion",
+    key: "turno_recordatorio_1h",
+    label: "Recordatorio de turno (1h antes)",
+    category: "turnos",
+    description: "Recordatorio enviado una hora antes del turno.",
+    variables: [VAR_CLIENTE, VAR_TURNO_FECHA, VAR_TURNO_VENTANA, VAR_TURNO_DIRECCION, VAR_TURNO_TECNICO, VAR_EMPRESA],
+    defaultText: `*{empresa}*
+Tu turno es en aproximadamente 1 hora.
+
+📅 {turno_fecha}{turno_ventana}
+📍 {turno_direccion}
+👤 Técnico: {turno_tecnico}`,
+  },
+  {
+    key: "turno_reprogramado",
+    label: "Turno reprogramado",
+    category: "turnos",
+    description: "Aviso cuando se reprograma un turno.",
+    variables: [VAR_CLIENTE, VAR_TURNO_FECHA, VAR_TURNO_VENTANA, VAR_TURNO_DIRECCION, VAR_EMPRESA],
+    defaultText: `*{empresa}*
+Reprogramamos tu turno 📅
+Nueva fecha: {turno_fecha}{turno_ventana}
+📍 {turno_direccion}`,
+  },
+  {
+    key: "turno_cancelado",
     label: "Cancelación de turno",
     category: "turnos",
     description: "Aviso cuando se cancela un turno.",
-    variables: [VAR_CLIENTE, VAR_TURNO_FECHA, VAR_TURNO_HORA, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, le informamos que su turno del {turno_fecha} a las {turno_hora} fue cancelado.
-
-Puede reprogramar contactándonos.
-
-{empresa}`,
+    variables: [VAR_CLIENTE, VAR_TURNO_FECHA, VAR_EMPRESA],
+    defaultText: `*{empresa}*
+Tu turno del {turno_fecha} fue cancelado.
+Si querés reagendar, respondé este mensaje.`,
+  },
+  {
+    key: "turno_tecnico_en_camino",
+    label: "Técnico en camino",
+    category: "turnos",
+    description: "Aviso cuando el técnico salió hacia el turno.",
+    variables: [VAR_CLIENTE, VAR_TURNO_TECNICO, VAR_TURNO_FECHA, VAR_EMPRESA],
+    defaultText: `*{empresa}*
+🚗 {turno_tecnico} está en camino para tu turno de {turno_fecha}.`,
   },
 
   // === Marketing / Captación / Retención ===

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Copy, Check, Send } from "lucide-react"
@@ -34,6 +34,7 @@ export function ClienteWhatsAppDialog({
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
   const [customMessage, setCustomMessage] = useState("")
   const [copied, setCopied] = useState(false)
+  const [plantillasOverride, setPlantillasOverride] = useState<Record<string, string> | null>(null)
 
   // Contexto sin orden para mostrar plantillas genéricas
   const context: NotificationContext = {
@@ -47,7 +48,17 @@ export function ClienteWhatsAppDialog({
     },
   }
 
-  const templates = getWhatsAppTemplates(context)
+  useEffect(() => {
+    if (!open) return
+    fetch("/api/notificaciones/config")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.plantillasWhatsapp) setPlantillasOverride(data.plantillasWhatsapp)
+      })
+      .catch(() => {})
+  }, [open])
+
+  const templates = getWhatsAppTemplates(context, plantillasOverride)
 
   const handleSelectTemplate = (id: string) => {
     const template = templates.find((t) => t.id === id)

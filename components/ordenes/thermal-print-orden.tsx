@@ -306,7 +306,7 @@ function ReceiptPreview({ data }: { data: PreviewData }) {
   return (
     <div
       id="thermal-receipt-print-area"
-      className="bg-white text-black font-mono text-[11px] leading-tight p-3"
+      className="bg-white text-black font-mono text-[11px] leading-tight p-3 text-center"
       style={{ width: "302px" }}
     >
       {data.logoUrl && (

@@ -1,5 +1,15 @@
 import { supabaseAdmin } from "@/lib/supabase"
 import { Resend } from "resend"
+import { renderTemplate, getPlantilla } from "@/lib/whatsapp/plantillas-catalog"
+
+const TURNO_TIPO_TO_CATALOG_KEY: Record<string, string> = {
+  confirmacion: "turno_confirmacion",
+  recordatorio_24h: "turno_recordatorio_24h",
+  recordatorio_1h: "turno_recordatorio_1h",
+  reprogramado: "turno_reprogramado",
+  cancelado: "turno_cancelado",
+  tecnico_en_camino: "turno_tecnico_en_camino",
+}
 
 let _resend: Resend | null = null
 function getResend(): Resend {
@@ -54,7 +64,11 @@ interface TemplateOut {
   html: string
 }
 
-function buildTemplate(tipo: TurnoNotifTipo, ctx: TurnoCtx): TemplateOut {
+function buildTemplate(
+  tipo: TurnoNotifTipo,
+  ctx: TurnoCtx,
+  plantillasOverride?: Record<string, string> | null,
+): TemplateOut {
   const fechaTxt = fmtFecha(ctx.inicio, ctx.zonaHoraria)
   const finTxt = ctx.fin
     ? new Intl.DateTimeFormat("es-AR", {
@@ -77,7 +91,28 @@ function buildTemplate(tipo: TurnoNotifTipo, ctx: TurnoCtx): TemplateOut {
     </div>
   `.trim()
 
-  switch (tipo) {
+  // Si la organización tiene plantilla custom para este tipo, usar el catálogo.
+  const catalogKey = TURNO_TIPO_TO_CATALOG_KEY[tipo]
+  const override = catalogKey ? plantillasOverride?.[catalogKey] : null
+  const plantillaCatalogo = catalogKey ? getPlantilla(catalogKey) : null
+  const waText = (override && override.trim()) || plantillaCatalogo?.defaultText
+  let whatsappOverride: string | null = null
+  if (waText) {
+    whatsappOverride = renderTemplate(waText, {
+      cliente: ctx.destinatarioNombre,
+      empresa: ctx.organizationName,
+      turno_fecha: fechaTxt,
+      turno_ventana: ventana,
+      turno_direccion: ctx.direccion || "",
+      turno_tecnico: ctx.tecnicoNombre || "",
+      turno_equipo: ctx.equipo || "",
+      turno_servicio: ctx.tipo || "",
+      turno_hora: finTxt || "",
+    })
+  }
+
+  const buildDefault = (): TemplateOut => {
+    switch (tipo) {
     case "confirmacion":
       return {
         subject: `Turno agendado — ${ctx.organizationName}`,
@@ -156,7 +191,14 @@ function buildTemplate(tipo: TurnoNotifTipo, ctx: TurnoCtx): TemplateOut {
           <p>Tu turno del ${fechaTxt} fue cancelado.</p>
         `),
       }
+    }
   }
+
+  const out = buildDefault()
+  if (whatsappOverride && override) {
+    return { ...out, whatsapp: whatsappOverride }
+  }
+  return out
 }
 
 async function logNotif(
@@ -191,7 +233,6 @@ export async function sendTurnoNotification(
   tipo: TurnoNotifTipo,
   canales?: TurnoNotifCanal[],
 ): Promise<SendResult> {
-  const tpl = buildTemplate(tipo, ctx)
   const result: SendResult = {}
 
   const usarEmail = !canales || canales.includes("email")
@@ -199,9 +240,11 @@ export async function sendTurnoNotification(
 
   const { data: orgConfig } = await supabaseAdmin
     .from("organizations")
-    .select("notificaciones_email, notificaciones_whatsapp")
+    .select("notificaciones_email, notificaciones_whatsapp, plantillas_whatsapp")
     .eq("id", ctx.organizationId)
     .single()
+
+  const tpl = buildTemplate(tipo, ctx, orgConfig?.plantillas_whatsapp ?? null)
 
   // Email
   if (usarEmail && orgConfig?.notificaciones_email !== false && ctx.destinatarioEmail) {

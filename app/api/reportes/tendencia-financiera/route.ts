@@ -190,29 +190,38 @@ export async function GET(request: Request) {
       }
     }
 
-    // (B) Cobros adelantados: cobros en el período de órdenes que NO completaron en ese mes.
+    // (B) Cobros adelantados por mes.
+    //     Excluye:
+    //       - Cobro del mismo mes que completó la orden (ya en (A))
+    //       - Orden CANCELADO / SIN_REPARACION (nunca devengará)
+    //       - Cobro POSTERIOR al mes de completado (ya devengó full en su mes)
     const { data: cobrosPeriodo } = await supabaseAdmin
       .from("cobros_orden")
-      .select("orden_id, monto, created_at")
-      .eq("organization_id", organizationId!)
+      .select("orden_id, monto, created_at, ordenes_servicio!inner(estado, fecha_completado, organization_id)")
+      .eq("ordenes_servicio.organization_id", organizationId!)
       .neq("anulado", true)
       .gte("created_at", desdeISO)
       .lte("created_at", hastaISO)
 
-    // Index: ordenes terminales por mes
-    const terminalByMonth = new Map<string, Set<string>>()
-    for (const o of (ordenes || []) as any[]) {
-      const k = keyFor(o.fecha_completado)
-      if (!terminalByMonth.has(k)) terminalByMonth.set(k, new Set())
-      terminalByMonth.get(k)!.add(o.id)
-    }
+    const ESTADOS_NUNCA_DEVENGAN = new Set(["CANCELADO", "SIN_REPARACION"])
+    const ESTADOS_TERMINALES_DEV = new Set(["REPARADO", "ENTREGADO", "ENTREGADO_SIN_REPARACION", "ENTREGADO_SIN_COBRO"])
 
     for (const c of (cobrosPeriodo || []) as any[]) {
       const key = keyFor(c.created_at)
       const bucket = buckets[key]
       if (!bucket) continue
-      const terminalesDelMes = terminalByMonth.get(key)
-      if (terminalesDelMes?.has(c.orden_id)) continue // ya contado en (A) de ese mes
+      const os = c.ordenes_servicio
+      if (!os) continue
+      if (ESTADOS_NUNCA_DEVENGAN.has(os.estado)) continue
+
+      if (ESTADOS_TERMINALES_DEV.has(os.estado) && os.fecha_completado) {
+        const mesCompletado = keyFor(os.fecha_completado)
+        // Cobro mismo mes que completed: ya parte de costo_final en (A)
+        if (key === mesCompletado) continue
+        // Cobro posterior al mes de completed: ya devengado full → no contar
+        if (key > mesCompletado) continue
+        // Cobro previo al mes de completed: contar como adelanto en su mes
+      }
       bucket.ingresosServicios += parseFloat(c.monto || "0")
     }
 

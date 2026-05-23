@@ -209,7 +209,6 @@ export function generateOrdenTicketCommands(data: OrdenTicketData, printerWidth:
   add(CMD.BOLD_ON, CMD.DOUBLE_ON)
   add(line("ORDEN DE SERVICIO"))
   add(CMD.DOUBLE_OFF, CMD.BOLD_OFF)
-  add(CMD.ALIGN_LEFT)
 
   const ordenCode = data.codigoOrden || `#${String(data.numeroOrden).padStart(4, "0")}`
   add(CMD.BOLD_ON)
@@ -290,7 +289,7 @@ export function generateOrdenTicketCommands(data: OrdenTicketData, printerWidth:
 
   // === TERMINOS Y CONDICIONES ===
   if (data.terminosCondiciones) {
-    add(CMD.ALIGN_LEFT)
+    add(CMD.ALIGN_CENTER)
     add(CMD.BOLD_ON)
     add(line("TERMINOS Y CONDICIONES"))
     add(CMD.BOLD_OFF)
@@ -342,7 +341,6 @@ export function generateTicketCommands(data: TicketData, printerWidth: 58 | 80 =
   add(separator(W))
 
   // === CLIENTE + VENDEDOR ===
-  add(CMD.ALIGN_LEFT)
   const clienteName = data.cliente.nombre || "Consumidor Final"
   add(columns("Cliente:", clienteName.substring(0, W - 10), W))
   if (data.cliente.telefono) {

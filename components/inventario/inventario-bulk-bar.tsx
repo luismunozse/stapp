@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Archive, Tag, Percent, X, Printer, Truck } from "lucide-react"
+import { Archive, Tag, Percent, X, Printer, Truck, Trash2 } from "lucide-react"
 import { useModal } from "@/contexts/modal-context"
 
 interface ProveedorLite {
@@ -61,6 +61,80 @@ export function InventarioBulkBar({
       onSuccess()
     } catch {
       await showError("Error de red al ejecutar la acción")
+    } finally {
+      setPending(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    const ok = await confirm({
+      title: "Eliminar items",
+      description: `¿Eliminar permanentemente ${selectedCount} item${selectedCount === 1 ? "" : "s"}? Los que estén en uso en órdenes, compras o devoluciones no se eliminarán.`,
+      confirmText: "Eliminar",
+      cancelText: "Cancelar",
+      variant: "danger",
+    })
+    if (!ok) return
+    setPending(true)
+    try {
+      const res = await fetch("/api/inventario/bulk", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: selectedIds, action: "delete" }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        await showError(json.error || "Error al eliminar")
+        return
+      }
+      const deleted: number = json.updated ?? 0
+      const blocked: Array<{ id: string; codigo: string | null; nombre: string | null }> = json.blocked ?? []
+
+      if (blocked.length === 0) {
+        await showSuccess(`${deleted} item${deleted === 1 ? "" : "s"} eliminados`)
+        onClear()
+        onSuccess()
+        return
+      }
+
+      // Refrescar lista (los safeIds ya fueron eliminados) antes de pedir archivar.
+      onSuccess()
+
+      const preview = blocked
+        .slice(0, 3)
+        .map((b) => `${b.codigo ?? "—"} ${b.nombre ?? ""}`.trim())
+        .join(", ")
+      const more = blocked.length > 3 ? ` y ${blocked.length - 3} más` : ""
+      const headTitle = deleted > 0
+        ? `${deleted} eliminado${deleted === 1 ? "" : "s"}, ${blocked.length} en uso`
+        : `${blocked.length} item${blocked.length === 1 ? "" : "s"} en uso`
+      const wantArchive = await confirm({
+        title: headTitle,
+        description: `${blocked.length === 1 ? "Este item no se puede eliminar" : "Estos items no se pueden eliminar"} porque ${blocked.length === 1 ? "está" : "están"} en uso (${preview}${more}). ¿Archivar${blocked.length === 1 ? "lo" : "los"} en su lugar?`,
+        confirmText: "Archivar",
+        cancelText: "Mantener",
+        variant: "info",
+      })
+      if (!wantArchive) {
+        onClear()
+        return
+      }
+      const blockedIds = blocked.map((b) => b.id)
+      const arcRes = await fetch("/api/inventario/bulk", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: blockedIds, action: "archive" }),
+      })
+      const arcJson = await arcRes.json()
+      if (!arcRes.ok) {
+        await showError(arcJson.error || "Error al archivar")
+        return
+      }
+      await showSuccess(`${arcJson.updated} item${arcJson.updated === 1 ? "" : "s"} archivados`)
+      onClear()
+      onSuccess()
+    } catch {
+      await showError("Error de red al eliminar")
     } finally {
       setPending(false)
     }
@@ -244,6 +318,12 @@ export function InventarioBulkBar({
         <Button size="sm" variant="outline" onClick={handleArchive} disabled={pending} className="text-destructive hover:text-destructive">
           <Archive className="mr-2 h-4 w-4" />
           Archivar
+        </Button>
+
+        {/* Eliminar */}
+        <Button size="sm" variant="destructive" onClick={handleDelete} disabled={pending}>
+          <Trash2 className="mr-2 h-4 w-4" />
+          Eliminar
         </Button>
 
         <Button size="sm" variant="ghost" onClick={onClear} disabled={pending}>
