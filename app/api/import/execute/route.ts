@@ -15,6 +15,53 @@ const executeSchema = z.object({
   entityType: z.enum(["CLIENTES", "INVENTARIO"]),
 })
 
+// Vercel default 30s. Import batch puede tomar más con archivos grandes.
+// Hobby plan max = 60s, Pro = 300s.
+export const maxDuration = 60
+
+const BATCH_SIZE = 500
+
+function buildInventarioPayload(d: any, codigo: string, organizationId: string) {
+  return {
+    codigo,
+    nombre: d.nombre,
+    descripcion: d.descripcion || null,
+    categoria: d.categoria || 'GENERAL',
+    tipo_dispositivo: resolveTipoDispositivo(d.tipoDispositivo),
+    stock: d.stock,
+    precio_compra: d.precioCompra ?? 0,
+    precio_venta: d.precioVenta,
+    proveedor: d.proveedor || d.marca || null,
+    organization_id: organizationId,
+  }
+}
+
+async function batchInsert(
+  client: typeof supabaseAdmin,
+  table: 'clientes' | 'inventario',
+  items: Array<{ rowNumber: number; row: any; payload: any }>,
+  results: { success: any[]; skipped: any[]; errors: any[] }
+) {
+  for (let start = 0; start < items.length; start += BATCH_SIZE) {
+    const chunk = items.slice(start, start + BATCH_SIZE)
+    const payloads = chunk.map(c => c.payload)
+    const { error } = await client.from(table).insert(payloads)
+    if (!error) {
+      for (const c of chunk) results.success.push({ row: c.rowNumber, data: c.row })
+      continue
+    }
+    // Insert fallido: reintentar item por item para aislar la fila mala.
+    for (const c of chunk) {
+      const { error: rowErr } = await client.from(table).insert(c.payload)
+      if (rowErr) {
+        results.errors.push({ row: c.rowNumber, error: rowErr.message, data: c.row })
+      } else {
+        results.success.push({ row: c.rowNumber, data: c.row })
+      }
+    }
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const { error, organizationId, userId } = await requireAuth()
@@ -88,136 +135,129 @@ export async function POST(request: Request) {
       console.warn("Import upload skipped:", uploadErr instanceof Error ? uploadErr.message : uploadErr)
     }
 
-    // Process rows
+    // Validar todas las filas primero (sync, sin I/O).
     const results = {
       success: [] as any[],
       skipped: [] as any[],
       errors: [] as any[],
     }
+    const validRows: Array<{ rowNumber: number; row: any; data: any }> = []
 
     for (let i = 0; i < parseResult.data.length; i++) {
       const row = parseResult.data[i]
-      const rowNumber = i + 2 // +2 because of header row and 0-index
-
-      // Validate row
+      const rowNumber = i + 2
       const validation = data.entityType === 'CLIENTES'
         ? validateClienteRow(row, i)
         : validateInventarioRow(row, i)
-
       if (!validation.valid) {
-        results.errors.push({
-          row: rowNumber,
-          error: validation.error!,
-          data: row,
-        })
+        results.errors.push({ row: rowNumber, error: validation.error!, data: row })
         continue
       }
+      validRows.push({ rowNumber, row, data: validation.data })
+    }
 
-      // Insert based on entity type
-      try {
-        if (data.entityType === 'CLIENTES') {
-          const { data: existing } = await supabaseAdmin
-            .from('clientes')
-            .select('id')
-            .eq('organization_id', organizationId!)
-            .eq('telefono', validation.data.telefono)
-            .single()
+    if (data.entityType === 'CLIENTES') {
+      // Batch dedup por telefono
+      const telefonos = Array.from(new Set(validRows.map(v => v.data.telefono)))
+      const { data: existing } = await supabaseAdmin
+        .from('clientes')
+        .select('telefono')
+        .eq('organization_id', organizationId!)
+        .in('telefono', telefonos)
+      const existingSet = new Set((existing ?? []).map(e => e.telefono))
 
-          if (existing) {
-            results.skipped.push({
-              row: rowNumber,
-              reason: 'Ya existe un cliente con ese teléfono',
-              data: row,
-            })
-            continue
-          }
-
-          // Check plan limit
-          const limitError = await enforcePlanLimit(organizationId!, 'clientes')
-          if (limitError) {
-            results.errors.push({
-              row: rowNumber,
-              error: 'Límite de clientes alcanzado en tu plan',
-              data: row,
-            })
-            continue
-          }
-
-          const { error: insertError } = await supabaseAdmin
-            .from('clientes')
-            .insert({
-              nombre: validation.data.nombre,
-              telefono: validation.data.telefono,
-              email: validation.data.email || null,
-              direccion: validation.data.direccion || null,
-              dni: validation.data.dni || null,
-              organization_id: organizationId!,
-            })
-
-          if (insertError) {
-            throw insertError
-          }
-
-          results.success.push({ row: rowNumber, data: row })
-        } else {
-          // INVENTARIO
-          // Generar código si no vino. Retry hasta 3 veces si colisiona con UNIQUE.
-          let codigoFinal: string = (validation.data.codigo || '').trim()
-          const codigoAutogen = !codigoFinal
-          if (codigoAutogen) {
-            codigoFinal = generateCodigo(validation.data.nombre)
-          }
-
-          if (!codigoAutogen) {
-            const { data: existing } = await supabaseAdmin
-              .from('inventario')
-              .select('id')
-              .eq('organization_id', organizationId!)
-              .eq('codigo', codigoFinal)
-              .single()
-
-            if (existing) {
-              results.skipped.push({
-                row: rowNumber,
-                reason: 'Ya existe un item con ese código',
-                data: row,
-              })
-              continue
-            }
-          }
-
-          // Defaults para columnas requeridas en DB pero opcionales en CSV.
-          // Plantillas externas suelen omitir tipoDispositivo/precioCompra/categoria.
-          const proveedorFinal = validation.data.proveedor || validation.data.marca || null
-
-          const { error: insertError } = await supabaseAdmin
-            .from('inventario')
-            .insert({
-              codigo: codigoFinal,
-              nombre: validation.data.nombre,
-              descripcion: validation.data.descripcion || null,
-              categoria: validation.data.categoria || 'GENERAL',
-              tipo_dispositivo: resolveTipoDispositivo(validation.data.tipoDispositivo),
-              stock: validation.data.stock,
-              precio_compra: validation.data.precioCompra ?? 0,
-              precio_venta: validation.data.precioVenta,
-              proveedor: proveedorFinal,
-              organization_id: organizationId!,
-            })
-
-          if (insertError) {
-            throw insertError
-          }
-
-          results.success.push({ row: rowNumber, data: row })
+      // Dedup entre filas del mismo archivo (primer ocurrencia gana)
+      const seenInBatch = new Set<string>()
+      const toInsert: Array<{ rowNumber: number; row: any; payload: any }> = []
+      for (const v of validRows) {
+        if (existingSet.has(v.data.telefono)) {
+          results.skipped.push({ row: v.rowNumber, reason: 'Ya existe un cliente con ese teléfono', data: v.row })
+          continue
         }
-      } catch (insertError: any) {
-        results.errors.push({
-          row: rowNumber,
-          error: insertError.message || 'Error al insertar registro',
-          data: row,
+        if (seenInBatch.has(v.data.telefono)) {
+          results.skipped.push({ row: v.rowNumber, reason: 'Teléfono duplicado dentro del archivo', data: v.row })
+          continue
+        }
+        seenInBatch.add(v.data.telefono)
+        toInsert.push({
+          rowNumber: v.rowNumber,
+          row: v.row,
+          payload: {
+            nombre: v.data.nombre,
+            telefono: v.data.telefono,
+            email: v.data.email || null,
+            direccion: v.data.direccion || null,
+            dni: v.data.dni || null,
+            organization_id: organizationId!,
+          },
         })
       }
+
+      // Plan limit: chequeo una sola vez antes del batch insert.
+      const limitError = toInsert.length > 0
+        ? await enforcePlanLimit(organizationId!, 'clientes')
+        : null
+      if (limitError) {
+        for (const item of toInsert) {
+          results.errors.push({ row: item.rowNumber, error: 'Límite de clientes alcanzado en tu plan', data: item.row })
+        }
+      } else {
+        await batchInsert(supabaseAdmin, 'clientes', toInsert, results)
+      }
+    } else {
+      // INVENTARIO: separar items con código vs autogen
+      const withCodigo: typeof validRows = []
+      const autoGen: typeof validRows = []
+      for (const v of validRows) {
+        const codigo = (v.data.codigo || '').trim()
+        if (codigo) withCodigo.push({ ...v, data: { ...v.data, codigo } })
+        else autoGen.push(v)
+      }
+
+      // Batch dedup contra DB por codigo
+      const codigos = Array.from(new Set(withCodigo.map(v => v.data.codigo)))
+      const existingSet = new Set<string>()
+      if (codigos.length > 0) {
+        const { data: existing } = await supabaseAdmin
+          .from('inventario')
+          .select('codigo')
+          .eq('organization_id', organizationId!)
+          .in('codigo', codigos)
+        for (const e of existing ?? []) existingSet.add(e.codigo)
+      }
+
+      const seenInBatch = new Set<string>()
+      const toInsert: Array<{ rowNumber: number; row: any; payload: any }> = []
+
+      for (const v of withCodigo) {
+        if (existingSet.has(v.data.codigo)) {
+          results.skipped.push({ row: v.rowNumber, reason: 'Ya existe un item con ese código', data: v.row })
+          continue
+        }
+        if (seenInBatch.has(v.data.codigo)) {
+          results.skipped.push({ row: v.rowNumber, reason: 'Código duplicado dentro del archivo', data: v.row })
+          continue
+        }
+        seenInBatch.add(v.data.codigo)
+        toInsert.push({
+          rowNumber: v.rowNumber,
+          row: v.row,
+          payload: buildInventarioPayload(v.data, v.data.codigo, organizationId!),
+        })
+      }
+
+      for (const v of autoGen) {
+        let codigo = generateCodigo(v.data.nombre)
+        while (seenInBatch.has(codigo)) codigo = generateCodigo(v.data.nombre)
+        seenInBatch.add(codigo)
+        toInsert.push({
+          rowNumber: v.rowNumber,
+          row: v.row,
+          payload: buildInventarioPayload(v.data, codigo, organizationId!),
+        })
+      }
+
+      await batchInsert(supabaseAdmin, 'inventario', toInsert, results)
     }
 
     // Save import history
