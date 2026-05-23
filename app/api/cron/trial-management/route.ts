@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
+import { resolveTemplate } from "@/lib/emails/template-resolver"
 import { requireCronAuth } from "@/lib/cron-auth"
 
 const ENVIALOSIMPLE_API_URL = "https://backend.envialosimple.email/api/v1/mail/send"
@@ -41,7 +42,7 @@ export async function GET(request: Request) {
 
   try {
     const now = new Date()
-    const results = { autoExtended: 0, lastChanceEmails: 0, alreadyHandled: 0 }
+    const results = { autoExtended: 0, lastChanceEmails: 0, alreadyHandled: 0, skippedDraft: 0 }
 
     // Buscar trials vencidos o por vencer en 3 días
     const threeDaysFromNow = new Date(now)
@@ -125,11 +126,30 @@ export async function GET(request: Request) {
       if (daysLeft <= 0) {
         // Trial vencido: enviar email invitando a reactivar (NO extender automáticamente)
         // Los 7 días se activan solo cuando el usuario hace clic en /reactivar
-        const sent = await sendEmail(
-          admin.email,
-          "Reactivá tu cuenta en STApp - Tenés 7 días más para probar",
-          getReactivationEmailHtml(admin.nombre, org.nombre, reactivarUrl)
-        )
+        // Kill switch via resolver: TRIAL_REACTIVATION_INVITE seedeado PUBLISHED con cuerpo vacío,
+        // fallback = builder hardcoded existente.
+        const data = {
+          nombre: admin.nombre,
+          organizacion: org.nombre,
+          slug: org.slug,
+          reactivarUrl,
+        }
+        const resolved = await resolveTemplate("TRIAL_REACTIVATION_INVITE", data, () => ({
+          subject: "Reactivá tu cuenta en STApp - Tenés 7 días más para probar",
+          html: getReactivationEmailHtml(admin.nombre, org.nombre, reactivarUrl),
+        }))
+
+        if (!resolved) {
+          await supabaseAdmin.from("lifecycle_emails").insert({
+            organization_id: org.id, user_id: admin.id,
+            email_type: "TRIAL_REACTIVATION_INVITE",
+            status: "SKIPPED_DRAFT",
+          })
+          results.skippedDraft++
+          continue
+        }
+
+        const sent = await sendEmail(admin.email, resolved.subject, resolved.html)
         await supabaseAdmin.from("lifecycle_emails").insert({
           organization_id: org.id, user_id: admin.id,
           email_type: "TRIAL_REACTIVATION_INVITE",

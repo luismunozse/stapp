@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { captureUtmParams } from "@/lib/utm"
+import { track } from "@/lib/analytics/track"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
@@ -669,7 +670,10 @@ export function Hero() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.4 }}
               >
-                <Link href="/registro">
+                <Link
+                  href="/registro"
+                  onClick={() => track("landing_cta_click", { cta: "hero_primary", label: "Comenzar Gratis" })}
+                >
                   <m.div
                     whileHover={{ scale: 1.05, y: -2 }}
                     whileTap={{ scale: 0.98 }}
@@ -681,7 +685,10 @@ export function Hero() {
                     </Button>
                   </m.div>
                 </Link>
-                <a href="#features">
+                <a
+                  href="#features"
+                  onClick={() => track("landing_cta_click", { cta: "hero_secondary", label: "Ver cómo funciona" })}
+                >
                   <m.div
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.98 }}

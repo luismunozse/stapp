@@ -8,6 +8,7 @@ import { redirect } from "next/navigation"
 import Link from "next/link"
 import { QuickActions } from "@/components/dashboard/quick-actions"
 import { OnboardingPanel } from "@/components/dashboard/onboarding-panel"
+import { SetupChecklist } from "@/components/onboarding/setup-checklist"
 import { DolarWidget } from "@/components/cotizacion-dolar"
 import {
   OrdenesRecientes,
@@ -840,6 +841,9 @@ export default async function DashboardPage() {
           Bienvenido, {currentUserName}
         </p>
       </div>
+
+      {/* Setup checklist (oculto al 100%) — guía nuevos/inactivos a su primera orden */}
+      {isAdmin && <SetupChecklist />}
 
       {/* Onboarding para cuentas nuevas */}
       {isAdmin && totalOrdenes === 0 && (

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getLifecycleEmail, type LifecycleEmailType } from "@/lib/emails/lifecycle-templates"
+import { resolveTemplate } from "@/lib/emails/template-resolver"
 import { requireCronAuth } from "@/lib/cron-auth"
 
 const ENVIALOSIMPLE_API_URL = "https://backend.envialosimple.email/api/v1/mail/send"
@@ -32,7 +33,12 @@ async function wasAlreadySent(orgId: string, emailType: string): Promise<boolean
   return (count || 0) > 0
 }
 
-async function logEmail(orgId: string, emailType: string, status: "SENT" | "FAILED", userId?: string) {
+async function logEmail(
+  orgId: string,
+  emailType: string,
+  status: "SENT" | "FAILED" | "SKIPPED_DRAFT",
+  userId?: string
+) {
   await supabaseAdmin.from("lifecycle_emails").insert({
     organization_id: orgId,
     user_id: userId || null,
@@ -54,6 +60,7 @@ export async function GET(request: Request) {
       trialExpiring5: 0, trialExpiring1: 0, trialExpired: 0,
       winBack7: 0, winBack30: 0, milestones: 0,
       trialDay25Sent: 0, trialDay28Sent: 0,
+      skippedDraft: 0,
     }
 
     // Traer todas las orgs activas con sus admins en bulk
@@ -77,23 +84,32 @@ export async function GET(request: Request) {
 
     const adminMap = new Map((allAdmins || []).map(a => [a.organization_id, a]))
 
-    // Helper para enviar un lifecycle email
+    // Helper para enviar un lifecycle email — pasa por el kill switch del resolver.
     async function trySend(org: { id: string; nombre: string; slug: string }, emailType: LifecycleEmailType, extra?: { diasRestantes?: number; milestone?: { tipo: string; valor: number } }) {
-      const alreadySent = await wasAlreadySent(org.id, emailType === "MILESTONE" ? `MILESTONE_ORDENES_${extra?.milestone?.valor}` : emailType)
+      const loggedType = emailType === "MILESTONE" ? `MILESTONE_ORDENES_${extra?.milestone?.valor}` : emailType
+      const alreadySent = await wasAlreadySent(org.id, loggedType)
       if (alreadySent) return false
 
       const admin = adminMap.get(org.id)
       if (!admin?.email) return false
 
-      const { subject, html } = getLifecycleEmail(emailType, {
+      const data = {
         nombre: admin.nombre,
         organizacion: org.nombre,
         slug: org.slug,
         ...extra,
-      })
+      }
 
-      const sent = await sendEmail(admin.email, subject, html)
-      await logEmail(org.id, emailType === "MILESTONE" ? `MILESTONE_ORDENES_${extra?.milestone?.valor}` : emailType, sent ? "SENT" : "FAILED", admin.id)
+      // Kill switch: DB-PUBLISHED con cuerpo → DB; PUBLISHED sin cuerpo → fallback hardcoded; DRAFT/missing → null
+      const resolved = await resolveTemplate(emailType, data, () => getLifecycleEmail(emailType, data))
+      if (!resolved) {
+        await logEmail(org.id, loggedType, "SKIPPED_DRAFT", admin.id)
+        results.skippedDraft++
+        return false
+      }
+
+      const sent = await sendEmail(admin.email, resolved.subject, resolved.html)
+      await logEmail(org.id, loggedType, sent ? "SENT" : "FAILED", admin.id)
       return sent
     }
 
@@ -157,12 +173,26 @@ export async function GET(request: Request) {
       if (!admin?.email) return false
 
       const billingUrl = `https://www.${ROOT_DOMAIN}/configuracion/billing`
-      const { subject, html } =
+      const data = {
+        nombre: admin.nombre,
+        organizacion: org.nombre,
+        slug: org.slug,
+        billingUrl,
+      }
+
+      // Kill switch via resolver. Fallback = builders hardcoded existentes.
+      const resolved = await resolveTemplate(emailType, data, () =>
         emailType === "TRIAL_DAY_25_REMINDER"
           ? buildTrialDay25Email(admin.nombre, org.nombre, billingUrl)
           : buildTrialDay28Email(admin.nombre, org.nombre, billingUrl)
+      )
+      if (!resolved) {
+        await logEmail(org.id, emailType, "SKIPPED_DRAFT", admin.id)
+        results.skippedDraft++
+        return false
+      }
 
-      const sent = await sendEmail(admin.email, subject, html)
+      const sent = await sendEmail(admin.email, resolved.subject, resolved.html)
       await logEmail(org.id, emailType, sent ? "SENT" : "FAILED", admin.id)
       return sent
     }

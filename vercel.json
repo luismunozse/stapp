@@ -41,6 +41,10 @@
     {
       "path": "/api/cron/subscription-sweep",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/re-engagement",
+      "schedule": "0 12 * * 1"
     }
   ]
 }
