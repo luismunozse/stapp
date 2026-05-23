@@ -64,17 +64,17 @@ export function BusinessLogo({
   // Si hay logo de organización, mostrarlo
   if (logoData?.hasLogo && logoData.logoUrl) {
     return (
-      <div className={cn("flex items-center gap-2", className)}>
+      <div className={cn("flex items-center gap-2 min-w-0", className)}>
         <Image
           src={logoData.logoUrl}
           alt={logoData.nombreEmpresa}
           width={width}
           height={height}
-          className={cn("object-contain", imageClassName)}
+          className={cn("object-contain shrink-0", imageClassName)}
           unoptimized
         />
         {showText && (
-          <span className={cn("font-bold", text, textClassName)}>
+          <span className={cn("font-bold min-w-0 truncate", text, textClassName)}>
             {logoData.nombreEmpresa}
           </span>
         )}

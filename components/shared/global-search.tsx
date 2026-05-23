@@ -95,22 +95,37 @@ export function GlobalSearch() {
     }
   }
 
-  // Trigger button for desktop
+  // Trigger button: full search pill on desktop, icon-only on mobile
   if (!open) {
     return (
-      <button
-        onClick={() => {
-          setOpen(true)
-          setTimeout(() => inputRef.current?.focus(), 50)
-        }}
-        className="hidden lg:flex items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground bg-muted/50 border rounded-md hover:bg-muted transition-colors"
-      >
-        <Search className="h-4 w-4" />
-        <span className="max-w-[160px] truncate">{PLACEHOLDER_EXAMPLES[placeholderIdx].replace("...", "")}</span>
-        <kbd className="ml-2 px-1.5 py-0.5 text-[10px] bg-background border rounded font-mono">
-          Ctrl+K
-        </kbd>
-      </button>
+      <>
+        {/* Mobile: icon-only trigger */}
+        <button
+          onClick={() => {
+            setOpen(true)
+            setTimeout(() => inputRef.current?.focus(), 50)
+          }}
+          className="lg:hidden inline-flex items-center justify-center h-10 w-10 rounded-md text-muted-foreground hover:bg-accent active:bg-accent/80 transition-colors"
+          aria-label="Buscar"
+          data-touch-icon=""
+        >
+          <Search className="h-5 w-5" />
+        </button>
+        {/* Desktop: full search pill with placeholder rotation + shortcut */}
+        <button
+          onClick={() => {
+            setOpen(true)
+            setTimeout(() => inputRef.current?.focus(), 50)
+          }}
+          className="hidden lg:flex items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground bg-muted/50 border rounded-md hover:bg-muted transition-colors"
+        >
+          <Search className="h-4 w-4" />
+          <span className="max-w-[160px] truncate">{PLACEHOLDER_EXAMPLES[placeholderIdx].replace("...", "")}</span>
+          <kbd className="ml-2 px-1.5 py-0.5 text-[10px] bg-background border rounded font-mono">
+            Ctrl+K
+          </kbd>
+        </button>
+      </>
     )
   }
 

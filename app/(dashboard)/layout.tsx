@@ -115,6 +115,8 @@ export default async function DashboardLayout({
             className={
               showMaintenanceBanner || showTrialBanner
                 ? "pt-[calc(3.5rem+2.5rem+env(safe-area-inset-top,0px))] lg:pt-10"
+                : !hasSampleData
+                ? "pt-[calc(3.5rem+2.5rem+env(safe-area-inset-top,0px))] lg:pt-0"
                 : "pt-[calc(3.5rem+env(safe-area-inset-top,0px))] lg:pt-0"
             }
           >

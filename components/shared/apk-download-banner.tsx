@@ -77,26 +77,26 @@ export function ApkDownloadBanner({ variant }: ApkDownloadBannerProps) {
 
   // variant === "top"
   return (
-    <div className="lg:hidden fixed top-14 left-0 right-0 z-40 flex justify-center px-4 safe-area-inset-top">
-      <div className="px-4 py-2 text-sm font-medium rounded-full shadow-lg flex items-center gap-2 bg-primary text-primary-foreground">
-        <Smartphone className="h-4 w-4 shrink-0" />
-        <span className="text-xs">Descargá la app para Android</span>
-        <Link href={APK_DOWNLOAD_URL}>
+    <div className="lg:hidden fixed top-[calc(3.5rem+env(safe-area-inset-top,0px))] left-0 right-0 z-40 flex justify-center px-2">
+      <div className="px-3 py-1.5 text-xs font-medium rounded-full shadow-lg flex items-center gap-1.5 bg-primary text-primary-foreground max-w-full">
+        <Smartphone className="h-3.5 w-3.5 shrink-0" />
+        <span className="truncate min-w-0">Descargá la app Android</span>
+        <Link href={APK_DOWNLOAD_URL} className="shrink-0">
           <Button
             size="sm"
             variant="outline"
-            className="h-7 text-xs bg-primary-foreground/20 border-primary-foreground/30 text-primary-foreground hover:bg-primary-foreground/30"
+            className="h-6 text-[11px] px-2 bg-primary-foreground/20 border-primary-foreground/30 text-primary-foreground hover:bg-primary-foreground/30"
           >
-            <Download className="h-3 w-3 mr-1" />
-            Descargar
+            <Download className="h-3 w-3 mr-0.5" />
+            APK
           </Button>
         </Link>
         <button
           onClick={handleDismiss}
-          className="ml-1 p-1 rounded-full hover:bg-primary-foreground/20 transition-colors"
+          className="p-1 rounded-full hover:bg-primary-foreground/20 transition-colors shrink-0"
           aria-label="Cerrar aviso"
         >
-          <X className="h-4 w-4" />
+          <X className="h-3.5 w-3.5" />
         </button>
       </div>
     </div>

@@ -525,17 +525,16 @@ export function Navbar() {
 
       {/* Mobile Header */}
       <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border safe-area-inset-top">
-        <div className="flex items-center justify-between h-14 px-4">
-          <div className="flex items-center gap-2">
-            <Link href="/dashboard" className="hover:opacity-80 transition-opacity">
-              <BusinessLogo size="sm" showText={true} textClassName="text-lg" />
-            </Link>
-          </div>
-          <div className="flex items-center gap-1">
+        <div className="flex items-center justify-between h-14 pl-4 pr-2 gap-2">
+          <Link href="/dashboard" className="hover:opacity-80 transition-opacity min-w-0 flex-shrink overflow-hidden">
+            <BusinessLogo size="sm" showText={true} textClassName="text-base truncate" />
+          </Link>
+          <div className="flex items-center gap-2 flex-shrink-0">
             <GlobalSearch />
             <NotificationBell />
             <button
-              className="touch-target active:bg-accent/60 rounded-full focus:outline-none focus:ring-2 focus:ring-primary"
+              data-touch-icon=""
+              className="inline-flex items-center justify-center h-11 w-11 rounded-full active:bg-accent/60 focus:outline-none focus:ring-2 focus:ring-primary"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               aria-label={mobileMenuOpen ? "Cerrar menú" : "Abrir menú"}
               aria-expanded={mobileMenuOpen}
