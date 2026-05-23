@@ -12,16 +12,16 @@ export default function InventarioPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="flex flex-col gap-3">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold">Inventario</h1>
           <p className="text-sm text-muted-foreground">
             Gestiona el stock de repuestos, accesorios y productos
           </p>
         </div>
-        <div className="flex gap-2 w-full sm:w-auto">
+        <div className="flex flex-wrap gap-2">
           <Link href="/inventario/importar-precios" className="flex-1 sm:flex-none">
-            <Button variant="outline" className="gap-1.5 w-full">
+            <Button variant="outline" className="gap-1.5 w-full sm:w-auto">
               <FileSpreadsheet className="h-4 w-4" />
               Importar precios
             </Button>

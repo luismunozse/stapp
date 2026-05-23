@@ -65,6 +65,7 @@ import { OrdenCostosCard } from "@/components/ordenes/orden-costos-card"
 import { OrdenComisionCard } from "@/components/ordenes/orden-comision-card"
 import { OrdenRepuestosTab } from "@/components/ordenes/orden-repuestos-tab"
 import { CobrarOrdenDialog } from "@/components/ordenes/cobrar-orden-dialog"
+import { NotaCreditoDialog } from "@/components/notas-credito/nota-credito-dialog"
 import { PatternDisplay } from "@/components/ui/pattern-display"
 import { useModal } from "@/contexts/modal-context"
 import { toast } from "sonner"
@@ -105,6 +106,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const [showEntregaDialog, setShowEntregaDialog] = useState(false)
   const [sinCobroEntrega, setSinCobroEntrega] = useState(false)
   const [showCobrarDialog, setShowCobrarDialog] = useState(false)
+  const [showNCDialog, setShowNCDialog] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
   const [editingProblema, setEditingProblema] = useState(false)
   const [problemaText, setProblemaText] = useState("")
@@ -328,9 +330,14 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
 
     if (nuevoEstado === "CANCELADO" || nuevoEstado === "SIN_REPARACION") {
       const label = nuevoEstado === "CANCELADO" ? "Cancelar" : "Marcar Sin Reparación"
+      const totalCobrado = orden?.totalCobrado || 0
+      const tieneCobros = totalCobrado > 0
+      const desc = tieneCobros
+        ? `⚠️ Esta orden tiene ${formatPrice(totalCobrado)} cobrados. Si cancelás sin anular esos cobros, quedan como ingreso real en finanzas (no se descuentan automáticamente). Revisá la pestaña Cobros y anulá los que correspondan o registrá un reembolso manual en Caja antes de proceder.`
+        : `¿Estás seguro de cambiar el estado a "${ESTADO_LABELS[nuevoEstado]}"? Esta acción puede ser difícil de revertir.`
       const confirmed = await confirm({
         title: label,
-        description: `¿Estás seguro de cambiar el estado a "${ESTADO_LABELS[nuevoEstado]}"? Esta acción puede ser difícil de revertir.`,
+        description: desc,
         confirmText: label,
         variant: "danger",
       })
@@ -711,6 +718,12 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                   <DropdownMenuItem onClick={handleReingreso} disabled={updating}>
                     <Shield className="h-4 w-4 mr-2" />
                     Re-ingreso por Garantia
+                  </DropdownMenuItem>
+                )}
+                {(orden.totalCobrado || 0) > 0 && (
+                  <DropdownMenuItem onClick={() => setShowNCDialog(true)}>
+                    <Receipt className="h-4 w-4 mr-2" />
+                    Emitir nota de crédito
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />
@@ -1250,6 +1263,16 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             clienteId: orden.cliente?.id,
             clienteNombre: orden.cliente?.nombre,
           }}
+          onSuccess={() => fetchOrden()}
+        />
+      )}
+
+      {orden && showNCDialog && (
+        <NotaCreditoDialog
+          open={showNCDialog}
+          onOpenChange={setShowNCDialog}
+          ordenId={orden.id}
+          montoMaximo={orden.totalCobrado || 0}
           onSuccess={() => fetchOrden()}
         />
       )}

@@ -10,11 +10,13 @@ import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import {
   Save,
   RotateCcw,
+  Undo2,
   Loader2,
   Search,
   X,
   Check,
   ChevronLeft,
+  ChevronDown,
   Sparkles,
   ClipboardList,
   ShoppingCart,
@@ -23,6 +25,8 @@ import {
   Wrench,
   Megaphone,
   MessageCircle,
+  AlertTriangle,
+  Copy,
 } from "lucide-react"
 import {
   PLANTILLAS_CATALOG,
@@ -68,12 +72,19 @@ function snippet(text: string, maxLen = 80): string {
   return single.slice(0, maxLen).trimEnd() + "…"
 }
 
+function extractVariables(text: string): string[] {
+  const set = new Set<string>()
+  const regex = /\{(\w+)\}/g
+  let m: RegExpExecArray | null
+  while ((m = regex.exec(text)) !== null) set.add(m[1])
+  return Array.from(set)
+}
+
 // =====================================================================
 // WhatsApp-style preview bubble
 // =====================================================================
 
 function WhatsAppPreview({ text }: { text: string }) {
-  // Convert WhatsApp markdown (*bold*) to JSX
   const renderMarkdown = (line: string) => {
     const parts: React.ReactNode[] = []
     const regex = /\*([^*]+)\*/g
@@ -100,7 +111,7 @@ function WhatsAppPreview({ text }: { text: string }) {
         <div className="max-w-[85%] rounded-lg bg-[#dcf8c6] dark:bg-[#005c4b] px-2.5 py-1.5 text-sm relative shadow-sm">
           <div className="whitespace-pre-wrap break-words text-gray-900 dark:text-gray-100 leading-snug">
             {lines.map((line, i) => (
-              <div key={i}>{renderMarkdown(line) || " "}</div>
+              <div key={i}>{renderMarkdown(line) || " "}</div>
             ))}
           </div>
           <div className="text-[9px] text-gray-500 dark:text-gray-300 text-right mt-0.5 flex items-center justify-end gap-0.5">
@@ -115,17 +126,19 @@ function WhatsAppPreview({ text }: { text: string }) {
 }
 
 // =====================================================================
-// Variable chip
+// Variable chip with flash-on-insert feedback
 // =====================================================================
 
 function VariableChip({
   variable,
   onClick,
   disabled,
+  recentlyInserted,
 }: {
   variable: PlantillaVariable
   onClick: () => void
   disabled?: boolean
+  recentlyInserted?: boolean
 }) {
   return (
     <Tooltip>
@@ -134,7 +147,12 @@ function VariableChip({
           type="button"
           onClick={onClick}
           disabled={disabled}
-          className="px-2 py-1 rounded-md bg-muted hover:bg-primary/10 hover:text-primary border border-transparent hover:border-primary/30 text-[11px] font-mono transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1"
+          className={cn(
+            "px-2 py-1 rounded-md text-[11px] font-mono transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1 border",
+            recentlyInserted
+              ? "bg-primary text-primary-foreground border-primary scale-105"
+              : "bg-muted hover:bg-primary/10 hover:text-primary border-transparent hover:border-primary/30",
+          )}
         >
           <Sparkles className="h-2.5 w-2.5" />
           {`{${variable.key}}`}
@@ -157,19 +175,35 @@ function VariableChip({
 interface PlantillaEditorProps {
   plantilla: PlantillaDefinition
   value: string
+  savedValue: string
   onChange: (next: string) => void
   onBack?: () => void
   disabled: boolean
 }
 
-function PlantillaEditor({ plantilla, value, onChange, onBack, disabled }: PlantillaEditorProps) {
+function PlantillaEditor({
+  plantilla,
+  value,
+  savedValue,
+  onChange,
+  onBack,
+  disabled,
+}: PlantillaEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const [lastInserted, setLastInserted] = useState<string | null>(null)
+
   const effectiveText = value || plantilla.defaultText
   const previewCtx = buildPreviewContext(plantilla.variables)
   const previewText = renderTemplate(effectiveText, previewCtx)
   const isCustomized = value.trim().length > 0 && value !== plantilla.defaultText
+  const isDirty = value !== savedValue
   const Icon = CATEGORY_ICONS[plantilla.category]
   const colorClass = CATEGORY_COLORS[plantilla.category]
+
+  // Detect unknown variables
+  const allowedKeys = new Set(plantilla.variables.map((v) => v.key))
+  const usedVars = extractVariables(effectiveText)
+  const unknownVars = usedVars.filter((v) => !allowedKeys.has(v))
 
   const handleInsertVar = (varKey: string) => {
     const el = textareaRef.current
@@ -182,11 +216,19 @@ function PlantillaEditor({ plantilla, value, onChange, onBack, disabled }: Plant
     const end = el.selectionEnd ?? current.length
     const next = current.slice(0, start) + `{${varKey}}` + current.slice(end)
     onChange(next)
+    setLastInserted(varKey)
+    setTimeout(() => setLastInserted((cur) => (cur === varKey ? null : cur)), 600)
     requestAnimationFrame(() => {
       el.focus()
       const newPos = start + varKey.length + 2
       el.setSelectionRange(newPos, newPos)
     })
+  }
+
+  const handleCopyDefault = async () => {
+    try {
+      await navigator.clipboard.writeText(plantilla.defaultText)
+    } catch {}
   }
 
   return (
@@ -204,10 +246,15 @@ function PlantillaEditor({ plantilla, value, onChange, onBack, disabled }: Plant
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h2 className="font-semibold text-base sm:text-lg">{plantilla.label}</h2>
-            {isCustomized && (
+            {isCustomized && !isDirty && (
               <Badge variant="secondary" className="text-[10px] font-normal h-5">
                 <Sparkles className="h-2.5 w-2.5 mr-1" />
                 Personalizada
+              </Badge>
+            )}
+            {isDirty && (
+              <Badge className="text-[10px] font-normal h-5 bg-amber-500 hover:bg-amber-500 text-white">
+                Sin guardar
               </Badge>
             )}
           </div>
@@ -225,7 +272,7 @@ function PlantillaEditor({ plantilla, value, onChange, onBack, disabled }: Plant
             <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Variables disponibles
             </label>
-            <span className="text-[10px] text-muted-foreground">Click para insertar</span>
+            <span className="text-[10px] text-muted-foreground">Click para insertar en el cursor</span>
           </div>
           <div className="flex flex-wrap gap-1.5">
             {plantilla.variables.map((v) => (
@@ -234,10 +281,32 @@ function PlantillaEditor({ plantilla, value, onChange, onBack, disabled }: Plant
                 variable={v}
                 onClick={() => handleInsertVar(v.key)}
                 disabled={disabled}
+                recentlyInserted={lastInserted === v.key}
               />
             ))}
           </div>
         </div>
+
+        {/* Unknown variables warning */}
+        {unknownVars.length > 0 && (
+          <div className="border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 rounded-md p-3 flex gap-2 text-xs">
+            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium text-amber-800 dark:text-amber-300">
+                Variables desconocidas
+              </p>
+              <p className="text-amber-700 dark:text-amber-400 mt-0.5">
+                Estas variables no se reemplazarán y aparecerán vacías:{" "}
+                {unknownVars.map((v, i) => (
+                  <span key={v}>
+                    <code className="font-mono bg-amber-100 dark:bg-amber-900/40 px-1 rounded">{`{${v}}`}</code>
+                    {i < unknownVars.length - 1 ? ", " : ""}
+                  </span>
+                ))}
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Editor + Preview side-by-side on desktop */}
         <div className="grid lg:grid-cols-2 gap-4">
@@ -246,7 +315,7 @@ function PlantillaEditor({ plantilla, value, onChange, onBack, disabled }: Plant
               <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Mensaje
               </label>
-              <span className="text-[10px] text-muted-foreground">
+              <span className="text-[10px] text-muted-foreground tabular-nums">
                 {(value || plantilla.defaultText).length} / 4000
               </span>
             </div>
@@ -259,18 +328,45 @@ function PlantillaEditor({ plantilla, value, onChange, onBack, disabled }: Plant
               placeholder={plantilla.defaultText}
               className="font-mono text-xs resize-none"
             />
-            <div className="flex justify-between items-center gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                disabled={disabled || !value}
-                onClick={() => onChange("")}
-                className="h-7 text-xs"
-              >
-                <RotateCcw className="mr-1.5 h-3 w-3" />
-                Restaurar predeterminado
-              </Button>
+            <div className="flex justify-between items-center gap-2 flex-wrap">
+              <div className="flex gap-1">
+                {isDirty && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={disabled}
+                    onClick={() => onChange(savedValue)}
+                    className="h-7 text-xs"
+                  >
+                    <Undo2 className="mr-1.5 h-3 w-3" />
+                    Descartar cambios
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={disabled || !value}
+                  onClick={() => onChange("")}
+                  className="h-7 text-xs"
+                >
+                  <RotateCcw className="mr-1.5 h-3 w-3" />
+                  Restaurar predeterminado
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={disabled}
+                  onClick={handleCopyDefault}
+                  className="h-7 text-xs"
+                  title="Copiar texto predeterminado al portapapeles"
+                >
+                  <Copy className="mr-1.5 h-3 w-3" />
+                  Copiar default
+                </Button>
+              </div>
               {!value && (
                 <span className="text-[10px] text-muted-foreground italic">
                   Usando predeterminado
@@ -295,41 +391,46 @@ function PlantillaEditor({ plantilla, value, onChange, onBack, disabled }: Plant
 }
 
 // =====================================================================
-// Sidebar item
+// Sidebar list item
 // =====================================================================
 
 interface SidebarItemProps {
   plantilla: PlantillaDefinition
   isActive: boolean
   isCustomized: boolean
+  isDirty: boolean
   preview: string
   onClick: () => void
 }
 
-function SidebarItem({ plantilla, isActive, isCustomized, preview, onClick }: SidebarItemProps) {
-  const Icon = CATEGORY_ICONS[plantilla.category]
-  const colorClass = CATEGORY_COLORS[plantilla.category]
+function SidebarItem({
+  plantilla,
+  isActive,
+  isCustomized,
+  isDirty,
+  preview,
+  onClick,
+}: SidebarItemProps) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        "w-full text-left p-3 border-b hover:bg-muted/50 transition-colors flex gap-3 items-start",
-        isActive && "bg-primary/10 hover:bg-primary/15 border-l-2 border-l-primary",
+        "w-full text-left p-2.5 hover:bg-muted/50 transition-colors flex gap-2 items-start border-l-2",
+        isActive ? "bg-primary/10 hover:bg-primary/15 border-l-primary" : "border-l-transparent",
       )}
     >
-      <div className={cn("rounded-md p-1.5 border shrink-0", colorClass)}>
-        <Icon className="h-3.5 w-3.5" />
+      <div className="flex flex-col items-center gap-1 pt-1 shrink-0">
+        {isDirty ? (
+          <span title="Cambios sin guardar" className="h-2 w-2 rounded-full bg-amber-500" />
+        ) : isCustomized ? (
+          <Sparkles className="h-3 w-3 text-primary" />
+        ) : (
+          <span className="h-2 w-2 rounded-full bg-transparent" />
+        )}
       </div>
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
-          <span className="text-sm font-medium truncate">{plantilla.label}</span>
-          {isCustomized && (
-            <span title="Personalizada" className="shrink-0">
-              <Sparkles className="h-3 w-3 text-primary" />
-            </span>
-          )}
-        </div>
+        <div className="text-sm font-medium truncate">{plantilla.label}</div>
         <p className="text-[11px] text-muted-foreground truncate mt-0.5">{preview}</p>
       </div>
     </button>
@@ -350,8 +451,21 @@ export function PlantillasWhatsappEditor() {
   const [categoryFilter, setCategoryFilter] = useState<PlantillaCategory | "all">("all")
   const [search, setSearch] = useState("")
   const [showEditorMobile, setShowEditorMobile] = useState(false)
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<PlantillaCategory>>(new Set())
 
-  const hasChanges = JSON.stringify(plantillas) !== JSON.stringify(originalPlantillas)
+  const hasChanges = useMemo(
+    () => JSON.stringify(plantillas) !== JSON.stringify(originalPlantillas),
+    [plantillas, originalPlantillas],
+  )
+
+  const dirtyCount = useMemo(() => {
+    let n = 0
+    const keys = new Set([...Object.keys(plantillas), ...Object.keys(originalPlantillas)])
+    for (const k of keys) {
+      if ((plantillas[k] ?? "") !== (originalPlantillas[k] ?? "")) n++
+    }
+    return n
+  }, [plantillas, originalPlantillas])
 
   const filtered = useMemo(() => {
     return PLANTILLAS_CATALOG.filter((p) => {
@@ -370,6 +484,16 @@ export function PlantillasWhatsappEditor() {
     })
   }, [categoryFilter, search])
 
+  // Group filtered list by category
+  const filteredByCategory = useMemo(() => {
+    const map: Record<string, PlantillaDefinition[]> = {}
+    for (const p of filtered) {
+      if (!map[p.category]) map[p.category] = []
+      map[p.category].push(p)
+    }
+    return map
+  }, [filtered])
+
   const stats = useMemo(() => {
     const customized = PLANTILLAS_CATALOG.filter(
       (p) => (plantillas[p.key] ?? "").trim().length > 0,
@@ -382,6 +506,7 @@ export function PlantillasWhatsappEditor() {
     [activeKey],
   )
 
+  // Initial fetch
   useEffect(() => {
     let cancelled = false
     fetch("/api/notificaciones/config")
@@ -400,6 +525,25 @@ export function PlantillasWhatsappEditor() {
       cancelled = true
     }
   }, [])
+
+  // Warn on navigation if unsaved changes
+  useEffect(() => {
+    if (!hasChanges) return
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ""
+    }
+    window.addEventListener("beforeunload", handler)
+    return () => window.removeEventListener("beforeunload", handler)
+  }, [hasChanges])
+
+  // Auto-select first filtered if active not in filtered list
+  useEffect(() => {
+    if (filtered.length === 0) return
+    if (!filtered.some((p) => p.key === activeKey)) {
+      setActiveKey(filtered[0].key)
+    }
+  }, [filtered, activeKey])
 
   const handleChange = (key: string, next: string) => {
     setPlantillas((prev) => ({ ...prev, [key]: next }))
@@ -432,8 +576,35 @@ export function PlantillasWhatsappEditor() {
     }
   }
 
+  // Ctrl+S / Cmd+S to save
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault()
+        if (hasChanges && !saving) handleSave()
+      }
+    }
+    window.addEventListener("keydown", handler)
+    return () => window.removeEventListener("keydown", handler)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasChanges, saving, plantillas])
+
   const handleResetAll = () => {
+    if (!confirm("¿Restaurar TODAS las plantillas a sus valores predeterminados? Esta acción puede deshacerse con 'Descartar cambios'.")) return
     setPlantillas({})
+  }
+
+  const handleDiscardAll = () => {
+    setPlantillas(originalPlantillas)
+  }
+
+  const toggleCategory = (cat: PlantillaCategory) => {
+    setCollapsedCategories((prev) => {
+      const next = new Set(prev)
+      if (next.has(cat)) next.delete(cat)
+      else next.add(cat)
+      return next
+    })
   }
 
   if (loading) {
@@ -452,7 +623,7 @@ export function PlantillasWhatsappEditor() {
         {message && (
           <div
             className={cn(
-              "px-4 py-3 rounded-lg text-sm flex items-center gap-2",
+              "px-4 py-3 rounded-lg text-sm flex items-center gap-2 animate-in slide-in-from-top-2",
               message.type === "success"
                 ? "bg-green-50 dark:bg-green-950/50 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400"
                 : "bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400",
@@ -478,7 +649,11 @@ export function PlantillasWhatsappEditor() {
                 {stats.customized} de {stats.total} plantillas personalizadas
               </div>
               <p className="text-xs text-muted-foreground">
-                Las plantillas sin personalizar usan el texto predeterminado.
+                Sin personalizar usan el texto predeterminado. Atajo:{" "}
+                <kbd className="px-1 py-0.5 rounded bg-muted border text-[10px] font-mono">Ctrl</kbd>{" "}
+                +{" "}
+                <kbd className="px-1 py-0.5 rounded bg-muted border text-[10px] font-mono">S</kbd>{" "}
+                para guardar.
               </p>
             </div>
           </div>
@@ -565,7 +740,7 @@ export function PlantillasWhatsappEditor() {
               </div>
             </div>
 
-            {/* Plantillas list */}
+            {/* Plantillas list grouped by category */}
             <div className="flex-1 overflow-y-auto">
               {filtered.length === 0 ? (
                 <div className="p-6 text-center text-muted-foreground text-sm">
@@ -573,22 +748,63 @@ export function PlantillasWhatsappEditor() {
                   Sin resultados
                 </div>
               ) : (
-                filtered.map((p) => {
-                  const value = plantillas[p.key] ?? ""
-                  const isCustomized = value.trim().length > 0
-                  const preview = snippet(value || p.defaultText)
+                (Object.keys(CATEGORIES) as PlantillaCategory[]).map((cat) => {
+                  const items = filteredByCategory[cat]
+                  if (!items || items.length === 0) return null
+                  const Icon = CATEGORY_ICONS[cat]
+                  const colorClass = CATEGORY_COLORS[cat]
+                  const isCollapsed = collapsedCategories.has(cat)
+                  const dirtyInCat = items.filter(
+                    (p) => (plantillas[p.key] ?? "") !== (originalPlantillas[p.key] ?? ""),
+                  ).length
                   return (
-                    <SidebarItem
-                      key={p.key}
-                      plantilla={p}
-                      isActive={activeKey === p.key}
-                      isCustomized={isCustomized}
-                      preview={preview}
-                      onClick={() => {
-                        setActiveKey(p.key)
-                        setShowEditorMobile(true)
-                      }}
-                    />
+                    <div key={cat}>
+                      <button
+                        type="button"
+                        onClick={() => toggleCategory(cat)}
+                        className="w-full px-3 py-2 bg-muted/40 hover:bg-muted/70 border-b text-left flex items-center gap-2 sticky top-0 z-10 backdrop-blur"
+                      >
+                        <div className={cn("rounded p-1 border", colorClass)}>
+                          <Icon className="h-3 w-3" />
+                        </div>
+                        <span className="text-[11px] font-semibold uppercase tracking-wide flex-1">
+                          {CATEGORIES[cat].label}
+                        </span>
+                        {dirtyInCat > 0 && (
+                          <span className="text-[10px] bg-amber-500 text-white px-1.5 py-0.5 rounded-full font-medium">
+                            {dirtyInCat}
+                          </span>
+                        )}
+                        <span className="text-[10px] text-muted-foreground">{items.length}</span>
+                        <ChevronDown
+                          className={cn(
+                            "h-3 w-3 transition-transform",
+                            isCollapsed && "-rotate-90",
+                          )}
+                        />
+                      </button>
+                      {!isCollapsed && items.map((p) => {
+                        const value = plantillas[p.key] ?? ""
+                        const savedVal = originalPlantillas[p.key] ?? ""
+                        const isCustomized = value.trim().length > 0
+                        const isDirty = value !== savedVal
+                        const preview = snippet(value || p.defaultText)
+                        return (
+                          <SidebarItem
+                            key={p.key}
+                            plantilla={p}
+                            isActive={activeKey === p.key}
+                            isCustomized={isCustomized}
+                            isDirty={isDirty}
+                            preview={preview}
+                            onClick={() => {
+                              setActiveKey(p.key)
+                              setShowEditorMobile(true)
+                            }}
+                          />
+                        )
+                      })}
+                    </div>
                   )
                 })
               )}
@@ -606,6 +822,7 @@ export function PlantillasWhatsappEditor() {
               <PlantillaEditor
                 plantilla={activePlantilla}
                 value={plantillas[activePlantilla.key] ?? ""}
+                savedValue={originalPlantillas[activePlantilla.key] ?? ""}
                 onChange={(next) => handleChange(activePlantilla.key, next)}
                 onBack={() => setShowEditorMobile(false)}
                 disabled={saving}
@@ -634,20 +851,34 @@ export function PlantillasWhatsappEditor() {
             <span className="text-xs sm:text-sm">
               {hasChanges ? (
                 <span className="text-amber-700 dark:text-amber-400 font-medium">
-                  Tenés cambios sin guardar
+                  {dirtyCount} {dirtyCount === 1 ? "cambio" : "cambios"} sin guardar
                 </span>
               ) : (
                 <span className="text-muted-foreground">Sin cambios pendientes</span>
               )}
             </span>
-            <Button onClick={handleSave} disabled={saving || !hasChanges} size="sm">
-              {saving ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Save className="mr-2 h-4 w-4" />
+            <div className="flex gap-2">
+              {hasChanges && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDiscardAll}
+                  disabled={saving}
+                >
+                  <Undo2 className="mr-2 h-4 w-4" />
+                  Descartar
+                </Button>
               )}
-              {saving ? "Guardando..." : "Guardar cambios"}
-            </Button>
+              <Button onClick={handleSave} disabled={saving || !hasChanges} size="sm">
+                {saving ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="mr-2 h-4 w-4" />
+                )}
+                {saving ? "Guardando..." : "Guardar cambios"}
+              </Button>
+            </div>
           </div>
         </div>
       </div>

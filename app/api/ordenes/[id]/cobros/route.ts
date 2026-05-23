@@ -11,6 +11,8 @@ const pagoLineSchema = z.object({
   cuotas: z.number().int().min(1).nullable().optional(),
   recargo: z.number().min(0).nullable().optional(),
   montoOriginal: z.number().positive().nullable().optional(),
+  costoFinancieroMonto: z.number().min(0).nullable().optional(),
+  costoFinancieroPorcentaje: z.number().min(0).max(100).nullable().optional(),
 })
 
 const cobrosSchema = z.object({
@@ -49,6 +51,8 @@ export async function GET(
         cuotas: c.cuotas,
         recargoPorcentaje: c.recargo_porcentaje ? parseFloat(c.recargo_porcentaje) : null,
         montoOriginal: c.monto_original ? parseFloat(c.monto_original) : null,
+        costoFinancieroMonto: c.costo_financiero_monto ? parseFloat(c.costo_financiero_monto) : null,
+        costoFinancieroPorcentaje: c.costo_financiero_porcentaje ? parseFloat(c.costo_financiero_porcentaje) : null,
         fecha: c.created_at,
         anulado: c.anulado || false,
         anuladoAt: c.anulado_at,
@@ -140,6 +144,8 @@ export async function POST(
         cuotas: pago.cuotas || null,
         recargo_porcentaje: pago.recargo || null,
         monto_original: pago.montoOriginal || null,
+        costo_financiero_monto: pago.costoFinancieroMonto ?? null,
+        costo_financiero_porcentaje: pago.costoFinancieroPorcentaje ?? null,
         usuario_id: userId!,
       })
     }

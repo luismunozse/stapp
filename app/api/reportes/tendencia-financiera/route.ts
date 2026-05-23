@@ -40,6 +40,7 @@ export async function GET(request: Request) {
       costos: number
       costoProductos: number
       costoRepuestos: number
+      costoMerma: number
       gastos: number
       costosFinancieros: number
       comisiones: number
@@ -61,6 +62,7 @@ export async function GET(request: Request) {
         costos: 0,
         costoProductos: 0,
         costoRepuestos: 0,
+        costoMerma: 0,
         gastos: 0,
         costosFinancieros: 0,
         comisiones: 0,
@@ -287,12 +289,65 @@ export async function GET(request: Request) {
       bucket.costosFinancieros += parseFloat(p.costo_financiero_monto || "0")
     }
 
+    // CF de cobros directos a orden (sin factura)
+    const { data: cobrosCF } = await supabaseAdmin
+      .from("cobros_orden")
+      .select("costo_financiero_monto, created_at")
+      .eq("organization_id", organizationId!)
+      .neq("anulado", true)
+      .not("costo_financiero_monto", "is", null)
+      .gt("costo_financiero_monto", 0)
+      .gte("created_at", desdeISO)
+      .lte("created_at", hastaISO)
+
+    for (const c of (cobrosCF || []) as any[]) {
+      const key = keyFor(c.created_at)
+      const bucket = buckets[key]
+      if (!bucket) continue
+      bucket.costosFinancieros += parseFloat(c.costo_financiero_monto || "0")
+    }
+
+    // 4.5 Notas de crédito (restan ingresos del mes)
+    const { data: notasCredito } = await supabaseAdmin
+      .from("notas_credito")
+      .select("monto, fecha, venta_id, orden_id")
+      .eq("organization_id", organizationId!)
+      .eq("anulada", false)
+      .gte("fecha", desdeISO)
+      .lte("fecha", hastaISO)
+
+    for (const n of (notasCredito || []) as any[]) {
+      const key = keyFor(n.fecha)
+      const bucket = buckets[key]
+      if (!bucket) continue
+      const monto = parseFloat(n.monto || "0")
+      if (n.venta_id) bucket.ingresosVentas = Math.max(0, bucket.ingresosVentas - monto)
+      else if (n.orden_id) bucket.ingresosServicios = Math.max(0, bucket.ingresosServicios - monto)
+    }
+
+    // 5. Mermas / ajustes de inventario por mes
+    const { data: ajustes } = await supabaseAdmin
+      .from("ajustes_inventario")
+      .select("cantidad, costo_unitario_snapshot, fecha, afecta_rentabilidad")
+      .eq("organization_id", organizationId!)
+      .eq("direccion", "SALIDA")
+      .gte("fecha", desdeISO)
+      .lte("fecha", hastaISO)
+
+    for (const a of (ajustes || []) as any[]) {
+      if (a.afecta_rentabilidad === false) continue
+      const key = keyFor(a.fecha)
+      const bucket = buckets[key]
+      if (!bucket) continue
+      bucket.costoMerma += (a.cantidad || 0) * parseFloat(a.costo_unitario_snapshot || "0")
+    }
+
     // Calcular totales derivados por mes
     const porMes = Object.entries(buckets)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([, b]) => {
         b.ingresos = b.ingresosVentas + b.ingresosServicios + b.ingresosOtros
-        b.costos = b.costoProductos + b.costoRepuestos
+        b.costos = b.costoProductos + b.costoRepuestos + b.costoMerma
         b.gananciaBruta = b.ingresos - b.costos
         b.gananciaNeta = b.gananciaBruta - b.gastos - b.costosFinancieros - b.comisiones
         return {
@@ -305,6 +360,7 @@ export async function GET(request: Request) {
           costos: round(b.costos),
           costoProductos: round(b.costoProductos),
           costoRepuestos: round(b.costoRepuestos),
+          costoMerma: round(b.costoMerma),
           gastos: round(b.gastos),
           comisiones: round(b.comisiones),
           costosFinancieros: round(b.costosFinancieros),

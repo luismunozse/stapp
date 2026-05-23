@@ -91,13 +91,12 @@ export function UsageWarningBanner() {
 
   if (!loaded || warnings.length === 0) return null
 
-  // Dismissable solo si pct < 95. Críticas siempre se muestran.
+  // Dismissable siempre. Críticas re-aparecen tras 4h, advertencias tras 24h.
   const visible = warnings.filter(w => {
-    if (w.percentage >= CRITICAL_THRESHOLD) return true
     const dismissTs = dismissed[w.key]
     if (!dismissTs) return true
-    // Re-mostrar tras 24h
-    return Date.now() - dismissTs > 24 * 60 * 60 * 1000
+    const reshowMs = w.percentage >= CRITICAL_THRESHOLD ? 4 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000
+    return Date.now() - dismissTs > reshowMs
   })
 
   if (visible.length === 0) return null
@@ -120,13 +119,13 @@ export function UsageWarningBanner() {
   return (
     <div
       className={cn(
-        "w-full pl-4 pr-3 lg:pr-[34rem] py-2 border-b flex items-center gap-2 sm:gap-3 text-xs sm:text-sm",
+        "w-full pl-4 pr-3 lg:pr-[34rem] py-1.5 border-b flex items-center gap-2 sm:gap-3 text-xs",
         isCritical
-          ? "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800 text-red-900 dark:text-red-200"
-          : "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200"
+          ? "bg-red-50/70 dark:bg-red-950/20 border-red-200/70 dark:border-red-900/40 text-red-900 dark:text-red-200"
+          : "bg-amber-50/70 dark:bg-amber-950/20 border-amber-200/70 dark:border-amber-900/40 text-amber-900 dark:text-amber-200"
       )}
     >
-      <AlertTriangle className="h-4 w-4 shrink-0" />
+      <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
       <div className="flex-1 min-w-0 truncate">
         <span className="font-medium">
           {isCritical ? "Límite alcanzado: " : "Aviso: "}
@@ -152,15 +151,13 @@ export function UsageWarningBanner() {
         <span className="sm:hidden">Upgrade</span>
         <ArrowRight className="h-3 w-3" />
       </Link>
-      {!isCritical && (
-        <button
-          onClick={() => dismiss(top.key)}
-          className="opacity-60 hover:opacity-100 shrink-0 p-0.5"
-          aria-label="Cerrar aviso"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      )}
+      <button
+        onClick={() => dismiss(top.key)}
+        className="opacity-60 hover:opacity-100 shrink-0 p-0.5"
+        aria-label="Cerrar aviso"
+      >
+        <X className="h-4 w-4" />
+      </button>
     </div>
   )
 }

@@ -279,7 +279,63 @@ export async function GET(request: Request) {
       }
     }
 
-    const totalCostosFinancieros = costosFinancierosVentas + costosFinancierosServicios
+    // CF de cobros directos a orden (sin factura) en período
+    const { data: cobrosCF } = await supabaseAdmin
+      .from("cobros_orden")
+      .select("costo_financiero_monto, created_at")
+      .eq("organization_id", organizationId!)
+      .neq("anulado", true)
+      .not("costo_financiero_monto", "is", null)
+      .gt("costo_financiero_monto", 0)
+      .gte("created_at", desdeISO)
+      .lte("created_at", hastaISO)
+
+    let costosFinancierosCobrosOrden = 0
+    for (const c of (cobrosCF || []) as any[]) {
+      costosFinancierosCobrosOrden += parseFloat(c.costo_financiero_monto || "0")
+    }
+
+    const totalCostosFinancieros = costosFinancierosVentas + costosFinancierosServicios + costosFinancierosCobrosOrden
+
+    // ========================================
+    // 4.4 NOTAS DE CRÉDITO en período → restan ingresos
+    // ========================================
+    const { data: notasCredito } = await supabaseAdmin
+      .from("notas_credito")
+      .select("monto, venta_id, orden_id")
+      .eq("organization_id", organizationId!)
+      .eq("anulada", false)
+      .gte("fecha", desdeISO)
+      .lte("fecha", hastaISO)
+
+    let ncVentas = 0
+    let ncServicios = 0
+    for (const n of (notasCredito || []) as any[]) {
+      const monto = parseFloat(n.monto || "0")
+      if (n.venta_id) ncVentas += monto
+      else if (n.orden_id) ncServicios += monto
+    }
+    const totalNotasCredito = ncVentas + ncServicios
+
+    // ========================================
+    // 4.5 MERMAS / AJUSTES DE INVENTARIO (SALIDA con afecta_rentabilidad=true)
+    // ========================================
+    const { data: ajustes } = await supabaseAdmin
+      .from("ajustes_inventario")
+      .select("tipo, cantidad, costo_unitario_snapshot, afecta_rentabilidad")
+      .eq("organization_id", organizationId!)
+      .eq("direccion", "SALIDA")
+      .gte("fecha", desdeISO)
+      .lte("fecha", hastaISO)
+
+    let costoMerma = 0
+    const mermaPorTipo: Record<string, number> = {}
+    for (const a of (ajustes || []) as any[]) {
+      if (a.afecta_rentabilidad === false) continue
+      const monto = (a.cantidad || 0) * parseFloat(a.costo_unitario_snapshot || "0")
+      costoMerma += monto
+      mermaPorTipo[a.tipo] = (mermaPorTipo[a.tipo] || 0) + monto
+    }
 
     // ========================================
     // 5. GASTOS (movimientos manuales tipo EGRESO con afecta_rentabilidad = true)
@@ -344,8 +400,10 @@ export async function GET(request: Request) {
     // ========================================
     // Cálculos finales
     // ========================================
-    const totalIngresos = ingresosVentas + ingresosServicios + otrosIngresos
-    const totalCostos = costoProductos + costoRepuestos
+    const ingresosVentasNeto = Math.max(0, ingresosVentas - ncVentas)
+    const ingresosServiciosNeto = Math.max(0, ingresosServicios - ncServicios)
+    const totalIngresos = ingresosVentasNeto + ingresosServiciosNeto + otrosIngresos
+    const totalCostos = costoProductos + costoRepuestos + costoMerma
     const gananciaBruta = totalIngresos - totalCostos
     const totalComisiones = comisionTecnicos + comisionVendedores
     const totalGastos = gastosFijos + gastosVariables
@@ -360,15 +418,26 @@ export async function GET(request: Request) {
         hasta: fechaHasta.toISOString(),
       },
       ingresos: {
-        ventas: round(ingresosVentas),
-        servicios: round(ingresosServicios),
+        ventas: round(ingresosVentasNeto),
+        ventasBruto: round(ingresosVentas),
+        servicios: round(ingresosServiciosNeto),
+        serviciosBruto: round(ingresosServicios),
         serviciosAdelantos: round(ingresosAdelantos),
         otros: round(otrosIngresos),
         total: round(totalIngresos),
       },
+      notasCredito: {
+        ventas: round(ncVentas),
+        servicios: round(ncServicios),
+        total: round(totalNotasCredito),
+      },
       costos: {
         productos: round(costoProductos),
         repuestos: round(costoRepuestos),
+        merma: round(costoMerma),
+        mermaPorTipo: Object.fromEntries(
+          Object.entries(mermaPorTipo).map(([k, v]) => [k, round(v)])
+        ),
         total: round(totalCostos),
       },
       gananciaBruta: round(gananciaBruta),
@@ -376,6 +445,7 @@ export async function GET(request: Request) {
       costosFinancieros: {
         ventas: round(costosFinancierosVentas),
         servicios: round(costosFinancierosServicios),
+        cobrosOrden: round(costosFinancierosCobrosOrden),
         total: round(totalCostosFinancieros),
       },
       comisiones: {

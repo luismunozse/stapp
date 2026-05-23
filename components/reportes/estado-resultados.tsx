@@ -25,7 +25,7 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json())
 interface EstadoResultadosData {
   periodo: { desde: string; hasta: string }
   ingresos: { ventas: number; servicios: number; serviciosAdelantos?: number; otros: number; total: number }
-  costos: { productos: number; repuestos: number; total: number }
+  costos: { productos: number; repuestos: number; merma?: number; mermaPorTipo?: Record<string, number>; total: number }
   gananciaBruta: number
   margenBruto: number
   costosFinancieros?: { ventas: number; servicios: number; total: number }
@@ -158,6 +158,7 @@ export function EstadoResultados() {
           [{ content: "Total ingresos", styles: { fontStyle: "bold" } }, { content: fmt(data.ingresos.total), styles: { fontStyle: "bold" } }],
           ["Costo de productos vendidos", `-${fmt(data.costos.productos)}`],
           ["Costo de repuestos", `-${fmt(data.costos.repuestos)}`],
+          ...((data.costos.merma ?? 0) > 0 ? [["Mermas / ajustes", `-${fmt(data.costos.merma!)}`]] : []),
           [{ content: "Total costos", styles: { fontStyle: "bold" } }, { content: `-${fmt(data.costos.total)}`, styles: { fontStyle: "bold" } }],
           [
             { content: "GANANCIA BRUTA", styles: { fontStyle: "bold", fillColor: [220, 252, 231] } },
@@ -372,6 +373,9 @@ export function EstadoResultados() {
                 <Divider />
                 <Row label="Costo de productos vendidos" value={`-${formatPrice(data.costos.productos)}`} muted />
                 <Row label="Costo de repuestos" value={`-${formatPrice(data.costos.repuestos)}`} muted />
+                {(data.costos.merma ?? 0) > 0 && (
+                  <Row label="Mermas / ajustes inventario" value={`-${formatPrice(data.costos.merma!)}`} muted />
+                )}
                 <Row label="Total costos" value={`-${formatPrice(data.costos.total)}`} bold muted />
                 <Divider />
                 <Row label="GANANCIA BRUTA" value={formatPrice(data.gananciaBruta)} bold highlight />

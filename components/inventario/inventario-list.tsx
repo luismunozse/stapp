@@ -60,6 +60,7 @@ import { InventarioAnalyticsModal } from "./inventario-analytics-modal"
 import { BarcodeScanner } from "./barcode-scanner"
 import { LabelsPrintDialog } from "./labels-print-dialog"
 import { TransferirStockDialog } from "./transferir-stock-dialog"
+import { MermaDialog } from "./merma-dialog"
 import { AuditHistorial } from "./audit-historial"
 import { GaleriaImagenes } from "./galeria-imagenes"
 import { LotesDialog } from "./lotes-dialog"
@@ -140,6 +141,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   const [movimientosItem, setMovimientosItem] = useState<{ id: string; nombre: string } | null>(null)
   const [analyticsItem, setAnalyticsItem] = useState<{ id: string; nombre: string } | null>(null)
   const [transferirItem, setTransferirItem] = useState<{ id: string; nombre: string } | null>(null)
+  const [mermaItem, setMermaItem] = useState<{ id: string; nombre: string; stock: number } | null>(null)
   const [auditItem, setAuditItem] = useState<{ id: string; nombre: string } | null>(null)
   const [galeriaItem, setGaleriaItem] = useState<{ id: string; nombre: string } | null>(null)
   const [lotesItem, setLotesItem] = useState<{ id: string; nombre: string } | null>(null)
@@ -582,6 +584,12 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                   </DropdownMenuItem>
                 )}
                 {!isArchived && (
+                  <DropdownMenuItem onClick={() => setMermaItem({ id: item.id, nombre: item.nombre, stock: item.stock || 0 })}>
+                    <AlertCircle className="h-4 w-4 mr-2" />
+                    Merma / Ajuste
+                  </DropdownMenuItem>
+                )}
+                {!isArchived && (
                   <DropdownMenuItem onClick={() => setLabelItems([item])}>
                     <Tag className="h-4 w-4 mr-2" />
                     Imprimir etiqueta
@@ -922,6 +930,17 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
           onOpenChange={(open) => { if (!open) setTransferirItem(null) }}
           inventarioId={transferirItem.id}
           inventarioNombre={transferirItem.nombre}
+          onSuccess={() => setRefreshKey((k) => k + 1)}
+        />
+      )}
+
+      {mermaItem && (
+        <MermaDialog
+          open={!!mermaItem}
+          onOpenChange={(open) => { if (!open) setMermaItem(null) }}
+          itemId={mermaItem.id}
+          itemNombre={mermaItem.nombre}
+          currentStock={mermaItem.stock}
           onSuccess={() => setRefreshKey((k) => k + 1)}
         />
       )}
