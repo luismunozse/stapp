@@ -332,7 +332,7 @@ function TemplateEditorDialog({ open, onOpenChange, template, onSave, busy }: Ed
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-4xl max-h-[90dvh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Printer className="h-4 w-4" />

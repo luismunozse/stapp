@@ -66,7 +66,7 @@ export function NpsSurvey() {
 
   return (
     <Dialog open={show} onOpenChange={(open) => !open && handleDismiss()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-md">
         {step === "score" && (
           <>
             <DialogHeader className="text-center sm:text-center">

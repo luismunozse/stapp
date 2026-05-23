@@ -154,7 +154,7 @@ export function ChatbotPanel({ isOpen, onClose }: ChatbotPanelProps) {
         "fixed bottom-6 right-6 z-50",
         "w-[90vw] max-w-md h-[600px] max-h-[80vh]",
         "bg-card border shadow-2xl rounded-2xl",
-        "flex flex-col",
+        "flex flex-col pb-[max(1.5rem,env(safe-area-inset-bottom))]",
         "transition-all duration-300 ease-in-out",
         isOpen ? "scale-100 opacity-100" : "scale-95 opacity-0 pointer-events-none"
       )}

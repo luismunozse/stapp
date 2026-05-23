@@ -143,7 +143,7 @@ export function SubscriptionRequiredView({
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/30 flex flex-col">
+    <div className="min-h-dvh bg-gradient-to-br from-background via-background to-muted/30 flex flex-col">
       {/* Header */}
       <header className="p-4 border-b">
         <div className="container max-w-6xl mx-auto flex items-center justify-between">

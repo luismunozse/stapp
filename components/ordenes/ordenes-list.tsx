@@ -472,16 +472,17 @@ export function OrdenesList() {
       render: (orden) => (
         <div role="group" className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
           <Link href={`/ordenes/${orden.id}`}>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
+            <Button variant="ghost" size="icon" aria-label="Ver orden">
               <Eye className="h-4 w-4" />
             </Button>
           </Link>
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 text-muted-foreground hover:text-primary"
+            className="text-muted-foreground hover:text-primary"
             onClick={(e) => handlePrint(e, orden)}
             title="Imprimir"
+            aria-label="Imprimir"
           >
             <Printer className="h-4 w-4" />
           </Button>
@@ -489,9 +490,10 @@ export function OrdenesList() {
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+              className="text-muted-foreground hover:text-destructive"
               onClick={(e) => handleDelete(e, orden)}
               disabled={deleting === orden.id}
+              aria-label="Eliminar"
             >
               <Trash2 className="h-4 w-4" />
             </Button>
@@ -567,13 +569,13 @@ export function OrdenesList() {
       </div>
 
       {/* Quick filter chips */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex gap-2 overflow-x-auto snap-x snap-mandatory -mx-4 px-4 pb-1 [&::-webkit-scrollbar]:hidden sm:overflow-visible sm:mx-0 sm:px-0 sm:flex-wrap">
         {/* Estado quick filters for tecnico */}
         {isTecnico && tecnicoQuickFilters.map((qf) => (
           <button
             key={qf.value}
             onClick={() => applyQuickFilter(qf.value)}
-            className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium transition-colors border ${
+            className={`snap-start shrink-0 inline-flex items-center rounded-full px-3 py-1 text-xs font-medium transition-colors border ${
               estado === qf.value
                 ? "bg-primary text-primary-foreground border-primary"
                 : "bg-background text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
@@ -587,7 +589,7 @@ export function OrdenesList() {
           <button
             key={qf.value}
             onClick={() => applyGeneralQuickFilter(qf.value)}
-            className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium transition-colors border ${
+            className={`snap-start shrink-0 inline-flex items-center rounded-full px-3 py-1 text-xs font-medium transition-colors border ${
               quickFilterActive === qf.value
                 ? qf.value === "vencidas" ? "bg-red-500 text-white border-red-500"
                   : qf.value === "venceHoy" ? "bg-orange-500 text-white border-orange-500"

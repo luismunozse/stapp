@@ -443,7 +443,7 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-3xl max-h-[90dvh] overflow-y-auto pb-[env(safe-area-inset-bottom,1rem)]">
         <DialogHeader>
           <DialogTitle>Nueva Venta</DialogTitle>
         </DialogHeader>

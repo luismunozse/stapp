@@ -34,7 +34,7 @@ export function NotificationBell() {
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className="w-80 p-0 sm:w-96"
+        className="w-[calc(100vw-2rem)] sm:w-80 p-0 md:w-96"
         align="end"
         sideOffset={8}
       >

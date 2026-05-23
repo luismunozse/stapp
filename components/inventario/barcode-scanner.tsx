@@ -10,6 +10,16 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScanLine, Search, AlertCircle, Bug } from "lucide-react"
+import { isNativePlatform } from "@/lib/capacitor"
+
+// TODO(PR-9): Install @capacitor-mlkit/barcode-scanning for native barcode scan.
+// Falls back to web HID-wedge / manual input for now. When the plugin is added,
+// replace the noop below with a dynamic import + BarcodeScanner.scan() call.
+async function startNativeScan(): Promise<string | null> {
+  if (!isNativePlatform()) return null
+  // No native barcode plugin installed yet — caller falls through to the dialog.
+  return null
+}
 
 interface ScanResult {
   found: boolean
@@ -60,6 +70,22 @@ export function BarcodeScanner({ open, onOpenChange, onResult }: Props) {
   }, [onResult, onOpenChange])
 
   const handleSearch = useCallback(() => runSearch(code), [code, runSearch])
+
+  // On native (Capacitor), try the native barcode scanner first when the dialog opens.
+  // If it returns a code, use it directly; otherwise fall through to the web dialog.
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    ;(async () => {
+      const nativeCode = await startNativeScan()
+      if (cancelled) return
+      if (nativeCode) {
+        setCode(nativeCode)
+        runSearch(nativeCode)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [open, runSearch])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {

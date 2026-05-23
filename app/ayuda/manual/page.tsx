@@ -1040,7 +1040,7 @@ export default function ManualPage() {
   }, [expandMatchingSections])
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-dvh bg-background">
       {/* Header */}
       <header className="sticky top-0 z-50 border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-3">
@@ -1121,10 +1121,10 @@ export default function ManualPage() {
       </header>
 
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex gap-8 relative">
+        <div className="flex gap-4 md:gap-8 relative">
           {/* Sidebar - Desktop */}
           <aside className="hidden lg:block w-64 shrink-0">
-            <nav className="sticky top-36 py-6 max-h-[calc(100vh-9rem)] overflow-y-auto">
+            <nav className="sticky top-36 py-6 max-h-[calc(100dvh-9rem)] overflow-y-auto">
               <ul className="space-y-1">
                 {filteredSections.map((section) => (
                   <li key={section.id}>

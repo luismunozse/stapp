@@ -331,7 +331,7 @@ export function SessionRefresher({ children }: { children: React.ReactNode }) {
   // Mostrar indicador de carga mientras restaura
   if (isRestoring) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="min-h-dvh flex items-center justify-center bg-background">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
           <p className="text-muted-foreground">Restaurando sesión...</p>

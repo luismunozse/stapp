@@ -130,6 +130,7 @@ export function GlobalSearch() {
             <Search className="h-4 w-4 text-muted-foreground shrink-0" />
             <Input
               ref={inputRef}
+              type="search"
               value={query}
               onChange={(e) => {
                 search(e.target.value)

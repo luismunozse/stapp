@@ -18,7 +18,14 @@ import {
   Eye,
   LayoutList,
   LayoutGrid,
+  MoreHorizontal,
 } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { useCurrency } from "@/contexts/currency-context"
 import { PagoForm } from "./pago-form"
 import { PagosHistorial } from "./pagos-historial"
@@ -175,7 +182,7 @@ export function FacturacionList() {
         <Card>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead>
+              <thead className="sticky top-14 sm:top-0 z-10 bg-background">
                 <tr className="border-b bg-muted/50">
                   <th className="text-left p-3 font-medium">Factura</th>
                   <th className="text-left p-3 font-medium">Orden</th>
@@ -212,7 +219,61 @@ export function FacturacionList() {
                           <PaymentStatusBadge status={factura.estadoPago} showIcon />
                         </td>
                         <td className="p-3">
-                          <div className="flex items-center justify-center gap-1">
+                          {/* Mobile: kebab menu */}
+                          <div className="sm:hidden flex items-center justify-center">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" aria-label="Acciones">
+                                  <MoreHorizontal className="h-5 w-5" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                  onClick={() => window.open(`/api/facturacion/${factura.id}/pdf`, "_blank")}
+                                >
+                                  <Eye className="h-4 w-4 mr-2" />
+                                  Ver PDF
+                                </DropdownMenuItem>
+                                {factura.estadoPago !== "PAGADO" && factura.estadoPago !== "ANULADA" && (
+                                  <DropdownMenuItem
+                                    onClick={() => setShowPagoForm(showingPagoForm ? null : factura.id)}
+                                  >
+                                    <Plus className="h-4 w-4 mr-2" />
+                                    Registrar pago
+                                  </DropdownMenuItem>
+                                )}
+                                {factura.pagos && factura.pagos.length > 0 && (
+                                  <DropdownMenuItem
+                                    onClick={() => toggleExpanded(factura.id)}
+                                  >
+                                    {isExpanded ? (
+                                      <ChevronUp className="h-4 w-4 mr-2" />
+                                    ) : (
+                                      <ChevronDown className="h-4 w-4 mr-2" />
+                                    )}
+                                    Historial de pagos
+                                  </DropdownMenuItem>
+                                )}
+                                {isAdmin && factura.estadoPago !== "ANULADA" && (
+                                  <>
+                                    <DropdownMenuItem onClick={() => handleVoidClick(factura)}>
+                                      <Ban className="h-4 w-4 mr-2" />
+                                      Anular
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() => handleDeleteClick(factura)}
+                                      className="text-destructive hover:text-destructive"
+                                    >
+                                      <Trash2 className="h-4 w-4 mr-2" />
+                                      Eliminar
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                          {/* Desktop: inline row */}
+                          <div className="hidden sm:flex items-center justify-center gap-1">
                             <Button
                               variant="ghost"
                               size="sm"

@@ -37,7 +37,7 @@ export default function Error({
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-6">
+    <div className="min-h-dvh bg-background flex items-center justify-center p-6">
       <div className="max-w-md w-full text-center">
         <div className="bg-red-100 dark:bg-red-900/20 rounded-full p-4 w-fit mx-auto mb-6">
           <AlertTriangle className="h-10 w-10 text-red-600 dark:text-red-400" />

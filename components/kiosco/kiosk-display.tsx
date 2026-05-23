@@ -288,7 +288,7 @@ export function KioskDisplay({ token }: KioskDisplayProps) {
 
   if (error && !data) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center text-white">
+      <div className="min-h-dvh bg-gray-950 flex items-center justify-center text-white">
         <div className="text-center">
           <p className="text-2xl font-bold mb-2">Error</p>
           <p className="text-gray-400">{error}</p>
@@ -306,7 +306,7 @@ export function KioskDisplay({ token }: KioskDisplayProps) {
 
   if (!data) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+      <div className="min-h-dvh bg-gray-950 flex items-center justify-center">
         <div className="animate-pulse text-white text-xl">Cargando...</div>
       </div>
     )
@@ -329,7 +329,7 @@ export function KioskDisplay({ token }: KioskDisplayProps) {
 
   return (
     <div
-      className="min-h-screen text-white flex flex-col"
+      className="min-h-dvh text-white flex flex-col"
       style={{
         background: `linear-gradient(135deg, ${organizacion.colorPrimary}15, ${organizacion.colorSecondary}10, #0a0a0a)`,
         backgroundColor: "#0a0a0a",

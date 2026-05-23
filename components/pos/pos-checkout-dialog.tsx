@@ -334,7 +334,8 @@ export function PosCheckoutDialog({
               <div className="flex items-center gap-3">
                 <div className="flex-1">
                   <Input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     min={0}
                     step="0.01"
                     value={montoRecibido}

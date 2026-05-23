@@ -2,6 +2,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, Users, Target, Award, Heart } from "lucide-react"
 import { BreadcrumbJsonLd } from "@/components/seo/json-ld"
+import { WhatsAppFloat } from "@/components/marketing/whatsapp-float"
 
 export const metadata = {
   title: "Sobre Nosotros - Equipo detr\u00e1s del Software de Servicio T\u00e9cnico",
@@ -27,7 +28,7 @@ export default function SobreNosotrosPage() {
           { name: "Sobre Nosotros", url: "https://stapp.com.ar/empresa/sobre-nosotros" },
         ]}
       />
-    <div className="min-h-screen bg-gradient-to-b from-muted/50 to-background">
+    <div className="min-h-dvh bg-gradient-to-b from-muted/50 to-background">
       {/* Header */}
       <header className="border-b bg-card">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -91,7 +92,7 @@ export default function SobreNosotrosPage() {
             <h2 className="text-3xl font-bold text-foreground mb-12 text-center">
               Nuestros Valores
             </h2>
-            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-8">
               <div className="text-center">
                 <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Users className="h-8 w-8 text-primary" />
@@ -176,6 +177,7 @@ export default function SobreNosotrosPage() {
         </div>
       </footer>
     </div>
+    <WhatsAppFloat />
     </>
   )
 }

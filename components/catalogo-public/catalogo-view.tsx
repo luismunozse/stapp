@@ -214,7 +214,7 @@ export function CatalogoView({ data }: { data: CatalogoData }) {
 
   return (
     <div
-      className="min-h-screen bg-background"
+      className="min-h-dvh bg-background"
       style={{ ["--brand" as any]: data.config.color_primary }}
     >
       <CatalogoHero

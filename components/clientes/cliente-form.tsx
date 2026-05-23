@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { FormActionBar } from "@/components/ui/form-action-bar"
 import { User, Building2 } from "lucide-react"
 import type { Cliente } from "@/types"
 import { useCurrency } from "@/contexts/currency-context"
@@ -234,6 +235,7 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
                 <Label htmlFor="cuit">{countryConfig.taxIdLabel}</Label>
                 <Input
                   id="cuit"
+                  inputMode="numeric"
                   {...register("cuit")}
                   placeholder={countryConfig.taxIdPlaceholder}
                 />
@@ -250,6 +252,9 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
             <Label htmlFor="telefono">Teléfono *</Label>
             <Input
               id="telefono"
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
               {...register("telefono")}
               placeholder="1123456789"
               maxLength={15}
@@ -266,6 +271,8 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
             <Input
               id="email"
               type="email"
+              inputMode="email"
+              autoComplete="email"
               {...register("email")}
               placeholder="cliente@email.com"
             />
@@ -282,6 +289,7 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
             </Label>
             <Input
               id="dni"
+              inputMode="numeric"
               {...register("dni")}
               placeholder={countryConfig.personalIdPlaceholder}
             />
@@ -296,19 +304,20 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
             <Label htmlFor="direccion">Dirección</Label>
             <Input
               id="direccion"
+              autoComplete="street-address"
               {...register("direccion")}
               placeholder="Dirección completa"
             />
           </div>
 
-          <div className="flex gap-2 justify-end">
+          <FormActionBar>
             <Button type="button" variant="outline" onClick={onClose}>
               Cancelar
             </Button>
             <Button type="submit" disabled={loading}>
               {loading ? "Guardando..." : "Guardar"}
             </Button>
-          </div>
+          </FormActionBar>
         </form>
       </DialogContent>
     </Dialog>

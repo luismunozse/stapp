@@ -49,7 +49,7 @@ function GoogleAuthContent() {
   // Si no hay client ID, mostrar error
   if (!clientId) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-muted/30 dark:bg-background px-4">
+      <div className="min-h-dvh flex items-center justify-center bg-muted/30 dark:bg-background px-4">
         <Card className="w-full max-w-md">
           <CardContent className="pt-6">
             <p className="text-center text-destructive">Google Login no está configurado.</p>
@@ -148,7 +148,7 @@ function GoogleAuthContent() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/30 dark:bg-background px-4">
+    <div className="min-h-dvh flex items-center justify-center bg-muted/30 dark:bg-background px-4">
       <div className="absolute top-4 right-4">
         <ThemeToggle variant="icon" />
       </div>
@@ -224,7 +224,7 @@ export default function GoogleAuthPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center bg-muted/30 dark:bg-background">
+        <div className="min-h-dvh flex items-center justify-center bg-muted/30 dark:bg-background">
           <div className="animate-pulse text-muted-foreground">Cargando...</div>
         </div>
       }

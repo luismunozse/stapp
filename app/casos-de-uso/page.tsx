@@ -1,8 +1,8 @@
 import Link from "next/link"
-import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { ArrowLeft, ArrowRight } from "lucide-react"
 import { BreadcrumbJsonLd } from "@/components/seo/json-ld"
+import { WhatsAppFloat } from "@/components/marketing/whatsapp-float"
 import { useCases } from "@/lib/use-cases-data"
 import type { Metadata } from "next"
 
@@ -30,7 +30,7 @@ export default function CasosDeUsoPage() {
           { name: "Casos de Uso", url: "https://stapp.com.ar/casos-de-uso" },
         ]}
       />
-      <div className="min-h-screen bg-gradient-to-b from-muted/50 to-background">
+      <div className="min-h-dvh bg-gradient-to-b from-muted/50 to-background">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 pt-6">
           <Link
             href="/"
@@ -77,6 +77,7 @@ export default function CasosDeUsoPage() {
           </div>
         </section>
       </div>
+      <WhatsAppFloat message="Hola, vengo de STApp y quiero saber qué caso de uso me sirve" />
     </>
   )
 }

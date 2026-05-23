@@ -258,6 +258,8 @@ function IosWaitlist() {
           <form onSubmit={handleSubmit} className="flex gap-2">
             <Input
               type="email"
+              inputMode="email"
+              autoComplete="email"
               placeholder="tu@email.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}

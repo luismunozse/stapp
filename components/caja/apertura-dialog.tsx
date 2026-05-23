@@ -64,7 +64,8 @@ export function AperturaDialog({ open, onOpenChange, onSuccess }: AperturaDialog
           <div>
             <label className="text-sm font-medium">Saldo inicial en efectivo</label>
             <Input
-              type="number"
+              type="text"
+              inputMode="decimal"
               min="0"
               step="0.01"
               placeholder="0.00"

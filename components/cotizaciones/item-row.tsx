@@ -191,7 +191,8 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
             <label htmlFor={`item-cantidad-${index}`} className="text-xs text-muted-foreground">Cantidad</label>
             <Input
               id={`item-cantidad-${index}`}
-              type="number"
+              type="text"
+              inputMode="numeric"
               min="1"
               placeholder="Cant."
               value={item.cantidad || ""}
@@ -220,7 +221,8 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
             <label htmlFor={`item-precio-${index}`} className="text-xs text-muted-foreground">Precio</label>
             <Input
               id={`item-precio-${index}`}
-              type="number"
+              type="text"
+              inputMode="decimal"
               min="0"
               step="0.01"
               placeholder="Precio"
@@ -234,7 +236,8 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
           <div>
             <label className="text-xs text-muted-foreground">Costo unitario (opcional, para margen)</label>
             <Input
-              type="number"
+              type="text"
+              inputMode="decimal"
               min="0"
               step="0.01"
               placeholder="0.00"
@@ -251,7 +254,8 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
         <div className="flex items-center gap-2">
           <label className="text-xs text-muted-foreground shrink-0">Desc.</label>
           <Input
-            type="number"
+            type="text"
+            inputMode="decimal"
             min="0"
             step="0.01"
             placeholder="0"
@@ -346,7 +350,8 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
             <div className="mt-1 flex items-center gap-1">
               <span className="text-[11px] text-muted-foreground shrink-0">Costo:</span>
               <Input
-                type="number"
+                type="text"
+                inputMode="decimal"
                 min="0"
                 step="0.01"
                 placeholder="opcional"
@@ -395,7 +400,8 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
         </div>
         <div>
           <Input
-            type="number"
+            type="text"
+            inputMode="numeric"
             min="1"
             placeholder="Cant."
             value={item.cantidad || ""}
@@ -405,7 +411,8 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
         </div>
         <div>
           <Input
-            type="number"
+            type="text"
+            inputMode="decimal"
             min="0"
             step="0.01"
             placeholder="Precio"
@@ -416,7 +423,8 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
         </div>
         <div className="flex items-center gap-1">
           <Input
-            type="number"
+            type="text"
+            inputMode="decimal"
             min="0"
             step="0.01"
             placeholder="0"

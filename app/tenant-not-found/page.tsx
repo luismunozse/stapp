@@ -10,7 +10,7 @@ export default function TenantNotFoundPage() {
   const homeUrl = `https://${rootDomain}`
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/30 dark:bg-background px-4">
+    <div className="min-h-dvh flex items-center justify-center bg-muted/30 dark:bg-background px-4">
       <Card className="w-full max-w-md text-center">
         <CardHeader className="space-y-4 pb-2">
           <div className="mx-auto w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center">

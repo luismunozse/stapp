@@ -112,7 +112,7 @@ export function CookieConsent() {
 
       {/* Banner */}
       <div
-        className={`fixed bottom-0 left-0 right-0 z-50 transition-all duration-300 transform ${
+        className={`fixed bottom-0 left-0 right-0 z-50 transition-all duration-300 transform pb-[env(safe-area-inset-bottom,0px)] ${
           isVisible ? "translate-y-0 opacity-100" : "translate-y-full opacity-0"
         }`}
       >

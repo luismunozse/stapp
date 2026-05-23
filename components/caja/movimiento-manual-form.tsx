@@ -194,7 +194,8 @@ export function MovimientoManualForm({ onCreated }: MovimientoManualFormProps) {
             <div>
               <label className="text-sm font-medium">Monto</label>
               <Input
-                type="number"
+                type="text"
+                inputMode="decimal"
                 min="0.01"
                 step="0.01"
                 placeholder="0.00"

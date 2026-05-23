@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { FormActionBar } from "@/components/ui/form-action-bar"
 import { X, ChevronDown, ChevronUp, Plus, Check, Loader2, ImagePlus, Trash2, Package, AlertTriangle, PlusCircle, Pencil, MapPin } from "lucide-react"
 import type { Inventario } from "@/types"
 import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
@@ -856,7 +857,8 @@ export function InventarioForm({
               <Label htmlFor="stock">Stock *</Label>
               <Input
                 id="stock"
-                type="number"
+                type="text"
+                inputMode="numeric"
                 {...register("stock", { valueAsNumber: true })}
                 min={0}
               />
@@ -871,7 +873,8 @@ export function InventarioForm({
               <Label htmlFor="precioCompra">Costo *</Label>
               <Input
                 id="precioCompra"
-                type="number"
+                type="text"
+                inputMode="decimal"
                 step="0.01"
                 {...register("precioCompra", { valueAsNumber: true })}
                 min={0}
@@ -888,7 +891,8 @@ export function InventarioForm({
               <Label htmlFor="precioVenta">Precio Venta *</Label>
               <Input
                 id="precioVenta"
-                type="number"
+                type="text"
+                inputMode="decimal"
                 step="0.01"
                 {...register("precioVenta", { valueAsNumber: true })}
                 min={0}
@@ -945,7 +949,8 @@ export function InventarioForm({
                   <Label htmlFor="stockMinimo">Stock Mínimo</Label>
                   <Input
                     id="stockMinimo"
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
                     {...register("stockMinimo", {
                       setValueAs: (v: string) => v === "" || v === null ? null : parseInt(v, 10),
                     })}
@@ -957,7 +962,8 @@ export function InventarioForm({
                   <Label htmlFor="stockMaximo">Stock Máximo</Label>
                   <Input
                     id="stockMaximo"
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
                     {...register("stockMaximo", {
                       setValueAs: (v: string) => v === "" || v === null ? null : parseInt(v, 10),
                     })}
@@ -969,7 +975,8 @@ export function InventarioForm({
                   <Label htmlFor="puntoReorden">Punto Reorden</Label>
                   <Input
                     id="puntoReorden"
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
                     {...register("puntoReorden", {
                       setValueAs: (v: string) => v === "" || v === null ? null : parseInt(v, 10),
                     })}
@@ -1129,14 +1136,14 @@ export function InventarioForm({
             </div>
           </details>
 
-          <div className="flex gap-2 justify-end pt-2">
+          <FormActionBar className="pt-2">
             <Button type="button" variant="outline" onClick={onClose}>
               Cancelar
             </Button>
             <Button type="submit" disabled={loading || uploadingImage || (!item && !generatedCode)}>
               {uploadingImage ? "Subiendo imagen..." : loading ? "Guardando..." : "Guardar"}
             </Button>
-          </div>
+          </FormActionBar>
         </form>
       </CardContent>
     </Card>

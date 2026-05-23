@@ -78,7 +78,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
         ]}
       />
 
-      <div className="min-h-screen bg-gradient-to-b from-muted/50 to-background">
+      <div className="min-h-dvh bg-gradient-to-b from-muted/50 to-background">
         {/* Header */}
         <header className="border-b bg-card">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">

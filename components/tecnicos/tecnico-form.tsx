@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { FormActionBar } from "@/components/ui/form-action-bar"
 import { Eye, EyeOff, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -176,6 +177,8 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
               <Input
                 id="telefono"
                 type="tel"
+                inputMode="tel"
+                autoComplete="tel"
                 value={telefono}
                 onChange={(e) => setTelefono(e.target.value)}
                 placeholder="+54 9 11 ..."
@@ -188,6 +191,8 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
             <Input
               id="email"
               type="email"
+              inputMode="email"
+              autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="correo@ejemplo.com"
@@ -289,7 +294,7 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
             </p>
           </div>
 
-          <div className="flex justify-end gap-2 pt-4">
+          <FormActionBar className="pt-4">
             <Button
               type="button"
               variant="outline"
@@ -301,7 +306,7 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
             <Button type="submit" disabled={loading}>
               {loading ? "Guardando..." : isEditing ? "Guardar Cambios" : "Crear Técnico"}
             </Button>
-          </div>
+          </FormActionBar>
         </form>
       </DialogContent>
     </Dialog>

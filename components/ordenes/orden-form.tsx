@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { DatePicker } from "@/components/ui/date-picker"
+import { FormActionBar } from "@/components/ui/form-action-bar"
 import { X, Plus, Camera, Upload, Trash2, Loader2, Lock, Grid3X3, ClipboardCheck, ChevronDown, ChevronUp } from "lucide-react"
 import { PatternLock } from "@/components/ui/pattern-lock"
 import { ClienteSelector } from "@/components/cotizaciones/cliente-selector"
@@ -760,6 +761,19 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId }: OrdenFormProps) {
           }
         }} className="space-y-4">
           {/* Step indicator */}
+          {(() => {
+            const stepsForLabel = [
+              { step: 1, label: "Cliente y Equipo" },
+              { step: 2, label: "Detalles" },
+              { step: 3, label: "Fotos y Checklist" },
+            ]
+            const current = stepsForLabel.find((s) => s.step === currentStep)
+            return (
+              <p className="text-xs text-center text-muted-foreground sm:hidden mb-2">
+                Paso {currentStep}/{totalSteps}{current ? ` · ${current.label}` : ""}
+              </p>
+            )
+          })()}
           <div className="flex items-center gap-2 mb-6">
             {[
               { step: 1, label: "Cliente y Equipo" },
@@ -1065,7 +1079,8 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId }: OrdenFormProps) {
               <Label htmlFor="presupuesto">Presupuesto (Opcional)</Label>
               <Input
                 id="presupuesto"
-                type="number"
+                type="text"
+                inputMode="decimal"
                 step="0.01"
                 min="0"
                 {...register("presupuesto", {
@@ -1133,7 +1148,8 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId }: OrdenFormProps) {
                     <span className="text-muted-foreground">$</span>
                     <Input
                       id="sena"
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
                       step="0.01"
                       min="0"
                       max={watch("presupuesto") || undefined}
@@ -1310,6 +1326,8 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId }: OrdenFormProps) {
               {...register("telefonoContacto")}
               placeholder={selectedClienteObj?.telefono || "Número alternativo"}
               type="tel"
+              inputMode="tel"
+              autoComplete="tel"
             />
             <p className="text-xs text-muted-foreground mt-1">
               {watch("tipoDispositivo") === "CELULAR"
@@ -1585,7 +1603,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId }: OrdenFormProps) {
           )}
           </>)}
 
-          <div className="flex flex-wrap gap-2 justify-between">
+          <FormActionBar className="flex-wrap justify-between">
             <div>
               {currentStep > 1 && (
                 <Button type="button" variant="outline" onClick={handlePrevStep} className="text-sm">
@@ -1607,7 +1625,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId }: OrdenFormProps) {
                 </Button>
               )}
             </div>
-          </div>
+          </FormActionBar>
         </form>
       </CardContent>
 

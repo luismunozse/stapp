@@ -191,7 +191,7 @@ export function ItemDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0">
+      <DialogContent className="w-[calc(100vw-1rem)] sm:w-full sm:max-w-2xl max-h-[90dvh] overflow-y-auto p-0">
         <DialogTitle className="sr-only">{item.nombre}</DialogTitle>
 
         <div

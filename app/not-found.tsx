@@ -5,7 +5,7 @@ import { Home, ArrowLeft, Search } from "lucide-react"
 
 export default function NotFound() {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-muted/30 dark:bg-background px-4">
+    <div className="min-h-dvh flex flex-col items-center justify-center bg-muted/30 dark:bg-background px-4">
       <div className="max-w-md w-full text-center space-y-6">
         <div className="flex justify-center mb-2">
           <STAppLogo size="md" />

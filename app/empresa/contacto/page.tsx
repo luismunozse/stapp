@@ -17,6 +17,7 @@ import {
   CheckCircle,
 } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
+import { WhatsAppFloat } from "@/components/marketing/whatsapp-float"
 
 export default function ContactoPage() {
   const [formData, setFormData] = useState({
@@ -90,7 +91,7 @@ export default function ContactoPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-muted/50 to-background">
+    <div className="min-h-dvh bg-gradient-to-b from-muted/50 to-background">
       {/* Header */}
       <header className="border-b bg-card">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -159,7 +160,7 @@ export default function ContactoPage() {
       {/* Contact Form & Info */}
       <section className="pb-20">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="max-w-5xl mx-auto grid lg:grid-cols-3 gap-8">
+          <div className="max-w-5xl mx-auto grid lg:grid-cols-3 gap-4 md:gap-8">
             {/* Form */}
             <div className="lg:col-span-2">
               <Card>
@@ -341,6 +342,7 @@ export default function ContactoPage() {
           </p>
         </div>
       </footer>
+      <WhatsAppFloat />
     </div>
   )
 }

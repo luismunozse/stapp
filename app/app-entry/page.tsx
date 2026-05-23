@@ -294,7 +294,7 @@ export default function AppEntryPage() {
   // --- Loading / Navigating screen ---
   if (loading || navigating) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-muted/30 dark:bg-background">
+      <div className="min-h-dvh flex items-center justify-center bg-muted/30 dark:bg-background">
         <div className="text-center space-y-6">
           <STAppLogo size="xl" showText={false} className="justify-center" />
           <div className="space-y-2">
@@ -318,7 +318,7 @@ export default function AppEntryPage() {
   // --- Registration success screen ---
   if (view === "register-success") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-muted/30 dark:bg-background p-4">
+      <div className="min-h-dvh flex items-center justify-center bg-muted/30 dark:bg-background p-4">
         <div className="w-full max-w-sm space-y-6">
           <div className="text-center space-y-4">
             <div className="w-16 h-16 rounded-full bg-success/10 dark:bg-success/20 flex items-center justify-center mx-auto">
@@ -394,7 +394,7 @@ export default function AppEntryPage() {
   // --- Registration form ---
   if (view === "register") {
     return (
-      <div className="min-h-screen bg-muted/30 dark:bg-background flex flex-col">
+      <div className="min-h-dvh bg-muted/30 dark:bg-background flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-4 pt-3 pb-2">
           <button
@@ -577,7 +577,7 @@ export default function AppEntryPage() {
 
   // --- Main: Organization selection ---
   return (
-    <div className="min-h-screen bg-muted/30 dark:bg-background flex flex-col">
+    <div className="min-h-dvh bg-muted/30 dark:bg-background flex flex-col">
       {/* Theme toggle */}
       <div className="absolute top-4 right-4">
         <ThemeToggle variant="icon" />

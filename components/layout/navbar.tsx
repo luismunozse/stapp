@@ -15,8 +15,6 @@ import {
   FileText,
   BarChart3,
   LogOut,
-  Menu,
-  X,
   Settings,
   Store,
   MoreHorizontal,
@@ -134,13 +132,27 @@ const navSections: NavSection[] = [
   },
 ]
 
-// Items principales para el bottom nav (los 4 más usados)
-const bottomNavItems: NavItem[] = [
-  { href: "/dashboard", label: "Inicio", icon: LayoutDashboard },
-  { href: "/ordenes", label: "Órdenes", icon: ClipboardList },
-  { href: "/clientes", label: "Clientes", icon: Users, roles: ["ADMIN", "VENDEDOR", "TECNICO"] },
-  { href: "/inventario", label: "Inventario", icon: Package, roles: ["ADMIN"] },
-]
+// Items principales para el bottom nav (los 4 más usados, por rol)
+const bottomNavByRole: Record<string, NavItem[]> = {
+  ADMIN: [
+    { href: "/dashboard", label: "Inicio", icon: LayoutDashboard },
+    { href: "/ordenes", label: "Órdenes", icon: ClipboardList },
+    { href: "/clientes", label: "Clientes", icon: Users },
+    { href: "/inventario", label: "Inventario", icon: Package },
+  ],
+  VENDEDOR: [
+    { href: "/dashboard", label: "Inicio", icon: LayoutDashboard },
+    { href: "/pos", label: "POS", icon: Store },
+    { href: "/ventas", label: "Ventas", icon: ShoppingCart },
+    { href: "/clientes", label: "Clientes", icon: Users },
+  ],
+  TECNICO: [
+    { href: "/dashboard", label: "Inicio", icon: LayoutDashboard },
+    { href: "/ordenes", label: "Órdenes", icon: ClipboardList },
+    { href: "/agenda", label: "Agenda", icon: CalendarDays },
+    { href: "/clientes", label: "Clientes", icon: Users },
+  ],
+}
 
 export function Navbar() {
   const pathname = usePathname()
@@ -298,7 +310,8 @@ export function Navbar() {
     }
   }
 
-  const filteredBottomNavItems = bottomNavItems.filter(item => !item.roles || item.roles.includes(userRole))
+  const filteredBottomNavItems = (bottomNavByRole[userRole] ?? bottomNavByRole.ADMIN)
+    .filter(item => isFeatureEnabled(item.featureFlag))
 
   // Items que no están en el bottom nav (para el menú "Más")
   const moreItems = allNavItems.filter(
@@ -325,7 +338,7 @@ export function Navbar() {
             "flex items-center border-b border-sidebar-border transition-all duration-300",
             collapsed ? "justify-center px-2 py-4" : "justify-between px-6 py-4"
           )}>
-            <Link href="/dashboard" className="hover:opacity-80 transition-opacity overflow-hidden">
+            <Link href="/dashboard" className="hover:opacity-80 active:opacity-60 transition-opacity overflow-hidden">
               <BusinessLogo size="sm" showText={!collapsed} textClassName="text-xl" />
             </Link>
             {!collapsed && (
@@ -415,7 +428,7 @@ export function Navbar() {
                                 collapsed ? "justify-center px-2 py-2" : "px-3 py-2",
                                 isActive
                                   ? "bg-primary text-primary-foreground"
-                                  : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                                  : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:bg-sidebar-accent/80 active:scale-[0.98] transition-transform"
                               )}
                             >
                               <Icon className={cn("h-5 w-5 shrink-0", !collapsed && "mr-3")} />
@@ -519,35 +532,17 @@ export function Navbar() {
             </Link>
           </div>
           <div className="flex items-center gap-1">
-            <PlanBadge compact />
             <GlobalSearch />
-            <DeadlineCalendar />
             <NotificationBell />
-            <ThemeToggle variant="icon" />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="touch-target text-muted-foreground hover:text-destructive"
-              onClick={handleLogout}
-              aria-label="Cerrar sesión"
-            >
-              <LogOut className="h-5 w-5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="touch-target"
+            <button
+              className="touch-target active:bg-accent/60 rounded-full focus:outline-none focus:ring-2 focus:ring-primary"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               aria-label={mobileMenuOpen ? "Cerrar menú" : "Abrir menú"}
               aria-expanded={mobileMenuOpen}
               aria-controls="mobile-menu-drawer"
             >
-              {mobileMenuOpen ? (
-                <X className="h-6 w-6" />
-              ) : (
-                <Menu className="h-6 w-6" />
-              )}
-            </Button>
+              <UserAvatar src={displayAvatar} nombre={displayName} size="sm" />
+            </button>
           </div>
         </div>
       </header>
@@ -571,7 +566,17 @@ export function Navbar() {
           mobileMenuOpen ? "translate-x-0" : "translate-x-full"
         )}
       >
-        <div className="flex flex-col h-full pt-16 safe-area-inset">
+        <div className="flex flex-col h-full pt-20 safe-area-inset">
+          <div className="px-4 pt-4 pb-3 border-b border-border">
+            <div className="flex items-center gap-3">
+              <UserAvatar src={displayAvatar} nombre={displayName} size="md" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium truncate">{displayName}</p>
+                <p className="text-xs text-muted-foreground truncate">{session?.user?.role}</p>
+              </div>
+            </div>
+            <div className="mt-3"><PlanBadge /></div>
+          </div>
           <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto">
             {allNavItems.map((item) => {
               const Icon = item.icon
@@ -596,6 +601,11 @@ export function Navbar() {
             })}
           </nav>
           <div className="p-4 border-t border-border safe-bottom space-y-1">
+            <div className="flex items-center justify-between px-3 py-2">
+              <span className="text-sm text-muted-foreground">Tema</span>
+              <ThemeToggle variant="icon" />
+            </div>
+            <div className="px-3 py-2"><DeadlineCalendar /></div>
             <Link
               href="/ayuda/manual"
               onClick={() => setMobileMenuOpen(false)}

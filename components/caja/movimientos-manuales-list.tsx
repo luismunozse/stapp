@@ -140,7 +140,7 @@ export function MovimientosManualesList({ fecha, refreshKey }: MovimientosManual
                         </a>
                       )}
                     </div>
-                    <div className="text-xs text-muted-foreground flex items-center gap-1">
+                    <div className="text-caption-mobile flex items-center gap-1">
                       <Badge variant="outline" className="text-xs">
                         {m.tipo === "INGRESO" ? "Ingreso" : "Egreso"}
                       </Badge>
@@ -153,7 +153,7 @@ export function MovimientosManualesList({ fecha, refreshKey }: MovimientosManual
                       {m.usuarioNombre && ` · ${m.usuarioNombre}`}
                     </div>
                     {m.observaciones && (
-                      <div className="text-xs text-muted-foreground">{m.observaciones}</div>
+                      <div className="text-caption-mobile">{m.observaciones}</div>
                     )}
                   </div>
                 </div>

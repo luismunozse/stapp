@@ -182,7 +182,8 @@ export function MultiPagoInput({
             <div>
               <Label className="text-xs">Monto *</Label>
               <Input
-                type="number"
+                type="text"
+                inputMode="decimal"
                 step="0.01"
                 min="0"
                 value={pago.monto || ""}
@@ -197,7 +198,8 @@ export function MultiPagoInput({
                 <div>
                   <Label className="text-xs">Cuotas</Label>
                   <Input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
                     min={1}
                     max={48}
                     value={pago.cuotas || ""}
@@ -208,7 +210,8 @@ export function MultiPagoInput({
                 <div>
                   <Label className="text-xs">Recargo al cliente %</Label>
                   <Input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     step="0.01"
                     min={0}
                     max={100}
@@ -225,7 +228,8 @@ export function MultiPagoInput({
               <div>
                 <Label className="text-xs">Recargo al cliente % (si aplica)</Label>
                 <Input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   step="0.01"
                   min={0}
                   max={100}
@@ -241,7 +245,8 @@ export function MultiPagoInput({
               <div>
                 <Label className="text-xs">Costo terminal % (lo que absorbe el comercio)</Label>
                 <Input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   step="0.01"
                   min={0}
                   max={100}

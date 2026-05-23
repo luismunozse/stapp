@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { WhatsAppFloat } from "@/components/marketing/whatsapp-float"
 import {
   ArrowLeft,
   Briefcase,
@@ -84,7 +85,7 @@ const benefits = [
 
 export default function TrabajaConNosotrosPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-muted/50 to-background">
+    <div className="min-h-dvh bg-gradient-to-b from-muted/50 to-background">
       {/* Header */}
       <header className="border-b bg-card">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -268,6 +269,7 @@ export default function TrabajaConNosotrosPage() {
           </p>
         </div>
       </footer>
+      <WhatsAppFloat message="Hola, vengo de STApp y me interesa trabajar con ustedes" />
     </div>
   )
 }

@@ -41,7 +41,7 @@ export default function ReactivarPage() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/30 flex items-center justify-center p-4">
+    <div className="min-h-dvh bg-gradient-to-br from-background via-background to-muted/30 flex items-center justify-center p-4">
       <Card className="max-w-md w-full">
         <CardContent className="pt-8 pb-8 text-center space-y-4">
           {state === "loading" && (

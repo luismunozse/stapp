@@ -130,6 +130,7 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
               <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
               <Input
                 ref={inputRef}
+                type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={handleKeyDown}
@@ -220,7 +221,8 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
                 <div className="w-32">
                   <Input
                     ref={manualPriceRef}
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     min={0}
                     step="0.01"
                     value={manualPrecio || ""}
@@ -249,9 +251,9 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
         )}
 
         {/* Product grid */}
-        <div className="flex-1 overflow-y-auto p-3">
+        <div className="flex-1 overflow-y-auto p-3 max-h-[70dvh] lg:max-h-none">
           {initialLoad ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
               {[...Array(8)].map((_, i) => (
                 <div key={i} className="h-24 rounded-lg bg-muted animate-pulse" />
               ))}
@@ -274,7 +276,7 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-2 pb-20 lg:pb-0">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-2 pb-20 lg:pb-0">
               {displayProducts.map((product) => (
                 <button
                   key={product.id}

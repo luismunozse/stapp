@@ -186,7 +186,7 @@ export function OnboardingWizard() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-950 dark:to-gray-900 flex items-center justify-center p-4">
+    <div className="min-h-dvh bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-950 dark:to-gray-900 flex items-center justify-center p-4">
       <div className="w-full max-w-2xl">
         {/* Progress indicator */}
         <div className="flex items-center justify-center gap-2 mb-8">

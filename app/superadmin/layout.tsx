@@ -20,10 +20,10 @@ export default async function SuperadminLayout({
   }
 
   return (
-    <div className="h-screen overflow-hidden bg-muted/30 dark:bg-background">
+    <div className="h-dvh overflow-hidden bg-muted/30 dark:bg-background">
       <SkipLinks />
       <NavbarSuperadmin userEmail={session.user?.email || ""} />
-      <main id="main-content" className="lg:pl-64 pt-[calc(3.5rem+env(safe-area-inset-top,0px))] lg:pt-0 h-screen overflow-y-auto">
+      <main id="main-content" className="lg:pl-64 pt-[calc(3.5rem+env(safe-area-inset-top,0px))] lg:pt-0 h-dvh overflow-y-auto">
         <div className="p-4 lg:p-8">
           <Breadcrumbs />
           {children}

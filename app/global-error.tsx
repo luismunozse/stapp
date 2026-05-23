@@ -15,7 +15,7 @@ export default function GlobalError({
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          minHeight: "100vh",
+          minHeight: "100dvh",
           fontFamily: "system-ui, sans-serif",
           padding: "2rem",
           textAlign: "center",

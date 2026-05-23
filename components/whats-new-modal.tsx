@@ -67,7 +67,7 @@ export function WhatsNewModal({ lastSeenVersion }: WhatsNewModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
-      <DialogContent className="sm:max-w-md max-h-[85vh] flex flex-col">
+      <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-md max-h-[85dvh] flex flex-col pb-[env(safe-area-inset-bottom,1rem)]">
         <DialogHeader className="text-center sm:text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-500">
             <Sparkles className="h-8 w-8 text-white" />

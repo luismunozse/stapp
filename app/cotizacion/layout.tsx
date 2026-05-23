@@ -12,7 +12,7 @@ export default function CotizacionPublicLayout({
   children: React.ReactNode
 }) {
   return (
-    <div className="min-h-screen bg-muted/30">
+    <div className="min-h-dvh bg-muted/30">
       <main className="container mx-auto px-4 py-8 max-w-2xl">
         {children}
       </main>

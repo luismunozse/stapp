@@ -9,6 +9,7 @@ import {
   AlertTriangle,
 } from "lucide-react"
 import { BreadcrumbJsonLd, FAQPageJsonLd } from "@/components/seo/json-ld"
+import { WhatsAppFloat } from "@/components/marketing/whatsapp-float"
 import { useCases, getUseCase } from "@/lib/use-cases-data"
 import type { Metadata } from "next"
 
@@ -64,7 +65,7 @@ export default async function UseCasePage({ params }: PageProps) {
         ]}
       />
       <FAQPageJsonLd faqs={useCase.faqs} />
-      <div className="min-h-screen bg-gradient-to-b from-muted/50 to-background">
+      <div className="min-h-dvh bg-gradient-to-b from-muted/50 to-background">
         {/* Nav */}
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 pt-6">
           <Link
@@ -310,6 +311,7 @@ export default async function UseCasePage({ params }: PageProps) {
           </Card>
         </section>
       </div>
+      <WhatsAppFloat message={`Hola, me interesa STApp para ${useCase.title}`} />
     </>
   )
 }

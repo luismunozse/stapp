@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
+import { FormActionBar } from "@/components/ui/form-action-bar"
 import { Star, X, Upload, ImageIcon, Trash2, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -307,6 +308,9 @@ export function ProveedorForm({ proveedor, onClose, onSuccess }: ProveedorFormPr
               <Label htmlFor="telefono">Teléfono</Label>
               <Input
                 id="telefono"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
                 {...register("telefono")}
                 placeholder="+54 11 1234-5678"
               />
@@ -336,6 +340,8 @@ export function ProveedorForm({ proveedor, onClose, onSuccess }: ProveedorFormPr
               <Input
                 id="email"
                 type="email"
+                inputMode="email"
+                autoComplete="email"
                 {...register("email")}
                 placeholder="contacto@proveedor.com"
               />
@@ -574,14 +580,14 @@ export function ProveedorForm({ proveedor, onClose, onSuccess }: ProveedorFormPr
             <Label htmlFor="activo">Proveedor activo</Label>
           </div>
 
-          <div className="flex gap-2 justify-end">
+          <FormActionBar>
             <Button type="button" variant="outline" onClick={onClose}>
               Cancelar
             </Button>
             <Button type="submit" disabled={loading}>
               {loading ? "Guardando..." : "Guardar"}
             </Button>
-          </div>
+          </FormActionBar>
         </form>
       </CardContent>
     </Card>

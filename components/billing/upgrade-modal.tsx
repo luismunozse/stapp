@@ -145,7 +145,7 @@ export function UpgradeModal({ open, onClose, planSlug = "profesional" }: Upgrad
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[540px] p-0 gap-0 overflow-hidden">
+      <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-[540px] p-4 sm:p-0 gap-0 overflow-hidden max-h-[90dvh] overflow-y-auto">
         {/* Header con gradiente */}
         <div className="bg-gradient-to-br from-primary/10 via-primary/5 to-transparent px-6 pt-6 pb-4">
           <DialogHeader>

@@ -169,7 +169,7 @@ export default async function Home() {
       <HowToJsonLd />
       <UseCasesListJsonLd />
       <SkipLinks />
-      <main id="main-content" className="min-h-screen">
+      <main id="main-content" className="min-h-dvh">
         <NavbarLanding />
         <Hero />
         <Features />

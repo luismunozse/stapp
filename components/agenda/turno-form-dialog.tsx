@@ -281,6 +281,9 @@ export function TurnoFormDialog({
                 />
                 <Input
                   placeholder="Teléfono"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
                   value={snapTelefono}
                   onChange={(e) => setSnapTelefono(e.target.value)}
                   required
@@ -288,6 +291,8 @@ export function TurnoFormDialog({
                 <Input
                   placeholder="Email (opcional)"
                   type="email"
+                  inputMode="email"
+                  autoComplete="email"
                   value={snapEmail}
                   onChange={(e) => setSnapEmail(e.target.value)}
                   className="sm:col-span-2"

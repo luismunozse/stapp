@@ -236,7 +236,8 @@ export function CatalogoItemDialog({ item, categorias, open, onClose, onSaved }:
               <Label htmlFor="precio">Precio</Label>
               <Input
                 id="precio"
-                type="number"
+                type="text"
+                inputMode="decimal"
                 step="0.01"
                 min="0"
                 value={precio}
@@ -248,7 +249,8 @@ export function CatalogoItemDialog({ item, categorias, open, onClose, onSaved }:
               <Label htmlFor="precio_hasta">Precio hasta (rango)</Label>
               <Input
                 id="precio_hasta"
-                type="number"
+                type="text"
+                inputMode="decimal"
                 step="0.01"
                 min="0"
                 value={precioHasta}
@@ -263,7 +265,8 @@ export function CatalogoItemDialog({ item, categorias, open, onClose, onSaved }:
               <Label htmlFor="stock">Stock disponible</Label>
               <Input
                 id="stock"
-                type="number"
+                type="text"
+                inputMode="numeric"
                 min="0"
                 step="1"
                 value={stock}

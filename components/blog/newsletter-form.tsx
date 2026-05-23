@@ -50,6 +50,8 @@ export function NewsletterForm() {
     >
       <input
         type="email"
+        inputMode="email"
+        autoComplete="email"
         required
         value={email}
         onChange={(e) => setEmail(e.target.value)}

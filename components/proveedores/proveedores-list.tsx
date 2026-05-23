@@ -340,37 +340,37 @@ export function ProveedoresList() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7"
                         asChild
                         title="Nueva orden de compra"
+                        aria-label="Nueva orden de compra"
                       >
                         <Link href={`/ordenes-compra?nueva=1&proveedorId=${proveedor.id}`}>
-                          <ShoppingCart className="h-3.5 w-3.5" />
+                          <ShoppingCart className="h-4 w-4" />
                         </Link>
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7"
                         onClick={() => {
                           setEditingProveedor(proveedor)
                           setShowForm(true)
                         }}
                         title="Editar"
+                        aria-label="Editar"
                       >
-                        <Edit className="h-3.5 w-3.5" />
+                        <Edit className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7"
                         onClick={() => handleToggleActivo(proveedor.id, proveedor.activo)}
                         title={proveedor.activo ? "Archivar" : "Reactivar"}
+                        aria-label={proveedor.activo ? "Archivar" : "Reactivar"}
                       >
                         {proveedor.activo ? (
-                          <Archive className="h-3.5 w-3.5" />
+                          <Archive className="h-4 w-4" />
                         ) : (
-                          <ArchiveRestore className="h-3.5 w-3.5 text-emerald-600" />
+                          <ArchiveRestore className="h-4 w-4 text-emerald-600" />
                         )}
                       </Button>
                     </div>

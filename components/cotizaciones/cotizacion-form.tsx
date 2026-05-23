@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label"
 import { DatePicker } from "@/components/ui/date-picker"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { FormActionBar } from "@/components/ui/form-action-bar"
 import {
   Select,
   SelectContent,
@@ -665,7 +666,8 @@ export function CotizacionForm({
                 <div>
                   <Label>Plazo estimado (días)</Label>
                   <Input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
                     min="0"
                     value={condiciones.plazoEstimadoDias ?? ""}
                     onChange={(e) => setCondiciones((p) => ({ ...p, plazoEstimadoDias: e.target.value ? parseInt(e.target.value) : null }))}
@@ -678,7 +680,8 @@ export function CotizacionForm({
                   <Label>Anticipo</Label>
                   <div className="flex items-center gap-2 mt-1">
                     <Input
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
                       min="0"
                       step="0.01"
                       value={condiciones.anticipoValor || ""}
@@ -702,7 +705,8 @@ export function CotizacionForm({
                 <div>
                   <Label>Plazo de retiro (días)</Label>
                   <Input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
                     min="0"
                     value={condiciones.politicaAbandonoDias ?? ""}
                     onChange={(e) => setCondiciones((p) => ({ ...p, politicaAbandonoDias: e.target.value ? parseInt(e.target.value) : null }))}
@@ -716,7 +720,8 @@ export function CotizacionForm({
                 <div>
                   <Label>Garantía (días)</Label>
                   <Input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
                     min="0"
                     value={condiciones.garantiaDias || ""}
                     onChange={(e) => setCondiciones((p) => ({ ...p, garantiaDias: parseInt(e.target.value) || 0 }))}
@@ -826,7 +831,8 @@ export function CotizacionForm({
               <Label className="text-sm">Descuento Global</Label>
               <div className="flex items-center gap-2 mt-1">
                 <Input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   min="0"
                   step="0.01"
                   placeholder="0"
@@ -868,7 +874,8 @@ export function CotizacionForm({
             <div>
               <Label className="text-sm">Tipo cambio USD (opcional)</Label>
               <Input
-                type="number"
+                type="text"
+                inputMode="decimal"
                 min={0}
                 step="0.01"
                 placeholder="Ej: 1250"
@@ -969,7 +976,7 @@ export function CotizacionForm({
           </div>
 
           {/* Actions */}
-          <div className="flex gap-2 justify-end">
+          <FormActionBar>
             <Button type="button" variant="outline" onClick={onClose}>
               Cancelar
             </Button>
@@ -981,7 +988,7 @@ export function CotizacionForm({
                 ? "Actualizar Cotización"
                 : "Crear Cotización"}
             </Button>
-          </div>
+          </FormActionBar>
         </form>
       </CardContent>
     </Card>

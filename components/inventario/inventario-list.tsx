@@ -507,16 +507,16 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
       render: (item) => {
         const isArchived = !!item.deletedAt
         return (
-          <div className="flex items-center justify-end gap-0.5">
+          <div className="flex items-center justify-end gap-1">
             {!isArchived && (
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6"
                 title="Editar"
+                aria-label="Editar"
                 onClick={(e) => { e.stopPropagation(); setEditingItem(item); setShowForm(true) }}
               >
-                <Edit className="h-3.5 w-3.5" />
+                <Edit className="h-4 w-4" />
               </Button>
             )}
             {isArchived && (
@@ -527,11 +527,12 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-6 w-6 text-muted-foreground"
+                  className="text-muted-foreground"
                   title="Más acciones"
+                  aria-label="Más acciones"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <MoreHorizontal className="h-3.5 w-3.5" />
+                  <MoreHorizontal className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
@@ -600,11 +601,12 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
             <Button
               variant="ghost"
               size="icon"
-              className="h-6 w-6 text-muted-foreground hover:text-destructive"
+              className="text-muted-foreground hover:text-destructive"
               title="Eliminar"
+              aria-label="Eliminar"
               onClick={(e) => { e.stopPropagation(); handleDelete(item.id, item.nombre) }}
             >
-              <Trash2 className="h-3.5 w-3.5" />
+              <Trash2 className="h-4 w-4" />
             </Button>
           </div>
         )
@@ -1186,24 +1188,25 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-7 w-7"
+                                aria-label="Editar"
                                 onClick={(e) => {
                                   e.stopPropagation()
                                   setEditingItem(item)
                                   setShowForm(true)
                                 }}
                               >
-                                <Edit className="h-3.5 w-3.5" />
+                                <Edit className="h-4 w-4" />
                               </Button>
                             )}
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                              className="text-muted-foreground hover:text-destructive"
                               title="Eliminar"
+                              aria-label="Eliminar"
                               onClick={(e) => { e.stopPropagation(); handleDelete(item.id, item.nombre) }}
                             >
-                              <Trash2 className="h-3.5 w-3.5" />
+                              <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
                         </div>

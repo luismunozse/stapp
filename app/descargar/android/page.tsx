@@ -27,7 +27,7 @@ export default function DescargarAndroidPage() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-primary/5 to-background">
+    <div className="min-h-dvh bg-gradient-to-b from-primary/5 to-background">
       {/* Header */}
       <div className="container mx-auto px-4 py-6 flex items-center justify-between">
         <Link
@@ -42,7 +42,7 @@ export default function DescargarAndroidPage() {
 
       {/* Hero */}
       <div className="container mx-auto px-4 pb-16">
-        <div className="max-w-2xl mx-auto text-center space-y-8">
+        <div className="max-w-2xl mx-auto text-center space-y-4 md:space-y-8">
           {/* Logo */}
           <div className="mx-auto flex h-28 w-28 items-center justify-center rounded-3xl bg-gradient-to-br from-primary to-primary/70 shadow-lg shadow-primary/25">
             <Image

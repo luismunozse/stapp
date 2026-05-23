@@ -173,7 +173,7 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
             onClick={onClose}
           />
           <motion.aside
-            className="fixed right-0 top-0 bottom-0 z-50 w-full sm:max-w-md bg-background shadow-2xl flex flex-col"
+            className="fixed right-0 top-0 bottom-0 z-50 w-full sm:max-w-md bg-background shadow-2xl flex flex-col pb-[env(safe-area-inset-bottom,0px)]"
             initial={{ x: "100%" }}
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
@@ -189,7 +189,7 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
               </Button>
             </header>
 
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom,1rem)]">
               {step === "cart" ? (
                 cart.items.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-6">
@@ -418,7 +418,7 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                   </div>
                   <div>
                     <Label htmlFor="telefono">Teléfono / WhatsApp *</Label>
-                    <Input id="telefono" type="tel" value={telefono} onChange={(e) => setTelefono(e.target.value)} maxLength={40} />
+                    <Input id="telefono" type="tel" inputMode="tel" autoComplete="tel" value={telefono} onChange={(e) => setTelefono(e.target.value)} maxLength={40} />
                   </div>
                   <div>
                     <Label htmlFor="email">Email (opcional)</Label>

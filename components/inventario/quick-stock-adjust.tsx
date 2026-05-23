@@ -104,7 +104,7 @@ export function QuickStockAdjust({
         </button>
       </PopoverTrigger>
       <PopoverContent
-        className="w-64 space-y-3"
+        className="w-[min(16rem,calc(100vw-2rem))] space-y-3"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="space-y-1">

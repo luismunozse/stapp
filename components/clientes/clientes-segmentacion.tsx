@@ -69,7 +69,7 @@ export function ClientesSegmentacion({ open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-5xl max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Segmentación de Clientes</DialogTitle>
         </DialogHeader>

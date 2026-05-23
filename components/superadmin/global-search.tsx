@@ -144,6 +144,7 @@ export function GlobalSearch() {
             <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
             <Input
               ref={inputRef}
+              type="search"
               value={query}
               onChange={(e) => handleQueryChange(e.target.value)}
               placeholder="Buscar organizaciones, usuarios, tickets..."

@@ -127,7 +127,7 @@ function LoginForm() {
 
   if (requires2FA && pending2FAUserId) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-muted/30 dark:bg-background px-4">
+      <div className="min-h-dvh flex items-center justify-center bg-muted/30 dark:bg-background px-4">
         <div className="absolute top-4 right-4">
           <ThemeToggle variant="icon" />
         </div>
@@ -147,7 +147,7 @@ function LoginForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/30 dark:bg-background px-4">
+    <div className="min-h-dvh flex items-center justify-center bg-muted/30 dark:bg-background px-4">
       {/* Theme toggle in corner */}
       <div className="absolute top-4 right-4">
         <ThemeToggle variant="icon" />
@@ -239,7 +239,7 @@ export default function SuperadminLoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center bg-muted/30 dark:bg-background">
+        <div className="min-h-dvh flex items-center justify-center bg-muted/30 dark:bg-background">
           <div className="animate-pulse text-muted-foreground">Cargando...</div>
         </div>
       }

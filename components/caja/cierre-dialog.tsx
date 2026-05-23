@@ -125,7 +125,8 @@ export function CierreDialog({
           <div>
             <label className="text-sm font-medium">Conteo físico de efectivo</label>
             <Input
-              type="number"
+              type="text"
+              inputMode="decimal"
               min="0"
               step="0.01"
               placeholder="0.00"

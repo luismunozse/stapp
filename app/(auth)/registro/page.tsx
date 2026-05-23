@@ -278,7 +278,7 @@ function RegistroForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/30 dark:bg-background px-4 py-8">
+    <div className="min-h-dvh flex items-center justify-center bg-muted/30 dark:bg-background px-4 py-8">
       {/* Theme toggle in corner */}
       <div className="absolute top-4 right-4">
         <ThemeToggle variant="icon" />
@@ -365,6 +365,7 @@ function RegistroForm() {
               <Label htmlFor="nombre">Tu nombre</Label>
               <Input
                 id="nombre"
+                autoComplete="name"
                 value={formData.nombre}
                 onChange={(e) => updateForm("nombre", e.target.value)}
                 placeholder="Juan Pérez"
@@ -377,6 +378,7 @@ function RegistroForm() {
               <Input
                 id="email"
                 type="email"
+                inputMode="email"
                 value={formData.email}
                 onChange={(e) => updateForm("email", e.target.value)}
                 placeholder="tu@email.com"
@@ -391,6 +393,7 @@ function RegistroForm() {
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
+                  autoComplete="new-password"
                   value={formData.password}
                   onChange={(e) => updateForm("password", e.target.value)}
                   placeholder="Mínimo 6 caracteres"

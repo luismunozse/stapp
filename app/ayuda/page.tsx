@@ -307,7 +307,7 @@ export default function AyudaPage() {
   )
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-muted/50 to-background">
+    <div className="min-h-dvh bg-gradient-to-b from-muted/50 to-background">
       {/* Header */}
       <header className="border-b bg-card">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -447,7 +447,7 @@ export default function AyudaPage() {
                 </Button>
               </div>
             ) : (
-              <div className="space-y-8">
+              <div className="space-y-4 md:space-y-8">
                 {filteredFaqs.map((category) => (
                   <div key={category.category}>
                     <h3 className="text-sm font-semibold text-primary uppercase tracking-wider mb-3">

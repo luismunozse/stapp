@@ -7,6 +7,7 @@ import { PricingSection } from "@/components/landing/pricing-section"
 import { FAQ } from "@/components/landing/faq"
 import { Footer } from "@/components/landing/footer"
 import { WhatsAppButton } from "@/components/landing/whatsapp-button"
+import { PricingPageTracker } from "@/components/marketing/pricing-page-tracker"
 import { getPremiumPrices, getAllPlanPrices } from "@/lib/pricing"
 import { FAQPageJsonLd, BreadcrumbJsonLd } from "@/components/seo/json-ld"
 
@@ -94,7 +95,8 @@ export default async function PreciosPage() {
         ]}
       />
       <FAQPageJsonLd faqs={pricingFaqs} />
-      <main className="min-h-screen">
+      <PricingPageTracker />
+      <main className="min-h-dvh">
         <NavbarLanding />
         <div className="pt-20">
           <PricingSection prices={prices} allPlans={allPlans} />

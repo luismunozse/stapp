@@ -39,6 +39,10 @@ import { EMPTY_CLIENT, nextLineId } from "./pos-types"
 
 const HELD_SALES_KEY = "pos_held_sales"
 
+// Module-scope cache for notif config (rarely changes; avoid refetch on every POS mount).
+let cachedNotifConfig: { data: any; ts: number } | null = null
+const NOTIF_CONFIG_CACHE_MS = 60 * 60 * 1000 // 1h
+
 function loadHeldSales(): HeldSale[] {
   try {
     const raw = localStorage.getItem(HELD_SALES_KEY)
@@ -76,9 +80,18 @@ export function PosTerminal() {
 
   useEffect(() => {
     let cancelled = false
+    const now = Date.now()
+    const fresh = cachedNotifConfig && now - cachedNotifConfig.ts < NOTIF_CONFIG_CACHE_MS
+
+    if (fresh && cachedNotifConfig?.data?.plantillasWhatsapp?.venta_comprobante_corto) {
+      setPlantillaCorta(cachedNotifConfig.data.plantillasWhatsapp.venta_comprobante_corto)
+      return
+    }
+
     fetch("/api/notificaciones/config")
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
+        if (data) cachedNotifConfig = { data, ts: Date.now() }
         if (!cancelled && data?.plantillasWhatsapp?.venta_comprobante_corto) {
           setPlantillaCorta(data.plantillasWhatsapp.venta_comprobante_corto)
         }
@@ -597,11 +610,18 @@ export function PosTerminal() {
 
       {/* ===== Mobile: Tab-based view ===== */}
       <div className="flex-1 flex flex-col lg:hidden overflow-hidden">
-        {/* Content area */}
-        <div className="flex-1 overflow-hidden">
-          {mobileTab === "products" ? (
+        {/* Content area — keep both mounted to preserve search state + scroll */}
+        <div className="flex-1 overflow-hidden relative">
+          <div
+            style={{ display: mobileTab === "products" ? "block" : "none" }}
+            className="absolute inset-0 overflow-hidden"
+          >
             <PosProductSearch ref={searchRef} onAddProduct={addProduct} onAddManualProduct={addManualProduct} onOpenScanner={() => setScannerOpen(true)} />
-          ) : (
+          </div>
+          <div
+            style={{ display: mobileTab === "cart" ? "block" : "none" }}
+            className="absolute inset-0 overflow-hidden"
+          >
             <PosCart
               items={cartItems}
               cliente={cliente}
@@ -617,7 +637,7 @@ export function PosTerminal() {
               showClienteSearch={showClienteSearch}
               onToggleClienteSearch={() => setShowClienteSearch((prev) => !prev)}
             />
-          )}
+          </div>
         </div>
 
         {/* Mobile bottom tab bar */}
@@ -664,7 +684,7 @@ export function PosTerminal() {
 
       {/* ===== Mobile: Floating cart badge (on products tab) ===== */}
       {mobileTab === "products" && cartCount > 0 && (
-        <div className="lg:hidden fixed bottom-20 left-4 right-4 z-[51] safe-area-bottom">
+        <div className="lg:hidden fixed bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] left-4 right-4 z-[51]">
           <button
             type="button"
             onClick={() => setMobileTab("cart")}

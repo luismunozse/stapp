@@ -106,7 +106,7 @@ export function CatalogoItemView({ data }: { data: Data }) {
 
   return (
     <div
-      className="min-h-screen bg-background"
+      className="min-h-dvh bg-background"
       style={{ ["--brand" as any]: config.color_primary }}
     >
       {/* Compact header */}

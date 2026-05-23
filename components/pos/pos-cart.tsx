@@ -255,7 +255,7 @@ export function PosCart({
                       <Button
                         variant="outline"
                         size="icon"
-                        className="h-8 w-8 sm:h-7 sm:w-7"
+                        className="h-8 w-8 sm:h-7 sm:w-7 active:scale-90 active:bg-accent/60 transition-transform"
                         onClick={() => onUpdateQuantity(item.lineId, -1)}
                       >
                         <Minus className="h-3.5 w-3.5 sm:h-3 sm:w-3" />
@@ -266,7 +266,7 @@ export function PosCart({
                       <Button
                         variant="outline"
                         size="icon"
-                        className="h-8 w-8 sm:h-7 sm:w-7"
+                        className="h-8 w-8 sm:h-7 sm:w-7 active:scale-90 active:bg-accent/60 transition-transform"
                         onClick={() => onUpdateQuantity(item.lineId, 1)}
                         disabled={item.inventarioId !== null && item.cantidad >= item.stockDisponible}
                       >
