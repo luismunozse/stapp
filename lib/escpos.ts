@@ -26,7 +26,9 @@ const CMD = {
   DOUBLE_OFF: [ESC, 0x21, 0x00],
   UNDERLINE_ON: [ESC, 0x2d, 0x01],
   UNDERLINE_OFF: [ESC, 0x2d, 0x00],
-  CUT: [GS, 0x56, 0x41, 0x03], // Partial cut with feed
+  CUT: [GS, 0x56, 0x41, 0x03], // Partial cut with minimal feed for cutter clearance
+  FEED_1: [ESC, 0x64, 0x01], // Feed 1 line
+  FEED_2: [ESC, 0x64, 0x02], // Feed 2 lines
   FEED_3: [ESC, 0x64, 0x03], // Feed 3 lines
   FEED_5: [ESC, 0x64, 0x05], // Feed 5 lines
 }
@@ -283,7 +285,6 @@ export function generateOrdenTicketCommands(data: OrdenTicketData, printerWidth:
     add(CMD.BOLD_OFF)
     add(line("Escanea para ver el estado"))
     buf.push(...qrCommands(data.qrUrl, 7))
-    add([LF])
     add(separator(W))
   }
 
@@ -304,7 +305,7 @@ export function generateOrdenTicketCommands(data: OrdenTicketData, printerWidth:
   add(CMD.BOLD_OFF)
   if (data.telefonoEmpresa) add(line(`Consultas: ${data.telefonoEmpresa}`))
 
-  add(CMD.FEED_5, CMD.CUT)
+  add(CMD.CUT)
   return new Uint8Array(buf)
 }
 
@@ -404,8 +405,8 @@ export function generateTicketCommands(data: TicketData, printerWidth: 58 | 80 =
   add(line("Conserve este ticket"))
   add(line("como comprobante"))
 
-  // Feed and cut
-  add(CMD.FEED_5, CMD.CUT)
+  // Cut (cut command provides minimal feed for cutter clearance)
+  add(CMD.CUT)
 
   return new Uint8Array(buf)
 }

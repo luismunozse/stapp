@@ -48,7 +48,8 @@ export async function imageUrlToRaster(
 
     // Convert to 1-bit, MSB first
     const bytesPerRow = targetW / 8
-    const raster = new Uint8Array(bytesPerRow * targetH)
+    const fullRaster = new Uint8Array(bytesPerRow * targetH)
+    const rowHasInk = new Uint8Array(targetH)
 
     for (let y = 0; y < targetH; y++) {
       for (let x = 0; x < targetW; x++) {
@@ -62,18 +63,28 @@ export async function imageUrlToRaster(
         if (lum < threshold) {
           const byteIdx = y * bytesPerRow + Math.floor(x / 8)
           const bitIdx = 7 - (x % 8)
-          raster[byteIdx] |= 1 << bitIdx
+          fullRaster[byteIdx] |= 1 << bitIdx
+          rowHasInk[y] = 1
         }
       }
     }
+
+    // Trim blank rows top/bottom to avoid wasting paper from logo padding
+    let topTrim = 0
+    while (topTrim < targetH && !rowHasInk[topTrim]) topTrim++
+    let bottomTrim = targetH
+    while (bottomTrim > topTrim && !rowHasInk[bottomTrim - 1]) bottomTrim--
+    const trimmedH = bottomTrim - topTrim
+    if (trimmedH <= 0) return null
+    const raster = fullRaster.slice(topTrim * bytesPerRow, bottomTrim * bytesPerRow)
 
     // Build GS v 0 command
     // GS v 0 m xL xH yL yH data
     // m = 0 (normal)
     const xL = bytesPerRow & 0xff
     const xH = (bytesPerRow >> 8) & 0xff
-    const yL = targetH & 0xff
-    const yH = (targetH >> 8) & 0xff
+    const yL = trimmedH & 0xff
+    const yH = (trimmedH >> 8) & 0xff
 
     const ALIGN_CENTER = [ESC_ESC, 0x61, 0x01]
     const ALIGN_LEFT = [ESC_ESC, 0x61, 0x00]
