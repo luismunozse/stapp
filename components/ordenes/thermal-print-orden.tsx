@@ -147,7 +147,70 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
   }
 
   const handleBrowserPrint = () => {
-    window.print()
+    const source = document.getElementById("thermal-receipt-print-area")
+    if (!source) {
+      window.print()
+      return
+    }
+
+    const iframe = document.createElement("iframe")
+    iframe.style.position = "fixed"
+    iframe.style.right = "0"
+    iframe.style.bottom = "0"
+    iframe.style.width = "0"
+    iframe.style.height = "0"
+    iframe.style.border = "0"
+    document.body.appendChild(iframe)
+
+    const doc = iframe.contentDocument || iframe.contentWindow?.document
+    if (!doc) {
+      document.body.removeChild(iframe)
+      window.print()
+      return
+    }
+
+    const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+      .map((el) => el.outerHTML)
+      .join("\n")
+
+    doc.open()
+    doc.write(`<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+${styles}
+<style>
+  @page { size: 80mm auto; margin: 0; }
+  html, body { margin: 0; padding: 0; background: #fff; }
+  body { width: 80mm; }
+  #thermal-receipt-print-area { width: 80mm !important; padding: 2mm; box-sizing: border-box; }
+  img { max-width: 100%; }
+</style>
+</head>
+<body>${source.outerHTML}</body>
+</html>`)
+    doc.close()
+
+    const cleanup = () => {
+      setTimeout(() => {
+        if (iframe.parentNode) iframe.parentNode.removeChild(iframe)
+      }, 500)
+    }
+
+    const triggerPrint = () => {
+      try {
+        iframe.contentWindow?.focus()
+        iframe.contentWindow?.print()
+      } finally {
+        cleanup()
+      }
+    }
+
+    if (doc.readyState === "complete") {
+      setTimeout(triggerPrint, 200)
+    } else {
+      iframe.onload = () => setTimeout(triggerPrint, 200)
+    }
   }
 
   return (
@@ -340,28 +403,6 @@ function ReceiptPreview({ data }: { data: PreviewData }) {
         <div className="text-center">Consultas: {data.telefonoEmpresa}</div>
       )}
 
-      <style jsx global>{`
-        @media print {
-          @page {
-            size: 80mm auto;
-            margin: 0;
-          }
-          body * {
-            visibility: hidden;
-          }
-          #thermal-receipt-print-area,
-          #thermal-receipt-print-area * {
-            visibility: visible;
-          }
-          #thermal-receipt-print-area {
-            position: fixed;
-            left: 0;
-            top: 0;
-            width: 80mm;
-            padding: 2mm;
-          }
-        }
-      `}</style>
     </div>
   )
 }

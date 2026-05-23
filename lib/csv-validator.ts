@@ -64,16 +64,12 @@ const inventarioRowSchema = z.object({
 // Tipo dispositivo enum del schema. Importaciones libres usan 'TODOS' por default.
 const TIPOS_DISPOSITIVO_VALIDOS = new Set(['CELULAR', 'COMPUTADORA', 'TABLET', 'CONSOLA', 'SMARTWATCH', 'TODOS'])
 
-export function generateCodigo(nombre: string): string {
-  const slug = (nombre || 'item')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 20) || 'item'
-  const rand = Math.random().toString(36).slice(2, 8).toUpperCase()
-  return `AUTO-${slug}-${rand}`
+export function generateCodigo(_nombre?: string): string {
+  // 7 chars alfanum. ~78B combinaciones, colisión despreciable por org.
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // sin 0/O/1/I para legibilidad
+  let out = ''
+  for (let i = 0; i < 7; i++) out += chars[Math.floor(Math.random() * chars.length)]
+  return out
 }
 
 export function resolveTipoDispositivo(raw: unknown): string {
