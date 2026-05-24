@@ -456,41 +456,63 @@ async function getPendingCountAll() {
 // ============================================
 
 self.addEventListener('push', (event) => {
-  if (!event.data) return
-
-  const data = event.data.json()
-
-  const options = {
-    body: data.body || 'Nueva notificación',
-    icon: '/logo.png',
-    badge: '/logo.png',
-    vibrate: [100, 50, 100],
-    data: {
-      url: data.url || '/dashboard'
-    },
-    actions: data.actions || []
+  // Parse payload defensively: server may send JSON, plain text, or empty.
+  let data = {}
+  if (event.data) {
+    try { data = event.data.json() }
+    catch { data = { title: 'STApp', body: event.data.text?.() || '' } }
   }
 
-  event.waitUntil(
-    self.registration.showNotification(data.title || 'STApp', options)
-  )
+  // `path` matches the native Capacitor hook convention.
+  // `url` kept as legacy fallback.
+  const target = data.path || data.url || '/dashboard'
+
+  const title = data.title || 'STApp'
+  const options = {
+    body: data.body || 'Nueva notificación',
+    icon: data.icon || '/icon-192.png',
+    badge: data.badge || '/icon-192.png',
+    image: data.image,
+    vibrate: data.silent ? [] : [100, 50, 100],
+    tag: data.tag,            // groups/dedups same-tag notifications
+    renotify: !!data.tag,     // re-alert even if tag exists
+    requireInteraction: !!data.requireInteraction,
+    silent: !!data.silent,
+    timestamp: data.timestamp || Date.now(),
+    data: { path: target, ...(data.data || {}) },
+    actions: Array.isArray(data.actions) ? data.actions.slice(0, 2) : [],
+  }
+
+  event.waitUntil(self.registration.showNotification(title, options))
 })
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
 
-  const url = event.notification.data?.url || '/dashboard'
+  // Action button click → use action's id as path if present.
+  const data = event.notification.data || {}
+  const target = (event.action && data[event.action]) || data.path || data.url || '/dashboard'
 
-  event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true })
-      .then((clientList) => {
-        for (const client of clientList) {
-          if (client.url.includes(self.location.origin) && 'focus' in client) {
-            client.navigate(url)
-            return client.focus()
-          }
-        }
-        return clients.openWindow(url)
-      })
-  )
+  event.waitUntil((async () => {
+    const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+    // Prefer an existing same-origin window: focus + navigate without full reload.
+    const origin = self.location.origin
+    const sameOrigin = all.find((c) => c.url.startsWith(origin))
+    if (sameOrigin) {
+      try { await sameOrigin.focus() } catch {}
+      try { await sameOrigin.navigate(target) } catch {
+        // Some browsers throw on navigate from SW; post a message instead so
+        // the client-side hook can router.push.
+        sameOrigin.postMessage({ type: 'PUSH_NAVIGATE', path: target })
+      }
+      return
+    }
+    await self.clients.openWindow(target)
+  })())
+})
+
+// Optional: track dismissals to refine future targeting.
+self.addEventListener('notificationclose', (event) => {
+  // No-op for now. Hook later for analytics if needed.
+  void event
 })

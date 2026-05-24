@@ -10,7 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { PersonalInfo } from "@/components/perfil/personal-info"
 import { ChangePassword } from "@/components/perfil/change-password"
 import { SecuritySettings } from "@/components/configuracion/security-settings"
-import { Camera, Trash2, Loader2, User, Shield, Info } from "lucide-react"
+import { PushSettings } from "@/components/notifications/push-settings"
+import { Camera, Trash2, Loader2, User, Shield, Info, Bell } from "lucide-react"
 import { toast } from "sonner"
 
 interface ProfileData {
@@ -161,6 +162,10 @@ export default function PerfilPage() {
             <Shield className="h-4 w-4" />
             Seguridad
           </TabsTrigger>
+          <TabsTrigger value="notificaciones" className="gap-2">
+            <Bell className="h-4 w-4" />
+            Notificaciones
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="general" className="space-y-4 mt-4">
@@ -248,6 +253,10 @@ export default function PerfilPage() {
           {profile && (
             <SecuritySettings totpEnabled={profile.totpEnabled} />
           )}
+        </TabsContent>
+
+        <TabsContent value="notificaciones" className="space-y-4 mt-4">
+          <PushSettings />
         </TabsContent>
       </Tabs>
     </div>
