@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -41,6 +42,8 @@ import {
   Hash,
   Layers,
   Boxes,
+  ChevronDown,
+  FileSpreadsheet,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -116,6 +119,7 @@ interface InventarioListProps {
 }
 
 export function InventarioList({ allowImport = true }: InventarioListProps) {
+  const router = useRouter()
   const { confirm } = useModal()
   const { formatPrice } = useCurrency()
   const { tipos: tiposDispositivo, loading: tiposLoading } = useTiposDispositivo()
@@ -774,11 +778,31 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
             variant="outline"
           />
           {allowImport && (
-            <Button onClick={() => setShowImport(true)} variant="outline" className="gap-2">
-              <Upload className="h-4 w-4" />
-              <span className="hidden sm:inline">Importar CSV</span>
-              <span className="sm:hidden">Importar</span>
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <Upload className="h-4 w-4" />
+                  <span>Importar</span>
+                  <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+                <DropdownMenuItem onClick={() => setShowImport(true)} className="gap-2">
+                  <Package className="h-4 w-4" />
+                  <div className="flex flex-col">
+                    <span className="font-medium">Productos nuevos</span>
+                    <span className="text-xs text-muted-foreground">Crear desde CSV / XLSX</span>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => router.push("/inventario/importar-precios")} className="gap-2">
+                  <FileSpreadsheet className="h-4 w-4" />
+                  <div className="flex flex-col">
+                    <span className="font-medium">Actualizar precios</span>
+                    <span className="text-xs text-muted-foreground">Cambiar precios de productos existentes</span>
+                  </div>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
           <Link href="/inventario/conteos">
             <Button variant="outline" className="gap-2">
