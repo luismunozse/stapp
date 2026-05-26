@@ -12,14 +12,16 @@ const ESC_ESC = 0x1b
 
 interface RasterOptions {
   maxWidth?: number    // max width in dots (default 300)
-  threshold?: number   // 0-255, pixels darker than this = black (default 160)
+  threshold?: number   // 0-255, pixels darker than this = black (default 180)
+  dither?: boolean     // Floyd-Steinberg dithering (default true)
+  contrast?: boolean   // stretch luminance before binarize (default true)
 }
 
 export async function imageUrlToRaster(
   url: string,
   options: RasterOptions = {}
 ): Promise<Uint8Array | null> {
-  const { maxWidth = 300, threshold = 160 } = options
+  const { maxWidth = 300, threshold = 180, dither = true, contrast = true } = options
 
   try {
     // Load image
@@ -46,25 +48,68 @@ export async function imageUrlToRaster(
 
     const imgData = ctx.getImageData(0, 0, targetW, targetH).data
 
+    // Build float luminance buffer (transparent → white)
+    const lum = new Float32Array(targetW * targetH)
+    for (let i = 0, p = 0; i < imgData.length; i += 4, p++) {
+      const a = imgData[i + 3]
+      lum[p] = a < 128 ? 255 : imgData[i] * 0.299 + imgData[i + 1] * 0.587 + imgData[i + 2] * 0.114
+    }
+
+    // Auto contrast: stretch [min..max] of non-white pixels to [0..255]
+    if (contrast) {
+      let lo = 255, hi = 0
+      for (let p = 0; p < lum.length; p++) {
+        const v = lum[p]
+        if (v < 250) {
+          if (v < lo) lo = v
+          if (v > hi) hi = v
+        }
+      }
+      const range = hi - lo
+      if (range > 20) {
+        const scale = 255 / range
+        for (let p = 0; p < lum.length; p++) {
+          lum[p] = Math.max(0, Math.min(255, (lum[p] - lo) * scale))
+        }
+      }
+    }
+
     // Convert to 1-bit, MSB first
     const bytesPerRow = targetW / 8
     const fullRaster = new Uint8Array(bytesPerRow * targetH)
     const rowHasInk = new Uint8Array(targetH)
 
-    for (let y = 0; y < targetH; y++) {
-      for (let x = 0; x < targetW; x++) {
-        const i = (y * targetW + x) * 4
-        const r = imgData[i]
-        const g = imgData[i + 1]
-        const b = imgData[i + 2]
-        const a = imgData[i + 3]
-        // Treat transparent as white
-        const lum = a < 128 ? 255 : (r * 0.299 + g * 0.587 + b * 0.114)
-        if (lum < threshold) {
-          const byteIdx = y * bytesPerRow + Math.floor(x / 8)
-          const bitIdx = 7 - (x % 8)
-          fullRaster[byteIdx] |= 1 << bitIdx
-          rowHasInk[y] = 1
+    if (dither) {
+      // Floyd-Steinberg dithering
+      for (let y = 0; y < targetH; y++) {
+        for (let x = 0; x < targetW; x++) {
+          const p = y * targetW + x
+          const old = lum[p]
+          const neu = old < threshold ? 0 : 255
+          const err = old - neu
+          lum[p] = neu
+          if (x + 1 < targetW) lum[p + 1] += (err * 7) / 16
+          if (y + 1 < targetH) {
+            if (x > 0) lum[p + targetW - 1] += (err * 3) / 16
+            lum[p + targetW] += (err * 5) / 16
+            if (x + 1 < targetW) lum[p + targetW + 1] += err / 16
+          }
+          if (neu === 0) {
+            const byteIdx = y * bytesPerRow + (x >> 3)
+            fullRaster[byteIdx] |= 1 << (7 - (x & 7))
+            rowHasInk[y] = 1
+          }
+        }
+      }
+    } else {
+      // Plain threshold
+      for (let y = 0; y < targetH; y++) {
+        for (let x = 0; x < targetW; x++) {
+          if (lum[y * targetW + x] < threshold) {
+            const byteIdx = y * bytesPerRow + (x >> 3)
+            fullRaster[byteIdx] |= 1 << (7 - (x & 7))
+            rowHasInk[y] = 1
+          }
         }
       }
     }
