@@ -6,6 +6,16 @@ import { z } from "zod"
 
 const slugRegex = /^[a-z0-9]([a-z0-9-]{1,48}[a-z0-9])?$/
 
+const trustBadgeIcons = [
+  "truck", "shield", "undo", "card", "clock",
+  "star", "check", "phone", "map",
+] as const
+
+const trustBadgeSchema = z.object({
+  icon: z.enum(trustBadgeIcons),
+  label: z.string().min(1).max(30),
+})
+
 const upsertSchema = z.object({
   slug: z.string().regex(slugRegex, "Slug inválido (a-z, 0-9, guiones)").optional(),
   titulo: z.string().max(120).nullable().optional(),
@@ -13,6 +23,7 @@ const upsertSchema = z.object({
   color_primary: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Color hex inválido").nullable().optional(),
   whatsapp: z.string().max(30).nullable().optional(),
   banner_url: z.string().url().nullable().optional(),
+  trust_badges: z.array(trustBadgeSchema).max(6).optional(),
   activo: z.boolean().optional(),
 })
 

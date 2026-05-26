@@ -748,6 +748,15 @@ export interface LeadConRelaciones extends Lead {
 
 export type TipoCatalogoItem = "PRODUCTO" | "SERVICIO"
 
+export type TrustBadgeIcon =
+  | "truck" | "shield" | "undo" | "card" | "clock"
+  | "star" | "check" | "phone" | "map"
+
+export interface TrustBadge {
+  icon: TrustBadgeIcon
+  label: string
+}
+
 export interface CatalogoConfig {
   id: string
   organization_id: string
@@ -757,6 +766,7 @@ export interface CatalogoConfig {
   color_primary: string | null
   whatsapp: string | null
   banner_url: string | null
+  trust_badges: TrustBadge[]
   activo: boolean
   created_at: string
   updated_at: string

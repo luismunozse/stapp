@@ -17,7 +17,7 @@ async function _fetchCatalogo(slug: string) {
 
   const { data: config } = await supabaseAdmin
     .from("catalogo_config")
-    .select("slug, titulo, descripcion, color_primary, whatsapp, banner_url, activo, organization_id")
+    .select("slug, titulo, descripcion, color_primary, whatsapp, banner_url, trust_badges, activo, organization_id")
     .eq("slug", slug)
     .maybeSingle()
 
@@ -49,6 +49,27 @@ async function _fetchCatalogo(slug: string) {
     .order("destacado", { ascending: false })
     .order("orden", { ascending: true })
 
+  // Social proof: vistas únicas (por visitor_hash) por item últimos 7 días
+  const ago7 = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+  const { data: viewsRaw } = await supabaseAdmin
+    .from("catalogo_views")
+    .select("item_id, visitor_hash")
+    .eq("organization_id", config.organization_id)
+    .not("item_id", "is", null)
+    .gte("created_at", ago7)
+    .limit(10000)
+
+  const viewsPorItem = new Map<string, Set<string>>()
+  const viewsPorItemRaw = new Map<string, number>()
+  for (const v of viewsRaw ?? []) {
+    if (!v.item_id) continue
+    viewsPorItemRaw.set(v.item_id, (viewsPorItemRaw.get(v.item_id) ?? 0) + 1)
+    if (v.visitor_hash) {
+      if (!viewsPorItem.has(v.item_id)) viewsPorItem.set(v.item_id, new Set())
+      viewsPorItem.get(v.item_id)!.add(v.visitor_hash)
+    }
+  }
+
   const items = (itemsRaw ?? []).map((it: any) => {
     const variantesActivas = (it.variantes ?? [])
       .filter((v: any) => v.activo)
@@ -69,11 +90,14 @@ async function _fetchCatalogo(slug: string) {
           return m == null ? Number(v.precio) : Math.min(m, Number(v.precio))
         }, null) ?? it.precio
       : it.precio
+    const vistasUnicas = viewsPorItem.get(it.id)?.size ?? 0
+    const vistasTotal = viewsPorItemRaw.get(it.id) ?? 0
     const { inventario, variantes, ...rest } = it
     return {
       ...rest,
       precio: precioMin,
       stock_disponible: stockReal,
+      vistas_semana: Math.max(vistasUnicas, vistasTotal),
       variantes: variantesActivas.map((v: any) => ({
         id: v.id,
         etiqueta: v.etiqueta,
@@ -93,6 +117,7 @@ async function _fetchCatalogo(slug: string) {
       color_primary: config.color_primary || "#2563eb",
       whatsapp: config.whatsapp,
       banner_url: config.banner_url,
+      trust_badges: Array.isArray(config.trust_badges) ? config.trust_badges : [],
     },
     organizacion: org!,
     categorias: categorias ?? [],

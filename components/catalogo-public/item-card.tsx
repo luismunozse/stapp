@@ -2,7 +2,7 @@
 
 import Image from "next/image"
 import { motion } from "framer-motion"
-import { Plus, Star, Check, Heart } from "lucide-react"
+import { Plus, Star, Check, Heart, Eye } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { useState } from "react"
 
@@ -20,6 +20,7 @@ interface Item {
   etiquetas: string[]
   stock_disponible: number | null
   destacado: boolean
+  vistas_semana?: number
 }
 
 interface Props {
@@ -79,6 +80,15 @@ export function ItemCard({ item, onClick, onQuickAdd, formatPrecio, brandColor, 
             >
               <Star className="h-3 w-3 fill-current" />
               Destacado
+            </Badge>
+          )}
+          {(item.vistas_semana ?? 0) >= 5 && !item.destacado && (
+            <Badge
+              variant="secondary"
+              className="absolute top-2 left-2 gap-1 bg-background/90 backdrop-blur shadow text-[10px] font-semibold"
+            >
+              <Eye className="h-3 w-3" />
+              {item.vistas_semana} esta semana
             </Badge>
           )}
           {onToggleFav && (

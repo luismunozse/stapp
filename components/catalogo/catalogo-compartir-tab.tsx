@@ -7,11 +7,40 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Copy, ExternalLink, Loader2, QrCode, Save, CheckCircle2, AlertCircle, ImagePlus, Trash2, Upload } from "lucide-react"
+import {
+  Copy, ExternalLink, Loader2, QrCode, Save, CheckCircle2, AlertCircle, ImagePlus, Trash2, Upload,
+  Plus, X, Truck, Shield, Undo2, CreditCard, Clock, Star, Phone, MapPin, type LucideIcon,
+} from "lucide-react"
 import { useRef } from "react"
 import { toast } from "sonner"
 import QRCode from "qrcode"
-import type { CatalogoConfig } from "@/types/database"
+import type { CatalogoConfig, TrustBadge, TrustBadgeIcon } from "@/types/database"
+
+const TRUST_ICON_MAP: Record<TrustBadgeIcon, LucideIcon> = {
+  truck: Truck,
+  shield: Shield,
+  undo: Undo2,
+  card: CreditCard,
+  clock: Clock,
+  star: Star,
+  check: CheckCircle2,
+  phone: Phone,
+  map: MapPin,
+}
+
+const TRUST_ICON_OPTIONS: Array<{ value: TrustBadgeIcon; label: string }> = [
+  { value: "truck", label: "Envío" },
+  { value: "shield", label: "Garantía" },
+  { value: "undo", label: "Devolución" },
+  { value: "card", label: "Pago" },
+  { value: "clock", label: "Horario" },
+  { value: "star", label: "Calidad" },
+  { value: "check", label: "Confianza" },
+  { value: "phone", label: "Contacto" },
+  { value: "map", label: "Ubicación" },
+]
+
+const MAX_TRUST_BADGES = 6
 import { CatalogoStatsCard } from "./catalogo-stats-card"
 
 export function CatalogoCompartirTab() {
@@ -29,6 +58,7 @@ export function CatalogoCompartirTab() {
   const [bannerUrl, setBannerUrl] = useState<string | null>(null)
   const [uploadingBanner, setUploadingBanner] = useState(false)
   const [activo, setActivo] = useState(false)
+  const [trustBadges, setTrustBadges] = useState<TrustBadge[]>([])
   const bannerInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -46,6 +76,7 @@ export function CatalogoCompartirTab() {
         setWhatsapp(data.config.whatsapp ?? "")
         setBannerUrl(data.config.banner_url ?? null)
         setActivo(data.config.activo)
+        setTrustBadges(Array.isArray(data.config.trust_badges) ? data.config.trust_badges : [])
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Error cargando configuración")
       } finally {
@@ -90,6 +121,7 @@ export function CatalogoCompartirTab() {
         color_primary: colorPrimary,
         whatsapp: whatsapp.trim() || null,
         banner_url: bannerUrl,
+        trust_badges: trustBadges.filter((b) => b.label.trim().length > 0).slice(0, MAX_TRUST_BADGES),
         activo,
       }
       const res = await fetch("/api/catalogo/config", {
@@ -254,6 +286,74 @@ export function CatalogoCompartirTab() {
                 onChange={(e) => setWhatsapp(e.target.value)}
                 placeholder="+5491112345678"
               />
+            </div>
+          </div>
+
+          <div className="pt-2 border-t">
+            <div className="flex items-center justify-between mb-1.5">
+              <Label>Sellos de confianza</Label>
+              <span className="text-xs text-muted-foreground">{trustBadges.length}/{MAX_TRUST_BADGES}</span>
+            </div>
+            <p className="text-xs text-muted-foreground mb-3">
+              Strip que aparece bajo el hero. Refuerza envío / garantía / pago / etc. para subir conversión.
+            </p>
+            <div className="space-y-2">
+              {trustBadges.map((b, i) => {
+                const Icon = TRUST_ICON_MAP[b.icon] ?? CheckCircle2
+                return (
+                  <div key={i} className="flex items-center gap-2">
+                    <select
+                      value={b.icon}
+                      onChange={(e) =>
+                        setTrustBadges((prev) =>
+                          prev.map((x, j) => (j === i ? { ...x, icon: e.target.value as TrustBadgeIcon } : x))
+                        )
+                      }
+                      className="h-9 rounded-md border bg-background px-2 text-sm"
+                      aria-label="Icono"
+                    >
+                      {TRUST_ICON_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                    <div className="flex items-center gap-2 flex-1 min-w-0 rounded-md border bg-background px-2">
+                      <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <Input
+                        value={b.label}
+                        onChange={(e) =>
+                          setTrustBadges((prev) =>
+                            prev.map((x, j) => (j === i ? { ...x, label: e.target.value } : x))
+                          )
+                        }
+                        maxLength={30}
+                        placeholder="Ej: Envío a todo el país"
+                        className="border-0 shadow-none focus-visible:ring-0 h-9 px-1"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setTrustBadges((prev) => prev.filter((_, j) => j !== i))}
+                      aria-label="Quitar sello"
+                    >
+                      <X className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                )
+              })}
+              {trustBadges.length < MAX_TRUST_BADGES && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setTrustBadges((prev) => [...prev, { icon: "truck", label: "" }])}
+                  className="gap-1.5"
+                >
+                  <Plus className="h-4 w-4" />
+                  Agregar sello
+                </Button>
+              )}
             </div>
           </div>
 

@@ -23,6 +23,7 @@ interface CatalogoData {
     color_primary: string
     whatsapp: string | null
     banner_url: string | null
+    trust_badges: Array<{ icon: string; label: string }>
   }
   organizacion: {
     id: string
@@ -52,6 +53,7 @@ interface CatalogoData {
     etiquetas: string[]
     stock_disponible: number | null
     destacado: boolean
+    vistas_semana?: number
     variantes?: Array<{
       id: string
       etiqueta: string
@@ -226,6 +228,7 @@ export function CatalogoView({ data }: { data: CatalogoData }) {
         whatsapp={data.config.whatsapp}
         brandColor={data.config.color_primary}
         shareUrl={shareUrl}
+        trustBadges={data.config.trust_badges}
       />
 
       <CatalogoFilters
