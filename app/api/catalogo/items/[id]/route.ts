@@ -12,6 +12,7 @@ const updateSchema = z.object({
   inventario_id: z.string().nullable().optional(),
   precio: z.number().min(0).nullable().optional(),
   precio_hasta: z.number().min(0).nullable().optional(),
+  precio_lista: z.number().min(0).nullable().optional(),
   imagen_url: z.string().url().nullable().optional(),
   imagenes: z.array(z.string().url()).optional(),
   etiquetas: z.array(z.string().max(40)).optional(),

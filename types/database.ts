@@ -784,6 +784,7 @@ export interface CatalogoItem {
   descripcion: string | null
   precio: number | null
   precio_hasta: number | null
+  precio_lista: number | null
   imagen_url: string | null
   imagenes: string[]
   etiquetas: string[]

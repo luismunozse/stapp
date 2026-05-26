@@ -31,6 +31,7 @@ export function CatalogoItemDialog({ item, categorias, open, onClose, onSaved }:
   const [categoriaId, setCategoriaId] = useState<string>("")
   const [precio, setPrecio] = useState<string>("")
   const [precioHasta, setPrecioHasta] = useState<string>("")
+  const [precioLista, setPrecioLista] = useState<string>("")
   const [stock, setStock] = useState<string>("")
   const [imagenUrl, setImagenUrl] = useState<string | null>(null)
   const [activo, setActivo] = useState(true)
@@ -44,6 +45,7 @@ export function CatalogoItemDialog({ item, categorias, open, onClose, onSaved }:
       setCategoriaId(item.categoria_id ?? "")
       setPrecio(item.precio != null ? String(item.precio) : "")
       setPrecioHasta(item.precio_hasta != null ? String(item.precio_hasta) : "")
+      setPrecioLista(item.precio_lista != null ? String(item.precio_lista) : "")
       setStock(item.stock != null ? String(item.stock) : "")
       setImagenUrl(item.imagen_url ?? null)
       setActivo(item.activo)
@@ -55,6 +57,7 @@ export function CatalogoItemDialog({ item, categorias, open, onClose, onSaved }:
       setCategoriaId("")
       setPrecio("")
       setPrecioHasta("")
+      setPrecioLista("")
       setStock("")
       setImagenUrl(null)
       setActivo(true)
@@ -91,6 +94,7 @@ export function CatalogoItemDialog({ item, categorias, open, onClose, onSaved }:
       categoria_id: categoriaId || null,
       precio: precio ? Number(precio) : null,
       precio_hasta: precioHasta ? Number(precioHasta) : null,
+      precio_lista: precioLista ? Number(precioLista) : null,
       imagen_url: imagenUrl,
       activo,
       destacado,
@@ -258,6 +262,23 @@ export function CatalogoItemDialog({ item, categorias, open, onClose, onSaved }:
                 placeholder="Opcional"
               />
             </div>
+          </div>
+
+          <div>
+            <Label htmlFor="precio_lista">Precio de lista (antes)</Label>
+            <Input
+              id="precio_lista"
+              type="text"
+              inputMode="decimal"
+              step="0.01"
+              min="0"
+              value={precioLista}
+              onChange={(e) => setPrecioLista(e.target.value)}
+              placeholder="Opcional — se muestra tachado si es mayor que el precio"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Anchor pricing: si es mayor que el precio actual, se renderiza tachado con el % de descuento.
+            </p>
           </div>
 
           {tipo === "PRODUCTO" && (

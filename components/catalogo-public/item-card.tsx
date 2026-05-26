@@ -14,6 +14,7 @@ interface Item {
   categoria_id: string | null
   precio: number | null
   precio_hasta: number | null
+  precio_lista: number | null
   imagen_url: string | null
   imagenes: string[]
   etiquetas: string[]
@@ -106,13 +107,38 @@ export function ItemCard({ item, onClick, onQuickAdd, formatPrecio, brandColor, 
         </div>
         <div className="p-3 space-y-1">
           <h3 className="font-medium text-sm line-clamp-2 min-h-[2.5rem]">{item.nombre}</h3>
-          <div className="text-base font-bold" style={{ color: brandColor }}>
-            {sinPrecio
-              ? <span className="text-sm font-normal text-muted-foreground italic">Consultar</span>
-              : item.precio_hasta != null
-                ? `Desde ${formatPrecio(Number(item.precio))}`
-                : formatPrecio(Number(item.precio))}
-          </div>
+          {(() => {
+            const tieneAnchor =
+              !sinPrecio &&
+              item.precio_lista != null &&
+              Number(item.precio_lista) > Number(item.precio)
+            const pct = tieneAnchor
+              ? Math.round((1 - Number(item.precio) / Number(item.precio_lista)) * 100)
+              : 0
+            return (
+              <>
+                <div className="flex items-baseline gap-1.5 flex-wrap">
+                  <div className="text-base font-bold" style={{ color: brandColor }}>
+                    {sinPrecio
+                      ? <span className="text-sm font-normal text-muted-foreground italic">Consultar</span>
+                      : item.precio_hasta != null
+                        ? `Desde ${formatPrecio(Number(item.precio))}`
+                        : formatPrecio(Number(item.precio))}
+                  </div>
+                  {tieneAnchor && (
+                    <span className="text-xs text-muted-foreground line-through">
+                      {formatPrecio(Number(item.precio_lista))}
+                    </span>
+                  )}
+                </div>
+                {tieneAnchor && pct > 0 && (
+                  <span className="inline-block text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded">
+                    -{pct}%
+                  </span>
+                )}
+              </>
+            )
+          })()}
         </div>
       </button>
 

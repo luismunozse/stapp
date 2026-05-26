@@ -39,7 +39,7 @@ async function _fetchCatalogo(slug: string) {
   const { data: itemsRaw } = await supabaseAdmin
     .from("catalogo_items")
     .select(`
-      id, tipo, nombre, descripcion, categoria_id, precio, precio_hasta,
+      id, tipo, nombre, descripcion, categoria_id, precio, precio_hasta, precio_lista,
       imagen_url, imagenes, etiquetas, stock, destacado, inventario_id, orden,
       inventario:inventario(stock),
       variantes:catalogo_variantes(id, etiqueta, sku, precio, stock, imagen_url, activo, orden)
@@ -139,5 +139,56 @@ export default async function CatalogoPublicPage({ params }: PageProps) {
   const data = await fetchCatalogo(slug)
   if (!data) notFound()
 
-  return <CatalogoView data={data} />
+  const orgName = data.organizacion.nombre_mostrar || data.organizacion.nombre
+  const moneda = data.organizacion.moneda || "ARS"
+  const titulo = data.config.titulo || orgName
+
+  // ItemList JSON-LD para SEO (Google Shopping snippets / rich results)
+  const itemListLd = {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: titulo,
+    numberOfItems: data.items.length,
+    itemListElement: data.items.slice(0, 50).map((it, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      url: `/catalogo/${slug}/${it.id}`,
+      item: {
+        "@type": it.tipo === "SERVICIO" ? "Service" : "Product",
+        name: it.nombre,
+        image: it.imagen_url || undefined,
+        description: it.descripcion || undefined,
+        ...(it.precio != null && {
+          offers: {
+            "@type": "Offer",
+            price: Number(it.precio),
+            priceCurrency: moneda,
+            availability:
+              it.stock_disponible === 0
+                ? "https://schema.org/OutOfStock"
+                : "https://schema.org/InStock",
+            ...(it.precio_lista != null &&
+              Number(it.precio_lista) > Number(it.precio) && {
+                priceSpecification: {
+                  "@type": "UnitPriceSpecification",
+                  priceType: "https://schema.org/ListPrice",
+                  price: Number(it.precio_lista),
+                  priceCurrency: moneda,
+                },
+              }),
+          },
+        }),
+      },
+    })),
+  }
+
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListLd) }}
+      />
+      <CatalogoView data={data} />
+    </>
+  )
 }

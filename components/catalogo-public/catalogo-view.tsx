@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import Fuse from "fuse.js"
 import { motion, AnimatePresence } from "framer-motion"
-import { ShoppingCart } from "lucide-react"
+import { ShoppingCart, MessageCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CartDrawer } from "./cart-drawer"
 import { ItemDetailDialog } from "./item-detail-dialog"
@@ -46,6 +46,7 @@ interface CatalogoData {
     categoria_id: string | null
     precio: number | null
     precio_hasta: number | null
+    precio_lista: number | null
     imagen_url: string | null
     imagenes: string[]
     etiquetas: string[]
@@ -274,13 +275,40 @@ export function CatalogoView({ data }: { data: CatalogoData }) {
               </div>
             )}
             {itemsFiltrados.length === 0 ? (
-              <div className="text-center py-20 text-muted-foreground">
-                <p className="mb-3">No hay items que coincidan con tu búsqueda.</p>
-                {hasActiveFilters && (
-                  <Button variant="outline" size="sm" onClick={clearFilters}>
-                    Limpiar filtros
-                  </Button>
-                )}
+              <div className="text-center py-16 text-muted-foreground">
+                <p className="mb-4 text-base">
+                  {search.trim()
+                    ? <>No encontramos <span className="font-medium text-foreground">"{search}"</span> en el catálogo.</>
+                    : "No hay items que coincidan con esos filtros."}
+                </p>
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  {hasActiveFilters && (
+                    <Button variant="outline" size="sm" onClick={clearFilters}>
+                      Limpiar filtros
+                    </Button>
+                  )}
+                  {data.config.whatsapp && (
+                    <Button
+                      asChild
+                      size="sm"
+                      className="gap-1.5 text-white"
+                      style={{ backgroundColor: data.config.color_primary }}
+                    >
+                      <a
+                        href={`https://wa.me/${data.config.whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(
+                          search.trim()
+                            ? `Hola! Estoy buscando "${search.trim()}" pero no lo encuentro en el catálogo. ¿Tienen disponibilidad?`
+                            : `Hola! ¿Pueden ayudarme a encontrar algo en el catálogo?`
+                        )}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <MessageCircle className="h-4 w-4" />
+                        Consultar por WhatsApp
+                      </a>
+                    </Button>
+                  )}
+                </div>
               </div>
             ) : (
               <motion.div

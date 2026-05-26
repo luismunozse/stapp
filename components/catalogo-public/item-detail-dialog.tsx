@@ -26,6 +26,7 @@ interface Item {
   categoria_id: string | null
   precio: number | null
   precio_hasta: number | null
+  precio_lista: number | null
   imagen_url: string | null
   imagenes: string[]
   etiquetas: string[]
@@ -90,12 +91,25 @@ export function ItemDetailDialog({
     }).catch(() => {})
   }, [open, item?.id, slug])
 
-  // Cross-sell: 4 items aleatorios de la misma categoría (excluyendo el actual)
+  // Cross-sell: 4 items misma categoría priorizando destacados y precio alto (anchor upsell).
+  // Si no hay 4 en la misma categoría, completa con destacados de otras categorías.
   const sugeridos = useMemo(() => {
     if (!item) return []
-    return relatedItems
-      .filter((i) => i.id !== item.id && i.categoria_id === item.categoria_id && i.stock_disponible !== 0)
-      .slice(0, 4)
+    const disponible = (i: Item) => i.id !== item.id && i.stock_disponible !== 0
+    const score = (i: Item) =>
+      (i.destacado ? 1_000_000 : 0) + (Number(i.precio) || 0)
+    const sortByScore = (arr: Item[]) =>
+      [...arr].sort((a, b) => score(b) - score(a))
+
+    const mismaCat = sortByScore(
+      relatedItems.filter(disponible).filter((i) => i.categoria_id === item.categoria_id)
+    )
+    if (mismaCat.length >= 4) return mismaCat.slice(0, 4)
+
+    const otraCat = sortByScore(
+      relatedItems.filter(disponible).filter((i) => i.categoria_id !== item.categoria_id)
+    )
+    return [...mismaCat, ...otraCat].slice(0, 4)
   }, [item, relatedItems])
 
   if (!item) return null
@@ -314,6 +328,16 @@ export function ItemDetailDialog({
                   </div>
                   {item.precio_hasta != null && !tieneVariantes && (
                     <div className="text-xs text-muted-foreground">hasta {formatPrecio(Number(item.precio_hasta))}</div>
+                  )}
+                  {item.precio_lista != null && Number(item.precio_lista) > precioEfectivo! && (
+                    <div className="flex items-center justify-end gap-1.5 mt-0.5">
+                      <span className="text-xs text-muted-foreground line-through">
+                        {formatPrecio(Number(item.precio_lista))}
+                      </span>
+                      <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded">
+                        -{Math.round((1 - precioEfectivo! / Number(item.precio_lista)) * 100)}%
+                      </span>
+                    </div>
                   )}
                 </>
               )}

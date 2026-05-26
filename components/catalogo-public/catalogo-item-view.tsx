@@ -20,6 +20,7 @@ interface Item {
   categoria_id: string | null
   precio: number | null
   precio_hasta: number | null
+  precio_lista: number | null
   imagen_url: string | null
   imagenes: string[]
   etiquetas: string[]
@@ -213,8 +214,20 @@ export function CatalogoItemView({ data }: { data: Data }) {
               <p className="text-lg italic text-muted-foreground">Consultar precio</p>
             ) : (
               <div>
-                <div className="text-3xl font-bold" style={{ color: config.color_primary }}>
-                  {item.precio_hasta != null ? `Desde ${formatPrecio(Number(item.precio))}` : formatPrecio(Number(item.precio))}
+                <div className="flex items-baseline gap-2 flex-wrap">
+                  <div className="text-3xl font-bold" style={{ color: config.color_primary }}>
+                    {item.precio_hasta != null ? `Desde ${formatPrecio(Number(item.precio))}` : formatPrecio(Number(item.precio))}
+                  </div>
+                  {item.precio_lista != null && Number(item.precio_lista) > Number(item.precio) && (
+                    <>
+                      <span className="text-base text-muted-foreground line-through">
+                        {formatPrecio(Number(item.precio_lista))}
+                      </span>
+                      <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded">
+                        -{Math.round((1 - Number(item.precio) / Number(item.precio_lista)) * 100)}%
+                      </span>
+                    </>
+                  )}
                 </div>
                 {item.precio_hasta != null && (
                   <p className="text-sm text-muted-foreground">hasta {formatPrecio(Number(item.precio_hasta))}</p>

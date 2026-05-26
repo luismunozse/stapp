@@ -27,7 +27,7 @@ async function _fetchItem(slug: string, itemId: string) {
   const { data: itemRaw } = await supabaseAdmin
     .from("catalogo_items")
     .select(`
-      id, tipo, nombre, descripcion, categoria_id, precio, precio_hasta,
+      id, tipo, nombre, descripcion, categoria_id, precio, precio_hasta, precio_lista,
       imagen_url, imagenes, etiquetas, stock, destacado, inventario_id,
       inventario:inventario(stock),
       variantes:catalogo_variantes(id, etiqueta, sku, precio, stock, imagen_url, activo, orden)
@@ -87,7 +87,7 @@ async function _fetchItem(slug: string, itemId: string) {
     const { data } = await supabaseAdmin
       .from("catalogo_items")
       .select(`
-        id, tipo, nombre, descripcion, categoria_id, precio, precio_hasta,
+        id, tipo, nombre, descripcion, categoria_id, precio, precio_hasta, precio_lista,
         imagen_url, imagenes, etiquetas, stock, destacado, inventario_id,
         inventario:inventario(stock)
       `)
@@ -96,6 +96,7 @@ async function _fetchItem(slug: string, itemId: string) {
       .eq("categoria_id", item.categoria_id)
       .neq("id", itemId)
       .order("destacado", { ascending: false })
+      .order("precio", { ascending: false, nullsFirst: false })
       .limit(8)
     relacionados = (data ?? []).map((it: any) => {
       const stk = it.inventario_id && it.inventario ? it.inventario.stock : it.stock
@@ -166,12 +167,23 @@ export default async function ItemPermalinkPage({ params }: PageProps) {
     brand: { "@type": "Organization", name: orgName },
   }
   if (data.item.precio != null) {
+    const hasAnchor =
+      data.item.precio_lista != null &&
+      Number(data.item.precio_lista) > Number(data.item.precio)
     productLd.offers = {
       "@type": "Offer",
       price: Number(data.item.precio),
       priceCurrency: moneda,
       availability,
       seller: { "@type": "Organization", name: orgName },
+      ...(hasAnchor && {
+        priceSpecification: {
+          "@type": "UnitPriceSpecification",
+          priceType: "https://schema.org/ListPrice",
+          price: Number(data.item.precio_lista),
+          priceCurrency: moneda,
+        },
+      }),
     }
   }
 
