@@ -29,6 +29,8 @@ interface EstadoResultadosData {
   }
   meta: {
     gastosNoComputables: number
+    movEgresosCount?: number
+    movEgresosSinCategoria?: number
   }
 }
 
@@ -266,6 +268,23 @@ export function GastosResumen() {
             <div className="text-xs text-muted-foreground bg-muted/50 border rounded-lg p-3">
               Se excluyeron {formatPrice(data.meta.gastosNoComputables)} en movimientos marcados
               como "no afecta resultado" (retiros de socio, transferencias internas, etc).
+            </div>
+          )}
+
+          {/* Diagnóstico: hay EGRESO en período pero $0 computables */}
+          {data.gastos.total === 0 && (data.meta.movEgresosCount ?? 0) === 0 && (
+            <div className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-lg p-3 space-y-1">
+              <div className="font-medium">No hay movimientos EGRESO en este período</div>
+              <div>
+                Verificá el rango de fechas. Para registrar un gasto: <Link href="/caja" className="underline">Caja → Movimientos → Nuevo</Link>
+              </div>
+            </div>
+          )}
+
+          {data.gastos.total === 0 && (data.meta.movEgresosCount ?? 0) > 0 && data.meta.gastosNoComputables === 0 && (
+            <div className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-lg p-3 space-y-1">
+              <div className="font-medium">Hay {data.meta.movEgresosCount} EGRESO en el período pero suman $0 computable</div>
+              <div>Posible causa: monto cero, o problema de datos. Revisá <Link href="/caja" className="underline">Caja → Movimientos</Link>.</div>
             </div>
           )}
         </>

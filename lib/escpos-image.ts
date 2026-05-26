@@ -11,17 +11,18 @@ const ESC_GS = 0x1d
 const ESC_ESC = 0x1b
 
 interface RasterOptions {
-  maxWidth?: number    // max width in dots (default 300)
-  threshold?: number   // 0-255, pixels darker than this = black (default 180)
+  maxWidth?: number    // max width in dots (default 384 = full 80mm head)
+  threshold?: number   // 0-255, pixels darker than this = black (default 200)
   dither?: boolean     // Floyd-Steinberg dithering (default true)
   contrast?: boolean   // stretch luminance before binarize (default true)
+  gamma?: number       // <1 darkens midtones, >1 lightens (default 0.7)
 }
 
 export async function imageUrlToRaster(
   url: string,
   options: RasterOptions = {}
 ): Promise<Uint8Array | null> {
-  const { maxWidth = 300, threshold = 180, dither = true, contrast = true } = options
+  const { maxWidth = 384, threshold = 200, dither = true, contrast = true, gamma = 0.7 } = options
 
   try {
     // Load image
@@ -53,6 +54,13 @@ export async function imageUrlToRaster(
     for (let i = 0, p = 0; i < imgData.length; i += 4, p++) {
       const a = imgData[i + 3]
       lum[p] = a < 128 ? 255 : imgData[i] * 0.299 + imgData[i + 1] * 0.587 + imgData[i + 2] * 0.114
+    }
+
+    // Gamma darken midtones (gamma < 1 = darker)
+    if (gamma !== 1) {
+      for (let p = 0; p < lum.length; p++) {
+        lum[p] = 255 * Math.pow(lum[p] / 255, 1 / gamma)
+      }
     }
 
     // Auto contrast: stretch [min..max] of non-white pixels to [0..255]
@@ -159,4 +167,108 @@ function loadImage(url: string): Promise<HTMLImageElement> {
     img.onerror = () => reject(new Error("No se pudo cargar el logo"))
     img.src = url
   })
+}
+
+interface BinarizeOptions {
+  maxWidth?: number
+  threshold?: number
+  dither?: boolean
+  contrast?: boolean
+  gamma?: number
+}
+
+/**
+ * Binarize image to pure B/W PNG data URL.
+ * Use for browser printing — driver will receive only black pixels, no grays to crush.
+ */
+export async function imageUrlToBinarizedDataUrl(
+  url: string,
+  options: BinarizeOptions = {}
+): Promise<string | null> {
+  const { maxWidth = 384, threshold = 200, dither = true, contrast = true, gamma = 0.7 } = options
+
+  try {
+    const img = await loadImage(url)
+    const ratio = Math.min(1, maxWidth / img.width)
+    const targetW = Math.max(8, Math.floor(img.width * ratio))
+    const targetH = Math.max(1, Math.floor(img.height * (targetW / img.width)))
+
+    const canvas = document.createElement("canvas")
+    canvas.width = targetW
+    canvas.height = targetH
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return null
+
+    ctx.fillStyle = "#ffffff"
+    ctx.fillRect(0, 0, targetW, targetH)
+    ctx.drawImage(img, 0, 0, targetW, targetH)
+
+    const imgData = ctx.getImageData(0, 0, targetW, targetH)
+    const data = imgData.data
+
+    const lum = new Float32Array(targetW * targetH)
+    for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+      const a = data[i + 3]
+      lum[p] = a < 128 ? 255 : data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114
+    }
+
+    if (gamma !== 1) {
+      for (let p = 0; p < lum.length; p++) {
+        lum[p] = 255 * Math.pow(lum[p] / 255, 1 / gamma)
+      }
+    }
+
+    if (contrast) {
+      let lo = 255, hi = 0
+      for (let p = 0; p < lum.length; p++) {
+        const v = lum[p]
+        if (v < 250) {
+          if (v < lo) lo = v
+          if (v > hi) hi = v
+        }
+      }
+      const range = hi - lo
+      if (range > 20) {
+        const scale = 255 / range
+        for (let p = 0; p < lum.length; p++) {
+          lum[p] = Math.max(0, Math.min(255, (lum[p] - lo) * scale))
+        }
+      }
+    }
+
+    if (dither) {
+      for (let y = 0; y < targetH; y++) {
+        for (let x = 0; x < targetW; x++) {
+          const p = y * targetW + x
+          const old = lum[p]
+          const neu = old < threshold ? 0 : 255
+          const err = old - neu
+          lum[p] = neu
+          if (x + 1 < targetW) lum[p + 1] += (err * 7) / 16
+          if (y + 1 < targetH) {
+            if (x > 0) lum[p + targetW - 1] += (err * 3) / 16
+            lum[p + targetW] += (err * 5) / 16
+            if (x + 1 < targetW) lum[p + targetW + 1] += err / 16
+          }
+        }
+      }
+    } else {
+      for (let p = 0; p < lum.length; p++) {
+        lum[p] = lum[p] < threshold ? 0 : 255
+      }
+    }
+
+    for (let p = 0; p < lum.length; p++) {
+      const v = lum[p] === 0 ? 0 : 255
+      const i = p * 4
+      data[i] = data[i + 1] = data[i + 2] = v
+      data[i + 3] = 255
+    }
+    ctx.putImageData(imgData, 0, 0)
+
+    return canvas.toDataURL("image/png")
+  } catch (err) {
+    console.error("imageUrlToBinarizedDataUrl error:", err)
+    return null
+  }
 }

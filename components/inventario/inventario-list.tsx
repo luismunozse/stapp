@@ -70,6 +70,7 @@ import { LotesDialog } from "./lotes-dialog"
 import { SeriesDialog } from "./series-dialog"
 import { VariantesDialog } from "./variantes-dialog"
 import { KitDialog } from "./kit-dialog"
+import { WipeInventarioDialog } from "./wipe-inventario-dialog"
 import { ImportModal } from "@/components/import/import-modal"
 import { ExportButton } from "@/components/export/export-button"
 import { useCurrency } from "@/contexts/currency-context"
@@ -153,6 +154,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   const [variantesItem, setVariantesItem] = useState<{ id: string; nombre: string } | null>(null)
   const [kitItem, setKitItem] = useState<{ id: string; nombre: string } | null>(null)
   const [showScanner, setShowScanner] = useState(false)
+  const [showWipe, setShowWipe] = useState(false)
   const [pendingBarcode, setPendingBarcode] = useState<string | null>(null)
   const [labelItems, setLabelItems] = useState<Inventario[] | null>(null)
   const [includeArchived, setIncludeArchived] = useState(false)
@@ -867,8 +869,23 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
             <Plus className="h-4 w-4" />
             Nuevo Item
           </Button>
+          <Button
+            variant="destructive"
+            onClick={() => setShowWipe(true)}
+            className="gap-2 md:hidden"
+            title="Eliminar todo el inventario"
+          >
+            <Trash2 className="h-4 w-4" />
+            Vaciar
+          </Button>
         </div>
       </div>
+
+      <WipeInventarioDialog
+        open={showWipe}
+        onOpenChange={setShowWipe}
+        onSuccess={() => setRefreshKey((k) => k + 1)}
+      />
 
       {showBulkForm && (
         <InventarioBulkForm

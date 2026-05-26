@@ -474,6 +474,8 @@ export async function GET(request: Request) {
         itemsConCostoConocido,
         itemsSinCostoConocido,
         gastosNoComputables: round(gastosNoComputables),
+        movEgresosCount: movEgresos?.length || 0,
+        movEgresosSinCategoria: (movEgresos || []).filter((m: any) => !m.categorias_gasto && m.afecta_rentabilidad !== false).length,
       },
     })
   } catch (err) {

@@ -13,7 +13,7 @@ import {
 import { Receipt, Loader2, Usb, Printer, Eye } from "lucide-react"
 import { useThermalPrinter } from "@/components/pos/use-thermal-printer"
 import { generateOrdenTicketCommands, type OrdenTicketData } from "@/lib/escpos"
-import { imageUrlToRaster } from "@/lib/escpos-image"
+import { imageUrlToRaster, imageUrlToBinarizedDataUrl } from "@/lib/escpos-image"
 import { ESTADO_LABELS } from "@/lib/orden-state-machine"
 import { toast } from "sonner"
 import type { OrdenServicio } from "@/types"
@@ -100,7 +100,7 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
   const buildTicketData = async (): Promise<OrdenTicketData> => {
     let logoRaster: Uint8Array | null = null
     if (preview.logoUrl) {
-      logoRaster = await imageUrlToRaster(preview.logoUrl, { maxWidth: 280 })
+      logoRaster = await imageUrlToRaster(preview.logoUrl, { maxWidth: 384 })
     }
     return {
       numeroOrden: orden.numeroOrden,
@@ -146,11 +146,23 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
     }
   }
 
-  const handleBrowserPrint = () => {
+  const handleBrowserPrint = async () => {
     const source = document.getElementById("thermal-receipt-print-area")
     if (!source) {
       window.print()
       return
+    }
+
+    // Pre-binarize logo so driver receives pure B/W (no grays to crush)
+    let logoDataUrl: string | null = null
+    if (preview.logoUrl) {
+      logoDataUrl = await imageUrlToBinarizedDataUrl(preview.logoUrl, { maxWidth: 384 })
+    }
+
+    const clone = source.cloneNode(true) as HTMLElement
+    if (logoDataUrl) {
+      const logoImg = clone.querySelector("img") as HTMLImageElement | null
+      if (logoImg) logoImg.src = logoDataUrl
     }
 
     const iframe = document.createElement("iframe")
@@ -184,10 +196,10 @@ ${styles}
   html, body { margin: 0; padding: 0; background: #fff; }
   body { width: 80mm; }
   #thermal-receipt-print-area { width: 80mm !important; padding: 2mm; box-sizing: border-box; }
-  img { max-width: 100%; }
+  img { max-width: 100%; image-rendering: pixelated; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 </style>
 </head>
-<body>${source.outerHTML}</body>
+<body>${clone.outerHTML}</body>
 </html>`)
     doc.close()
 
@@ -197,8 +209,23 @@ ${styles}
       }, 500)
     }
 
-    const triggerPrint = () => {
+    const waitForImages = async () => {
+      const imgs = Array.from(doc.images)
+      await Promise.all(
+        imgs.map((img) =>
+          img.complete && img.naturalWidth > 0
+            ? Promise.resolve()
+            : new Promise<void>((res) => {
+                img.onload = () => res()
+                img.onerror = () => res()
+              })
+        )
+      )
+    }
+
+    const triggerPrint = async () => {
       try {
+        await waitForImages()
         iframe.contentWindow?.focus()
         iframe.contentWindow?.print()
       } finally {
@@ -207,9 +234,9 @@ ${styles}
     }
 
     if (doc.readyState === "complete") {
-      setTimeout(triggerPrint, 200)
+      triggerPrint()
     } else {
-      iframe.onload = () => setTimeout(triggerPrint, 200)
+      iframe.onload = () => triggerPrint()
     }
   }
 
