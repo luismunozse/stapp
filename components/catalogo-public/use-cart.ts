@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
-import { cartKey } from "@/lib/catalogo-validators"
+import { cartKey, cartSchema } from "@/lib/catalogo-validators"
 
 export interface CartItem {
   id: string
@@ -21,7 +21,15 @@ function readCart(slug: string): CartItem[] {
   try {
     const raw = localStorage.getItem(STORAGE_PREFIX + slug)
     if (!raw) return []
-    return JSON.parse(raw)
+    const parsed = JSON.parse(raw)
+    // Validar shape contra schema — defensa contra storage corrupto
+    // (versiones viejas, manipulación manual, otros scripts).
+    const result = cartSchema.safeParse(parsed)
+    if (!result.success) {
+      localStorage.removeItem(STORAGE_PREFIX + slug)
+      return []
+    }
+    return result.data as CartItem[]
   } catch {
     return []
   }

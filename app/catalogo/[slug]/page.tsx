@@ -6,11 +6,17 @@ import type { Metadata, Viewport } from "next"
 
 type PageProps = { params: Promise<{ slug: string }> }
 
-const fetchCatalogo = unstable_cache(
-  _fetchCatalogo,
-  ["catalogo-public"],
-  { revalidate: 60, tags: ["catalogo"] }
-)
+// Cache key incluye el slug para invalidación granular por tenant y para
+// evitar colisiones entre entries (cada catálogo tiene su propio espacio).
+// Tag `catalogo:${slug}` permite a admin/cotizar invalidar un solo catálogo
+// sin tirar abajo el resto.
+function fetchCatalogo(slug: string) {
+  return unstable_cache(
+    () => _fetchCatalogo(slug),
+    ["catalogo-public", slug],
+    { revalidate: 60, tags: ["catalogo", `catalogo:${slug}`] }
+  )()
+}
 
 async function _fetchCatalogo(slug: string) {
   if (!/^[a-z0-9]([a-z0-9-]{1,48}[a-z0-9])?$/.test(slug)) return null

@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
+import { idArraySchema } from "@/lib/catalogo-validators"
 
 const MAX_RECIENTES = 20
 
@@ -23,6 +24,24 @@ function readJSON<T>(key: string, fallback: T): T {
   }
 }
 
+// Lee array de IDs validando shape. Si falla, limpia y devuelve [].
+function readIdArray(key: string): string[] {
+  if (typeof window === "undefined") return []
+  try {
+    const raw = window.localStorage.getItem(key)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    const result = idArraySchema.safeParse(parsed)
+    if (!result.success) {
+      window.localStorage.removeItem(key)
+      return []
+    }
+    return result.data
+  } catch {
+    return []
+  }
+}
+
 function writeJSON(key: string, value: unknown) {
   if (typeof window === "undefined") return
   try {
@@ -34,7 +53,7 @@ export function useRecientes(slug: string) {
   const [ids, setIds] = useState<string[]>([])
 
   useEffect(() => {
-    setIds(readJSON<string[]>(keyRecientes(slug), []))
+    setIds(readIdArray(keyRecientes(slug)))
   }, [slug])
 
   const push = useCallback((itemId: string) => {
@@ -57,7 +76,7 @@ export function useFavoritos(slug: string) {
   const [ids, setIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
-    const arr = readJSON<string[]>(keyFavoritos(slug), [])
+    const arr = readIdArray(keyFavoritos(slug))
     setIds(new Set(arr))
   }, [slug])
 

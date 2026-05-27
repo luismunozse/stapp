@@ -5,6 +5,7 @@ import {
   getApiRateLimit,
   isExemptFromRateLimit,
   extractPublicToken,
+  extractPublicCatalogoSlug,
 } from "@/lib/rate-limit"
 import { getTenantStatusBySlug } from "@/lib/tenant-status-edge"
 
@@ -199,6 +200,31 @@ export async function middleware(request: NextRequest) {
               "X-RateLimit-Remaining": "0",
               "X-RateLimit-Reset": String(tokenResult.reset),
               "X-RateLimit-Scope": "public-token",
+            },
+          }
+        )
+      }
+    }
+
+    // Rate limit por slug de catálogo público. Defensa contra botnet
+    // distribuido scrapeando un catálogo (el per-IP no alcanza). El slug
+    // es público (no secreto) pero limita el daño agregado. 300 req/5min
+    // permite tráfico real alto (decenas de visitantes simultáneos cada
+    // uno cargando ~10 requests al catálogo) y corta abuso masivo.
+    const catalogoSlug = extractPublicCatalogoSlug(pathname)
+    if (catalogoSlug) {
+      const slugResult = await rateLimit(`csl:${catalogoSlug}`, 300, 5 * 60 * 1000)
+      if (!slugResult.success) {
+        return NextResponse.json(
+          { error: "Catálogo recibiendo demasiadas solicitudes. Intentá en unos minutos." },
+          {
+            status: 429,
+            headers: {
+              "Retry-After": String(Math.ceil((slugResult.reset - Date.now()) / 1000)),
+              "X-RateLimit-Limit": String(slugResult.limit),
+              "X-RateLimit-Remaining": "0",
+              "X-RateLimit-Reset": String(slugResult.reset),
+              "X-RateLimit-Scope": "catalogo-slug",
             },
           }
         )

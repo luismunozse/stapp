@@ -53,6 +53,13 @@ export const CRON_JOBS: CronJobDefinition[] = [
     schedule: "6:00 AM",
     description: "Downgradea MANUAL vencidas y marca externas PAST_DUE",
   },
+  {
+    id: "catalogo-pii-purge",
+    name: "Catálogo PII Purge",
+    path: "/api/cron/catalogo-pii-purge",
+    schedule: "4:00 AM",
+    description: "Borra carritos abandonados y views viejos (Ley 25.326)",
+  },
 ]
 
 /** Paths válidos para el endpoint run-cron */

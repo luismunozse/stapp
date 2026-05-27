@@ -4,6 +4,8 @@
  * Exportados como funciones puras = testeables sin DB ni red.
  */
 
+import { z } from "zod"
+
 // Mismo patrón que la CHECK constraint en migration 143_catalogo_publico.sql
 export const SLUG_REGEX = /^[a-z0-9]([a-z0-9-]{1,48}[a-z0-9])?$/
 
@@ -85,3 +87,27 @@ export function puedeQuickAdd(item: ItemConVariantes): boolean {
 export function cartKey(item: { id: string; varianteId?: string | null }): string {
   return item.varianteId ? `${item.id}::${item.varianteId}` : item.id
 }
+
+/**
+ * Schema del item del carrito persistido en localStorage. Defensa contra
+ * storage corrupto (versiones viejas, manipulación manual, otros scripts).
+ * Si el parse falla, el cart se resetea a []. Mantener en sync con
+ * CartItem en components/catalogo-public/use-cart.ts.
+ */
+export const cartItemSchema = z.object({
+  id: z.string().min(1).max(100),
+  nombre: z.string().min(1).max(300),
+  precio: z.number().nonnegative().finite(),
+  cantidad: z.number().int().positive().max(9999),
+  imagen_url: z.string().max(1000).nullish(),
+  stock_disponible: z.number().int().nonnegative().nullable(),
+  varianteId: z.string().min(1).max(100).nullish(),
+  varianteEtiqueta: z.string().max(200).nullish(),
+})
+
+export const cartSchema = z.array(cartItemSchema).max(100)
+
+/**
+ * Schema para arrays de IDs (recientes / favoritos / etc).
+ */
+export const idArraySchema = z.array(z.string().min(1).max(100)).max(200)

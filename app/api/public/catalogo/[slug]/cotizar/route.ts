@@ -20,6 +20,9 @@ const cotizarSchema = z.object({
   }),
   notas: z.string().max(1000).optional(),
   cuponCodigo: z.string().min(3).max(32).optional(),
+  // Consent explícito requerido (compliance Ley 25.326 / GDPR-like).
+  // Sin true acá, rechazamos la solicitud.
+  consent: z.literal(true),
   items: z.array(z.object({
     itemId: z.string(),
     varianteId: z.string().nullable().optional(),
@@ -139,9 +142,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   }
 
   // 5. Cliente: buscar por teléfono dentro de la org, o crear.
-  // Si existe, sincronizar nombre/email con lo que acaba de enviar el cliente
-  // (la cotización debe reflejar el contacto que llenó el form, no un
-  // registro viejo que casualmente comparte ese teléfono).
+  // SEGURIDAD: flujo público anónimo. NO sobrescribimos nombre/email de un
+  // cliente existente (un atacante con un teléfono conocido podría pisar
+  // los datos de contacto del cliente real). Si difieren, loggeamos para
+  // que el admin pueda revisar/mergear manualmente. La cotización guarda
+  // el snapshot del nombre que el visitante envió (ver paso 6+).
   const telefonoNorm = data.cliente.telefono.trim()
   const nombreNuevo = data.cliente.nombre.trim()
   const emailNuevo = data.cliente.email?.trim() || null
@@ -156,23 +161,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   let clienteId: string
   if (clienteExistente) {
     clienteId = clienteExistente.id
-    const updates: Record<string, unknown> = {}
-    if (nombreNuevo && nombreNuevo !== clienteExistente.nombre) {
-      updates.nombre = nombreNuevo
-    }
-    if (emailNuevo && emailNuevo !== clienteExistente.email) {
-      updates.email = emailNuevo
-    }
-    if (Object.keys(updates).length > 0) {
-      const { error: updateErr } = await supabaseAdmin
-        .from("clientes")
-        .update(updates)
-        .eq("id", clienteId)
-        .eq("organization_id", organizationId)
-      if (updateErr) {
-        console.error("Error actualizando cliente existente:", updateErr)
-        // No bloqueante — seguimos con el clienteId, la cotización se crea igual
-      }
+    const nameDiff = nombreNuevo && nombreNuevo !== clienteExistente.nombre
+    const emailDiff = emailNuevo && emailNuevo !== clienteExistente.email
+    if (nameDiff || emailDiff) {
+      console.warn("[catalogo/cotizar] cliente existente con datos distintos — no se sobreescribe", {
+        clienteId,
+        organizationId,
+        telefonoSuffix: telefonoNorm.slice(-4),
+        nameDiff,
+        emailDiff,
+      })
     }
   } else {
     const { data: nuevoCliente, error: clienteErr } = await supabaseAdmin
@@ -249,107 +247,63 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
 
   const total = Math.max(0, subtotal - cuponDescuento)
 
-  // 7. Crear cotización tipo PRESUPUESTO (sin equipo)
+  // 7. Crear cotización + items + reservar stock + marcar abandono en una
+  // sola transacción (RPC plpgsql). Si cualquier paso falla, ROLLBACK total
+  // — no quedan cotizaciones huérfanas, stock no se decrementa, abandono
+  // no se marca. El cupón ya fue aplicado arriba; si esta RPC falla hay
+  // que revertirlo manualmente.
   const numeroCotizacion = await getNextQuoteNumber(organizationId)
   const publicToken = randomBytes(16).toString("hex")
 
-  const { data: cotizacion, error: cotErr } = await supabaseAdmin
-    .from("cotizaciones")
-    .insert({
+  const { data: rpcResult, error: rpcErr } = await supabaseAdmin.rpc("crear_cotizacion_publica_atomica", {
+    p_cotizacion: {
       organization_id: organizationId,
       cliente_id: clienteId,
       numero_cotizacion: numeroCotizacion,
       public_token: publicToken,
-      tipo: "PRESUPUESTO",
-      estado: "ENVIADA",
-      origen: "CATALOGO_PUBLICO",
       notas: data.notas?.trim() || "Solicitud desde catálogo público",
       subtotal,
       iva,
       total,
-      iva_porcentaje: 0,
-      descuento_global_tipo: "porcentaje",
-      descuento_global_valor: 0,
       cupon_id: cuponId,
       cupon_codigo: cuponCodigoAplicado,
       cupon_descuento: cuponDescuento > 0 ? cuponDescuento : null,
-    })
-    .select("id, public_token, numero_cotizacion")
-    .single()
-
-  if (cotErr || !cotizacion) {
-    console.error("Error creando cotización:", cotErr)
-    if (cuponId) {
-      // Revertir uso del cupón ya que la cotización falló
-      await revertirCupon(cuponId)
-    }
-    return NextResponse.json({ error: "Error al crear cotización" }, { status: 500 })
-  }
-
-  // 8. Insertar items_cotizacion
-  const { error: itemsInsertErr } = await supabaseAdmin
-    .from("items_cotizacion")
-    .insert(itemsCalculados.map((i) => ({
-      cotizacion_id: cotizacion.id,
+    },
+    p_items: itemsCalculados.map((i) => ({
       descripcion: i.descripcion,
       cantidad: i.cantidad,
       precio_unitario: i.precioUnitario,
       subtotal: i.subtotal,
-      unidad: "Unidad",
-      descuento_tipo: "porcentaje",
-      descuento_valor: 0,
       inventario_id: i.inventarioId,
       catalogo_item_id: i.catalogoItemId,
-      tipo_repuesto: "NO_APLICA",
       comentario_cliente: i.comentarioCliente,
       adjuntos: i.adjuntos,
       variante_id: i.varianteId,
       variante_etiqueta: i.varianteEtiqueta,
-    })))
-
-  if (itemsInsertErr) {
-    await supabaseAdmin.from("cotizaciones").delete().eq("id", cotizacion.id)
-    if (cuponId) {
-      await revertirCupon(cuponId)
-    }
-    console.error("Error insertando items:", itemsInsertErr)
-    return NextResponse.json({ error: "Error al guardar items" }, { status: 500 })
-  }
-
-  // 9. Decrementar stock atómico via RPC (FOR UPDATE lock anti-race)
-  const { error: stockErr } = await supabaseAdmin.rpc("reservar_stock_catalogo", {
-    p_organization_id: organizationId,
-    p_items: data.items.map((i) => ({
+    })),
+    p_stock_items: data.items.map((i) => ({
       item_id: i.itemId,
       variante_id: i.varianteId ?? null,
       cantidad: i.cantidad,
     })),
+    p_telefono: telefonoNorm,
   })
 
-  if (stockErr) {
-    // Rollback: borrar cotización + items_cotizacion + revertir cupón
-    await supabaseAdmin.from("items_cotizacion").delete().eq("cotizacion_id", cotizacion.id)
-    await supabaseAdmin.from("cotizaciones").delete().eq("id", cotizacion.id)
+  if (rpcErr || !rpcResult?.ok) {
+    console.error("Error en crear_cotizacion_publica_atomica:", rpcErr)
     if (cuponId) {
       await revertirCupon(cuponId)
     }
-
-    // P0003 = stock insuficiente (error custom de la RPC)
-    const status = stockErr.code === "P0003" ? 409 : 500
-    return NextResponse.json({ error: stockErr.message }, { status })
+    // P0003 = stock insuficiente (raise de reservar_stock_catalogo)
+    const status = rpcErr?.code === "P0003" ? 409 : 500
+    const msg = rpcErr?.code === "P0003" ? rpcErr.message : "Error al crear cotización"
+    return NextResponse.json({ error: msg }, { status })
   }
 
-  // 9.5 Marcar carrito abandonado como recuperado (si existe por el mismo tel)
-  try {
-    await supabaseAdmin
-      .from("catalogo_carritos_abandonados")
-      .update({ recovered_at: new Date().toISOString(), cotizacion_id: cotizacion.id })
-      .eq("organization_id", organizationId)
-      .eq("cliente_telefono", telefonoNorm)
-      .is("recovered_at", null)
-  } catch (err) {
-    console.error("Error marcando carrito abandonado como recuperado:", err)
-    // No bloqueante
+  const cotizacion = {
+    id: rpcResult.cotizacion_id as string,
+    public_token: publicToken,
+    numero_cotizacion: numeroCotizacion,
   }
 
   // 10. Notificar a los ADMIN de la org (in-app)

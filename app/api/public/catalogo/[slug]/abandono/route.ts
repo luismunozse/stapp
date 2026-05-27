@@ -20,6 +20,8 @@ const abandonoSchema = z.object({
   })).min(1).max(50),
   total: z.number().min(0),
   cuponCodigo: z.string().max(32).optional(),
+  // Consent explícito requerido para snapshot PII (Ley 25.326 / GDPR-like).
+  consent: z.literal(true),
 })
 
 export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
@@ -81,6 +83,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     items: d.items,
     total_estimado: d.total,
     cupon_codigo: d.cuponCodigo?.toUpperCase() || null,
+    consent_at: new Date().toISOString(),
   }
 
   if (existing) {

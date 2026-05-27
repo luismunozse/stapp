@@ -11,11 +11,13 @@ import type { Metadata, Viewport } from "next"
 
 type PageProps = { params: Promise<{ slug: string; categoriaSlug: string }> }
 
-const fetchCatalogo = unstable_cache(
-  _fetchCatalogo,
-  ["catalogo-public-categoria"],
-  { revalidate: 60, tags: ["catalogo"] }
-)
+function fetchCatalogo(slug: string, categoriaSlug: string) {
+  return unstable_cache(
+    () => _fetchCatalogo(slug, categoriaSlug),
+    ["catalogo-public-categoria", slug, categoriaSlug],
+    { revalidate: 60, tags: ["catalogo", `catalogo:${slug}`, `catalogo:${slug}:cat:${categoriaSlug}`] }
+  )()
+}
 
 async function _fetchCatalogo(slug: string, categoriaSlug: string) {
   if (!/^[a-z0-9]([a-z0-9-]{1,48}[a-z0-9])?$/.test(slug)) return null

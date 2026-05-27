@@ -157,6 +157,19 @@ export function extractPublicToken(pathname: string): string | null {
 }
 
 /**
+ * Extrae el slug de catálogo público. Permite rate-limitar agregadamente
+ * todas las requests al mismo catálogo (defensa contra botnet distribuido
+ * scrapeando un catálogo específico, donde el rate-por-IP no alcanza).
+ *
+ * El slug es público (no es secreto como un token) pero limita el daño
+ * que un atacante puede hacer contra UN catálogo en particular.
+ */
+export function extractPublicCatalogoSlug(pathname: string): string | null {
+  const m = pathname.match(/^\/api\/public\/catalogo\/([a-z0-9][a-z0-9-]{1,49})(?:\/|$)/)
+  return m ? m[1] : null
+}
+
+/**
  * Verifica si una ruta está exenta de rate limiting.
  */
 export function isExemptFromRateLimit(pathname: string): boolean {

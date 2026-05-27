@@ -7,11 +7,16 @@ import type { Metadata, Viewport } from "next"
 
 type PageProps = { params: Promise<{ slug: string; itemId: string }> }
 
-const fetchItem = unstable_cache(
-  _fetchItem,
-  ["catalogo-item"],
-  { revalidate: 60, tags: ["catalogo"] }
-)
+// Key con slug + itemId: cada item tiene su propia entry. Tags incluyen
+// `catalogo:${slug}` para que la invalidación del catálogo arrastre también
+// sus items.
+function fetchItem(slug: string, itemId: string) {
+  return unstable_cache(
+    () => _fetchItem(slug, itemId),
+    ["catalogo-item", slug, itemId],
+    { revalidate: 60, tags: ["catalogo", `catalogo:${slug}`, `catalogo-item:${itemId}`] }
+  )()
+}
 
 async function _fetchItem(slug: string, itemId: string) {
   if (!/^[a-z0-9]([a-z0-9-]{1,48}[a-z0-9])?$/.test(slug)) return null

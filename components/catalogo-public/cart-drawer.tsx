@@ -46,6 +46,10 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
   const [cuponAplicado, setCuponAplicado] = useState<{ codigo: string; descuento: number } | null>(null)
   const [cuponError, setCuponError] = useState<string | null>(null)
   const [validatingCupon, setValidatingCupon] = useState(false)
+  // Consent de privacidad (Ley 25.326 / GDPR-like): el cliente debe aceptar
+  // explícitamente que sus datos se usen para contactarlo. Sin esto, no se
+  // envía la solicitud ni se snapshota el carrito como abandonado.
+  const [consent, setConsent] = useState(false)
   const abandonoLastSentRef = useRef<string>("")
 
   const totalConCupon = Math.max(0, cart.total - (cuponAplicado?.descuento ?? 0))
@@ -57,6 +61,8 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
     if (!open) return
     if (step !== "checkout") return
     if (cart.items.length === 0) return
+    // Sin consent explícito no snapshoteamos PII (compliance Ley 25.326).
+    if (!consent) return
     const n = nombre.trim()
     const t = telefono.trim()
     if (n.length < 2 || t.length < 4) return
@@ -74,6 +80,7 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
       })),
       total: totalConCupon,
       cuponCodigo: cuponAplicado?.codigo,
+      consent: true,
     }
     const payloadKey = JSON.stringify(payload)
     if (abandonoLastSentRef.current === payloadKey) return
@@ -91,7 +98,7 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
     }, 1500)
 
     return () => clearTimeout(timer)
-  }, [open, step, nombre, telefono, email, cart.items, totalConCupon, cuponAplicado, slug])
+  }, [open, step, consent, nombre, telefono, email, cart.items, totalConCupon, cuponAplicado, slug])
 
   const aplicarCupon = async () => {
     const codigo = cuponInput.trim().toUpperCase()
@@ -168,6 +175,10 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
       toast.error("Nombre y teléfono son obligatorios")
       return
     }
+    if (!consent) {
+      toast.error("Necesitás aceptar el uso de tus datos para enviar la solicitud")
+      return
+    }
     if (cart.items.length === 0) return
 
     setSubmitting(true)
@@ -179,6 +190,7 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
           cliente: { nombre: nombre.trim(), telefono: telefono.trim(), email: email.trim() || undefined },
           notas: notas.trim() || undefined,
           cuponCodigo: cuponAplicado?.codigo,
+          consent: true,
           items: cart.items.map((i) => {
             const k = cart.cartKey(i)
             const ex = extras[k]
@@ -573,6 +585,22 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                     <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
                     <span>Esta solicitud genera un presupuesto en {titulo}. Te van a contactar para confirmar.</span>
                   </div>
+
+                  <label className="flex gap-2 items-start text-xs text-muted-foreground cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={consent}
+                      onChange={(e) => setConsent(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 accent-current cursor-pointer"
+                      style={{ accentColor: brandColor }}
+                      aria-describedby="consent-help"
+                    />
+                    <span id="consent-help">
+                      Acepto que {titulo} use mi nombre, teléfono y email para contactarme
+                      sobre esta solicitud. Los datos se conservan hasta 90 días si no
+                      finalizo la consulta y se eliminan si retiro mi pedido.
+                    </span>
+                  </label>
                 </div>
               )}
             </div>
@@ -608,7 +636,7 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                     </Button>
                     <Button
                       onClick={handleSubmit}
-                      disabled={submitting || !nombre.trim() || !telefono.trim()}
+                      disabled={submitting || !nombre.trim() || !telefono.trim() || !consent}
                       className="flex-1 h-12 gap-1.5 text-base font-semibold shadow-md hover:shadow-lg transition-shadow"
                       style={{ backgroundColor: brandColor }}
                     >
