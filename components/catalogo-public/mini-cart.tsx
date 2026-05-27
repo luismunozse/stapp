@@ -24,30 +24,37 @@ export function MiniCart({ cart, onOpen, formatPrecio, brandColor }: Props) {
           <ShoppingCart className="h-4 w-4" />
           Tu solicitud ({cart.count})
         </div>
-        <div className="max-h-72 overflow-y-auto p-3 space-y-2">
-          {cart.items.map((item) => (
-            <div key={item.id} className="flex gap-2 items-start group">
-              <div className="w-10 h-10 rounded bg-muted overflow-hidden shrink-0">
-                {item.imagen_url && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={item.imagen_url} alt={item.nombre} loading="lazy" className="w-full h-full object-cover" />
-                )}
+        <div className="max-h-80 overflow-y-auto p-3 space-y-2.5">
+          {cart.items.map((item) => {
+            const k = cart.cartKey(item)
+            return (
+              <div key={k} className="flex gap-2.5 items-start group">
+                <div className="w-11 h-11 rounded-md bg-muted overflow-hidden shrink-0 border">
+                  {item.imagen_url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={item.imagen_url} alt={item.nombre} loading="lazy" className="w-full h-full object-cover" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium line-clamp-1 leading-tight">{item.nombre}</p>
+                  {item.varianteEtiqueta && (
+                    <p className="text-[10px] text-muted-foreground line-clamp-1">{item.varianteEtiqueta}</p>
+                  )}
+                  <p className="text-xs font-semibold mt-0.5" style={{ color: brandColor }}>
+                    {item.cantidad} × {formatPrecio(item.precio)}
+                  </p>
+                </div>
+                <button
+                  onClick={() => cart.remove(k)}
+                  className="h-7 w-7 rounded-md inline-flex items-center justify-center opacity-0 group-hover:opacity-100 text-muted-foreground hover:bg-muted hover:text-destructive transition"
+                  aria-label="Quitar"
+                  title="Quitar del carrito"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium line-clamp-1">{item.nombre}</p>
-                <p className="text-xs text-muted-foreground">
-                  {item.cantidad} × {formatPrecio(item.precio)}
-                </p>
-              </div>
-              <button
-                onClick={() => cart.remove(item.id)}
-                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition"
-                aria-label="Quitar"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
-          ))}
+            )
+          })}
         </div>
         <div className="border-t p-3 space-y-2">
           <div className="flex items-center justify-between text-sm font-semibold">

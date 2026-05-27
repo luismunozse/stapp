@@ -178,7 +178,7 @@ export function CatalogoHero({ bannerUrl, logoUrl, titulo, descripcion, whatsapp
           <div className="flex-1 min-w-0">
             <h1 className="text-2xl sm:text-4xl font-bold tracking-tight leading-tight">{titulo}</h1>
             {descripcion && (
-              <p className="text-muted-foreground mt-1.5 sm:text-base leading-relaxed">{descripcion}</p>
+              <p className="text-muted-foreground mt-1.5 sm:text-base leading-relaxed line-clamp-3">{descripcion}</p>
             )}
           </div>
           <div className="flex gap-2 w-full sm:w-auto sm:shrink-0">

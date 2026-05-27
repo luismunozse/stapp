@@ -6,8 +6,9 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Plus, Minus, ShoppingCart, Package, Wrench, MessageCircle,
-  Star, Share2, ChevronLeft, ChevronRight, ArrowLeft, Sparkles,
+  Star, Share2, ChevronLeft, ChevronRight, ArrowLeft, Sparkles, Copy,
 } from "lucide-react"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { toast } from "sonner"
 import { useCart } from "./use-cart"
 import { CartDrawer } from "./cart-drawer"
@@ -83,14 +84,25 @@ export function CatalogoItemView({ data }: { data: Data }) {
     toast.success("Agregado al carrito")
   }
 
+  const itemUrl = typeof window !== "undefined" ? window.location.href : ""
+  const precioTexto = !sinPrecio ? formatPrecio(Number(item.precio)) : "(consultar precio)"
+  const shareText = `Hola! Vi "${item.nombre}" ${precioTexto} en el catálogo: ${itemUrl}`
+  const shareWhatsAppUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`
+
   const handleShare = async () => {
-    const url = typeof window !== "undefined" ? window.location.href : ""
     if (typeof navigator !== "undefined" && navigator.share) {
-      try { await navigator.share({ title: item.nombre, url }) } catch { /* */ }
+      try { await navigator.share({ title: item.nombre, text: shareText, url: itemUrl }) } catch { /* */ }
       return
     }
     try {
-      await navigator.clipboard.writeText(url)
+      await navigator.clipboard.writeText(itemUrl)
+      toast.success("Link copiado")
+    } catch { toast.error("No se pudo copiar") }
+  }
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(itemUrl)
       toast.success("Link copiado")
     } catch { toast.error("No se pudo copiar") }
   }
@@ -153,27 +165,58 @@ export function CatalogoItemView({ data }: { data: Data }) {
                 <>
                   <button
                     onClick={() => setImgIdx((i) => (i - 1 + galeria.length) % galeria.length)}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 h-9 w-9 rounded-full bg-background/80 backdrop-blur flex items-center justify-center"
+                    className="absolute left-2 top-1/2 -translate-y-1/2 h-11 w-11 rounded-full bg-background/85 backdrop-blur flex items-center justify-center shadow-md active:scale-95 transition"
                     aria-label="Anterior"
                   >
                     <ChevronLeft className="h-5 w-5" />
                   </button>
                   <button
                     onClick={() => setImgIdx((i) => (i + 1) % galeria.length)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 h-9 w-9 rounded-full bg-background/80 backdrop-blur flex items-center justify-center"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 h-11 w-11 rounded-full bg-background/85 backdrop-blur flex items-center justify-center shadow-md active:scale-95 transition"
                     aria-label="Siguiente"
                   >
                     <ChevronRight className="h-5 w-5" />
                   </button>
                 </>
               )}
-              <button
-                onClick={handleShare}
-                className="absolute top-2 right-2 h-9 w-9 rounded-full bg-background/80 backdrop-blur flex items-center justify-center"
-                aria-label="Compartir"
-              >
-                <Share2 className="h-4 w-4" />
-              </button>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className="absolute top-2 right-2 h-11 w-11 rounded-full bg-background/85 backdrop-blur flex items-center justify-center shadow-md hover:bg-background active:scale-95 transition"
+                    aria-label="Compartir"
+                  >
+                    <Share2 className="h-4 w-4" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="p-2 w-48">
+                  <a
+                    href={shareWhatsAppUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm hover:bg-muted transition-colors"
+                  >
+                    <MessageCircle className="h-4 w-4 text-green-600" />
+                    WhatsApp
+                  </a>
+                  <button
+                    type="button"
+                    onClick={handleCopyLink}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm hover:bg-muted transition-colors"
+                  >
+                    <Copy className="h-4 w-4 text-muted-foreground" />
+                    Copiar link
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleShare}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm hover:bg-muted transition-colors"
+                  >
+                    <Share2 className="h-4 w-4 text-muted-foreground" />
+                    Más opciones…
+                  </button>
+                </PopoverContent>
+              </Popover>
             </div>
             {galeria.length > 1 && (
               <div className="grid grid-cols-5 gap-2">
