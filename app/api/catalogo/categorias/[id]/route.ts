@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
-import { revalidateTag } from "next/cache"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { revalidateCatalogo } from "@/lib/catalogo/revalidate"
 import { z } from "zod"
 import { CATEGORIA_SLUG_REGEX, generarSlugCategoriaUnico } from "@/lib/catalogo-slug"
 
@@ -44,7 +44,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!data) return NextResponse.json({ error: "Categoría no encontrada" }, { status: 404 })
-  revalidateTag("catalogo", "max")
+  await revalidateCatalogo(auth.organizationId!)
   return NextResponse.json({ categoria: data })
 }
 
@@ -60,6 +60,6 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     .eq("organization_id", auth.organizationId!)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  revalidateTag("catalogo", "max")
+  await revalidateCatalogo(auth.organizationId!)
   return NextResponse.json({ ok: true })
 }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
-import { revalidateTag } from "next/cache"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { revalidateCatalogo } from "@/lib/catalogo/revalidate"
 import { z } from "zod"
 
 const updateSchema = z.object({
@@ -39,7 +39,7 @@ export async function PUT(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!data) return NextResponse.json({ error: "Variante no encontrada" }, { status: 404 })
-  revalidateTag("catalogo", "max")
+  await revalidateCatalogo(auth.organizationId!, { itemId: id })
   return NextResponse.json({ variante: data })
 }
 
@@ -59,6 +59,6 @@ export async function DELETE(
     .eq("organization_id", auth.organizationId!)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  revalidateTag("catalogo", "max")
+  await revalidateCatalogo(auth.organizationId!, { itemId: id })
   return NextResponse.json({ ok: true })
 }

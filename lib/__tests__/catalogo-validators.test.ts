@@ -7,6 +7,9 @@ import {
   tieneVariantesActivas,
   puedeQuickAdd,
   cartKey,
+  cartItemSchema,
+  cartSchema,
+  idArraySchema,
   SLUG_REGEX,
   CUPON_CODIGO_REGEX,
 } from '../catalogo-validators'
@@ -194,6 +197,95 @@ describe('tieneVariantesActivas / puedeQuickAdd', () => {
 
   it('item con stock null (sin tracking) → puede quick add', () => {
     expect(puedeQuickAdd({ precio: 100, stock_disponible: null })).toBe(true)
+  })
+})
+
+describe('cartItemSchema', () => {
+  const valido = {
+    id: 'item1',
+    nombre: 'Producto X',
+    precio: 100,
+    cantidad: 2,
+    imagen_url: null,
+    stock_disponible: 5,
+    varianteId: null,
+    varianteEtiqueta: null,
+  }
+
+  it('acepta shape válido', () => {
+    expect(cartItemSchema.safeParse(valido).success).toBe(true)
+  })
+
+  it('rechaza cantidad 0 o negativa', () => {
+    expect(cartItemSchema.safeParse({ ...valido, cantidad: 0 }).success).toBe(false)
+    expect(cartItemSchema.safeParse({ ...valido, cantidad: -1 }).success).toBe(false)
+  })
+
+  it('rechaza precio negativo', () => {
+    expect(cartItemSchema.safeParse({ ...valido, precio: -10 }).success).toBe(false)
+  })
+
+  it('rechaza nombre vacío', () => {
+    expect(cartItemSchema.safeParse({ ...valido, nombre: '' }).success).toBe(false)
+  })
+
+  it('rechaza id ausente', () => {
+    const { id, ...sinId } = valido
+    expect(cartItemSchema.safeParse(sinId).success).toBe(false)
+  })
+
+  it('acepta varianteId/varianteEtiqueta opcionales', () => {
+    expect(cartItemSchema.safeParse({ ...valido, varianteId: 'v1', varianteEtiqueta: 'Rojo' }).success).toBe(true)
+  })
+
+  it('rechaza cantidad no-entera', () => {
+    expect(cartItemSchema.safeParse({ ...valido, cantidad: 1.5 }).success).toBe(false)
+  })
+
+  it('rechaza cantidad astronómica', () => {
+    expect(cartItemSchema.safeParse({ ...valido, cantidad: 10_000 }).success).toBe(false)
+  })
+
+  it('cartSchema acepta array vacío', () => {
+    expect(cartSchema.safeParse([]).success).toBe(true)
+  })
+
+  it('cartSchema rechaza array > 100 items', () => {
+    const big = Array.from({ length: 101 }, () => valido)
+    expect(cartSchema.safeParse(big).success).toBe(false)
+  })
+
+  it('cartSchema rechaza un item corrupto en el array', () => {
+    expect(cartSchema.safeParse([valido, { foo: 'bar' }]).success).toBe(false)
+  })
+})
+
+describe('idArraySchema', () => {
+  it('acepta array de strings válidos', () => {
+    expect(idArraySchema.safeParse(['id1', 'id2', 'id3']).success).toBe(true)
+  })
+
+  it('acepta array vacío', () => {
+    expect(idArraySchema.safeParse([]).success).toBe(true)
+  })
+
+  it('rechaza no-array', () => {
+    expect(idArraySchema.safeParse('id1').success).toBe(false)
+    expect(idArraySchema.safeParse({ 0: 'id1' }).success).toBe(false)
+    expect(idArraySchema.safeParse(null).success).toBe(false)
+  })
+
+  it('rechaza strings vacíos en el array', () => {
+    expect(idArraySchema.safeParse(['id1', '']).success).toBe(false)
+  })
+
+  it('rechaza tipos mezclados', () => {
+    expect(idArraySchema.safeParse(['id1', 42]).success).toBe(false)
+  })
+
+  it('rechaza array > 200 elementos', () => {
+    const big = Array.from({ length: 201 }, (_, i) => `id${i}`)
+    expect(idArraySchema.safeParse(big).success).toBe(false)
   })
 })
 

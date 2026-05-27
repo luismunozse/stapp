@@ -31,8 +31,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
   const themeColor = config.color_primary || "#2563eb"
   const startUrl = `/catalogo/${slug}`
 
-  // Si la org tiene logo_url, lo usamos como ícono PWA. Si no, fallback a OG generada.
-  const iconUrl = org?.logo_url || `/catalogo/${slug}/opengraph-image`
+  // Endpoint dedicado genera PNGs cuadrados con safe-zone correcto.
+  // Chrome rechaza el install prompt si los icons no son cuadrados verdaderos
+  // o si "maskable" no tiene padding suficiente. Antes apuntábamos todos al
+  // mismo logo (no cuadrado) o a la OG (1200×630).
+  const iconBase = `/api/public/catalogo/${slug}/icon`
 
   const manifest = {
     name,
@@ -51,20 +54,26 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
     categories: ["business", "shopping"],
     icons: [
       {
-        src: iconUrl,
+        src: `${iconBase}/192`,
         sizes: "192x192",
         type: "image/png",
         purpose: "any",
       },
       {
-        src: iconUrl,
+        src: `${iconBase}/384`,
+        sizes: "384x384",
+        type: "image/png",
+        purpose: "any",
+      },
+      {
+        src: `${iconBase}/512`,
         sizes: "512x512",
         type: "image/png",
         purpose: "any",
       },
       {
-        src: iconUrl,
-        sizes: "any",
+        src: `${iconBase}/512-maskable`,
+        sizes: "512x512",
         type: "image/png",
         purpose: "maskable",
       },

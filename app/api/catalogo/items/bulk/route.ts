@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
-import { revalidateTag } from "next/cache"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { revalidateCatalogo } from "@/lib/catalogo/revalidate"
 import { z } from "zod"
 
 const bulkSchema = z.discriminatedUnion("action", [
@@ -60,7 +60,7 @@ export async function POST(req: Request) {
       .in("id", d.ids)
       .eq("organization_id", orgId)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    revalidateTag("catalogo", "max")
+    await revalidateCatalogo(orgId)
     return NextResponse.json({ ok: true, affected: count ?? 0 })
   }
 
@@ -77,6 +77,6 @@ export async function POST(req: Request) {
     .eq("organization_id", orgId)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  revalidateTag("catalogo", "max")
+  await revalidateCatalogo(orgId)
   return NextResponse.json({ ok: true, affected: count ?? 0 })
 }

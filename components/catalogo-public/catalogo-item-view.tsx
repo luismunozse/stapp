@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { useState, useRef } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -154,8 +155,14 @@ export function CatalogoItemView({ data }: { data: Data }) {
               onTouchEnd={onTouchEnd}
             >
               {galeria[imgIdx] ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={galeria[imgIdx]} alt={item.nombre} className="w-full h-full object-cover" />
+                <Image
+                  src={galeria[imgIdx]}
+                  alt={item.nombre}
+                  fill
+                  priority
+                  sizes="(max-width: 768px) 100vw, 600px"
+                  className="object-cover"
+                />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-7xl text-muted-foreground">
                   {item.tipo === "PRODUCTO" ? "📦" : "🛠️"}
@@ -229,8 +236,13 @@ export function CatalogoItemView({ data }: { data: Data }) {
                     }`}
                     style={i === imgIdx ? { borderColor: config.color_primary } : undefined}
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={src} alt="" loading="lazy" className="w-full h-full object-cover" />
+                    <Image
+                      src={src}
+                      alt=""
+                      width={100}
+                      height={100}
+                      className="w-full h-full object-cover"
+                    />
                   </button>
                 ))}
               </div>

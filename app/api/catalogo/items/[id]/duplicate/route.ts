@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
-import { revalidateTag } from "next/cache"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { revalidateCatalogo } from "@/lib/catalogo/revalidate"
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdmin()
@@ -48,6 +48,6 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  revalidateTag("catalogo", "max")
+  await revalidateCatalogo(orgId, { itemId: nuevo?.id })
   return NextResponse.json({ item: nuevo }, { status: 201 })
 }

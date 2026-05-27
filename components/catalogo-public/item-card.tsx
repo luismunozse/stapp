@@ -31,9 +31,12 @@ interface Props {
   brandColor: string
   isFav?: boolean
   onToggleFav?: () => void
+  // priority=true en las primeras cards above-the-fold para LCP. Cargar
+  // como high-priority evita que la imagen de hero/grid sea el LCP demorado.
+  priority?: boolean
 }
 
-export function ItemCard({ item, onClick, onQuickAdd, formatPrecio, brandColor, isFav, onToggleFav }: Props) {
+export function ItemCard({ item, onClick, onQuickAdd, formatPrecio, brandColor, isFav, onToggleFav, priority }: Props) {
   const [added, setAdded] = useState(false)
   const agotado = item.stock_disponible === 0
   const sinPrecio = item.precio == null
@@ -65,7 +68,22 @@ export function ItemCard({ item, onClick, onQuickAdd, formatPrecio, brandColor, 
         agotado ? "opacity-60" : ""
       }`}
     >
-      <button onClick={onClick} className="block w-full text-left">
+      {/* Wrapper accesible con role=button: evita HTML inválido por
+          botones anidados (el quick-add y el de favoritos viven adentro).
+          Click + Enter/Space disparan onClick. */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onClick}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault()
+            onClick()
+          }
+        }}
+        aria-label={item.nombre}
+        className="block w-full text-left cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-current"
+      >
         <div className="aspect-square bg-muted relative overflow-hidden">
           {item.imagen_url ? (
             <Image
@@ -73,6 +91,7 @@ export function ItemCard({ item, onClick, onQuickAdd, formatPrecio, brandColor, 
               alt={item.nombre}
               fill
               sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+              priority={priority}
               className="object-cover transition-transform duration-300 group-hover:scale-[1.04]"
             />
           ) : (
@@ -173,7 +192,7 @@ export function ItemCard({ item, onClick, onQuickAdd, formatPrecio, brandColor, 
             )}
           </div>
         </div>
-      </button>
+      </div>
 
       {/* Quick-add: visible siempre en mobile, hover en desktop */}
       {canQuickAdd && (

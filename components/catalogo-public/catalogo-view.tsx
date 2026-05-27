@@ -1,20 +1,30 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import Fuse from "fuse.js"
+import dynamic from "next/dynamic"
 import { motion, AnimatePresence } from "framer-motion"
 import { ShoppingCart, MessageCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { CartDrawer } from "./cart-drawer"
-import { ItemDetailDialog } from "./item-detail-dialog"
 import { CatalogoHero } from "./catalogo-hero"
 import { CatalogoFilters, type SortOption } from "./catalogo-filters"
 import { MiniCart } from "./mini-cart"
 import { ItemCard } from "./item-card"
 import { useCart, type CartItem } from "./use-cart"
 import { useRecientes, useFavoritos } from "./use-catalogo-storage"
+import { useFuseSearch } from "./use-fuse-search"
 import { Clock, Heart, Check } from "lucide-react"
 import { toast } from "sonner"
+
+// Dialogs/drawers solo se abren tras interacción. Cargarlos dynamic con
+// ssr:false los saca del bundle inicial → mejor TTI mobile.
+const CartDrawer = dynamic(
+  () => import("./cart-drawer").then((m) => m.CartDrawer),
+  { ssr: false }
+)
+const ItemDetailDialog = dynamic(
+  () => import("./item-detail-dialog").then((m) => m.ItemDetailDialog),
+  { ssr: false }
+)
 
 interface CatalogoData {
   config: {
@@ -123,32 +133,20 @@ export function CatalogoView({
     return Array.from(set).sort()
   }, [data.items])
 
-  const fuse = useMemo(
-    () =>
-      new Fuse(data.items, {
-        keys: [
-          { name: "nombre", weight: 0.6 },
-          { name: "etiquetas", weight: 0.25 },
-          { name: "descripcion", weight: 0.15 },
-        ],
-        threshold: 0.38,
-        ignoreLocation: true,
-        minMatchCharLength: 2,
-        useExtendedSearch: false,
-        includeScore: false,
-      }),
-    [data.items]
+  const fuseConfig = useMemo(
+    () => ({
+      keys: [
+        { name: "nombre" as const, weight: 0.6 },
+        { name: "etiquetas" as const, weight: 0.25 },
+        { name: "descripcion" as const, weight: 0.15 },
+      ],
+    }),
+    []
   )
+  const searchResults = useFuseSearch(data.items, search, fuseConfig)
 
   const itemsFiltrados = useMemo(() => {
-    const searchNorm = search.trim()
-    const baseList = searchNorm.length === 0
-      ? data.items
-      : searchNorm.length === 1
-        ? data.items.filter((i) => i.nombre.toLowerCase().includes(searchNorm.toLowerCase()))
-        : fuse.search(searchNorm).map((r) => r.item)
-
-    let arr = baseList.filter((it) => {
+    let arr = searchResults.filter((it) => {
       if (categoriaActiva && it.categoria_id !== categoriaActiva) return false
       if (soloDisponibles && it.stock_disponible === 0) return false
       if (soloFavoritos && !favoritos.ids.has(it.id)) return false
@@ -172,7 +170,7 @@ export function CatalogoView({
     // recomendados: ya viene ordenado del server (destacado DESC, orden ASC)
 
     return arr
-  }, [data.items, fuse, search, categoriaActiva, soloDisponibles, soloFavoritos, favoritos.ids, tagsActivos, precioRange, precioMin, precioMax, sort])
+  }, [searchResults, categoriaActiva, soloDisponibles, soloFavoritos, favoritos.ids, tagsActivos, precioRange, precioMin, precioMax, sort])
 
   // Items recientemente vistos (que sigan existiendo en el catálogo)
   const itemsRecientes = useMemo(() => {
@@ -297,7 +295,20 @@ export function CatalogoView({
         onClearFilters={clearFilters}
       />
 
-      <main className="container mx-auto max-w-6xl px-4 py-6 pb-32 lg:pb-12">
+      {/* Skip link para keyboard / screen reader users. */}
+      <a
+        href="#productos"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded focus:bg-background focus:px-3 focus:py-2 focus:shadow focus:ring-2"
+      >
+        Saltar al listado de productos
+      </a>
+
+      {/* Anuncia cantidad de resultados a screen readers cuando cambian filtros. */}
+      <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+        {itemsFiltrados.length} {itemsFiltrados.length === 1 ? "resultado" : "resultados"}
+      </div>
+
+      <main id="productos" className="container mx-auto max-w-6xl px-4 py-6 pb-32 lg:pb-12" aria-label="Catálogo de productos">
         <div className="flex gap-6">
           <div className="flex-1 min-w-0">
             {/* Strip horizontal compacto vistos recientemente (sólo sin filtros) */}
@@ -417,7 +428,7 @@ export function CatalogoView({
                 }}
               >
                 <AnimatePresence>
-                  {itemsFiltrados.map((item) => (
+                  {itemsFiltrados.map((item, idx) => (
                     <ItemCard
                       key={item.id}
                       item={item}
@@ -427,6 +438,7 @@ export function CatalogoView({
                       brandColor={data.config.color_primary}
                       isFav={favoritos.has(item.id)}
                       onToggleFav={() => favoritos.toggle(item.id)}
+                      priority={idx < 4}
                     />
                   ))}
                 </AnimatePresence>

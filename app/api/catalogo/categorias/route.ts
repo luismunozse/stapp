@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
-import { revalidateTag } from "next/cache"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { revalidateCatalogo } from "@/lib/catalogo/revalidate"
 import { z } from "zod"
 import { CATEGORIA_SLUG_REGEX, generarSlugCategoriaUnico } from "@/lib/catalogo-slug"
 
@@ -69,6 +69,6 @@ export async function POST(req: Request) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  revalidateTag("catalogo", "max")
+  await revalidateCatalogo(auth.organizationId!)
   return NextResponse.json({ categoria: data }, { status: 201 })
 }

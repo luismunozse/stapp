@@ -29,18 +29,43 @@ async function _fetchItem(slug: string, itemId: string) {
 
   if (!config || !config.activo) return null
 
-  const { data: itemRaw } = await supabaseAdmin
-    .from("catalogo_items")
-    .select(`
-      id, tipo, nombre, descripcion, categoria_id, precio, precio_hasta, precio_lista,
-      imagen_url, imagenes, etiquetas, stock, destacado, inventario_id,
-      inventario:inventario(stock),
-      variantes:catalogo_variantes(id, etiqueta, sku, precio, stock, imagen_url, activo, orden)
-    `)
-    .eq("id", itemId)
-    .eq("organization_id", config.organization_id)
-    .eq("activo", true)
-    .maybeSingle()
+  // Item + org + top-variante + bundle-base en paralelo (4 RTT → 1).
+  // No dependen entre sí (todas usan itemId/organization_id ya conocidos).
+  const [
+    { data: itemRaw },
+    { data: org },
+    { data: vRows },
+    { data: rowsBase },
+  ] = await Promise.all([
+    supabaseAdmin
+      .from("catalogo_items")
+      .select(`
+        id, tipo, nombre, descripcion, categoria_id, precio, precio_hasta, precio_lista,
+        imagen_url, imagenes, etiquetas, stock, destacado, inventario_id,
+        inventario:inventario(stock),
+        variantes:catalogo_variantes(id, etiqueta, sku, precio, stock, imagen_url, activo, orden)
+      `)
+      .eq("id", itemId)
+      .eq("organization_id", config.organization_id)
+      .eq("activo", true)
+      .maybeSingle(),
+    supabaseAdmin
+      .from("organizations")
+      .select("id, nombre, nombre_mostrar, logo_url, telefono, moneda")
+      .eq("id", config.organization_id)
+      .single(),
+    supabaseAdmin
+      .from("items_cotizacion")
+      .select("variante_id")
+      .eq("catalogo_item_id", itemId)
+      .not("variante_id", "is", null)
+      .limit(5000),
+    supabaseAdmin
+      .from("items_cotizacion")
+      .select("cotizacion_id")
+      .eq("catalogo_item_id", itemId)
+      .limit(500),
+  ])
 
   if (!itemRaw) return null
 
@@ -49,17 +74,10 @@ async function _fetchItem(slug: string, itemId: string) {
     .sort((a: any, b: any) => a.orden - b.orden)
   const tieneVariantes = variantesActivas.length > 0
 
-  // Top variante (más elegida en cotizaciones histórico)
   let topVarianteId: string | null = null
-  if (tieneVariantes) {
-    const { data: vRows } = await supabaseAdmin
-      .from("items_cotizacion")
-      .select("variante_id")
-      .eq("catalogo_item_id", itemId)
-      .not("variante_id", "is", null)
-      .limit(5000)
+  if (tieneVariantes && vRows) {
     const counts = new Map<string, number>()
-    for (const r of vRows ?? []) {
+    for (const r of vRows) {
       if (!r.variante_id) continue
       counts.set(r.variante_id, (counts.get(r.variante_id) ?? 0) + 1)
     }
@@ -105,12 +123,6 @@ async function _fetchItem(slug: string, itemId: string) {
     })),
   }
 
-  const { data: org } = await supabaseAdmin
-    .from("organizations")
-    .select("id, nombre, nombre_mostrar, logo_url, telefono, moneda")
-    .eq("id", config.organization_id)
-    .single()
-
   // Items relacionados misma categoría
   let relacionados: any[] = []
   if (item.categoria_id) {
@@ -136,12 +148,8 @@ async function _fetchItem(slug: string, itemId: string) {
   }
 
   // Bundle "comprados juntos" — top 3 ids co-ocurrentes en cotizaciones
+  // rowsBase ya cargado en el Promise.all inicial.
   let bundle: any[] = []
-  const { data: rowsBase } = await supabaseAdmin
-    .from("items_cotizacion")
-    .select("cotizacion_id")
-    .eq("catalogo_item_id", itemId)
-    .limit(500)
   const cotIds = Array.from(new Set((rowsBase ?? []).map((r) => r.cotizacion_id))).filter(Boolean)
   if (cotIds.length > 0) {
     const { data: rowsOtros } = await supabaseAdmin
@@ -214,11 +222,19 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title: titulo,
     description: desc,
+    alternates: {
+      canonical: `/catalogo/${slug}/${itemId}`,
+    },
     openGraph: {
       title: data.item.nombre,
       description: desc,
-      images: data.item.imagen_url ? [data.item.imagen_url] : [],
+      // Si hay imagen propia del item se prefiere; sino dejamos que el
+      // opengraph-image.tsx generado domine. Width/height ayudan a previews.
+      ...(data.item.imagen_url && {
+        images: [{ url: data.item.imagen_url, width: 1200, height: 630 }],
+      }),
       type: "website",
+      url: `/catalogo/${slug}/${itemId}`,
     },
   }
 }
@@ -236,13 +252,23 @@ export default async function ItemPermalinkPage({ params }: PageProps) {
       ? "https://schema.org/OutOfStock"
       : "https://schema.org/InStock"
 
+  // URL absoluta + priceValidUntil (rich snippets de Google los exigen).
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || ""
+  const abs = (p: string) => (baseUrl ? `${baseUrl}${p}` : p)
+  const priceValidUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10)
+  const itemAbsUrl = abs(`/catalogo/${slug}/${itemId}`)
+
   const productLd: Record<string, unknown> = {
     "@context": "https://schema.org",
     "@type": data.item.tipo === "SERVICIO" ? "Service" : "Product",
     name: data.item.nombre,
+    sku: data.item.id,
     description: data.item.descripcion || undefined,
     image: data.item.imagen_url ? [data.item.imagen_url, ...data.item.imagenes] : undefined,
     brand: { "@type": "Organization", name: orgName },
+    url: itemAbsUrl,
   }
   if (data.item.precio != null) {
     const hasAnchor =
@@ -253,6 +279,8 @@ export default async function ItemPermalinkPage({ params }: PageProps) {
       price: Number(data.item.precio),
       priceCurrency: moneda,
       availability,
+      priceValidUntil,
+      url: itemAbsUrl,
       seller: { "@type": "Organization", name: orgName },
       ...(hasAnchor && {
         priceSpecification: {
@@ -265,11 +293,34 @@ export default async function ItemPermalinkPage({ params }: PageProps) {
     }
   }
 
+  // BreadcrumbList: catálogo → (categoría?) → item. Habilita breadcrumbs
+  // visibles en SERPs.
+  const breadcrumbItems: Array<{ name: string; href: string }> = [
+    { name: orgName, href: `/catalogo/${slug}` },
+  ]
+  // No tenemos info de slug categoría acá; si existe categoria_id, mostramos
+  // un nivel genérico. Para link real haría falta extender fetchItem.
+  breadcrumbItems.push({ name: data.item.nombre, href: `/catalogo/${slug}/${itemId}` })
+  const breadcrumbLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: breadcrumbItems.map((b, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name: b.name,
+      item: abs(b.href),
+    })),
+  }
+
   return (
     <>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(productLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
       />
       <CatalogoItemView data={data} />
       <div className="container mx-auto max-w-5xl px-4 pb-8 text-center">

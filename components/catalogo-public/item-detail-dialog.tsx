@@ -2,13 +2,15 @@
 
 import Image from "next/image"
 import { useState, useEffect, useRef, useMemo } from "react"
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Plus, Minus, ShoppingCart, Package, Wrench, MessageCircle, Star, Share2, ChevronLeft, ChevronRight, Copy, Heart, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 import type { CartItem } from "./use-cart"
+import { useViewTracking } from "./use-view-tracking"
+import { useItemBundle } from "./use-item-bundle"
 
 interface Variante {
   id: string
@@ -69,7 +71,6 @@ export function ItemDetailDialog({
   const [cantidad, setCantidad] = useState(1)
   const [imgIdx, setImgIdx] = useState(0)
   const [varianteId, setVarianteId] = useState<string | null>(null)
-  const [bundle, setBundle] = useState<Item[]>([])
   const touchStartX = useRef<number | null>(null)
 
   useEffect(() => {
@@ -87,51 +88,8 @@ export function ItemDetailDialog({
     }
   }, [open, item?.id])
 
-  useEffect(() => {
-    if (!open || !item?.id) return
-    // Tracking de vista de item. Fire & forget.
-    fetch(`/api/public/catalogo/${slug}/view`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ itemId: item.id }),
-      keepalive: true,
-    }).catch(() => {})
-  }, [open, item?.id, slug])
-
-  // Cargar bundle "comprados juntos" cuando se abre el detalle
-  useEffect(() => {
-    if (!open || !item?.id) {
-      setBundle([])
-      return
-    }
-    const ac = new AbortController()
-    fetch(`/api/public/catalogo/${slug}/items/${item.id}/bundle`, { signal: ac.signal })
-      .then((r) => r.json())
-      .then((data) => {
-        // Hidratar con la forma Item esperada por el render
-        const bundleItems: Item[] = (data.items ?? []).map((b: any) => {
-          const existing = relatedItems.find((i) => i.id === b.id)
-          return existing ?? {
-            id: b.id,
-            tipo: b.tipo,
-            nombre: b.nombre,
-            descripcion: null,
-            categoria_id: null,
-            precio: b.precio,
-            precio_hasta: null,
-            precio_lista: b.precio_lista ?? null,
-            imagen_url: b.imagen_url,
-            imagenes: [],
-            etiquetas: [],
-            stock_disponible: b.stock_disponible,
-            destacado: false,
-          }
-        })
-        setBundle(bundleItems)
-      })
-      .catch(() => setBundle([]))
-    return () => ac.abort()
-  }, [open, item?.id, slug, relatedItems])
+  useViewTracking(slug, item?.id ?? null, open)
+  const bundle = useItemBundle(slug, item?.id ?? null, open, relatedItems)
 
   // Cross-sell: 4 items misma categoría priorizando destacados y precio alto (anchor upsell).
   // Si no hay 4 en la misma categoría, completa con destacados de otras categorías.
@@ -266,6 +224,12 @@ export function ItemDetailDialog({
         ].join(" ")}
       >
         <DialogTitle className="sr-only">{item.nombre}</DialogTitle>
+        <DialogDescription className="sr-only">
+          {item.descripcion ||
+            `Detalle de ${item.nombre}${item.precio != null ? `. Precio ${item.precio}` : ""}${
+              item.stock_disponible === 0 ? ". Sin stock disponible" : ""
+            }.`}
+        </DialogDescription>
         {/* Drag handle (mobile only) */}
         <div
           className="sm:hidden sticky top-0 z-20 flex items-center justify-center py-2 bg-card"

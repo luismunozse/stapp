@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useRouter } from "next/navigation"
 import {
@@ -13,6 +13,8 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
 import type { useCart } from "./use-cart"
+import { useCupon } from "./use-cupon"
+import { useCatalogoUpload } from "./use-catalogo-upload"
 
 interface Props {
   open: boolean
@@ -39,13 +41,22 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
   const [notas, setNotas] = useState("")
   const [extras, setExtras] = useState<Record<string, ItemExtras>>({})
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
-  const [uploadingItem, setUploadingItem] = useState<string | null>(null)
   const fileInputsRef = useRef<Record<string, HTMLInputElement | null>>({})
 
-  const [cuponInput, setCuponInput] = useState("")
-  const [cuponAplicado, setCuponAplicado] = useState<{ codigo: string; descuento: number } | null>(null)
-  const [cuponError, setCuponError] = useState<string | null>(null)
-  const [validatingCupon, setValidatingCupon] = useState(false)
+  // Cupón + upload encapsulados en hooks; reusables y testeables aparte.
+  const getSubtotalCb = useCallback(() => cart.total, [cart.total])
+  const cupon = useCupon(slug, getSubtotalCb)
+  const { upload: uploadFile, uploadingItem } = useCatalogoUpload(slug)
+
+  // Aliases para minimizar cambios en JSX existente.
+  const cuponInput = cupon.input
+  const setCuponInput = cupon.setInput
+  const cuponAplicado = cupon.aplicado
+  const cuponError = cupon.error
+  const validatingCupon = cupon.validating
+  const aplicarCupon = cupon.aplicar
+  const quitarCupon = cupon.quitar
+
   // Consent de privacidad (Ley 25.326 / GDPR-like): el cliente debe aceptar
   // explícitamente que sus datos se usen para contactarlo. Sin esto, no se
   // envía la solicitud ni se snapshota el carrito como abandonado.
@@ -100,41 +111,6 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
     return () => clearTimeout(timer)
   }, [open, step, consent, nombre, telefono, email, cart.items, totalConCupon, cuponAplicado, slug])
 
-  const aplicarCupon = async () => {
-    const codigo = cuponInput.trim().toUpperCase()
-    if (!codigo) return
-    setValidatingCupon(true)
-    setCuponError(null)
-    try {
-      const res = await fetch(`/api/public/catalogo/${slug}/cupon/validar`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ codigo, subtotal: cart.total }),
-      })
-      const data = await res.json()
-      if (!data.ok) {
-        setCuponError(data.error || "Cupón inválido")
-        setCuponAplicado(null)
-        return
-      }
-      setCuponAplicado({
-        codigo: data.codigo,
-        descuento: Number(data.descuento_aplicado) || 0,
-      })
-      toast.success(`Cupón ${data.codigo} aplicado`)
-    } catch {
-      setCuponError("Error al validar cupón")
-    } finally {
-      setValidatingCupon(false)
-    }
-  }
-
-  const quitarCupon = () => {
-    setCuponAplicado(null)
-    setCuponInput("")
-    setCuponError(null)
-  }
-
   const getExtras = (id: string): ItemExtras => extras[id] ?? { comentario: "", adjuntos: [] }
 
   const setExtra = (id: string, patch: Partial<ItemExtras>) => {
@@ -145,24 +121,10 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
   }
 
   const handleUpload = async (itemId: string, file: File) => {
-    if (file.size > 4 * 1024 * 1024) {
-      toast.error("La foto supera 4MB")
-      return
-    }
-    setUploadingItem(itemId)
-    try {
-      const fd = new FormData()
-      fd.append("file", file)
-      const res = await fetch(`/api/public/catalogo/${slug}/upload`, { method: "POST", body: fd })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Error subiendo foto")
-      const current = getExtras(itemId).adjuntos
-      setExtra(itemId, { adjuntos: [...current, data.url].slice(0, MAX_ADJUNTOS_POR_ITEM) })
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error subiendo foto")
-    } finally {
-      setUploadingItem(null)
-    }
+    const url = await uploadFile(itemId, file)
+    if (!url) return
+    const current = getExtras(itemId).adjuntos
+    setExtra(itemId, { adjuntos: [...current, url].slice(0, MAX_ADJUNTOS_POR_ITEM) })
   }
 
   const removeAdjunto = (itemId: string, url: string) => {
@@ -497,7 +459,6 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                           value={cuponInput}
                           onChange={(e) => {
                             setCuponInput(e.target.value.toUpperCase())
-                            setCuponError(null)
                           }}
                           placeholder="Ej: VERANO25"
                           className="font-mono uppercase"

@@ -1,169 +1,19 @@
 import { notFound } from "next/navigation"
 import { unstable_cache } from "next/cache"
-import { supabaseAdmin } from "@/lib/supabase"
 import { CatalogoView } from "@/components/catalogo-public/catalogo-view"
+import { fetchCatalogoBaseData } from "@/lib/catalogo/fetch-data"
 import type { Metadata, Viewport } from "next"
 
 type PageProps = { params: Promise<{ slug: string }> }
 
-// Cache key incluye el slug para invalidación granular por tenant y para
-// evitar colisiones entre entries (cada catálogo tiene su propio espacio).
-// Tag `catalogo:${slug}` permite a admin/cotizar invalidar un solo catálogo
-// sin tirar abajo el resto.
+// Cache key incluye el slug para invalidación granular por tenant.
+// Tag `catalogo:${slug}` permite invalidar un solo catálogo desde admin.
 function fetchCatalogo(slug: string) {
   return unstable_cache(
-    () => _fetchCatalogo(slug),
+    () => fetchCatalogoBaseData(slug),
     ["catalogo-public", slug],
     { revalidate: 60, tags: ["catalogo", `catalogo:${slug}`] }
   )()
-}
-
-async function _fetchCatalogo(slug: string) {
-  if (!/^[a-z0-9]([a-z0-9-]{1,48}[a-z0-9])?$/.test(slug)) return null
-
-  const { data: config } = await supabaseAdmin
-    .from("catalogo_config")
-    .select("slug, titulo, descripcion, color_primary, whatsapp, banner_url, trust_badges, activo, organization_id")
-    .eq("slug", slug)
-    .maybeSingle()
-
-  if (!config || !config.activo) return null
-
-  const { data: org } = await supabaseAdmin
-    .from("organizations")
-    .select("id, nombre, nombre_mostrar, logo_url, telefono, moneda")
-    .eq("id", config.organization_id)
-    .single()
-
-  const { data: categorias } = await supabaseAdmin
-    .from("catalogo_categorias")
-    .select("id, nombre, slug, descripcion, imagen_url, orden")
-    .eq("organization_id", config.organization_id)
-    .eq("activo", true)
-    .order("orden", { ascending: true })
-
-  const { data: itemsRaw } = await supabaseAdmin
-    .from("catalogo_items")
-    .select(`
-      id, tipo, nombre, descripcion, categoria_id, precio, precio_hasta, precio_lista,
-      imagen_url, imagenes, etiquetas, stock, destacado, inventario_id, orden,
-      inventario:inventario(stock),
-      variantes:catalogo_variantes(id, etiqueta, sku, precio, stock, imagen_url, activo, orden)
-    `)
-    .eq("organization_id", config.organization_id)
-    .eq("activo", true)
-    .order("destacado", { ascending: false })
-    .order("orden", { ascending: true })
-
-  // Social proof: vistas únicas (por visitor_hash) por item últimos 7 días
-  const ago7 = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-  const { data: viewsRaw } = await supabaseAdmin
-    .from("catalogo_views")
-    .select("item_id, visitor_hash")
-    .eq("organization_id", config.organization_id)
-    .not("item_id", "is", null)
-    .gte("created_at", ago7)
-    .limit(10000)
-
-  const viewsPorItem = new Map<string, Set<string>>()
-  const viewsPorItemRaw = new Map<string, number>()
-  for (const v of viewsRaw ?? []) {
-    if (!v.item_id) continue
-    viewsPorItemRaw.set(v.item_id, (viewsPorItemRaw.get(v.item_id) ?? 0) + 1)
-    if (v.visitor_hash) {
-      if (!viewsPorItem.has(v.item_id)) viewsPorItem.set(v.item_id, new Set())
-      viewsPorItem.get(v.item_id)!.add(v.visitor_hash)
-    }
-  }
-
-  // Top variante por item (más elegida en cotizaciones histórico)
-  const itemIdsConVariantes = (itemsRaw ?? [])
-    .filter((it: any) => (it.variantes ?? []).some((v: any) => v.activo))
-    .map((it: any) => it.id)
-  const topVariantePorItem = new Map<string, string>()
-  if (itemIdsConVariantes.length > 0) {
-    const { data: vRows } = await supabaseAdmin
-      .from("items_cotizacion")
-      .select("catalogo_item_id, variante_id")
-      .in("catalogo_item_id", itemIdsConVariantes)
-      .not("variante_id", "is", null)
-      .limit(20000)
-    const counts = new Map<string, Map<string, number>>()
-    for (const r of vRows ?? []) {
-      if (!r.catalogo_item_id || !r.variante_id) continue
-      if (!counts.has(r.catalogo_item_id)) counts.set(r.catalogo_item_id, new Map())
-      const m = counts.get(r.catalogo_item_id)!
-      m.set(r.variante_id, (m.get(r.variante_id) ?? 0) + 1)
-    }
-    for (const [itemId, m] of counts.entries()) {
-      let topId: string | null = null
-      let topCount = 0
-      for (const [vid, c] of m.entries()) {
-        if (c > topCount) {
-          topCount = c
-          topId = vid
-        }
-      }
-      // Sólo marcar si tiene tracción mínima (≥2 ventas para evitar ruido)
-      if (topId && topCount >= 2) topVariantePorItem.set(itemId, topId)
-    }
-  }
-
-  const items = (itemsRaw ?? []).map((it: any) => {
-    const variantesActivas = (it.variantes ?? [])
-      .filter((v: any) => v.activo)
-      .sort((a: any, b: any) => a.orden - b.orden)
-    const tieneVariantes = variantesActivas.length > 0
-    const stockVariantes = tieneVariantes
-      ? variantesActivas.reduce((s: number | null, v: any) => {
-          if (v.stock == null) return null
-          return s == null ? null : s + v.stock
-        }, 0)
-      : null
-    const stockReal = tieneVariantes
-      ? stockVariantes
-      : it.inventario_id && it.inventario ? it.inventario.stock : it.stock
-    const precioMin = tieneVariantes
-      ? variantesActivas.reduce((m: number | null, v: any) => {
-          if (v.precio == null) return m
-          return m == null ? Number(v.precio) : Math.min(m, Number(v.precio))
-        }, null) ?? it.precio
-      : it.precio
-    const vistasUnicas = viewsPorItem.get(it.id)?.size ?? 0
-    const vistasTotal = viewsPorItemRaw.get(it.id) ?? 0
-    const topVarId = topVariantePorItem.get(it.id) ?? null
-    const { inventario, variantes, ...rest } = it
-    return {
-      ...rest,
-      precio: precioMin,
-      stock_disponible: stockReal,
-      vistas_semana: Math.max(vistasUnicas, vistasTotal),
-      top_variante_id: topVarId,
-      variantes: variantesActivas.map((v: any) => ({
-        id: v.id,
-        etiqueta: v.etiqueta,
-        sku: v.sku,
-        precio: v.precio,
-        stock: v.stock,
-        imagen_url: v.imagen_url,
-      })),
-    }
-  })
-
-  return {
-    config: {
-      slug: config.slug,
-      titulo: config.titulo,
-      descripcion: config.descripcion,
-      color_primary: config.color_primary || "#2563eb",
-      whatsapp: config.whatsapp,
-      banner_url: config.banner_url,
-      trust_badges: Array.isArray(config.trust_badges) ? config.trust_badges : [],
-    },
-    organizacion: org!,
-    categorias: categorias ?? [],
-    items,
-  }
 }
 
 export async function generateViewport({ params }: PageProps): Promise<Viewport> {
@@ -187,6 +37,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     title: titulo,
     description: descripcion,
     manifest: `/catalogo/${slug}/manifest.webmanifest`,
+    alternates: {
+      canonical: `/catalogo/${slug}`,
+    },
     appleWebApp: {
       capable: true,
       title: titulo.length > 20 ? titulo.slice(0, 20) : titulo,
@@ -196,6 +49,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       title: titulo,
       description: descripcion,
       type: "website",
+      url: `/catalogo/${slug}`,
     },
   }
 }
@@ -209,6 +63,14 @@ export default async function CatalogoPublicPage({ params }: PageProps) {
   const moneda = data.organizacion.moneda || "ARS"
   const titulo = data.config.titulo || orgName
 
+  // URL absoluta requerida por schema.org (Google la pide para indexación).
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || ""
+  const abs = (p: string) => (baseUrl ? `${baseUrl}${p}` : p)
+  // priceValidUntil: ~30 días desde hoy (Google exige fecha futura para Offer).
+  const priceValidUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10)
+
   // ItemList JSON-LD para SEO (Google Shopping snippets / rich results)
   const itemListLd = {
     "@context": "https://schema.org",
@@ -218,10 +80,11 @@ export default async function CatalogoPublicPage({ params }: PageProps) {
     itemListElement: data.items.slice(0, 50).map((it, i) => ({
       "@type": "ListItem",
       position: i + 1,
-      url: `/catalogo/${slug}/${it.id}`,
+      url: abs(`/catalogo/${slug}/${it.id}`),
       item: {
         "@type": it.tipo === "SERVICIO" ? "Service" : "Product",
         name: it.nombre,
+        sku: it.id,
         image: it.imagen_url || undefined,
         description: it.descripcion || undefined,
         ...(it.precio != null && {
@@ -229,6 +92,8 @@ export default async function CatalogoPublicPage({ params }: PageProps) {
             "@type": "Offer",
             price: Number(it.precio),
             priceCurrency: moneda,
+            priceValidUntil,
+            url: abs(`/catalogo/${slug}/${it.id}`),
             availability:
               it.stock_disponible === 0
                 ? "https://schema.org/OutOfStock"

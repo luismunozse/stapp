@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
-import { revalidateTag } from "next/cache"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { revalidateCatalogo } from "@/lib/catalogo/revalidate"
 import { z } from "zod"
 
 const importSchema = z.object({
@@ -102,7 +102,7 @@ export async function POST(req: Request) {
 
   if (insertErr) return NextResponse.json({ error: insertErr.message }, { status: 500 })
 
-  revalidateTag("catalogo", "max")
+  await revalidateCatalogo(auth.organizationId!)
   return NextResponse.json({
     ok: true,
     creados: creados?.length ?? 0,

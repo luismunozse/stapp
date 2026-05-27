@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { revalidateTag } from "next/cache"
+import { revalidateCatalogo } from "@/lib/catalogo/revalidate"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
@@ -132,7 +132,7 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  revalidateTag("catalogo", "max")
+  await revalidateCatalogo(organizationId!)
 
   const url = `${process.env.NEXT_PUBLIC_APP_URL || ""}/catalogo/${data.slug}`
   return NextResponse.json({ config: data, url })

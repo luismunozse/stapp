@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach } from "vitest"
-import { rateLimit, getApiRateLimit, isExemptFromRateLimit } from "@/lib/rate-limit"
+import {
+  rateLimit,
+  getApiRateLimit,
+  isExemptFromRateLimit,
+  extractPublicToken,
+  extractPublicCatalogoSlug,
+} from "@/lib/rate-limit"
 
 describe("rate-limit", () => {
   describe("rateLimit()", () => {
@@ -54,7 +60,7 @@ describe("rate-limit", () => {
 
     it("retorna límites para APIs públicas", () => {
       const config = getApiRateLimit("/api/public/ordenes/abc")
-      expect(config.max).toBe(30)
+      expect(config.max).toBe(20)
     })
 
     it("retorna límites altos para webhooks", () => {
@@ -79,6 +85,55 @@ describe("rate-limit", () => {
 
     it("no exime rutas normales", () => {
       expect(isExemptFromRateLimit("/api/ordenes")).toBe(false)
+    })
+  })
+
+  describe("extractPublicToken()", () => {
+    it("extrae token de /api/public/cotizaciones/{token}/...", () => {
+      expect(extractPublicToken("/api/public/cotizaciones/abc123def456")).toBe("abc123def456")
+      expect(extractPublicToken("/api/public/cotizaciones/abc123def456/items")).toBe("abc123def456")
+    })
+
+    it("extrae token de /api/public/ordenes/{token}", () => {
+      expect(extractPublicToken("/api/public/ordenes/0123456789abcdef")).toBe("0123456789abcdef")
+    })
+
+    it("extrae token de /api/public/kiosco/{token}", () => {
+      expect(extractPublicToken("/api/public/kiosco/longenoughtoken123")).toBe("longenoughtoken123")
+    })
+
+    it("rechaza tokens muy cortos (< 12 chars)", () => {
+      expect(extractPublicToken("/api/public/cotizaciones/short")).toBeNull()
+    })
+
+    it("retorna null para rutas no reconocidas", () => {
+      expect(extractPublicToken("/api/public/catalogo/mi-tienda")).toBeNull()
+      expect(extractPublicToken("/api/public/tenant/mi-tienda")).toBeNull()
+      expect(extractPublicToken("/api/ordenes/abc123def456")).toBeNull()
+    })
+  })
+
+  describe("extractPublicCatalogoSlug()", () => {
+    it("extrae slug de catálogo público", () => {
+      expect(extractPublicCatalogoSlug("/api/public/catalogo/mi-tienda")).toBe("mi-tienda")
+      expect(extractPublicCatalogoSlug("/api/public/catalogo/mi-tienda/items")).toBe("mi-tienda")
+      expect(extractPublicCatalogoSlug("/api/public/catalogo/mi-tienda/cotizar")).toBe("mi-tienda")
+    })
+
+    it("acepta slugs alfanuméricos", () => {
+      expect(extractPublicCatalogoSlug("/api/public/catalogo/tienda123")).toBe("tienda123")
+      expect(extractPublicCatalogoSlug("/api/public/catalogo/abc")).toBe("abc")
+    })
+
+    it("retorna null para rutas que no son catálogo", () => {
+      expect(extractPublicCatalogoSlug("/api/public/cotizaciones/abc123")).toBeNull()
+      expect(extractPublicCatalogoSlug("/api/catalogo/mi-tienda")).toBeNull()
+    })
+
+    it("rechaza slugs malformados", () => {
+      expect(extractPublicCatalogoSlug("/api/public/catalogo/-bad")).toBeNull()
+      expect(extractPublicCatalogoSlug("/api/public/catalogo/UPPER")).toBeNull()
+      expect(extractPublicCatalogoSlug("/api/public/catalogo/a")).toBeNull() // mínimo 2
     })
   })
 })
