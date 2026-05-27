@@ -102,6 +102,7 @@ function formatCotizacion(c: any) {
     vistoAt: c.visto_at || null,
     vistoCount: c.visto_count || 0,
     motivoRechazo: c.motivo_rechazo || null,
+    origen: c.origen || null,
     tipoCambio: c.tipo_cambio || null,
     tipo: c.tipo || "ORDEN",
     equipo: c.equipo_snapshot || null,

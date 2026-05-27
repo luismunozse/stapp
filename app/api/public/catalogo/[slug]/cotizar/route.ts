@@ -138,11 +138,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     }
   }
 
-  // 5. Cliente: buscar por teléfono dentro de la org, o crear
+  // 5. Cliente: buscar por teléfono dentro de la org, o crear.
+  // Si existe, sincronizar nombre/email con lo que acaba de enviar el cliente
+  // (la cotización debe reflejar el contacto que llenó el form, no un
+  // registro viejo que casualmente comparte ese teléfono).
   const telefonoNorm = data.cliente.telefono.trim()
+  const nombreNuevo = data.cliente.nombre.trim()
+  const emailNuevo = data.cliente.email?.trim() || null
+
   const { data: clienteExistente } = await supabaseAdmin
     .from("clientes")
-    .select("id, nombre, telefono, email")
+    .select("id, nombre, email")
     .eq("organization_id", organizationId)
     .eq("telefono", telefonoNorm)
     .maybeSingle()
@@ -150,14 +156,32 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   let clienteId: string
   if (clienteExistente) {
     clienteId = clienteExistente.id
+    const updates: Record<string, unknown> = {}
+    if (nombreNuevo && nombreNuevo !== clienteExistente.nombre) {
+      updates.nombre = nombreNuevo
+    }
+    if (emailNuevo && emailNuevo !== clienteExistente.email) {
+      updates.email = emailNuevo
+    }
+    if (Object.keys(updates).length > 0) {
+      const { error: updateErr } = await supabaseAdmin
+        .from("clientes")
+        .update(updates)
+        .eq("id", clienteId)
+        .eq("organization_id", organizationId)
+      if (updateErr) {
+        console.error("Error actualizando cliente existente:", updateErr)
+        // No bloqueante — seguimos con el clienteId, la cotización se crea igual
+      }
+    }
   } else {
     const { data: nuevoCliente, error: clienteErr } = await supabaseAdmin
       .from("clientes")
       .insert({
         organization_id: organizationId,
-        nombre: data.cliente.nombre.trim(),
+        nombre: nombreNuevo,
         telefono: telefonoNorm,
-        email: data.cliente.email?.trim() || null,
+        email: emailNuevo,
       })
       .select("id")
       .single()

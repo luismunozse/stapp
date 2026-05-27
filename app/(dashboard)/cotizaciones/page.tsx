@@ -76,6 +76,7 @@ interface Cotizacion {
   vistoAt?: string | null
   vistoCount?: number
   motivoRechazo?: string | null
+  origen?: string | null
   tipo?: "ORDEN" | "PRESUPUESTO"
   equipo?: {
     dispositivo: string
@@ -195,7 +196,15 @@ export default function CotizacionesPage() {
   const { data: response, isLoading: loading, mutate } = useSWR<PaginatedResponse>(
     swrKey,
     fetcher,
-    { revalidateOnFocus: true, dedupingInterval: 5000 }
+    {
+      revalidateOnFocus: true,
+      dedupingInterval: 5000,
+      // Polling cada 30s mientras el tab esté visible — captura nuevas
+      // cotizaciones del catálogo público sin esperar focus o F5.
+      refreshInterval: 30000,
+      refreshWhenHidden: false,
+      refreshWhenOffline: false,
+    }
   )
 
   // Auto-abrir cotización cuando llega ?abrir=<id> (deeplink de notificaciones).
@@ -655,11 +664,21 @@ export default function CotizacionesPage() {
                       return (
                         <tr key={cotizacion.id} className="border-b hover:bg-muted/30 transition-colors">
                           <td className="p-3 font-medium">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               {cotizacion.numeroCotizacion}
                               {cotizacion.tipo === "PRESUPUESTO" && (
                                 <Badge variant="outline" className="text-[10px] border-purple-300 text-purple-700">
                                   Presupuesto
+                                </Badge>
+                              )}
+                              {cotizacion.origen === "CATALOGO_PUBLICO" && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] border-emerald-300 text-emerald-700 bg-emerald-50 dark:bg-emerald-950/30 dark:border-emerald-900 dark:text-emerald-300 gap-1"
+                                  title="Solicitud generada desde el catálogo público"
+                                >
+                                  <ShoppingCart className="h-2.5 w-2.5" />
+                                  Catálogo
                                 </Badge>
                               )}
                             </div>
@@ -829,6 +848,16 @@ export default function CotizacionesPage() {
                           <Badge variant="outline" className="text-xs border-purple-300 text-purple-700">
                             <FileText className="mr-1 h-3 w-3" />
                             Presupuesto
+                          </Badge>
+                        )}
+                        {cotizacion.origen === "CATALOGO_PUBLICO" && (
+                          <Badge
+                            variant="outline"
+                            className="text-xs border-emerald-300 text-emerald-700 bg-emerald-50 dark:bg-emerald-950/30 dark:border-emerald-900 dark:text-emerald-300 gap-1"
+                            title="Solicitud generada desde el catálogo público"
+                          >
+                            <ShoppingCart className="mr-0.5 h-3 w-3" />
+                            Catálogo
                           </Badge>
                         )}
                         {cotizacion.ordenNumero && (
