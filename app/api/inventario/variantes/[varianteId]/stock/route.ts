@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { revalidateTag } from "next/cache"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
@@ -54,6 +55,10 @@ export async function POST(
       stockAnterior: number
       stockPosterior: number
       movimientoId: string | null
+    }
+
+    if (result.changed) {
+      revalidateTag("catalogo", "max")
     }
 
     return NextResponse.json({

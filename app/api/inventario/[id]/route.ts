@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { revalidateTag } from "next/cache"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatInventario } from "@/lib/db-utils"
@@ -215,6 +216,12 @@ export async function PUT(
           error: movError,
         })
       }
+    }
+
+    // Si cambió stock, invalidar caché del catálogo público (items linkean
+    // a este inventario via inventario_id).
+    if (data.stock !== undefined && data.stock !== existingItem.stock) {
+      revalidateTag("catalogo", "max")
     }
 
     return NextResponse.json(formatInventario(item))

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { revalidateTag } from "next/cache"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
@@ -96,6 +97,12 @@ export async function POST(
           }).catch(() => {})
         }
       }
+    }
+
+    // Invalidar caché del catálogo público — items que linkean a este
+    // inventario via inventario_id reflejan el stock real, deben refrescar.
+    if (result.changed) {
+      revalidateTag("catalogo", "max")
     }
 
     return NextResponse.json({

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { revalidateTag } from "next/cache"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
@@ -100,6 +101,8 @@ export async function POST(request: Request) {
     if (result?.error) {
       return NextResponse.json({ error: result.error }, { status: 400 })
     }
+
+    revalidateTag("catalogo", "max")
 
     return NextResponse.json({ success: true, id: result.id, nuevoStock: result.nuevoStock }, { status: 201 })
   } catch (err) {
