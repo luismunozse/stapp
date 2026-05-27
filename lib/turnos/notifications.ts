@@ -269,19 +269,23 @@ export async function sendTurnoNotification(
     try {
       const { data: waConfig } = await supabaseAdmin
         .from("whatsapp_config")
-        .select("phone_number_id, access_token_encrypted, is_configured, is_verified")
+        .select("provider, is_configured, is_verified, evolution_connection_state")
         .eq("organization_id", ctx.organizationId)
         .single()
 
-      if (!waConfig?.is_configured || !waConfig?.is_verified || !waConfig.access_token_encrypted) {
+      const provider = (waConfig?.provider || "meta") as "meta" | "evolution"
+      const canSendViaApi =
+        waConfig?.is_configured &&
+        (provider === "evolution"
+          ? waConfig.evolution_connection_state === "open"
+          : waConfig.is_verified)
+
+      if (!canSendViaApi) {
         result.whatsapp = { sent: false, error: "WhatsApp no configurado" }
       } else {
-        const { decrypt } = await import("@/lib/whatsapp/encryption")
-        const { sendTextMessage } = await import("@/lib/whatsapp/client")
-        const accessToken = decrypt(waConfig.access_token_encrypted)
-        const wa = await sendTextMessage(
-          waConfig.phone_number_id,
-          accessToken,
+        const { sendWhatsAppText } = await import("@/lib/whatsapp/providers")
+        const wa = await sendWhatsAppText(
+          ctx.organizationId,
           ctx.destinatarioTelefono,
           tpl.whatsapp,
         )

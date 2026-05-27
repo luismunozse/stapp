@@ -294,9 +294,9 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                       const isExpanded = expanded[k] || hasExtras
                       const isUploading = uploadingItem === k
                       return (
-                        <div key={k} className="border rounded-lg p-2 space-y-2">
+                        <div key={k} className="border rounded-lg p-2.5 space-y-2">
                           <div className="flex gap-3">
-                            <div className="w-16 h-16 rounded-md bg-muted overflow-hidden shrink-0">
+                            <div className="w-16 h-16 rounded-md bg-muted overflow-hidden shrink-0 border">
                               {item.imagen_url && (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img
@@ -309,74 +309,77 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                               )}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <h3 className="text-sm font-medium line-clamp-2">{item.nombre}</h3>
+                              <h3 className="text-sm font-medium line-clamp-2 leading-snug">{item.nombre}</h3>
                               {item.varianteEtiqueta && (
                                 <p className="text-xs text-muted-foreground">{item.varianteEtiqueta}</p>
                               )}
-                              <div className="text-sm font-semibold mt-0.5" style={{ color: brandColor }}>
+                              <div className="text-sm font-bold mt-0.5" style={{ color: brandColor }}>
                                 {formatPrecio(item.precio * item.cantidad)}
                               </div>
-                              <div className="flex items-center gap-1 mt-1.5">
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  className="h-7 w-7"
+                              <div className="inline-flex items-center rounded-md border bg-background overflow-hidden mt-1.5">
+                                <button
+                                  type="button"
                                   onClick={() => cart.setCantidad(k, item.cantidad - 1)}
+                                  className="h-9 w-9 inline-flex items-center justify-center hover:bg-muted active:scale-95 transition disabled:opacity-40"
+                                  aria-label="Disminuir"
                                 >
-                                  <Minus className="h-3 w-3" />
-                                </Button>
-                                <span className="w-8 text-center text-sm">{item.cantidad}</span>
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  className="h-7 w-7"
+                                  <Minus className="h-3.5 w-3.5" />
+                                </button>
+                                <span className="w-9 text-center text-sm font-semibold tabular-nums">{item.cantidad}</span>
+                                <button
+                                  type="button"
                                   onClick={() => cart.setCantidad(k, item.cantidad + 1)}
                                   disabled={item.stock_disponible != null && item.cantidad >= item.stock_disponible}
+                                  className="h-9 w-9 inline-flex items-center justify-center hover:bg-muted active:scale-95 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                                  aria-label="Aumentar"
                                 >
-                                  <Plus className="h-3 w-3" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 ml-auto"
-                                  onClick={() => cart.remove(k)}
-                                >
-                                  <Trash2 className="h-3 w-3 text-destructive" />
-                                </Button>
+                                  <Plus className="h-3.5 w-3.5" />
+                                </button>
                               </div>
                             </div>
+                            <button
+                              type="button"
+                              onClick={() => cart.remove(k)}
+                              className="h-9 w-9 inline-flex items-center justify-center rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition shrink-0"
+                              aria-label="Quitar"
+                              title="Quitar del carrito"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
                           </div>
 
                           {!isExpanded ? (
                             <button
+                              type="button"
                               onClick={() => setExpanded((prev) => ({ ...prev, [k]: true }))}
-                              className="w-full text-left text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 transition-colors"
+                              className="w-full text-left text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 transition-colors px-1 py-1 -mx-1 rounded"
                             >
-                              <MessageSquare className="h-3 w-3" />
-                              Agregar comentario o foto
+                              <MessageSquare className="h-3.5 w-3.5" />
+                              <span>Agregar comentario o foto</span>
+                              <span className="ml-auto text-[10px] opacity-60">opcional</span>
                             </button>
                           ) : (
-                            <div className="space-y-2 pt-1 border-t">
+                            <div className="space-y-2 pt-2 border-t">
                               <Textarea
                                 value={ex.comentario}
                                 onChange={(e) => setExtra(k, { comentario: e.target.value })}
                                 rows={2}
                                 maxLength={500}
-                                placeholder="Comentario (ej: pantalla rota lado superior)"
+                                placeholder="Detalles del item (ej: pantalla rota lado superior, talle XL)"
                                 className="text-xs resize-none"
                               />
-                              <div className="flex flex-wrap gap-1.5">
+                              <div className="flex flex-wrap gap-1.5 items-center">
                                 {ex.adjuntos.map((url) => (
-                                  <div key={url} className="relative h-14 w-14 rounded-md overflow-hidden border group/img">
+                                  <div key={url} className="relative h-12 w-12 rounded-md overflow-hidden border group/img">
                                     {/* eslint-disable-next-line @next/next/no-img-element */}
                                     <img src={url} alt="" className="w-full h-full object-cover" />
                                     <button
                                       type="button"
                                       onClick={() => removeAdjunto(k, url)}
-                                      className="absolute inset-0 bg-black/50 opacity-0 group-hover/img:opacity-100 flex items-center justify-center transition-opacity"
+                                      className="absolute inset-0 bg-black/60 sm:opacity-0 sm:group-hover/img:opacity-100 flex items-center justify-center transition-opacity"
                                       aria-label="Quitar foto"
                                     >
-                                      <X className="h-4 w-4 text-white" />
+                                      <X className="h-3.5 w-3.5 text-white" />
                                     </button>
                                   </div>
                                 ))}
@@ -386,14 +389,15 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                                       type="button"
                                       onClick={() => fileInputsRef.current[k]?.click()}
                                       disabled={isUploading}
-                                      className="h-14 w-14 rounded-md border-2 border-dashed flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-foreground transition-colors disabled:opacity-50"
+                                      className="inline-flex items-center gap-1 h-9 px-2.5 rounded-md border border-dashed text-xs text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors disabled:opacity-50 active:scale-95"
                                       aria-label="Agregar foto"
                                     >
                                       {isUploading ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
                                       ) : (
-                                        <Camera className="h-4 w-4" />
+                                        <Camera className="h-3.5 w-3.5" />
                                       )}
+                                      <span>{ex.adjuntos.length === 0 ? "Agregar foto" : "Otra"}</span>
                                     </button>
                                     <input
                                       ref={(el) => {
@@ -412,9 +416,11 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                                   </>
                                 )}
                               </div>
-                              <p className="text-[10px] text-muted-foreground">
-                                Hasta {MAX_ADJUNTOS_POR_ITEM} fotos · JPG/PNG/WEBP · máx 4MB
-                              </p>
+                              {ex.adjuntos.length === 0 && (
+                                <p className="text-[10px] text-muted-foreground">
+                                  Hasta {MAX_ADJUNTOS_POR_ITEM} fotos · máx 4MB c/u
+                                </p>
+                              )}
                             </div>
                           )}
                         </div>
@@ -503,15 +509,42 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
 
                   <div>
                     <Label htmlFor="nombre">Nombre completo *</Label>
-                    <Input id="nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} maxLength={120} />
+                    <Input
+                      id="nombre"
+                      value={nombre}
+                      onChange={(e) => setNombre(e.target.value)}
+                      maxLength={120}
+                      autoComplete="name"
+                      placeholder="Ej: Juan Pérez"
+                      className="h-11 mt-1"
+                    />
                   </div>
                   <div>
                     <Label htmlFor="telefono">Teléfono / WhatsApp *</Label>
-                    <Input id="telefono" type="tel" inputMode="tel" autoComplete="tel" value={telefono} onChange={(e) => setTelefono(e.target.value)} maxLength={40} />
+                    <Input
+                      id="telefono"
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="tel"
+                      value={telefono}
+                      onChange={(e) => setTelefono(e.target.value)}
+                      maxLength={40}
+                      placeholder="+54 9 11 1234-5678"
+                      className="h-11 mt-1"
+                    />
                   </div>
                   <div>
                     <Label htmlFor="email">Email (opcional)</Label>
-                    <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                    <Input
+                      id="email"
+                      type="email"
+                      inputMode="email"
+                      autoComplete="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="tu@correo.com"
+                      className="h-11 mt-1"
+                    />
                   </div>
                   <div>
                     <Label htmlFor="notas">Notas (opcional)</Label>
@@ -522,6 +555,7 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                       rows={3}
                       maxLength={1000}
                       placeholder="Algún detalle que quieras compartir..."
+                      className="mt-1"
                     />
                   </div>
 
@@ -534,17 +568,18 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
             </div>
 
             {cart.items.length > 0 && (
-              <footer className="border-t p-4 space-y-2">
+              <footer className="border-t p-4 space-y-2 bg-background/95 backdrop-blur">
                 {step === "cart" ? (
                   <>
-                    <div className="flex items-center justify-between text-base font-semibold">
-                      <span>Total</span>
-                      <span style={{ color: brandColor }}>{formatPrecio(totalConCupon)}</span>
+                    <div className="flex items-center justify-between text-base">
+                      <span className="font-medium">Total</span>
+                      <span className="text-lg font-bold" style={{ color: brandColor }}>
+                        {formatPrecio(totalConCupon)}
+                      </span>
                     </div>
                     <Button
                       onClick={() => setStep("checkout")}
-                      className="w-full"
-                      size="lg"
+                      className="w-full h-12 text-base font-semibold gap-1.5 shadow-md hover:shadow-lg transition-shadow"
                       style={{ backgroundColor: brandColor }}
                       disabled={!!uploadingItem}
                     >
@@ -557,18 +592,18 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
                       variant="outline"
                       onClick={() => setStep("cart")}
                       disabled={submitting}
-                      className="flex-1"
+                      className="flex-1 h-12"
                     >
                       Atrás
                     </Button>
                     <Button
                       onClick={handleSubmit}
-                      disabled={submitting}
-                      className="flex-1 gap-1.5"
+                      disabled={submitting || !nombre.trim() || !telefono.trim()}
+                      className="flex-1 h-12 gap-1.5 text-base font-semibold shadow-md hover:shadow-lg transition-shadow"
                       style={{ backgroundColor: brandColor }}
                     >
                       {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-                      Enviar
+                      Enviar solicitud
                     </Button>
                   </div>
                 )}

@@ -178,16 +178,21 @@ export async function sendNotificationDirect(params: NotificationParams) {
     try {
       const { data: waConfig } = await supabaseAdmin
         .from("whatsapp_config")
-        .select("phone_number_id, access_token_encrypted, is_configured, is_verified")
+        .select("provider, is_configured, is_verified, evolution_connection_state")
         .eq("organization_id", organizationId)
         .single()
 
-      if (waConfig?.is_configured && waConfig?.is_verified && waConfig.access_token_encrypted) {
-        const { decrypt } = await import("@/lib/whatsapp/encryption")
-        const { sendTextMessage } = await import("@/lib/whatsapp/client")
+      const provider = (waConfig?.provider || "meta") as "meta" | "evolution"
+      const canSendViaApi =
+        waConfig?.is_configured &&
+        (provider === "evolution"
+          ? waConfig.evolution_connection_state === "open"
+          : waConfig.is_verified)
+
+      if (canSendViaApi) {
+        const { sendWhatsAppText } = await import("@/lib/whatsapp/providers")
         const { NOTIFICATION_TEMPLATES } = await import("@/lib/whatsapp/templates")
 
-        const accessToken = decrypt(waConfig.access_token_encrypted)
         const template = NOTIFICATION_TEMPLATES[tipo]
         const overrideText = resolvePlantillaForTipo(tipo, context, orgConfig.plantillas_whatsapp)
         const fallbackText = overrideText
@@ -200,9 +205,8 @@ export async function sendNotificationDirect(params: NotificationParams) {
               })
             : generateWhatsAppMessage(tipo, context))
 
-        const result = await sendTextMessage(
-          waConfig.phone_number_id,
-          accessToken,
+        const result = await sendWhatsAppText(
+          organizationId,
           context.cliente.telefono,
           fallbackText
         )
@@ -217,7 +221,7 @@ export async function sendNotificationDirect(params: NotificationParams) {
           estado: result.success ? "ENVIADO" : "FALLIDO",
           destinatario: context.cliente.telefono,
           contenido: fallbackText,
-          metadata: JSON.stringify({ messageId: result.messageId, viaApi: true }),
+          metadata: JSON.stringify({ messageId: result.messageId, viaApi: true, provider: result.provider }),
           error_message: result.error || null,
         })
 

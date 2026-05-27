@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
-import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
-import { decrypt } from "@/lib/whatsapp/encryption"
-import { sendTextMessage } from "@/lib/whatsapp/client"
+import { sendWhatsAppText } from "@/lib/whatsapp/providers"
 import { z } from "zod"
 
 const sendSchema = z.object({
@@ -27,34 +25,17 @@ export async function POST(request: Request) {
     const body = await request.json()
     const data = sendSchema.parse(body)
 
-    // Obtener configuración
-    const { data: config } = await supabaseAdmin
-      .from("whatsapp_config")
-      .select("phone_number_id, access_token_encrypted, is_configured")
-      .eq("organization_id", organizationId!)
-      .single()
-
-    if (!config || !config.is_configured) {
-      return NextResponse.json({ error: "WhatsApp Business no configurado" }, { status: 400 })
-    }
-
-    const accessToken = decrypt(config.access_token_encrypted)
-
-    const result = await sendTextMessage(
-      config.phone_number_id,
-      accessToken,
-      data.phoneNumber,
-      data.message
-    )
+    const result = await sendWhatsAppText(organizationId!, data.phoneNumber, data.message)
 
     if (result.success) {
       return NextResponse.json({
         success: true,
         messageId: result.messageId,
+        provider: result.provider,
       })
     } else {
       return NextResponse.json(
-        { success: false, error: result.error },
+        { success: false, error: result.error, provider: result.provider },
         { status: 400 }
       )
     }

@@ -1,9 +1,12 @@
 import { notFound } from "next/navigation"
 import Image from "next/image"
+import Link from "next/link"
 import { unstable_cache } from "next/cache"
 import { supabaseAdmin } from "@/lib/supabase"
 import { CatalogoView } from "@/components/catalogo-public/catalogo-view"
 import { CatalogoBreadcrumb } from "@/components/catalogo-public/catalogo-breadcrumb"
+import { Button } from "@/components/ui/button"
+import { Inbox, MessageCircle } from "lucide-react"
 import type { Metadata, Viewport } from "next"
 
 type PageProps = { params: Promise<{ slug: string; categoriaSlug: string }> }
@@ -284,9 +287,9 @@ export default async function CatalogoCategoriaPage({ params }: PageProps) {
         ]}
       />
       <section className="container mx-auto max-w-6xl px-4 pt-4 pb-2">
-        <div className="rounded-2xl border bg-card overflow-hidden flex items-center gap-4 p-4 sm:p-5">
+        <div className="rounded-2xl border bg-card overflow-hidden flex items-center gap-3 sm:gap-4 p-3 sm:p-5">
           {data.categoria.imagen_url ? (
-            <div className="relative h-16 w-16 sm:h-20 sm:w-20 rounded-xl overflow-hidden bg-muted shrink-0">
+            <div className="relative h-12 w-12 sm:h-20 sm:w-20 rounded-xl overflow-hidden bg-muted shrink-0">
               <Image
                 src={data.categoria.imagen_url}
                 alt={data.categoria.nombre}
@@ -297,24 +300,62 @@ export default async function CatalogoCategoriaPage({ params }: PageProps) {
             </div>
           ) : (
             <div
-              className="h-16 w-16 sm:h-20 sm:w-20 rounded-xl flex items-center justify-center text-2xl shrink-0"
+              className="h-12 w-12 sm:h-20 sm:w-20 rounded-xl flex items-center justify-center text-xl sm:text-2xl shrink-0"
               style={{ backgroundColor: `${data.config.color_primary}15`, color: data.config.color_primary }}
             >
               📁
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <h2 className="text-xl sm:text-2xl font-bold leading-tight">{data.categoria.nombre}</h2>
+            <h2 className="text-lg sm:text-2xl font-bold leading-tight">{data.categoria.nombre}</h2>
             {data.categoria.descripcion && (
-              <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{data.categoria.descripcion}</p>
+              <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1 line-clamp-2">{data.categoria.descripcion}</p>
             )}
-            <p className="text-xs text-muted-foreground mt-1.5">
+            <p className="text-[11px] sm:text-xs text-muted-foreground mt-1">
               {itemsCategoria.length} {itemsCategoria.length === 1 ? "item" : "items"}
             </p>
           </div>
         </div>
       </section>
-      <CatalogoView data={data} initialCategoriaId={data.categoria.id} />
+      {itemsCategoria.length === 0 ? (
+        <main className="container mx-auto max-w-6xl px-4 py-12 sm:py-16">
+          <div className="max-w-md mx-auto text-center">
+            <div className="h-20 w-20 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+              <Inbox className="h-10 w-10 text-muted-foreground opacity-50" />
+            </div>
+            <h3 className="text-lg font-semibold mb-1">Sin items en esta categoría</h3>
+            <p className="text-sm text-muted-foreground mb-6">
+              {orgName} todavía no publicó productos o servicios en{" "}
+              <span className="font-medium text-foreground">{data.categoria.nombre}</span>.
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <Button asChild variant="outline">
+                <Link href={`/catalogo/${slug}`}>← Ver catálogo completo</Link>
+              </Button>
+              {data.config.whatsapp && (
+                <Button
+                  asChild
+                  className="gap-1.5 text-white"
+                  style={{ backgroundColor: data.config.color_primary }}
+                >
+                  <a
+                    href={`https://wa.me/${data.config.whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(
+                      `Hola! Estoy buscando algo en "${data.categoria.nombre}". ¿Tienen disponibilidad?`
+                    )}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                    Consultar por WhatsApp
+                  </a>
+                </Button>
+              )}
+            </div>
+          </div>
+        </main>
+      ) : (
+        <CatalogoView data={data} initialCategoriaId={data.categoria.id} />
+      )}
     </>
   )
 }

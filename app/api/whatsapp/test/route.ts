@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
-import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
-import { decrypt } from "@/lib/whatsapp/encryption"
-import { sendTextMessage } from "@/lib/whatsapp/client"
+import { sendWhatsAppText } from "@/lib/whatsapp/providers"
 
 export async function POST(request: Request) {
   try {
@@ -25,35 +23,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "phoneNumber es requerido" }, { status: 400 })
     }
 
-    // Obtener configuración
-    const { data: config } = await supabaseAdmin
-      .from("whatsapp_config")
-      .select("phone_number_id, access_token_encrypted, is_configured")
-      .eq("organization_id", organizationId!)
-      .single()
-
-    if (!config || !config.is_configured) {
-      return NextResponse.json({ error: "WhatsApp Business no configurado" }, { status: 400 })
-    }
-
-    const accessToken = decrypt(config.access_token_encrypted)
-
-    const result = await sendTextMessage(
-      config.phone_number_id,
-      accessToken,
+    const result = await sendWhatsAppText(
+      organizationId!,
       phoneNumber,
-      "¡Hola! Este es un mensaje de prueba de STApp. Si recibiste este mensaje, tu configuración de WhatsApp Business está funcionando correctamente. ✅"
+      "¡Hola! Este es un mensaje de prueba de STApp. Si recibiste este mensaje, tu configuración de WhatsApp está funcionando correctamente. ✅"
     )
 
     if (result.success) {
       return NextResponse.json({
         success: true,
         messageId: result.messageId,
+        provider: result.provider,
         message: "Mensaje de prueba enviado exitosamente",
       })
     } else {
       return NextResponse.json(
-        { success: false, error: result.error },
+        { success: false, error: result.error, provider: result.provider },
         { status: 400 }
       )
     }

@@ -2,8 +2,9 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
-import { encrypt, decrypt } from "@/lib/whatsapp/encryption"
+import { encrypt } from "@/lib/whatsapp/encryption"
 import { verifyCredentials } from "@/lib/whatsapp/client"
+import { createInstance, getConnectionState } from "@/lib/whatsapp/providers/evolution"
 
 export async function GET() {
   try {
@@ -18,22 +19,36 @@ export async function GET() {
 
     if (!data) {
       return NextResponse.json({
+        provider: "meta",
         isConfigured: false,
         isVerified: false,
         phoneNumberId: null,
         businessAccountId: null,
         webhookVerifyToken: null,
+        evolution: {
+          baseUrl: null,
+          instanceName: null,
+          connectionState: null,
+          hasApiKey: false,
+        },
       })
     }
 
     return NextResponse.json({
+      provider: data.provider || "meta",
       isConfigured: data.is_configured,
       isVerified: data.is_verified,
       phoneNumberId: data.phone_number_id,
       businessAccountId: data.business_account_id,
       webhookVerifyToken: data.webhook_verify_token,
-      // Nunca enviar access_token al frontend
       hasAccessToken: !!data.access_token_encrypted,
+      evolution: {
+        baseUrl: data.evolution_base_url,
+        instanceName: data.evolution_instance_name,
+        connectionState: data.evolution_connection_state,
+        hasApiKey: !!data.evolution_api_key_encrypted,
+        lastQrAt: data.evolution_last_qr_at,
+      },
     })
   } catch (err) {
     console.error("Error fetching WA config:", err)
@@ -55,43 +70,106 @@ export async function PUT(request: Request) {
     }
 
     const body = await request.json()
-    const { phoneNumberId, businessAccountId, accessToken } = body
+    const provider: "meta" | "evolution" = body.provider === "evolution" ? "evolution" : "meta"
 
-    if (!phoneNumberId || !accessToken) {
+    if (provider === "meta") {
+      const { phoneNumberId, businessAccountId, accessToken } = body
+
+      if (!phoneNumberId || !accessToken) {
+        return NextResponse.json(
+          { error: "phoneNumberId y accessToken son requeridos" },
+          { status: 400 }
+        )
+      }
+
+      const verification = await verifyCredentials(phoneNumberId, accessToken)
+      const encryptedToken = encrypt(accessToken)
+
+      const configData = {
+        organization_id: organizationId!,
+        provider: "meta",
+        phone_number_id: phoneNumberId,
+        business_account_id: businessAccountId || null,
+        access_token_encrypted: encryptedToken,
+        is_configured: true,
+        is_verified: verification.valid,
+      }
+
+      const { error: dbError } = await supabaseAdmin
+        .from("whatsapp_config")
+        .upsert(configData, { onConflict: "organization_id" })
+
+      if (dbError) throw dbError
+
+      return NextResponse.json({
+        provider: "meta",
+        isConfigured: true,
+        isVerified: verification.valid,
+        phoneName: verification.phoneName,
+        error: verification.valid ? null : verification.error,
+      })
+    }
+
+    // Evolution
+    const { baseUrl, instanceName, apiKey } = body
+    if (!baseUrl || !instanceName || !apiKey) {
       return NextResponse.json(
-        { error: "phoneNumberId y accessToken son requeridos" },
+        { error: "baseUrl, instanceName y apiKey son requeridos" },
         { status: 400 }
       )
     }
 
-    // Verificar credenciales con Meta
-    const verification = await verifyCredentials(phoneNumberId, accessToken)
+    const normalizedBaseUrl = String(baseUrl).trim().replace(/\/+$/, "")
+    const normalizedInstance = String(instanceName).trim()
+    if (!/^https?:\/\//i.test(normalizedBaseUrl)) {
+      return NextResponse.json({ error: "baseUrl debe ser http(s)://..." }, { status: 400 })
+    }
+    if (!/^[a-zA-Z0-9_-]{1,64}$/.test(normalizedInstance)) {
+      return NextResponse.json(
+        { error: "instanceName invalida (solo letras, numeros, - y _, max 64)" },
+        { status: 400 }
+      )
+    }
 
-    // Encriptar access token
-    const encryptedToken = encrypt(accessToken)
+    const creds = { baseUrl: normalizedBaseUrl, instanceName: normalizedInstance, apiKey }
+
+    // Crear instancia (idempotente)
+    const created = await createInstance(creds)
+    if (!created.success) {
+      return NextResponse.json(
+        { error: `No se pudo crear instancia: ${created.error}` },
+        { status: 400 }
+      )
+    }
+
+    // Estado actual
+    const state = await getConnectionState(creds)
+
+    const encryptedKey = encrypt(apiKey)
 
     const configData = {
       organization_id: organizationId!,
-      phone_number_id: phoneNumberId,
-      business_account_id: businessAccountId || null,
-      access_token_encrypted: encryptedToken,
+      provider: "evolution",
+      evolution_base_url: normalizedBaseUrl,
+      evolution_instance_name: normalizedInstance,
+      evolution_api_key_encrypted: encryptedKey,
+      evolution_connection_state: state.state,
       is_configured: true,
-      is_verified: verification.valid,
+      is_verified: state.state === "open",
     }
 
-    const { data, error: dbError } = await supabaseAdmin
+    const { error: dbError } = await supabaseAdmin
       .from("whatsapp_config")
       .upsert(configData, { onConflict: "organization_id" })
-      .select()
-      .single()
 
     if (dbError) throw dbError
 
     return NextResponse.json({
+      provider: "evolution",
       isConfigured: true,
-      isVerified: verification.valid,
-      phoneName: verification.phoneName,
-      error: verification.valid ? null : verification.error,
+      isVerified: state.state === "open",
+      connectionState: state.state,
+      alreadyExists: created.alreadyExists ?? false,
     })
   } catch (err) {
     console.error("Error updating WA config:", err)
