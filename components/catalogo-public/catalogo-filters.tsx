@@ -10,6 +10,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
+import { Slider } from "@/components/ui/slider"
 import { useState } from "react"
 
 export type SortOption = "recomendados" | "precio_asc" | "precio_desc" | "nombre_asc"
@@ -330,31 +331,27 @@ function FiltrosAvanzadosContent({
 
       {precioMax > precioMin && (
         <div>
-          <div className="flex items-center justify-between text-sm mb-2">
+          <div className="flex items-center justify-between text-sm mb-3">
             <span className="font-medium">Rango de precio</span>
             <span className="text-muted-foreground text-xs tabular-nums">
               {formatPrecio(precioRange[0])} – {formatPrecio(precioRange[1])}
             </span>
           </div>
-          <div className="flex items-center gap-3">
-            <input
-              type="range"
+          <div className="px-1.5 pb-1" style={{ color: brandColor }}>
+            <Slider
               min={precioMin}
               max={precioMax}
-              value={precioRange[0]}
-              onChange={(e) => onPrecioRange([Math.min(Number(e.target.value), precioRange[1]), precioRange[1]])}
-              className="flex-1 h-2"
-              style={{ accentColor: brandColor }}
+              step={Math.max(1, Math.round((precioMax - precioMin) / 100))}
+              value={[precioRange[0], precioRange[1]]}
+              onValueChange={(v) => {
+                if (v.length === 2) onPrecioRange([v[0], v[1]])
+              }}
+              minStepsBetweenThumbs={1}
             />
-            <input
-              type="range"
-              min={precioMin}
-              max={precioMax}
-              value={precioRange[1]}
-              onChange={(e) => onPrecioRange([precioRange[0], Math.max(Number(e.target.value), precioRange[0])])}
-              className="flex-1 h-2"
-              style={{ accentColor: brandColor }}
-            />
+          </div>
+          <div className="flex items-center justify-between text-[10px] text-muted-foreground mt-1 tabular-nums px-1">
+            <span>{formatPrecio(precioMin)}</span>
+            <span>{formatPrecio(precioMax)}</span>
           </div>
         </div>
       )}

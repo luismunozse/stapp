@@ -197,6 +197,16 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
       cart.clear()
       setExtras({})
       toast.success("¡Solicitud enviada!")
+      // Abrir WhatsApp del taller en nueva pestaña con resumen para que el
+      // mensaje llegue a su canal. Está dentro del gesture del submit → no lo
+      // bloquea el popup blocker. Si la org no tiene WA configurado, omite.
+      if (data.whatsappTallerUrl) {
+        try {
+          window.open(data.whatsappTallerUrl, "_blank", "noopener,noreferrer")
+        } catch {
+          /* ignore */
+        }
+      }
       router.push(data.url)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error al enviar")

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
+import { useSearchParams, useRouter } from "next/navigation"
 import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -194,8 +195,36 @@ export default function CotizacionesPage() {
   const { data: response, isLoading: loading, mutate } = useSWR<PaginatedResponse>(
     swrKey,
     fetcher,
-    { revalidateOnFocus: false, dedupingInterval: 5000 }
+    { revalidateOnFocus: true, dedupingInterval: 5000 }
   )
+
+  // Auto-abrir cotización cuando llega ?abrir=<id> (deeplink de notificaciones).
+  // Fetcha individualmente porque puede no estar en la página actual.
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const abrirIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    const abrirId = searchParams?.get("abrir")
+    if (!abrirId || abrirIdRef.current === abrirId) return
+    abrirIdRef.current = abrirId
+    void (async () => {
+      try {
+        const res = await fetch(`/api/cotizaciones/${abrirId}`)
+        if (!res.ok) {
+          return
+        }
+        const cot = await res.json()
+        setEditingCotizacion(cot as Cotizacion)
+      } catch {
+        /* silent */
+      } finally {
+        // Limpiar query param para que no se reabra en próximos renders
+        const params = new URLSearchParams(searchParams?.toString() ?? "")
+        params.delete("abrir")
+        router.replace(`/cotizaciones${params.toString() ? `?${params.toString()}` : ""}`, { scroll: false })
+      }
+    })()
+  }, [searchParams, router])
 
   const cotizaciones = response?.data || []
   const totalPages = response?.totalPages || 1

@@ -96,10 +96,14 @@ export function CatalogoHero({ bannerUrl, logoUrl, titulo, descripcion, whatsapp
   }
 
   if (bannerUrl) {
+    // Aspect ratio adaptive: cuando no hay descripción, banner más corto para
+    // que el contenido bajo el banner suba above-the-fold antes.
+    const aspectMobile = descripcion ? "aspect-[3/1]" : "aspect-[16/5]"
+    const aspectDesktop = descripcion ? "sm:aspect-[4/1]" : "sm:aspect-[5/1]"
     return (
       <>
       <header className="relative">
-        <div className="aspect-[3/1] sm:aspect-[4/1] relative overflow-hidden bg-muted">
+        <div className={`${aspectMobile} ${aspectDesktop} relative overflow-hidden bg-muted`}>
           <Image
             src={bannerUrl}
             alt=""
@@ -168,7 +172,7 @@ export function CatalogoHero({ bannerUrl, logoUrl, titulo, descripcion, whatsapp
           backgroundSize: "20px 20px",
         }}
       />
-      <div className="container mx-auto max-w-5xl px-4 py-8 sm:py-10 relative">
+      <div className={`container mx-auto max-w-5xl px-4 relative ${descripcion ? "py-8 sm:py-10" : "py-6 sm:py-7"}`}>
         <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 items-start sm:items-center">
           {logoUrl && (
             <div className="relative h-16 w-16 sm:h-20 sm:w-20 rounded-2xl overflow-hidden bg-white border-2 shadow-md shrink-0" style={{ borderColor: `${brandColor}30` }}>

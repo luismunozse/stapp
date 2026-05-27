@@ -53,7 +53,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   // 1. Validar catálogo activo
   const { data: config } = await supabaseAdmin
     .from("catalogo_config")
-    .select("organization_id, activo")
+    .select("organization_id, activo, whatsapp, titulo")
     .eq("slug", slug)
     .maybeSingle()
 
@@ -350,7 +350,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
           body,
           type: "CATALOGO_SOLICITUD",
           icon: "shopping-cart",
-          action_url: `/cotizaciones/${cotizacion.id}`,
+          action_url: `/cotizaciones?abrir=${cotizacion.id}`,
           cliente_id: clienteId,
         }))
       )
@@ -360,9 +360,41 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     // No bloqueante — la cotización ya se creó
   }
 
+  // 11. Hybrid: armar wa.me URL al WhatsApp del taller con resumen para que
+  // el cliente lo "envíe" desde su WhatsApp. Refuerza que el taller reciba la
+  // solicitud en su canal habitual y abra contacto directo con el cliente.
+  let whatsappTallerUrl: string | null = null
+  if (config.whatsapp) {
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || ""
+    const linkPublico = appUrl
+      ? `${appUrl}/cotizacion/${cotizacion.public_token}`
+      : `/cotizacion/${cotizacion.public_token}`
+    const tallerNombre = config.titulo || ""
+    const itemsResumen = itemsCalculados
+      .slice(0, 8)
+      .map((i) => `• ${i.cantidad}× ${i.descripcion}`)
+      .join("\n")
+    const restantes =
+      itemsCalculados.length > 8 ? `\n…y ${itemsCalculados.length - 8} más` : ""
+    const cuponLinea = cuponCodigoAplicado
+      ? `\nCupón: ${cuponCodigoAplicado} (− $${cuponDescuento.toLocaleString("es-AR")})`
+      : ""
+    const msg =
+      `Hola${tallerNombre ? ` ${tallerNombre}` : ""}! Acabo de enviar una solicitud desde el catálogo:\n\n` +
+      `Solicitud N° ${cotizacion.numero_cotizacion}\n` +
+      `Cliente: ${data.cliente.nombre.trim()}\n` +
+      `Tel: ${telefonoNorm}\n\n` +
+      `${itemsResumen}${restantes}\n\n` +
+      `Total: $${total.toLocaleString("es-AR")}${cuponLinea}\n\n` +
+      `Detalle completo: ${linkPublico}`
+    const telLimpio = config.whatsapp.replace(/\D/g, "")
+    whatsappTallerUrl = `https://wa.me/${telLimpio}?text=${encodeURIComponent(msg)}`
+  }
+
   return NextResponse.json({
     cotizacionToken: cotizacion.public_token,
     numeroCotizacion: cotizacion.numero_cotizacion,
     url: `/cotizacion/${cotizacion.public_token}`,
+    whatsappTallerUrl,
   }, { status: 201 })
 }
