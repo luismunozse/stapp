@@ -275,6 +275,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       descuento_tipo: "porcentaje",
       descuento_valor: 0,
       inventario_id: i.inventarioId,
+      catalogo_item_id: i.catalogoItemId,
       tipo_repuesto: "NO_APLICA",
       comentario_cliente: i.comentarioCliente,
       adjuntos: i.adjuntos,
@@ -312,6 +313,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     // P0003 = stock insuficiente (error custom de la RPC)
     const status = stockErr.code === "P0003" ? 409 : 500
     return NextResponse.json({ error: stockErr.message }, { status })
+  }
+
+  // 9.5 Marcar carrito abandonado como recuperado (si existe por el mismo tel)
+  try {
+    await supabaseAdmin
+      .from("catalogo_carritos_abandonados")
+      .update({ recovered_at: new Date().toISOString(), cotizacion_id: cotizacion.id })
+      .eq("organization_id", organizationId)
+      .eq("cliente_telefono", telefonoNorm)
+      .is("recovered_at", null)
+  } catch (err) {
+    console.error("Error marcando carrito abandonado como recuperado:", err)
+    // No bloqueante
   }
 
   // 10. Notificar a los ADMIN de la org (in-app)

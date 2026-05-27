@@ -776,6 +776,7 @@ export interface CatalogoCategoria {
   id: string
   organization_id: string
   nombre: string
+  slug: string | null
   descripcion: string | null
   imagen_url: string | null
   orden: number

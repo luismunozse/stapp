@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Plus, Minus, ShoppingCart, Package, Wrench, MessageCircle,
-  Star, Share2, ChevronLeft, ChevronRight, ArrowLeft,
+  Star, Share2, ChevronLeft, ChevronRight, ArrowLeft, Sparkles,
 } from "lucide-react"
 import { toast } from "sonner"
 import { useCart } from "./use-cart"
@@ -44,6 +44,7 @@ interface Data {
   }
   item: Item
   relacionados: Item[]
+  bundle?: Item[]
 }
 
 export function CatalogoItemView({ data }: { data: Data }) {
@@ -296,11 +297,49 @@ export function CatalogoItemView({ data }: { data: Data }) {
           </div>
         </div>
 
-        {data.relacionados.length > 0 && (
+        {(data.bundle?.length ?? 0) > 0 && (
+          <section className="mt-12 pt-8 border-t">
+            <h2 className="text-lg font-semibold mb-4 inline-flex items-center gap-2">
+              <Sparkles className="h-5 w-5" style={{ color: config.color_primary }} />
+              Frecuentemente comprados juntos
+            </h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {(data.bundle ?? []).map((bg) => (
+                <Link
+                  key={bg.id}
+                  href={`/catalogo/${config.slug}/${bg.id}`}
+                  className="rounded-lg border bg-card overflow-hidden hover:shadow-md transition group"
+                >
+                  <div className="aspect-square bg-muted relative">
+                    {bg.imagen_url && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={bg.imagen_url}
+                        alt={bg.nombre}
+                        loading="lazy"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                      />
+                    )}
+                  </div>
+                  <div className="p-2.5">
+                    <p className="text-sm font-medium line-clamp-1">{bg.nombre}</p>
+                    <p className="text-sm font-bold mt-1" style={{ color: config.color_primary }}>
+                      {bg.precio != null ? formatPrecio(Number(bg.precio)) : "Consultar"}
+                    </p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {data.relacionados.filter((r) => !data.bundle?.some((b) => b.id === r.id)).length > 0 && (
           <section className="mt-12 pt-8 border-t">
             <h2 className="text-lg font-semibold mb-4">Otros items relacionados</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-              {data.relacionados.map((rel) => (
+              {data.relacionados
+                .filter((r) => !data.bundle?.some((b) => b.id === r.id))
+                .map((rel) => (
                 <Link
                   key={rel.id}
                   href={`/catalogo/${config.slug}/${rel.id}`}

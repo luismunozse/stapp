@@ -5,7 +5,7 @@ import { z } from "zod"
 
 const resetPasswordSchema = z.object({
   token: z.string().min(1, "Token requerido"),
-  password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
+  password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres"),
 })
 
 export async function POST(request: Request) {

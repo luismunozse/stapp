@@ -2,11 +2,12 @@
 
 import { useState } from "react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { Package, FolderTree, Share2, BookMarked, Ticket } from "lucide-react"
+import { Package, FolderTree, Share2, BookMarked, Ticket, ShoppingCart } from "lucide-react"
 import { CatalogoItemsTab } from "./catalogo-items-tab"
 import { CatalogoCategoriasTab } from "./catalogo-categorias-tab"
 import { CatalogoCompartirTab } from "./catalogo-compartir-tab"
 import { CatalogoCuponesTab } from "./catalogo-cupones-tab"
+import { CatalogoCarritosAbandonadosTab } from "./catalogo-carritos-abandonados-tab"
 
 export function CatalogoAdmin() {
   const [tab, setTab] = useState("items")
@@ -26,7 +27,7 @@ export function CatalogoAdmin() {
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="grid w-full grid-cols-4 max-w-2xl">
+        <TabsList className="grid w-full grid-cols-5 max-w-3xl">
           <TabsTrigger value="items" className="gap-2">
             <Package className="h-4 w-4" />
             <span className="hidden sm:inline">Items</span>
@@ -38,6 +39,10 @@ export function CatalogoAdmin() {
           <TabsTrigger value="cupones" className="gap-2">
             <Ticket className="h-4 w-4" />
             <span className="hidden sm:inline">Cupones</span>
+          </TabsTrigger>
+          <TabsTrigger value="abandonados" className="gap-2">
+            <ShoppingCart className="h-4 w-4" />
+            <span className="hidden sm:inline">Abandonados</span>
           </TabsTrigger>
           <TabsTrigger value="compartir" className="gap-2">
             <Share2 className="h-4 w-4" />
@@ -53,6 +58,9 @@ export function CatalogoAdmin() {
         </TabsContent>
         <TabsContent value="cupones" className="mt-6">
           <CatalogoCuponesTab />
+        </TabsContent>
+        <TabsContent value="abandonados" className="mt-6">
+          <CatalogoCarritosAbandonadosTab />
         </TabsContent>
         <TabsContent value="compartir" className="mt-6">
           <CatalogoCompartirTab />

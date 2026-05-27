@@ -104,6 +104,9 @@ export function CatalogoCategoriasTab() {
                 <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
                 <div className="flex-1 min-w-0">
                   <h3 className="font-medium">{cat.nombre}</h3>
+                  {cat.slug && (
+                    <p className="text-xs text-muted-foreground font-mono">/c/{cat.slug}</p>
+                  )}
                   {cat.descripcion && (
                     <p className="text-sm text-muted-foreground line-clamp-1">{cat.descripcion}</p>
                   )}
@@ -156,6 +159,7 @@ function CategoriaDialog({
   onSaved: () => void
 }) {
   const [nombre, setNombre] = useState(categoria?.nombre ?? "")
+  const [slug, setSlug] = useState(categoria?.slug ?? "")
   const [descripcion, setDescripcion] = useState(categoria?.descripcion ?? "")
   const [saving, setSaving] = useState(false)
 
@@ -165,10 +169,15 @@ function CategoriaDialog({
     try {
       const url = categoria ? `/api/catalogo/categorias/${categoria.id}` : "/api/catalogo/categorias"
       const method = categoria ? "PUT" : "POST"
+      const payload: Record<string, unknown> = {
+        nombre: nombre.trim(),
+        descripcion: descripcion.trim() || null,
+      }
+      if (slug.trim()) payload.slug = slug.trim()
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nombre: nombre.trim(), descripcion: descripcion.trim() || null }),
+        body: JSON.stringify(payload),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Error")
@@ -191,6 +200,23 @@ function CategoriaDialog({
           <div>
             <Label htmlFor="cat-nombre">Nombre *</Label>
             <Input id="cat-nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} maxLength={80} />
+          </div>
+          <div>
+            <Label htmlFor="cat-slug">Slug URL</Label>
+            <div className="flex items-center gap-1 mt-1">
+              <span className="text-xs text-muted-foreground whitespace-nowrap">/c/</span>
+              <Input
+                id="cat-slug"
+                value={slug}
+                onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))}
+                maxLength={64}
+                placeholder={categoria ? "" : "Auto desde nombre"}
+                pattern="[a-z0-9][a-z0-9-]*[a-z0-9]"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              URL pública SEO: /catalogo/.../c/{slug || "<auto>"}. Sólo a-z, 0-9, guiones.
+            </p>
           </div>
           <div>
             <Label htmlFor="cat-desc">Descripción</Label>

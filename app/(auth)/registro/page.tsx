@@ -14,6 +14,7 @@ import {
   Globe,
   AlertCircle,
   CheckCircle2,
+  Mail,
 } from "lucide-react"
 import { BusinessLogo } from "@/components/shared/business-logo"
 import { trackAdsConversion, trackEvent } from "@/lib/gtag"
@@ -180,8 +181,8 @@ function RegistroForm() {
       setError("La contraseña es requerida")
       return false
     }
-    if (formData.password.length < 6) {
-      setError("La contraseña debe tener al menos 6 caracteres")
+    if (formData.password.length < 8) {
+      setError("La contraseña debe tener al menos 8 caracteres")
       return false
     }
     return true
@@ -267,9 +268,14 @@ function RegistroForm() {
         organization: formData.orgNombre,
       })
 
-      // Éxito - redirigir al login del subdominio con mensaje de verificación
-      const targetUrl = `https://${cleanSlug}.${rootDomain}/login?registered=true&verify=true`
-      window.location.href = targetUrl
+      // Éxito - redirigir a pantalla intermedia con instrucciones y reenvío.
+      // Va en el dominio raíz (no en el subdomain), así evita problemas de
+      // propagación DNS justo después de crear la org.
+      const params = new URLSearchParams({
+        email: formData.email,
+        slug: cleanSlug,
+      })
+      window.location.href = `/registro/verificar?${params.toString()}`
     } catch (err) {
       console.error("Error:", err)
       setError("Error de conexión. Intentá de nuevo.")
@@ -384,6 +390,10 @@ function RegistroForm() {
                 placeholder="tu@email.com"
                 autoComplete="email"
               />
+              <p className="text-xs text-muted-foreground flex items-start gap-1.5">
+                <Mail className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+                <span>Te enviaremos un email de confirmación para activar tu cuenta.</span>
+              </p>
             </div>
 
             {/* Contraseña */}
@@ -396,7 +406,7 @@ function RegistroForm() {
                   autoComplete="new-password"
                   value={formData.password}
                   onChange={(e) => updateForm("password", e.target.value)}
-                  placeholder="Mínimo 6 caracteres"
+                  placeholder="Mínimo 8 caracteres"
                   className="pr-10"
                 />
                 <Button
@@ -426,6 +436,14 @@ function RegistroForm() {
                 "Crear cuenta gratis"
               )}
             </Button>
+
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 px-3 py-2.5 rounded text-xs flex items-start gap-2">
+              <Mail className="h-4 w-4 flex-shrink-0 mt-0.5" />
+              <span>
+                Al crear tu cuenta recibirás un <strong>email de confirmación</strong> para activarla.
+                Revisá tu bandeja de entrada (y spam) luego de registrarte.
+              </span>
+            </div>
           </form>
 
           {/* Separador + Google */}
@@ -465,7 +483,14 @@ function RegistroForm() {
           )}
 
           <p className="mt-4 text-xs text-center text-muted-foreground">
-            Al crear tu cuenta aceptás nuestros términos de servicio
+            Al crear tu cuenta aceptás nuestros{" "}
+            <Link
+              href="/legal/terminos"
+              target="_blank"
+              className="text-primary hover:underline"
+            >
+              términos de servicio
+            </Link>
           </p>
 
           <div className="mt-6 text-center text-sm text-muted-foreground space-y-2">

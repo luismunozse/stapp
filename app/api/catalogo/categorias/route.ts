@@ -3,9 +3,11 @@ import { revalidateTag } from "next/cache"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
+import { CATEGORIA_SLUG_REGEX, generarSlugCategoriaUnico } from "@/lib/catalogo-slug"
 
 const categoriaSchema = z.object({
   nombre: z.string().min(1).max(80),
+  slug: z.string().regex(CATEGORIA_SLUG_REGEX, "Slug inválido").optional(),
   descripcion: z.string().max(500).nullable().optional(),
   imagen_url: z.string().url().nullable().optional(),
   orden: z.number().int().min(0).optional(),
@@ -47,11 +49,17 @@ export async function POST(req: Request) {
 
   const nextOrden = parsed.data.orden ?? ((maxOrden?.orden ?? -1) + 1)
 
+  const slug = await generarSlugCategoriaUnico(
+    auth.organizationId!,
+    parsed.data.slug || parsed.data.nombre
+  )
+
   const { data, error } = await supabaseAdmin
     .from("catalogo_categorias")
     .insert({
       organization_id: auth.organizationId!,
       nombre: parsed.data.nombre,
+      slug,
       descripcion: parsed.data.descripcion ?? null,
       imagen_url: parsed.data.imagen_url ?? null,
       orden: nextOrden,

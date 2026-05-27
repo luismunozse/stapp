@@ -122,21 +122,24 @@ export function CatalogoHero({ bannerUrl, logoUrl, titulo, descripcion, whatsapp
               {descripcion && <p className="mt-1 sm:text-lg drop-shadow opacity-90 line-clamp-2">{descripcion}</p>}
             </div>
             <div className="flex gap-2 sm:pb-2">
-              <Button variant="secondary" size="sm" onClick={handleShare} className="gap-1.5">
+              <Button
+                variant="secondary"
+                onClick={handleShare}
+                className="gap-1.5 h-11 bg-white/90 backdrop-blur text-foreground hover:bg-white"
+              >
                 {shared ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}
                 <span className="hidden sm:inline">Compartir</span>
               </Button>
               {whatsappLink && (
                 <Button
                   asChild
-                  size="icon"
-                  className="h-9 w-9"
+                  className="gap-2 h-11 px-4 text-white shadow-md hover:shadow-lg transition-shadow"
                   style={{ backgroundColor: brandColor }}
                   aria-label="Contactar por WhatsApp"
-                  title="Contactar por WhatsApp"
                 >
                   <a href={whatsappLink} target="_blank" rel="noreferrer">
                     <WhatsAppIcon className="h-5 w-5" />
+                    <span>WhatsApp</span>
                   </a>
                 </Button>
               )}
@@ -151,34 +154,52 @@ export function CatalogoHero({ bannerUrl, logoUrl, titulo, descripcion, whatsapp
 
   return (
     <>
-    <header className="border-b" style={{ background: `linear-gradient(180deg, ${brandColor}15 0%, transparent 100%)` }}>
-      <div className="container mx-auto max-w-5xl px-4 py-8">
-        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+    <header
+      className="relative border-b overflow-hidden"
+      style={{
+        background: `radial-gradient(80% 60% at 50% 0%, ${brandColor}22 0%, ${brandColor}08 45%, transparent 80%)`,
+      }}
+    >
+      {/* Subtle dot pattern decoration */}
+      <div
+        className="absolute inset-0 opacity-[0.04] pointer-events-none"
+        style={{
+          backgroundImage: `radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)`,
+          backgroundSize: "20px 20px",
+        }}
+      />
+      <div className="container mx-auto max-w-5xl px-4 py-8 sm:py-10 relative">
+        <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 items-start sm:items-center">
           {logoUrl && (
-            <div className="relative h-16 w-16 rounded-xl overflow-hidden bg-white border shadow-sm shrink-0">
-              <Image src={logoUrl} alt={titulo} fill sizes="64px" className="object-cover" priority />
+            <div className="relative h-16 w-16 sm:h-20 sm:w-20 rounded-2xl overflow-hidden bg-white border-2 shadow-md shrink-0" style={{ borderColor: `${brandColor}30` }}>
+              <Image src={logoUrl} alt={titulo} fill sizes="80px" className="object-cover" priority />
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{titulo}</h1>
-            {descripcion && <p className="text-muted-foreground mt-1">{descripcion}</p>}
+            <h1 className="text-2xl sm:text-4xl font-bold tracking-tight leading-tight">{titulo}</h1>
+            {descripcion && (
+              <p className="text-muted-foreground mt-1.5 sm:text-base leading-relaxed">{descripcion}</p>
+            )}
           </div>
-          <div className="flex gap-2 w-full sm:w-auto">
-            <Button variant="outline" onClick={handleShare} className="gap-1.5 flex-1 sm:flex-none">
+          <div className="flex gap-2 w-full sm:w-auto sm:shrink-0">
+            <Button
+              variant="outline"
+              onClick={handleShare}
+              className="gap-1.5 flex-1 sm:flex-none h-11 bg-background/80 backdrop-blur"
+            >
               {shared ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}
               <span className="hidden sm:inline">Compartir</span>
             </Button>
             {whatsappLink && (
               <Button
                 asChild
-                size="icon"
-                className="h-10 w-10 shrink-0"
+                className="gap-2 flex-1 sm:flex-none h-11 px-4 text-white shadow-md hover:shadow-lg transition-shadow"
                 style={{ backgroundColor: brandColor }}
                 aria-label="Contactar por WhatsApp"
-                title="Contactar por WhatsApp"
               >
                 <a href={whatsappLink} target="_blank" rel="noreferrer">
                   <WhatsAppIcon className="h-5 w-5" />
+                  <span>WhatsApp</span>
                 </a>
               </Button>
             )}

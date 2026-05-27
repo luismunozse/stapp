@@ -1,8 +1,15 @@
 "use client"
 
+import Link from "next/link"
 import { Search, SlidersHorizontal, X } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
 import { useState } from "react"
 
 export type SortOption = "recomendados" | "precio_asc" | "precio_desc" | "nombre_asc"
@@ -10,11 +17,13 @@ export type SortOption = "recomendados" | "precio_asc" | "precio_desc" | "nombre
 interface Categoria {
   id: string
   nombre: string
+  slug: string | null
 }
 
 interface Props {
   search: string
   onSearch: (s: string) => void
+  catalogoSlug: string
   categorias: Categoria[]
   categoriaActiva: string | null
   onCategoria: (id: string | null) => void
@@ -38,6 +47,7 @@ interface Props {
 export function CatalogoFilters({
   search,
   onSearch,
+  catalogoSlug,
   categorias,
   categoriaActiva,
   onCategoria,
@@ -59,24 +69,40 @@ export function CatalogoFilters({
 }: Props) {
   const [advancedOpen, setAdvancedOpen] = useState(false)
 
+  const activeAdvancedCount =
+    (tagsActivos.length > 0 ? 1 : 0) +
+    (soloDisponibles ? 1 : 0) +
+    (precioRange[0] !== precioMin || precioRange[1] !== precioMax ? 1 : 0) +
+    (sort !== "recomendados" ? 1 : 0)
+
   return (
     <div className="sticky top-0 z-30 bg-background/95 backdrop-blur border-b shadow-sm">
       <div className="container mx-auto max-w-5xl px-4 py-3 space-y-2">
         <div className="flex gap-2">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
             <Input
               type="search"
               value={search}
               onChange={(e) => onSearch(e.target.value)}
-              placeholder="Buscar..."
-              className="pl-9"
+              placeholder="Buscar productos o servicios..."
+              className="pl-9 pr-10 h-11"
             />
+            {search.length > 0 && (
+              <button
+                type="button"
+                onClick={() => onSearch("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full hover:bg-muted inline-flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                aria-label="Limpiar búsqueda"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
           <select
             value={sort}
             onChange={(e) => onSort(e.target.value as SortOption)}
-            className="h-10 rounded-md border bg-background px-3 text-sm hidden sm:block"
+            className="h-11 rounded-md border bg-background px-3 text-sm hidden sm:block"
             aria-label="Ordenar"
           >
             <option value="recomendados">Recomendados</option>
@@ -85,133 +111,291 @@ export function CatalogoFilters({
             <option value="nombre_asc">Nombre A-Z</option>
           </select>
           <Button
-            variant={advancedOpen || tagsActivos.length > 0 || soloDisponibles ? "default" : "outline"}
+            variant={activeAdvancedCount > 0 ? "default" : "outline"}
             size="icon"
             onClick={() => setAdvancedOpen((o) => !o)}
             aria-label="Filtros avanzados"
+            className="relative h-11 w-11 shrink-0"
           >
             <SlidersHorizontal className="h-4 w-4" />
+            {activeAdvancedCount > 0 && (
+              <span
+                className="absolute -top-1 -right-1 h-5 min-w-5 px-1 inline-flex items-center justify-center rounded-full bg-rose-500 text-white text-[10px] font-bold leading-none"
+                style={{ backgroundColor: brandColor }}
+              >
+                {activeAdvancedCount}
+              </span>
+            )}
           </Button>
         </div>
 
         {categorias.length > 0 && (
-          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-            <button
-              onClick={() => onCategoria(null)}
-              className={`shrink-0 px-3 py-1.5 rounded-full text-sm transition-colors border ${
+          <div className="relative -mx-4 sm:mx-0">
+            <div
+              className="flex gap-2 overflow-x-auto pb-1 px-4 sm:px-0 scrollbar-hide snap-x snap-mandatory"
+              style={{ scrollbarWidth: "none" }}
+            >
+            <Link
+              href={`/catalogo/${catalogoSlug}`}
+              prefetch={false}
+              onClick={(e) => {
+                if (categoriaActiva !== null) {
+                  e.preventDefault()
+                  onCategoria(null)
+                }
+              }}
+              className={`snap-start shrink-0 px-3.5 py-2 rounded-full text-sm font-medium transition-all border whitespace-nowrap ${
                 categoriaActiva === null
-                  ? "text-white"
-                  : "bg-background hover:bg-muted"
+                  ? "text-white shadow-sm"
+                  : "bg-background hover:bg-muted hover:border-foreground/20 active:scale-95"
               }`}
               style={categoriaActiva === null ? { backgroundColor: brandColor, borderColor: brandColor } : undefined}
             >
               Todos
-            </button>
+            </Link>
             {categorias.map((cat) => {
               const active = categoriaActiva === cat.id
+              const href = cat.slug ? `/catalogo/${catalogoSlug}/c/${cat.slug}` : `/catalogo/${catalogoSlug}`
               return (
-                <button
+                <Link
                   key={cat.id}
-                  onClick={() => onCategoria(cat.id)}
-                  className={`shrink-0 px-3 py-1.5 rounded-full text-sm transition-colors border ${
-                    active ? "text-white" : "bg-background hover:bg-muted"
+                  href={href}
+                  prefetch={false}
+                  onClick={(e) => {
+                    if (!cat.slug) {
+                      e.preventDefault()
+                      onCategoria(cat.id)
+                    }
+                  }}
+                  className={`snap-start shrink-0 px-3.5 py-2 rounded-full text-sm font-medium transition-all border whitespace-nowrap ${
+                    active
+                      ? "text-white shadow-sm"
+                      : "bg-background hover:bg-muted hover:border-foreground/20 active:scale-95"
                   }`}
                   style={active ? { backgroundColor: brandColor, borderColor: brandColor } : undefined}
                 >
                   {cat.nombre}
+                </Link>
+              )
+            })}
+            </div>
+            {/* Fade edges para indicar scroll horizontal */}
+            <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-6 sm:w-4 bg-gradient-to-r from-background/95 to-transparent" />
+            <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-6 sm:w-4 bg-gradient-to-l from-background/95 to-transparent" />
+          </div>
+        )}
+
+        {/* Desktop: inline collapsible panel */}
+        <div
+          className={`hidden sm:grid transition-[grid-template-rows,opacity] duration-200 ${
+            advancedOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+          }`}
+        >
+          <div className="overflow-hidden">
+            <FiltrosAvanzadosContent
+              sort={sort}
+              onSort={onSort}
+              soloDisponibles={soloDisponibles}
+              onSoloDisponibles={onSoloDisponibles}
+              precioMin={precioMin}
+              precioMax={precioMax}
+              precioRange={precioRange}
+              onPrecioRange={onPrecioRange}
+              tags={tags}
+              tagsActivos={tagsActivos}
+              onToggleTag={onToggleTag}
+              brandColor={brandColor}
+              formatPrecio={formatPrecio}
+              hasActiveFilters={hasActiveFilters}
+              onClearFilters={onClearFilters}
+              hideSort={true}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile: bottom sheet */}
+      <Sheet open={advancedOpen} onOpenChange={setAdvancedOpen}>
+        <SheetContent side="bottom" className="sm:hidden">
+          <SheetHeader className="px-4 pb-2">
+            <SheetTitle className="flex items-center gap-2">
+              <SlidersHorizontal className="h-4 w-4" />
+              Filtros
+              {activeAdvancedCount > 0 && (
+                <span
+                  className="inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full text-[11px] font-bold text-white"
+                  style={{ backgroundColor: brandColor }}
+                >
+                  {activeAdvancedCount}
+                </span>
+              )}
+            </SheetTitle>
+          </SheetHeader>
+          <div className="px-4 pb-4">
+            <FiltrosAvanzadosContent
+              sort={sort}
+              onSort={onSort}
+              soloDisponibles={soloDisponibles}
+              onSoloDisponibles={onSoloDisponibles}
+              precioMin={precioMin}
+              precioMax={precioMax}
+              precioRange={precioRange}
+              onPrecioRange={onPrecioRange}
+              tags={tags}
+              tagsActivos={tagsActivos}
+              onToggleTag={onToggleTag}
+              brandColor={brandColor}
+              formatPrecio={formatPrecio}
+              hasActiveFilters={hasActiveFilters}
+              onClearFilters={onClearFilters}
+              hideSort={false}
+              noBg
+            />
+            <div className="pt-3 mt-3 border-t flex gap-2">
+              {hasActiveFilters && (
+                <Button variant="outline" onClick={onClearFilters} className="flex-1 gap-1.5">
+                  <X className="h-4 w-4" />
+                  Limpiar
+                </Button>
+              )}
+              <Button
+                onClick={() => setAdvancedOpen(false)}
+                className="flex-1 text-white"
+                style={{ backgroundColor: brandColor }}
+              >
+                Ver resultados
+              </Button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+    </div>
+  )
+}
+
+function FiltrosAvanzadosContent({
+  sort, onSort, soloDisponibles, onSoloDisponibles,
+  precioMin, precioMax, precioRange, onPrecioRange,
+  tags, tagsActivos, onToggleTag,
+  brandColor, formatPrecio, hasActiveFilters, onClearFilters,
+  hideSort, noBg,
+}: {
+  sort: SortOption
+  onSort: (s: SortOption) => void
+  soloDisponibles: boolean
+  onSoloDisponibles: (b: boolean) => void
+  precioMin: number
+  precioMax: number
+  precioRange: [number, number]
+  onPrecioRange: (r: [number, number]) => void
+  tags: string[]
+  tagsActivos: string[]
+  onToggleTag: (tag: string) => void
+  brandColor: string
+  formatPrecio: (n: number) => string
+  hasActiveFilters: boolean
+  onClearFilters: () => void
+  hideSort?: boolean
+  noBg?: boolean
+}) {
+  return (
+    <div className={`${noBg ? "" : "rounded-xl border bg-muted/30 mt-1"} p-4 space-y-4`}>
+      {!hideSort && (
+        <div>
+          <div className="text-sm font-medium mb-1.5">Ordenar por</div>
+          <select
+            value={sort}
+            onChange={(e) => onSort(e.target.value as SortOption)}
+            className="h-11 w-full rounded-md border bg-background px-3 text-sm"
+            aria-label="Ordenar"
+          >
+            <option value="recomendados">Recomendados</option>
+            <option value="precio_asc">Precio: menor a mayor</option>
+            <option value="precio_desc">Precio: mayor a menor</option>
+            <option value="nombre_asc">Nombre A-Z</option>
+          </select>
+        </div>
+      )}
+
+      <label className="flex items-center gap-2.5 text-sm cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={soloDisponibles}
+          onChange={(e) => onSoloDisponibles(e.target.checked)}
+          className="h-5 w-5 rounded"
+          style={{ accentColor: brandColor }}
+        />
+        <span className="font-medium">Solo items disponibles</span>
+      </label>
+
+      {precioMax > precioMin && (
+        <div>
+          <div className="flex items-center justify-between text-sm mb-2">
+            <span className="font-medium">Rango de precio</span>
+            <span className="text-muted-foreground text-xs tabular-nums">
+              {formatPrecio(precioRange[0])} – {formatPrecio(precioRange[1])}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <input
+              type="range"
+              min={precioMin}
+              max={precioMax}
+              value={precioRange[0]}
+              onChange={(e) => onPrecioRange([Math.min(Number(e.target.value), precioRange[1]), precioRange[1]])}
+              className="flex-1 h-2"
+              style={{ accentColor: brandColor }}
+            />
+            <input
+              type="range"
+              min={precioMin}
+              max={precioMax}
+              value={precioRange[1]}
+              onChange={(e) => onPrecioRange([precioRange[0], Math.max(Number(e.target.value), precioRange[0])])}
+              className="flex-1 h-2"
+              style={{ accentColor: brandColor }}
+            />
+          </div>
+        </div>
+      )}
+
+      {tags.length > 0 && (
+        <div>
+          <div className="text-sm font-medium mb-2">Etiquetas</div>
+          <div className="flex flex-wrap gap-1.5">
+            {tags.map((tag) => {
+              const active = tagsActivos.includes(tag)
+              return (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => onToggleTag(tag)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all border active:scale-95 ${
+                    active
+                      ? "text-white shadow-sm"
+                      : "bg-background hover:bg-muted hover:border-foreground/20"
+                  }`}
+                  style={active ? { backgroundColor: brandColor, borderColor: brandColor } : undefined}
+                >
+                  {tag}
                 </button>
               )
             })}
           </div>
-        )}
+        </div>
+      )}
 
-        {advancedOpen && (
-          <div className="rounded-lg border bg-muted/30 p-3 space-y-3">
-            <select
-              value={sort}
-              onChange={(e) => onSort(e.target.value as SortOption)}
-              className="h-10 w-full rounded-md border bg-background px-3 text-sm sm:hidden"
-              aria-label="Ordenar"
-            >
-              <option value="recomendados">Recomendados</option>
-              <option value="precio_asc">Precio: menor a mayor</option>
-              <option value="precio_desc">Precio: mayor a menor</option>
-              <option value="nombre_asc">Nombre A-Z</option>
-            </select>
-
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input
-                type="checkbox"
-                checked={soloDisponibles}
-                onChange={(e) => onSoloDisponibles(e.target.checked)}
-                className="h-4 w-4 rounded"
-              />
-              Solo items disponibles
-            </label>
-
-            {precioMax > precioMin && (
-              <div>
-                <div className="flex items-center justify-between text-sm mb-1.5">
-                  <span className="font-medium">Rango de precio</span>
-                  <span className="text-muted-foreground text-xs">
-                    {formatPrecio(precioRange[0])} – {formatPrecio(precioRange[1])}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="range"
-                    min={precioMin}
-                    max={precioMax}
-                    value={precioRange[0]}
-                    onChange={(e) => onPrecioRange([Math.min(Number(e.target.value), precioRange[1]), precioRange[1]])}
-                    className="flex-1 accent-current"
-                    style={{ color: brandColor }}
-                  />
-                  <input
-                    type="range"
-                    min={precioMin}
-                    max={precioMax}
-                    value={precioRange[1]}
-                    onChange={(e) => onPrecioRange([precioRange[0], Math.max(Number(e.target.value), precioRange[0])])}
-                    className="flex-1 accent-current"
-                    style={{ color: brandColor }}
-                  />
-                </div>
-              </div>
-            )}
-
-            {tags.length > 0 && (
-              <div>
-                <div className="text-sm font-medium mb-1.5">Etiquetas</div>
-                <div className="flex flex-wrap gap-1.5">
-                  {tags.map((tag) => {
-                    const active = tagsActivos.includes(tag)
-                    return (
-                      <button
-                        key={tag}
-                        onClick={() => onToggleTag(tag)}
-                        className={`px-2.5 py-1 rounded-full text-xs transition-colors border ${
-                          active ? "text-white" : "bg-background hover:bg-muted"
-                        }`}
-                        style={active ? { backgroundColor: brandColor, borderColor: brandColor } : undefined}
-                      >
-                        {tag}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-
-            {hasActiveFilters && (
-              <Button variant="ghost" size="sm" onClick={onClearFilters} className="gap-1.5 text-muted-foreground">
-                <X className="h-3 w-3" />
-                Limpiar filtros
-              </Button>
-            )}
-          </div>
-        )}
-      </div>
+      {hasActiveFilters && hideSort && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onClearFilters}
+          className="gap-1.5"
+        >
+          <X className="h-3 w-3" />
+          Limpiar filtros
+        </Button>
+      )}
     </div>
   )
 }

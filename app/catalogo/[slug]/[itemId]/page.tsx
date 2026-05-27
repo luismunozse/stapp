@@ -43,6 +43,30 @@ async function _fetchItem(slug: string, itemId: string) {
     .filter((v: any) => v.activo)
     .sort((a: any, b: any) => a.orden - b.orden)
   const tieneVariantes = variantesActivas.length > 0
+
+  // Top variante (más elegida en cotizaciones histórico)
+  let topVarianteId: string | null = null
+  if (tieneVariantes) {
+    const { data: vRows } = await supabaseAdmin
+      .from("items_cotizacion")
+      .select("variante_id")
+      .eq("catalogo_item_id", itemId)
+      .not("variante_id", "is", null)
+      .limit(5000)
+    const counts = new Map<string, number>()
+    for (const r of vRows ?? []) {
+      if (!r.variante_id) continue
+      counts.set(r.variante_id, (counts.get(r.variante_id) ?? 0) + 1)
+    }
+    let topCount = 0
+    for (const [vid, c] of counts.entries()) {
+      if (c > topCount) {
+        topCount = c
+        topVarianteId = vid
+      }
+    }
+    if (topCount < 2) topVarianteId = null
+  }
   const stockVariantes = tieneVariantes
     ? variantesActivas.reduce((s: number | null, v: any) => {
         if (v.stock == null) return null
@@ -65,6 +89,7 @@ async function _fetchItem(slug: string, itemId: string) {
     ...rest,
     precio: precioMin,
     stock_disponible: stockReal,
+    top_variante_id: topVarianteId,
     variantes: variantesActivas.map((v: any) => ({
       id: v.id,
       etiqueta: v.etiqueta,
@@ -105,6 +130,53 @@ async function _fetchItem(slug: string, itemId: string) {
     })
   }
 
+  // Bundle "comprados juntos" — top 3 ids co-ocurrentes en cotizaciones
+  let bundle: any[] = []
+  const { data: rowsBase } = await supabaseAdmin
+    .from("items_cotizacion")
+    .select("cotizacion_id")
+    .eq("catalogo_item_id", itemId)
+    .limit(500)
+  const cotIds = Array.from(new Set((rowsBase ?? []).map((r) => r.cotizacion_id))).filter(Boolean)
+  if (cotIds.length > 0) {
+    const { data: rowsOtros } = await supabaseAdmin
+      .from("items_cotizacion")
+      .select("catalogo_item_id")
+      .in("cotizacion_id", cotIds)
+      .not("catalogo_item_id", "is", null)
+      .neq("catalogo_item_id", itemId)
+      .limit(5000)
+    const counts = new Map<string, number>()
+    for (const r of rowsOtros ?? []) {
+      if (!r.catalogo_item_id) continue
+      counts.set(r.catalogo_item_id, (counts.get(r.catalogo_item_id) ?? 0) + 1)
+    }
+    const topIds = Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([k]) => k)
+    if (topIds.length > 0) {
+      const { data: bItems } = await supabaseAdmin
+        .from("catalogo_items")
+        .select(`
+          id, tipo, nombre, descripcion, categoria_id, precio, precio_hasta, precio_lista,
+          imagen_url, imagenes, etiquetas, stock, destacado, inventario_id,
+          inventario:inventario(stock)
+        `)
+        .in("id", topIds)
+        .eq("organization_id", config.organization_id)
+        .eq("activo", true)
+      bundle = (bItems ?? [])
+        .map((it: any) => {
+          const stk = it.inventario_id && it.inventario ? it.inventario.stock : it.stock
+          const { inventario: _i, ...rs } = it
+          return { ...rs, stock_disponible: stk, co_count: counts.get(it.id) ?? 0 }
+        })
+        .filter((i: any) => i.stock_disponible !== 0)
+        .sort((a: any, b: any) => b.co_count - a.co_count)
+    }
+  }
+
   return {
     config: {
       slug: config.slug,
@@ -115,6 +187,7 @@ async function _fetchItem(slug: string, itemId: string) {
     organizacion: org!,
     item,
     relacionados,
+    bundle,
   }
 }
 

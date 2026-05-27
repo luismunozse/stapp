@@ -1,19 +1,22 @@
 import { notFound } from "next/navigation"
+import Image from "next/image"
 import { unstable_cache } from "next/cache"
 import { supabaseAdmin } from "@/lib/supabase"
 import { CatalogoView } from "@/components/catalogo-public/catalogo-view"
+import { CatalogoBreadcrumb } from "@/components/catalogo-public/catalogo-breadcrumb"
 import type { Metadata, Viewport } from "next"
 
-type PageProps = { params: Promise<{ slug: string }> }
+type PageProps = { params: Promise<{ slug: string; categoriaSlug: string }> }
 
 const fetchCatalogo = unstable_cache(
   _fetchCatalogo,
-  ["catalogo-public"],
+  ["catalogo-public-categoria"],
   { revalidate: 60, tags: ["catalogo"] }
 )
 
-async function _fetchCatalogo(slug: string) {
+async function _fetchCatalogo(slug: string, categoriaSlug: string) {
   if (!/^[a-z0-9]([a-z0-9-]{1,48}[a-z0-9])?$/.test(slug)) return null
+  if (!/^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?$/.test(categoriaSlug)) return null
 
   const { data: config } = await supabaseAdmin
     .from("catalogo_config")
@@ -22,6 +25,16 @@ async function _fetchCatalogo(slug: string) {
     .maybeSingle()
 
   if (!config || !config.activo) return null
+
+  const { data: categoria } = await supabaseAdmin
+    .from("catalogo_categorias")
+    .select("id, nombre, slug, descripcion, imagen_url")
+    .eq("organization_id", config.organization_id)
+    .eq("slug", categoriaSlug)
+    .eq("activo", true)
+    .maybeSingle()
+
+  if (!categoria) return null
 
   const { data: org } = await supabaseAdmin
     .from("organizations")
@@ -49,7 +62,6 @@ async function _fetchCatalogo(slug: string) {
     .order("destacado", { ascending: false })
     .order("orden", { ascending: true })
 
-  // Social proof: vistas únicas (por visitor_hash) por item últimos 7 días
   const ago7 = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
   const { data: viewsRaw } = await supabaseAdmin
     .from("catalogo_views")
@@ -70,7 +82,7 @@ async function _fetchCatalogo(slug: string) {
     }
   }
 
-  // Top variante por item (más elegida en cotizaciones histórico)
+  // Top variante por item
   const itemIdsConVariantes = (itemsRaw ?? [])
     .filter((it: any) => (it.variantes ?? []).some((v: any) => v.activo))
     .map((it: any) => it.id)
@@ -93,12 +105,8 @@ async function _fetchCatalogo(slug: string) {
       let topId: string | null = null
       let topCount = 0
       for (const [vid, c] of m.entries()) {
-        if (c > topCount) {
-          topCount = c
-          topId = vid
-        }
+        if (c > topCount) { topCount = c; topId = vid }
       }
-      // Sólo marcar si tiene tracción mínima (≥2 ventas para evitar ruido)
       if (topId && topCount >= 2) topVariantePorItem.set(itemId, topId)
     }
   }
@@ -155,61 +163,78 @@ async function _fetchCatalogo(slug: string) {
       trust_badges: Array.isArray(config.trust_badges) ? config.trust_badges : [],
     },
     organizacion: org!,
+    categoria,
     categorias: categorias ?? [],
     items,
   }
 }
 
 export async function generateViewport({ params }: PageProps): Promise<Viewport> {
-  const { slug } = await params
-  const data = await fetchCatalogo(slug)
-  return {
-    themeColor: data?.config.color_primary || "#2563eb",
-  }
+  const { slug, categoriaSlug } = await params
+  const data = await fetchCatalogo(slug, categoriaSlug)
+  return { themeColor: data?.config.color_primary || "#2563eb" }
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const { slug } = await params
-  const data = await fetchCatalogo(slug)
-  if (!data) return { title: "Catálogo no encontrado" }
+  const { slug, categoriaSlug } = await params
+  const data = await fetchCatalogo(slug, categoriaSlug)
+  if (!data) return { title: "Categoría no encontrada" }
 
-  const titulo = data.config.titulo || data.organizacion.nombre_mostrar || data.organizacion.nombre
-  const descripcion = data.config.descripcion || `Catálogo de productos y servicios de ${titulo}`
+  const orgName = data.organizacion.nombre_mostrar || data.organizacion.nombre
+  const titulo = `${data.categoria.nombre} — ${orgName}`
+  const descripcion =
+    data.categoria.descripcion ||
+    `${data.categoria.nombre} disponibles en el catálogo de ${orgName}. Ver precios, stock y solicitar cotización online.`
 
-  // OG image se genera automáticamente desde opengraph-image.tsx en este mismo dir
   return {
     title: titulo,
     description: descripcion,
-    manifest: `/catalogo/${slug}/manifest.webmanifest`,
-    appleWebApp: {
-      capable: true,
-      title: titulo.length > 20 ? titulo.slice(0, 20) : titulo,
-      statusBarStyle: "default",
+    alternates: {
+      canonical: `/catalogo/${slug}/c/${categoriaSlug}`,
     },
     openGraph: {
       title: titulo,
       description: descripcion,
       type: "website",
+      images: data.categoria.imagen_url ? [data.categoria.imagen_url] : undefined,
     },
   }
 }
 
-export default async function CatalogoPublicPage({ params }: PageProps) {
-  const { slug } = await params
-  const data = await fetchCatalogo(slug)
+export default async function CatalogoCategoriaPage({ params }: PageProps) {
+  const { slug, categoriaSlug } = await params
+  const data = await fetchCatalogo(slug, categoriaSlug)
   if (!data) notFound()
 
   const orgName = data.organizacion.nombre_mostrar || data.organizacion.nombre
   const moneda = data.organizacion.moneda || "ARS"
-  const titulo = data.config.titulo || orgName
+  const itemsCategoria = data.items.filter((i: any) => i.categoria_id === data.categoria.id)
 
-  // ItemList JSON-LD para SEO (Google Shopping snippets / rich results)
+  const breadcrumbLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: orgName,
+        item: `/catalogo/${slug}`,
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: data.categoria.nombre,
+        item: `/catalogo/${slug}/c/${categoriaSlug}`,
+      },
+    ],
+  }
+
   const itemListLd = {
     "@context": "https://schema.org",
     "@type": "ItemList",
-    name: titulo,
-    numberOfItems: data.items.length,
-    itemListElement: data.items.slice(0, 50).map((it, i) => ({
+    name: `${data.categoria.nombre} — ${orgName}`,
+    numberOfItems: itemsCategoria.length,
+    itemListElement: itemsCategoria.slice(0, 50).map((it: any, i: number) => ({
       "@type": "ListItem",
       position: i + 1,
       url: `/catalogo/${slug}/${it.id}`,
@@ -246,9 +271,50 @@ export default async function CatalogoPublicPage({ params }: PageProps) {
     <>
       <script
         type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
+      />
+      <script
+        type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListLd) }}
       />
-      <CatalogoView data={data} />
+      <CatalogoBreadcrumb
+        items={[
+          { label: orgName, href: `/catalogo/${slug}` },
+          { label: data.categoria.nombre },
+        ]}
+      />
+      <section className="container mx-auto max-w-6xl px-4 pt-4 pb-2">
+        <div className="rounded-2xl border bg-card overflow-hidden flex items-center gap-4 p-4 sm:p-5">
+          {data.categoria.imagen_url ? (
+            <div className="relative h-16 w-16 sm:h-20 sm:w-20 rounded-xl overflow-hidden bg-muted shrink-0">
+              <Image
+                src={data.categoria.imagen_url}
+                alt={data.categoria.nombre}
+                fill
+                sizes="80px"
+                className="object-cover"
+              />
+            </div>
+          ) : (
+            <div
+              className="h-16 w-16 sm:h-20 sm:w-20 rounded-xl flex items-center justify-center text-2xl shrink-0"
+              style={{ backgroundColor: `${data.config.color_primary}15`, color: data.config.color_primary }}
+            >
+              📁
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <h2 className="text-xl sm:text-2xl font-bold leading-tight">{data.categoria.nombre}</h2>
+            {data.categoria.descripcion && (
+              <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{data.categoria.descripcion}</p>
+            )}
+            <p className="text-xs text-muted-foreground mt-1.5">
+              {itemsCategoria.length} {itemsCategoria.length === 1 ? "item" : "items"}
+            </p>
+          </div>
+        </div>
+      </section>
+      <CatalogoView data={data} initialCategoriaId={data.categoria.id} />
     </>
   )
 }

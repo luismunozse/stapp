@@ -21,7 +21,7 @@ const registerSchema = z.object({
   usuario: z.object({
     nombre: z.string().default(""),
     email: z.string().default(""),
-    password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres").optional(),
+    password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres").optional(),
   }),
   // Google ID Token (opcional, para registro con Google)
   googleIdToken: z.string().optional(),

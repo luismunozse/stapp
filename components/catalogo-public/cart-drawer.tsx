@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useRouter } from "next/navigation"
 import {
@@ -46,8 +46,52 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
   const [cuponAplicado, setCuponAplicado] = useState<{ codigo: string; descuento: number } | null>(null)
   const [cuponError, setCuponError] = useState<string | null>(null)
   const [validatingCupon, setValidatingCupon] = useState(false)
+  const abandonoLastSentRef = useRef<string>("")
 
   const totalConCupon = Math.max(0, cart.total - (cuponAplicado?.descuento ?? 0))
+
+  // Auto-snapshot del carrito como "abandonado" cuando el visitante ya completó
+  // nombre + teléfono pero todavía no apretó Enviar. Sirve para que el admin
+  // pueda contactarlo por WhatsApp si no termina el flujo.
+  useEffect(() => {
+    if (!open) return
+    if (step !== "checkout") return
+    if (cart.items.length === 0) return
+    const n = nombre.trim()
+    const t = telefono.trim()
+    if (n.length < 2 || t.length < 4) return
+
+    const payload = {
+      cliente: { nombre: n, telefono: t, email: email.trim() || undefined },
+      items: cart.items.map((i) => ({
+        itemId: i.id,
+        varianteId: i.varianteId ?? null,
+        varianteEtiqueta: i.varianteEtiqueta ?? null,
+        nombre: i.nombre,
+        cantidad: i.cantidad,
+        precioUnitario: i.precio,
+        imagen_url: i.imagen_url ?? null,
+      })),
+      total: totalConCupon,
+      cuponCodigo: cuponAplicado?.codigo,
+    }
+    const payloadKey = JSON.stringify(payload)
+    if (abandonoLastSentRef.current === payloadKey) return
+
+    const timer = setTimeout(() => {
+      abandonoLastSentRef.current = payloadKey
+      fetch(`/api/public/catalogo/${slug}/abandono`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payloadKey,
+        keepalive: true,
+      }).catch(() => {
+        abandonoLastSentRef.current = ""
+      })
+    }, 1500)
+
+    return () => clearTimeout(timer)
+  }, [open, step, nombre, telefono, email, cart.items, totalConCupon, cuponAplicado, slug])
 
   const aplicarCupon = async () => {
     const codigo = cuponInput.trim().toUpperCase()
@@ -179,22 +223,67 @@ export function CartDrawer({ open, onClose, cart, slug, titulo, formatPrecio, br
             exit={{ x: "100%" }}
             transition={{ type: "spring", damping: 30, stiffness: 300 }}
           >
-            <header className="flex items-center justify-between p-4 border-b">
-              <h2 className="font-semibold flex items-center gap-2">
-                <ShoppingCart className="h-5 w-5" />
-                {step === "cart" ? "Tu solicitud" : "Tus datos"}
-              </h2>
-              <Button variant="ghost" size="icon" onClick={onClose}>
-                <X className="h-4 w-4" />
-              </Button>
+            <header className="border-b">
+              <div className="flex items-center justify-between p-4">
+                <h2 className="font-semibold flex items-center gap-2">
+                  <ShoppingCart className="h-5 w-5" />
+                  {step === "cart" ? "Tu solicitud" : "Tus datos"}
+                </h2>
+                <Button variant="ghost" size="icon" onClick={onClose} className="h-10 w-10">
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              {cart.items.length > 0 && (
+                <ol className="px-4 pb-3 flex items-center gap-2 text-xs">
+                  <li className="flex items-center gap-1.5 font-semibold" style={{ color: brandColor }}>
+                    <span
+                      className="inline-flex h-5 w-5 items-center justify-center rounded-full text-white text-[10px] font-bold"
+                      style={{ backgroundColor: brandColor }}
+                    >
+                      {step === "cart" ? "1" : <CheckCircle2 className="h-3 w-3" />}
+                    </span>
+                    Carrito
+                  </li>
+                  <li
+                    className="h-px flex-1 transition-colors"
+                    style={{ backgroundColor: step === "checkout" ? brandColor : "var(--border)" }}
+                  />
+                  <li
+                    className={`flex items-center gap-1.5 ${
+                      step === "checkout" ? "font-semibold" : "text-muted-foreground"
+                    }`}
+                    style={{ color: step === "checkout" ? brandColor : undefined }}
+                  >
+                    <span
+                      className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${
+                        step === "checkout" ? "text-white" : "bg-muted text-muted-foreground"
+                      }`}
+                      style={step === "checkout" ? { backgroundColor: brandColor } : undefined}
+                    >
+                      2
+                    </span>
+                    Tus datos
+                  </li>
+                </ol>
+              )}
             </header>
 
             <div className="flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom,1rem)]">
               {step === "cart" ? (
                 cart.items.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-6">
-                    <ShoppingCart className="h-12 w-12 mb-3 opacity-50" />
-                    <p>Tu carrito está vacío</p>
+                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-6 text-center">
+                    <div className="h-20 w-20 rounded-full bg-muted flex items-center justify-center mb-4">
+                      <ShoppingCart className="h-10 w-10 opacity-40" />
+                    </div>
+                    <p className="font-medium text-foreground mb-1">Tu carrito está vacío</p>
+                    <p className="text-sm mb-5">Explorá el catálogo y agregá items para solicitar tu presupuesto.</p>
+                    <Button
+                      onClick={onClose}
+                      className="gap-1.5"
+                      style={{ backgroundColor: brandColor }}
+                    >
+                      Volver al catálogo
+                    </Button>
                   </div>
                 ) : (
                   <div className="p-4 space-y-3">

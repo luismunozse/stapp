@@ -158,6 +158,26 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
           priority: 0.6,
         })
       }
+
+      // Categorías landing (/catalogo/[slug]/c/[categoriaSlug])
+      const { data: cats } = await supabaseAdmin
+        .from("catalogo_categorias")
+        .select("slug, updated_at, organization_id")
+        .in("organization_id", orgIds)
+        .eq("activo", true)
+        .not("slug", "is", null)
+        .limit(50000)
+
+      for (const c of cats ?? []) {
+        const orgSlug = slugByOrg.get(c.organization_id)
+        if (!orgSlug || !c.slug) continue
+        catalogoUrls.push({
+          url: `${baseUrl}/catalogo/${orgSlug}/c/${c.slug}`,
+          lastModified: new Date(c.updated_at),
+          changeFrequency: "weekly",
+          priority: 0.7,
+        })
+      }
     }
   } catch (err) {
     console.error("sitemap: error fetching catalogs", err)
