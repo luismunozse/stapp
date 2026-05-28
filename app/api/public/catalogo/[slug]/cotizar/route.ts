@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { getNextQuoteNumber } from "@/lib/counters"
 import { randomBytes } from "crypto"
 import { z } from "zod"
+import { resolvePlantilla } from "@/lib/whatsapp/plantillas-catalog"
 
 async function revertirCupon(cuponId: string) {
   try {
@@ -357,14 +358,29 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     const cuponLinea = cuponCodigoAplicado
       ? `\nCupón: ${cuponCodigoAplicado} (− $${cuponDescuento.toLocaleString("es-AR")})`
       : ""
-    const msg =
-      `Hola${tallerNombre ? ` ${tallerNombre}` : ""}! Acabo de enviar una solicitud desde el catálogo:\n\n` +
-      `Solicitud N° ${cotizacion.numero_cotizacion}\n` +
-      `Cliente: ${data.cliente.nombre.trim()}\n` +
-      `Tel: ${telefonoNorm}\n\n` +
-      `${itemsResumen}${restantes}\n\n` +
-      `Total: $${total.toLocaleString("es-AR")}${cuponLinea}\n\n` +
-      `Detalle completo: ${linkPublico}`
+
+    // Cargar plantillas custom de la org (override sobre defaultText del catálogo).
+    const { data: orgRow } = await supabaseAdmin
+      .from("organizations")
+      .select("plantillas_whatsapp")
+      .eq("id", organizationId)
+      .maybeSingle()
+    const orgPlantillas = (orgRow?.plantillas_whatsapp as Record<string, string> | null) ?? null
+
+    const msg = resolvePlantilla(
+      "catalogo_solicitud_taller",
+      {
+        taller: tallerNombre,
+        numero_cotizacion: String(cotizacion.numero_cotizacion),
+        cliente: data.cliente.nombre.trim(),
+        telefono: telefonoNorm,
+        items: `${itemsResumen}${restantes}`,
+        total: `$${total.toLocaleString("es-AR")}`,
+        linea_cupon: cuponLinea,
+        link_publico: linkPublico,
+      },
+      orgPlantillas,
+    )
     const telLimpio = config.whatsapp.replace(/\D/g, "")
     whatsappTallerUrl = `https://wa.me/${telLimpio}?text=${encodeURIComponent(msg)}`
   }

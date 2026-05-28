@@ -2,6 +2,20 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { Resend } from "resend"
 import { formatDateValue } from "@/lib/timezone"
 import { renderTemplate } from "@/lib/whatsapp/plantillas-catalog"
+import { formatCurrencyValue, type CurrencyCode, DEFAULT_CURRENCY } from "@/lib/currency"
+
+/**
+ * Replica de getBaseUrl de lib/notifications/whatsapp-templates.ts.
+ * Inlined aquí para mantener la paridad con el path cliente sin
+ * tocar el módulo de templates.
+ */
+function getBaseUrl(organizationSlug?: string | null): string {
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
+  if (organizationSlug) {
+    return `https://${organizationSlug}.${rootDomain}`
+  }
+  return `https://${rootDomain}`
+}
 
 /**
  * Mapeo de NotificationType (legacy) a la key del catálogo de plantillas.
@@ -41,6 +55,13 @@ function resolvePlantillaForTipo(
   const tpl = plantillasOverride[key]
   if (!tpl || !tpl.trim()) return null
 
+  const currency: CurrencyCode = (context.moneda as CurrencyCode) || DEFAULT_CURRENCY
+  const formatCurrency = (amount: number | null | undefined) =>
+    formatCurrencyValue(amount ?? 0, currency)
+
+  const baseUrl = getBaseUrl(context.organizationSlug)
+  const publicToken: string | null | undefined = context.orden?.publicToken
+
   const vars: Record<string, string | number> = {
     cliente: context.cliente?.nombre || "",
     empresa: context.organizationName || "",
@@ -52,8 +73,10 @@ function resolvePlantillaForTipo(
     vars.dispositivo = context.orden.dispositivo || ""
     vars.estado = formatEstado(context.orden.estado || "")
     vars.presupuesto = context.orden.presupuesto != null
-      ? `$${Number(context.orden.presupuesto).toLocaleString()}`
+      ? formatCurrency(context.orden.presupuesto)
       : ""
+    vars.link_seguimiento = publicToken ? `${baseUrl}/seguimiento/${publicToken}` : ""
+    vars.link_pdf = publicToken ? `${baseUrl}/api/public/ordenes/${publicToken}/pdf` : ""
   }
 
   if (context.garantia) {
@@ -61,6 +84,27 @@ function resolvePlantillaForTipo(
     vars.garantia_fecha = context.garantia.fechaVencimiento
       ? formatDateValue(context.garantia.fechaVencimiento, context.zonaHoraria)
       : ""
+  }
+
+  if (context.pago) {
+    vars.monto_pago = context.pago.monto ? formatCurrency(context.pago.monto) : ""
+    vars.saldo = context.pago.saldoPendiente
+      ? formatCurrency(context.pago.saldoPendiente)
+      : "Al día"
+    vars.link_pago = context.pago.linkPago || ""
+  }
+
+  if (context.repuesto) {
+    vars.repuesto = context.repuesto.nombre || "necesario"
+  }
+
+  if (context.demora) {
+    vars.motivo_demora = context.demora.motivo || ""
+  }
+
+  if (context.promocion) {
+    vars.promo_titulo = context.promocion.titulo || ""
+    vars.promo_descripcion = context.promocion.descripcion || ""
   }
 
   return renderTemplate(tpl, vars)
@@ -84,6 +128,7 @@ interface NotificationParams {
   tipo: NotificationType
   context: {
     organizationName: string
+    organizationSlug?: string | null
     moneda?: string
     zonaHoraria?: string
     cliente: {
@@ -100,11 +145,33 @@ interface NotificationParams {
       estadoAnterior?: string
       presupuesto?: number | null
       fechaCompletado?: string | null
+      publicToken?: string | null
     }
     garantia?: {
       id: string
       diasValidez: number
       fechaVencimiento: string
+    }
+    pago?: {
+      monto: number
+      metodoPago?: string
+      fechaPago?: string | Date
+      saldoPendiente?: number
+      linkPago?: string
+    }
+    repuesto?: {
+      nombre: string
+      disponible?: boolean
+    }
+    demora?: {
+      motivo: string
+      nuevaFechaEstimada?: string | Date
+    }
+    promocion?: {
+      titulo: string
+      descripcion: string
+      descuento?: string
+      validoHasta?: string | Date
     }
   }
 }

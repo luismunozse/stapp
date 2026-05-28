@@ -26,6 +26,8 @@ export function WhatsAppDialog({ context, onClose }: WhatsAppDialogProps) {
   const [sendingApi, setSendingApi] = useState(false)
   const [apiResult, setApiResult] = useState<{ success: boolean; message: string } | null>(null)
   const [plantillasOverride, setPlantillasOverride] = useState<Record<string, string> | null>(null)
+  const [loadingPlantillas, setLoadingPlantillas] = useState(true)
+  const [customMessageEdited, setCustomMessageEdited] = useState(false)
 
   const templates = getWhatsAppTemplates(context, plantillasOverride)
 
@@ -43,23 +45,51 @@ export function WhatsAppDialog({ context, onClose }: WhatsAppDialogProps) {
 
   // Fetch plantillas personalizadas
   useEffect(() => {
+    let cancelled = false
     fetch("/api/notificaciones/config")
       .then((res) => res.ok ? res.json() : null)
       .then((data) => {
+        if (cancelled) return
         if (data?.plantillasWhatsapp) {
           setPlantillasOverride(data.plantillasWhatsapp)
         }
       })
       .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoadingPlantillas(false)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [])
+
+  // Auto-seleccionar primera plantilla cuando el dialog está abierto
+  // y las plantillas (con override aplicado) ya están listas.
+  useEffect(() => {
+    if (isOpen && !loadingPlantillas && !selectedTemplate && templates.length > 0) {
+      const first = templates[0]
+      setSelectedTemplate(first.id)
+      setCustomMessage(first.mensaje)
+      setCustomMessageEdited(false)
+    }
+  }, [isOpen, loadingPlantillas, plantillasOverride, selectedTemplate, templates])
+
+  // Si el override llega después de seleccionar plantilla, reaplicar
+  // siempre que el usuario no haya editado el textarea manualmente.
+  useEffect(() => {
+    if (!selectedTemplate || customMessageEdited) return
+    const tpl = templates.find((t) => t.id === selectedTemplate)
+    if (tpl && tpl.mensaje !== customMessage) {
+      setCustomMessage(tpl.mensaje)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plantillasOverride])
 
   const handleOpen = () => {
     setIsOpen(true)
     setApiResult(null)
-    // Seleccionar primera plantilla por defecto
-    if (templates.length > 0 && !selectedTemplate) {
-      handleSelectTemplate(templates[0].id)
-    }
+    // La auto-selección ocurre en el useEffect de arriba para esperar
+    // a que las plantillas custom estén cargadas.
   }
 
   const handleClose = () => {
@@ -73,6 +103,7 @@ export function WhatsAppDialog({ context, onClose }: WhatsAppDialogProps) {
     if (template) {
       setSelectedTemplate(id)
       setCustomMessage(template.mensaje)
+      setCustomMessageEdited(false)
     }
   }
 
@@ -179,7 +210,10 @@ export function WhatsAppDialog({ context, onClose }: WhatsAppDialogProps) {
           <label className="text-sm font-medium">Mensaje:</label>
           <Textarea
             value={customMessage}
-            onChange={(e) => setCustomMessage(e.target.value)}
+            onChange={(e) => {
+              setCustomMessage(e.target.value)
+              setCustomMessageEdited(true)
+            }}
             rows={6}
             className="mt-2 font-mono text-sm"
             placeholder="Selecciona una plantilla o escribe tu mensaje..."

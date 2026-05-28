@@ -22,11 +22,12 @@ export async function GET() {
 
     const { data: org } = await supabaseAdmin
       .from("organizations")
-      .select("notificaciones_email, notificaciones_whatsapp, dias_recordatorio, notif_stock_bajo, plantillas_whatsapp")
+      .select("nombre, nombre_mostrar, notificaciones_email, notificaciones_whatsapp, dias_recordatorio, notif_stock_bajo, plantillas_whatsapp")
       .eq("id", organizationId!)
       .single()
 
     return NextResponse.json({
+      organizationName: org?.nombre_mostrar || org?.nombre || "",
       notificacionesEmail: org?.notificaciones_email,
       notificacionesWhatsapp: org?.notificaciones_whatsapp,
       diasRecordatorio: org?.dias_recordatorio,

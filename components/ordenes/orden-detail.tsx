@@ -233,7 +233,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           cliente: orden.cliente?.nombre || "",
           codigo_orden: codigoDisplay,
           link_seguimiento_publico: seguimientoUrl,
-          empresa: (orden as any).organizacion?.nombre || "",
+          empresa: (orden as any).organizationName || (orden as any).organization?.nombre || "",
         },
         config?.plantillasWhatsapp ?? null,
       )

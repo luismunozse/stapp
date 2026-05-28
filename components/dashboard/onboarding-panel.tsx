@@ -81,7 +81,7 @@ export function OnboardingPanel({ hasConfig, hasTecnicos, hasOrdenes }: Onboardi
             Ocultar
           </Button>
         </div>
-        <p className="text-sm text-muted-foreground">Completá estos pasos para empezar a usar GuruTech</p>
+        <p className="text-sm text-muted-foreground">Completá estos pasos para empezar a usar STApp</p>
         {/* Barra de progreso */}
         <div className="mt-3 h-2 bg-muted rounded-full overflow-hidden">
           <div

@@ -38,7 +38,7 @@ export interface PlantillaDefinition {
 }
 
 const VAR_CLIENTE: PlantillaVariable = { key: "cliente", label: "Nombre del cliente", example: "Juan Pérez" }
-const VAR_EMPRESA: PlantillaVariable = { key: "empresa", label: "Nombre del negocio", example: "GuruTech" }
+const VAR_EMPRESA: PlantillaVariable = { key: "empresa", label: "Nombre del negocio", example: "Tu Negocio" }
 const VAR_NUMERO_ORDEN: PlantillaVariable = { key: "numero_orden", label: "Número de orden", example: "1234" }
 const VAR_DISPOSITIVO: PlantillaVariable = { key: "dispositivo", label: "Dispositivo", example: "iPhone 12" }
 const VAR_ESTADO: PlantillaVariable = { key: "estado", label: "Estado de la orden", example: "Listo para retirar" }
@@ -69,6 +69,9 @@ const VAR_TURNO_TECNICO: PlantillaVariable = { key: "turno_tecnico", label: "Té
 const VAR_TURNO_EQUIPO: PlantillaVariable = { key: "turno_equipo", label: "Equipo del turno", example: "Notebook Dell" }
 const VAR_LINK_SEGUIMIENTO_PUBLICO: PlantillaVariable = { key: "link_seguimiento_publico", label: "Link público de seguimiento", example: "https://..." }
 const VAR_CODIGO_ORDEN: PlantillaVariable = { key: "codigo_orden", label: "Código/número de orden", example: "ORD-1234" }
+const VAR_PROBLEMA: PlantillaVariable = { key: "problema", label: "Problema reportado", example: "No carga" }
+const VAR_LINEA_PRESUPUESTO: PlantillaVariable = { key: "linea_presupuesto", label: "Línea presupuesto (auto)", example: "\nPresupuesto estimado: $45.000" }
+const VAR_LINEA_FECHA_PROMETIDA: PlantillaVariable = { key: "linea_fecha_prometida", label: "Línea fecha estimada (auto)", example: "\nFecha estimada de entrega: 31/05/2026" }
 
 export const PLANTILLAS_CATALOG: PlantillaDefinition[] = [
   // === Órdenes ===
@@ -141,6 +144,37 @@ Gracias por confiar en nosotros!
     variables: [VAR_CLIENTE, VAR_CODIGO_ORDEN, VAR_LINK_SEGUIMIENTO_PUBLICO, VAR_EMPRESA],
     defaultText: `Hola {cliente}, desde acá podés seguir el estado de tu equipo (Orden {codigo_orden}):
 {link_seguimiento_publico}
+
+{empresa}`,
+  },
+  {
+    key: "orden_recepcion",
+    label: "Recepción de orden nueva",
+    category: "ordenes",
+    description: "Mensaje que se envía al crear una orden de servicio nueva, con resumen de la recepción.",
+    variables: [
+      VAR_CLIENTE,
+      VAR_CODIGO_ORDEN,
+      VAR_DISPOSITIVO,
+      VAR_PROBLEMA,
+      VAR_LINEA_PRESUPUESTO,
+      VAR_LINEA_FECHA_PROMETIDA,
+      VAR_LINK_SEGUIMIENTO,
+      VAR_LINK_PDF,
+      VAR_EMPRESA,
+    ],
+    defaultText: `Hola {cliente}, le confirmamos la recepción de su equipo:
+
+*ORDEN DE SERVICIO {codigo_orden}*
+
+Dispositivo: {dispositivo}
+Problema: {problema}{linea_presupuesto}{linea_fecha_prometida}
+
+Comprobante PDF: {link_pdf}
+Seguimiento en línea: {link_seguimiento}
+
+Conserve este mensaje como comprobante.
+Le avisaremos sobre el avance de la reparación.
 
 {empresa}`,
   },
@@ -554,6 +588,55 @@ Recuerde que ofrecemos diagnóstico sin cargo. Traiga su equipo y lo revisamos s
 Lo esperamos!
 
 {empresa}`,
+  },
+  {
+    key: "catalogo_carrito_abandonado_recovery",
+    label: "Recuperación de carrito abandonado",
+    category: "marketing",
+    description: "Mensaje que envía el admin desde el panel de carritos abandonados para invitar al cliente a finalizar la compra.",
+    variables: [
+      VAR_CLIENTE,
+      VAR_ITEMS,
+      VAR_TOTAL,
+      { key: "link_catalogo", label: "Link al catálogo", example: "https://miempresa.stapp.com.ar/catalogo/equipos" },
+      VAR_EMPRESA,
+    ],
+    defaultText: `Hola {cliente}! Te escribo de parte del catálogo. Vi que dejaste estos items pendientes:
+
+{items}
+
+Total estimado: {total}.
+¿Querés que te ayudemos a finalizar la compra?
+{link_catalogo}
+
+{empresa}`,
+  },
+  {
+    key: "catalogo_solicitud_taller",
+    label: "Aviso al taller por nueva solicitud (catálogo)",
+    category: "operativo",
+    description: "Mensaje pre-armado que el cliente envía al WhatsApp del taller al confirmar una cotización pública desde el catálogo.",
+    variables: [
+      { key: "taller", label: "Nombre del taller", example: "Servicio Técnico" },
+      { key: "numero_cotizacion", label: "Número de cotización", example: "C-0042" },
+      { key: "cliente", label: "Nombre del cliente", example: "Juan Pérez" },
+      { key: "telefono", label: "Teléfono del cliente", example: "+54 9 11 1234-5678" },
+      VAR_ITEMS,
+      VAR_TOTAL,
+      { key: "linea_cupon", label: "Línea de cupón (auto)", example: "\nCupón: SAVE10 (-$5.000)" },
+      { key: "link_publico", label: "Link público de la cotización", example: "https://miempresa.stapp.com.ar/cotizacion/abc123" },
+    ],
+    defaultText: `Hola {taller}! Acabo de enviar una solicitud desde el catálogo:
+
+Solicitud N° {numero_cotizacion}
+Cliente: {cliente}
+Tel: {telefono}
+
+{items}
+
+Total: {total}{linea_cupon}
+
+Detalle completo: {link_publico}`,
   },
 ]
 

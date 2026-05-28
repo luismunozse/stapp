@@ -110,6 +110,7 @@ function formatCotizacion(c: any) {
     convertidaAOrdenId: c.convertida_a_orden_id || null,
     clienteNombre: cliente?.nombre || null,
     clienteEmail: cliente?.email || null,
+    clienteTelefono: cliente?.telefono || null,
     ordenNumero: orden?.numero_orden || null,
     orden: orden ? {
       id: orden.id,

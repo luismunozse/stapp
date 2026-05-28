@@ -24,6 +24,7 @@ import {
 import { printDeviceLabel } from "./print-label"
 import { ThermalPrintOrden } from "./thermal-print-orden"
 import { generateWhatsAppUrl, formatPhoneForWhatsApp } from "@/lib/notifications/whatsapp-templates"
+import { resolvePlantilla } from "@/lib/whatsapp/plantillas-catalog"
 import { useCurrency } from "@/contexts/currency-context"
 import type { OrdenServicio } from "@/types"
 
@@ -79,40 +80,6 @@ interface OrdenCreadaModalProps {
   orden: OrdenCreadaData | null
 }
 
-function generateOrdenMessage(orden: OrdenCreadaData, baseUrl: string, formatCurrency: (amount: number | string | null | undefined) => string, formatDate: (date: Date | string | null | undefined) => string): string {
-  // Usar código con prefijo si existe, sino el número simple
-  const codigoDisplay = orden.codigoOrden || `#${orden.numeroOrden}`
-  let mensaje = `Hola ${orden.cliente.nombre}, le confirmamos la recepcion de su equipo:
-
-*ORDEN DE SERVICIO ${codigoDisplay}*
-
-Dispositivo: ${orden.dispositivo}
-Problema: ${orden.problemaReportado}`
-
-  if (orden.presupuesto) {
-    mensaje += `\nPresupuesto estimado: ${formatCurrency(orden.presupuesto)}`
-  }
-
-  if (orden.fechaPrometida) {
-    mensaje += `\nFecha estimada de entrega: ${formatDate(orden.fechaPrometida)}`
-  }
-
-  // Agregar links si hay token público
-  if (orden.publicToken) {
-    mensaje += `\n\nComprobante PDF: ${baseUrl}/api/public/ordenes/${orden.publicToken}/pdf`
-    mensaje += `\nSeguimiento en linea: ${baseUrl}/seguimiento/${orden.publicToken}`
-  }
-
-  mensaje += `
-
-Conserve este mensaje como comprobante.
-Le avisaremos sobre el avance de la reparacion.
-
-${orden.organizationName || "Servicio Tecnico"}`
-
-  return mensaje
-}
-
 function buildThermalOrden(orden: OrdenCreadaData) {
   const fechaIngreso = orden.fechaIngreso ? new Date(orden.fechaIngreso) : new Date()
   const fechaPrometida = orden.fechaPrometida ? new Date(orden.fechaPrometida) : null
@@ -160,18 +127,61 @@ export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps
   const [downloading, setDownloading] = useState(false)
   const [printing, setPrinting] = useState(false)
   const [mensaje, setMensaje] = useState("")
+  const [plantillas, setPlantillas] = useState<Record<string, string> | null>(null)
   const { formatPrice, formatDate } = useCurrency()
 
-  // Actualizar mensaje cuando cambia la orden
+  // Traer plantillas custom de la organización cuando se abre el modal
   useEffect(() => {
-    if (orden) {
-      // Obtener la URL base del navegador
-      const baseUrl = typeof window !== "undefined"
-        ? window.location.origin
-        : ""
-      setMensaje(generateOrdenMessage(orden, baseUrl, formatPrice, formatDate))
+    if (!open) return
+    let cancelled = false
+    fetch("/api/notificaciones/config")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.plantillasWhatsapp) {
+          setPlantillas(data.plantillasWhatsapp)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
     }
-  }, [orden, formatPrice, formatDate])
+  }, [open])
+
+  // Actualizar mensaje cuando cambia la orden o las plantillas
+  useEffect(() => {
+    if (!orden) return
+    const baseUrl = typeof window !== "undefined" ? window.location.origin : ""
+    const codigoDisplay = orden.codigoOrden || `#${orden.numeroOrden}`
+    // Variables auto-computadas para mostrar líneas condicionales sin dejar
+    // líneas vacías cuando el dato no existe (presupuesto/fecha estimada).
+    const lineaPresupuesto = orden.presupuesto
+      ? `\nPresupuesto estimado: ${formatPrice(orden.presupuesto)}`
+      : ""
+    const lineaFechaPrometida = orden.fechaPrometida
+      ? `\nFecha estimada de entrega: ${formatDate(orden.fechaPrometida)}`
+      : ""
+    const linkPdf = orden.publicToken
+      ? `${baseUrl}/api/public/ordenes/${orden.publicToken}/pdf`
+      : ""
+    const linkSeguimiento = orden.publicToken
+      ? `${baseUrl}/seguimiento/${orden.publicToken}`
+      : ""
+
+    const vars = {
+      cliente: orden.cliente.nombre,
+      codigo_orden: codigoDisplay,
+      dispositivo: orden.dispositivo,
+      problema: orden.problemaReportado,
+      presupuesto: orden.presupuesto ? formatPrice(orden.presupuesto) : "",
+      fecha_prometida: orden.fechaPrometida ? formatDate(orden.fechaPrometida) : "",
+      linea_presupuesto: lineaPresupuesto,
+      linea_fecha_prometida: lineaFechaPrometida,
+      link_pdf: linkPdf,
+      link_seguimiento: linkSeguimiento,
+      empresa: orden.organizationName || "",
+    }
+    setMensaje(resolvePlantilla("orden_recepcion", vars, plantillas))
+  }, [orden, formatPrice, formatDate, plantillas])
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(mensaje)

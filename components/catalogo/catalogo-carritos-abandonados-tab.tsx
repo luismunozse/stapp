@@ -9,6 +9,7 @@ import {
   ShoppingCart, RefreshCw, Mail, Phone,
 } from "lucide-react"
 import { toast } from "sonner"
+import { resolvePlantilla } from "@/lib/whatsapp/plantillas-catalog"
 
 interface CarritoItem {
   itemId: string
@@ -61,6 +62,22 @@ export function CatalogoCarritosAbandonadosTab() {
   const [loading, setLoading] = useState(true)
   const [includeRecovered, setIncludeRecovered] = useState(false)
   const [actingId, setActingId] = useState<number | null>(null)
+  const [plantillas, setPlantillas] = useState<Record<string, string> | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch("/api/notificaciones/config")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.plantillasWhatsapp) {
+          setPlantillas(data.plantillasWhatsapp)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const load = async () => {
     setLoading(true)
@@ -191,11 +208,19 @@ export function CatalogoCarritosAbandonadosTab() {
                   typeof window !== "undefined"
                     ? `${window.location.origin}/catalogo/${c.catalogo_slug}`
                     : ""
-                const msg =
-                  `Hola ${c.cliente_nombre}! Te escribo de parte del catálogo. ` +
-                  `Vi que dejaste estos items pendientes:\n\n${lista}${restantes}\n\n` +
-                  `Total estimado: ${formatPrecio(Number(c.total_estimado))}.\n` +
-                  `¿Querés que te ayudemos a finalizar la compra?\n${linkCatalogo}`
+                // empresa: el componente padre (catalogo-admin) no nos pasa el nombre
+                // de la organización; se deja vacío para evitar refactor de scope.
+                const msg = resolvePlantilla(
+                  "catalogo_carrito_abandonado_recovery",
+                  {
+                    cliente: c.cliente_nombre,
+                    items: `${lista}${restantes}`,
+                    total: formatPrecio(Number(c.total_estimado)),
+                    link_catalogo: linkCatalogo,
+                    empresa: "",
+                  },
+                  plantillas,
+                )
                 const waUrl = `https://wa.me/${telLimpio}?text=${encodeURIComponent(msg)}`
 
                 return (

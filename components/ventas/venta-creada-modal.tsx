@@ -82,7 +82,7 @@ export function VentaCreadaModal({ open, onClose, venta }: VentaCreadaModalProps
     if (venta) {
       setMensaje(generateVentaMessage(venta, formatPrice, plantilla.venta_comprobante))
     }
-  }, [venta, plantilla.venta_comprobante])
+  }, [venta, plantilla.venta_comprobante, formatPrice])
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(mensaje)

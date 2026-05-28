@@ -9,7 +9,7 @@ declare global {
   }
   interface USB {
     getDevices(): Promise<USBDevice[]>
-    requestDevice(options: { filters: Array<{ vendorId?: number; productId?: number }> }): Promise<USBDevice>
+    requestDevice(options: { filters: Array<{ vendorId?: number; productId?: number; classCode?: number; subclassCode?: number; protocolCode?: number }> }): Promise<USBDevice>
     addEventListener(type: "connect" | "disconnect", listener: (e: USBConnectionEvent) => void): void
     removeEventListener(type: "connect" | "disconnect", listener: (e: USBConnectionEvent) => void): void
   }
@@ -173,6 +173,7 @@ export function useThermalPrinter() {
           { vendorId: 0x0416 }, // WinBond (many Chinese printers)
           { vendorId: 0x0483 }, // STMicroelectronics (some printers)
           { vendorId: 0x04b8 }, // Epson
+          { vendorId: 0x04c5 }, // Fujitsu (FP-1000H, etc.)
           { vendorId: 0x0525 }, // Netchip (Linux USB gadget)
           { vendorId: 0x067b }, // Prolific (USB-Serial adapters)
           { vendorId: 0x1a86 }, // QinHeng (CH340 based)
@@ -185,6 +186,7 @@ export function useThermalPrinter() {
           { vendorId: 0x04e8 }, // Samsung (Bixolon)
           { vendorId: 0x0828 }, // Citizen
           { vendorId: 0x2730 }, // Gainscha / Gprinter
+          { classCode: 7 },     // USB Printer class (fallback for any printer)
         ],
       })
 

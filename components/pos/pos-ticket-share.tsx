@@ -10,6 +10,7 @@ import {
   renderVentaMessageCorto,
   type VentaForTemplate,
 } from "@/lib/whatsapp/plantillas-venta"
+import { generateWhatsAppUrl } from "@/lib/notifications/whatsapp-templates"
 
 function WhatsAppIcon({ className }: { className?: string }) {
   return (
@@ -50,9 +51,10 @@ interface TicketShareProps {
     garantias?: Array<{ numeroGarantia: string | number; diasValidez: number }>
   }
   plantillaCorta?: string | null
+  countryCode?: string | null
 }
 
-export function PosTicketShare({ ventaData, plantillaCorta }: TicketShareProps) {
+export function PosTicketShare({ ventaData, plantillaCorta, countryCode }: TicketShareProps) {
   const { formatPrice } = useCurrency()
   const ticketRef = useRef<HTMLDivElement>(null)
   const [generating, setGenerating] = useState(false)
@@ -115,10 +117,9 @@ export function PosTicketShare({ ventaData, plantillaCorta }: TicketShareProps) 
         document.body.removeChild(a)
         URL.revokeObjectURL(url)
 
-        // Open WhatsApp with text message
-        const phone = ventaData.clienteTelefono.replace(/\D/g, "")
-        const msg = encodeURIComponent(mensajeCorto)
-        window.open(`https://wa.me/54${phone}?text=${msg}`, "_blank")
+        // Open WhatsApp with text message (multi-country via generateWhatsAppUrl)
+        const waUrl = generateWhatsAppUrl(ventaData.clienteTelefono, mensajeCorto, countryCode)
+        window.open(waUrl, "_blank")
       }
     } catch (err: any) {
       if (err.name !== "AbortError") {
@@ -127,7 +128,7 @@ export function PosTicketShare({ ventaData, plantillaCorta }: TicketShareProps) 
     } finally {
       setGenerating(false)
     }
-  }, [ventaData, formatPrice, generateImage])
+  }, [ventaData, formatPrice, generateImage, plantillaCorta, countryCode])
 
   const handleDownloadImage = useCallback(async () => {
     setGenerating(true)

@@ -20,6 +20,7 @@ import {
   Share2,
   Link2,
   Copy,
+  MessageCircle,
 } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { CotizacionForm } from "./cotizacion-form"
@@ -41,6 +42,8 @@ interface Cotizacion {
   firmaAprobacion: string | null
   firmaMime: string | null
   fechaAprobacion: string | null
+  clienteNombre?: string | null
+  clienteTelefono?: string | null
   items: {
     id: string
     descripcion: string
@@ -208,6 +211,40 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
       // Fallback
       prompt("Copiar este link:", url)
     }
+  }
+
+  const handleShareWhatsApp = async (cotizacion: Cotizacion) => {
+    if (!cotizacion.publicToken) return
+    const url = `${window.location.origin}/cotizacion/${cotizacion.publicToken}`
+    const nombre = cotizacion.clienteNombre || "cliente"
+    const total = formatPrice(Number(cotizacion.total || 0))
+    const mensaje =
+      `Hola ${nombre}, te comparto la cotización ${cotizacion.numeroCotizacion}. ` +
+      `Total: ${total}. ` +
+      `Podés verla acá: ${url}`
+
+    if (cotizacion.estado === "BORRADOR") {
+      try {
+        const res = await fetch(`/api/cotizaciones/${cotizacion.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ estado: "ENVIADA" }),
+        })
+        if (res.ok) mutate()
+      } catch {
+        // continuar igual
+      }
+    }
+
+    const telefono = (cotizacion.clienteTelefono || "").replace(/\D/g, "")
+    let waUrl: string
+    if (telefono) {
+      const normalized = telefono.startsWith("54") ? telefono : `54${telefono}`
+      waUrl = `https://wa.me/${normalized}?text=${encodeURIComponent(mensaje)}`
+    } else {
+      waUrl = `https://wa.me/?text=${encodeURIComponent(mensaje)}`
+    }
+    window.open(waUrl, "_blank", "noopener,noreferrer")
   }
 
   const handleDownloadPDF = async (cotizacion: Cotizacion) => {
@@ -496,6 +533,18 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
                         ) : (
                           <><Link2 className="mr-2 h-3 w-3" />Compartir</>
                         )}
+                      </Button>
+                    )}
+                    {cotizacion.publicToken && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-green-600 hover:text-green-700"
+                        onClick={() => handleShareWhatsApp(cotizacion)}
+                        title={cotizacion.clienteTelefono ? "Compartir por WhatsApp al cliente" : "Compartir por WhatsApp"}
+                      >
+                        <MessageCircle className="mr-2 h-3 w-3" />
+                        WhatsApp
                       </Button>
                     )}
                   </div>

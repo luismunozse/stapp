@@ -58,10 +58,14 @@ const CATEGORY_COLORS: Record<PlantillaCategory, string> = {
   marketing: "text-pink-600 bg-pink-50 dark:bg-pink-950/40 border-pink-200 dark:border-pink-900",
 }
 
-function buildPreviewContext(variables: PlantillaVariable[]): Record<string, string> {
+function buildPreviewContext(
+  variables: PlantillaVariable[],
+  overrides?: Record<string, string>,
+): Record<string, string> {
   const ctx: Record<string, string> = {}
   for (const v of variables) {
-    ctx[v.key] = v.example ?? `[${v.label}]`
+    const override = overrides?.[v.key]
+    ctx[v.key] = (override && override.trim().length > 0) ? override : (v.example ?? `[${v.label}]`)
   }
   return ctx
 }
@@ -179,6 +183,7 @@ interface PlantillaEditorProps {
   onChange: (next: string) => void
   onBack?: () => void
   disabled: boolean
+  organizationName?: string
 }
 
 function PlantillaEditor({
@@ -188,12 +193,16 @@ function PlantillaEditor({
   onChange,
   onBack,
   disabled,
+  organizationName,
 }: PlantillaEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [lastInserted, setLastInserted] = useState<string | null>(null)
 
   const effectiveText = value || plantilla.defaultText
-  const previewCtx = buildPreviewContext(plantilla.variables)
+  const previewCtx = buildPreviewContext(
+    plantilla.variables,
+    organizationName ? { empresa: organizationName } : undefined,
+  )
   const previewText = renderTemplate(effectiveText, previewCtx)
   const isCustomized = value.trim().length > 0 && value !== plantilla.defaultText
   const isDirty = value !== savedValue
@@ -444,6 +453,7 @@ function SidebarItem({
 export function PlantillasWhatsappEditor() {
   const [plantillas, setPlantillas] = useState<PlantillasMap>({})
   const [originalPlantillas, setOriginalPlantillas] = useState<PlantillasMap>({})
+  const [organizationName, setOrganizationName] = useState<string>("")
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
@@ -516,6 +526,9 @@ export function PlantillasWhatsappEditor() {
         const initial = (data?.plantillasWhatsapp ?? {}) as PlantillasMap
         setPlantillas(initial)
         setOriginalPlantillas(initial)
+        if (typeof data?.organizationName === "string") {
+          setOrganizationName(data.organizationName)
+        }
       })
       .catch(() => {})
       .finally(() => {
@@ -826,6 +839,7 @@ export function PlantillasWhatsappEditor() {
                 onChange={(next) => handleChange(activePlantilla.key, next)}
                 onBack={() => setShowEditorMobile(false)}
                 disabled={saving}
+                organizationName={organizationName}
               />
             ) : (
               <div className="flex-1 flex items-center justify-center text-muted-foreground p-6 text-sm text-center">
