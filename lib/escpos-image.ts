@@ -11,18 +11,20 @@ const ESC_GS = 0x1d
 const ESC_ESC = 0x1b
 
 interface RasterOptions {
-  maxWidth?: number    // max width in dots (default 384 = full 80mm head)
+  maxWidth?: number    // max width in dots (default 384)
   threshold?: number   // 0-255, pixels darker than this = black (default 200)
   dither?: boolean     // Floyd-Steinberg dithering (default true)
   contrast?: boolean   // stretch luminance before binarize (default true)
   gamma?: number       // <1 darkens midtones, >1 lightens (default 0.7)
+  printerDots?: number // printer head width in dots for manual centering (default 576 = 80mm head)
+  center?: boolean     // pad raster with white columns on left to center (default true)
 }
 
 export async function imageUrlToRaster(
   url: string,
   options: RasterOptions = {}
 ): Promise<Uint8Array | null> {
-  const { maxWidth = 384, threshold = 200, dither = true, contrast = true, gamma = 0.7 } = options
+  const { maxWidth = 384, threshold = 200, dither = true, contrast = true, gamma = 0.7, printerDots = 576, center = true } = options
 
   try {
     // Load image
@@ -129,13 +131,33 @@ export async function imageUrlToRaster(
     while (bottomTrim > topTrim && !rowHasInk[bottomTrim - 1]) bottomTrim--
     const trimmedH = bottomTrim - topTrim
     if (trimmedH <= 0) return null
-    const raster = fullRaster.slice(topTrim * bytesPerRow, bottomTrim * bytesPerRow)
+    const trimmedRaster = fullRaster.slice(topTrim * bytesPerRow, bottomTrim * bytesPerRow)
+
+    // Pad raster with white bytes on left to manually center (many printers
+    // ignore ESC a for GS v 0 raster commands)
+    let raster: Uint8Array
+    let finalBytesPerRow: number
+    if (center && printerDots > targetW) {
+      const padDots = Math.floor((printerDots - targetW) / 2)
+      const padBytes = padDots >> 3  // floor to multiple of 8 dots
+      const rightPadBytes = Math.max(0, (printerDots >> 3) - bytesPerRow - padBytes)
+      finalBytesPerRow = bytesPerRow + padBytes + rightPadBytes
+      raster = new Uint8Array(finalBytesPerRow * trimmedH)
+      for (let y = 0; y < trimmedH; y++) {
+        const srcOff = y * bytesPerRow
+        const dstOff = y * finalBytesPerRow + padBytes
+        raster.set(trimmedRaster.subarray(srcOff, srcOff + bytesPerRow), dstOff)
+      }
+    } else {
+      raster = trimmedRaster
+      finalBytesPerRow = bytesPerRow
+    }
 
     // Build GS v 0 command
     // GS v 0 m xL xH yL yH data
     // m = 0 (normal)
-    const xL = bytesPerRow & 0xff
-    const xH = (bytesPerRow >> 8) & 0xff
+    const xL = finalBytesPerRow & 0xff
+    const xH = (finalBytesPerRow >> 8) & 0xff
     const yL = trimmedH & 0xff
     const yH = (trimmedH >> 8) & 0xff
 
