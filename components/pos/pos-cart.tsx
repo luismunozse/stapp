@@ -110,11 +110,19 @@ export function PosCart({
     if (!expandedItem) return
     const item = items.find((i) => i.lineId === expandedItem)
     if (!item || !item.trackeaSeries || !item.inventarioId) return
-    if (seriesDisp[item.lineId]) return // ya cargado
+    const cached = seriesDisp[item.lineId]
+    if (cached) {
+      // Lista ya cargada: re-autoseleccionar FIFO si la selección quedó vacía
+      // (p.ej. tras cambiar la cantidad, que limpia serieIds).
+      if (item.serieIds.length === 0 && item.cantidad > 0) {
+        onSetSerieIds(item.lineId, autoSelectSeries(cached, item.cantidad))
+      }
+      return
+    }
 
     let cancelled = false
     setSeriesLoading(item.lineId)
-    fetch(`/api/inventario/${item.inventarioId}/series?estado=DISPONIBLE&limit=500`)
+    fetch(`/api/inventario/${item.inventarioId}/series?estado=DISPONIBLE&limit=500&order=asc`)
       .then((r) => (r.ok ? r.json() : { data: [] }))
       .then((data) => {
         if (cancelled) return

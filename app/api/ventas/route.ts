@@ -247,7 +247,7 @@ export async function POST(request: Request) {
           `)
           .eq("organization_id", organizationId!)
           .eq("idempotency_key", data.idempotencyKey)
-          .single()
+          .maybeSingle()
 
         if (existente) {
           const { data: org } = await supabaseAdmin
@@ -260,6 +260,13 @@ export async function POST(request: Request) {
             organizationName: org?.nombre_mostrar || org?.nombre || null,
           }, { status: 201 })
         }
+
+        // 23505 de idempotencia pero la venta original aún no es visible
+        // (carrera de commit). No es un error del usuario; pedir reintento.
+        return NextResponse.json(
+          { error: "La venta ya se está registrando (reintento en curso). Volvé a intentar en unos segundos." },
+          { status: 409 }
+        )
       }
 
       // Los errores de RAISE EXCEPTION vienen en error.message
