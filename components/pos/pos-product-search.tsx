@@ -10,6 +10,7 @@ import type { InventarioResult } from "./pos-types"
 interface ManualProduct {
   nombre: string
   precioUnitario: number
+  costo?: number
 }
 
 interface PosProductSearchProps {
@@ -36,6 +37,7 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
     const [showManualForm, setShowManualForm] = useState(false)
     const [manualNombre, setManualNombre] = useState("")
     const [manualPrecio, setManualPrecio] = useState<number | "">(0)
+    const [manualCosto, setManualCosto] = useState<number | "">("")
 
     useImperativeHandle(ref, () => ({
       focusSearch: () => {
@@ -95,19 +97,25 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
     const handleAddManual = useCallback(() => {
       const nombre = manualNombre.trim()
       if (!nombre || !manualPrecio || manualPrecio <= 0) return
-      onAddManualProduct({ nombre, precioUnitario: manualPrecio })
+      onAddManualProduct({
+        nombre,
+        precioUnitario: manualPrecio,
+        costo: manualCosto === "" ? undefined : manualCosto,
+      })
       setManualNombre("")
       setManualPrecio(0)
+      setManualCosto("")
       setShowManualForm(false)
       setQuery("")
       setResults([])
       inputRef.current?.focus()
-    }, [manualNombre, manualPrecio, onAddManualProduct])
+    }, [manualNombre, manualPrecio, manualCosto, onAddManualProduct])
 
     const openManualForm = useCallback(() => {
       setShowManualForm(true)
       setManualNombre("")
       setManualPrecio(0)
+      setManualCosto("")
       setTimeout(() => manualNameRef.current?.focus(), 100)
     }, [])
 
@@ -218,7 +226,7 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
                     }}
                   />
                 </div>
-                <div className="w-32">
+                <div className="w-28">
                   <Input
                     ref={manualPriceRef}
                     type="text"
@@ -235,6 +243,19 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
                         handleAddManual()
                       }
                     }}
+                  />
+                </div>
+                <div className="w-24">
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    min={0}
+                    step="0.01"
+                    value={manualCosto === "" ? "" : manualCosto}
+                    onChange={(e) => setManualCosto(e.target.value ? parseFloat(e.target.value) : "")}
+                    placeholder="Costo"
+                    className="h-11 text-sm"
+                    title="Costo (opcional) — para margen correcto en reportes"
                   />
                 </div>
                 <Button
