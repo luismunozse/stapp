@@ -402,7 +402,7 @@ export function SeguimientoContent({ token }: { token: string }) {
   const colors = estadoColors[data.estado] || estadoColors.RECIBIDO
 
   const timeRemaining = shouldShowTimeRemaining(estadoClass)
-    ? computeTimeRemaining(data.fechaPrometida)
+    ? computeTimeRemaining(data.fechaPrometida, new Date(), data.zonaHoraria)
     : null
 
   const whatsappUrl = data.organizacion.telefono

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { queueNotification } from "@/lib/notifications/queue"
+import { addDaysInTimeZone, DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { z } from "zod"
 
 const garantiaSchema = z.object({
@@ -153,18 +154,18 @@ export async function POST(request: Request) {
       )
     }
 
-    // Calcular fechas
-    const fechaInicio = new Date()
-    const fechaVencimiento = new Date()
-    fechaVencimiento.setDate(fechaVencimiento.getDate() + data.diasValidez)
+    // Calcular fechas: el vencimiento es un día calendario en la zona
+    // horaria del taller (today + diasValidez), para que se renderice
+    // exactamente ese día al formatear con la tz de la organización.
+    const zonaHoraria = (orden.organizations as any)?.zona_horaria || DEFAULT_TIMEZONE
 
     const { data: garantia, error: createError } = await supabaseAdmin
       .from("garantias")
       .insert({
         orden_id: data.ordenId,
         dias_validez: data.diasValidez,
-        fecha_inicio: fechaInicio.toISOString(),
-        fecha_vencimiento: fechaVencimiento.toISOString(),
+        fecha_inicio: new Date().toISOString(),
+        fecha_vencimiento: addDaysInTimeZone(data.diasValidez, zonaHoraria),
         notas: data.notas || null,
       })
       .select()

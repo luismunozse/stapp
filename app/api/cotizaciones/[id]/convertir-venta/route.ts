@@ -91,25 +91,62 @@ export async function POST(
     const clienteTelefono = cliente?.telefono || null
     const clienteId = cliente?.id || null
 
+    // Phantom-stock guard: en ACEPTAR, reservar_items_cotizacion (migration 108)
+    // reserva stock para TODO item con inventario_id. Tras la venta liberamos las
+    // reservas con liberar_items_cotizacion, que libera TODAS las reservas de la
+    // cotización (no solo las consumidas). Por eso la conversión debe ser
+    // todo-o-nada: si data.items no incluye algún item reservado, ese stock
+    // quedaría liberado sin haberse consumido (fantasma). Rechazamos la conversión
+    // parcial de items reservados.
+    const requestedIds = new Set(data.items.map((r) => r.cotizacionItemId))
+    const reservedMissing = (cotizacion.items_cotizacion || []).filter(
+      (it: any) => it.inventario_id && !requestedIds.has(it.id)
+    )
+    if (reservedMissing.length > 0) {
+      return NextResponse.json(
+        {
+          error:
+            "La conversión a venta debe incluir todos los ítems reservados de la cotización; convertir parcialmente dejaría stock reservado sin consumir.",
+        },
+        { status: 400 }
+      )
+    }
+
     // Map cotizacion items to venta items format.
     // inventarioId: priorizar override del request, sino el FK guardado en el item.
     // Si null: crear_venta_atomica no descuenta stock → la reserva queda fantasma.
+    // descuento por item: transferir fielmente el descuento del item de cotización
+    // (descuento_tipo 'porcentaje'/'fijo' → tipoDescuento 'PORCENTAJE'/'MONTO').
+    // costo: snapshot histórico (migration 182) para no perder el margen de items
+    // manuales (la RPC lo ignora hoy; lo consume la migration 199).
     const pItems = data.items.map((reqItem) => {
       const cotItem = itemMap.get(reqItem.cotizacionItemId)!
+      const descuentoValor = Number(cotItem.descuento_valor) || 0
+      const esPorcentaje = cotItem.descuento_tipo === "porcentaje"
       return {
         inventarioId: reqItem.inventarioId ?? cotItem.inventario_id ?? null,
         descripcion: cotItem.descripcion,
         cantidad: cotItem.cantidad,
         precioUnitario: Number(cotItem.precio_unitario),
         diasGarantia: reqItem.diasGarantia,
-        descuento: 0,
-        tipoDescuento: "MONTO" as const,
-        porcentajeDescuento: 0,
+        descuento: esPorcentaje ? 0 : descuentoValor,
+        tipoDescuento: (esPorcentaje ? "PORCENTAJE" : "MONTO") as "MONTO" | "PORCENTAJE",
+        porcentajeDescuento: esPorcentaje ? descuentoValor : 0,
+        costo: cotItem.costo_unitario != null ? Number(cotItem.costo_unitario) : null,
       }
     })
 
-    // Calculate totals (use cotizacion totals which already include discounts/IVA)
-    const subtotal = pItems.reduce((sum, item) => sum + item.cantidad * item.precioUnitario, 0)
+    // Calculate totals: el subtotal de la venta debe ser la suma de los NETOS por
+    // línea (igual que calcItemNeto en cotizaciones/route.ts), no el bruto. Así
+    // subtotal - descuentoGlobal + IVA reproduce el total aceptado de la cotización.
+    const subtotal = pItems.reduce((sum, item) => {
+      const bruto = item.cantidad * item.precioUnitario
+      const neto =
+        item.tipoDescuento === "MONTO"
+          ? Math.max(0, bruto - item.descuento)
+          : Math.max(0, bruto * (1 - item.porcentajeDescuento / 100))
+      return sum + neto
+    }, 0)
 
     // Map global discount type: cotizacion "fijo"/"porcentaje" → venta "MONTO"/"PORCENTAJE"
     const descGlobalTipo = cotizacion.descuento_global_tipo

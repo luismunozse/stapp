@@ -65,6 +65,7 @@ export function PosCart({
   const [clienteResults, setClienteResults] = useState<ClienteResult[]>([])
   const [clienteLoading, setClienteLoading] = useState(false)
   const [expandedItem, setExpandedItem] = useState<string | null>(null)
+  const [garantiaDraft, setGarantiaDraft] = useState<string>("")
   const clienteInputRef = useRef<HTMLInputElement>(null)
 
   const subtotal = items.reduce((sum, item) => sum + item.precioUnitario * item.cantidad, 0)
@@ -228,7 +229,14 @@ export function PosCart({
                     <button
                       type="button"
                       className="flex-1 min-w-0 text-left"
-                      onClick={() => setExpandedItem(isExpanded ? null : item.lineId)}
+                      onClick={() => {
+                        if (isExpanded) {
+                          setExpandedItem(null)
+                        } else {
+                          setExpandedItem(item.lineId)
+                          setGarantiaDraft(String(item.diasGarantia))
+                        }
+                      }}
                     >
                       <div className="flex items-center gap-1">
                         <span className="text-sm font-medium truncate">{item.nombre}</span>
@@ -301,8 +309,11 @@ export function PosCart({
                         <Input
                           type="number"
                           min={0}
-                          value={item.diasGarantia}
-                          onChange={(e) => onSetGarantia(item.lineId, parseInt(e.target.value) || 0)}
+                          value={garantiaDraft}
+                          onChange={(e) => {
+                            setGarantiaDraft(e.target.value)
+                            onSetGarantia(item.lineId, parseInt(e.target.value, 10) || 0)
+                          }}
                           className="h-7 w-16 text-xs text-center"
                         />
                       </label>

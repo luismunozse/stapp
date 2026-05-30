@@ -152,6 +152,9 @@ export function CobrarMultipleDialog({
           cuotas: p.cuotas,
           recargo: p.recargo,
           montoOriginal: p.montoOriginal,
+          // costoFinanciero es un porcentaje: el servidor computa el monto sobre el
+          // monto prorrateado de cada orden, por lo que se envía tal cual.
+          costoFinanciero: p.costoFinanciero,
         }))
 
         // Ajustar redondeo en el primer pago

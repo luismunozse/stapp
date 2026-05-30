@@ -41,7 +41,7 @@ export function MermaDialog({
   const { showError } = useModal()
   const [tipo, setTipo] = useState<string>("MERMA")
   const [direccion, setDireccion] = useState<"SALIDA" | "ENTRADA">("SALIDA")
-  const [cantidad, setCantidad] = useState<number>(1)
+  const [cantidad, setCantidad] = useState<string>("1")
   const [motivo, setMotivo] = useState("")
   const [afectaRentabilidad, setAfectaRentabilidad] = useState(true)
   const [pending, setPending] = useState(false)
@@ -49,17 +49,18 @@ export function MermaDialog({
   const reset = () => {
     setTipo("MERMA")
     setDireccion("SALIDA")
-    setCantidad(1)
+    setCantidad("1")
     setMotivo("")
     setAfectaRentabilidad(true)
   }
 
   const handleSubmit = async () => {
-    if (cantidad <= 0) {
+    const cantidadNum = Math.max(1, parseInt(cantidad, 10) || 1)
+    if (cantidadNum <= 0) {
       await showError("Cantidad debe ser mayor a 0")
       return
     }
-    if (direccion === "SALIDA" && cantidad > currentStock) {
+    if (direccion === "SALIDA" && cantidadNum > currentStock) {
       await showError(`Stock insuficiente. Disponible: ${currentStock}`)
       return
     }
@@ -72,7 +73,7 @@ export function MermaDialog({
           inventarioId: itemId,
           tipo,
           direccion,
-          cantidad,
+          cantidad: cantidadNum,
           motivo: motivo || null,
           afectaRentabilidad,
         }),
@@ -142,7 +143,7 @@ export function MermaDialog({
               type="number"
               min={1}
               value={cantidad}
-              onChange={(e) => setCantidad(parseInt(e.target.value) || 0)}
+              onChange={(e) => setCantidad(e.target.value)}
               disabled={pending}
             />
           </div>

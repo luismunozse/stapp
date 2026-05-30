@@ -258,6 +258,35 @@ export async function POST(
               usuario_id: userId!,
               organization_id: organizationId!,
             })
+
+          // For series-tracked items: reset the serials sold by this sale back
+          // to DISPONIBLE so they match the aggregate stock just restored.
+          // items_devolucion has no serie_id column (series were added in
+          // migration 175, after items_devolucion in 043), so candidate series
+          // are matched by (organization_id, inventario_id, venta_id, estado),
+          // ordered deterministically and limited to item.cantidad.
+          const { data: seriesToReset } = await supabaseAdmin
+            .from("inventario_series")
+            .select("id")
+            .eq("organization_id", organizationId!)
+            .eq("inventario_id", item.inventarioId)
+            .eq("venta_id", id)
+            .in("estado", ["VENDIDO", "GARANTIA_ACTIVA"])
+            .order("fecha_venta", { ascending: false })
+            .limit(item.cantidad)
+
+          if (seriesToReset && seriesToReset.length > 0) {
+            await supabaseAdmin
+              .from("inventario_series")
+              .update({
+                estado: "DISPONIBLE",
+                fecha_venta: null,
+                venta_id: null,
+                cliente_id: null,
+                updated_at: new Date().toISOString(),
+              })
+              .in("id", seriesToReset.map((s: { id: string }) => s.id))
+          }
         }
       }
     }

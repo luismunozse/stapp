@@ -62,6 +62,23 @@ export function MultiPagoInput({
 }: MultiPagoInputProps) {
   const { formatPrice } = useCurrency()
 
+  // Raw display buffers per numeric field so the user can clear/retype freely
+  // (e.g. empty intermediate state, leading ".") without the value snapping to
+  // the parsed fallback. Keyed by `${pago.id}:${field}`. The numeric state in
+  // `pagos` keeps driving every total/calc exactly as before.
+  const [rawInputs, setRawInputs] = useState<Record<string, string>>({})
+
+  const setRaw = (key: string, value: string) => {
+    setRawInputs((prev) => ({ ...prev, [key]: value }))
+  }
+
+  // Display value: prefer the raw buffer (what the user is typing) and fall back
+  // to the numeric state for externally-driven updates (addPago, recargo recalc).
+  const displayValue = (key: string, numeric: number | null) => {
+    if (key in rawInputs) return rawInputs[key]
+    return numeric ? String(numeric) : ""
+  }
+
   // Use base amounts for totals (recargo is bank interest, not store income)
   const totalPagos = useMemo(() => pagos.reduce((sum, p) => sum + (p.monto || 0), 0), [pagos])
   const restante = montoPendiente - totalPagos
@@ -151,7 +168,18 @@ export function MultiPagoInput({
                 <button
                   key={value}
                   type="button"
-                  onClick={() => updatePago(index, { metodo: value })}
+                  onClick={() => {
+                    // Method change can reset cuotas/recargo/etc. programmatically;
+                    // drop this line's raw buffers so display reflects new state.
+                    setRawInputs((prev) => {
+                      const next = { ...prev }
+                      delete next[`${pago.id}:cuotas`]
+                      delete next[`${pago.id}:recargo`]
+                      delete next[`${pago.id}:costoFinanciero`]
+                      return next
+                    })
+                    updatePago(index, { metodo: value })
+                  }}
                   className={cn(
                     "flex flex-col items-center gap-0.5 p-2 rounded-lg border-2 text-center transition-all text-[10px] leading-tight",
                     pago.metodo === value
@@ -186,8 +214,11 @@ export function MultiPagoInput({
                 inputMode="decimal"
                 step="0.01"
                 min="0"
-                value={pago.monto || ""}
-                onChange={(e) => updatePago(index, { monto: parseFloat(e.target.value) || 0 })}
+                value={displayValue(`${pago.id}:monto`, pago.monto)}
+                onChange={(e) => {
+                  setRaw(`${pago.id}:monto`, e.target.value)
+                  updatePago(index, { monto: parseFloat(e.target.value) || 0 })
+                }}
                 placeholder="0.00"
               />
             </div>
@@ -202,8 +233,11 @@ export function MultiPagoInput({
                     inputMode="numeric"
                     min={1}
                     max={48}
-                    value={pago.cuotas || ""}
-                    onChange={(e) => updatePago(index, { cuotas: parseInt(e.target.value) || null })}
+                    value={displayValue(`${pago.id}:cuotas`, pago.cuotas)}
+                    onChange={(e) => {
+                      setRaw(`${pago.id}:cuotas`, e.target.value)
+                      updatePago(index, { cuotas: parseInt(e.target.value) || null })
+                    }}
                     placeholder="1"
                   />
                 </div>
@@ -215,8 +249,11 @@ export function MultiPagoInput({
                     step="0.01"
                     min={0}
                     max={100}
-                    value={pago.recargo || ""}
-                    onChange={(e) => updatePago(index, { recargo: parseFloat(e.target.value) || null })}
+                    value={displayValue(`${pago.id}:recargo`, pago.recargo)}
+                    onChange={(e) => {
+                      setRaw(`${pago.id}:recargo`, e.target.value)
+                      updatePago(index, { recargo: parseFloat(e.target.value) || null })
+                    }}
                     placeholder="0"
                   />
                 </div>
@@ -233,8 +270,11 @@ export function MultiPagoInput({
                   step="0.01"
                   min={0}
                   max={100}
-                  value={pago.recargo || ""}
-                  onChange={(e) => updatePago(index, { recargo: parseFloat(e.target.value) || null })}
+                  value={displayValue(`${pago.id}:recargo`, pago.recargo)}
+                  onChange={(e) => {
+                    setRaw(`${pago.id}:recargo`, e.target.value)
+                    updatePago(index, { recargo: parseFloat(e.target.value) || null })
+                  }}
                   placeholder="0"
                 />
               </div>
@@ -250,8 +290,11 @@ export function MultiPagoInput({
                   step="0.01"
                   min={0}
                   max={100}
-                  value={pago.costoFinanciero || ""}
-                  onChange={(e) => updatePago(index, { costoFinanciero: parseFloat(e.target.value) || null })}
+                  value={displayValue(`${pago.id}:costoFinanciero`, pago.costoFinanciero)}
+                  onChange={(e) => {
+                    setRaw(`${pago.id}:costoFinanciero`, e.target.value)
+                    updatePago(index, { costoFinanciero: parseFloat(e.target.value) || null })
+                  }}
                   placeholder="Ej: 12"
                 />
               </div>

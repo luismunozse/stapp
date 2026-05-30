@@ -103,7 +103,11 @@ export function CotizacionForm({
   )
   const [terminos, setTerminos] = useState(initialData?.terminos || "")
   const [descuentoGlobalTipo, setDescuentoGlobalTipo] = useState(initialData?.descuentoGlobalTipo || "porcentaje")
-  const [descuentoGlobalValor, setDescuentoGlobalValor] = useState(initialData?.descuentoGlobalValor || 0)
+  // Raw string for free typing; numeric value (used in totals/submit) is parsed below.
+  const [descuentoGlobalValorStr, setDescuentoGlobalValorStr] = useState(
+    initialData?.descuentoGlobalValor ? String(initialData.descuentoGlobalValor) : ""
+  )
+  const descuentoGlobalValor = parseFloat(descuentoGlobalValorStr) || 0
   const [ivaPorcentaje, setIvaPorcentaje] = useState(initialData?.ivaPorcentaje ?? 0)
   const [tipoCambio, setTipoCambio] = useState<number | null>((initialData as any)?.tipoCambio || null)
   const [clienteId, setClienteId] = useState<string | null>(initialData?.clienteId || null)
@@ -138,6 +142,17 @@ export function CotizacionForm({
     garantiaAlcance: initialData?.equipo?.condiciones?.garantiaAlcance ?? "AMBOS",
     politicaAbandonoDias: initialData?.equipo?.condiciones?.politicaAbandonoDias ?? null,
   })
+  // Raw strings for free typing on the technical-condition numeric inputs.
+  // Parsed back into numbers at submit (anticipoValor/garantiaDias) so the saved
+  // values are unchanged. Initialized from the same defaults as `condiciones`.
+  const [anticipoValorStr, setAnticipoValorStr] = useState(
+    initialData?.equipo?.condiciones?.anticipoValor
+      ? String(initialData.equipo.condiciones.anticipoValor)
+      : ""
+  )
+  const [garantiaDiasStr, setGarantiaDiasStr] = useState(
+    String(initialData?.equipo?.condiciones?.garantiaDias ?? 30)
+  )
   const [checklistValue, setChecklistValue] = useState<ChecklistPickerValue | null>(
     initialData?.checklist || null
   )
@@ -183,6 +198,8 @@ export function CotizacionForm({
               politicaAbandonoDias: data.politicaAbandonoDiasDefault ?? prev.politicaAbandonoDias,
               anticipoValor: data.anticipoPorcentajeDefault ?? prev.anticipoValor,
             }))
+            if (data.garantiaDiasDefault != null) setGarantiaDiasStr(String(data.garantiaDiasDefault))
+            if (data.anticipoPorcentajeDefault != null) setAnticipoValorStr(String(data.anticipoPorcentajeDefault))
           }
         }
       } catch {
@@ -285,7 +302,7 @@ export function CotizacionForm({
     if (template.notas) setNotas(template.notas)
     if (template.terminos) setTerminos(template.terminos)
     if (template.descuentoGlobalTipo) setDescuentoGlobalTipo(template.descuentoGlobalTipo)
-    if (template.descuentoGlobalValor) setDescuentoGlobalValor(template.descuentoGlobalValor)
+    if (template.descuentoGlobalValor) setDescuentoGlobalValorStr(String(template.descuentoGlobalValor))
     if (template.ivaPorcentaje) setIvaPorcentaje(template.ivaPorcentaje)
     setShowTemplates(false)
   }
@@ -401,8 +418,8 @@ export function CotizacionForm({
             diagnostico: condiciones.diagnostico?.trim() || null,
             plazoEstimadoDias: condiciones.plazoEstimadoDias && condiciones.plazoEstimadoDias > 0 ? condiciones.plazoEstimadoDias : null,
             anticipoTipo: condiciones.anticipoTipo,
-            anticipoValor: condiciones.anticipoValor || 0,
-            garantiaDias: condiciones.garantiaAlcance === "NINGUNA" ? 0 : (condiciones.garantiaDias || 0),
+            anticipoValor: parseFloat(anticipoValorStr) || 0,
+            garantiaDias: condiciones.garantiaAlcance === "NINGUNA" ? 0 : (parseInt(garantiaDiasStr, 10) || 0),
             garantiaAlcance: condiciones.garantiaAlcance,
             politicaAbandonoDias: condiciones.politicaAbandonoDias && condiciones.politicaAbandonoDias > 0 ? condiciones.politicaAbandonoDias : null,
           },
@@ -684,8 +701,8 @@ export function CotizacionForm({
                       inputMode="decimal"
                       min="0"
                       step="0.01"
-                      value={condiciones.anticipoValor || ""}
-                      onChange={(e) => setCondiciones((p) => ({ ...p, anticipoValor: parseFloat(e.target.value) || 0 }))}
+                      value={anticipoValorStr}
+                      onChange={(e) => setAnticipoValorStr(e.target.value)}
                       placeholder="0"
                       disabled={loading}
                       className="flex-1"
@@ -723,8 +740,8 @@ export function CotizacionForm({
                     type="text"
                     inputMode="numeric"
                     min="0"
-                    value={condiciones.garantiaDias || ""}
-                    onChange={(e) => setCondiciones((p) => ({ ...p, garantiaDias: parseInt(e.target.value) || 0 }))}
+                    value={garantiaDiasStr}
+                    onChange={(e) => setGarantiaDiasStr(e.target.value)}
                     placeholder="30"
                     disabled={loading || condiciones.garantiaAlcance === "NINGUNA"}
                     className="mt-1"
@@ -836,8 +853,8 @@ export function CotizacionForm({
                   min="0"
                   step="0.01"
                   placeholder="0"
-                  value={descuentoGlobalValor || ""}
-                  onChange={(e) => setDescuentoGlobalValor(parseFloat(e.target.value) || 0)}
+                  value={descuentoGlobalValorStr}
+                  onChange={(e) => setDescuentoGlobalValorStr(e.target.value)}
                   disabled={loading}
                   className="w-32"
                 />

@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger, diffObjects } from "@/lib/audit"
 import { queueNotification } from "@/lib/notifications/queue"
+import { addDaysInTimeZone, DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { z } from "zod"
 
 const entregarSchema = z.object({
@@ -108,19 +109,25 @@ export async function POST(
 
     if (updateError) throw updateError
 
+    // Obtener datos de organización (zona horaria necesaria para calcular el
+    // vencimiento de garantía como día calendario en la tz del taller)
+    const { data: org } = await supabaseAdmin
+      .from("organizations")
+      .select("nombre, nombre_mostrar, slug, moneda, zona_horaria")
+      .eq("id", organizationId!)
+      .single()
+
+    const zonaHoraria = org?.zona_horaria || DEFAULT_TIMEZONE
+
     // Create warranty if requested (only for normal deliveries, not returns or sin cobro)
     if (data.diasGarantia && !esRetiro && !sinCobro) {
-      const fechaInicio = new Date()
-      const fechaVencimiento = new Date()
-      fechaVencimiento.setDate(fechaVencimiento.getDate() + data.diasGarantia)
-
       await supabaseAdmin
         .from("garantias")
         .insert({
           orden_id: id,
           dias_validez: data.diasGarantia,
-          fecha_inicio: fechaInicio.toISOString(),
-          fecha_vencimiento: fechaVencimiento.toISOString(),
+          fecha_inicio: new Date().toISOString(),
+          fecha_vencimiento: addDaysInTimeZone(data.diasGarantia, zonaHoraria),
           notas: data.notasGarantia || null,
         })
     }
@@ -139,13 +146,6 @@ export async function POST(
     const audit = createAuditLogger(organizationId!, userId!, request)
     const changes = diffObjects(orden, updatedOrden)
     await audit.update("ordenes_servicio", id, changes.before, changes.after)
-
-    // Obtener datos de organización para notificación
-    const { data: org } = await supabaseAdmin
-      .from("organizations")
-      .select("nombre, nombre_mostrar, slug, moneda, zona_horaria")
-      .eq("id", organizationId!)
-      .single()
 
     // Encolar notificación de entrega
     const cliente = orden.clientes as any

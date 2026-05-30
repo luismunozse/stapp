@@ -11,6 +11,7 @@ import {
 import { toast } from "sonner"
 import { resolvePlantilla } from "@/lib/whatsapp/plantillas-catalog"
 import { useCurrency } from "@/contexts/currency-context"
+import { formatPhoneForWhatsApp } from "@/lib/notifications/whatsapp-templates"
 
 interface CarritoItem {
   itemId: string
@@ -58,7 +59,7 @@ function timeAgo(iso: string) {
 }
 
 export function CatalogoCarritosAbandonadosTab() {
-  const { organizationName } = useCurrency()
+  const { organizationName, pais } = useCurrency()
   const [carritos, setCarritos] = useState<Carrito[]>([])
   const [pendientes, setPendientes] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -200,7 +201,7 @@ export function CatalogoCarritosAbandonadosTab() {
             <div className="space-y-3">
               {carritos.map((c) => {
                 const cantidadTotal = c.items.reduce((s, i) => s + i.cantidad, 0)
-                const telLimpio = c.cliente_telefono.replace(/\D/g, "")
+                const telFormateado = formatPhoneForWhatsApp(c.cliente_telefono, pais)
                 const lista = c.items
                   .slice(0, 5)
                   .map((i) => `• ${i.cantidad}× ${i.nombre}${i.varianteEtiqueta ? ` (${i.varianteEtiqueta})` : ""}`)
@@ -221,7 +222,7 @@ export function CatalogoCarritosAbandonadosTab() {
                   },
                   plantillas,
                 )
-                const waUrl = `https://wa.me/${telLimpio}?text=${encodeURIComponent(msg)}`
+                const waUrl = `https://wa.me/${telFormateado}?text=${encodeURIComponent(msg)}`
 
                 return (
                   <div

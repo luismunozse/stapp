@@ -117,9 +117,12 @@ describe('classifyEstado — defensivo (regresión del bug -17%)', () => {
 
 describe('getTimeRemaining', () => {
   const now = new Date('2026-05-12T12:00:00Z')
+  // Se fija la tz a UTC para que el delta de días calendario sea determinista
+  // independientemente de la zona del runner de tests.
+  const tz = 'UTC'
 
   it('fecha pasada → overdue con días absolutos', () => {
-    const r = getTimeRemaining('2026-04-20T12:00:00Z', now)
+    const r = getTimeRemaining('2026-04-20T12:00:00Z', now, tz)
     expect(r).not.toBeNull()
     expect(r!.urgency).toBe('overdue')
     expect(r!.text).toMatch(/\d+ d[ií]as? de atraso/i)
@@ -127,56 +130,68 @@ describe('getTimeRemaining', () => {
   })
 
   it('1 día de atraso → singular', () => {
-    const r = getTimeRemaining('2026-05-11T12:00:00Z', now)
+    const r = getTimeRemaining('2026-05-11T12:00:00Z', now, tz)
     expect(r!.urgency).toBe('overdue')
     expect(r!.text).toMatch(/1 día de atraso/)
   })
 
   it('hoy (mismo instante) → soon "Hoy"', () => {
-    const r = getTimeRemaining('2026-05-12T12:00:00Z', now)
+    const r = getTimeRemaining('2026-05-12T12:00:00Z', now, tz)
     expect(r!.urgency).toBe('soon')
     expect(r!.text).toBe('Hoy')
   })
 
   it('hoy (unas horas atrás, mismo día) → soon "Hoy"', () => {
-    const r = getTimeRemaining('2026-05-12T09:00:00Z', now)
+    const r = getTimeRemaining('2026-05-12T09:00:00Z', now, tz)
     expect(r!.urgency).toBe('soon')
     expect(r!.text).toBe('Hoy')
   })
 
   it('mañana (>= 1 día) → soon "Mañana"', () => {
-    const r = getTimeRemaining('2026-05-13T12:00:00Z', now)
+    const r = getTimeRemaining('2026-05-13T12:00:00Z', now, tz)
     expect(r!.urgency).toBe('soon')
     expect(r!.text).toBe('Mañana')
   })
 
-  it('unas horas en el futuro (mismo día) → soon "Mañana" (Math.ceil)', () => {
-    // Documenta el comportamiento real de Math.ceil: cualquier diffMs > 0
-    // pero < 1 día redondea a 1 día → "Mañana".
-    const r = getTimeRemaining('2026-05-12T18:00:00Z', now)
+  it('unas horas en el futuro pero mismo día calendario → soon "Hoy"', () => {
+    // Regresión del bug de Math.ceil: antes cualquier diffMs > 0 pero < 1 día
+    // redondeaba a 1 día → "Mañana". Ahora se mide en días calendario, así que
+    // sigue siendo "Hoy" mientras no cambie el día.
+    const r = getTimeRemaining('2026-05-12T18:00:00Z', now, tz)
     expect(r!.urgency).toBe('soon')
-    expect(r!.text).toBe('Mañana')
+    expect(r!.text).toBe('Hoy')
   })
 
   it('2 días → soon plural', () => {
-    const r = getTimeRemaining('2026-05-14T12:00:00Z', now)
+    const r = getTimeRemaining('2026-05-14T12:00:00Z', now, tz)
     expect(r!.urgency).toBe('soon')
     expect(r!.text).toBe('2 días')
   })
 
   it('10 días → normal', () => {
-    const r = getTimeRemaining('2026-05-22T12:00:00Z', now)
+    const r = getTimeRemaining('2026-05-22T12:00:00Z', now, tz)
     expect(r!.urgency).toBe('normal')
   })
 
   it('null/undefined → null', () => {
-    expect(getTimeRemaining(null, now)).toBeNull()
-    expect(getTimeRemaining(undefined, now)).toBeNull()
-    expect(getTimeRemaining('', now)).toBeNull()
+    expect(getTimeRemaining(null, now, tz)).toBeNull()
+    expect(getTimeRemaining(undefined, now, tz)).toBeNull()
+    expect(getTimeRemaining('', now, tz)).toBeNull()
   })
 
   it('fecha inválida → null', () => {
-    expect(getTimeRemaining('not-a-date', now)).toBeNull()
+    expect(getTimeRemaining('not-a-date', now, tz)).toBeNull()
+  })
+
+  it('respeta la zona horaria del taller para el límite del día calendario', () => {
+    // now = 2026-05-12T12:00:00Z. En UTC-3 (Buenos Aires) ya son las 09:00
+    // del 12/05. Una fecha prometida anclada a las 02:00Z del 13/05 (es decir
+    // 23:00 del 12/05 en UTC-3) debe contar como "Hoy" en la tz del taller,
+    // pero como "Mañana" en UTC.
+    const arg = getTimeRemaining('2026-05-13T02:00:00Z', now, 'America/Argentina/Buenos_Aires')
+    expect(arg!.text).toBe('Hoy')
+    const utc = getTimeRemaining('2026-05-13T02:00:00Z', now, 'UTC')
+    expect(utc!.text).toBe('Mañana')
   })
 })
 

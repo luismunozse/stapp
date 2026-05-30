@@ -171,6 +171,16 @@ interface AlertConfig {
   retention_days: number
 }
 
+// Form state holds raw strings so the user can freely clear/type the inputs.
+// Parsed and clamped to valid numbers at save time (handleSaveAlertConfig).
+interface AlertConfigForm {
+  user_activity_threshold: string
+  user_activity_window_hours: string
+  failed_login_threshold: string
+  failed_login_window_hours: string
+  retention_days: string
+}
+
 interface AuditStats {
   total: number
   today: number
@@ -319,12 +329,12 @@ export default function LogsPage() {
   const [organizations, setOrganizations] = useState<Array<{ id: string; nombre: string }>>([])
   const [chartView, setChartView] = useState<"hourly" | "daily">("hourly")
   const [showAlertConfig, setShowAlertConfig] = useState(false)
-  const [alertForm, setAlertForm] = useState<AlertConfig>({
-    user_activity_threshold: 100,
-    user_activity_window_hours: 1,
-    failed_login_threshold: 5,
-    failed_login_window_hours: 24,
-    retention_days: 90,
+  const [alertForm, setAlertForm] = useState<AlertConfigForm>({
+    user_activity_threshold: "100",
+    user_activity_window_hours: "1",
+    failed_login_threshold: "5",
+    failed_login_window_hours: "24",
+    retention_days: "90",
   })
 
   const { loading, fetchData } = useSuperadminFetch<{
@@ -362,11 +372,11 @@ export default function LogsPage() {
     if (result) {
       setStats(result)
       setAlertForm({
-        user_activity_threshold: result.alertConfig?.user_activity_threshold ?? 100,
-        user_activity_window_hours: result.alertConfig?.user_activity_window_hours ?? 1,
-        failed_login_threshold: result.alertConfig?.failed_login_threshold ?? 5,
-        failed_login_window_hours: result.alertConfig?.failed_login_window_hours ?? 24,
-        retention_days: result.alertConfig?.retention_days ?? 90,
+        user_activity_threshold: String(result.alertConfig?.user_activity_threshold ?? 100),
+        user_activity_window_hours: String(result.alertConfig?.user_activity_window_hours ?? 1),
+        failed_login_threshold: String(result.alertConfig?.failed_login_threshold ?? 5),
+        failed_login_window_hours: String(result.alertConfig?.failed_login_window_hours ?? 24),
+        retention_days: String(result.alertConfig?.retention_days ?? 90),
       })
       markUpdated()
     }
@@ -463,9 +473,16 @@ export default function LogsPage() {
   }
 
   const handleSaveAlertConfig = async () => {
+    const alertConfigBody: AlertConfig = {
+      user_activity_threshold: Math.min(10000, Math.max(10, parseInt(alertForm.user_activity_threshold, 10) || 100)),
+      user_activity_window_hours: Math.min(168, Math.max(1, parseInt(alertForm.user_activity_window_hours, 10) || 1)),
+      failed_login_threshold: Math.min(1000, Math.max(1, parseInt(alertForm.failed_login_threshold, 10) || 5)),
+      failed_login_window_hours: Math.min(168, Math.max(1, parseInt(alertForm.failed_login_window_hours, 10) || 24)),
+      retention_days: Math.min(365, Math.max(30, parseInt(alertForm.retention_days, 10) || 90)),
+    }
     await mutate("/api/superadmin/audit-logs/alert-config", {
       method: "PUT",
-      body: alertForm,
+      body: alertConfigBody,
       successMessage: "Configuración de alertas actualizada",
       onSuccess: () => {
         setShowAlertConfig(false)
@@ -1481,7 +1498,7 @@ export default function LogsPage() {
                       min={10}
                       max={10000}
                       value={alertForm.user_activity_threshold}
-                      onChange={(e) => setAlertForm(f => ({ ...f, user_activity_threshold: parseInt(e.target.value) || 100 }))}
+                      onChange={(e) => setAlertForm(f => ({ ...f, user_activity_threshold: e.target.value }))}
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -1491,7 +1508,7 @@ export default function LogsPage() {
                       min={1}
                       max={168}
                       value={alertForm.user_activity_window_hours}
-                      onChange={(e) => setAlertForm(f => ({ ...f, user_activity_window_hours: parseInt(e.target.value) || 1 }))}
+                      onChange={(e) => setAlertForm(f => ({ ...f, user_activity_window_hours: e.target.value }))}
                     />
                   </div>
                 </div>
@@ -1510,7 +1527,7 @@ export default function LogsPage() {
                       min={1}
                       max={1000}
                       value={alertForm.failed_login_threshold}
-                      onChange={(e) => setAlertForm(f => ({ ...f, failed_login_threshold: parseInt(e.target.value) || 5 }))}
+                      onChange={(e) => setAlertForm(f => ({ ...f, failed_login_threshold: e.target.value }))}
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -1520,7 +1537,7 @@ export default function LogsPage() {
                       min={1}
                       max={168}
                       value={alertForm.failed_login_window_hours}
-                      onChange={(e) => setAlertForm(f => ({ ...f, failed_login_window_hours: parseInt(e.target.value) || 24 }))}
+                      onChange={(e) => setAlertForm(f => ({ ...f, failed_login_window_hours: e.target.value }))}
                     />
                   </div>
                 </div>
@@ -1535,7 +1552,7 @@ export default function LogsPage() {
                     min={30}
                     max={365}
                     value={alertForm.retention_days}
-                    onChange={(e) => setAlertForm(f => ({ ...f, retention_days: parseInt(e.target.value) || 90 }))}
+                    onChange={(e) => setAlertForm(f => ({ ...f, retention_days: e.target.value }))}
                   />
                 </div>
                 <p className="text-xs text-muted-foreground mt-1.5">

@@ -46,7 +46,7 @@ export function CobrarOrdenDialog({
   const { offlineFetch } = useOffline()
   const [loading, setLoading] = useState(false)
   const [observaciones, setObservaciones] = useState("")
-  const [descuento, setDescuento] = useState(0)
+  const [descuento, setDescuento] = useState("")
   const [saldoCuenta, setSaldoCuenta] = useState(0)
   const [cobrosHistorial, setCobrosHistorial] = useState<any[]>([])
   const [cuotasPendientes, setCuotasPendientes] = useState<any[]>([])
@@ -55,7 +55,8 @@ export function CobrarOrdenDialog({
 
   const [mostrarDescuento, setMostrarDescuento] = useState(false)
 
-  const costoConDescuento = orden.costoFinal - orden.descuentoCobro - descuento
+  const descuentoNum = parseFloat(descuento) || 0
+  const costoConDescuento = orden.costoFinal - orden.descuentoCobro - descuentoNum
   const pendiente = Math.max(0, costoConDescuento - orden.totalCobrado)
   const yaCobradoTotal = orden.costoFinal - orden.descuentoCobro - orden.totalCobrado <= 0
 
@@ -66,7 +67,7 @@ export function CobrarOrdenDialog({
     if (open) {
       const p = Math.max(0, orden.costoFinal - orden.descuentoCobro - orden.totalCobrado)
       setPagosLines([createPagoLine(p)])
-      setDescuento(0)
+      setDescuento("")
       setMostrarDescuento(false)
       setObservaciones("")
       fetchHistorial()
@@ -143,9 +144,10 @@ export function CobrarOrdenDialog({
           cuotas: p.cuotas,
           recargo: p.recargo,
           montoOriginal: p.montoOriginal,
+          costoFinanciero: p.costoFinanciero,
         })),
         observaciones: observaciones || undefined,
-        descuento: descuento > 0 ? descuento : undefined,
+        descuento: descuentoNum > 0 ? descuentoNum : undefined,
       }
 
       const res = await offlineFetch(`/api/ordenes/${orden.id}/cobros`, {
@@ -210,9 +212,9 @@ export function CobrarOrdenDialog({
               <div className="font-semibold text-red-600">{formatPrice(pendiente)}</div>
             </div>
           </div>
-          {(orden.descuentoCobro > 0 || descuento > 0) && (
+          {(orden.descuentoCobro > 0 || descuentoNum > 0) && (
             <div className="text-xs text-muted-foreground border-t pt-1">
-              Descuento aplicado: {formatPrice(orden.descuentoCobro + descuento)}
+              Descuento aplicado: {formatPrice(orden.descuentoCobro + descuentoNum)}
             </div>
           )}
         </div>
@@ -261,12 +263,12 @@ export function CobrarOrdenDialog({
                   step="0.01"
                   min="0"
                   max={orden.costoFinal - orden.descuentoCobro - orden.totalCobrado}
-                  value={descuento || ""}
-                  onChange={(e) => setDescuento(parseFloat(e.target.value) || 0)}
+                  value={descuento}
+                  onChange={(e) => setDescuento(e.target.value)}
                   placeholder="0.00"
                   autoFocus
                 />
-                {descuento > 0 && (
+                {descuentoNum > 0 && (
                   <p className="text-xs text-muted-foreground mt-1">
                     Nuevo pendiente: {formatPrice(pendiente)}
                   </p>

@@ -41,6 +41,9 @@ export function OrdenCompraForm({ onClose, onCreated, initialItems, initialProve
     initialItems?.map(i => ({ ...i, tempId: i.tempId || nextTempId() })) || []
   )
   const [loading, setLoading] = useState(false)
+  // Raw editing strings for numeric inputs, keyed by `${tempId}:${field}`.
+  // Lets the input show empty while a valid numeric value is still pushed into `items` for totals.
+  const [numDrafts, setNumDrafts] = useState<Record<string, string>>({})
   const { formatPrice } = useCurrency()
 
   useEffect(() => {
@@ -64,6 +67,26 @@ export function OrdenCompraForm({ onClose, onCreated, initialItems, initialProve
 
   const removeItem = (index: number) => {
     setItems(items.filter((_, i) => i !== index))
+  }
+
+  // Updates the raw draft string (so the field can show empty) while pushing the parsed
+  // numeric into `items` so live subtotals/total stay correct. Fallback preserves prior semantics.
+  const updateNumericItem = (
+    index: number,
+    field: "cantidadPedida" | "precioUnitario",
+    raw: string
+  ) => {
+    const tempId = items[index].tempId
+    setNumDrafts((prev) => ({ ...prev, [`${tempId}:${field}`]: raw }))
+    const parsed = field === "cantidadPedida"
+      ? parseInt(raw, 10) || 1
+      : parseFloat(raw) || 0
+    updateItem(index, field, parsed)
+  }
+
+  const numValue = (item: OCItem, field: "cantidadPedida" | "precioUnitario") => {
+    const draft = numDrafts[`${item.tempId}:${field}`]
+    return draft !== undefined ? draft : String(item[field])
   }
 
   const total = items.reduce((sum, i) => sum + i.cantidadPedida * i.precioUnitario, 0)
@@ -187,8 +210,8 @@ export function OrdenCompraForm({ onClose, onCreated, initialItems, initialProve
                         <Input
                           type="number"
                           min={1}
-                          value={item.cantidadPedida}
-                          onChange={e => updateItem(idx, "cantidadPedida", parseInt(e.target.value) || 1)}
+                          value={numValue(item, "cantidadPedida")}
+                          onChange={e => updateNumericItem(idx, "cantidadPedida", e.target.value)}
                           className="h-8 text-center"
                         />
                       </td>
@@ -197,8 +220,8 @@ export function OrdenCompraForm({ onClose, onCreated, initialItems, initialProve
                           type="number"
                           min={0}
                           step="0.01"
-                          value={item.precioUnitario}
-                          onChange={e => updateItem(idx, "precioUnitario", parseFloat(e.target.value) || 0)}
+                          value={numValue(item, "precioUnitario")}
+                          onChange={e => updateNumericItem(idx, "precioUnitario", e.target.value)}
                           className="h-8 text-right"
                         />
                       </td>

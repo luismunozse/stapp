@@ -39,6 +39,9 @@ export function OrdenRepuestosTab({ ordenId, repuestos, onRepuestosChanged }: Or
     nombre: "",
     precioUnitario: 0,
   })
+  // Raw editing strings so the inputs can show empty while a valid numeric stays in nuevoRepuesto.
+  const [cantidadDraft, setCantidadDraft] = useState("1")
+  const [precioDraft, setPrecioDraft] = useState("")
 
   // Lazy load inventario only when add form is opened
   useEffect(() => {
@@ -98,6 +101,8 @@ export function OrdenRepuestosTab({ ordenId, repuestos, onRepuestosChanged }: Or
 
       if (res.ok) {
         setNuevoRepuesto({ inventarioId: "", cantidad: 1, nombre: "", precioUnitario: 0 })
+        setCantidadDraft("1")
+        setPrecioDraft("")
         setShowAddRepuesto(false)
         setInventarioLoaded(false) // Refresh inventory stock on next open
         onRepuestosChanged()
@@ -218,8 +223,11 @@ export function OrdenRepuestosTab({ ordenId, repuestos, onRepuestosChanged }: Or
                   <Input
                     type="number"
                     min="1"
-                    value={nuevoRepuesto.cantidad}
-                    onChange={(e) => setNuevoRepuesto({ ...nuevoRepuesto, cantidad: parseInt(e.target.value) || 1 })}
+                    value={cantidadDraft}
+                    onChange={(e) => {
+                      setCantidadDraft(e.target.value)
+                      setNuevoRepuesto({ ...nuevoRepuesto, cantidad: parseInt(e.target.value, 10) || 1 })
+                    }}
                   />
                 </div>
               </div>
@@ -238,8 +246,11 @@ export function OrdenRepuestosTab({ ordenId, repuestos, onRepuestosChanged }: Or
                   <Input
                     type="number"
                     min="1"
-                    value={nuevoRepuesto.cantidad}
-                    onChange={(e) => setNuevoRepuesto({ ...nuevoRepuesto, cantidad: parseInt(e.target.value) || 1 })}
+                    value={cantidadDraft}
+                    onChange={(e) => {
+                      setCantidadDraft(e.target.value)
+                      setNuevoRepuesto({ ...nuevoRepuesto, cantidad: parseInt(e.target.value, 10) || 1 })
+                    }}
                   />
                 </div>
                 <div className="sm:col-span-2">
@@ -249,8 +260,11 @@ export function OrdenRepuestosTab({ ordenId, repuestos, onRepuestosChanged }: Or
                     min="0"
                     step="0.01"
                     placeholder="0.00"
-                    value={nuevoRepuesto.precioUnitario || ""}
-                    onChange={(e) => setNuevoRepuesto({ ...nuevoRepuesto, precioUnitario: parseFloat(e.target.value) || 0 })}
+                    value={precioDraft}
+                    onChange={(e) => {
+                      setPrecioDraft(e.target.value)
+                      setNuevoRepuesto({ ...nuevoRepuesto, precioUnitario: parseFloat(e.target.value) || 0 })
+                    }}
                   />
                 </div>
               </div>
@@ -267,6 +281,8 @@ export function OrdenRepuestosTab({ ordenId, repuestos, onRepuestosChanged }: Or
                   setShowAddRepuesto(false)
                   setTipoRepuesto("inventario")
                   setNuevoRepuesto({ inventarioId: "", cantidad: 1, nombre: "", precioUnitario: 0 })
+                  setCantidadDraft("1")
+                  setPrecioDraft("")
                 }}
               >
                 Cancelar

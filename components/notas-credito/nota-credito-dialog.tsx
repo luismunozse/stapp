@@ -49,24 +49,26 @@ export function NotaCreditoDialog({
 }: NotaCreditoDialogProps) {
   const { showError } = useModal()
   const [motivo, setMotivo] = useState<string>("DEVOLUCION")
-  const [monto, setMonto] = useState<number>(0)
+  const [monto, setMonto] = useState<string>("")
   const [metodo, setMetodo] = useState<string>("EFECTIVO")
   const [notas, setNotas] = useState("")
   const [pending, setPending] = useState(false)
 
+  const montoNum = parseFloat(monto) || 0
+
   const reset = () => {
     setMotivo("DEVOLUCION")
-    setMonto(0)
+    setMonto("")
     setMetodo("EFECTIVO")
     setNotas("")
   }
 
   const handleSubmit = async () => {
-    if (monto <= 0) {
+    if (montoNum <= 0) {
       await showError("El monto debe ser mayor a 0")
       return
     }
-    if (monto > montoMaximo + 0.01) {
+    if (montoNum > montoMaximo + 0.01) {
       await showError(`Monto excede el máximo (${montoMaximo.toFixed(2)})`)
       return
     }
@@ -79,7 +81,7 @@ export function NotaCreditoDialog({
           ventaId: ventaId || null,
           ordenId: ordenId || null,
           motivo,
-          monto,
+          monto: montoNum,
           metodoDevolucion: metodo,
           notas: notas || null,
         }),
@@ -126,8 +128,8 @@ export function NotaCreditoDialog({
               min={0}
               max={montoMaximo}
               step="0.01"
-              value={monto || ""}
-              onChange={(e) => setMonto(parseFloat(e.target.value) || 0)}
+              value={monto}
+              onChange={(e) => setMonto(e.target.value)}
               disabled={pending}
             />
           </div>

@@ -97,6 +97,13 @@ export async function POST(
             unidad: item.unidad || "Unidad",
             descuento_tipo: item.descuento_tipo || "porcentaje",
             descuento_valor: item.descuento_valor || 0,
+            // Copiar fielmente links y snapshots del item origen para no perder
+            // inventario (reserva/descuento de stock al ACEPTAR/convertir),
+            // costo histórico (margen) ni la disclosure de repuesto.
+            inventario_id: item.inventario_id ?? null,
+            costo_unitario: item.costo_unitario ?? null,
+            tipo_repuesto: item.tipo_repuesto || "NO_APLICA",
+            catalogo_item_id: item.catalogo_item_id ?? null,
           }))
         )
 

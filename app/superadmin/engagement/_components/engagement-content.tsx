@@ -269,7 +269,7 @@ export function EngagementContent() {
   const [showBroadcast, setShowBroadcast] = useState(false)
   const [broadcastMsg, setBroadcastMsg] = useState({ title: "", message: "" })
   const [showTrialExt, setShowTrialExt] = useState<OrgEngagement | null>(null)
-  const [trialForm, setTrialForm] = useState({ dias: 15, motivo: "" })
+  const [trialForm, setTrialForm] = useState<{ dias: string; motivo: string }>({ dias: "15", motivo: "" })
 
   const loadData = useCallback(async () => {
     await fetchData("/api/superadmin/stats/engagement")
@@ -367,17 +367,18 @@ export function EngagementContent() {
 
   const handleExtendTrial = async () => {
     if (!showTrialExt) return
+    const diasNum = Math.min(90, Math.max(1, parseInt(trialForm.dias, 10) || 15))
     await mutate("/api/superadmin/trial-extension", {
       method: "POST",
       body: {
         organizationId: showTrialExt.id,
-        dias: trialForm.dias,
+        dias: diasNum,
         motivo: trialForm.motivo || null,
       },
-      successMessage: `Trial extendido ${trialForm.dias} días para ${showTrialExt.nombre}`,
+      successMessage: `Trial extendido ${diasNum} días para ${showTrialExt.nombre}`,
       onSuccess: () => {
         setShowTrialExt(null)
-        setTrialForm({ dias: 15, motivo: "" })
+        setTrialForm({ dias: "15", motivo: "" })
         loadData()
       },
     })
@@ -804,7 +805,7 @@ export function EngagementContent() {
                               <DropdownMenuSeparator />
                               <DropdownMenuItem onClick={() => {
                                 setShowTrialExt(org)
-                                setTrialForm({ dias: 15, motivo: "" })
+                                setTrialForm({ dias: "15", motivo: "" })
                               }}>
                                 <Clock className="h-4 w-4 mr-2" />
                                 Extender trial
@@ -1135,7 +1136,7 @@ export function EngagementContent() {
                   min={1}
                   max={90}
                   value={trialForm.dias}
-                  onChange={e => setTrialForm(f => ({ ...f, dias: parseInt(e.target.value) || 15 }))}
+                  onChange={e => setTrialForm(f => ({ ...f, dias: e.target.value }))}
                 />
                 <p className="text-xs text-muted-foreground">Máximo 90 días</p>
               </div>
@@ -1151,7 +1152,7 @@ export function EngagementContent() {
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowTrialExt(null)}>Cancelar</Button>
-              <Button onClick={handleExtendTrial} disabled={mutating || trialForm.dias < 1}>
+              <Button onClick={handleExtendTrial} disabled={mutating || (parseInt(trialForm.dias, 10) || 0) < 1}>
                 {mutating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                 Extender {trialForm.dias} días
               </Button>

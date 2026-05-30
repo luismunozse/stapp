@@ -83,6 +83,53 @@ export function formatDateValue(
   }).format(d)
 }
 
+/**
+ * Devuelve las partes Y-M-D del calendario para un instante en una zona horaria.
+ * Usa Intl para resolver el día calendario real en esa tz (DST-safe).
+ */
+function getCalendarParts(
+  date: Date,
+  timeZone: string
+): { year: number; month: number; day: number } {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone,
+  }).formatToParts(date)
+
+  const lookup = (type: string) =>
+    Number(parts.find((p) => p.type === type)?.value)
+
+  return {
+    year: lookup("year"),
+    month: lookup("month"),
+    day: lookup("day"),
+  }
+}
+
+/**
+ * Suma `days` días calendario a la fecha `from` evaluada en `timeZone` y
+ * devuelve el ISO del día resultante anclado al mediodía (12:00) de esa tz.
+ *
+ * El ancla al mediodía es DST-safe y garantiza que, al formatear con
+ * formatDateValue(..., timeZone), se renderice exactamente el día calendario
+ * "hoy (en la tz) + days". Evita el off-by-one de `new Date()` + setDate,
+ * cuyo instante UTC puede caer en otro día calendario según la tz.
+ */
+export function addDaysInTimeZone(
+  days: number,
+  timeZone: string = DEFAULT_TIMEZONE,
+  from: Date = new Date()
+): string {
+  const { year, month, day } = getCalendarParts(from, timeZone)
+  // Sumamos los días sobre el día calendario base (Date.UTC normaliza el
+  // overflow de mes/año) y anclamos al mediodía UTC. El mediodía UTC se
+  // renderiza al mismo día calendario para todas las zonas soportadas
+  // (UTC-8 a UTC+1), igual que el ancla ya usada para fecha_prometida.
+  return new Date(Date.UTC(year, month - 1, day + days, 12, 0, 0)).toISOString()
+}
+
 export function formatDateTimeValue(
   date: Date | string | null | undefined,
   timezone: string = DEFAULT_TIMEZONE,

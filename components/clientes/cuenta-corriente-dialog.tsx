@@ -92,7 +92,7 @@ export function CuentaCorrienteDialog({
   const [depositoLoading, setDepositoLoading] = useState(false)
 
   // Deposito form state
-  const [depositoMonto, setDepositoMonto] = useState<number>(0)
+  const [depositoMonto, setDepositoMonto] = useState<string>("")
   const [depositoMetodo, setDepositoMetodo] = useState<MetodoDeposito>("EFECTIVO")
   const [depositoReferencia, setDepositoReferencia] = useState("")
   const [depositoObservaciones, setDepositoObservaciones] = useState("")
@@ -117,7 +117,7 @@ export function CuentaCorrienteDialog({
     if (open) {
       fetchData()
       setShowDeposito(false)
-      setDepositoMonto(0)
+      setDepositoMonto("")
       setDepositoMetodo("EFECTIVO")
       setDepositoReferencia("")
       setDepositoObservaciones("")
@@ -125,7 +125,8 @@ export function CuentaCorrienteDialog({
   }, [open, cliente.id])
 
   const handleDeposito = async () => {
-    if (!depositoMonto || depositoMonto <= 0) {
+    const depositoMontoNum = parseFloat(depositoMonto) || 0
+    if (!depositoMontoNum || depositoMontoNum <= 0) {
       await showError("El monto debe ser mayor a 0")
       return
     }
@@ -136,7 +137,7 @@ export function CuentaCorrienteDialog({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          monto: depositoMonto,
+          monto: depositoMontoNum,
           metodoPago: depositoMetodo,
           numeroReferencia: depositoReferencia || undefined,
           observaciones: depositoObservaciones || undefined,
@@ -150,7 +151,7 @@ export function CuentaCorrienteDialog({
       }
 
       // Reset form
-      setDepositoMonto(0)
+      setDepositoMonto("")
       setDepositoMetodo("EFECTIVO")
       setDepositoReferencia("")
       setDepositoObservaciones("")
@@ -236,8 +237,8 @@ export function CuentaCorrienteDialog({
                 type="number"
                 step="0.01"
                 min="0"
-                value={depositoMonto || ""}
-                onChange={(e) => setDepositoMonto(parseFloat(e.target.value) || 0)}
+                value={depositoMonto}
+                onChange={(e) => setDepositoMonto(e.target.value)}
                 placeholder="0.00"
               />
             </div>

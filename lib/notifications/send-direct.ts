@@ -201,7 +201,7 @@ export async function sendNotificationDirect(params: NotificationParams) {
   // Obtener configuración de la organización
   const { data: orgConfig } = await supabaseAdmin
     .from("organizations")
-    .select("notificaciones_email, notificaciones_whatsapp, plantillas_whatsapp")
+    .select("notificaciones_email, notificaciones_whatsapp, plantillas_whatsapp, pais")
     .eq("id", organizationId)
     .single()
 
@@ -319,8 +319,9 @@ export async function sendNotificationDirect(params: NotificationParams) {
         // Fallback: generar URL
         const overrideTextWa = resolvePlantillaForTipo(tipo, context, orgConfig.plantillas_whatsapp)
         const message = overrideTextWa ?? generateWhatsAppMessage(tipo, context)
-        const cleanPhone = context.cliente.telefono.replace(/\D/g, "")
-        const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`
+        const { formatPhoneForWhatsApp } = await import("@/lib/notifications/whatsapp-templates")
+        const formattedPhone = formatPhoneForWhatsApp(context.cliente.telefono, orgConfig.pais)
+        const whatsappUrl = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`
 
         await supabaseAdmin.from("notification_logs").insert({
           organization_id: organizationId,

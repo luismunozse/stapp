@@ -60,9 +60,13 @@ export function PagosHistorial({ pagos }: PagosHistorialProps) {
                 <span> · {pago.recargoPorcentaje}% recargo</span>
               )}
             </div>
-            {pago.montoOriginal && pago.recargoPorcentaje && pago.recargoPorcentaje > 0 && (
+            {pago.recargoPorcentaje && pago.recargoPorcentaje > 0 && (
               <div className="text-xs text-muted-foreground">
-                Sin recargo: {formatPrice(pago.montoOriginal)}
+                {/* `monto` es el importe base (ingreso del negocio). El recargo es interés bancario
+                    que el cliente paga sobre el precio, no reduce la deuda ni es ingreso. Se computa
+                    el total que paga el cliente desde monto + recargo, sin depender del ambiguo
+                    `monto_original` (que difiere entre paths de venta y cobro). */}
+                Total c/recargo: {formatPrice(pago.monto + pago.monto * (pago.recargoPorcentaje / 100))}
               </div>
             )}
             {pago.costoFinancieroMonto != null && pago.costoFinancieroMonto > 0 && (

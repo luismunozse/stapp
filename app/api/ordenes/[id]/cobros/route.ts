@@ -11,6 +11,10 @@ const pagoLineSchema = z.object({
   cuotas: z.number().int().min(1).nullable().optional(),
   recargo: z.number().min(0).nullable().optional(),
   montoOriginal: z.number().positive().nullable().optional(),
+  // Costo financiero (comisión de terminal que absorbe el comercio).
+  // Se acepta el porcentaje y se computa el monto en el servidor, igual que en ventas/[id]/pagos.
+  costoFinanciero: z.number().min(0).max(100).nullable().optional(),
+  // Backward compat: callers antiguos que envían el monto/porcentaje ya calculados.
   costoFinancieroMonto: z.number().min(0).nullable().optional(),
   costoFinancieroPorcentaje: z.number().min(0).max(100).nullable().optional(),
 })
@@ -134,6 +138,13 @@ export async function POST(
         }
       }
 
+      // Costo financiero: preferir el porcentaje (computar monto en servidor, como en ventas).
+      // Si no viene, usar los valores ya calculados que envíen callers antiguos.
+      const cfPorcentaje = pago.costoFinanciero ?? pago.costoFinancieroPorcentaje ?? null
+      const cfMonto = pago.costoFinanciero != null && pago.costoFinanciero > 0
+        ? Math.round(pago.monto * (pago.costoFinanciero / 100) * 100) / 100
+        : (pago.costoFinancieroMonto ?? null)
+
       await supabaseAdmin.from("cobros_orden").insert({
         orden_id: ordenId,
         organization_id: organizationId!,
@@ -144,8 +155,8 @@ export async function POST(
         cuotas: pago.cuotas || null,
         recargo_porcentaje: pago.recargo || null,
         monto_original: pago.montoOriginal || null,
-        costo_financiero_monto: pago.costoFinancieroMonto ?? null,
-        costo_financiero_porcentaje: pago.costoFinancieroPorcentaje ?? null,
+        costo_financiero_monto: cfMonto,
+        costo_financiero_porcentaje: cfPorcentaje,
         usuario_id: userId!,
       })
     }

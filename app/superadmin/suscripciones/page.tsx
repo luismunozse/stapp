@@ -105,14 +105,14 @@ export default function SuscripcionesPage() {
 
   // Form states
   const [cancelImmediate, setCancelImmediate] = useState(false)
-  const [extendDias, setExtendDias] = useState(7)
+  const [extendDias, setExtendDias] = useState("7")
   const [extendMotivo, setExtendMotivo] = useState("")
   const [renewPeriod, setRenewPeriod] = useState<"MONTHLY" | "YEARLY">("MONTHLY")
   const [renewCustomDate, setRenewCustomDate] = useState("")
   const [renewDays, setRenewDays] = useState("")
   const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([])
   const [limitOverrides, setLimitOverrides] = useState({ limite_ordenes: "", limite_tecnicos: "", limite_clientes: "", limite_storage_mb: "", motivo: "" })
-  const [bulkDias, setBulkDias] = useState(7)
+  const [bulkDias, setBulkDias] = useState("7")
   const [bulkMotivo, setBulkMotivo] = useState("")
   const [bulkPeriod, setBulkPeriod] = useState<"MONTHLY" | "YEARLY">("MONTHLY")
 
@@ -200,11 +200,11 @@ export default function SuscripcionesPage() {
   const handleExtendTrial = async () => {
     await mutate("/api/superadmin/trial-extension", {
       method: "POST",
-      body: { organizationId: extendModal.orgId, dias: extendDias, motivo: extendMotivo || undefined },
+      body: { organizationId: extendModal.orgId, dias: Math.min(90, Math.max(1, parseInt(extendDias, 10) || 7)), motivo: extendMotivo || undefined },
       successMessage: "Trial extendido",
       onSuccess: () => {
         setExtendModal({ open: false, orgId: "", orgName: "" })
-        setExtendDias(7)
+        setExtendDias("7")
         setExtendMotivo("")
         fetchSubscriptions()
       },
@@ -260,7 +260,7 @@ export default function SuscripcionesPage() {
     const body: Record<string, unknown> = { organizationIds: orgIds, action: bulkModal.action }
 
     if (bulkModal.action === "extend_trial") {
-      body.dias = bulkDias
+      body.dias = Math.min(90, Math.max(1, parseInt(bulkDias, 10) || 7))
       body.motivo = bulkMotivo || undefined
     } else if (bulkModal.action === "activate") {
       body.billingPeriod = bulkPeriod
@@ -275,7 +275,7 @@ export default function SuscripcionesPage() {
       onSuccess: () => {
         setBulkModal({ open: false, action: "" })
         setSelectedIds(new Set())
-        setBulkDias(7)
+        setBulkDias("7")
         setBulkMotivo("")
         fetchSubscriptions()
       },
@@ -621,7 +621,7 @@ export default function SuscripcionesPage() {
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label>Días a extender</Label>
-              <Input type="number" min={1} max={90} value={extendDias} onChange={(e) => setExtendDias(parseInt(e.target.value) || 7)} />
+              <Input type="number" min={1} max={90} value={extendDias} onChange={(e) => setExtendDias(e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label>Motivo (opcional)</Label>
@@ -773,7 +773,7 @@ export default function SuscripcionesPage() {
               <>
                 <div className="space-y-2">
                   <Label>Días a extender</Label>
-                  <Input type="number" min={1} max={90} value={bulkDias} onChange={(e) => setBulkDias(parseInt(e.target.value) || 7)} />
+                  <Input type="number" min={1} max={90} value={bulkDias} onChange={(e) => setBulkDias(e.target.value)} />
                 </div>
                 <div className="space-y-2">
                   <Label>Motivo (opcional)</Label>

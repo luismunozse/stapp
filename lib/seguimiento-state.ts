@@ -87,20 +87,49 @@ export type TimeRemaining = {
 }
 
 /**
+ * Convierte un instante a un número de día calendario (días desde epoch UTC)
+ * según el calendario de `timeZone`. Permite restar dos fechas y obtener la
+ * diferencia en días calendario reales, no en duración cruda.
+ */
+function calendarDayNumber(date: Date, timeZone?: string): number {
+  if (timeZone) {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      timeZone,
+    }).formatToParts(date)
+    const get = (t: string) => Number(parts.find((p) => p.type === t)?.value)
+    return Math.floor(
+      Date.UTC(get("year"), get("month") - 1, get("day")) / 86400000
+    )
+  }
+  return Math.floor(
+    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000
+  )
+}
+
+/**
  * Calcula tiempo restante hasta una fecha prometida.
  * Devuelve null si no hay fecha.
- * Acepta `now` opcional para tests deterministas.
+ * Acepta `now` opcional para tests deterministas y `timeZone` opcional para
+ * medir la diferencia en días calendario de la zona horaria del taller.
+ *
+ * La diferencia se mide en DÍAS CALENDARIO (no en duración): cualquier hora
+ * de hoy es "Hoy", el día calendario siguiente es "Mañana", etc. Esto evita
+ * que algo vencido en unas horas hoy se muestre como "Mañana".
  */
 export function getTimeRemaining(
   fechaPrometida: string | null | undefined,
-  now: Date = new Date()
+  now: Date = new Date(),
+  timeZone?: string
 ): TimeRemaining | null {
   if (!fechaPrometida) return null
   const target = new Date(fechaPrometida)
   if (Number.isNaN(target.getTime())) return null
 
-  const diffMs = target.getTime() - now.getTime()
-  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+  const diffDays =
+    calendarDayNumber(target, timeZone) - calendarDayNumber(now, timeZone)
 
   if (diffDays < 0) {
     return {
