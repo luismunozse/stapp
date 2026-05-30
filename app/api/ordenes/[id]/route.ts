@@ -395,6 +395,8 @@ export async function PUT(
             estado: estadoFinal,
             estadoAnterior: orden.estado,
             publicToken: orden.public_token,
+            // Técnico efectivo: el reasignado en este request si vino, si no el actual.
+            tecnicoId: (data.tecnicoId !== undefined ? data.tecnicoId : orden.tecnico_id) ?? null,
           },
         },
       }).catch(err => console.error("Error queueing notification:", err))

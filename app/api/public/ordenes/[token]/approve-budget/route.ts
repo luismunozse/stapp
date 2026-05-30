@@ -20,7 +20,7 @@ export async function POST(
     // Obtener orden
     const { orden, error } = await getOrderByPublicToken(token, `
         id, estado, presupuesto, organization_id, cliente_id,
-        numero_orden, dispositivo,
+        numero_orden, dispositivo, tecnico_id, public_token,
         clientes (id, nombre, email, telefono),
         organizations (nombre, nombre_mostrar, slug, moneda, zona_horaria)
       `)
@@ -110,6 +110,7 @@ export async function POST(
           estadoAnterior: "PRESUPUESTADO",
           presupuesto: orden.presupuesto,
           publicToken: orden.public_token,
+          tecnicoId: orden.tecnico_id ?? null,
         },
       },
     }).catch(err => console.error("Error sending notification:", err))

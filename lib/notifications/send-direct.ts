@@ -3,6 +3,7 @@ import { Resend } from "resend"
 import { formatDateValue } from "@/lib/timezone"
 import { renderTemplate } from "@/lib/whatsapp/plantillas-catalog"
 import { formatCurrencyValue, type CurrencyCode, DEFAULT_CURRENCY } from "@/lib/currency"
+import { sendPushToUsers } from "@/lib/push/send"
 
 /**
  * Replica de getBaseUrl de lib/notifications/whatsapp-templates.ts.
@@ -161,6 +162,7 @@ interface NotificationParams {
       presupuesto?: number | null
       fechaCompletado?: string | null
       publicToken?: string | null
+      tecnicoId?: string | null
     }
     garantia?: {
       id: string
@@ -373,6 +375,25 @@ export async function sendNotificationDirect(params: NotificationParams) {
         }))
 
         await supabaseAdmin.from("user_notifications").insert(notifications)
+      }
+
+      // Push: solo cuando una orden pasa a APROBADO. Destinatarios: técnico
+      // asignado de la orden + todos los ADMIN. Opt-in implícito vía suscripción
+      // (sendPushToUsers devuelve 0 sin error si el usuario no tiene push).
+      if (tipo === "CAMBIO_ESTADO" && context.orden?.estado === "APROBADO" && ordenId) {
+        const adminIds = users.filter((u) => u.rol === "ADMIN").map((u) => u.id)
+        const pushTargetIds = Array.from(
+          new Set([context.orden.tecnicoId, ...adminIds].filter(Boolean) as string[])
+        )
+        if (pushTargetIds.length > 0) {
+          const { title, body } = generateInAppContent(tipo, context)
+          void sendPushToUsers(pushTargetIds, {
+            title,
+            body,
+            path: `/ordenes/${ordenId}`,
+            tag: `orden-${ordenId}`,
+          }).catch((e) => console.error("sendNotificationDirect: push APROBADO error", e))
+        }
       }
     }
   } catch (error) {
