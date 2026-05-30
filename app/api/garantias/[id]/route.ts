@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { addDaysInTimeZone, DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { z } from "zod"
 
 const updateGarantiaSchema = z.object({
   estado: z.enum(["ACTIVA", "VENCIDA", "RECLAMADA"]).optional(),
   notas: z.string().optional(),
+  diasValidez: z.number().int().positive().optional(),
 })
 
 export async function GET(
@@ -102,7 +104,7 @@ export async function PUT(
     // Verificar que la garantía existe y pertenece a la org
     const { data: existing, error: fetchError } = await supabaseAdmin
       .from("garantias")
-      .select("id, ordenes_servicio!inner(organization_id)")
+      .select("id, fecha_inicio, estado, ordenes_servicio!inner(organization_id, organizations(zona_horaria))")
       .eq("id", id)
       .single()
 
@@ -124,6 +126,36 @@ export async function PUT(
     const updateData: Record<string, any> = {}
     if (data.estado !== undefined) updateData.estado = data.estado
     if (data.notas !== undefined) updateData.notas = data.notas
+
+    // Editar días de validez: recalcular fecha_vencimiento desde fecha_inicio
+    // respetando la zona horaria de la org (mismo helper que la creación).
+    if (data.diasValidez !== undefined) {
+      const zonaHoraria =
+        (existing.ordenes_servicio as any)?.organizations?.zona_horaria || DEFAULT_TIMEZONE
+      const fechaInicio = (existing as any).fecha_inicio
+        ? new Date((existing as any).fecha_inicio)
+        : new Date()
+      updateData.dias_validez = data.diasValidez
+      const nuevaFechaVencimiento = addDaysInTimeZone(
+        data.diasValidez,
+        zonaHoraria,
+        fechaInicio
+      )
+      updateData.fecha_vencimiento = nuevaFechaVencimiento
+
+      // Re-sincronizar estado según el nuevo vencimiento, salvo que el caller
+      // mande un estado explícito o la garantía esté RECLAMADA (no se toca).
+      const estadoActual = (existing as any).estado
+      if (data.estado === undefined && estadoActual !== "RECLAMADA") {
+        const vencida = new Date(nuevaFechaVencimiento) < new Date()
+        if (vencida && estadoActual === "ACTIVA") {
+          updateData.estado = "VENCIDA"
+        } else if (!vencida && estadoActual === "VENCIDA") {
+          // Extender una garantía vencida la reactiva.
+          updateData.estado = "ACTIVA"
+        }
+      }
+    }
 
     const { data: garantia, error: updateError } = await supabaseAdmin
       .from("garantias")

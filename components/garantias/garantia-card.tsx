@@ -19,6 +19,7 @@ import {
   XCircle,
   AlertTriangle,
   FileText,
+  Pencil,
 } from "lucide-react"
 import { ReclamoForm } from "./reclamo-form"
 import { useModal } from "@/contexts/modal-context"
@@ -75,6 +76,10 @@ export function GarantiaCard({ ordenId, ordenEstado }: GarantiaCardProps) {
   const [diasValidez, setDiasValidez] = useState("30")
   const [notas, setNotas] = useState("")
   const [updatingReclamo, setUpdatingReclamo] = useState<string | null>(null)
+  const [showEditForm, setShowEditForm] = useState(false)
+  const [editDias, setEditDias] = useState("30")
+  const [editNotas, setEditNotas] = useState("")
+  const [saving, setSaving] = useState(false)
 
   const fetchGarantia = async () => {
     try {
@@ -125,6 +130,43 @@ export function GarantiaCard({ ordenId, ordenEstado }: GarantiaCardProps) {
       alert("Error al crear garantía")
     } finally {
       setCreating(false)
+    }
+  }
+
+  const openEditForm = () => {
+    if (!garantia) return
+    setEditDias(String(garantia.diasValidez))
+    setEditNotas(garantia.notas || "")
+    setShowEditForm(true)
+  }
+
+  const handleUpdateGarantia = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!garantia) return
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/garantias/${garantia.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          diasValidez: Math.max(1, parseInt(editDias, 10) || 30),
+          notas: editNotas,
+        }),
+      })
+
+      if (!res.ok) {
+        const error = await res.json()
+        alert(error.error || "Error al actualizar garantía")
+        return
+      }
+
+      setShowEditForm(false)
+      fetchGarantia()
+    } catch (error) {
+      console.error("Error:", error)
+      alert("Error al actualizar garantía")
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -260,13 +302,63 @@ export function GarantiaCard({ ordenId, ordenEstado }: GarantiaCardProps) {
             <Shield className="h-5 w-5" />
             Garantía
           </CardTitle>
-          <Badge className={config.color}>
-            <Icon className="mr-1 h-3 w-3" />
-            {config.label}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge className={config.color}>
+              <Icon className="mr-1 h-3 w-3" />
+              {config.label}
+            </Badge>
+            {!showEditForm && (
+              <Button variant="ghost" size="sm" onClick={openEditForm} title="Editar garantía">
+                <Pencil className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {showEditForm ? (
+          <form onSubmit={handleUpdateGarantia} className="space-y-4">
+            <div>
+              <Label htmlFor="editDias">Días de validez</Label>
+              <Input
+                id="editDias"
+                type="number"
+                min="1"
+                value={editDias}
+                onChange={(e) => setEditDias(e.target.value)}
+                disabled={saving}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                El vencimiento se recalcula desde la fecha de inicio.
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="editNotas">Notas</Label>
+              <Textarea
+                id="editNotas"
+                value={editNotas}
+                onChange={(e) => setEditNotas(e.target.value)}
+                placeholder="Condiciones de la garantía..."
+                rows={2}
+                disabled={saving}
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowEditForm(false)}
+                disabled={saving}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={saving}>
+                {saving ? "Guardando..." : "Guardar cambios"}
+              </Button>
+            </div>
+          </form>
+        ) : (
+        <>
         {/* Info de la garantía */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3 bg-muted rounded-lg">
           <div>
@@ -444,6 +536,8 @@ export function GarantiaCard({ ordenId, ordenEstado }: GarantiaCardProps) {
               )
             })}
           </div>
+        )}
+        </>
         )}
       </CardContent>
     </Card>
