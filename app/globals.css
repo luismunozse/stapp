@@ -64,6 +64,13 @@
 
 @layer base {
   :root {
+    /* Easing tokens (Emil Kowalski) — los easings nativos CSS son débiles.
+       --ease-out: entradas/salidas y feedback de UI (arranca rápido).
+       --ease-in-out: movimiento/morph en pantalla.
+       Nunca usar ease-in en UI: arranca lento y se siente sluggish. */
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+
     /* Background & Foreground */
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
@@ -347,11 +354,11 @@
 /* Animation utilities */
 @layer utilities {
   .animate-in {
-    animation: animate-in 0.2s ease-out;
+    animation: animate-in 0.2s var(--ease-out);
   }
 
   .animate-out {
-    animation: animate-out 0.2s ease-in;
+    animation: animate-out 0.18s var(--ease-out);
   }
 
   @keyframes animate-in {
