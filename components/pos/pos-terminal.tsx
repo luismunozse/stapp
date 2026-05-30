@@ -170,12 +170,14 @@ export function PosTerminal() {
           cantidad: 1,
           stockDisponible: product.stock,
           diasGarantia: 0,
+          trackeaSeries: product.trackeaSeries ?? false,
+          serieIds: [],
         },
       ]
     })
   }, [])
 
-  const addManualProduct = useCallback((product: { nombre: string; precioUnitario: number }) => {
+  const addManualProduct = useCallback((product: { nombre: string; precioUnitario: number; costo?: number }) => {
     setCartItems((prev) => [
       ...prev,
       {
@@ -187,6 +189,9 @@ export function PosTerminal() {
         cantidad: 1,
         stockDisponible: 999,
         diasGarantia: 0,
+        trackeaSeries: false,
+        serieIds: [],
+        costo: product.costo,
       },
     ])
   }, [])
