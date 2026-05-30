@@ -92,8 +92,6 @@ DECLARE
   v_trackea_series BOOLEAN;
   v_serie_ids_in JSONB;
   v_serie_ids_out TEXT[];
-  v_serie_id TEXT;
-  v_serie_count INTEGER;
   v_dias_garantia INTEGER;
 BEGIN
   v_metodo := p_metodo_pago::metodo_pago_venta;
