@@ -21,7 +21,8 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useCurrency } from "@/contexts/currency-context"
-import type { PosCartItem, PosCliente, EMPTY_CLIENT } from "./pos-types"
+import { autoSelectSeries } from "./pos-types"
+import type { PosCartItem, PosCliente, SerieDisponible } from "./pos-types"
 
 interface PosCartProps {
   items: PosCartItem[]
@@ -29,6 +30,7 @@ interface PosCartProps {
   onUpdateQuantity: (lineId: string, delta: number) => void
   onRemoveItem: (lineId: string) => void
   onSetGarantia: (lineId: string, dias: number) => void
+  onSetSerieIds: (lineId: string, serieIds: string[]) => void
   onSetCliente: (cliente: PosCliente) => void
   onCheckout: () => void
   onHoldSale: () => void
@@ -51,6 +53,7 @@ export function PosCart({
   onUpdateQuantity,
   onRemoveItem,
   onSetGarantia,
+  onSetSerieIds,
   onSetCliente,
   onCheckout,
   onHoldSale,
@@ -66,6 +69,8 @@ export function PosCart({
   const [clienteLoading, setClienteLoading] = useState(false)
   const [expandedItem, setExpandedItem] = useState<string | null>(null)
   const [garantiaDraft, setGarantiaDraft] = useState<string>("")
+  const [seriesDisp, setSeriesDisp] = useState<Record<string, SerieDisponible[]>>({})
+  const [seriesLoading, setSeriesLoading] = useState<string | null>(null)
   const clienteInputRef = useRef<HTMLInputElement>(null)
 
   const subtotal = items.reduce((sum, item) => sum + item.precioUnitario * item.cantidad, 0)
@@ -99,6 +104,32 @@ export function PosCart({
     }, 250)
     return () => clearTimeout(timer)
   }, [clienteQuery])
+
+  // Cargar series DISPONIBLE cuando se expande una línea serializada.
+  useEffect(() => {
+    if (!expandedItem) return
+    const item = items.find((i) => i.lineId === expandedItem)
+    if (!item || !item.trackeaSeries || !item.inventarioId) return
+    if (seriesDisp[item.lineId]) return // ya cargado
+
+    let cancelled = false
+    setSeriesLoading(item.lineId)
+    fetch(`/api/inventario/${item.inventarioId}/series?estado=DISPONIBLE&limit=500`)
+      .then((r) => (r.ok ? r.json() : { data: [] }))
+      .then((data) => {
+        if (cancelled) return
+        const list: SerieDisponible[] = (data.data ?? []).map((s: any) => ({
+          id: s.id, numeroSerie: s.numero_serie,
+        }))
+        setSeriesDisp((prev) => ({ ...prev, [item.lineId]: list }))
+        if (item.serieIds.length === 0) {
+          onSetSerieIds(item.lineId, autoSelectSeries(list, item.cantidad))
+        }
+      })
+      .catch(() => { if (!cancelled) setSeriesDisp((prev) => ({ ...prev, [item.lineId]: [] })) })
+      .finally(() => { if (!cancelled) setSeriesLoading(null) })
+    return () => { cancelled = true }
+  }, [expandedItem, items, seriesDisp, onSetSerieIds])
 
   const selectCliente = (c: ClienteResult) => {
     onSetCliente({ id: c.id, nombre: c.nombre, telefono: c.telefono })
@@ -302,7 +333,7 @@ export function PosCart({
 
                   {/* Expanded options */}
                   {isExpanded && (
-                    <div className="mt-2 pl-1 flex items-center gap-3 text-xs">
+                    <div className="mt-2 pl-1 flex flex-col gap-2 text-xs">
                       <label className="flex items-center gap-1.5">
                         <Shield className="h-3 w-3 text-muted-foreground" />
                         <span className="text-muted-foreground">Garantía (días):</span>
@@ -317,6 +348,50 @@ export function PosCart({
                           className="h-7 w-16 text-xs text-center"
                         />
                       </label>
+
+                      {item.trackeaSeries && (
+                        <div className="rounded border bg-muted/30 p-2 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground font-medium">
+                              Series ({item.serieIds.length}/{item.cantidad})
+                            </span>
+                            {item.serieIds.length !== item.cantidad && (
+                              <span className="text-red-500">
+                                Seleccioná {item.cantidad}
+                              </span>
+                            )}
+                          </div>
+                          {seriesLoading === item.lineId ? (
+                            <span className="text-muted-foreground">Cargando series…</span>
+                          ) : (
+                            <div className="max-h-32 overflow-y-auto grid grid-cols-2 gap-1">
+                              {(seriesDisp[item.lineId] ?? []).map((s) => {
+                                const checked = item.serieIds.includes(s.id)
+                                return (
+                                  <label key={s.id} className="flex items-center gap-1.5 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      className="h-3.5 w-3.5 rounded"
+                                      checked={checked}
+                                      onChange={() => {
+                                        if (checked) {
+                                          onSetSerieIds(item.lineId, item.serieIds.filter((id) => id !== s.id))
+                                        } else if (item.serieIds.length < item.cantidad) {
+                                          onSetSerieIds(item.lineId, [...item.serieIds, s.id])
+                                        }
+                                      }}
+                                    />
+                                    <span className="font-mono truncate">{s.numeroSerie}</span>
+                                  </label>
+                                )
+                              })}
+                              {(seriesDisp[item.lineId] ?? []).length === 0 && (
+                                <span className="text-red-500 col-span-2">Sin series disponibles</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

@@ -204,7 +204,7 @@ export function PosTerminal() {
           const newQty = item.cantidad + delta
           if (newQty <= 0) return null
           if (item.inventarioId && newQty > item.stockDisponible) return item
-          return { ...item, cantidad: newQty }
+          return { ...item, cantidad: newQty, serieIds: item.trackeaSeries ? [] : item.serieIds }
         })
         .filter(Boolean) as PosCartItem[]
     )
@@ -217,6 +217,12 @@ export function PosTerminal() {
   const setGarantia = useCallback((lineId: string, dias: number) => {
     setCartItems((prev) =>
       prev.map((item) => (item.lineId === lineId ? { ...item, diasGarantia: dias } : item))
+    )
+  }, [])
+
+  const setSerieIds = useCallback((lineId: string, serieIds: string[]) => {
+    setCartItems((prev) =>
+      prev.map((item) => (item.lineId === lineId ? { ...item, serieIds } : item))
     )
   }, [])
 
@@ -601,6 +607,7 @@ export function PosTerminal() {
             onUpdateQuantity={updateQuantity}
             onRemoveItem={removeItem}
             onSetGarantia={setGarantia}
+            onSetSerieIds={setSerieIds}
             onSetCliente={setCliente}
             onCheckout={() => cartItems.length > 0 && setCheckoutOpen(true)}
             onHoldSale={holdSale}
@@ -633,6 +640,7 @@ export function PosTerminal() {
               onUpdateQuantity={updateQuantity}
               onRemoveItem={removeItem}
               onSetGarantia={setGarantia}
+              onSetSerieIds={setSerieIds}
               onSetCliente={setCliente}
               onCheckout={() => cartItems.length > 0 && setCheckoutOpen(true)}
               onHoldSale={holdSale}
