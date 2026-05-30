@@ -123,8 +123,9 @@ export async function POST(request: Request) {
         numero_orden,
         dispositivo,
         organization_id,
+        public_token,
         clientes (*),
-        organizations (id, nombre, moneda, zona_horaria),
+        organizations (id, nombre, nombre_mostrar, slug, moneda, zona_horaria),
         garantias (id)
       `)
       .eq("id", data.ordenId)
@@ -184,7 +185,8 @@ export async function POST(request: Request) {
       clienteId: cliente.id,
       tipo: "GARANTIA_CREADA",
       context: {
-        organizationName: org.nombre,
+        organizationName: org.nombre_mostrar || org.nombre,
+        organizationSlug: org.slug,
         moneda: org.moneda || "ARS",
         zonaHoraria: org.zona_horaria || "America/Argentina/Buenos_Aires",
         cliente: {
@@ -198,6 +200,7 @@ export async function POST(request: Request) {
           numeroOrden: orden.numero_orden,
           dispositivo: orden.dispositivo,
           estado: orden.estado,
+          publicToken: (orden as any).public_token,
         },
         garantia: {
           id: garantia.id,

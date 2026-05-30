@@ -269,6 +269,7 @@ interface TrackingData {
     direccion?: string
     logoUrl?: string
   }
+  whatsappMensajeConsulta?: string
 }
 
 
@@ -406,7 +407,8 @@ export function SeguimientoContent({ token }: { token: string }) {
 
   const whatsappUrl = data.organizacion.telefono
     ? `https://wa.me/${data.organizacion.telefono.replace(/\D/g, "")}?text=${encodeURIComponent(
-        `Hola, consulto por la orden ${data.codigoOrden || `#${data.numeroOrden}`} (${data.dispositivo})`
+        data.whatsappMensajeConsulta ||
+          `Hola, consulto por la orden ${data.codigoOrden || `#${data.numeroOrden}`} (${data.dispositivo})`
       )}`
     : null
 

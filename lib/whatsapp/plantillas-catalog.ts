@@ -192,6 +192,176 @@ Seguimiento: {link_seguimiento}
 
 {empresa}`,
   },
+  // === Plantillas por estado individual ===
+  // Si está customizada se usa para ese estado específico; si no, cae a orden_estado_actual.
+  {
+    key: "orden_estado_recibido",
+    label: "Aviso: Recibido",
+    category: "ordenes",
+    description: "Aviso al cliente cuando la orden entra al estado RECIBIDO.",
+    variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra recibido.
+
+Hemos recibido su equipo correctamente. Pronto comenzaremos con el diagnóstico y le informaremos novedades.
+
+Seguimiento: {link_seguimiento}
+
+{empresa}`,
+  },
+  {
+    key: "orden_estado_en_diagnostico",
+    label: "Aviso: En Diagnóstico",
+    category: "ordenes",
+    description: "Aviso al cliente cuando la orden entra al estado EN_DIAGNOSTICO.",
+    variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra en diagnóstico.
+
+Nuestro técnico está evaluando el equipo. Le enviaremos el presupuesto a la brevedad.
+
+Seguimiento: {link_seguimiento}
+
+{empresa}`,
+  },
+  {
+    key: "orden_estado_presupuestado",
+    label: "Aviso: Presupuestado",
+    category: "ordenes",
+    description: "Aviso al cliente cuando la orden entra al estado PRESUPUESTADO.",
+    variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra presupuestado - esperando su respuesta.
+
+Por favor confirme si desea continuar con la reparación.
+
+Seguimiento: {link_seguimiento}
+
+{empresa}`,
+  },
+  {
+    key: "orden_estado_aprobado",
+    label: "Aviso: Aprobado",
+    category: "ordenes",
+    description: "Aviso al cliente cuando la orden entra al estado APROBADO.",
+    variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra aprobado - en cola de reparación.
+
+Gracias por aprobar el presupuesto. Su equipo entrará en cola de reparación y le avisaremos cuando esté listo.
+
+Seguimiento: {link_seguimiento}
+
+{empresa}`,
+  },
+  {
+    key: "orden_estado_en_reparacion",
+    label: "Aviso: En Reparación",
+    category: "ordenes",
+    description: "Aviso al cliente cuando la orden entra al estado EN_REPARACION.",
+    variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra en reparación.
+
+Nuestro técnico está trabajando en su equipo. Le avisaremos cuando la reparación esté completa.
+
+Seguimiento: {link_seguimiento}
+
+{empresa}`,
+  },
+  {
+    key: "orden_estado_esperando_repuesto",
+    label: "Aviso: Esperando repuesto",
+    category: "ordenes",
+    description: "Aviso al cliente cuando la orden entra al estado ESPERANDO_REPUESTO.",
+    variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra esperando repuesto.
+
+Le avisaremos cuando llegue el repuesto para continuar con la reparación.
+
+Seguimiento: {link_seguimiento}
+
+{empresa}`,
+  },
+  {
+    key: "orden_estado_reparado",
+    label: "Aviso: Reparado / listo para retirar",
+    category: "ordenes",
+    description: "Aviso al cliente cuando la orden entra al estado REPARADO.",
+    variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra listo para retirar.
+
+Puede pasar a retirarlo en nuestro local en horario de atención. Lo esperamos!
+
+Seguimiento: {link_seguimiento}
+
+{empresa}`,
+  },
+  {
+    key: "orden_estado_entregado",
+    label: "Aviso: Entregado",
+    category: "ordenes",
+    description: "Aviso al cliente cuando la orden entra al estado ENTREGADO.",
+    variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra entregado.
+
+Gracias por confiar en nosotros!
+
+Seguimiento: {link_seguimiento}
+
+{empresa}`,
+  },
+  {
+    key: "orden_estado_entregado_sin_reparacion",
+    label: "Aviso: Retirado sin reparación",
+    category: "ordenes",
+    description: "Aviso al cliente cuando la orden entra al estado ENTREGADO_SIN_REPARACION.",
+    variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra retirado sin reparación.
+
+Su equipo fue retirado sin reparación. Gracias por habernos consultado.
+
+Seguimiento: {link_seguimiento}
+
+{empresa}`,
+  },
+  {
+    key: "orden_estado_entregado_sin_cobro",
+    label: "Aviso: Entregado sin cobro",
+    category: "ordenes",
+    description: "Aviso al cliente cuando la orden entra al estado ENTREGADO_SIN_COBRO.",
+    variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra entregado sin cobro.
+
+Gracias por confiar en nosotros!
+
+Seguimiento: {link_seguimiento}
+
+{empresa}`,
+  },
+  {
+    key: "orden_estado_cancelado",
+    label: "Aviso: Cancelado",
+    category: "ordenes",
+    description: "Aviso al cliente cuando la orden entra al estado CANCELADO.",
+    variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra cancelado.
+
+Si tiene alguna consulta o desea ingresar un nuevo servicio, no dude en contactarnos.
+
+Seguimiento: {link_seguimiento}
+
+{empresa}`,
+  },
+  {
+    key: "orden_estado_sin_reparacion",
+    label: "Aviso: Sin posibilidad de reparación",
+    category: "ordenes",
+    description: "Aviso al cliente cuando la orden entra al estado SIN_REPARACION.",
+    variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra sin posibilidad de reparación.
+
+Lamentablemente no fue posible realizar la reparación. Puede pasar a retirar su equipo en horario de atención.
+
+Seguimiento: {link_seguimiento}
+
+{empresa}`,
+  },
   {
     key: "orden_solicitud_info",
     label: "Solicitar información",
@@ -610,6 +780,14 @@ Total estimado: {total}.
 {link_catalogo}
 
 {empresa}`,
+  },
+  {
+    key: "seguimiento_consulta_cliente",
+    label: "Consulta cliente desde seguimiento público",
+    category: "operativo",
+    description: "Mensaje pre-rellenado que el cliente envía al taller desde el botón WhatsApp de la página pública de seguimiento.",
+    variables: [VAR_CLIENTE, VAR_CODIGO_ORDEN, VAR_DISPOSITIVO],
+    defaultText: `Hola, consulto por la orden {codigo_orden} ({dispositivo}).`,
   },
   {
     key: "catalogo_solicitud_taller",

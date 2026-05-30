@@ -143,7 +143,7 @@ export async function POST(
     // Obtener datos de organización para notificación
     const { data: org } = await supabaseAdmin
       .from("organizations")
-      .select("nombre, moneda, zona_horaria")
+      .select("nombre, nombre_mostrar, slug, moneda, zona_horaria")
       .eq("id", organizationId!)
       .single()
 
@@ -156,7 +156,8 @@ export async function POST(
         clienteId: cliente.id,
         tipo: "CAMBIO_ESTADO",
         context: {
-          organizationName: org?.nombre || "",
+          organizationName: org?.nombre_mostrar || org?.nombre || "",
+          organizationSlug: org?.slug,
           moneda: org?.moneda || "ARS",
           zonaHoraria: org?.zona_horaria || "America/Argentina/Buenos_Aires",
           cliente: {
@@ -171,6 +172,7 @@ export async function POST(
             dispositivo: orden.dispositivo,
             estado: nuevoEstado,
             estadoAnterior: orden.estado,
+            publicToken: orden.public_token,
           },
         },
       }).catch(err => console.error("Error queueing notification:", err))

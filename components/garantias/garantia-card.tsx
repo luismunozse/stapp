@@ -72,7 +72,7 @@ export function GarantiaCard({ ordenId, ordenEstado }: GarantiaCardProps) {
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [showReclamoForm, setShowReclamoForm] = useState(false)
   const [creating, setCreating] = useState(false)
-  const [diasValidez, setDiasValidez] = useState(30)
+  const [diasValidez, setDiasValidez] = useState("30")
   const [notas, setNotas] = useState("")
   const [updatingReclamo, setUpdatingReclamo] = useState<string | null>(null)
 
@@ -107,7 +107,7 @@ export function GarantiaCard({ ordenId, ordenEstado }: GarantiaCardProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ordenId,
-          diasValidez,
+          diasValidez: Math.max(1, parseInt(diasValidez, 10) || 30),
           notas: notas || undefined,
         }),
       })
@@ -210,7 +210,7 @@ export function GarantiaCard({ ordenId, ordenEstado }: GarantiaCardProps) {
                   type="number"
                   min="1"
                   value={diasValidez}
-                  onChange={(e) => setDiasValidez(parseInt(e.target.value) || 30)}
+                  onChange={(e) => setDiasValidez(e.target.value)}
                   disabled={creating}
                 />
               </div>

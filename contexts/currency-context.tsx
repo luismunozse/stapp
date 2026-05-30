@@ -19,6 +19,7 @@ interface CurrencyContextType {
   currency: CurrencyCode
   timezone: string
   pais: CountryCode
+  organizationName: string
   formatPrice: (amount: number | string | null | undefined) => string
   formatDate: (date: Date | string | null | undefined) => string
   formatDateTime: (date: Date | string | null | undefined) => string
@@ -28,6 +29,7 @@ const CurrencyContext = createContext<CurrencyContextType>({
   currency: DEFAULT_CURRENCY,
   timezone: DEFAULT_TIMEZONE,
   pais: DEFAULT_COUNTRY,
+  organizationName: "",
   formatPrice: (amount) => formatCurrencyValue(amount, DEFAULT_CURRENCY),
   formatDate: (date) => formatDateValue(date, DEFAULT_TIMEZONE),
   formatDateTime: (date) => formatDateTimeValue(date, DEFAULT_TIMEZONE),
@@ -38,6 +40,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
   const [currency, setCurrency] = useState<CurrencyCode>(DEFAULT_CURRENCY)
   const [timezone, setTimezone] = useState<string>(DEFAULT_TIMEZONE)
   const [pais, setPais] = useState<CountryCode>(DEFAULT_COUNTRY)
+  const [organizationName, setOrganizationName] = useState<string>("")
 
   useEffect(() => {
     if (!session?.user?.organizationId) return
@@ -58,6 +61,9 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
         }
         if (data.pais) {
           setPais(data.pais as CountryCode)
+        }
+        if (data.nombreEmpresa) {
+          setOrganizationName(data.nombreEmpresa)
         }
       } catch (error) {
         if (controller.signal.aborted) return
@@ -94,7 +100,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
   )
 
   return (
-    <CurrencyContext.Provider value={{ currency, timezone, pais, formatPrice, formatDate, formatDateTime }}>
+    <CurrencyContext.Provider value={{ currency, timezone, pais, organizationName, formatPrice, formatDate, formatDateTime }}>
       {children}
     </CurrencyContext.Provider>
   )

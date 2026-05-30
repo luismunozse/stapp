@@ -60,7 +60,7 @@ type MobileTab = "products" | "cart"
 
 export function PosTerminal() {
   const router = useRouter()
-  const { formatPrice } = useCurrency()
+  const { formatPrice, pais } = useCurrency()
   const { confirm, showSuccess, showError } = useModal()
   const searchRef = useRef<PosProductSearchRef>(null)
 
@@ -802,7 +802,7 @@ export function PosTerminal() {
               )}
 
               {/* WhatsApp share as image + download image */}
-              <PosTicketShare ventaData={successData} plantillaCorta={plantillaCorta} />
+              <PosTicketShare ventaData={successData} plantillaCorta={plantillaCorta} countryCode={pais} />
 
               <Button onClick={handleSuccessClose} className="h-12 text-lg font-semibold">
                 Nueva Venta

@@ -15,6 +15,7 @@ export async function queueNotification(params: {
   tipo: "CAMBIO_ESTADO" | "PRESUPUESTO_DEFINIDO" | "GARANTIA_CREADA" | "RECORDATORIO_RETIRO"
   context: {
     organizationName: string
+    organizationSlug?: string
     moneda?: string
     zonaHoraria?: string
     cliente: {
@@ -31,13 +32,29 @@ export async function queueNotification(params: {
       estadoAnterior?: string
       presupuesto?: number | null
       fechaCompletado?: string | null
+      publicToken?: string | null
     }
     garantia?: {
       id: string
       diasValidez: number
       fechaVencimiento: string
     }
+    pago?: {
+      monto: number
+      saldoPendiente?: number
+      linkPago?: string
+    }
+    repuesto?: {
+      nombre: string
+    }
+    demora?: {
+      motivo: string
+    }
+    promocion?: {
+      titulo: string
+      descripcion: string
+    }
   }
 }) {
-  return sendNotificationDirect(params)
+  return sendNotificationDirect(params as any)
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getOrderByPublicToken } from "@/lib/public-token"
 import { getDeviceTypeLabel } from "@/lib/device-types"
+import { resolvePlantilla } from "@/lib/whatsapp/plantillas-catalog"
 
 export async function GET(
   request: Request,
@@ -43,7 +44,8 @@ export async function GET(
           telefono,
           direccion,
           logo_url,
-          zona_horaria
+          zona_horaria,
+          plantillas_whatsapp
         )
       `)
     if (error) return error
@@ -105,6 +107,20 @@ export async function GET(
       }))
     }
 
+    // Plantilla pre-rellenada para el botón de WhatsApp ("Coordinar retiro" /
+    // "Consultar"). Si el taller customizó "seguimiento_consulta_cliente" en
+    // /configuracion/plantillas-whatsapp, se usa esa; si no, el default.
+    const codigoOrdenDisplay = orden.codigo_orden || `#${orden.numero_orden}`
+    const whatsappMensajeConsulta = resolvePlantilla(
+      "seguimiento_consulta_cliente",
+      {
+        cliente: cliente?.nombre || "",
+        codigo_orden: codigoOrdenDisplay,
+        dispositivo: orden.dispositivo || "",
+      },
+      (org?.plantillas_whatsapp as Record<string, string>) || null,
+    )
+
     return NextResponse.json({
       id: orden.id,
       numeroOrden: orden.numero_orden,
@@ -137,6 +153,7 @@ export async function GET(
         direccion: org?.direccion || null,
         logoUrl: org?.logo_url || null,
       },
+      whatsappMensajeConsulta,
     })
   } catch (error) {
     console.error("Error fetching public order:", error)

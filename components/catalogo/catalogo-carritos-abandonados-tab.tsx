@@ -10,6 +10,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { resolvePlantilla } from "@/lib/whatsapp/plantillas-catalog"
+import { useCurrency } from "@/contexts/currency-context"
 
 interface CarritoItem {
   itemId: string
@@ -57,6 +58,7 @@ function timeAgo(iso: string) {
 }
 
 export function CatalogoCarritosAbandonadosTab() {
+  const { organizationName } = useCurrency()
   const [carritos, setCarritos] = useState<Carrito[]>([])
   const [pendientes, setPendientes] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -208,8 +210,6 @@ export function CatalogoCarritosAbandonadosTab() {
                   typeof window !== "undefined"
                     ? `${window.location.origin}/catalogo/${c.catalogo_slug}`
                     : ""
-                // empresa: el componente padre (catalogo-admin) no nos pasa el nombre
-                // de la organización; se deja vacío para evitar refactor de scope.
                 const msg = resolvePlantilla(
                   "catalogo_carrito_abandonado_recovery",
                   {
@@ -217,7 +217,7 @@ export function CatalogoCarritosAbandonadosTab() {
                     items: `${lista}${restantes}`,
                     total: formatPrecio(Number(c.total_estimado)),
                     link_catalogo: linkCatalogo,
-                    empresa: "",
+                    empresa: organizationName,
                   },
                   plantillas,
                 )

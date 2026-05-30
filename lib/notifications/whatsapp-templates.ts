@@ -117,6 +117,18 @@ function applyOverride(
   plantillasOverride?: Record<string, string> | null,
 ): string {
   if (!plantillasOverride) return defaultMessage
+
+  // Lookup especial para estado_actual: primero buscar override por estado específico
+  // (ej. orden_estado_recibido). Si no existe, cae al override genérico orden_estado_actual.
+  if (legacyId === "estado_actual" && ctx.orden?.estado) {
+    const estadoKey = `orden_estado_${ctx.orden.estado.toLowerCase()}`
+    const overrideEstado = plantillasOverride[estadoKey]
+    if (overrideEstado && overrideEstado.trim()) {
+      const vars = buildVarsFromContext(ctx)
+      return renderTemplate(overrideEstado, vars)
+    }
+  }
+
   const catalogKey = LEGACY_ID_TO_CATALOG_KEY[legacyId]
   if (!catalogKey) return defaultMessage
   const override = plantillasOverride[catalogKey]

@@ -44,17 +44,7 @@ const TIPO_TO_CATALOG_KEY: Record<string, string> = {
   SEGUIMIENTO_PRESUPUESTO_RECHAZADO: "orden_seguimiento_rechazado",
 }
 
-function resolvePlantillaForTipo(
-  tipo: string,
-  context: any,
-  plantillasOverride: Record<string, string> | null | undefined,
-): string | null {
-  if (!plantillasOverride) return null
-  const key = TIPO_TO_CATALOG_KEY[tipo]
-  if (!key) return null
-  const tpl = plantillasOverride[key]
-  if (!tpl || !tpl.trim()) return null
-
+function buildVarsForContext(context: any): Record<string, string | number> {
   const currency: CurrencyCode = (context.moneda as CurrencyCode) || DEFAULT_CURRENCY
   const formatCurrency = (amount: number | null | undefined) =>
     formatCurrencyValue(amount ?? 0, currency)
@@ -107,7 +97,32 @@ function resolvePlantillaForTipo(
     vars.promo_descripcion = context.promocion.descripcion || ""
   }
 
-  return renderTemplate(tpl, vars)
+  return vars
+}
+
+function resolvePlantillaForTipo(
+  tipo: string,
+  context: any,
+  plantillasOverride: Record<string, string> | null | undefined,
+): string | null {
+  if (!plantillasOverride) return null
+
+  // Lookup especial para CAMBIO_ESTADO: primero buscar override por estado específico
+  // (ej. orden_estado_recibido). Si no existe, cae al override genérico orden_estado_actual.
+  if (tipo === "CAMBIO_ESTADO" && context.orden?.estado) {
+    const estadoKey = `orden_estado_${String(context.orden.estado).toLowerCase()}`
+    const tplEstado = plantillasOverride[estadoKey]
+    if (tplEstado && tplEstado.trim()) {
+      return renderTemplate(tplEstado, buildVarsForContext(context))
+    }
+  }
+
+  const key = TIPO_TO_CATALOG_KEY[tipo]
+  if (!key) return null
+  const tpl = plantillasOverride[key]
+  if (!tpl || !tpl.trim()) return null
+
+  return renderTemplate(tpl, buildVarsForContext(context))
 }
 
 let _resend: Resend | null = null

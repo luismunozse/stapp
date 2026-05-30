@@ -71,13 +71,21 @@ export async function GET(
             inventario:inventario_id ( precio_compra )
           )
         ),
+        garantias (
+          id,
+          dias_validez,
+          fecha_vencimiento,
+          estado
+        ),
         organizations:organization_id (
           nombre,
           nombre_mostrar,
           logo_url,
           telefono,
           direccion,
-          comprobante_terminos
+          comprobante_terminos,
+          moneda,
+          zona_horaria
         )
       `)
       .eq("id", id)
@@ -99,6 +107,17 @@ export async function GET(
       )
     }
 
+    // Último cambio de estado para derivar estadoAnterior (plantillas WhatsApp
+    // como "seguimiento_presupuesto_rechazado" lo necesitan).
+    const { data: ultimoEventoEstado } = await supabaseAdmin
+      .from("orden_eventos")
+      .select("estado_anterior, estado_nuevo, created_at")
+      .eq("orden_id", id)
+      .eq("tipo", "CAMBIO_ESTADO")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
     const formatted = formatOrden(orden)
     const org = (orden as any).organizations
     return NextResponse.json({
@@ -108,6 +127,9 @@ export async function GET(
       organizationTelefono: org?.telefono || null,
       organizationDireccion: org?.direccion || null,
       organizationComprobanteTerminos: org?.comprobante_terminos || null,
+      organizationMoneda: org?.moneda || null,
+      organizationZonaHoraria: org?.zona_horaria || null,
+      estadoAnterior: ultimoEventoEstado?.estado_anterior ?? null,
     }, {
       headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
     })
@@ -138,7 +160,7 @@ export async function PUT(
       .select(`
         *,
         clientes (*),
-        organizations (id, nombre, moneda, zona_horaria)
+        organizations (id, nombre, nombre_mostrar, slug, moneda, zona_horaria)
       `)
       .eq("id", id)
       .eq("organization_id", organizationId!)
@@ -354,7 +376,8 @@ export async function PUT(
         clienteId: cliente.id,
         tipo: "CAMBIO_ESTADO",
         context: {
-          organizationName: org.nombre,
+          organizationName: org.nombre_mostrar || org.nombre,
+          organizationSlug: org.slug,
           moneda: org.moneda || "ARS",
           zonaHoraria: org.zona_horaria || "America/Argentina/Buenos_Aires",
           cliente: {
@@ -369,6 +392,7 @@ export async function PUT(
             dispositivo: orden.dispositivo,
             estado: estadoFinal,
             estadoAnterior: orden.estado,
+            publicToken: orden.public_token,
           },
         },
       }).catch(err => console.error("Error queueing notification:", err))
@@ -386,7 +410,8 @@ export async function PUT(
         clienteId: cliente.id,
         tipo: "PRESUPUESTO_DEFINIDO",
         context: {
-          organizationName: org.nombre,
+          organizationName: org.nombre_mostrar || org.nombre,
+          organizationSlug: org.slug,
           moneda: org.moneda || "ARS",
           zonaHoraria: org.zona_horaria || "America/Argentina/Buenos_Aires",
           cliente: {
@@ -401,6 +426,7 @@ export async function PUT(
             dispositivo: orden.dispositivo,
             estado: updatedOrden.estado,
             presupuesto: data.presupuesto,
+            publicToken: orden.public_token,
           },
         },
       }).catch(err => console.error("Error queueing notification:", err))

@@ -11,6 +11,7 @@ import {
   generateWhatsAppUrl,
 } from "@/lib/notifications/whatsapp-templates"
 import type { NotificationContext } from "@/lib/notifications/types"
+import { useCurrency } from "@/contexts/currency-context"
 
 interface WhatsAppDialogProps {
   context: NotificationContext
@@ -18,6 +19,7 @@ interface WhatsAppDialogProps {
 }
 
 export function WhatsAppDialog({ context, onClose }: WhatsAppDialogProps) {
+  const { pais } = useCurrency()
   const [isOpen, setIsOpen] = useState(false)
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
   const [customMessage, setCustomMessage] = useState("")
@@ -124,7 +126,7 @@ export function WhatsAppDialog({ context, onClose }: WhatsAppDialogProps) {
   }
 
   const handleSend = async () => {
-    const url = generateWhatsAppUrl(context.cliente.telefonoContacto || context.cliente.telefono, customMessage)
+    const url = generateWhatsAppUrl(context.cliente.telefonoContacto || context.cliente.telefono, customMessage, pais)
     try {
       const { Capacitor } = await import("@capacitor/core")
       if (Capacitor.isNativePlatform()) {

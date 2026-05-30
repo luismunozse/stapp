@@ -94,7 +94,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const router = useRouter()
   const { data: session } = useSession()
   const { confirm, alert } = useModal()
-  const { formatPrice, formatDate } = useCurrency()
+  const { formatPrice, formatDate, currency, timezone } = useCurrency()
   const [orden, setOrden] = useState<OrdenServicio | null>(null)
   const [tecnicos, setTecnicos] = useState<UserType[]>([])
   const [loading, setLoading] = useState(true)
@@ -640,32 +640,70 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <WhatsAppDialog
-            context={{
-              organizationId: "",
-              organizationName: (orden as any).organizationName || "",
-              organizationSlug: (() => {
+            context={(() => {
+              const o: any = orden
+              const slug = (() => {
                 if (typeof window === "undefined") return undefined
                 const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
                 const h = window.location.hostname
                 return h.endsWith(`.${rootDomain}`) ? h.replace(`.${rootDomain}`, "") : undefined
-              })(),
-              orden: {
-                id: orden.id,
-                numeroOrden: orden.numeroOrden,
-                estado: orden.estado,
-                dispositivo: orden.dispositivo,
-                presupuesto: orden.presupuesto,
-                fechaCompletado: orden.fechaCompletado ? new Date(orden.fechaCompletado as any) : null,
-                publicToken: orden.publicToken,
-              },
-              cliente: {
-                id: orden.cliente!.id,
-                nombre: orden.cliente!.nombre,
-                email: orden.cliente!.email,
-                telefono: orden.cliente!.telefono,
-                telefonoContacto: orden.telefonoContacto,
-              },
-            }}
+              })()
+              // Garantía vigente (la más reciente activa)
+              const garantiasArr: any[] = Array.isArray(o.garantia) ? o.garantia : (o.garantia ? [o.garantia] : [])
+              const gActiva = garantiasArr
+                .filter((g) => g && g.estado === "ACTIVA")
+                .sort((a, b) => new Date(b.fecha_vencimiento).getTime() - new Date(a.fecha_vencimiento).getTime())[0]
+              // Saldo pendiente derivado de cobros vs costo
+              const baseTotal = Number(o.costoFinal ?? o.presupuesto ?? 0)
+              const cobrado = Number(o.totalCobrado ?? 0) + Number(o.sena ?? 0) - Number(o.descuentoCobro ?? 0)
+              const saldoPendiente = Math.max(0, baseTotal - cobrado)
+              // Demora: fechaPrometida pasada y no entregada
+              const fechaPromTs = o.fechaPrometida ? new Date(o.fechaPrometida).getTime() : null
+              const entregada = ["ENTREGADO", "ENTREGADO_SIN_REPARACION", "ENTREGADO_SIN_COBRO", "CANCELADO"].includes(o.estado)
+              const esDemora = fechaPromTs != null && fechaPromTs < Date.now() && !entregada
+              return {
+                organizationId: session?.user?.organizationId || o.organizationId || "",
+                organizationName: o.organizationName || "",
+                organizationSlug: slug,
+                moneda: o.organizationMoneda || currency,
+                zonaHoraria: o.organizationZonaHoraria || timezone,
+                cliente: {
+                  id: o.cliente!.id,
+                  nombre: o.cliente!.nombre,
+                  email: o.cliente!.email,
+                  telefono: o.cliente!.telefono,
+                  telefonoContacto: o.telefonoContacto,
+                },
+                orden: {
+                  id: o.id,
+                  numeroOrden: o.numeroOrden,
+                  estado: o.estado,
+                  estadoAnterior: o.estadoAnterior ?? undefined,
+                  dispositivo: o.dispositivo,
+                  presupuesto: o.presupuesto,
+                  fechaCompletado: o.fechaCompletado ? new Date(o.fechaCompletado) : null,
+                  publicToken: o.publicToken,
+                },
+                ...(gActiva && {
+                  garantia: {
+                    id: gActiva.id,
+                    diasValidez: gActiva.dias_validez,
+                    fechaVencimiento: new Date(gActiva.fecha_vencimiento),
+                  },
+                }),
+                ...(saldoPendiente > 0 && {
+                  pago: {
+                    monto: 0,
+                    saldoPendiente,
+                  },
+                }),
+                ...(esDemora && {
+                  demora: {
+                    motivo: `La fecha estimada de entrega (${formatDate(o.fechaPrometida)}) ya pasó`,
+                  },
+                }),
+              }
+            })()}
           />
           <Button variant="outline" size="sm" onClick={handleDownloadPdf} disabled={downloadingPdf}>
             <FileDown className="h-4 w-4 mr-2" />

@@ -63,7 +63,7 @@ export function EntregaDialog({
   const [notasEntrega, setNotasEntrega] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [conGarantia, setConGarantia] = useState(!esRetiro && !sinCobro)
-  const [diasGarantia, setDiasGarantia] = useState(30)
+  const [diasGarantia, setDiasGarantia] = useState("30")
   const [notasGarantia, setNotasGarantia] = useState("")
   const [motivoSinCobro, setMotivoSinCobro] = useState<MotivoSinCobro>(
     () => defaultMotivoSinCobro(orden.estado)
@@ -106,7 +106,7 @@ export function EntregaDialog({
           sinCobro: sinCobro || undefined,
           motivoSinCobro: sinCobro ? motivoSinCobro : undefined,
           ...(conGarantia && !esRetiro && !sinCobro ? {
-            diasGarantia,
+            diasGarantia: Math.max(1, parseInt(diasGarantia, 10) || 30),
             notasGarantia: notasGarantia || null,
           } : {}),
         }),
@@ -137,7 +137,7 @@ export function EntregaDialog({
       setNotasEntrega("")
       setError(null)
       setConGarantia(!esRetiro && !sinCobro)
-      setDiasGarantia(30)
+      setDiasGarantia("30")
       setNotasGarantia("")
       onClose()
     }
@@ -281,7 +281,7 @@ export function EntregaDialog({
                       type="number"
                       min="1"
                       value={diasGarantia}
-                      onChange={(e) => setDiasGarantia(parseInt(e.target.value) || 30)}
+                      onChange={(e) => setDiasGarantia(e.target.value)}
                       disabled={loading}
                       className="mt-1 w-32"
                     />

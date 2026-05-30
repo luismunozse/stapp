@@ -56,7 +56,7 @@ function generateVentaMessage(
 }
 
 export function VentaCreadaModal({ open, onClose, venta }: VentaCreadaModalProps) {
-  const { formatPrice } = useCurrency()
+  const { formatPrice, pais } = useCurrency()
   const [copied, setCopied] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [mensaje, setMensaje] = useState("")
@@ -171,7 +171,7 @@ export function VentaCreadaModal({ open, onClose, venta }: VentaCreadaModalProps
           </Button>
 
           {/* Enviar ticket como imagen por WhatsApp */}
-          <PosTicketShare ventaData={venta} plantillaCorta={plantilla.venta_comprobante_corto} />
+          <PosTicketShare ventaData={venta} plantillaCorta={plantilla.venta_comprobante_corto} countryCode={pais} />
 
           {/* Mensaje de texto para WhatsApp (alternativa) */}
           <details className="text-sm">

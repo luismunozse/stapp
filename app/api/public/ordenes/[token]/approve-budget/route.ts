@@ -22,7 +22,7 @@ export async function POST(
         id, estado, presupuesto, organization_id, cliente_id,
         numero_orden, dispositivo,
         clientes (id, nombre, email, telefono),
-        organizations (nombre, nombre_mostrar)
+        organizations (nombre, nombre_mostrar, slug, moneda, zona_horaria)
       `)
     if (error) return error
 
@@ -93,6 +93,9 @@ export async function POST(
       tipo: "CAMBIO_ESTADO",
       context: {
         organizationName: (org?.nombre_mostrar as string) || (org?.nombre as string) || "",
+        organizationSlug: org?.slug as string | undefined,
+        moneda: (org?.moneda as string) || "ARS",
+        zonaHoraria: (org?.zona_horaria as string) || "America/Argentina/Buenos_Aires",
         cliente: {
           id: cliente?.id as string,
           nombre: cliente?.nombre as string,
@@ -106,6 +109,7 @@ export async function POST(
           estado: "APROBADO",
           estadoAnterior: "PRESUPUESTADO",
           presupuesto: orden.presupuesto,
+          publicToken: orden.public_token,
         },
       },
     }).catch(err => console.error("Error sending notification:", err))

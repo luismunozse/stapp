@@ -294,6 +294,13 @@ function PlantillaEditor({
               />
             ))}
           </div>
+          {plantilla.variables.some((v) => v.label.includes("(auto)")) && (
+            <p className="text-[10px] text-muted-foreground mt-1.5 italic">
+              Variables con <span className="font-mono">(auto)</span> ya incluyen el salto de
+              línea y el texto fijo (p. ej. "Presupuesto estimado: $45.000"). Si el dato no
+              existe, no aparece nada. No las borres si querés que ese dato se muestre.
+            </p>
+          )}
         </div>
 
         {/* Unknown variables warning */}

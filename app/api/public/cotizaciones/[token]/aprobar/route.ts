@@ -90,7 +90,7 @@ export async function POST(
     if (cotizacion.orden_id) {
       const { data: orden } = await supabaseAdmin
         .from("ordenes_servicio")
-        .select("id, estado, organization_id, cliente_id, numero_orden, dispositivo, clientes (id, nombre, email, telefono), organizations (nombre, nombre_mostrar)")
+        .select("id, estado, organization_id, cliente_id, numero_orden, dispositivo, public_token, clientes (id, nombre, email, telefono), organizations (nombre, nombre_mostrar, slug, moneda, zona_horaria)")
         .eq("id", cotizacion.orden_id)
         .single()
 
@@ -128,6 +128,9 @@ export async function POST(
           tipo: "CAMBIO_ESTADO",
           context: {
             organizationName: (org?.nombre_mostrar as string) || (org?.nombre as string) || "",
+            organizationSlug: org?.slug as string | undefined,
+            moneda: (org?.moneda as string) || "ARS",
+            zonaHoraria: (org?.zona_horaria as string) || "America/Argentina/Buenos_Aires",
             cliente: {
               id: cliente?.id as string,
               nombre: cliente?.nombre as string,
@@ -141,6 +144,7 @@ export async function POST(
               estado: "APROBADO",
               estadoAnterior: "PRESUPUESTADO",
               presupuesto: cotizacion.total,
+              publicToken: (orden as any).public_token,
             },
           },
         }).catch(err => console.error("Error sending notification:", err))
