@@ -20,6 +20,11 @@ vi.mock("@/lib/audit", () => ({
   })),
 }))
 
+vi.mock("@/lib/webhooks/dispatcher", () => ({
+  emitWebhookEvent: vi.fn().mockResolvedValue(undefined),
+}))
+
+import { supabaseAdmin } from "@/lib/supabase"
 import { GET, POST } from "@/app/api/ventas/route"
 
 describe("GET /api/ventas", () => {
@@ -247,5 +252,56 @@ describe("POST /api/ventas", () => {
 
     // Will be 400 because RPC is not mocked, but NOT a Zod validation error
     expect([201, 400, 500]).toContain(status)
+  })
+})
+
+describe("POST /api/ventas — serieIds + idempotencia", () => {
+  const baseBody = {
+    clienteNombre: "Consumidor Final",
+    items: [{ inventarioId: "i1", descripcion: "Notebook", cantidad: 1, precioUnitario: 100, diasGarantia: 0 }],
+    metodoPago: "EFECTIVO",
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it("pasa serieIds e idempotencyKey a la RPC", async () => {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ventaId: "v1" }, error: null } as any)
+    mockSupabaseFrom({
+      ventas: createChainMock({ id: "v1", numero_venta: 1, total: 100 }),
+      organizations: createChainMock({ nombre: "Org", nombre_mostrar: "Org" }),
+    })
+
+    const res = await POST(createPostRequest({
+      ...baseBody,
+      idempotencyKey: "idem-123",
+      items: [{ ...baseBody.items[0], serieIds: ["s1"] }],
+    }))
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(201)
+    const rpcArgs = vi.mocked(supabaseAdmin.rpc).mock.calls[0][1] as any
+    expect(rpcArgs.p_idempotency_key).toBe("idem-123")
+    expect(rpcArgs.p_items[0].serieIds).toEqual(["s1"])
+  })
+
+  it("23505: devuelve la venta existente (reintento idempotente)", async () => {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
+      data: null,
+      error: { code: "23505", message: "duplicate key ventas_idempotency_key_unique" },
+    } as any)
+    mockSupabaseFrom({
+      ventas: createChainMock({ id: "v-existing", numero_venta: 7, total: 100 }),
+      organizations: createChainMock({ nombre: "Org", nombre_mostrar: "Org" }),
+    })
+
+    const res = await POST(createPostRequest({ ...baseBody, idempotencyKey: "idem-dup" }))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(201)
+    expect(body.numeroVenta).toBe(7)
   })
 })

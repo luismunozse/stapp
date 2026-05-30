@@ -15,6 +15,8 @@ const itemSchema = z.object({
   descuento: z.number().min(0).default(0),
   tipoDescuento: z.enum(["MONTO", "PORCENTAJE"]).default("MONTO"),
   porcentajeDescuento: z.number().min(0).max(100).default(0),
+  serieIds: z.array(z.string()).optional(),
+  costo: z.number().min(0).nullable().optional(),
 })
 
 const ventaSchema = z.object({
@@ -33,6 +35,7 @@ const ventaSchema = z.object({
   numeroReferencia: z.string().nullable().optional(),
   descuentoMotivo: z.string().nullable().optional(),
   pagosParcial: z.boolean().optional(),
+  idempotencyKey: z.string().max(100).nullable().optional(),
   pagos: z.array(z.object({
     metodo: z.string(),
     monto: z.number().positive(),
@@ -190,6 +193,8 @@ export async function POST(request: Request) {
       descuento: item.descuento,
       tipoDescuento: item.tipoDescuento,
       porcentajeDescuento: item.porcentajeDescuento,
+      ...(item.serieIds && item.serieIds.length > 0 && { serieIds: item.serieIds }),
+      ...(item.costo != null && { costo: item.costo }),
     }))
 
     // Crear venta atómicamente
@@ -211,6 +216,7 @@ export async function POST(request: Request) {
       p_recargo_porcentaje: data.recargoPorcentaje || null,
       p_monto_original: data.montoOriginal || null,
       p_items: pItems,
+      p_idempotency_key: data.idempotencyKey || null,
     }
 
     // Pass multi-payment array if provided
@@ -225,6 +231,37 @@ export async function POST(request: Request) {
     const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc("crear_venta_atomica", rpcParams)
 
     if (rpcError) {
+      // 23505: violación del índice único de idempotencia → la venta ya existe.
+      // Reintento idempotente: devolver la venta original sin duplicar.
+      if ((rpcError as any).code === "23505" && data.idempotencyKey) {
+        const { data: existente } = await supabaseAdmin
+          .from("ventas")
+          .select(`
+            *,
+            clientes (*),
+            users:vendedor_id (id, nombre),
+            items_venta (*, inventario (*)),
+            garantias_venta (*),
+            pagos_venta (*),
+            devoluciones_venta (*, items_devolucion(*))
+          `)
+          .eq("organization_id", organizationId!)
+          .eq("idempotency_key", data.idempotencyKey)
+          .single()
+
+        if (existente) {
+          const { data: org } = await supabaseAdmin
+            .from("organizations")
+            .select("nombre, nombre_mostrar")
+            .eq("id", organizationId!)
+            .single()
+          return NextResponse.json({
+            ...formatVenta(existente),
+            organizationName: org?.nombre_mostrar || org?.nombre || null,
+          }, { status: 201 })
+        }
+      }
+
       // Los errores de RAISE EXCEPTION vienen en error.message
       console.error("Error en crear_venta_atomica:", rpcError)
       return NextResponse.json(
