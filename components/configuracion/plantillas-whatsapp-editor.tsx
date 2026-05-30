@@ -643,7 +643,7 @@ export function PlantillasWhatsappEditor() {
         {message && (
           <div
             className={cn(
-              "px-4 py-3 rounded-lg text-sm flex items-center gap-2 animate-in slide-in-from-top-2",
+              "px-4 py-3 rounded-lg text-sm flex items-center gap-2 animate-in",
               message.type === "success"
                 ? "bg-green-50 dark:bg-green-950/50 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400"
                 : "bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400",
