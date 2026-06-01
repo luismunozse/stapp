@@ -3,9 +3,8 @@ import { test, expect } from "@playwright/test"
 test.describe("Paginas publicas", () => {
   test("landing page carga correctamente", async ({ page }) => {
     await page.goto("/")
-    // El <title> de la home es el título SEO ("Software de Gestión para
-    // Servicio Técnico | ..."), no incluye la marca "STApp". Verificamos el
-    // núcleo del producto, estable ante cambios de copy de marca.
+    // Verificamos el núcleo del producto en el <title>, estable ante cambios
+    // de copy de marca.
     await expect(page).toHaveTitle(/servicio técnico/i)
   })
 
