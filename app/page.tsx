@@ -14,6 +14,7 @@ import { DownloadApp } from "@/components/landing/download-app"
 import { Footer } from "@/components/landing/footer"
 import { ChatbotButton } from "@/components/chatbot/chatbot-button"
 import { WhatsAppButton } from "@/components/landing/whatsapp-button"
+import { ReducedMotionProvider } from "@/components/landing/reduced-motion-provider"
 import { getPremiumPrices, getAllPlanPrices } from "@/lib/pricing"
 import { SkipLinks } from "@/components/shared/skip-links"
 import { FAQPageJsonLd, HowToJsonLd, UseCasesListJsonLd } from "@/components/seo/json-ld"
@@ -170,18 +171,20 @@ export default async function Home() {
       <UseCasesListJsonLd />
       <SkipLinks />
       <main id="main-content" className="min-h-dvh">
-        <NavbarLanding />
-        <Hero />
-        <Features />
-        <Comparison />
-        <UseCasesGrid />
-        <PricingSection prices={prices} allPlans={allPlans} />
-        <BlogTeaser />
-        <FAQ faqs={faqData} />
-        <DownloadApp />
-        <Footer />
-        <WhatsAppButton />
-        <ChatbotButton />
+        <ReducedMotionProvider>
+          <NavbarLanding />
+          <Hero />
+          <Features />
+          <Comparison />
+          <UseCasesGrid />
+          <PricingSection prices={prices} allPlans={allPlans} />
+          <BlogTeaser />
+          <FAQ faqs={faqData} />
+          <DownloadApp />
+          <Footer />
+          <WhatsAppButton />
+          <ChatbotButton />
+        </ReducedMotionProvider>
       </main>
     </>
   )
