@@ -81,6 +81,7 @@
     "string-similarity": "^4.0.4",
     "swr": "^2.3.8",
     "tailwind-merge": "^2.5.4",
+    "tailwindcss-animate": "^1.0.7",
     "uuid": "^11.1.0",
     "web-push": "^3.6.7",
     "zod": "^3.23.8"
