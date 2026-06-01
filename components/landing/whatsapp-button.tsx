@@ -20,7 +20,7 @@ export function WhatsAppButton() {
         "bg-[#25D366] hover:bg-[#1ebe57]",
         "text-white",
         "shadow-lg hover:shadow-2xl",
-        "transition-all duration-300 hover:scale-110",
+        "transition-transform duration-300 hover:scale-110",
         "flex items-center justify-center",
         "group",
         "focus:outline-none focus:ring-4 focus:ring-green-400 focus:ring-offset-2"
