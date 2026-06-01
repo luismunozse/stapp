@@ -8,6 +8,7 @@ import { Features } from "@/components/landing/features"
 import { PricingSection } from "@/components/landing/pricing-section"
 import { Comparison } from "@/components/landing/comparison"
 import { UseCasesGrid } from "@/components/landing/use-cases-grid"
+import { Testimonials } from "@/components/landing/testimonials"
 import { BlogTeaser } from "@/components/landing/blog-teaser"
 import { FAQ } from "@/components/landing/faq"
 import { DownloadApp } from "@/components/landing/download-app"
@@ -57,7 +58,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "STApp - Software de Gestión para Talleres de Celulares",
     description:
-      "Gestión completa de tu taller: órdenes, inventario, ventas y finanzas. +500 talleres en Argentina. Probá 30 días gratis.",
+      "Gestión completa de tu taller: órdenes, inventario, ventas y finanzas. Probá 30 días gratis, sin tarjeta de crédito.",
     url: "https://stapp.com.ar",
   },
   alternates: {
@@ -177,10 +178,11 @@ export default async function Home() {
       <main id="main-content" className="min-h-dvh">
         <ReducedMotionProvider>
           <NavbarLanding />
-          <Hero />
+          <Hero prices={prices} />
           <Features />
           <Comparison />
           <UseCasesGrid />
+          <Testimonials />
           <PricingSection prices={prices} allPlans={allPlans} />
           <BlogTeaser />
           <FAQ faqs={faqData} />
