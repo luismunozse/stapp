@@ -203,7 +203,7 @@ export function ChatbotPanel({ isOpen, onClose }: ChatbotPanelProps) {
         )}
         {showCaptureBadge && (
           <div className="flex items-center justify-center my-2">
-            <span className="inline-flex items-center gap-1.5 text-xs bg-green-50 text-green-700 border border-green-200 px-3 py-1.5 rounded-full animate-in fade-in-0 slide-in-from-bottom-2">
+            <span className="inline-flex items-center gap-1.5 text-xs bg-green-50 text-green-700 border border-green-200 px-3 py-1.5 rounded-full ease-snappy animate-in fade-in-0 slide-in-from-bottom-2">
               <CheckCircle2 className="w-3.5 h-3.5" />
               Tus datos quedaron guardados
             </span>
