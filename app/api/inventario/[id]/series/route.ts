@@ -17,6 +17,7 @@ export async function GET(
     const estado = url.searchParams.get("estado")?.trim().toUpperCase()
     const q = url.searchParams.get("q")?.trim()
     const limit = Math.min(Number(url.searchParams.get("limit")) || 200, 500)
+    const order = url.searchParams.get("order")
 
     let query = supabaseAdmin
       .from("inventario_series")
@@ -25,7 +26,7 @@ export async function GET(
       )
       .eq("inventario_id", id)
       .eq("organization_id", organizationId!)
-      .order("created_at", { ascending: false })
+      .order("created_at", { ascending: order === "asc" })
       .limit(limit)
 
     if (estado) query = query.eq("estado", estado)

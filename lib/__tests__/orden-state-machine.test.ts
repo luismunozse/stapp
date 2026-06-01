@@ -157,10 +157,11 @@ describe("orden-state-machine", () => {
       expect(error).not.toBeNull()
     })
 
-    it("requiere técnico asignado para EN_REPARACION", () => {
-      const error = validarCamposRequeridos("EN_REPARACION", { tecnico_id: null, costo_final: 5000 })
+    it("requiere costo final (presupuesto aceptado) para EN_REPARACION cuando no hay técnico ni costo", () => {
+      // tecnico_id ya no es un campo requerido por la state machine; solo costo_final lo es.
+      const error = validarCamposRequeridos("EN_REPARACION", { tecnico_id: null, costo_final: null })
       expect(error).not.toBeNull()
-      expect(error).toContain("Técnico")
+      expect(error).toContain("Costo final")
     })
 
     it("requiere costo final para EN_REPARACION", () => {

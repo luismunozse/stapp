@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useCallback } from "react"
+import { useState, useMemo, useCallback, useEffect } from "react"
 import useSWR from "swr"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -306,7 +306,10 @@ function TemplateEditorDialog({ open, onOpenChange, template, onSave, busy }: Ed
   const [testOutput, setTestOutput] = useState<string>("")
 
   // Reset cuando se abre con un template distinto.
-  useMemo(() => setDraft(template), [template.id])
+  useEffect(() => {
+    setDraft(template)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [template.id])
 
   const renderTest = useCallback(() => {
     if (draft.formato === "PDF") {

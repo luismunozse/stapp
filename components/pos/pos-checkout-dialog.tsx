@@ -47,6 +47,7 @@ export function PosCheckoutDialog({
   const [observaciones, setObservaciones] = useState("")
   const [saldoCuenta, setSaldoCuenta] = useState(0)
   const [pagoParcial, setPagoParcial] = useState(false)
+  const [idempotencyKey, setIdempotencyKey] = useState<string>("")
 
   // Cash change calculation
   const [montoRecibido, setMontoRecibido] = useState<number | "">("")
@@ -67,6 +68,7 @@ export function PosCheckoutDialog({
       setMontoRecibido("")
       setObservaciones("")
       setPagoParcial(false)
+      setIdempotencyKey(crypto.randomUUID())
     }
   }, [open, total])
 
@@ -118,6 +120,17 @@ export function PosCheckoutDialog({
       return
     }
 
+    // Validar selección de series para items serializados
+    const itemSinSeries = items.find(
+      (it) => it.trackeaSeries && it.serieIds.length !== it.cantidad
+    )
+    if (itemSinSeries) {
+      await showError(
+        `Seleccioná ${itemSinSeries.cantidad} serie(s) para "${itemSinSeries.nombre}" antes de cobrar`
+      )
+      return
+    }
+
     setLoading(true)
     try {
       // Filter out pago lines with 0 amount
@@ -128,6 +141,7 @@ export function PosCheckoutDialog({
         clienteNombre: cliente.nombre || "Consumidor Final",
         clienteTelefono: cliente.telefono || undefined,
         pagosParcial: pagoParcial,
+        idempotencyKey,
         items: items.map((item) => ({
           inventarioId: item.inventarioId || null,
           descripcion: item.nombre,
@@ -137,6 +151,8 @@ export function PosCheckoutDialog({
           descuento: 0,
           tipoDescuento: "MONTO" as const,
           porcentajeDescuento: 0,
+          ...(item.trackeaSeries && item.serieIds.length > 0 && { serieIds: item.serieIds }),
+          ...(item.costo != null && { costo: item.costo }),
         })),
         descuento: 0,
         tipoDescuento: "MONTO" as const,

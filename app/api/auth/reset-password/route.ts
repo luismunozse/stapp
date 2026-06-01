@@ -38,6 +38,12 @@ export async function POST(request: Request) {
         password: hashedPassword,
         reset_token: null,
         reset_token_expiry: null,
+        // Limpiar lockout: si el usuario quedó bloqueado por intentos fallidos,
+        // resetear la clave debe desbloquear la cuenta. Sin esto, el usuario
+        // resetea el password pero sigue sin poder entrar (ACCOUNT_LOCKED).
+        failed_login_attempts: 0,
+        locked_until: null,
+        last_failed_login: null,
       })
       .eq("id", user.id)
 

@@ -174,7 +174,7 @@ export function CookieSettings() {
 
         {/* Mensaje de guardado */}
         {showSaved && (
-          <div className="fixed bottom-4 right-4 bg-green-600 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 animate-in slide-in-from-bottom-5 pb-[env(safe-area-inset-bottom,1rem)]">
+          <div className="fixed bottom-4 right-4 bg-green-600 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 ease-snappy animate-in slide-in-from-bottom-5 pb-[env(safe-area-inset-bottom,1rem)]">
             <Check className="w-5 h-5" />
             <span className="font-medium">Preferencias guardadas</span>
           </div>

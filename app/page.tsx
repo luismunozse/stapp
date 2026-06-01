@@ -14,12 +14,17 @@ import { DownloadApp } from "@/components/landing/download-app"
 import { Footer } from "@/components/landing/footer"
 import { ChatbotButton } from "@/components/chatbot/chatbot-button"
 import { WhatsAppButton } from "@/components/landing/whatsapp-button"
+import { ReducedMotionProvider } from "@/components/landing/reduced-motion-provider"
 import { getPremiumPrices, getAllPlanPrices } from "@/lib/pricing"
 import { SkipLinks } from "@/components/shared/skip-links"
 import { FAQPageJsonLd, HowToJsonLd, UseCasesListJsonLd } from "@/components/seo/json-ld"
 
 export const metadata: Metadata = {
-  title: "Software de Gestión para Servicio Técnico | Reparación de Celulares y Electrónica",
+  // Título absoluto: el template "%s | STApp" del layout raíz NO aplica a la
+  // home (Next.js sólo lo aplica a segmentos hijos, no al propio segmento raíz),
+  // así que incluimos la marca acá. Keyword primero, marca al final, ~50 chars
+  // para que Google no lo trunque en el SERP.
+  title: "Software de Gestión para Servicio Técnico | STApp",
   description:
     "STApp es el software #1 para talleres de reparación de celulares y servicio técnico en Argentina. Órdenes de trabajo, caja diaria, inventario, punto de venta, finanzas, cotizaciones, leads, reportes avanzados, asistente IA y notificaciones WhatsApp. Probá 30 días gratis sin tarjeta.",
   keywords: [
@@ -170,18 +175,20 @@ export default async function Home() {
       <UseCasesListJsonLd />
       <SkipLinks />
       <main id="main-content" className="min-h-dvh">
-        <NavbarLanding />
-        <Hero />
-        <Features />
-        <Comparison />
-        <UseCasesGrid />
-        <PricingSection prices={prices} allPlans={allPlans} />
-        <BlogTeaser />
-        <FAQ faqs={faqData} />
-        <DownloadApp />
-        <Footer />
-        <WhatsAppButton />
-        <ChatbotButton />
+        <ReducedMotionProvider>
+          <NavbarLanding />
+          <Hero />
+          <Features />
+          <Comparison />
+          <UseCasesGrid />
+          <PricingSection prices={prices} allPlans={allPlans} />
+          <BlogTeaser />
+          <FAQ faqs={faqData} />
+          <DownloadApp />
+          <Footer />
+          <WhatsAppButton />
+          <ChatbotButton />
+        </ReducedMotionProvider>
       </main>
     </>
   )

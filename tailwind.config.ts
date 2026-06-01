@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import tailwindcssAnimate from "tailwindcss-animate";
 
 const config: Config = {
   darkMode: ["class"],
@@ -103,6 +104,13 @@ const config: Config = {
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
+      // Curvas fuertes (Emil). tailwindcss-animate lee animationTimingFunction
+      // desde transitionTimingFunction, asi que `ease-snappy` fija tambien la
+      // animation-timing-function de animate-in/animate-out.
+      transitionTimingFunction: {
+        snappy: "cubic-bezier(0.23, 1, 0.32, 1)",
+        smooth: "cubic-bezier(0.77, 0, 0.175, 1)",
+      },
       keyframes: {
         "accordion-down": {
           from: { height: "0" },
@@ -171,12 +179,13 @@ const config: Config = {
         "accordion-up": "accordion-up 0.2s ease-out",
         shimmer: "shimmer 2s infinite",
         pulse: "pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
-        "slide-in-from-top": "slide-in-from-top 0.3s ease-out",
-        "slide-in-from-bottom": "slide-in-from-bottom 0.3s ease-out",
-        "slide-out-to-top": "slide-out-to-top 0.3s ease-in",
-        "slide-out-to-bottom": "slide-out-to-bottom 0.3s ease-in",
-        "fade-in": "fade-in 0.2s ease-out",
-        "fade-out": "fade-out 0.2s ease-in",
+        // Easings fuertes (Emil): nunca ease-in en UI; salidas <300ms.
+        "slide-in-from-top": "slide-in-from-top 0.25s cubic-bezier(0.23, 1, 0.32, 1)",
+        "slide-in-from-bottom": "slide-in-from-bottom 0.25s cubic-bezier(0.23, 1, 0.32, 1)",
+        "slide-out-to-top": "slide-out-to-top 0.2s cubic-bezier(0.23, 1, 0.32, 1)",
+        "slide-out-to-bottom": "slide-out-to-bottom 0.2s cubic-bezier(0.23, 1, 0.32, 1)",
+        "fade-in": "fade-in 0.2s cubic-bezier(0.23, 1, 0.32, 1)",
+        "fade-out": "fade-out 0.18s cubic-bezier(0.23, 1, 0.32, 1)",
         // Chatbot animations
         "bounce-slow": "bounce-slow 3s ease-in-out infinite",
         "pulse-glow": "pulse-glow 2s ease-in-out infinite",
@@ -186,7 +195,7 @@ const config: Config = {
       },
     },
   },
-  plugins: [],
+  plugins: [tailwindcssAnimate],
 };
 
 export default config;

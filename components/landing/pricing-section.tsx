@@ -145,7 +145,7 @@ export function PricingSection({ prices, allPlans }: PricingSectionProps) {
             viewport={{ once: true, margin: "0px" }}
             transition={{ duration: 0.6 }}
           >
-            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-balance text-foreground mb-4">
               Elegí el plan que mejor se adapte a tu taller
             </h2>
             <p className="text-lg text-muted-foreground">
@@ -274,7 +274,7 @@ export function PricingSection({ prices, allPlans }: PricingSectionProps) {
                           key={feature.text}
                           className={cn(
                             "flex items-start gap-2 text-sm",
-                            !feature.included && "text-muted-foreground/50"
+                            !feature.included && "text-muted-foreground/70"
                           )}
                         >
                           {feature.included ? (
@@ -302,7 +302,7 @@ export function PricingSection({ prices, allPlans }: PricingSectionProps) {
           {/* Trust signals */}
           <div className="text-center mt-10 space-y-4">
             <p className="text-xs text-orange-600 dark:text-orange-400 font-medium">
-              Precio de lanzamiento — no va a durar para siempre
+              Precio de lanzamiento: no va a durar para siempre
             </p>
             <p className="text-sm text-muted-foreground">
               Si no te convence en 30 días, no pagás nada. Sin preguntas, sin vueltas.

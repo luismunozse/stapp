@@ -220,7 +220,7 @@ const categories = [
     description: "Ayuda inteligente y herramientas que te ahorran tiempo",
     features: [
       {
-        name: "Asistente IA — Santi",
+        name: "Asistente IA: Santi",
         description:
           "Tu asistente virtual dentro de la app. Preguntale sobre funciones, pedile ayuda para resolver problemas o que te guíe paso a paso. Disponible 24/7.",
         icon: Bot,
@@ -264,13 +264,13 @@ export function Features() {
             viewport={{ once: true, margin: "0px" }}
             transition={{ duration: 0.6 }}
           >
-            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-balance text-foreground mb-4">
               Todo tu taller en una sola plataforma
             </h2>
             <p className="text-lg text-muted-foreground">
               Reparaciones, ventas, caja, finanzas, cotizaciones, seguimiento online,
-              leads, reportes avanzados, soporte con IA y más —
-              pensado para talleres de reparación, no adaptado de otro rubro.
+              leads, reportes avanzados, soporte con IA y más.
+              Pensado para talleres de reparación, no adaptado de otro rubro.
             </p>
           </m.div>
 
@@ -282,63 +282,81 @@ export function Features() {
                   <TabsTrigger
                     key={category.id}
                     value={category.id}
-                    className="inline-flex items-center gap-1 sm:gap-2 py-2 px-2.5 sm:py-3 sm:px-4 text-[11px] sm:text-sm font-medium rounded-lg sm:rounded-xl transition-all duration-200 whitespace-nowrap data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground data-[state=inactive]:hover:bg-background/50 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md"
+                    className="inline-flex items-center gap-1 sm:gap-2 py-2 px-2.5 sm:py-3 sm:px-4 text-[11px] sm:text-sm font-medium rounded-lg sm:rounded-xl transition-[color,background-color,box-shadow] duration-200 whitespace-nowrap data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground data-[state=inactive]:hover:bg-background/50 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md"
                   >
-                    <category.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    <category.icon className="w-4 h-4 sm:w-4 sm:h-4" />
+                    {/* Mobile: solo ícono (label truncado a 4 chars era ilegible).
+                        Desktop: primera palabra del nombre. */}
                     <span className="hidden sm:inline">{category.name.split(" ")[0]}</span>
-                    <span className="sm:hidden">{category.name.split(" ")[0].slice(0, 4)}</span>
+                    <span className="sr-only sm:hidden">{category.name}</span>
                   </TabsTrigger>
                 ))}
               </TabsList>
             </div>
 
-            {categories.map((category) => (
+            {categories.map((category) => {
+              const [featured, ...rest] = category.features
+              return (
               <TabsContent key={category.id} value={category.id}>
                 {/* Category description */}
                 <p className="text-center text-muted-foreground mb-8">
                   {category.description}
                 </p>
 
-                {/* Features grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                  {category.features.map((feature, index) => (
+                {/* Featured feature: el corazón de la categoría, panel ancho */}
+                <div className="grid gap-4 sm:gap-6">
+                  <m.div
+                    className="bg-card rounded-2xl p-6 sm:p-8 shadow-sm border hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5 group transition-colors flex flex-col sm:flex-row sm:items-center gap-5"
+                    initial={{ opacity: 0, y: 24 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: "0px" }}
+                    transition={{ duration: 0.5 }}
+                  >
                     <m.div
-                      key={feature.name}
-                      className="bg-card rounded-xl p-6 shadow-sm border hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 group h-full transition-colors"
-                      initial={{ opacity: 0, y: 30 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true, margin: "0px" }}
-                      transition={{ duration: 0.5, delay: index * 0.1 }}
-                      whileHover={{
-                        y: -8,
-                        boxShadow: "0 20px 40px -15px rgba(0,0,0,0.15)",
-                      }}
+                      className="bg-primary text-primary-foreground w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0"
+                      whileHover={{ scale: 1.1 }}
+                      transition={{ type: "spring", stiffness: 400, damping: 17 }}
                     >
-                      <m.div
-                        className={`${feature.color} w-12 h-12 rounded-xl flex items-center justify-center mb-4`}
-                        whileHover={{
-                          scale: 1.15,
-                          rotate: [0, -5, 5, 0],
-                        }}
-                        transition={{
-                          type: "spring",
-                          stiffness: 400,
-                          damping: 17
-                        }}
-                      >
-                        <feature.icon className="w-6 h-6 text-white" />
-                      </m.div>
-                      <h3 className="text-lg font-semibold text-foreground mb-2">
-                        {feature.name}
-                      </h3>
-                      <p className="text-muted-foreground text-sm leading-relaxed">
-                        {feature.description}
-                      </p>
+                      <featured.icon className="w-7 h-7" />
                     </m.div>
-                  ))}
+                    <div className="min-w-0">
+                      <h3 className="text-xl font-semibold text-foreground mb-1.5">
+                        {featured.name}
+                      </h3>
+                      <p className="text-muted-foreground leading-relaxed">
+                        {featured.description}
+                      </p>
+                    </div>
+                  </m.div>
+
+                  {/* Resto: grid compacto, icon-tiles tintados en brand */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                    {rest.map((feature, index) => (
+                      <m.div
+                        key={feature.name}
+                        className="bg-card rounded-xl p-5 shadow-sm border hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 group h-full transition-colors"
+                        initial={{ opacity: 0, y: 24 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true, margin: "0px" }}
+                        transition={{ duration: 0.45, delay: index * 0.08 }}
+                        whileHover={{ y: -6 }}
+                      >
+                        <div className="bg-primary/10 text-primary w-11 h-11 rounded-xl flex items-center justify-center mb-3.5 group-hover:bg-primary/15 transition-colors">
+                          <feature.icon className="w-5 h-5" />
+                        </div>
+                        <h3 className="text-base font-semibold text-foreground mb-1.5">
+                          {feature.name}
+                        </h3>
+                        <p className="text-muted-foreground text-sm leading-relaxed">
+                          {feature.description}
+                        </p>
+                      </m.div>
+                    ))}
+                  </div>
                 </div>
               </TabsContent>
-            ))}
+              )
+            })}
           </Tabs>
         </div>
       </section>

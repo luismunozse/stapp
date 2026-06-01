@@ -22,7 +22,9 @@ const PopoverContent = React.forwardRef<
       sideOffset={sideOffset}
       className={cn(
         "z-50 w-[min(18rem,calc(100vw-2rem))] rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-none",
-        "data-[state=open]:animate-in data-[state=closed]:animate-out",
+        // Origin-aware: el popover escala desde su trigger, no desde el centro.
+        "origin-[var(--radix-popover-content-transform-origin)]",
+        "ease-snappy data-[state=open]:animate-in data-[state=closed]:animate-out",
         "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
         "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
         "data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2",

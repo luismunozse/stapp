@@ -10,6 +10,12 @@ import {
 } from "./helpers"
 import { supabaseAdmin } from "@/lib/supabase"
 
+vi.mock("next/cache", () => ({
+  revalidateTag: vi.fn(),
+  revalidatePath: vi.fn(),
+  unstable_cache: vi.fn((fn: any) => fn),
+}))
+
 vi.mock("@/lib/audit", () => ({
   createAuditLogger: vi.fn(() => ({
     create: vi.fn().mockResolvedValue(undefined),

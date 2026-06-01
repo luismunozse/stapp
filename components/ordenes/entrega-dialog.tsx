@@ -44,6 +44,7 @@ interface EntregaDialogProps {
   encargadoNombre: string
   esRetiro?: boolean
   sinCobro?: boolean
+  garantiaDiasDefault?: number
 }
 
 export function EntregaDialog({
@@ -54,6 +55,7 @@ export function EntregaDialog({
   encargadoNombre,
   esRetiro = false,
   sinCobro = false,
+  garantiaDiasDefault = 30,
 }: EntregaDialogProps) {
   const [loading, setLoading] = useState(false)
   const [firmaCliente, setFirmaCliente] = useState<string | null>(null)
@@ -63,7 +65,7 @@ export function EntregaDialog({
   const [notasEntrega, setNotasEntrega] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [conGarantia, setConGarantia] = useState(!esRetiro && !sinCobro)
-  const [diasGarantia, setDiasGarantia] = useState("30")
+  const [diasGarantia, setDiasGarantia] = useState(String(garantiaDiasDefault))
   const [notasGarantia, setNotasGarantia] = useState("")
   const [motivoSinCobro, setMotivoSinCobro] = useState<MotivoSinCobro>(
     () => defaultMotivoSinCobro(orden.estado)
@@ -137,7 +139,7 @@ export function EntregaDialog({
       setNotasEntrega("")
       setError(null)
       setConGarantia(!esRetiro && !sinCobro)
-      setDiasGarantia("30")
+      setDiasGarantia(String(garantiaDiasDefault))
       setNotasGarantia("")
       onClose()
     }

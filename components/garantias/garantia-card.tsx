@@ -49,6 +49,7 @@ interface Garantia {
 interface GarantiaCardProps {
   ordenId: string
   ordenEstado: string
+  garantiaDiasDefault?: number
 }
 
 const estadoGarantiaConfig: Record<string, { label: string; icon: typeof Shield; color: string }> = {
@@ -65,7 +66,7 @@ const estadoReclamoConfig: Record<string, { label: string; color: string }> = {
   RESUELTO: { label: "Resuelto", color: "bg-gray-100 text-gray-800" },
 }
 
-export function GarantiaCard({ ordenId, ordenEstado }: GarantiaCardProps) {
+export function GarantiaCard({ ordenId, ordenEstado, garantiaDiasDefault = 30 }: GarantiaCardProps) {
   const { confirm } = useModal()
   const { formatDate } = useCurrency()
   const [garantia, setGarantia] = useState<Garantia | null>(null)
@@ -73,7 +74,7 @@ export function GarantiaCard({ ordenId, ordenEstado }: GarantiaCardProps) {
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [showReclamoForm, setShowReclamoForm] = useState(false)
   const [creating, setCreating] = useState(false)
-  const [diasValidez, setDiasValidez] = useState("30")
+  const [diasValidez, setDiasValidez] = useState(String(garantiaDiasDefault))
   const [notas, setNotas] = useState("")
   const [updatingReclamo, setUpdatingReclamo] = useState<string | null>(null)
   const [showEditForm, setShowEditForm] = useState(false)

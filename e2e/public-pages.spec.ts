@@ -3,7 +3,9 @@ import { test, expect } from "@playwright/test"
 test.describe("Paginas publicas", () => {
   test("landing page carga correctamente", async ({ page }) => {
     await page.goto("/")
-    await expect(page).toHaveTitle(/stapp/i)
+    // Verificamos el núcleo del producto en el <title>, estable ante cambios
+    // de copy de marca.
+    await expect(page).toHaveTitle(/servicio técnico/i)
   })
 
   test("pagina de registro es accesible", async ({ page }) => {

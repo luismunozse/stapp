@@ -220,21 +220,34 @@ describe("PUT /api/ordenes/[id] - Campos Requeridos", () => {
     expect(status).toBe(200)
   })
 
-  it("rechaza EN_REPARACION sin técnico asignado", async () => {
+  it("permite EN_REPARACION sin técnico asignado (técnico no es requerido)", async () => {
+    // técnico_id ya no es un campo requerido por la state machine para EN_REPARACION.
+    // Solo se requiere costo_final > 0. Orden con costo_final y sin técnico debe pasar.
     mockAuthSuccess()
 
     const mockOrden = createMockOrden({ estado: "APROBADO", presupuesto: 5000, costo_final: 5000, tecnico_id: null })
-    const chain = createChainMock(mockOrden)
-    mockSupabaseFrom({ ordenes_servicio: chain })
+    const mockUpdated = { ...mockOrden, estado: "EN_REPARACION" }
+
+    let callCount = 0
+    const chain = createChainMock(null)
+    chain.single = vi.fn().mockImplementation(() => {
+      callCount++
+      if (callCount === 1) return Promise.resolve({ data: mockOrden, error: null })
+      return Promise.resolve({ data: mockUpdated, error: null })
+    })
+
+    mockSupabaseFrom({
+      ordenes_servicio: chain,
+      orden_eventos: createChainMock(null),
+    })
 
     const response = await PUT(
       createPutRequest({ estado: "EN_REPARACION" }),
       createParams("o1")
     )
-    const { status, body } = await parseResponse(response)
+    const { status } = await parseResponse(response)
 
-    expect(status).toBe(400)
-    expect(body.error).toContain("Técnico")
+    expect(status).toBe(200)
   })
 
   it("rechaza EN_REPARACION sin costo final", async () => {

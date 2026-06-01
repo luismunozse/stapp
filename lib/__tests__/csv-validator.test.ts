@@ -149,7 +149,9 @@ describe('validateInventarioRow', () => {
     expect(result.valid).toBe(true)
   })
 
-  it('rechaza tipo de dispositivo vacío', () => {
+  it('acepta tipo de dispositivo vacío (se resuelve a TODOS)', () => {
+    // tipoDispositivo es opcional en el schema: string vacío es válido
+    // (resolveTipoDispositivo lo mapea a 'TODOS' en el flujo de importación)
     const row = {
       codigo: 'PROD001',
       nombre: 'Producto',
@@ -160,7 +162,7 @@ describe('validateInventarioRow', () => {
       precioVenta: '150',
     }
     const result = validateInventarioRow(row, 0)
-    expect(result.valid).toBe(false)
+    expect(result.valid).toBe(true)
   })
 
   it('acepta todos los tipos validos', () => {
@@ -208,7 +210,9 @@ describe('validateInventarioRow', () => {
     expect(result.valid).toBe(false)
   })
 
-  it('rechaza codigo vacio', () => {
+  it('acepta codigo vacio (se autogenera)', () => {
+    // codigo es opcional en el schema: string vacío es válido
+    // (generateCodigo() lo genera automáticamente en el flujo de importación)
     const row = {
       codigo: '',
       nombre: 'Producto',
@@ -219,7 +223,7 @@ describe('validateInventarioRow', () => {
       precioVenta: '150',
     }
     const result = validateInventarioRow(row, 0)
-    expect(result.valid).toBe(false)
+    expect(result.valid).toBe(true)
   })
 
   it('acepta proveedor opcional como null', () => {
@@ -288,10 +292,10 @@ describe('validateCSVHeaders', () => {
   })
 
   it('detecta columnas faltantes en inventario', () => {
-    const headers = ['codigo', 'nombre'] // faltan varias
+    const headers = ['codigo', 'nombre'] // falta precioVenta (única requerida junto con nombre)
     const result = validateCSVHeaders(headers, 'INVENTARIO')
     expect(result.valid).toBe(false)
-    expect(result.error).toContain('categoria')
+    expect(result.error).toContain('precioVenta')
   })
 
   it('acepta headers extras', () => {

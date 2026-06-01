@@ -85,7 +85,8 @@ export async function GET(
           direccion,
           comprobante_terminos,
           moneda,
-          zona_horaria
+          zona_horaria,
+          garantia_dias_default
         )
       `)
       .eq("id", id)
@@ -129,6 +130,7 @@ export async function GET(
       organizationComprobanteTerminos: org?.comprobante_terminos || null,
       organizationMoneda: org?.moneda || null,
       organizationZonaHoraria: org?.zona_horaria || null,
+      organizationGarantiaDiasDefault: org?.garantia_dias_default ?? null,
       estadoAnterior: ultimoEventoEstado?.estado_anterior ?? null,
     }, {
       headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
@@ -393,6 +395,8 @@ export async function PUT(
             estado: estadoFinal,
             estadoAnterior: orden.estado,
             publicToken: orden.public_token,
+            // Técnico efectivo: el reasignado en este request si vino, si no el actual.
+            tecnicoId: (data.tecnicoId !== undefined ? data.tecnicoId : orden.tecnico_id) ?? null,
           },
         },
       }).catch(err => console.error("Error queueing notification:", err))

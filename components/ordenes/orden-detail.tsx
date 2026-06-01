@@ -1147,7 +1147,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
 
           {/* Garantia (no aplica para retiros ni sin cobro) */}
           {!isRetiro && !isSinCobro && (
-            <GarantiaCard ordenId={ordenId} ordenEstado={orden.estado} />
+            <GarantiaCard ordenId={ordenId} ordenEstado={orden.estado} garantiaDiasDefault={(orden as any).organizationGarantiaDiasDefault ?? 30} />
           )}
         </div>
 
@@ -1337,6 +1337,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           encargadoNombre={session?.user?.name || "Usuario"}
           esRetiro={orden.estado === "SIN_REPARACION" && !sinCobroEntrega}
           sinCobro={sinCobroEntrega}
+          garantiaDiasDefault={(orden as any).organizationGarantiaDiasDefault ?? 30}
         />
       )}
 

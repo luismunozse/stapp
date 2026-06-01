@@ -33,6 +33,7 @@ export async function queueNotification(params: {
       presupuesto?: number | null
       fechaCompletado?: string | null
       publicToken?: string | null
+      tecnicoId?: string | null
     }
     garantia?: {
       id: string

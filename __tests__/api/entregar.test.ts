@@ -50,8 +50,10 @@ describe("POST /api/ordenes/[id]/entregar", () => {
   it("validates required fields", async () => {
     mockAuthSuccess()
 
+    // All top-level fields are optional, but diasGarantia must be a positive
+    // integer when provided. Sending a string triggers a ZodError → 400.
     const response = await POST(
-      createPostRequest({}),
+      createPostRequest({ diasGarantia: "not-a-number" }),
       createParams("o1")
     )
     const { status } = await parseResponse(response)

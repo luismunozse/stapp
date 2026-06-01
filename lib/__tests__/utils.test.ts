@@ -46,7 +46,9 @@ describe('formatDate', () => {
   })
 
   it('formatea fecha desde objeto Date', () => {
-    const date = new Date(2024, 2, 15) // Marzo 15
+    // Mediodía UTC: cae el día 15 en America/Argentina/Buenos_Aires (UTC-3)
+    // independientemente de la TZ del runner (CI corre en UTC).
+    const date = new Date(Date.UTC(2024, 2, 15, 12, 0, 0)) // Marzo 15
     const result = formatDate(date)
     expect(result).toContain('15')
     expect(result).toContain('03')
@@ -54,8 +56,8 @@ describe('formatDate', () => {
   })
 
   it('usa formato es-AR (dia/mes/ano)', () => {
-    // Usamos Date object para evitar problemas de timezone
-    const date = new Date(2024, 11, 25) // Diciembre 25
+    // Mediodía UTC para que el día sea estable ante la TZ del runner.
+    const date = new Date(Date.UTC(2024, 11, 25, 12, 0, 0)) // Diciembre 25
     const result = formatDate(date)
     expect(result).toMatch(/25.*12.*2024/)
   })

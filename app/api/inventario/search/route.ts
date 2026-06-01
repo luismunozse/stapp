@@ -19,7 +19,7 @@ export async function GET(request: Request) {
 
     let query = supabaseAdmin
       .from("inventario")
-      .select("id, codigo, nombre, stock, stock_reservado, precio_venta, precio_compra")
+      .select("id, codigo, nombre, stock, stock_reservado, precio_venta, precio_compra, trackea_series")
       .eq("organization_id", organizationId!)
       .is("deleted_at", null)
 
@@ -51,6 +51,7 @@ export async function GET(request: Request) {
       stockReservado: item.stock_reservado ?? 0,
       precioVenta: item.precio_venta,
       precioCompra: item.precio_compra ?? 0,
+      trackeaSeries: item.trackea_series ?? false,
     }))
 
     return NextResponse.json(formatted)

@@ -23,7 +23,7 @@ export function BlogTeaser() {
           <div>
             <h2
               id="blog-heading"
-              className="text-3xl sm:text-4xl font-bold text-foreground mb-3"
+              className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-balance text-foreground mb-3"
             >
               Aprendé a escalar tu taller
             </h2>
@@ -47,7 +47,7 @@ export function BlogTeaser() {
               href={`/empresa/blog/${post.slug}`}
               className="group"
             >
-              <Card className="h-full overflow-hidden hover:border-primary/30 hover:shadow-lg transition-all">
+              <Card className="h-full overflow-hidden hover:border-primary/30 hover:shadow-lg transition-[border-color,box-shadow]">
                 <div className="aspect-video relative overflow-hidden">
                   <Image
                     src={post.image}

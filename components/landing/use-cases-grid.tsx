@@ -14,7 +14,7 @@ export function UseCasesGrid() {
         <div className="text-center max-w-3xl mx-auto mb-12">
           <h2
             id="casos-heading"
-            className="text-3xl sm:text-4xl font-bold text-foreground mb-4"
+            className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-balance text-foreground mb-4"
           >
             Hecho para tu tipo de taller
           </h2>
@@ -33,7 +33,7 @@ export function UseCasesGrid() {
                 href={`/casos-de-uso/${useCase.slug}`}
                 className="group"
               >
-                <Card className="p-6 h-full hover:border-primary/30 hover:shadow-lg transition-all">
+                <Card className="p-6 h-full hover:border-primary/30 hover:shadow-lg transition-[border-color,box-shadow]">
                   <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4 group-hover:bg-primary/20 transition-colors">
                     <Icon className="w-6 h-6 text-primary" />
                   </div>
@@ -43,7 +43,7 @@ export function UseCasesGrid() {
                   <p className="text-sm text-muted-foreground mb-4 line-clamp-3">
                     {useCase.heroDescription}
                   </p>
-                  <span className="inline-flex items-center gap-1 text-sm text-primary font-medium group-hover:gap-2 transition-all">
+                  <span className="inline-flex items-center gap-1 text-sm text-primary font-medium group-hover:gap-2 transition-[gap]">
                     Ver caso de uso <ArrowRight className="w-4 h-4" />
                   </span>
                 </Card>
@@ -52,7 +52,7 @@ export function UseCasesGrid() {
           })}
 
           <Link href="/casos-de-uso" className="group">
-            <Card className="p-6 h-full flex flex-col justify-center items-center text-center border-dashed hover:border-primary/50 hover:bg-primary/5 transition-all">
+            <Card className="p-6 h-full flex flex-col justify-center items-center text-center border-dashed hover:border-primary/50 hover:bg-primary/5 transition-[border-color,background-color]">
               <h3 className="text-lg font-semibold text-foreground mb-2">
                 Ver todos los casos
               </h3>
