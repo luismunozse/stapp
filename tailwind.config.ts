@@ -104,6 +104,13 @@ const config: Config = {
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
+      // Curvas fuertes (Emil). tailwindcss-animate lee animationTimingFunction
+      // desde transitionTimingFunction, asi que `ease-snappy` fija tambien la
+      // animation-timing-function de animate-in/animate-out.
+      transitionTimingFunction: {
+        snappy: "cubic-bezier(0.23, 1, 0.32, 1)",
+        smooth: "cubic-bezier(0.77, 0, 0.175, 1)",
+      },
       keyframes: {
         "accordion-down": {
           from: { height: "0" },
