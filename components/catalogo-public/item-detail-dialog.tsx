@@ -212,9 +212,15 @@ export function ItemDetailDialog({
           // Mobile: bottom-sheet behavior (override default centered modal)
           "top-auto bottom-0 left-0 right-0 translate-x-0 translate-y-0",
           "w-full max-w-none max-h-[92dvh] rounded-t-2xl rounded-b-none border-b-0",
+          "data-[state=open]:slide-in-from-bottom data-[state=closed]:slide-out-to-bottom",
+          "data-[state=open]:zoom-in-100 data-[state=closed]:zoom-out-100",
+          "data-[state=open]:slide-in-from-left-0 data-[state=open]:slide-in-from-top-auto",
           // Desktop: revert to centered modal
           "sm:top-[50%] sm:left-[50%] sm:right-auto sm:bottom-auto sm:-translate-x-1/2 sm:-translate-y-1/2",
           "sm:w-[calc(100vw-1rem)] sm:max-w-2xl sm:max-h-[90dvh] sm:rounded-lg sm:border-b",
+          "sm:data-[state=open]:slide-in-from-top-[48%] sm:data-[state=open]:slide-in-from-left-1/2",
+          "sm:data-[state=closed]:slide-out-to-top-[48%] sm:data-[state=closed]:slide-out-to-left-1/2",
+          "sm:data-[state=open]:zoom-in-95 sm:data-[state=closed]:zoom-out-95",
         ].join(" ")}
       >
         <DialogTitle className="sr-only">{item.nombre}</DialogTitle>
