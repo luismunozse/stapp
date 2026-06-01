@@ -37,7 +37,7 @@ const categories = [
     id: "servicio",
     name: "Servicio Técnico",
     icon: Wrench,
-    description: "Gestiona el flujo completo de reparaciones",
+    description: "Gestioná el flujo completo de reparaciones",
     features: [
       {
         name: "Órdenes de Servicio",
@@ -56,7 +56,7 @@ const categories = [
       {
         name: "Fotos por Etapa",
         description:
-          "Documenta cada paso: ingreso, durante la reparación y entrega. Protegé tu taller ante cualquier reclamo con evidencia visual.",
+          "Documentá cada paso: ingreso, durante la reparación y entrega. Protegé tu taller ante cualquier reclamo con evidencia visual.",
         icon: Camera,
         color: "bg-amber-500",
       },

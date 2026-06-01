@@ -659,7 +659,7 @@ export function Hero({ prices }: { prices: PlanPrices }) {
                     transition={{ type: "spring", stiffness: 400, damping: 17 }}
                   >
                     <Button size="lg" className="text-sm sm:text-base px-4 sm:px-6 py-4 sm:py-5 shadow-lg hover:shadow-xl transition-shadow group">
-                      Comenzar Gratis
+                      Probar gratis 30 días
                       <ArrowRight className="ml-1.5 sm:ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
                     </Button>
                   </m.div>

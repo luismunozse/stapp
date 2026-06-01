@@ -76,7 +76,7 @@ const plans: Plan[] = [
       { text: "Tu logo en presupuestos", included: true, highlight: "Tu marca" },
       { text: "Soporte prioritario", included: true },
     ],
-    cta: "Probar 30 días gratis",
+    cta: "Probar gratis 30 días",
     ctaHref: "/registro?plan=profesional",
     ctaVariant: "default",
   },
@@ -301,9 +301,6 @@ export function PricingSection({ prices, allPlans }: PricingSectionProps) {
 
           {/* Trust signals */}
           <div className="text-center mt-10 space-y-4">
-            <p className="text-xs text-orange-600 dark:text-orange-400 font-medium">
-              Precio de lanzamiento: no va a durar para siempre
-            </p>
             <p className="text-sm text-muted-foreground">
               Si no te convence en 30 días, no pagás nada. Sin preguntas, sin vueltas.
             </p>
