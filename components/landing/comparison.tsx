@@ -192,7 +192,7 @@ export function Comparison() {
             viewport={{ once: true, margin: "0px" }}
             transition={{ duration: 0.6 }}
           >
-            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-balance text-foreground mb-4">
               Por qué cambiar a STApp
             </h2>
             <p className="text-lg text-muted-foreground">

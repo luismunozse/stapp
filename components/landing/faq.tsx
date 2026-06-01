@@ -29,7 +29,7 @@ export function FAQ({ faqs }: FAQProps) {
             viewport={{ once: true, margin: "0px" }}
             transition={{ duration: 0.6 }}
           >
-            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-balance text-foreground mb-4">
               Preguntas frecuentes
             </h2>
             <p className="text-lg text-muted-foreground">
@@ -72,7 +72,10 @@ export function FAQ({ faqs }: FAQProps) {
                   </m.div>
                 </m.button>
 
-                {/* Always rendered in DOM for SEO - animated with height */}
+                {/* Always rendered in DOM for SEO - animated with height.
+                    (Se probó grid-template-rows 0fr→1fr: framer-motion no
+                    interpola unidades fr de forma fiable y dejaba la respuesta
+                    clipeada al abrir. height:auto es el approach que funciona.) */}
                 <m.div
                   id={`faq-answer-${index}`}
                   role="region"
