@@ -15,28 +15,28 @@ describe('LIMIT_MESSAGES', () => {
   it('mensajes de ordenes son correctos', () => {
     expect(LIMIT_MESSAGES.ordenes.title).toContain('órdenes')
     expect(LIMIT_MESSAGES.ordenes.description).toContain('mensual')
-    expect(LIMIT_MESSAGES.ordenes.action).toContain('Premium')
+    expect(LIMIT_MESSAGES.ordenes.action).toContain('Actualizá')
   })
 
   it('mensajes de tecnicos son correctos', () => {
     expect(LIMIT_MESSAGES.tecnicos.title).toContain('técnicos')
-    expect(LIMIT_MESSAGES.tecnicos.action).toContain('Premium')
+    expect(LIMIT_MESSAGES.tecnicos.action).toContain('Actualizá')
   })
 
   it('mensajes de clientes son correctos', () => {
     expect(LIMIT_MESSAGES.clientes.title).toContain('clientes')
-    expect(LIMIT_MESSAGES.clientes.action).toContain('Premium')
+    expect(LIMIT_MESSAGES.clientes.action).toContain('Actualizá')
   })
 
   it('mensajes de vendedores son correctos', () => {
     expect(LIMIT_MESSAGES.vendedores.title).toContain('vendedores')
-    expect(LIMIT_MESSAGES.vendedores.action).toContain('Premium')
+    expect(LIMIT_MESSAGES.vendedores.action).toContain('Actualizá')
   })
 
   it('todos los mensajes tienen la acción de upgrade', () => {
     Object.values(LIMIT_MESSAGES).forEach((msg) => {
-      expect(msg.action).toContain('Premium')
-      expect(msg.action).toContain('Actualiza')
+      expect(msg.action).toContain('Actualizá')
+      expect(msg.action).toContain('plan')
     })
   })
 

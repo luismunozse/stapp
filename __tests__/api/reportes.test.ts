@@ -209,8 +209,8 @@ describe("GET /api/reportes/resumen-ingresos", () => {
     const now = new Date()
 
     const mockFacturas = [
-      { id: "f1", total: 5000, fecha: now.toISOString(), ordenes_servicio: { id: "o1", organization_id: "org-1", tipo_dispositivo: "CELULAR", dispositivo: "iPhone" } },
-      { id: "f2", total: 3000, fecha: now.toISOString(), ordenes_servicio: { id: "o2", organization_id: "org-1", tipo_dispositivo: "COMPUTADORA", dispositivo: "MacBook" } },
+      { id: "f1", total: 5000, fecha: now.toISOString(), orden_id: "o1", ordenes_servicio: { id: "o1", organization_id: "org-1", tipo_dispositivo: "CELULAR", dispositivo: "iPhone", tipos_dispositivo: null } },
+      { id: "f2", total: 3000, fecha: now.toISOString(), orden_id: "o2", ordenes_servicio: { id: "o2", organization_id: "org-1", tipo_dispositivo: "COMPUTADORA", dispositivo: "MacBook", tipos_dispositivo: null } },
     ]
 
     const mockVentas = [
@@ -223,7 +223,10 @@ describe("GET /api/reportes/resumen-ingresos", () => {
     const ventasChain = createChainMock(mockVentas)
     ventasChain.then = (resolve: any) => resolve({ data: mockVentas, error: null })
 
-    mockSupabaseFrom({ facturas: facturasChain, ventas: ventasChain })
+    const cobrosChain = createChainMock([])
+    cobrosChain.then = (resolve: any) => resolve({ data: [], error: null })
+
+    mockSupabaseFrom({ facturas: facturasChain, ventas: ventasChain, cobros_orden: cobrosChain })
 
     const response = await GET(createGetRequest("http://localhost:3000/api/reportes/resumen-ingresos?meses=6"))
     const { status, body } = await parseResponse(response)
@@ -248,7 +251,10 @@ describe("GET /api/reportes/resumen-ingresos", () => {
     const ventasChain = createChainMock([])
     ventasChain.then = (resolve: any) => resolve({ data: [], error: null })
 
-    mockSupabaseFrom({ facturas: facturasChain, ventas: ventasChain })
+    const cobrosChain = createChainMock([])
+    cobrosChain.then = (resolve: any) => resolve({ data: [], error: null })
+
+    mockSupabaseFrom({ facturas: facturasChain, ventas: ventasChain, cobros_orden: cobrosChain })
 
     const response = await GET(createGetRequest("http://localhost:3000/api/reportes/resumen-ingresos"))
     const { status, body } = await parseResponse(response)

@@ -2,6 +2,21 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { supabaseAdmin } from '@/lib/supabase'
 import { getOrderByPublicToken } from '../public-token'
 
+// Helper: build a full mock chain that includes every method the source calls.
+// The chain is: .from() -> .select() -> .eq() -> .not() -> .single()
+function makeMockChain(singleResult: { data: unknown; error: unknown }) {
+  const chain = {
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    not: vi.fn().mockReturnThis(),
+    single: vi.fn().mockResolvedValue(singleResult),
+  }
+  return chain
+}
+
+// A valid 32-char hex-like token used across most tests.
+const VALID_TOKEN = 'a'.repeat(32)
+
 describe('getOrderByPublicToken', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -32,15 +47,10 @@ describe('getOrderByPublicToken', () => {
   })
 
   it('retorna 404 cuando orden no existe', async () => {
-    const mockChain = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: null, error: { code: 'PGRST116' } }),
-    }
+    const mockChain = makeMockChain({ data: null, error: { code: 'PGRST116' } })
     vi.mocked(supabaseAdmin.from).mockReturnValue(mockChain as any)
 
-    const token = 'a'.repeat(32)
-    const result = await getOrderByPublicToken(token)
+    const result = await getOrderByPublicToken(VALID_TOKEN)
     expect(result.orden).toBeNull()
     expect(result.error).not.toBeNull()
     const body = await result.error!.json()
@@ -48,59 +58,73 @@ describe('getOrderByPublicToken', () => {
   })
 
   it('retorna orden cuando token válido existe', async () => {
-    const mockOrden = { id: 'orden-1', organization_id: 'org-1' }
-    const mockChain = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: mockOrden, error: null }),
+    // public_token must be present and match the token passed in so the
+    // timing-safe comparison succeeds.
+    const mockOrden = {
+      id: 'orden-1',
+      organization_id: 'org-1',
+      public_token: VALID_TOKEN,
+      public_token_expires_at: null,
     }
+    const mockChain = makeMockChain({ data: mockOrden, error: null })
     vi.mocked(supabaseAdmin.from).mockReturnValue(mockChain as any)
 
-    const token = 'a'.repeat(32)
-    const result = await getOrderByPublicToken(token)
+    const result = await getOrderByPublicToken(VALID_TOKEN)
     expect(result.error).toBeNull()
     expect(result.orden).toEqual(mockOrden)
   })
 
-  it('usa select por defecto "id, organization_id"', async () => {
-    const mockChain = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: { id: '1' }, error: null }),
+  it('usa select por defecto con columnas de seguridad requeridas', async () => {
+    const mockOrden = {
+      id: '1',
+      organization_id: 'org-1',
+      public_token: VALID_TOKEN,
+      public_token_expires_at: null,
     }
+    const mockChain = makeMockChain({ data: mockOrden, error: null })
     vi.mocked(supabaseAdmin.from).mockReturnValue(mockChain as any)
 
-    const token = 'a'.repeat(32)
-    await getOrderByPublicToken(token)
-    expect(mockChain.select).toHaveBeenCalledWith('id, organization_id')
+    await getOrderByPublicToken(VALID_TOKEN)
+    // Source always prepends required security columns when no extra select is given.
+    expect(mockChain.select).toHaveBeenCalledWith(
+      'id, organization_id, public_token, public_token_expires_at'
+    )
   })
 
-  it('permite select personalizado', async () => {
-    const mockChain = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: { id: '1', estado: 'RECIBIDO' }, error: null }),
+  it('permite select personalizado — columnas de seguridad se anteponen', async () => {
+    const mockOrden = {
+      id: '1',
+      organization_id: 'org-1',
+      public_token: VALID_TOKEN,
+      public_token_expires_at: null,
+      estado: 'RECIBIDO',
     }
+    const mockChain = makeMockChain({ data: mockOrden, error: null })
     vi.mocked(supabaseAdmin.from).mockReturnValue(mockChain as any)
 
-    const token = 'a'.repeat(32)
-    const result = await getOrderByPublicToken(token, 'id, estado')
-    expect(mockChain.select).toHaveBeenCalledWith('id, estado')
-    expect(result.orden.estado).toBe('RECIBIDO')
+    const result = await getOrderByPublicToken(VALID_TOKEN, 'estado')
+    // Source builds: requiredCols + ", " + caller's select
+    expect(mockChain.select).toHaveBeenCalledWith(
+      'id, organization_id, public_token, public_token_expires_at, estado'
+    )
+    expect(result.orden?.estado).toBe('RECIBIDO')
   })
 
-  it('filtra por public_token', async () => {
-    const mockChain = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: { id: '1' }, error: null }),
-    }
-    vi.mocked(supabaseAdmin.from).mockReturnValue(mockChain as any)
-
+  it('filtra por public_token y llama .not() para excluir nulls', async () => {
     const token = 'b'.repeat(32)
+    const mockOrden = {
+      id: '1',
+      organization_id: 'org-1',
+      public_token: token,
+      public_token_expires_at: null,
+    }
+    const mockChain = makeMockChain({ data: mockOrden, error: null })
+    vi.mocked(supabaseAdmin.from).mockReturnValue(mockChain as any)
+
     await getOrderByPublicToken(token)
     expect(supabaseAdmin.from).toHaveBeenCalledWith('ordenes_servicio')
     expect(mockChain.eq).toHaveBeenCalledWith('public_token', token)
+    expect(mockChain.not).toHaveBeenCalledWith('public_token', 'is', null)
   })
 
   it('rechaza token público expirado (410 Gone)', async () => {
@@ -110,17 +134,13 @@ describe('getOrderByPublicToken', () => {
     const mockOrden = {
       id: 'orden-1',
       organization_id: 'org-1',
+      public_token: VALID_TOKEN,
       public_token_expires_at: expiredDate.toISOString(),
     }
-    const mockChain = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: mockOrden, error: null }),
-    }
+    const mockChain = makeMockChain({ data: mockOrden, error: null })
     vi.mocked(supabaseAdmin.from).mockReturnValue(mockChain as any)
 
-    const token = 'a'.repeat(32)
-    const result = await getOrderByPublicToken(token)
+    const result = await getOrderByPublicToken(VALID_TOKEN)
     expect(result.orden).toBeNull()
     expect(result.error).not.toBeNull()
     const body = await result.error!.json()
@@ -134,17 +154,13 @@ describe('getOrderByPublicToken', () => {
     const mockOrden = {
       id: 'orden-1',
       organization_id: 'org-1',
+      public_token: VALID_TOKEN,
       public_token_expires_at: futureDate.toISOString(),
     }
-    const mockChain = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: mockOrden, error: null }),
-    }
+    const mockChain = makeMockChain({ data: mockOrden, error: null })
     vi.mocked(supabaseAdmin.from).mockReturnValue(mockChain as any)
 
-    const token = 'a'.repeat(32)
-    const result = await getOrderByPublicToken(token)
+    const result = await getOrderByPublicToken(VALID_TOKEN)
     expect(result.error).toBeNull()
     expect(result.orden).not.toBeNull()
     expect(result.orden.id).toBe('orden-1')
@@ -154,17 +170,13 @@ describe('getOrderByPublicToken', () => {
     const mockOrden = {
       id: 'orden-1',
       organization_id: 'org-1',
+      public_token: VALID_TOKEN,
       public_token_expires_at: null,
     }
-    const mockChain = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: mockOrden, error: null }),
-    }
+    const mockChain = makeMockChain({ data: mockOrden, error: null })
     vi.mocked(supabaseAdmin.from).mockReturnValue(mockChain as any)
 
-    const token = 'a'.repeat(32)
-    const result = await getOrderByPublicToken(token)
+    const result = await getOrderByPublicToken(VALID_TOKEN)
     expect(result.error).toBeNull()
     expect(result.orden).not.toBeNull()
   })
@@ -173,17 +185,13 @@ describe('getOrderByPublicToken', () => {
     const mockOrden = {
       id: 'orden-1',
       organization_id: 'org-1',
+      public_token: VALID_TOKEN,
       // Sin public_token_expires_at — columna no existe aún
     }
-    const mockChain = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: mockOrden, error: null }),
-    }
+    const mockChain = makeMockChain({ data: mockOrden, error: null })
     vi.mocked(supabaseAdmin.from).mockReturnValue(mockChain as any)
 
-    const token = 'a'.repeat(32)
-    const result = await getOrderByPublicToken(token)
+    const result = await getOrderByPublicToken(VALID_TOKEN)
     expect(result.error).toBeNull()
     expect(result.orden).not.toBeNull()
   })
