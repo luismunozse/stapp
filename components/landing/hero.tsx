@@ -35,7 +35,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { LazyMotion, domAnimation, m, AnimatePresence } from "framer-motion"
+import { LazyMotion, domAnimation, m, AnimatePresence, useReducedMotion } from "framer-motion"
 
 const modules = [
   { id: "ordenes", name: "Órdenes", icon: ClipboardList },
@@ -81,23 +81,6 @@ const floatingIcons: {
     opacity: "opacity-[0.1]",
   },
   {
-    Icon: Settings,
-    position: "top-20 left-[30%]",
-    size: "w-5 h-5",
-    animation: { rotate: [0, 360] },
-    duration: 20,
-    opacity: "opacity-[0.1]",
-  },
-  {
-    Icon: Monitor,
-    position: "bottom-20 left-[22%]",
-    size: "w-7 h-7",
-    animation: { y: [15, -15, 15], scale: [1, 1.1, 1] },
-    duration: 7,
-    delay: 2,
-    opacity: "opacity-[0.12]",
-  },
-  {
     Icon: Cpu,
     position: "top-32 right-[12%]",
     size: "w-6 h-6",
@@ -124,28 +107,12 @@ const floatingIcons: {
     delay: 0.3,
     opacity: "opacity-[0.12]",
   },
-  {
-    Icon: Wrench,
-    position: "bottom-24 right-[20%]",
-    size: "w-5 h-5",
-    animation: { y: [10, -10, 10], rotate: [-15, 15, -15] },
-    duration: 5.5,
-    delay: 2.5,
-    opacity: "opacity-[0.1]",
-  },
-  {
-    Icon: Smartphone,
-    position: "top-60 right-[5%]",
-    size: "w-6 h-6",
-    animation: { y: [-10, 10, -10], x: [-8, 8, -8] },
-    duration: 6.5,
-    delay: 1.2,
-    opacity: "opacity-[0.1]",
-  },
 ]
 
 // Floating Icons Background Component
 function FloatingIconsBackground() {
+  const reduceMotion = useReducedMotion()
+  if (reduceMotion) return null
   return (
     <>
       {floatingIcons.map((item) => (
@@ -254,9 +221,9 @@ function OrdenesMockup({ isDesktop }: { isDesktop: boolean }) {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-0.5">
                 <div className={cn("w-1 h-1 rounded-full", orden.color)} />
-                <span className="text-[7px] font-mono">#{orden.id}</span>
+                <span className="text-[10px] font-mono">#{orden.id}</span>
               </div>
-              <span className="text-[6px] text-muted-foreground truncate max-w-[50px]">{orden.estado}</span>
+              <span className="text-[9px] text-muted-foreground truncate max-w-[50px]">{orden.estado}</span>
             </div>
             <p className="text-[8px] font-medium mt-0.5 truncate">{orden.device}</p>
           </div>
@@ -304,7 +271,7 @@ function DashboardMockup({ isDesktop }: { isDesktop: boolean }) {
         <div className="grid grid-cols-2 gap-1">
           {stats.slice(0, 2).map((stat) => (
             <div key={stat.label} className="bg-card rounded p-1 shadow-sm border text-center">
-              <p className="text-[6px] text-muted-foreground">{stat.label}</p>
+              <p className="text-[9px] text-muted-foreground">{stat.label}</p>
               <p className={cn("text-xs font-bold", stat.color)}>{stat.value}</p>
             </div>
           ))}
@@ -312,13 +279,13 @@ function DashboardMockup({ isDesktop }: { isDesktop: boolean }) {
         <div className="grid grid-cols-2 gap-1">
           {stats.slice(2, 4).map((stat) => (
             <div key={stat.label} className="bg-card rounded p-1 shadow-sm border text-center">
-              <p className="text-[6px] text-muted-foreground">{stat.label}</p>
+              <p className="text-[9px] text-muted-foreground">{stat.label}</p>
               <p className={cn("text-xs font-bold", stat.color)}>{stat.value}</p>
             </div>
           ))}
         </div>
         <div className="bg-card rounded p-1 shadow-sm border">
-          <p className="text-[6px] text-muted-foreground mb-0.5">Ingresos</p>
+          <p className="text-[9px] text-muted-foreground mb-0.5">Ingresos</p>
           <div className="flex items-end gap-[2px] h-14">
             {[40, 65, 45, 80, 55, 75, 90].map((h) => (
               <div key={h} className="flex-1 bg-primary/70 rounded-t" style={{ height: `${h}%` }} />
@@ -378,10 +345,10 @@ function InventarioMockup({ isDesktop }: { isDesktop: boolean }) {
             className={cn("bg-card rounded p-1 shadow-sm border", item.alerta && "border-yellow-500/50")}
           >
             <div className="flex items-center justify-between gap-1">
-              <p className="text-[7px] font-medium truncate flex-1">{item.nombre}</p>
+              <p className="text-[10px] font-medium truncate flex-1">{item.nombre}</p>
               <div className="flex items-center gap-0.5 flex-shrink-0">
                 {item.alerta && <AlertCircle className="w-2 h-2 text-yellow-500" />}
-                <span className={cn("text-[7px] font-semibold", item.alerta ? "text-yellow-500" : "text-muted-foreground")}>
+                <span className={cn("text-[10px] font-semibold", item.alerta ? "text-yellow-500" : "text-muted-foreground")}>
                   {item.stock}
                 </span>
               </div>
@@ -429,12 +396,12 @@ function ClientesMockup({ isDesktop }: { isDesktop: boolean }) {
       <div className="space-y-1">
         {clientes.map((cliente) => (
           <div key={cliente.nombre} className="bg-card rounded p-1 shadow-sm border flex items-center gap-1">
-            <div className="w-5 h-5 rounded-full bg-gradient-to-br from-orange-400 to-red-500 flex items-center justify-center text-white text-[6px] font-semibold flex-shrink-0">
+            <div className="w-5 h-5 rounded-full bg-gradient-to-br from-orange-400 to-red-500 flex items-center justify-center text-white text-[9px] font-semibold flex-shrink-0">
               {cliente.iniciales}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[7px] font-medium truncate">{cliente.nombre}</p>
-              <p className="text-[6px] text-muted-foreground">{cliente.reparaciones} reparaciones</p>
+              <p className="text-[10px] font-medium truncate">{cliente.nombre}</p>
+              <p className="text-[9px] text-muted-foreground">{cliente.reparaciones} reparaciones</p>
             </div>
           </div>
         ))}
@@ -472,9 +439,11 @@ function ClientesMockup({ isDesktop }: { isDesktop: boolean }) {
 function MockupSlider() {
   const [activeModule, setActiveModule] = useState("ordenes")
   const [isDesktop, setIsDesktop] = useState(true)
+  const reduceMotion = useReducedMotion()
 
-  // Auto-rotate every 4 seconds
+  // Auto-rotate every 4 seconds (respeta prefers-reduced-motion)
   useEffect(() => {
+    if (reduceMotion) return
     const interval = setInterval(() => {
       setActiveModule((current) => {
         const currentIndex = modules.findIndex((m) => m.id === current)
@@ -483,7 +452,7 @@ function MockupSlider() {
       })
     }, 4000)
     return () => clearInterval(interval)
-  }, [])
+  }, [reduceMotion])
 
   // Detect screen size
   useEffect(() => {
@@ -522,7 +491,7 @@ function MockupSlider() {
               key={module.id}
               onClick={() => setActiveModule(module.id)}
               className={cn(
-                "no-touch-min flex items-center justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-medium transition-all",
+                "no-touch-min flex items-center justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-medium transition-[color,background-color,box-shadow]",
                 isActive
                   ? "bg-primary text-primary-foreground shadow-md"
                   : "bg-muted/80 text-muted-foreground hover:bg-muted"
@@ -567,7 +536,7 @@ function MockupSlider() {
             key={module.id}
             onClick={() => setActiveModule(module.id)}
             className={cn(
-              "no-touch-min w-2.5 h-2.5 rounded-full transition-all duration-300",
+              "no-touch-min w-2.5 h-2.5 rounded-full transition-[transform,background-color] duration-300",
               activeModule === module.id
                 ? "bg-primary scale-110"
                 : "bg-muted-foreground/25 hover:bg-muted-foreground/40"
@@ -584,6 +553,7 @@ function MockupSlider() {
 // ========================================
 
 export function Hero() {
+  const reduceMotion = useReducedMotion()
   // Capturar UTM params de la URL al cargar la landing
   useEffect(() => { captureUtmParams() }, [])
 
@@ -593,14 +563,13 @@ export function Hero() {
     "Punto de venta incluido",
     "Seguimiento online",
     "Asistente IA 24/7",
-    "30 días gratis",
   ]
 
   return (
     <LazyMotion features={domAnimation}>
       <section className="relative pt-24 pb-4 sm:pt-28 sm:pb-6 lg:pt-32 lg:pb-8 overflow-hidden">
         {/* Background gradient */}
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-background dark:via-background dark:to-background" />
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/[0.06] via-white to-primary/[0.03] dark:from-background dark:via-background dark:to-background" />
 
         {/* Grid pattern overlay */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:24px_24px]" />
@@ -627,7 +596,7 @@ export function Hero() {
 
               {/* Headline */}
               <m.h1
-                className="text-3xl sm:text-4xl lg:text-5xl font-bold text-foreground tracking-tight mb-4"
+                className="text-3xl sm:text-4xl lg:text-5xl font-bold text-foreground tracking-tight text-balance mb-4"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.1 }}
@@ -645,7 +614,7 @@ export function Hero() {
               >
                 Dejá de anotar en papeles, de olvidarte qué equipo era de quién,
                 y de perseguir cobros. Órdenes, caja, inventario, ventas, finanzas
-                y más — organizá todo tu taller desde el celular.
+                y más: organizá todo tu taller desde el celular.
               </m.p>
 
               {/* Benefits */}
@@ -679,7 +648,7 @@ export function Hero() {
                     whileTap={{ scale: 0.98 }}
                     transition={{ type: "spring", stiffness: 400, damping: 17 }}
                   >
-                    <Button size="lg" className="text-sm sm:text-base px-4 sm:px-6 py-4 sm:py-5 shadow-lg hover:shadow-xl transition-all group">
+                    <Button size="lg" className="text-sm sm:text-base px-4 sm:px-6 py-4 sm:py-5 shadow-lg hover:shadow-xl transition-shadow group">
                       Comenzar Gratis
                       <ArrowRight className="ml-1.5 sm:ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
                     </Button>
@@ -708,7 +677,7 @@ export function Hero() {
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.5, delay: 0.5 }}
               >
-                Sin tarjeta de crédito • Configuración en 2 min • Soporte incluido
+                Configuración en 2 min • Soporte en español • Cancelás cuando quieras
               </m.p>
             </div>
 
@@ -729,12 +698,12 @@ export function Hero() {
             className="flex flex-col items-center gap-1 mt-6 sm:mt-8 text-muted-foreground/60 hover:text-muted-foreground transition-colors"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 1.2, duration: 0.5 }}
+            transition={{ delay: 0.8, duration: 0.5 }}
             aria-label="Ver más contenido"
           >
             <span className="text-xs font-medium">Descubrí más</span>
             <m.div
-              animate={{ y: [0, 6, 0] }}
+              animate={reduceMotion ? undefined : { y: [0, 6, 0] }}
               transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
             >
               <ChevronDown className="w-5 h-5" />

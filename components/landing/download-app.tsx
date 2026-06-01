@@ -375,8 +375,8 @@ export function DownloadApp() {
                 <div className="space-y-3">
                   <div className="flex flex-col sm:flex-row items-center gap-3 justify-center lg:justify-start">
                     <a href="/api/download/apk">
-                      <Button size="lg" className="text-base px-6 py-5 shadow-lg hover:shadow-xl transition-all group">
-                        <Download className="mr-2 w-5 h-5 group-hover:animate-bounce" />
+                      <Button size="lg" className="text-base px-6 py-5 shadow-lg hover:shadow-xl transition-shadow group">
+                        <Download className="mr-2 w-5 h-5 transition-transform group-hover:translate-y-0.5" />
                         Descargar APK
                       </Button>
                     </a>
