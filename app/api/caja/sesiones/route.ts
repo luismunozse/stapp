@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdmin, requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaEscritura, sucursalParaLectura } from "@/lib/sucursal"
 import { z } from "zod"
 
 const aperturaSchema = z.object({
@@ -10,8 +11,10 @@ const aperturaSchema = z.object({
 // GET - Obtener sesión actual o historial
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role, session } = await requireAuth()
     if (error) return error
+
+    const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
 
     const { searchParams } = new URL(request.url)
     const current = searchParams.get("current")
@@ -19,12 +22,15 @@ export async function GET(request: Request) {
     const hasta = searchParams.get("hasta")
 
     if (current === "true") {
-      const { data: sesion } = await supabaseAdmin
+      let currentQuery = supabaseAdmin
         .from("sesiones_caja")
         .select("*, users!sesiones_caja_usuario_apertura_id_fkey(id, nombre)")
         .eq("organization_id", organizationId!)
         .eq("estado", "ABIERTA")
-        .maybeSingle()
+      if (!filtro.verTodas && filtro.sucursalId) {
+        currentQuery = currentQuery.eq("sucursal_id", filtro.sucursalId)
+      }
+      const { data: sesion } = await currentQuery.maybeSingle()
 
       return NextResponse.json({
         sesion: sesion
@@ -53,6 +59,10 @@ export async function GET(request: Request) {
       .eq("organization_id", organizationId!)
       .eq("estado", "CERRADA")
       .order("fecha", { ascending: false })
+
+    if (!filtro.verTodas && filtro.sucursalId) {
+      query = query.eq("sucursal_id", filtro.sucursalId)
+    }
 
     if (desde) query = query.gte("fecha", desde)
     if (hasta) query = query.lte("fecha", hasta)
@@ -93,11 +103,17 @@ export async function GET(request: Request) {
 // POST - Abrir nueva sesión de caja
 export async function POST(request: Request) {
   try {
-    const { error, organizationId, userId } = await requireAdmin()
+    const { error, organizationId, userId, role, session } = await requireAdmin()
     if (error) return error
 
     const body = await request.json()
     const parsed = aperturaSchema.parse(body)
+
+    const sucursalId = await sucursalParaEscritura({
+      role,
+      organizationId: organizationId!,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
 
     // Verificar que no hay sesión abierta
     const { data: existente } = await supabaseAdmin
@@ -118,6 +134,7 @@ export async function POST(request: Request) {
       .from("sesiones_caja")
       .insert({
         organization_id: organizationId!,
+        sucursal_id: sucursalId,
         usuario_apertura_id: userId!,
         saldo_inicial: parsed.saldoInicial,
         estado: "ABIERTA",
