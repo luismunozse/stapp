@@ -10,8 +10,11 @@
 
 ALTER TABLE plans ADD COLUMN IF NOT EXISTS limite_sucursales INTEGER;
 
+-- Asignación POR SLUG, no por tipo: existen 2 planes tipo='PREMIUM'
+-- (Emprendedor y Profesional, ver migración 107). Solo Profesional lleva 3.
 UPDATE plans SET limite_sucursales = 1 WHERE tipo = 'FREE';
-UPDATE plans SET limite_sucursales = 3 WHERE tipo = 'PREMIUM';
+UPDATE plans SET limite_sucursales = 1 WHERE slug = 'emprendedor';
+UPDATE plans SET limite_sucursales = 3 WHERE slug = 'profesional';
 
 -- ========================================
 -- 2. Fila del plan PRO (sucursales ilimitadas)
@@ -25,13 +28,13 @@ UPDATE plans SET limite_sucursales = 3 WHERE tipo = 'PREMIUM';
 -- (billing: price IDs Stripe/MP + pricing UI). Flipear a true recién ahí.
 
 INSERT INTO plans (
-  nombre, tipo, descripcion,
+  nombre, tipo, slug, tier_order, descripcion,
   precio_mensual, precio_anual, moneda,
   limite_ordenes, limite_tecnicos, limite_clientes, limite_storage_mb,
   limite_sucursales, features, activo
 )
 SELECT
-  'Pro', 'PRO', 'Plan para cadenas con múltiples sucursales',
+  'Pro', 'PRO', 'pro', 3, 'Plan para cadenas con múltiples sucursales',
   34999, 335990, 'ARS',
   NULL, NULL, NULL, 10000,
   NULL,
