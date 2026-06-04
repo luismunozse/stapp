@@ -37,6 +37,12 @@ interface TipoDispositivo {
   nombre: string
 }
 
+interface SucursalOpt {
+  id: string
+  nombre: string
+  principal: boolean
+}
+
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoFormProps) {
@@ -51,12 +57,28 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [sucursalId, setSucursalId] = useState("")
 
   const { data: tipos = [] } = useSWR<TipoDispositivo[]>(
     open ? "/api/tipos-dispositivo" : null,
     fetcher,
     { revalidateOnFocus: false }
   )
+
+  const { data: sucursalesResp } = useSWR<{ data: SucursalOpt[] }>(
+    open ? "/api/sucursales" : null,
+    fetcher,
+    { revalidateOnFocus: false }
+  )
+  const sucursales = sucursalesResp?.data ?? []
+
+  // Default: la principal (o la primera) cuando aún no se eligió ninguna.
+  useEffect(() => {
+    if (!sucursalId && sucursales.length > 0) {
+      const principal = sucursales.find((s) => s.principal) ?? sucursales[0]
+      setSucursalId(principal.id)
+    }
+  }, [sucursales, sucursalId])
 
   const isEditing = !!tecnico
 
@@ -126,6 +148,7 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
         fechaIngresoTecnico: fechaIngreso || null,
       }
       if (password) body.password = password
+      if (!isEditing && sucursalId) body.sucursalId = sucursalId
 
       const res = await fetch(url, {
         method,
@@ -271,6 +294,27 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
               </p>
             </div>
           </div>
+
+          {!isEditing && sucursales.length > 1 && (
+            <div className="space-y-2">
+              <Label htmlFor="sucursal">Sucursal</Label>
+              <select
+                id="sucursal"
+                value={sucursalId}
+                onChange={(e) => setSucursalId(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {sucursales.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.nombre}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-muted-foreground">
+                El técnico solo verá las órdenes de su sucursal.
+              </p>
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="costoHora">Costo por hora</Label>

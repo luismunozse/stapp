@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
-import { sucursalParaEscritura } from "@/lib/sucursal"
+import { sucursalParaEscritura, assertSucursalEnOrg } from "@/lib/sucursal"
 import { enforcePlanLimit, isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
 import bcrypt from "bcryptjs"
 import { z } from "zod"
@@ -17,6 +17,7 @@ const vendedorCreateSchema = z.object({
     .max(100, "La comisión no puede superar 100")
     .optional()
     .default(0),
+  sucursalId: z.string().optional().nullable(),
 })
 
 export async function GET(request: Request) {
@@ -121,11 +122,16 @@ export async function POST(request: Request) {
     const data = vendedorCreateSchema.parse(body)
 
     // El nuevo vendedor se asigna a la sucursal activa del admin (principal por defecto).
-    const sucursalId = await sucursalParaEscritura({
+    let sucursalId = await sucursalParaEscritura({
       role,
       organizationId: organizationId!,
       userSucursalId: session!.user.sucursalId ?? null,
     })
+
+    // Si el form mandó una sucursal explícita y es válida para la org, usarla.
+    if (data.sucursalId && (await assertSucursalEnOrg(data.sucursalId, organizationId!))) {
+      sucursalId = data.sucursalId
+    }
 
     // Verificar si el email ya existe
     const { data: existingUser } = await supabaseAdmin

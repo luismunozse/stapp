@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -28,6 +28,12 @@ interface VendedorFormProps {
   onSuccess: () => void
 }
 
+interface SucursalOpt {
+  id: string
+  nombre: string
+  principal: boolean
+}
+
 export function VendedorForm({ open, onOpenChange, vendedor, onSuccess }: VendedorFormProps) {
   const [nombre, setNombre] = useState(vendedor?.nombre || "")
   const [email, setEmail] = useState(vendedor?.email || "")
@@ -40,8 +46,25 @@ export function VendedorForm({ open, onOpenChange, vendedor, onSuccess }: Vended
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [sucursales, setSucursales] = useState<SucursalOpt[]>([])
+  const [sucursalId, setSucursalId] = useState("")
 
   const isEditing = !!vendedor
+
+  useEffect(() => {
+    if (!open) return
+    fetch("/api/sucursales")
+      .then((r) => r.json())
+      .then((d) => {
+        const list: SucursalOpt[] = d.data ?? []
+        setSucursales(list)
+        if (list.length > 0) {
+          const principal = list.find((s) => s.principal) ?? list[0]
+          setSucursalId((prev) => prev || principal.id)
+        }
+      })
+      .catch(() => {})
+  }, [open])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -66,6 +89,7 @@ export function VendedorForm({ open, onOpenChange, vendedor, onSuccess }: Vended
         telefono: string | null
         porcentajeComision: number
         activo?: boolean
+        sucursalId?: string
       } = {
         nombre,
         email,
@@ -74,6 +98,7 @@ export function VendedorForm({ open, onOpenChange, vendedor, onSuccess }: Vended
       }
       if (password) body.password = password
       if (isEditing) body.activo = activo
+      if (!isEditing && sucursalId) body.sucursalId = sucursalId
 
       const res = await fetch(url, {
         method,
@@ -216,6 +241,26 @@ export function VendedorForm({ open, onOpenChange, vendedor, onSuccess }: Vended
               Comisión por defecto aplicada sobre cada venta.
             </p>
           </div>
+          {!isEditing && sucursales.length > 1 && (
+            <div className="space-y-2">
+              <Label htmlFor="sucursal">Sucursal</Label>
+              <select
+                id="sucursal"
+                value={sucursalId}
+                onChange={(e) => setSucursalId(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {sucursales.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.nombre}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                El vendedor solo verá las ventas de su sucursal.
+              </p>
+            </div>
+          )}
           {isEditing && (
             <div className="flex items-center gap-2 pt-2">
               <input

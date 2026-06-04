@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
-import { sucursalParaEscritura } from "@/lib/sucursal"
+import { sucursalParaEscritura, assertSucursalEnOrg } from "@/lib/sucursal"
 import { enforcePlanLimit, isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
 import { ESTADOS_ACTIVOS, ESTADOS_COMPLETADOS } from "@/lib/order-states"
 import bcrypt from "bcryptjs"
@@ -79,7 +79,7 @@ export async function POST(request: Request) {
     if (error) return error
 
     // El nuevo técnico se asigna a la sucursal activa del admin (principal por defecto).
-    const sucursalId = await sucursalParaEscritura({
+    let sucursalId = await sucursalParaEscritura({
       role,
       organizationId: organizationId!,
       userSucursalId: session!.user.sucursalId ?? null,
@@ -100,6 +100,12 @@ export async function POST(request: Request) {
       especialidades,
       fechaIngresoTecnico,
     } = body
+
+    // Si el form mandó una sucursal explícita y es válida para la org, usarla.
+    const bodySucursalId = (body?.sucursalId ?? null) as string | null
+    if (bodySucursalId && (await assertSucursalEnOrg(bodySucursalId, organizationId!))) {
+      sucursalId = bodySucursalId
+    }
 
     if (!nombre || !email || !password) {
       return NextResponse.json(
