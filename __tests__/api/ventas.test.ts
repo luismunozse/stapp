@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import { auth } from "@/lib/auth"
 import {
   mockAuthSuccess,
   mockAuthError,
@@ -288,6 +289,36 @@ describe("POST /api/ventas — serieIds + idempotencia", () => {
     const rpcArgs = vi.mocked(supabaseAdmin.rpc).mock.calls[0][1] as any
     expect(rpcArgs.p_idempotency_key).toBe("idem-123")
     expect(rpcArgs.p_items[0].serieIds).toEqual(["s1"])
+  })
+
+  it("pasa p_sucursal_id (la sucursal del vendedor) a la RPC", async () => {
+    // VENDEDOR con sucursal fija "suc-1". sucursalParaEscritura ignora la cookie
+    // (no-ADMIN) y devuelve userSucursalId, pero igual lee la principal de la org.
+    vi.mocked(auth).mockResolvedValue({
+      user: {
+        id: "vendedor-1",
+        organizationId: "org-1",
+        role: "VENDEDOR",
+        sucursalId: "suc-1",
+        email: "v@v.com",
+      },
+      expires: new Date(Date.now() + 86400000).toISOString(),
+    } as any)
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ventaId: "v1" }, error: null } as any)
+    mockSupabaseFrom({
+      sucursales: createChainMock({ id: "suc-principal" }),
+      ventas: createChainMock({ id: "v1", numero_venta: 1, total: 100 }),
+      organizations: createChainMock({ nombre: "Org", nombre_mostrar: "Org" }),
+    })
+
+    const res = await POST(createPostRequest(baseBody))
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(201)
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
+      "crear_venta_atomica",
+      expect.objectContaining({ p_sucursal_id: "suc-1" }),
+    )
   })
 
   it("23505: devuelve la venta existente (reintento idempotente)", async () => {

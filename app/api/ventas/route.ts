@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger } from "@/lib/audit"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { formatVenta } from "@/lib/db-utils"
+import { sucursalParaEscritura, sucursalParaLectura } from "@/lib/sucursal"
 import { z } from "zod"
 
 const itemSchema = z.object({
@@ -50,7 +51,7 @@ const ventaSchema = z.object({
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId, userId, role } = await requireAdminOrVendedor()
+    const { error, organizationId, userId, role, session } = await requireAdminOrVendedor()
     if (error) return error
 
     const { searchParams } = new URL(request.url)
@@ -98,6 +99,12 @@ export async function GET(request: Request) {
     // Vendedores solo ven sus ventas
     if (role === "VENDEDOR") {
       query = query.eq("vendedor_id", userId!)
+    }
+
+    // Filtro por sucursal (no-ADMIN: su sucursal fija; ADMIN: según cookie)
+    const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
+    if (!filtro.verTodas && filtro.sucursalId) {
+      query = query.eq("sucursal_id", filtro.sucursalId)
     }
 
     if (estado) {
@@ -158,7 +165,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { error, organizationId, userId, role } = await requireAdminOrVendedor()
+    const { error, organizationId, userId, role, session } = await requireAdminOrVendedor()
     if (error) return error
 
     // Solo ADMIN o VENDEDOR pueden crear ventas
@@ -198,6 +205,14 @@ export async function POST(request: Request) {
       ...(item.costo != null && { costo: item.costo }),
     }))
 
+    // Resolver sucursal concreta para la escritura (no-ADMIN: la suya;
+    // ADMIN: según cookie, fallback a principal).
+    const sucursalId = await sucursalParaEscritura({
+      role,
+      organizationId: organizationId!,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
+
     // Crear venta atómicamente
     const rpcParams: Record<string, any> = {
       p_org_id: organizationId!,
@@ -219,6 +234,7 @@ export async function POST(request: Request) {
       p_items: pItems,
       p_idempotency_key: data.idempotencyKey || null,
       p_deposito_id: data.depositoId ?? null,
+      p_sucursal_id: sucursalId,
     }
 
     // Pass multi-payment array if provided
