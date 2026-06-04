@@ -7,6 +7,7 @@ import { createAuditLogger } from "@/lib/audit"
 import { uploadOrderPhoto, base64ToBuffer } from "@/lib/storage"
 import { enforcePlanLimit, isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
 import { formatOrden } from "@/lib/db-utils"
+import { sucursalParaEscritura, sucursalParaLectura } from "@/lib/sucursal"
 import { z } from "zod"
 
 // Generar token público único
@@ -51,7 +52,7 @@ const ordenSchema = z.object({
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId, userId, role } = await requireAuth()
+    const { error, session, organizationId, userId, role } = await requireAuth()
     if (error) return error
 
     const { searchParams } = new URL(request.url)
@@ -111,6 +112,12 @@ export async function GET(request: Request) {
     // Técnicos solo ven sus órdenes asignadas
     if (role === "TECNICO") {
       query = query.eq("tecnico_id", userId!)
+    }
+
+    // Filtro por sucursal (ADMIN ve según cookie; otros roles su sucursal fija)
+    const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
+    if (!filtro.verTodas && filtro.sucursalId) {
+      query = query.eq("sucursal_id", filtro.sucursalId)
     }
 
     if (estado) {
@@ -242,7 +249,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { error, organizationId, userId, role } = await requireAuth()
+    const { error, session, organizationId, userId, role } = await requireAuth()
     if (error) return error
 
     // Verificar límite de órdenes del plan
@@ -303,10 +310,18 @@ export async function POST(request: Request) {
     const estadoInicial = data.presupuestoAceptado ? "EN_REPARACION" : "RECIBIDO"
     const costoFinal = data.presupuestoAceptado && data.presupuesto ? data.presupuesto : null
 
+    // Resolver sucursal concreta de escritura según rol/cookie/usuario
+    const sucursalId = await sucursalParaEscritura({
+      role,
+      organizationId: organizationId!,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
+
     const { data: orden, error: dbError } = await supabaseAdmin
       .from("ordenes_servicio")
       .insert({
         numero_orden: numeroOrden,
+        sucursal_id: sucursalId,
         codigo_orden: codigoOrden,
         cliente_id: data.clienteId,
         organization_id: organizationId!,
