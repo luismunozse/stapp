@@ -150,6 +150,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               nombre,
               rol,
               organization_id,
+              sucursal_id,
               avatar_url,
               organizations (
                 id,
@@ -182,6 +183,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             name: fullUser.nombre,
             role: fullUser.rol as Rol,
             organizationId: fullUser.organization_id,
+            sucursalId: (fullUser.sucursal_id ?? null),
             isSuperadmin: isSuper,
             rememberMe: true,
             refreshToken: newRefreshToken,
@@ -262,6 +264,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             name: gUser.nombre,
             role: gUser.rol as Rol,
             organizationId: gUser.organization_id,
+            sucursalId: (gUser.sucursal_id ?? null),
             isSuperadmin: isGoogleSuper,
             rememberMe,
             refreshToken,
@@ -414,6 +417,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           name: user.nombre,
           role: user.rol as Rol,
           organizationId: user.organization_id,
+          sucursalId: (user.sucursal_id ?? null),
           isSuperadmin: isSuper,
           rememberMe,
           refreshToken,
@@ -429,6 +433,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.role = user.role
         token.id = user.id
         token.organizationId = user.organizationId
+        token.sucursalId = user.sucursalId ?? null
         token.isSuperadmin = user.isSuperadmin
         token.rememberMe = user.rememberMe
         token.refreshToken = user.refreshToken
@@ -512,6 +517,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.role = token.role as Rol
         session.user.id = token.id as string
         session.user.organizationId = token.organizationId as string
+        session.user.sucursalId = (token.sucursalId as string | null) ?? null
         session.user.isSuperadmin = token.isSuperadmin as boolean
         session.user.avatar = token.avatar as string | null
       }
