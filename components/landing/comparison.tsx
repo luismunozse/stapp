@@ -3,6 +3,7 @@
 import { Check, X, Minus } from "lucide-react"
 import { m, LazyMotion, domAnimation } from "@/components/animations/motion"
 import { cn } from "@/lib/utils"
+import { revealHeader, revealPanel, revealStaggerFast, revealRow } from "./reveal"
 
 const rows = [
   {
@@ -187,10 +188,10 @@ export function Comparison() {
           {/* Header */}
           <m.div
             className="text-center max-w-3xl mx-auto mb-10"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
+            variants={revealHeader}
+            initial="hidden"
+            whileInView="visible"
             viewport={{ once: true, margin: "0px" }}
-            transition={{ duration: 0.6 }}
           >
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-balance text-foreground mb-4">
               Por qué cambiar a STApp
@@ -200,13 +201,13 @@ export function Comparison() {
             </p>
           </m.div>
 
-          {/* Desktop table */}
+          {/* Desktop table: panel estructurado, se asienta con scale */}
           <m.div
             className="hidden md:block max-w-4xl mx-auto"
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
+            variants={revealPanel}
+            initial="hidden"
+            whileInView="visible"
             viewport={{ once: true, margin: "0px" }}
-            transition={{ duration: 0.5 }}
           >
             <div className="rounded-xl border overflow-hidden bg-card shadow-sm">
               {/* Table header */}
@@ -260,16 +261,19 @@ export function Comparison() {
             </div>
           </m.div>
 
-          {/* Mobile cards */}
-          <div className="md:hidden space-y-3">
-            {rows.map((row, index) => (
+          {/* Mobile cards: lista que se llena top-down vía stagger */}
+          <m.div
+            className="md:hidden space-y-3"
+            variants={revealStaggerFast}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: "0px" }}
+          >
+            {rows.map((row) => (
               <m.div
                 key={row.feature}
                 className="rounded-xl border bg-card p-4 shadow-sm"
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "0px" }}
-                transition={{ duration: 0.4, delay: index * 0.05 }}
+                variants={revealRow}
               >
                 <h3 className="font-semibold text-sm text-foreground mb-3">
                   {row.feature}
@@ -299,7 +303,7 @@ export function Comparison() {
                 </div>
               </m.div>
             ))}
-          </div>
+          </m.div>
         </div>
       </section>
     </LazyMotion>
