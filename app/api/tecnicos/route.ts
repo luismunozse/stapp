@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaEscritura } from "@/lib/sucursal"
 import { enforcePlanLimit, isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
 import { ESTADOS_ACTIVOS, ESTADOS_COMPLETADOS } from "@/lib/order-states"
 import bcrypt from "bcryptjs"
@@ -74,8 +75,15 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const { error, organizationId } = await requireAdmin()
+    const { error, organizationId, role, session } = await requireAdmin()
     if (error) return error
+
+    // El nuevo técnico se asigna a la sucursal activa del admin (principal por defecto).
+    const sucursalId = await sucursalParaEscritura({
+      role,
+      organizationId: organizationId!,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
 
     // Verificar límite de técnicos del plan
     const limitError = await enforcePlanLimit(organizationId!, "tecnicos")
@@ -144,6 +152,7 @@ export async function POST(request: Request) {
         password: hashedPassword,
         rol: "TECNICO",
         organization_id: organizationId!,
+        sucursal_id: sucursalId,
         email_verified: true,
         porcentaje_comision: porcentajeNum,
         costo_hora: costoHoraNum,
