@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { checkPlanLimit } from "@/lib/subscriptions"
 
-export type LimitType = "ordenes" | "tecnicos" | "clientes" | "vendedores" | "storage"
+export type LimitType = "ordenes" | "tecnicos" | "clientes" | "vendedores" | "storage" | "sucursales"
 
 // Forma del error que raisean los triggers / RPC cuando se excede el limite
 // del plan. Mensaje: "PLAN_LIMIT_EXCEEDED:<tipo>:<current>:<limit>"
@@ -106,5 +106,10 @@ export const LIMIT_MESSAGES = {
     title: "Límite de almacenamiento alcanzado",
     description: "Has alcanzado el límite de almacenamiento de tu plan.",
     action: "Actualizá tu plan para obtener más espacio de almacenamiento.",
+  },
+  sucursales: {
+    title: "Límite de sucursales alcanzado",
+    description: "Alcanzaste el límite de sucursales de tu plan.",
+    action: "Subí a Pro para crear sucursales ilimitadas.",
   },
 }

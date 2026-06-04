@@ -68,6 +68,7 @@ export async function getSubscriptionInfo(
         limite_clientes,
         limite_vendedores,
         limite_storage_mb,
+        limite_sucursales,
         features,
         feature_flags
       )
@@ -100,6 +101,7 @@ export async function getSubscriptionInfo(
       clientes: plan.limite_clientes,
       vendedores: plan.limite_vendedores,
       storageMb: plan.limite_storage_mb,
+      sucursales: plan.limite_sucursales,
     },
     features: plan.features || [],
     featureFlags: (plan.feature_flags as Record<string, boolean>) || {},
@@ -144,6 +146,19 @@ const FREE_PLAN_LIMITS: Record<string, number> = {
   vendedores: 1,
   clientes: 200,
   storageMb: 100,
+  sucursales: 1,
+}
+
+// COUNT en vivo de sucursales activas de la org. No usamos el contador cacheado
+// (organization_usage.sucursales_count) porque no tiene trigger que lo mantenga.
+async function countSucursalesActivas(organizationId: string): Promise<number> {
+  const { count } = await supabaseAdmin
+    .from("sucursales")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", organizationId)
+    .is("deleted_at", null)
+    .eq("activo", true)
+  return count ?? 0
 }
 
 // Reset atómico del contador mensual de órdenes si periodo_inicio quedó del mes
@@ -178,7 +193,7 @@ export type UpgradeAction = "upgrade_free_to_profesional" | "activate_trial" | n
 // Verificar si una organización puede realizar una acción según su plan
 export async function checkPlanLimit(
   organizationId: string,
-  limitType: "ordenes" | "tecnicos" | "clientes" | "vendedores" | "storage"
+  limitType: "ordenes" | "tecnicos" | "clientes" | "vendedores" | "storage" | "sucursales"
 ): Promise<{
   allowed: boolean
   current: number
@@ -222,6 +237,10 @@ export async function checkPlanLimit(
         limit = subscription.limits.storageMb
         current = Math.round(usage.storageMb)
         break
+      case "sucursales":
+        limit = subscription.limits.sucursales
+        current = await countSucursalesActivas(organizationId)
+        break
     }
   } else {
     // Sin suscripción: usar límites FREE
@@ -241,6 +260,9 @@ export async function checkPlanLimit(
         break
       case "storage":
         current = Math.round(usage.storageMb)
+        break
+      case "sucursales":
+        current = await countSucursalesActivas(organizationId)
         break
     }
   }
@@ -270,6 +292,7 @@ export async function checkPlanLimit(
     tecnicos: "técnicos",
     vendedores: "vendedores",
     storage: "almacenamiento (MB)",
+    sucursales: "sucursales",
   }
   const label = limitLabels[limitType] || limitType
 
