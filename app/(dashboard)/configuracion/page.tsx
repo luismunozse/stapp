@@ -4,7 +4,7 @@ import { ConfiguracionForm } from "@/components/configuracion/configuracion-form
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { CookieSettings } from "@/components/cookie-settings"
 import Link from "next/link"
-import { ClipboardCheck, ChevronRight, CreditCard, FileSpreadsheet, Smartphone, Monitor, MessageCircle, Shield, Tag, Repeat, Warehouse, Webhook, Printer, MessageSquare, KeyRound } from "lucide-react"
+import { ClipboardCheck, ChevronRight, CreditCard, FileSpreadsheet, Smartphone, Monitor, MessageCircle, Shield, Tag, Repeat, Warehouse, Webhook, Printer, MessageSquare, KeyRound, Store } from "lucide-react"
 import { canEditConfiguration } from "@/lib/auth-utils"
 import { SecuritySettings } from "@/components/configuracion/security-settings"
 import { supabaseAdmin } from "@/lib/supabase"
@@ -186,6 +186,24 @@ export default async function ConfiguracionPage() {
               <CardDescription className="text-[10px] sm:text-sm flex items-center justify-between">
                 <span className="hidden sm:inline">Alquiler, sueldos y otros gastos fijos</span>
                 <span className="sm:hidden">Alquiler, sueldos, etc</span>
+                <ChevronRight className="h-4 w-4 shrink-0" />
+              </CardDescription>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/configuracion/sucursales">
+          <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium">
+                Sucursales
+              </CardTitle>
+              <Store className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent className="p-3 sm:p-6 pt-0">
+              <CardDescription className="text-[10px] sm:text-sm flex items-center justify-between">
+                <span className="hidden sm:inline">Locales físicos: órdenes, ventas y caja por sucursal</span>
+                <span className="sm:hidden">Locales / personal</span>
                 <ChevronRight className="h-4 w-4 shrink-0" />
               </CardDescription>
             </CardContent>
