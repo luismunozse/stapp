@@ -21,6 +21,7 @@ export interface SubscriptionInfo {
     clientes: number | null
     vendedores: number | null
     storageMb: number | null
+    sucursales: number | null
   }
   features: string[]
   featureFlags: Record<string, boolean>
