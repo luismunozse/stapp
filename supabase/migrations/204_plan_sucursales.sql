@@ -19,6 +19,10 @@ UPDATE plans SET limite_sucursales = 3 WHERE tipo = 'PREMIUM';
 -- NOTA DE NEGOCIO: precio y features son valores iniciales sugeridos.
 -- Ajustar precio_mensual / precio_anual / features / stripe_price_* antes de
 -- exponer el plan en producción. ~1.8x Profesional como ancla.
+--
+-- activo = false a propósito: la RLS de plans expone solo activo=TRUE, y el
+-- pricing del landing lista planes activos. Mantener PRO oculto hasta Fase 4
+-- (billing: price IDs Stripe/MP + pricing UI). Flipear a true recién ahí.
 
 INSERT INTO plans (
   nombre, tipo, descripcion,
@@ -32,7 +36,7 @@ SELECT
   NULL, NULL, NULL, 10000,
   NULL,
   '["Todo lo de Profesional", "Sucursales ilimitadas", "Reportes consolidados por sucursal", "10GB almacenamiento", "Soporte prioritario"]',
-  true
+  false
 WHERE NOT EXISTS (SELECT 1 FROM plans WHERE tipo = 'PRO');
 
 -- ========================================

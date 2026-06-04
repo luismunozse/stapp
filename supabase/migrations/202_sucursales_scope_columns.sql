@@ -1,9 +1,16 @@
 -- ========================================
--- 202: SUCURSALES — columnas sucursal_id + backfill + NOT NULL
+-- 202: SUCURSALES — columnas sucursal_id + backfill (SIN NOT NULL)
 -- ========================================
--- Agrega sucursal_id a las entidades operativas, vuelca toda la data
--- existente a la Casa Central de su org, y aplica NOT NULL (salvo users).
+-- Agrega sucursal_id a las entidades operativas y vuelca toda la data
+-- existente a la Casa Central de su org. Columnas quedan NULLABLE.
 -- Idempotente: ADD COLUMN IF NOT EXISTS + backfill por WHERE sucursal_id IS NULL.
+--
+-- SEGURIDAD EN PROD: esta migración es ADITIVA y NO rompe el código actual.
+-- Las columnas son nullable; los INSERT existentes (que aún no setean
+-- sucursal_id) las omiten y quedan en NULL. El backfill cubre las filas viejas.
+-- El SET NOT NULL se aplica en una migración POSTERIOR (Fase 2), recién cuando
+-- el app-layer ya escribe sucursal_id en cada INSERT. Aplicar NOT NULL ahora
+-- rompería la creación de órdenes/ventas/caja en producción.
 
 -- ========================================
 -- 1. AGREGAR COLUMNAS (nullable primero)
@@ -67,15 +74,17 @@ WHERE t.sucursal_id IS NULL
   AND s.principal = true AND s.deleted_at IS NULL;
 
 -- ========================================
--- 3. NOT NULL (salvo users.sucursal_id, que admite NULL para ADMIN)
+-- 3. NOT NULL — DIFERIDO A FASE 2
 -- ========================================
-
-ALTER TABLE ordenes_servicio ALTER COLUMN sucursal_id SET NOT NULL;
-ALTER TABLE ventas           ALTER COLUMN sucursal_id SET NOT NULL;
-ALTER TABLE sesiones_caja    ALTER COLUMN sucursal_id SET NOT NULL;
-ALTER TABLE movimientos_caja ALTER COLUMN sucursal_id SET NOT NULL;
-ALTER TABLE depositos        ALTER COLUMN sucursal_id SET NOT NULL;
--- users.sucursal_id: NO se aplica NOT NULL (ADMIN = NULL).
+-- NO aplicar SET NOT NULL en esta fase: el código actual aún inserta sin
+-- sucursal_id y NOT NULL sin default rompería esos INSERT en producción.
+-- Una migración de Fase 2 (post app-layer) aplicará:
+--   ALTER TABLE ordenes_servicio ALTER COLUMN sucursal_id SET NOT NULL;
+--   ALTER TABLE ventas           ALTER COLUMN sucursal_id SET NOT NULL;
+--   ALTER TABLE sesiones_caja    ALTER COLUMN sucursal_id SET NOT NULL;
+--   ALTER TABLE movimientos_caja ALTER COLUMN sucursal_id SET NOT NULL;
+--   ALTER TABLE depositos        ALTER COLUMN sucursal_id SET NOT NULL;
+-- users.sucursal_id queda nullable siempre (ADMIN = NULL = ve todas).
 
 -- ========================================
 -- 4. ÍNDICES COMPUESTOS (espejo de los (organization_id, ...) existentes)
