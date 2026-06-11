@@ -93,6 +93,8 @@ export function formatOrden(orden: any) {
     porcentajeComision: orden.porcentaje_comision != null ? Number(orden.porcentaje_comision) : null,
     comisionPagada: !!orden.comision_pagada,
     fechaPagoComision: orden.fecha_pago_comision || null,
+    horasTrabajadas: Number(orden.horas_trabajadas ?? 0),
+    costoManoObra: Number(orden.costo_mano_obra ?? 0),
     observaciones: orden.observaciones,
     notasInternas: orden.notas_internas,
     diagnostico: orden.diagnostico,
