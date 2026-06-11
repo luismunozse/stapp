@@ -277,7 +277,7 @@ export async function arrayToXLSX<T extends Record<string, any>>(
           value = value?.[key]
         }
         if (col.transform) {
-          return col.transform(value, row)
+          return formatValue(col.transform(value, row))
         }
         return formatValue(value)
       })
