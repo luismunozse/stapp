@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
@@ -69,8 +69,7 @@ import { NotaCreditoDialog } from "@/components/notas-credito/nota-credito-dialo
 import { PatternDisplay } from "@/components/ui/pattern-display"
 import { useModal } from "@/contexts/modal-context"
 import { toast } from "sonner"
-import { getSupabaseClient, authenticateRealtime } from "@/lib/supabase-client"
-import type { RealtimeChannel } from "@supabase/supabase-js"
+import { useVisibilityPolling } from "@/hooks/use-visibility-polling"
 import type { OrdenServicio, EstadoOrden, User as UserType } from "@/types"
 
 import { ESTADO_LABELS } from "@/lib/orden-state-machine"
@@ -266,60 +265,11 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
     fetchTecnicos()
   }, [ordenId, fetchOrden])
 
-  // Realtime: re-fetch cuando cambia la orden o sus cotizaciones.
-  // Authenticate the socket as `authenticated` role so org-scoped
-  // authenticated policies (migration 202) govern row delivery.
-  const channelRef = useRef<RealtimeChannel | null>(null)
-  useEffect(() => {
-    let cancelled = false
-    const supabase = getSupabaseClient()
-
-    // Authenticate first; subscribe only after auth resolves.
-    // .finally() ensures we still subscribe even if auth fails (degrades to anon).
-    authenticateRealtime().finally(() => {
-      if (cancelled) return
-
-      const channel = supabase
-        .channel(`orden-detail-${ordenId}`)
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "ordenes_servicio", filter: `id=eq.${ordenId}` },
-          () => { fetchOrden() }
-        )
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "cotizaciones", filter: `orden_id=eq.${ordenId}` },
-          () => { fetchOrden() }
-        )
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "orden_eventos", filter: `orden_id=eq.${ordenId}` },
-          () => { fetchOrden() }
-        )
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "repuestos_orden", filter: `orden_id=eq.${ordenId}` },
-          () => { fetchOrden() }
-        )
-        .subscribe((status, err) => {
-          if (err) console.warn("[realtime] orden-detail subscribe error:", err)
-        })
-
-      channelRef.current = channel
-    })
-
-    return () => {
-      cancelled = true
-      // TODO(FIX5): cancelRealtimeRefresh() is a global module-level timer.
-      // Calling it here would cancel token refresh for all other mounted
-      // dashboard consumers. Safe to call only when the last consumer unmounts
-      // (no shared ref-count mechanism exists yet).
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current)
-        channelRef.current = null
-      }
-    }
-  }, [ordenId, fetchOrden])
+  // Polling: re-fetch the orden every 15 seconds while the tab is visible.
+  // Previously used Supabase Realtime with an HS256-minted JWT (PR3), which
+  // was abandoned because the production Supabase project uses asymmetric JWT
+  // signing (ECC P-256) — HS256 tokens are rejected with JwtSignatureError.
+  useVisibilityPolling(fetchOrden, 15000, Boolean(ordenId))
 
   const fetchTecnicos = async () => {
     try {
