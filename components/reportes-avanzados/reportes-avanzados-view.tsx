@@ -73,6 +73,11 @@ const PerformanceVendedores = dynamic(
   { loading: () => <ReporteSkeleton />, ssr: false }
 )
 
+const RentabilidadTecnicos = dynamic(
+  () => import("./rentabilidad-tecnicos").then(mod => ({ default: mod.RentabilidadTecnicos })),
+  { loading: () => <ReporteSkeleton />, ssr: false }
+)
+
 export function ReportesAvanzadosView() {
   const [activeTab, setActiveTab] = useState("tecnicos")
 
@@ -82,6 +87,7 @@ export function ReportesAvanzadosView() {
     "tasa-retorno": "tasa-retorno",
     "fallas": "fallas-comunes",
     "rentabilidad": "rentabilidad",
+    "rentabilidad-tecnicos": "rentabilidad-tecnicos",
     "prediccion": "prediccion-repuestos",
   }
 
@@ -103,7 +109,7 @@ export function ReportesAvanzadosView() {
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <div className="overflow-x-auto">
-          <TabsList className="inline-flex w-auto min-w-full lg:grid lg:grid-cols-9">
+          <TabsList className="inline-flex w-auto min-w-full lg:grid lg:grid-cols-10">
             <TabsTrigger value="tecnicos" className="gap-2">
               <BarChart3 className="h-4 w-4" />
               <span className="hidden sm:inline">Tecnicos</span>
@@ -135,6 +141,10 @@ export function ReportesAvanzadosView() {
             <TabsTrigger value="rentabilidad" className="gap-2">
               <DollarSign className="h-4 w-4" />
               <span className="hidden sm:inline">Rentabilidad</span>
+            </TabsTrigger>
+            <TabsTrigger value="rentabilidad-tecnicos" className="gap-2">
+              <DollarSign className="h-4 w-4" />
+              <span className="hidden sm:inline">Rentab. tecnico</span>
             </TabsTrigger>
             <TabsTrigger value="prediccion" className="gap-2">
               <Boxes className="h-4 w-4" />
@@ -173,6 +183,10 @@ export function ReportesAvanzadosView() {
 
         <TabsContent value="rentabilidad" className="mt-6">
           <RentabilidadChart />
+        </TabsContent>
+
+        <TabsContent value="rentabilidad-tecnicos" className="mt-6">
+          <RentabilidadTecnicos />
         </TabsContent>
 
         <TabsContent value="prediccion" className="mt-6">
