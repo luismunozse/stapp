@@ -12,6 +12,7 @@ interface OrdenCostosCardProps {
   ordenId: string
   presupuesto: number | null | undefined
   costoFinal: number | null | undefined
+  horasTrabajadas?: number
   sena: number
   totalCobrado?: number
   descuentoCobro?: number
@@ -27,6 +28,7 @@ export function OrdenCostosCard({
   ordenId,
   presupuesto,
   costoFinal,
+  horasTrabajadas,
   sena,
   totalCobrado = 0,
   descuentoCobro = 0,
@@ -110,6 +112,24 @@ export function OrdenCostosCard({
             />
           )}
         </div>
+
+        {!readOnly && (
+          <div>
+            <Label className="text-xs text-muted-foreground mb-1 block">Horas trabajadas</Label>
+            <Input
+              key={`horas-${ordenId}-${horasTrabajadas}`}
+              type="number"
+              step="0.25"
+              min="0"
+              defaultValue={horasTrabajadas || ""}
+              placeholder="0"
+              onBlur={(e) => {
+                const value = parseFloat(e.target.value) || 0
+                if (value !== (horasTrabajadas || 0)) onUpdateField("horasTrabajadas", value)
+              }}
+            />
+          </div>
+        )}
 
         {costoFinal && costoFinal > 0 && (
           <div className="pt-3 border-t space-y-2">
