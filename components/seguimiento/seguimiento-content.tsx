@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback } from "react"
 import dynamic from "next/dynamic"
 import Image from "next/image"
 import { formatDateValue } from "@/lib/timezone"
@@ -52,8 +52,7 @@ import {
   ArrowRight,
   Sparkles,
 } from "lucide-react"
-import { getSupabaseClient } from "@/lib/supabase-client"
-import type { RealtimeChannel } from "@supabase/supabase-js"
+import { useVisibilityPolling } from "@/hooks/use-visibility-polling"
 import {
   classifyEstado,
   shouldShowTimeRemaining,
@@ -324,44 +323,9 @@ export function SeguimientoContent({ token }: { token: string }) {
     return () => { controller.abort() }
   }, [fetchData])
 
-  // Realtime: suscribirse a cambios de la orden cuando tenemos el id
-  const channelRef = useRef<RealtimeChannel | null>(null)
-  useEffect(() => {
-    if (!data?.id) return
-
-    const supabase = getSupabaseClient()
-    const channel = supabase
-      .channel(`seguimiento-${data.id}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "ordenes_servicio", filter: `id=eq.${data.id}` },
-        () => { fetchData() }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "cotizaciones", filter: `orden_id=eq.${data.id}` },
-        () => { fetchData() }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "orden_eventos", filter: `orden_id=eq.${data.id}` },
-        () => { fetchData() }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "repuestos_orden", filter: `orden_id=eq.${data.id}` },
-        () => { fetchData() }
-      )
-      .subscribe()
-
-    channelRef.current = channel
-    return () => {
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current)
-        channelRef.current = null
-      }
-    }
-  }, [data?.id, fetchData])
+  // Visibility-aware polling: refetch every 15s while the order is loaded,
+  // pausing automatically when the tab is hidden. Zero anon Supabase DB access.
+  useVisibilityPolling(fetchData, 15000, Boolean(data?.id))
 
   if (loading) {
     return (
