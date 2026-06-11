@@ -35,6 +35,7 @@ const updateOrdenSchema = z.object({
   problemaReportado: z.string().min(1, "El problema reportado no puede estar vacío").optional(),
   telefonoContacto: z.string().optional().nullable(),
   porcentajeComision: z.number().min(0).max(100).optional().nullable(),
+  horasTrabajadas: z.number().min(0).optional().nullable(),
 })
 
 export async function GET(
@@ -209,10 +210,11 @@ export async function PUT(
 
     // Validar que el técnico exista y tenga rol TECNICO
     let porcentajeComisionFromTecnico: number | null = null
+    let costoHoraFromTecnico: number = 0
     if (data.tecnicoId) {
       const { data: tecnico } = await supabaseAdmin
         .from("users")
-        .select("id, rol, porcentaje_comision")
+        .select("id, rol, porcentaje_comision, costo_hora")
         .eq("id", data.tecnicoId)
         .eq("organization_id", organizationId!)
         .single()
@@ -224,6 +226,7 @@ export async function PUT(
         return NextResponse.json({ error: "El usuario seleccionado no tiene rol de técnico" }, { status: 400 })
       }
       porcentajeComisionFromTecnico = Number(tecnico.porcentaje_comision ?? 0)
+      costoHoraFromTecnico = Number(tecnico.costo_hora ?? 0)
     }
 
     // Preparar datos para update
@@ -240,6 +243,12 @@ export async function PUT(
       if (!data.tecnicoId && data.porcentajeComision === undefined) {
         updateData.porcentaje_comision = null
       }
+      // Snapshot labor rate on assign; clear on de-assign
+      if (data.tecnicoId) {
+        updateData.costo_hora_snapshot = costoHoraFromTecnico
+      } else {
+        updateData.costo_hora_snapshot = null
+      }
     }
     if (data.porcentajeComision !== undefined) updateData.porcentaje_comision = data.porcentajeComision
     if (data.presupuesto !== undefined) updateData.presupuesto = data.presupuesto
@@ -249,6 +258,10 @@ export async function PUT(
     if (data.diagnostico !== undefined) updateData.diagnostico = data.diagnostico
     if (data.problemaReportado !== undefined) updateData.problema_reportado = data.problemaReportado
     if (data.telefonoContacto !== undefined) updateData.telefono_contacto = data.telefonoContacto
+    if (data.horasTrabajadas !== undefined) {
+      const h = Number(data.horasTrabajadas)
+      updateData.horas_trabajadas = Number.isFinite(h) && h >= 0 ? h : 0
+    }
 
     if (data.fechaPrometida !== undefined) {
       updateData.fecha_prometida = data.fechaPrometida
