@@ -21,7 +21,7 @@ export async function GET() {
       .from("ordenes_servicio")
       .select(`
         id, tipo_dispositivo, costo_final,
-        porcentaje_comision, tecnico_id,
+        porcentaje_comision, tecnico_id, costo_mano_obra,
         repuestos_orden (cantidad, precio_unitario),
         cotizaciones (
           estado, deleted_at,
@@ -38,7 +38,7 @@ export async function GET() {
 
     // Calcular rentabilidad por tipo de dispositivo
     // Costos incluyen: repuestos consumidos + cotizaciones aceptadas (inv) + comisión técnico.
-    const porTipo: Record<string, { ingresos: number; costos: number; count: number }> = {}
+    const porTipo: Record<string, { ingresos: number; costos: number; manoObra: number; count: number }> = {}
 
     for (const orden of ordenes as any[]) {
       const tipo = orden.tipo_dispositivo || "OTRO"
@@ -68,11 +68,14 @@ export async function GET() {
         }
       }
 
+      const manoObra = parseFloat(orden.costo_mano_obra || "0") || 0
+
       if (!porTipo[tipo]) {
-        porTipo[tipo] = { ingresos: 0, costos: 0, count: 0 }
+        porTipo[tipo] = { ingresos: 0, costos: 0, manoObra: 0, count: 0 }
       }
       porTipo[tipo].ingresos += ingreso
-      porTipo[tipo].costos += costoRepuestos + comision
+      porTipo[tipo].costos += costoRepuestos + comision + manoObra
+      porTipo[tipo].manoObra += manoObra
       porTipo[tipo].count++
     }
 
@@ -84,6 +87,7 @@ export async function GET() {
         tipoDispositivo: tipo,
         ingresos: Math.round(stats.ingresos),
         costos: Math.round(stats.costos),
+        costoManoObra: Math.round(stats.manoObra),
         ganancia: Math.round(ganancia),
         margen,
         cantidad: stats.count,
