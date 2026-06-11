@@ -293,19 +293,19 @@ export async function arrayToXLSX<T extends Record<string, any>>(
 }
 
 /**
- * Descarga un archivo CSV en el navegador o filesystem nativo
+ * Descarga un Blob en el navegador, o lo guarda al filesystem en Capacitor.
+ * Maneja contenido binario (xlsx) y de texto (csv).
  */
-export async function downloadCSV(csvContent: string, filename: string): Promise<void> {
-  // En Capacitor nativo, guardar al filesystem del dispositivo
+export async function triggerDownload(blob: Blob, filename: string): Promise<void> {
   const { Capacitor } = await import("@capacitor/core")
   if (Capacitor.isNativePlatform()) {
     try {
-      const { Filesystem, Directory, Encoding } = await import("@capacitor/filesystem")
+      const { Filesystem, Directory } = await import("@capacitor/filesystem")
+      const base64 = await blobToBase64(blob)
       await Filesystem.writeFile({
         path: filename,
-        data: "\ufeff" + csvContent,
+        data: base64,
         directory: Directory.Documents,
-        encoding: Encoding.UTF8,
       })
       alert(`Archivo guardado en Documentos: ${filename}`)
     } catch (error) {
@@ -315,12 +315,8 @@ export async function downloadCSV(csvContent: string, filename: string): Promise
     return
   }
 
-  // En web, descargar normalmente
-  const blob = new Blob(["\ufeff" + csvContent], {
-    type: "text/csv;charset=utf-8;",
-  })
-  const link = document.createElement("a")
   const url = URL.createObjectURL(blob)
+  const link = document.createElement("a")
   link.setAttribute("href", url)
   link.setAttribute("download", filename)
   link.style.visibility = "hidden"
@@ -328,4 +324,26 @@ export async function downloadCSV(csvContent: string, filename: string): Promise
   link.click()
   document.body.removeChild(link)
   URL.revokeObjectURL(url)
+}
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      const result = reader.result as string
+      resolve(result.split(",")[1] || "")
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(blob)
+  })
+}
+
+/**
+ * Descarga texto CSV (UTF-8 con BOM para Excel) usando triggerDownload.
+ */
+export async function downloadCSV(csvContent: string, filename: string): Promise<void> {
+  const blob = new Blob(["\ufeff" + csvContent], {
+    type: "text/csv;charset=utf-8;",
+  })
+  await triggerDownload(blob, filename)
 }

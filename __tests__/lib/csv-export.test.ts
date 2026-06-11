@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi } from "vitest"
 import ExcelJS from "exceljs"
 import { arrayToXLSX, type CSVColumn } from "@/lib/csv-export"
 
@@ -33,5 +33,30 @@ describe("arrayToXLSX", () => {
   it("returns headers-only when data is empty (no data rows)", async () => {
     const ws = await loadWorkbook(await arrayToXLSX([], COLUMNS))
     expect(ws.rowCount).toBe(1)
+  })
+})
+
+import { triggerDownload } from "@/lib/csv-export"
+
+describe("triggerDownload (web)", () => {
+  it("creates an anchor with the download filename and clicks it", async () => {
+    const createUrl = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:mock")
+    const revokeUrl = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {})
+    const clicked: string[] = []
+    const realCreate = document.createElement.bind(document)
+    vi.spyOn(document, "createElement").mockImplementation((tag: string) => {
+      const el = realCreate(tag) as HTMLAnchorElement
+      if (tag === "a") el.click = () => clicked.push(el.getAttribute("download") || "")
+      return el
+    })
+
+    const blob = new Blob(["x"], { type: "text/plain" })
+    await triggerDownload(blob, "report.xlsx")
+
+    expect(createUrl).toHaveBeenCalled()
+    expect(clicked).toContain("report.xlsx")
+    expect(revokeUrl).toHaveBeenCalled()
+
+    vi.restoreAllMocks()
   })
 })
