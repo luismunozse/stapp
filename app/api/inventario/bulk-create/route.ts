@@ -29,16 +29,6 @@ const CATEGORIA_PREFIJOS: Record<string, string> = {
   "Otros": "OTR",
 }
 
-const TIPO_PREFIJOS: Record<string, string> = {
-  CELULAR: "CEL",
-  COMPUTADORA: "COM",
-  TABLET: "TAB",
-  CONSOLA: "CON",
-  SMARTWATCH: "SMA",
-  ACCESORIOS: "ACC",
-  TODOS: "GEN",
-}
-
 const itemSchema = z.object({
   nombre: z.string().min(1),
   categoria: z.string().min(1),
@@ -57,10 +47,8 @@ const bulkSchema = z.object({
   items: z.array(itemSchema).min(1).max(100),
 })
 
-function prefixFor(categoria: string, tipo: string) {
-  const cat = CATEGORIA_PREFIJOS[categoria] || categoria.substring(0, 3).toUpperCase()
-  const t = TIPO_PREFIJOS[tipo] || tipo.substring(0, 3).toUpperCase()
-  return `${cat}-${t}-`
+function prefixFor(categoria: string) {
+  return CATEGORIA_PREFIJOS[categoria] || categoria.substring(0, 3).toUpperCase()
 }
 
 export async function POST(request: Request) {
@@ -80,7 +68,7 @@ export async function POST(request: Request) {
     for (let i = 0; i < items.length; i++) {
       const data = items[i]
       try {
-        const prefijo = prefixFor(data.categoria, data.tipoDispositivo)
+        const prefijo = prefixFor(data.categoria)
         const { data: codigo, error: rpcError } = await supabaseAdmin.rpc(
           "get_next_inventory_code",
           { p_org_id: organizationId!, p_prefix: prefijo }
