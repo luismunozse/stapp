@@ -24,6 +24,7 @@ interface TecnicoFormProps {
     nombre: string
     email: string
     porcentajeComision?: number
+    costoHora?: number
     telefono?: string | null
     especialidades?: string[]
     fechaIngresoTecnico?: string | null
@@ -44,6 +45,7 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
   const [telefono, setTelefono] = useState("")
   const [password, setPassword] = useState("")
   const [porcentajeComision, setPorcentajeComision] = useState<string>("0")
+  const [costoHora, setCostoHora] = useState<string>("0")
   const [especialidades, setEspecialidades] = useState<string[]>([])
   const [fechaIngreso, setFechaIngreso] = useState<string>("")
   const [showPassword, setShowPassword] = useState(false)
@@ -67,6 +69,7 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
       setPorcentajeComision(
         tecnico.porcentajeComision != null ? String(tecnico.porcentajeComision) : "0"
       )
+      setCostoHora(tecnico.costoHora != null ? String(tecnico.costoHora) : "0")
       setEspecialidades(tecnico.especialidades ?? [])
       setFechaIngreso(tecnico.fechaIngresoTecnico ?? "")
     } else {
@@ -82,6 +85,7 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
     setTelefono("")
     setPassword("")
     setPorcentajeComision("0")
+    setCostoHora("0")
     setEspecialidades([])
     setFechaIngreso("")
     setError("")
@@ -107,11 +111,17 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
         throw new Error("El porcentaje de comisión debe estar entre 0 y 100")
       }
 
+      const costoHoraNum = parseFloat(costoHora) || 0
+      if (costoHoraNum < 0) {
+        throw new Error("El costo por hora no puede ser negativo")
+      }
+
       const body: Record<string, unknown> = {
         nombre,
         email,
         telefono: telefono.trim() || null,
         porcentajeComision: porcNum,
+        costoHora: costoHoraNum,
         especialidades,
         fechaIngresoTecnico: fechaIngreso || null,
       }
@@ -260,6 +270,22 @@ export function TecnicoForm({ open, onOpenChange, tecnico, onSuccess }: TecnicoF
                 Fecha de alta laboral (opcional).
               </p>
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="costoHora">Costo por hora</Label>
+            <Input
+              id="costoHora"
+              type="number"
+              step="0.01"
+              min="0"
+              value={costoHora}
+              onChange={(e) => setCostoHora(e.target.value)}
+              placeholder="0"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Costo interno por hora. Se usa para la mano de obra en rentabilidad.
+            </p>
           </div>
 
           <div className="space-y-2">
