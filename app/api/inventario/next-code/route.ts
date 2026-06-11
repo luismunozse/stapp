@@ -27,17 +27,6 @@ const CATEGORIA_PREFIJOS: Record<string, string> = {
   "Otros": "OTR",
 }
 
-// Prefijos para tipos de dispositivo
-const TIPO_PREFIJOS: Record<string, string> = {
-  "CELULAR": "CEL",
-  "COMPUTADORA": "COM",
-  "TABLET": "TAB",
-  "CONSOLA": "CON",
-  "SMARTWATCH": "SMA",
-  "ACCESORIOS": "ACC",
-  "TODOS": "GEN",
-}
-
 export async function GET(request: Request) {
   try {
     const { error, organizationId } = await requireAuth()
@@ -53,8 +42,7 @@ export async function GET(request: Request) {
     }
 
     const catPrefijo = CATEGORIA_PREFIJOS[categoria] || categoria.substring(0, 3).toUpperCase()
-    const tipoPrefijo = TIPO_PREFIJOS[tipoDispositivo] || tipoDispositivo.substring(0, 3).toUpperCase()
-    const prefijo = `${catPrefijo}-${tipoPrefijo}-`
+    const prefijo = catPrefijo
 
     // Use SQL function for efficient next-code generation (skips archived items)
     const { data, error: rpcError } = await supabaseAdmin
