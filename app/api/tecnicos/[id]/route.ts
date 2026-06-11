@@ -25,6 +25,7 @@ export async function GET(
         avatar_url,
         fecha_ingreso_tecnico,
         porcentaje_comision,
+        costo_hora,
         created_at,
         horario_laboral,
         ordenes_servicio:ordenes_servicio!tecnico_id ( estado )
@@ -56,6 +57,7 @@ export async function GET(
       avatarUrl: tecnico.avatar_url ?? null,
       fechaIngresoTecnico: tecnico.fecha_ingreso_tecnico ?? null,
       porcentajeComision: Number(tecnico.porcentaje_comision ?? 0),
+      costoHora: Number(tecnico.costo_hora ?? 0),
       createdAt: tecnico.created_at,
       horarioLaboral: tecnico.horario_laboral ?? null,
       ordenesActivas,
@@ -85,6 +87,7 @@ export async function PUT(
       email,
       password,
       porcentajeComision,
+      costoHora,
       telefono,
       especialidades,
       fechaIngresoTecnico,
@@ -96,6 +99,16 @@ export async function PUT(
       if (!Number.isFinite(p) || p < 0 || p > 100) {
         return NextResponse.json(
           { error: "El porcentaje de comisión debe estar entre 0 y 100" },
+          { status: 400 }
+        )
+      }
+    }
+
+    if (costoHora !== undefined) {
+      const c = Number(costoHora)
+      if (!Number.isFinite(c) || c < 0) {
+        return NextResponse.json(
+          { error: "El costo por hora debe ser mayor o igual a 0" },
           { status: 400 }
         )
       }
@@ -142,6 +155,7 @@ export async function PUT(
     if (email) updateData.email = email
     if (password) updateData.password = await bcrypt.hash(password, 10)
     if (porcentajeComision !== undefined) updateData.porcentaje_comision = Number(porcentajeComision)
+    if (costoHora !== undefined) updateData.costo_hora = Number(costoHora)
     if (telefono !== undefined) updateData.telefono = telefono || null
     if (especialidades !== undefined) {
       updateData.especialidades = especialidades.filter(
@@ -161,7 +175,7 @@ export async function PUT(
       .from("users")
       .update(updateData)
       .eq("id", id)
-      .select("id, nombre, email, porcentaje_comision, telefono, especialidades, fecha_ingreso_tecnico, activo, horario_laboral")
+      .select("id, nombre, email, porcentaje_comision, costo_hora, telefono, especialidades, fecha_ingreso_tecnico, activo, horario_laboral")
       .single()
 
     if (updateError) {
