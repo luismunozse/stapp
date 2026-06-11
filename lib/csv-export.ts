@@ -1,7 +1,9 @@
 /**
- * Utilidades para exportación de datos a CSV
+ * Utilidades para exportación de datos a CSV y XLSX
  * Feature Premium: Solo usuarios con plan Premium pueden exportar
  */
+
+import ExcelJS from "exceljs"
 
 export interface CSVColumn<T> {
   key: keyof T | string
@@ -250,6 +252,45 @@ export const GARANTIAS_COLUMNS: CSVColumn<any>[] = [
   { key: "estado", header: "Estado" },
   { key: "notas", header: "Notas" },
 ]
+
+/**
+ * Convierte un array de objetos a un workbook XLSX (Buffer).
+ * Usa las mismas CSVColumn que arrayToCSV: resuelve keys con dot-path y
+ * aplica transform si existe.
+ */
+export async function arrayToXLSX<T extends Record<string, any>>(
+  data: T[],
+  columns: CSVColumn<T>[]
+): Promise<Buffer> {
+  const workbook = new ExcelJS.Workbook()
+  const sheet = workbook.addWorksheet("Datos")
+
+  sheet.addRow(columns.map((col) => col.header))
+  sheet.getRow(1).font = { bold: true }
+
+  for (const row of data) {
+    sheet.addRow(
+      columns.map((col) => {
+        const keys = col.key.toString().split(".")
+        let value: any = row
+        for (const key of keys) {
+          value = value?.[key]
+        }
+        if (col.transform) {
+          return col.transform(value, row)
+        }
+        return formatValue(value)
+      })
+    )
+  }
+
+  sheet.columns.forEach((column, i) => {
+    column.width = Math.max(columns[i].header.length + 2, 14)
+  })
+
+  const arrayBuffer = await workbook.xlsx.writeBuffer()
+  return Buffer.from(arrayBuffer)
+}
 
 /**
  * Descarga un archivo CSV en el navegador o filesystem nativo
