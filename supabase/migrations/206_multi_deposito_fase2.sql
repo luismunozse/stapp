@@ -1321,3 +1321,11 @@ $$ LANGUAGE plpgsql;
 -- Trigger body updated via CREATE OR REPLACE FUNCTION above.
 -- No need to recreate the trigger: trigger_restore_stock_on_cancel already
 -- points to this function and remains valid.
+
+-- ============================================================
+-- 5. INDICE DE SOPORTE
+-- ============================================================
+-- Cubre el backfill de deposito_id en movimientos VENTA y el lookup de
+-- deposito de origen en anulacion/edicion (referencia_id + inventario_id + tipo).
+CREATE INDEX IF NOT EXISTS movimientos_inv_ref_inv_tipo_idx
+  ON movimientos_inventario (referencia_id, inventario_id, tipo);
