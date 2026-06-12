@@ -158,6 +158,7 @@ export async function PUT(
         porcentajeDescuento,
         metodoPago,
         observaciones,
+        depositoId,
       } = body
 
       // Calcular nuevos totales
@@ -200,9 +201,22 @@ export async function PUT(
         p_metodo_pago: metodoPago,
         p_observaciones: observaciones || null,
         p_items: pItems,
+        p_deposito_id: depositoId ?? null,
       })
 
       if (rpcError) {
+        if ((rpcError as any).code === "P0010") {
+          return NextResponse.json(
+            { error: "Stock insuficiente en el depósito seleccionado" },
+            { status: 400 }
+          )
+        }
+        if ((rpcError as any).code === "P0011") {
+          return NextResponse.json(
+            { error: "La organización no tiene depósito principal configurado" },
+            { status: 400 }
+          )
+        }
         console.error("Error en editar_venta_atomica:", rpcError)
         return NextResponse.json(
           { error: rpcError.message || "Error al editar venta" },
