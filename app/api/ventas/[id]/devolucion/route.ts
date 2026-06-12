@@ -241,7 +241,12 @@ export async function POST(
         )
 
         if (rpcError) {
-          throw rpcError
+          if ((rpcError as { code?: string }).code === "P0002") {
+            console.warn(`Devolución ${numeroDevolucion}: inventario ${item.inventarioId} no encontrado, stock no restaurado`)
+            continue  // skip series reset too, matching old behavior
+          } else {
+            throw rpcError
+          }
         }
 
         // For series-tracked items: reset the serials sold by this sale back

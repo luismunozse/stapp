@@ -1780,6 +1780,10 @@ DECLARE
   v_stock_anterior    INTEGER;
   v_deposito_efectivo TEXT;
 BEGIN
+  IF p_cantidad <= 0 THEN
+    RAISE EXCEPTION 'p_cantidad debe ser mayor a cero, recibido: %', p_cantidad USING ERRCODE = 'P0003';
+  END IF;
+
   SELECT stock INTO v_stock_anterior
   FROM inventario
   WHERE id = p_inventario_id AND organization_id = p_org_id
