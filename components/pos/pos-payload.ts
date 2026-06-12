@@ -8,6 +8,7 @@ export interface BuildVentaPayloadInput {
   pagoParcial: boolean
   observaciones: string
   idempotencyKey: string
+  depositoId?: string | null
 }
 
 export interface VentaPayload {
@@ -16,6 +17,7 @@ export interface VentaPayload {
   clienteTelefono?: string
   pagosParcial: boolean
   idempotencyKey: string
+  depositoId: string | null
   items: {
     inventarioId: string | null
     descripcion: string
@@ -44,7 +46,7 @@ export interface VentaPayload {
 }
 
 export function buildVentaPayload(input: BuildVentaPayloadInput): VentaPayload {
-  const { items, cliente, pagosLines, pagoParcial, observaciones, idempotencyKey } = input
+  const { items, cliente, pagosLines, pagoParcial, observaciones, idempotencyKey, depositoId = null } = input
   const pagosConMonto = pagosLines.filter((p) => p.monto > 0)
 
   return {
@@ -53,6 +55,7 @@ export function buildVentaPayload(input: BuildVentaPayloadInput): VentaPayload {
     ...(cliente.telefono ? { clienteTelefono: cliente.telefono } : {}),
     pagosParcial: pagoParcial,
     idempotencyKey,
+    depositoId: depositoId ?? null,
     items: items.map((item) => ({
       inventarioId: item.inventarioId || null,
       descripcion: item.nombre,

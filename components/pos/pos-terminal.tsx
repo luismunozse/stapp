@@ -4,6 +4,13 @@ import { useState, useRef, useCallback, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { useModal } from "@/contexts/modal-context"
 import {
   ArrowLeft,
@@ -16,6 +23,7 @@ import {
   Printer,
   Unplug,
   Loader2,
+  Warehouse,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { PosProductSearch, type PosProductSearchRef } from "./pos-product-search"
@@ -101,6 +109,47 @@ export function PosTerminal() {
       cancelled = true
     }
   }, [])
+
+  // Deposit selector state
+  interface DepositoOption {
+    id: string
+    nombre: string
+    principal: boolean
+  }
+  const [depositos, setDepositos] = useState<DepositoOption[]>([])
+  const [depositoId, setDepositoId] = useState<string | null>(null)
+  const [multiDepositoEnabled, setMultiDepositoEnabled] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+
+    Promise.all([
+      fetch("/api/depositos?activo=true").then((r) => (r.ok ? r.json() : null)),
+      fetch("/api/subscription/status").then((r) => (r.ok ? r.json() : null)),
+    ]).then(([depositosData, subData]) => {
+      if (cancelled) return
+
+      const items: DepositoOption[] = (depositosData?.data || []).map((d: any) => ({
+        id: d.id,
+        nombre: d.nombre,
+        principal: d.principal,
+      }))
+      setDepositos(items)
+
+      const flag = subData?.featureFlags?.multi_deposito === true
+      setMultiDepositoEnabled(flag)
+
+      // When the selector will be visible, default to principal deposit
+      if (flag && items.length >= 2) {
+        const principal = items.find((d) => d.principal) ?? items[0]
+        setDepositoId(principal.id)
+      }
+    }).catch(() => {})
+
+    return () => { cancelled = true }
+  }, [])
+
+  const showDepositoSelector = multiDepositoEnabled && depositos.length >= 2
 
   // Mobile tab state
   const [mobileTab, setMobileTab] = useState<MobileTab>("products")
@@ -567,6 +616,31 @@ export function PosTerminal() {
             </button>
           </div>
 
+          {/* Deposit selector — shown only when multi_deposito is enabled and ≥2 deposits */}
+          {showDepositoSelector && (
+            <div className="flex items-center gap-1.5">
+              <Warehouse className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <Select
+                value={depositoId ?? ""}
+                onValueChange={(val) => setDepositoId(val || null)}
+              >
+                <SelectTrigger className="h-8 text-xs w-[140px] sm:w-[180px]">
+                  <SelectValue placeholder="Depósito..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {depositos.map((d) => (
+                    <SelectItem key={d.id} value={d.id} className="text-xs">
+                      {d.nombre}
+                      {d.principal && (
+                        <span className="ml-1.5 text-muted-foreground">(principal)</span>
+                      )}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           {/* Shortcuts toggle - desktop only */}
           <Button
             variant="ghost"
@@ -724,6 +798,7 @@ export function PosTerminal() {
         items={cartItems}
         cliente={cliente}
         onComplete={handleCheckoutComplete}
+        depositoId={showDepositoSelector ? depositoId : null}
       />
 
       <PosHeldSales
