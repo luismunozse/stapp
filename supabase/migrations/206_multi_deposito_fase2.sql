@@ -321,3 +321,334 @@ BEGIN
     END IF;
   END LOOP;
 END $$;
+
+-- ============================================================
+-- 3. RPCs DE AJUSTE Y COMPRA
+-- Redefine adjust_stock_atomic, aplicar_ajuste_inventario y
+-- recibir_orden_compra para que también escriban stock por
+-- depósito en inventario_depositos.
+-- Contrato heredado: p_deposito_id IS NOT NULL → validación
+-- estricta en ese depósito; NULL → comportamiento global previo
+-- + drain principal-primero.
+-- DROP previo obligatorio para evitar sobrecarga (overload) que
+-- rompe la resolución de PostgREST.
+-- ============================================================
+
+DROP FUNCTION IF EXISTS adjust_stock_atomic(TEXT, TEXT, TEXT, TEXT, INTEGER, TEXT, TEXT, TEXT);
+
+CREATE OR REPLACE FUNCTION adjust_stock_atomic(
+  p_inventario_id    TEXT,
+  p_organization_id  TEXT,
+  p_user_id          TEXT,
+  p_mode             TEXT,
+  p_value            INTEGER,
+  p_motivo           TEXT DEFAULT NULL,
+  p_tipo             TEXT DEFAULT 'AJUSTE',
+  p_referencia_tipo  TEXT DEFAULT 'AJUSTE_MANUAL',
+  p_deposito_id      TEXT DEFAULT NULL
+) RETURNS JSONB AS $$
+DECLARE
+  v_stock_anterior   INTEGER;
+  v_stock_posterior  INTEGER;
+  v_cantidad         INTEGER;
+  v_mov_id           TEXT;
+  v_deposito_efectivo TEXT;
+BEGIN
+  IF p_mode NOT IN ('absolute', 'delta') THEN
+    RAISE EXCEPTION 'Modo inválido: %', p_mode
+      USING ERRCODE = '22023';
+  END IF;
+
+  IF p_tipo NOT IN ('AJUSTE', 'ENTRADA') THEN
+    RAISE EXCEPTION 'Tipo inválido: %', p_tipo
+      USING ERRCODE = '22023';
+  END IF;
+
+  -- Lock the row to serialize concurrent adjustments.
+  SELECT stock
+    INTO v_stock_anterior
+    FROM inventario
+    WHERE id = p_inventario_id
+      AND organization_id = p_organization_id
+      AND deleted_at IS NULL
+    FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Item no encontrado'
+      USING ERRCODE = 'P0002';
+  END IF;
+
+  IF p_mode = 'absolute' THEN
+    v_stock_posterior := p_value;
+  ELSE
+    v_stock_posterior := v_stock_anterior + p_value;
+  END IF;
+
+  IF v_stock_posterior < 0 THEN
+    RAISE EXCEPTION 'El stock no puede quedar negativo'
+      USING ERRCODE = 'P0003';
+  END IF;
+
+  IF v_stock_posterior = v_stock_anterior THEN
+    RETURN jsonb_build_object(
+      'stock', v_stock_anterior,
+      'changed', false,
+      'stockAnterior', v_stock_anterior,
+      'stockPosterior', v_stock_anterior,
+      'movimientoId', NULL
+    );
+  END IF;
+
+  v_cantidad := v_stock_posterior - v_stock_anterior;
+
+  UPDATE inventario
+     SET stock = v_stock_posterior,
+         updated_at = NOW()
+   WHERE id = p_inventario_id;
+
+  IF v_stock_posterior > v_stock_anterior THEN
+    v_deposito_efectivo := incrementar_stock_deposito(
+      p_inventario_id, p_organization_id, p_deposito_id,
+      v_stock_posterior - v_stock_anterior);
+  ELSE
+    v_deposito_efectivo := descontar_stock_deposito(
+      p_inventario_id, p_organization_id, p_deposito_id,
+      v_stock_anterior - v_stock_posterior,
+      p_deposito_id IS NOT NULL);
+  END IF;
+
+  INSERT INTO movimientos_inventario (
+    inventario_id, tipo, cantidad,
+    stock_anterior, stock_posterior,
+    referencia_tipo, observaciones,
+    usuario_id, organization_id,
+    deposito_id
+  ) VALUES (
+    p_inventario_id, p_tipo, v_cantidad,
+    v_stock_anterior, v_stock_posterior,
+    p_referencia_tipo,
+    COALESCE(p_motivo, 'Ajuste rápido desde lista'),
+    p_user_id, p_organization_id,
+    v_deposito_efectivo
+  )
+  RETURNING id INTO v_mov_id;
+
+  RETURN jsonb_build_object(
+    'stock', v_stock_posterior,
+    'changed', true,
+    'stockAnterior', v_stock_anterior,
+    'stockPosterior', v_stock_posterior,
+    'movimientoId', v_mov_id
+  );
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION adjust_stock_atomic(TEXT, TEXT, TEXT, TEXT, INTEGER, TEXT, TEXT, TEXT, TEXT) IS
+  'Ajuste atómico de stock con lock por fila. Update + movimiento auditable en una transacción. '
+  'p_deposito_id IS NOT NULL = validación estricta en ese depósito; NULL = global + drain principal-primero. '
+  'ERRCODE: P0002 no encontrado, P0003 stock negativo, 22023 modo/tipo inválido.';
+
+-- ------------------------------------------------------------
+
+DROP FUNCTION IF EXISTS aplicar_ajuste_inventario(TEXT, TEXT, TEXT, INTEGER, TEXT, TEXT, BOOLEAN, TEXT);
+
+CREATE OR REPLACE FUNCTION aplicar_ajuste_inventario(
+  p_inventario_id       TEXT,
+  p_tipo                TEXT,
+  p_direccion           TEXT,
+  p_cantidad            INTEGER,
+  p_motivo              TEXT,
+  p_comprobante_url     TEXT,
+  p_afecta_rentabilidad BOOLEAN,
+  p_user_id             TEXT,
+  p_deposito_id         TEXT DEFAULT NULL
+)
+RETURNS JSON AS $$
+DECLARE
+  v_stock              INTEGER;
+  v_org_id             TEXT;
+  v_precio_compra      NUMERIC;
+  v_ajuste_id          TEXT;
+  v_delta              INTEGER;
+  v_nuevo_stock        INTEGER;
+  v_deposito_efectivo  TEXT;
+BEGIN
+  SELECT stock, organization_id, precio_compra
+  INTO v_stock, v_org_id, v_precio_compra
+  FROM inventario
+  WHERE id = p_inventario_id AND deleted_at IS NULL
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RETURN json_build_object('error', 'Item no encontrado');
+  END IF;
+
+  v_delta := CASE WHEN p_direccion = 'SALIDA' THEN -p_cantidad ELSE p_cantidad END;
+  v_nuevo_stock := v_stock + v_delta;
+
+  IF v_nuevo_stock < 0 THEN
+    RETURN json_build_object('error', format('Stock insuficiente. Stock actual: %s', v_stock));
+  END IF;
+
+  INSERT INTO ajustes_inventario (
+    organization_id, inventario_id, tipo, direccion, cantidad,
+    costo_unitario_snapshot, motivo, comprobante_url, user_id, afecta_rentabilidad
+  ) VALUES (
+    v_org_id, p_inventario_id, p_tipo, p_direccion, p_cantidad,
+    COALESCE(v_precio_compra, 0), p_motivo, p_comprobante_url, p_user_id, p_afecta_rentabilidad
+  )
+  RETURNING id INTO v_ajuste_id;
+
+  UPDATE inventario SET stock = v_nuevo_stock WHERE id = p_inventario_id;
+
+  IF p_direccion = 'ENTRADA' THEN
+    v_deposito_efectivo := incrementar_stock_deposito(
+      p_inventario_id, v_org_id, p_deposito_id, p_cantidad);
+  ELSE
+    v_deposito_efectivo := descontar_stock_deposito(
+      p_inventario_id, v_org_id, p_deposito_id, p_cantidad,
+      p_deposito_id IS NOT NULL);
+  END IF;
+
+  INSERT INTO movimientos_inventario (
+    inventario_id, tipo, cantidad, stock_anterior, stock_posterior,
+    referencia_id, referencia_tipo, observaciones, organization_id, usuario_id,
+    deposito_id
+  ) VALUES (
+    p_inventario_id, 'AJUSTE', p_cantidad, v_stock, v_nuevo_stock,
+    v_ajuste_id, 'ajuste_inventario',
+    format('Ajuste %s %s: %s', p_tipo, p_direccion, COALESCE(p_motivo, 'sin motivo')),
+    v_org_id, p_user_id,
+    v_deposito_efectivo
+  );
+
+  RETURN json_build_object('success', true, 'id', v_ajuste_id, 'nuevoStock', v_nuevo_stock);
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION aplicar_ajuste_inventario(TEXT, TEXT, TEXT, INTEGER, TEXT, TEXT, BOOLEAN, TEXT, TEXT) IS
+  'Aplica ajuste de inventario (merma, rotura, etc.) y escribe stock por depósito. '
+  'p_deposito_id IS NOT NULL = validación estricta; NULL = global + drain principal-primero.';
+
+-- ------------------------------------------------------------
+
+DROP FUNCTION IF EXISTS recibir_orden_compra(TEXT, TEXT, JSONB);
+
+CREATE OR REPLACE FUNCTION recibir_orden_compra(
+  p_oc_id       TEXT,
+  p_user_id     TEXT,
+  p_items       JSONB,  -- [{itemId, cantidadRecibida, inventarioId?}]
+  p_deposito_id TEXT DEFAULT NULL
+)
+RETURNS JSONB AS $$
+DECLARE
+  v_item          JSONB;
+  v_ioc           RECORD;
+  v_inv_id        TEXT;
+  v_inv_stock     INTEGER;
+  v_org_id        TEXT;
+  v_total_pedida  INTEGER := 0;
+  v_total_recibida INTEGER := 0;
+  v_nuevo_estado  TEXT;
+  v_count         INTEGER := 0;
+  v_deposito_efectivo TEXT;
+BEGIN
+  SELECT organization_id INTO v_org_id
+  FROM ordenes_compra WHERE id = p_oc_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Orden de compra no encontrada';
+  END IF;
+
+  -- Process each received item
+  FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+  LOOP
+    -- Get the OC item
+    SELECT ioc.*
+    INTO v_ioc
+    FROM items_orden_compra ioc
+    WHERE ioc.id = (v_item->>'itemId')
+      AND ioc.orden_compra_id = p_oc_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+      CONTINUE;
+    END IF;
+
+    -- Resolve inventario_id: use provided one, or fall back to existing
+    v_inv_id := COALESCE(v_item->>'inventarioId', v_ioc.inventario_id);
+
+    -- Link item to inventory if not yet linked
+    IF v_inv_id IS NOT NULL AND v_ioc.inventario_id IS NULL THEN
+      UPDATE items_orden_compra
+      SET inventario_id = v_inv_id
+      WHERE id = (v_item->>'itemId');
+    END IF;
+
+    -- Update received quantity
+    UPDATE items_orden_compra
+    SET cantidad_recibida = cantidad_recibida + (v_item->>'cantidadRecibida')::INTEGER
+    WHERE id = (v_item->>'itemId');
+
+    -- Increment inventory stock if linked
+    IF v_inv_id IS NOT NULL THEN
+      SELECT stock INTO v_inv_stock
+      FROM inventario WHERE id = v_inv_id
+      FOR UPDATE;
+
+      UPDATE inventario
+      SET stock = stock + (v_item->>'cantidadRecibida')::INTEGER
+      WHERE id = v_inv_id;
+
+      v_deposito_efectivo := incrementar_stock_deposito(
+        v_inv_id, v_org_id, p_deposito_id,
+        (v_item->>'cantidadRecibida')::INTEGER);
+
+      -- Record movement
+      INSERT INTO movimientos_inventario (
+        inventario_id, tipo, cantidad, stock_anterior, stock_posterior,
+        referencia_id, referencia_tipo, usuario_id, organization_id, observaciones,
+        deposito_id
+      ) VALUES (
+        v_inv_id, 'COMPRA_RECIBIDA', (v_item->>'cantidadRecibida')::INTEGER,
+        v_inv_stock, v_inv_stock + (v_item->>'cantidadRecibida')::INTEGER,
+        p_oc_id, 'ORDEN_COMPRA', p_user_id, v_org_id,
+        'Recepción de orden de compra',
+        v_deposito_efectivo
+      );
+    END IF;
+
+    v_count := v_count + 1;
+  END LOOP;
+
+  -- Calculate new state
+  SELECT
+    SUM(cantidad_pedida), SUM(cantidad_recibida)
+  INTO v_total_pedida, v_total_recibida
+  FROM items_orden_compra
+  WHERE orden_compra_id = p_oc_id;
+
+  IF v_total_recibida >= v_total_pedida THEN
+    v_nuevo_estado := 'RECIBIDA';
+  ELSIF v_total_recibida > 0 THEN
+    v_nuevo_estado := 'RECIBIDA_PARCIAL';
+  ELSE
+    v_nuevo_estado := 'ENVIADA';
+  END IF;
+
+  UPDATE ordenes_compra
+  SET estado = v_nuevo_estado,
+      fecha_recepcion_real = CASE WHEN v_nuevo_estado = 'RECIBIDA' THEN NOW() ELSE fecha_recepcion_real END
+  WHERE id = p_oc_id;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'itemsRecibidos', v_count,
+    'nuevoEstado', v_nuevo_estado
+  );
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION recibir_orden_compra(TEXT, TEXT, JSONB, TEXT) IS
+  'Recibe ítems de una orden de compra e incrementa stock por depósito. '
+  'p_deposito_id IS NOT NULL = ingreso al depósito indicado; NULL = principal-primero.';
