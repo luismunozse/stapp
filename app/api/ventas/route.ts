@@ -36,6 +36,7 @@ const ventaSchema = z.object({
   descuentoMotivo: z.string().nullable().optional(),
   pagosParcial: z.boolean().optional(),
   idempotencyKey: z.string().max(100).nullable().optional(),
+  depositoId: z.string().min(1).nullable().optional(),
   pagos: z.array(z.object({
     metodo: z.string(),
     monto: z.number().positive(),
@@ -217,6 +218,7 @@ export async function POST(request: Request) {
       p_monto_original: data.montoOriginal || null,
       p_items: pItems,
       p_idempotency_key: data.idempotencyKey || null,
+      p_deposito_id: data.depositoId ?? null,
     }
 
     // Pass multi-payment array if provided
@@ -266,6 +268,20 @@ export async function POST(request: Request) {
         return NextResponse.json(
           { error: "La venta ya se está registrando (reintento en curso). Volvé a intentar en unos segundos." },
           { status: 409 }
+        )
+      }
+
+      // Mapped deposit error codes
+      if ((rpcError as any).code === "P0010") {
+        return NextResponse.json(
+          { error: "Stock insuficiente en el depósito seleccionado" },
+          { status: 400 }
+        )
+      }
+      if ((rpcError as any).code === "P0011") {
+        return NextResponse.json(
+          { error: "La organización no tiene depósito principal configurado" },
+          { status: 400 }
         )
       }
 

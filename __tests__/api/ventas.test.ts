@@ -305,3 +305,75 @@ describe("POST /api/ventas — serieIds + idempotencia", () => {
     expect(body.numeroVenta).toBe(7)
   })
 })
+
+describe("POST /api/ventas — depositoId", () => {
+  const baseBody = {
+    clienteNombre: "Consumidor Final",
+    items: [{ inventarioId: "i1", descripcion: "Notebook", cantidad: 1, precioUnitario: 100, diasGarantia: 0 }],
+    metodoPago: "EFECTIVO",
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it("pasa depositoId a la RPC como p_deposito_id", async () => {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ventaId: "v1" }, error: null } as any)
+    mockSupabaseFrom({
+      ventas: createChainMock({ id: "v1", numero_venta: 1, total: 100 }),
+      organizations: createChainMock({ nombre: "Org", nombre_mostrar: "Org" }),
+    })
+
+    const res = await POST(createPostRequest({ ...baseBody, depositoId: "dep-2" }))
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(201)
+    const rpcArgs = vi.mocked(supabaseAdmin.rpc).mock.calls[0][1] as any
+    expect(rpcArgs.p_deposito_id).toBe("dep-2")
+  })
+
+  it("manda p_deposito_id null cuando el body no trae depositoId", async () => {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ventaId: "v1" }, error: null } as any)
+    mockSupabaseFrom({
+      ventas: createChainMock({ id: "v1", numero_venta: 1, total: 100 }),
+      organizations: createChainMock({ nombre: "Org", nombre_mostrar: "Org" }),
+    })
+
+    const res = await POST(createPostRequest(baseBody))
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(201)
+    const rpcArgs = vi.mocked(supabaseAdmin.rpc).mock.calls[0][1] as any
+    expect(rpcArgs.p_deposito_id).toBeNull()
+  })
+
+  it("mapea P0010 a 400 con mensaje claro", async () => {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
+      data: null,
+      error: { code: "P0010", message: "STOCK_INSUFICIENTE_DEPOSITO: deposito dep-2" },
+    } as any)
+
+    const res = await POST(createPostRequest({ ...baseBody, depositoId: "dep-2" }))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(400)
+    expect(body.error).toContain("Stock insuficiente en el depósito")
+  })
+
+  it("mapea P0011 a 400 con mensaje claro", async () => {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
+      data: null,
+      error: { code: "P0011", message: "ORG_SIN_DEPOSITO_PRINCIPAL: org-1" },
+    } as any)
+
+    const res = await POST(createPostRequest(baseBody))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(400)
+    expect(body.error).toContain("depósito principal")
+  })
+})
