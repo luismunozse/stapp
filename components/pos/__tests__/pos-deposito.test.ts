@@ -36,3 +36,68 @@ describe("buildVentaPayload — depositoId", () => {
     expect(payload.depositoId).toBeNull()
   })
 })
+
+describe("buildVentaPayload — clienteTelefono", () => {
+  it("omite clienteTelefono cuando telefono es vacío", () => {
+    const payload = buildVentaPayload({
+      ...baseInput,
+      cliente: { id: null, nombre: "Juan", telefono: "" },
+    })
+    expect(payload).not.toHaveProperty("clienteTelefono")
+  })
+
+  it("incluye clienteTelefono cuando telefono tiene valor", () => {
+    const payload = buildVentaPayload({
+      ...baseInput,
+      cliente: { id: null, nombre: "Juan", telefono: "099123456" },
+    })
+    expect(payload.clienteTelefono).toBe("099123456")
+  })
+})
+
+describe("buildVentaPayload — serieIds", () => {
+  it("incluye serieIds solo cuando trackeaSeries=true y hay series", () => {
+    const input: BuildVentaPayloadInput = {
+      ...baseInput,
+      items: [
+        {
+          ...baseInput.items[0],
+          trackeaSeries: true,
+          serieIds: ["s1"],
+        },
+      ],
+    }
+    const payload = buildVentaPayload(input)
+    expect(payload.items[0].serieIds).toEqual(["s1"])
+  })
+
+  it("omite serieIds cuando trackeaSeries=false aunque haya serieIds en el item", () => {
+    const input: BuildVentaPayloadInput = {
+      ...baseInput,
+      items: [
+        {
+          ...baseInput.items[0],
+          trackeaSeries: false,
+          serieIds: ["s1"],
+        },
+      ],
+    }
+    const payload = buildVentaPayload(input)
+    expect(payload.items[0]).not.toHaveProperty("serieIds")
+  })
+
+  it("omite serieIds cuando trackeaSeries=true pero serieIds está vacío", () => {
+    const input: BuildVentaPayloadInput = {
+      ...baseInput,
+      items: [
+        {
+          ...baseInput.items[0],
+          trackeaSeries: true,
+          serieIds: [],
+        },
+      ],
+    }
+    const payload = buildVentaPayload(input)
+    expect(payload.items[0]).not.toHaveProperty("serieIds")
+  })
+})

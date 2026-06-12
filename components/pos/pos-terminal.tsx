@@ -117,17 +117,21 @@ export function PosTerminal() {
     principal: boolean
   }
   const [depositos, setDepositos] = useState<DepositoOption[]>([])
+  // Stale deposito tras archivado mid-sesion: la API responde 400 (P0010) — aceptado, no refetchear.
   const [depositoId, setDepositoId] = useState<string | null>(null)
   const [multiDepositoEnabled, setMultiDepositoEnabled] = useState(false)
 
   useEffect(() => {
     let cancelled = false
 
-    Promise.all([
+    Promise.allSettled([
       fetch("/api/depositos?activo=true").then((r) => (r.ok ? r.json() : null)),
       fetch("/api/subscription/status").then((r) => (r.ok ? r.json() : null)),
-    ]).then(([depositosData, subData]) => {
+    ]).then(([depositosResult, subResult]) => {
       if (cancelled) return
+
+      const depositosData = depositosResult.status === "fulfilled" ? depositosResult.value : null
+      const subData = subResult.status === "fulfilled" ? subResult.value : null
 
       const items: DepositoOption[] = (depositosData?.data || []).map((d: any) => ({
         id: d.id,
@@ -144,7 +148,7 @@ export function PosTerminal() {
         const principal = items.find((d) => d.principal) ?? items[0]
         setDepositoId(principal.id)
       }
-    }).catch(() => {})
+    })
 
     return () => { cancelled = true }
   }, [])
@@ -619,12 +623,12 @@ export function PosTerminal() {
           {/* Deposit selector — shown only when multi_deposito is enabled and ≥2 deposits */}
           {showDepositoSelector && (
             <div className="flex items-center gap-1.5">
-              <Warehouse className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <Warehouse className="h-3.5 w-3.5 text-muted-foreground shrink-0" aria-hidden="true" />
               <Select
                 value={depositoId ?? ""}
                 onValueChange={(val) => setDepositoId(val || null)}
               >
-                <SelectTrigger className="h-8 text-xs w-[140px] sm:w-[180px]">
+                <SelectTrigger className="h-8 text-xs w-[140px] sm:w-[180px]" aria-label="Depósito activo">
                   <SelectValue placeholder="Depósito..." />
                 </SelectTrigger>
                 <SelectContent>
