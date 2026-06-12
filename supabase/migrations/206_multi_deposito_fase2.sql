@@ -1329,3 +1329,488 @@ $$ LANGUAGE plpgsql;
 -- deposito de origen en anulacion/edicion (referencia_id + inventario_id + tipo).
 CREATE INDEX IF NOT EXISTS movimientos_inv_ref_inv_tipo_idx
   ON movimientos_inventario (referencia_id, inventario_id, tipo);
+
+-- ============================================================
+-- 6. RPCs DE RESERVAS
+-- Redefine las 6 funciones de reserva/liberación para que también
+-- escriban stock por depósito en inventario_depositos.
+-- Contrato: p_deposito_id IS NOT NULL → operación sobre ese depósito;
+-- NULL → depósito principal (comportamiento legacy).
+-- DROP previo obligatorio para evitar sobrecarga (overload) en PostgREST.
+-- ============================================================
+
+-- 6.1 reservar_items_cotizacion
+-- Old signature (108): (TEXT, TEXT)
+DROP FUNCTION IF EXISTS reservar_items_cotizacion(TEXT, TEXT);
+
+CREATE OR REPLACE FUNCTION reservar_items_cotizacion(
+  p_cotizacion_id TEXT,
+  p_user_id       TEXT,
+  p_deposito_id   TEXT DEFAULT NULL
+) RETURNS JSONB AS $$
+DECLARE
+  v_item              RECORD;
+  v_stock             INTEGER;
+  v_stock_reservado   INTEGER;
+  v_org_id            TEXT;
+  v_disponible        INTEGER;
+  v_count             INTEGER := 0;
+  v_deposito_efectivo TEXT;
+BEGIN
+  SELECT organization_id INTO v_org_id
+  FROM cotizaciones WHERE id = p_cotizacion_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Cotización no encontrada';
+  END IF;
+
+  FOR v_item IN
+    SELECT ic.id, ic.inventario_id, ic.cantidad, ic.descripcion
+    FROM items_cotizacion ic
+    WHERE ic.cotizacion_id = p_cotizacion_id
+      AND ic.inventario_id IS NOT NULL
+  LOOP
+    SELECT stock, stock_reservado INTO v_stock, v_stock_reservado
+    FROM inventario
+    WHERE id = v_item.inventario_id AND deleted_at IS NULL
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Producto no encontrado para item "%"', v_item.descripcion;
+    END IF;
+
+    v_disponible := v_stock - v_stock_reservado;
+
+    IF v_disponible < v_item.cantidad THEN
+      RAISE EXCEPTION 'Stock insuficiente para "%". Disponible: %, Solicitado: %',
+        v_item.descripcion, v_disponible, v_item.cantidad;
+    END IF;
+
+    UPDATE inventario
+    SET stock_reservado = stock_reservado + v_item.cantidad
+    WHERE id = v_item.inventario_id;
+
+    -- Dual-write: replicate reservation to per-deposit stock.
+    v_deposito_efectivo := reservar_stock_deposito(
+      v_item.inventario_id, v_org_id, p_deposito_id, v_item.cantidad, false);
+
+    INSERT INTO movimientos_inventario (
+      inventario_id, tipo, cantidad, stock_anterior, stock_posterior,
+      referencia_id, referencia_tipo, usuario_id, organization_id,
+      observaciones, deposito_id
+    ) VALUES (
+      v_item.inventario_id, 'RESERVA', v_item.cantidad,
+      v_stock, v_stock,
+      p_cotizacion_id, 'COTIZACION', p_user_id, v_org_id,
+      'Reserva por aprobación de cotización',
+      v_deposito_efectivo
+    );
+
+    v_count := v_count + 1;
+  END LOOP;
+
+  RETURN jsonb_build_object('success', true, 'itemsReservados', v_count);
+END;
+$$ LANGUAGE plpgsql;
+
+-- 6.2 liberar_items_cotizacion
+-- Old signature (108): (TEXT, TEXT, TEXT) — p_motivo has DEFAULT but that
+-- doesn't change the type list for DROP purposes.
+DROP FUNCTION IF EXISTS liberar_items_cotizacion(TEXT, TEXT, TEXT);
+
+CREATE OR REPLACE FUNCTION liberar_items_cotizacion(
+  p_cotizacion_id TEXT,
+  p_user_id       TEXT,
+  p_motivo        TEXT DEFAULT 'Liberación de reserva',
+  p_deposito_id   TEXT DEFAULT NULL
+) RETURNS JSONB AS $$
+DECLARE
+  v_item              RECORD;
+  v_stock             INTEGER;
+  v_stock_reservado   INTEGER;
+  v_org_id            TEXT;
+  v_count             INTEGER := 0;
+  v_cantidad_liberar  INTEGER;
+  v_deposito_efectivo TEXT;
+BEGIN
+  SELECT organization_id INTO v_org_id
+  FROM cotizaciones WHERE id = p_cotizacion_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Cotización no encontrada';
+  END IF;
+
+  FOR v_item IN
+    SELECT ic.id, ic.inventario_id, ic.cantidad, ic.descripcion
+    FROM items_cotizacion ic
+    WHERE ic.cotizacion_id = p_cotizacion_id
+      AND ic.inventario_id IS NOT NULL
+  LOOP
+    SELECT stock, stock_reservado INTO v_stock, v_stock_reservado
+    FROM inventario
+    WHERE id = v_item.inventario_id AND deleted_at IS NULL
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+      CONTINUE;
+    END IF;
+
+    v_cantidad_liberar := LEAST(v_item.cantidad, v_stock_reservado);
+
+    IF v_cantidad_liberar > 0 THEN
+      UPDATE inventario
+      SET stock_reservado = stock_reservado - v_cantidad_liberar
+      WHERE id = v_item.inventario_id;
+
+      -- Dual-write: replicate liberation to per-deposit stock.
+      v_deposito_efectivo := liberar_reserva_deposito(
+        v_item.inventario_id, v_org_id, p_deposito_id, v_cantidad_liberar);
+
+      INSERT INTO movimientos_inventario (
+        inventario_id, tipo, cantidad, stock_anterior, stock_posterior,
+        referencia_id, referencia_tipo, usuario_id, organization_id,
+        observaciones, deposito_id
+      ) VALUES (
+        v_item.inventario_id, 'LIBERACION_RESERVA', v_cantidad_liberar,
+        v_stock, v_stock,
+        p_cotizacion_id, 'COTIZACION', p_user_id, v_org_id,
+        p_motivo,
+        v_deposito_efectivo
+      );
+
+      v_count := v_count + 1;
+    END IF;
+  END LOOP;
+
+  RETURN jsonb_build_object('success', true, 'itemsLiberados', v_count);
+END;
+$$ LANGUAGE plpgsql;
+
+-- 6.3 add_repuesto_inventario
+-- Old signature (151): (TEXT, TEXT, INTEGER)
+DROP FUNCTION IF EXISTS add_repuesto_inventario(TEXT, TEXT, INTEGER);
+
+CREATE OR REPLACE FUNCTION add_repuesto_inventario(
+  p_orden_id      TEXT,
+  p_inventario_id TEXT,
+  p_cantidad      INTEGER,
+  p_deposito_id   TEXT DEFAULT NULL
+) RETURNS JSON AS $$
+DECLARE
+  v_stock             INTEGER;
+  v_stock_reservado   INTEGER;
+  v_costo             NUMERIC;
+  v_repuesto_id       TEXT;
+  v_org_id            TEXT;
+  v_disponible        INTEGER;
+  v_deposito_efectivo TEXT;
+BEGIN
+  SELECT stock, stock_reservado, precio_compra, organization_id
+  INTO v_stock, v_stock_reservado, v_costo, v_org_id
+  FROM inventario
+  WHERE id = p_inventario_id AND deleted_at IS NULL
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RETURN json_build_object('error', 'Item no encontrado');
+  END IF;
+
+  v_disponible := v_stock - v_stock_reservado;
+
+  IF v_disponible < p_cantidad THEN
+    RETURN json_build_object('error', format('Stock insuficiente. Disponible: %s', v_disponible));
+  END IF;
+
+  INSERT INTO repuestos_orden (orden_id, inventario_id, cantidad, precio_unitario)
+  VALUES (p_orden_id, p_inventario_id, p_cantidad, COALESCE(v_costo, 0))
+  RETURNING id INTO v_repuesto_id;
+
+  UPDATE inventario
+  SET stock_reservado = stock_reservado + p_cantidad
+  WHERE id = p_inventario_id;
+
+  -- Dual-write: replicate reservation to per-deposit stock.
+  v_deposito_efectivo := reservar_stock_deposito(
+    p_inventario_id, v_org_id, p_deposito_id, p_cantidad, false);
+
+  INSERT INTO movimientos_inventario (
+    inventario_id, tipo, cantidad, stock_anterior, stock_posterior,
+    referencia_id, referencia_tipo, observaciones, organization_id,
+    deposito_id
+  ) VALUES (
+    p_inventario_id, 'RESERVA', p_cantidad, v_stock, v_stock,
+    p_orden_id, 'orden_servicio',
+    'Repuesto reservado para orden de servicio',
+    v_org_id,
+    v_deposito_efectivo
+  );
+
+  RETURN json_build_object('success', true, 'id', v_repuesto_id);
+END;
+$$ LANGUAGE plpgsql;
+
+-- 6.4 remove_repuesto_inventario
+-- Old signature (108): (TEXT)
+DROP FUNCTION IF EXISTS remove_repuesto_inventario(TEXT);
+
+CREATE OR REPLACE FUNCTION remove_repuesto_inventario(
+  p_repuesto_id TEXT,
+  p_deposito_id TEXT DEFAULT NULL
+) RETURNS JSON AS $$
+DECLARE
+  v_inventario_id     TEXT;
+  v_cantidad          INTEGER;
+  v_orden_id          TEXT;
+  v_stock             INTEGER;
+  v_stock_reservado   INTEGER;
+  v_org_id            TEXT;
+  v_cantidad_liberar  INTEGER;
+  v_deposito_efectivo TEXT;
+BEGIN
+  DELETE FROM repuestos_orden
+  WHERE id = p_repuesto_id
+  RETURNING inventario_id, cantidad, orden_id
+    INTO v_inventario_id, v_cantidad, v_orden_id;
+
+  IF NOT FOUND THEN
+    RETURN json_build_object('error', 'Repuesto no encontrado');
+  END IF;
+
+  IF v_inventario_id IS NOT NULL THEN
+    SELECT stock, stock_reservado, organization_id
+    INTO v_stock, v_stock_reservado, v_org_id
+    FROM inventario
+    WHERE id = v_inventario_id
+    FOR UPDATE;
+
+    v_cantidad_liberar := LEAST(v_cantidad, v_stock_reservado);
+
+    IF v_cantidad_liberar > 0 THEN
+      UPDATE inventario
+      SET stock_reservado = stock_reservado - v_cantidad_liberar
+      WHERE id = v_inventario_id;
+
+      -- Dual-write: replicate liberation to per-deposit stock.
+      v_deposito_efectivo := liberar_reserva_deposito(
+        v_inventario_id, v_org_id, p_deposito_id, v_cantidad_liberar);
+
+      INSERT INTO movimientos_inventario (
+        inventario_id, tipo, cantidad, stock_anterior, stock_posterior,
+        referencia_id, referencia_tipo, observaciones, organization_id,
+        deposito_id
+      ) VALUES (
+        v_inventario_id, 'LIBERACION_RESERVA', v_cantidad_liberar, v_stock, v_stock,
+        v_orden_id, 'orden_servicio',
+        'Reserva liberada - repuesto removido de orden de servicio',
+        v_org_id,
+        v_deposito_efectivo
+      );
+    END IF;
+  END IF;
+
+  RETURN json_build_object('success', true);
+END;
+$$ LANGUAGE plpgsql;
+
+-- 6.5 consumir_reservas_orden
+-- Old signature (108): (TEXT, TEXT)
+DROP FUNCTION IF EXISTS consumir_reservas_orden(TEXT, TEXT);
+
+CREATE OR REPLACE FUNCTION consumir_reservas_orden(
+  p_orden_id    TEXT,
+  p_user_id     TEXT,
+  p_deposito_id TEXT DEFAULT NULL
+) RETURNS JSONB AS $$
+DECLARE
+  v_rep               RECORD;
+  v_stock             INTEGER;
+  v_stock_reservado   INTEGER;
+  v_org_id            TEXT;
+  v_count             INTEGER := 0;
+  v_cantidad_reservada INTEGER;
+  v_deposito_efectivo TEXT;
+BEGIN
+  SELECT organization_id INTO v_org_id
+  FROM ordenes WHERE id = p_orden_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Orden no encontrada';
+  END IF;
+
+  FOR v_rep IN
+    SELECT ro.inventario_id, ro.cantidad
+    FROM repuestos_orden ro
+    WHERE ro.orden_id = p_orden_id
+      AND ro.inventario_id IS NOT NULL
+  LOOP
+    SELECT stock, stock_reservado INTO v_stock, v_stock_reservado
+    FROM inventario
+    WHERE id = v_rep.inventario_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+      CONTINUE;
+    END IF;
+
+    v_cantidad_reservada := LEAST(v_rep.cantidad, v_stock_reservado);
+
+    UPDATE inventario
+    SET stock = stock - v_rep.cantidad,
+        stock_reservado = stock_reservado - v_cantidad_reservada
+    WHERE id = v_rep.inventario_id;
+
+    -- Dual-write: deduct physical stock from the target deposit, then
+    -- release the corresponding reservation from that same deposit.
+    v_deposito_efectivo := descontar_stock_deposito(
+      v_rep.inventario_id, v_org_id, p_deposito_id, v_rep.cantidad,
+      p_deposito_id IS NOT NULL);
+    PERFORM liberar_reserva_deposito(
+      v_rep.inventario_id, v_org_id, v_deposito_efectivo, v_cantidad_reservada);
+
+    INSERT INTO movimientos_inventario (
+      inventario_id, tipo, cantidad, stock_anterior, stock_posterior,
+      referencia_id, referencia_tipo, usuario_id, organization_id,
+      observaciones, deposito_id
+    ) VALUES (
+      v_rep.inventario_id, 'SALIDA', v_rep.cantidad,
+      v_stock, v_stock - v_rep.cantidad,
+      p_orden_id, 'orden_servicio', p_user_id, v_org_id,
+      'Consumo de repuesto al entregar orden',
+      v_deposito_efectivo
+    );
+
+    v_count := v_count + 1;
+  END LOOP;
+
+  RETURN jsonb_build_object('success', true, 'itemsConsumidos', v_count);
+END;
+$$ LANGUAGE plpgsql;
+
+-- 6.6 liberar_reservas_orden
+-- Old signature (108): (TEXT, TEXT)
+DROP FUNCTION IF EXISTS liberar_reservas_orden(TEXT, TEXT);
+
+CREATE OR REPLACE FUNCTION liberar_reservas_orden(
+  p_orden_id    TEXT,
+  p_user_id     TEXT,
+  p_deposito_id TEXT DEFAULT NULL
+) RETURNS JSONB AS $$
+DECLARE
+  v_rep               RECORD;
+  v_stock             INTEGER;
+  v_stock_reservado   INTEGER;
+  v_org_id            TEXT;
+  v_count             INTEGER := 0;
+  v_cantidad_liberar  INTEGER;
+  v_deposito_efectivo TEXT;
+BEGIN
+  SELECT organization_id INTO v_org_id
+  FROM ordenes WHERE id = p_orden_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Orden no encontrada';
+  END IF;
+
+  FOR v_rep IN
+    SELECT ro.inventario_id, ro.cantidad
+    FROM repuestos_orden ro
+    WHERE ro.orden_id = p_orden_id
+      AND ro.inventario_id IS NOT NULL
+  LOOP
+    SELECT stock, stock_reservado INTO v_stock, v_stock_reservado
+    FROM inventario
+    WHERE id = v_rep.inventario_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+      CONTINUE;
+    END IF;
+
+    v_cantidad_liberar := LEAST(v_rep.cantidad, v_stock_reservado);
+
+    IF v_cantidad_liberar > 0 THEN
+      UPDATE inventario
+      SET stock_reservado = stock_reservado - v_cantidad_liberar
+      WHERE id = v_rep.inventario_id;
+
+      -- Dual-write: replicate liberation to per-deposit stock.
+      v_deposito_efectivo := liberar_reserva_deposito(
+        v_rep.inventario_id, v_org_id, p_deposito_id, v_cantidad_liberar);
+
+      INSERT INTO movimientos_inventario (
+        inventario_id, tipo, cantidad, stock_anterior, stock_posterior,
+        referencia_id, referencia_tipo, usuario_id, organization_id,
+        observaciones, deposito_id
+      ) VALUES (
+        v_rep.inventario_id, 'LIBERACION_RESERVA', v_cantidad_liberar,
+        v_stock, v_stock,
+        p_orden_id, 'orden_servicio', p_user_id, v_org_id,
+        'Reserva liberada por cancelación de orden',
+        v_deposito_efectivo
+      );
+
+      v_count := v_count + 1;
+    END IF;
+  END LOOP;
+
+  RETURN jsonb_build_object('success', true, 'itemsLiberados', v_count);
+END;
+$$ LANGUAGE plpgsql;
+
+-- ============================================================
+-- 7. RPC DE DEVOLUCIONES
+-- El flujo de devoluciones existía completamente en la capa TS
+-- (app/api/ventas/[id]/devolucion/route.ts): hacía UPDATE directo
+-- a inventario + INSERT a movimientos_inventario sin deposito_id.
+-- Este RPC consolida la lógica en SQL para que también escriba
+-- el stock por depósito en inventario_depositos.
+-- La ruta TS llama a este RPC en lugar de las operaciones directas.
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION registrar_devolucion_stock(
+  p_inventario_id  TEXT,
+  p_org_id         TEXT,
+  p_user_id        TEXT,
+  p_cantidad       INTEGER,
+  p_referencia_id  TEXT,
+  p_observaciones  TEXT DEFAULT NULL,
+  p_deposito_id    TEXT DEFAULT NULL
+) RETURNS JSONB AS $$
+DECLARE
+  v_stock_anterior    INTEGER;
+  v_deposito_efectivo TEXT;
+BEGIN
+  SELECT stock INTO v_stock_anterior
+  FROM inventario
+  WHERE id = p_inventario_id AND organization_id = p_org_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Item de inventario no encontrado' USING ERRCODE = 'P0002';
+  END IF;
+
+  UPDATE inventario
+  SET stock = stock + p_cantidad, updated_at = NOW()
+  WHERE id = p_inventario_id;
+
+  -- Dual-write: replicate stock restore to per-deposit stock.
+  v_deposito_efectivo := incrementar_stock_deposito(
+    p_inventario_id, p_org_id, p_deposito_id, p_cantidad);
+
+  INSERT INTO movimientos_inventario (
+    inventario_id, tipo, cantidad, stock_anterior, stock_posterior,
+    referencia_id, referencia_tipo, observaciones, usuario_id,
+    organization_id, deposito_id
+  ) VALUES (
+    p_inventario_id, 'DEVOLUCION', p_cantidad, v_stock_anterior,
+    v_stock_anterior + p_cantidad, p_referencia_id, 'devolucion_venta',
+    p_observaciones, p_user_id, p_org_id, v_deposito_efectivo
+  );
+
+  RETURN jsonb_build_object(
+    'stockAnterior',   v_stock_anterior,
+    'stockPosterior',  v_stock_anterior + p_cantidad,
+    'depositoId',      v_deposito_efectivo
+  );
+END;
+$$ LANGUAGE plpgsql;
