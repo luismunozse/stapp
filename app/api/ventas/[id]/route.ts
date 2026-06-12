@@ -161,6 +161,10 @@ export async function PUT(
         depositoId,
       } = body
 
+      if (depositoId !== undefined && depositoId !== null && (typeof depositoId !== "string" || depositoId.length === 0)) {
+        return NextResponse.json({ error: "depositoId inválido" }, { status: 400 })
+      }
+
       // Calcular nuevos totales
       const subtotal = items.reduce(
         (sum: number, item: any) => sum + item.cantidad * item.precioUnitario,

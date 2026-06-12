@@ -7,6 +7,11 @@ import {
   parseResponse,
 } from "./helpers"
 
+vi.mock("next/cache", () => ({
+  revalidateTag: vi.fn(),
+  revalidatePath: vi.fn(),
+}))
+
 vi.mock("@/lib/webhooks/dispatcher", () => ({
   emitWebhookEvent: vi.fn().mockResolvedValue(undefined),
 }))

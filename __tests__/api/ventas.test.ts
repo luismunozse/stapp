@@ -17,6 +17,8 @@ vi.mock("@/lib/counters", () => ({
 vi.mock("@/lib/audit", () => ({
   createAuditLogger: vi.fn(() => ({
     create: vi.fn().mockResolvedValue(undefined),
+    update: vi.fn().mockResolvedValue(undefined),
+    delete: vi.fn().mockResolvedValue(undefined),
   })),
 }))
 
@@ -413,8 +415,10 @@ describe("PUT /api/ventas/[id] — depositoId", () => {
     })
 
     const [req, ctx] = createPutRequest({ ...editBody, depositoId: "dep-2" })
-    await PUT(req, ctx)
+    const res = await PUT(req, ctx)
+    const { status } = await parseResponse(res)
 
+    expect(status).toBe(200)
     const rpcArgs = vi.mocked(supabaseAdmin.rpc).mock.calls[0][1] as any
     expect(rpcArgs.p_deposito_id).toBe("dep-2")
   })
@@ -427,10 +431,25 @@ describe("PUT /api/ventas/[id] — depositoId", () => {
     })
 
     const [req, ctx] = createPutRequest(editBody)
-    await PUT(req, ctx)
+    const res = await PUT(req, ctx)
+    const { status } = await parseResponse(res)
 
+    expect(status).toBe(200)
     const rpcArgs = vi.mocked(supabaseAdmin.rpc).mock.calls[0][1] as any
     expect(rpcArgs.p_deposito_id).toBeNull()
+  })
+
+  it("rechaza depositoId vacío con 400", async () => {
+    mockAuthSuccess()
+    mockSupabaseFrom({
+      ventas: createChainMock({ id: "v1", estado: "COMPLETADA", cliente_nombre: "X", total: 100, items_venta: [] }),
+    })
+
+    const [req, ctx] = createPutRequest({ ...editBody, depositoId: "" })
+    const res = await PUT(req, ctx)
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(400)
   })
 
   it("mapea P0010 a 400 con mensaje claro en PUT", async () => {
