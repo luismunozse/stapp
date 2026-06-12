@@ -4,6 +4,7 @@
 -- Contrato: p_deposito_id explícito = validación estricta en ese depósito;
 -- NULL = validación global (comportamiento previo) + drain principal-primero.
 -- Invariante post-migración: inventario.stock = SUM(inventario_depositos.stock).
+-- Numeración: 204/205 reservadas por PRs en vuelo (#11 labor-cost, #13 api-v1).
 
 -- ============================================================
 -- 1. HELPERS
@@ -73,13 +74,19 @@ BEGIN
     RETURN v_target;
   END IF;
 
+  -- Pre-lock ordenado por deposito_id (mismo orden que transferir_stock_atomic)
+  -- para evitar deadlocks; el orden de PREFERENCIA se aplica recién en el loop.
+  PERFORM 1 FROM inventario_depositos
+  WHERE inventario_id = p_inventario_id
+  ORDER BY deposito_id
+  FOR UPDATE;
+
   -- Drain: target primero, luego otros por stock DESC.
   FOR v_row IN
     SELECT idep.deposito_id, idep.stock
     FROM inventario_depositos idep
     WHERE idep.inventario_id = p_inventario_id AND idep.stock > 0
     ORDER BY (idep.deposito_id = v_target) DESC, idep.stock DESC, idep.deposito_id
-    FOR UPDATE
   LOOP
     EXIT WHEN v_restante <= 0;
     v_quitar := LEAST(v_row.stock, v_restante);
@@ -98,6 +105,8 @@ BEGIN
   -- Si el detalle no alcanzó (desync histórico), absorber el resto en el target.
   -- La validación global ya garantizó stock total; esto solo corrige detalle stale.
   IF v_restante > 0 THEN
+    RAISE WARNING 'descontar_stock_deposito: detalle insuficiente, absorbiendo restante. inventario=% org=% restante=%',
+      p_inventario_id, p_org_id, v_restante;
     UPDATE inventario_depositos
     SET stock = GREATEST(stock - v_restante, 0),
         stock_reservado = LEAST(stock_reservado, GREATEST(stock - v_restante, 0)),
@@ -167,12 +176,18 @@ BEGIN
     RETURN v_target;
   END IF;
 
+  -- Pre-lock ordenado por deposito_id (mismo orden que transferir_stock_atomic)
+  -- para evitar deadlocks; el orden de PREFERENCIA se aplica recién en el loop.
+  PERFORM 1 FROM inventario_depositos
+  WHERE inventario_id = p_inventario_id
+  ORDER BY deposito_id
+  FOR UPDATE;
+
   FOR v_row IN
     SELECT idep.deposito_id, (idep.stock - idep.stock_reservado) AS capacidad
     FROM inventario_depositos idep
     WHERE idep.inventario_id = p_inventario_id AND (idep.stock - idep.stock_reservado) > 0
     ORDER BY (idep.deposito_id = v_target) DESC, capacidad DESC, idep.deposito_id
-    FOR UPDATE
   LOOP
     EXIT WHEN v_restante <= 0;
     v_poner := LEAST(v_row.capacidad, v_restante);
@@ -184,6 +199,10 @@ BEGIN
   -- Si v_restante > 0: la reserva global excede el detalle (desync). No forzar:
   -- el CHECK lo impide. El agregado en inventario.stock_reservado sigue siendo
   -- la fuente para validación global; el detalle queda parcial. Aceptado.
+  IF v_restante > 0 THEN
+    RAISE WARNING 'reservar_stock_deposito: capacidad insuficiente en detalle, reserva parcial. inventario=% org=% sin_asignar=%',
+      p_inventario_id, p_org_id, v_restante;
+  END IF;
   RETURN v_target;
 END;
 $$ LANGUAGE plpgsql;
@@ -205,12 +224,18 @@ BEGIN
   IF v_target IS NULL THEN
     RAISE EXCEPTION 'ORG_SIN_DEPOSITO_PRINCIPAL: %', p_org_id USING ERRCODE = 'P0011';
   END IF;
+  -- Pre-lock ordenado por deposito_id (mismo orden que transferir_stock_atomic)
+  -- para evitar deadlocks; el orden de PREFERENCIA se aplica recién en el loop.
+  PERFORM 1 FROM inventario_depositos
+  WHERE inventario_id = p_inventario_id
+  ORDER BY deposito_id
+  FOR UPDATE;
+
   FOR v_row IN
     SELECT idep.deposito_id, idep.stock_reservado
     FROM inventario_depositos idep
     WHERE idep.inventario_id = p_inventario_id AND idep.stock_reservado > 0
     ORDER BY (idep.deposito_id = v_target) DESC, idep.stock_reservado DESC, idep.deposito_id
-    FOR UPDATE
   LOOP
     EXIT WHEN v_restante <= 0;
     v_quitar := LEAST(v_row.stock_reservado, v_restante);
