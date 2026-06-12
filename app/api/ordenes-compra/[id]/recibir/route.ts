@@ -9,6 +9,7 @@ const recibirSchema = z.object({
     cantidadRecibida: z.number().int().positive(),
     inventarioId: z.string().min(1).nullable().optional(),
   })).min(1),
+  depositoId: z.string().min(1).nullable().optional(),
 })
 
 export async function POST(
@@ -50,9 +51,22 @@ export async function POST(
         cantidadRecibida: i.cantidadRecibida,
         ...(i.inventarioId ? { inventarioId: i.inventarioId } : {}),
       })),
+      p_deposito_id: data.depositoId ?? null,
     })
 
     if (rpcError) {
+      if ((rpcError as any).code === "P0010") {
+        return NextResponse.json(
+          { error: "Stock insuficiente en el depósito seleccionado" },
+          { status: 400 }
+        )
+      }
+      if ((rpcError as any).code === "P0011") {
+        return NextResponse.json(
+          { error: "La organización no tiene depósito principal configurado" },
+          { status: 400 }
+        )
+      }
       console.error("Error in recibir_orden_compra:", rpcError)
       return NextResponse.json(
         { error: rpcError.message || "Error al recibir orden de compra" },
