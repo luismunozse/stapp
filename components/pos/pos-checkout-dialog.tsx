@@ -24,6 +24,7 @@ import { useCurrency } from "@/contexts/currency-context"
 import { useModal } from "@/contexts/modal-context"
 import { MultiPagoInput, createPagoLine, type PagoLineItem } from "@/components/pagos/multi-pago-input"
 import type { PosCartItem, PosCliente } from "./pos-types"
+import { buildVentaPayload } from "./pos-payload"
 
 interface PosCheckoutDialogProps {
   open: boolean
@@ -133,43 +134,14 @@ export function PosCheckoutDialog({
 
     setLoading(true)
     try {
-      // Filter out pago lines with 0 amount
-      const pagosConMonto = pagosLines.filter((p) => p.monto > 0)
-
-      const payload = {
-        clienteId: cliente.id || null,
-        clienteNombre: cliente.nombre || "Consumidor Final",
-        clienteTelefono: cliente.telefono || undefined,
-        pagosParcial: pagoParcial,
+      const payload = buildVentaPayload({
+        items,
+        cliente,
+        pagosLines,
+        pagoParcial,
+        observaciones,
         idempotencyKey,
-        items: items.map((item) => ({
-          inventarioId: item.inventarioId || null,
-          descripcion: item.nombre,
-          cantidad: item.cantidad,
-          precioUnitario: item.precioUnitario,
-          diasGarantia: item.diasGarantia,
-          descuento: 0,
-          tipoDescuento: "MONTO" as const,
-          porcentajeDescuento: 0,
-          ...(item.trackeaSeries && item.serieIds.length > 0 && { serieIds: item.serieIds }),
-          ...(item.costo != null && { costo: item.costo }),
-        })),
-        descuento: 0,
-        tipoDescuento: "MONTO" as const,
-        porcentajeDescuento: 0,
-        metodoPago: pagosConMonto.length > 0 ? pagosConMonto[0].metodo : "EFECTIVO",
-        observaciones: observaciones || undefined,
-        ...(pagosConMonto.length > 0 && {
-          pagos: pagosConMonto.map((p) => ({
-            metodo: p.metodo,
-            monto: p.monto, // monto base = ingreso real del negocio
-            ...(p.referencia && { referencia: p.referencia }),
-            ...(p.cuotas && { cuotas: p.cuotas }),
-            ...(p.recargo && p.recargo > 0 && { recargo: p.recargo }),
-            ...(p.recargo && p.recargo > 0 && { montoOriginal: p.monto + p.monto * (p.recargo / 100) }), // total que paga el cliente (informativo)
-          })),
-        }),
-      }
+      })
 
       const res = await fetch("/api/ventas", {
         method: "POST",
