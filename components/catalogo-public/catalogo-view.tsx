@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react"
 import dynamic from "next/dynamic"
 import { motion, AnimatePresence } from "framer-motion"
-import { ShoppingCart, MessageCircle } from "lucide-react"
+import { ShoppingCart } from "lucide-react"
+import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { Button } from "@/components/ui/button"
 import { CatalogoHero } from "./catalogo-hero"
 import { CatalogoFilters, type SortOption } from "./catalogo-filters"
@@ -410,7 +411,7 @@ export function CatalogoView({
                         target="_blank"
                         rel="noreferrer"
                       >
-                        <MessageCircle className="h-4 w-4" />
+                        <WhatsAppIcon className="h-4 w-4" />
                         Consultar por WhatsApp
                       </a>
                     </Button>

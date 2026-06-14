@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog"
 import { FormActionBar } from "@/components/ui/form-action-bar"
 import { User, Building2 } from "lucide-react"
+import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { Switch } from "@/components/ui/switch"
 import type { Cliente } from "@/types"
 import { useCurrency } from "@/contexts/currency-context"
@@ -318,7 +319,10 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
 
           <div className="flex items-center justify-between rounded-md border p-3">
             <div className="space-y-0.5">
-              <Label htmlFor="aceptaWhatsapp">Acepta notificaciones por WhatsApp</Label>
+              <Label htmlFor="aceptaWhatsapp" className="flex items-center gap-1.5">
+                <WhatsAppIcon className="h-4 w-4 text-success-600" />
+                Acepta notificaciones por WhatsApp
+              </Label>
               <p className="text-xs text-muted-foreground">
                 Desactivar para no enviar mensajes automáticos de WhatsApp a este cliente.
               </p>

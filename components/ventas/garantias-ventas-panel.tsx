@@ -16,8 +16,8 @@ import {
   ShieldX,
   Clock,
   AlertTriangle,
-  MessageCircle,
 } from "lucide-react"
+import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { useCurrency } from "@/contexts/currency-context"
 import { EmptyState } from "@/components/ui/empty-state"
 
@@ -268,7 +268,7 @@ function GarantiaItem({ garantia: g, formatDate, formatWhatsAppLink }: {
             className="text-success hover:text-success/80"
             title="Notificar por WhatsApp"
           >
-            <MessageCircle className="h-3.5 w-3.5" />
+            <WhatsAppIcon className="h-3.5 w-3.5" />
           </a>
         )}
       </div>

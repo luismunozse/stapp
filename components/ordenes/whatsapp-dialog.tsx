@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Send, Copy, Check, X, Loader2, Zap } from "lucide-react"
+import { Copy, Check, X, Loader2, Zap } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import {
   getWhatsAppTemplates,
@@ -268,7 +268,7 @@ export function WhatsAppDialog({ context, onClose }: WhatsAppDialogProps) {
               className="flex-1 bg-green-600 hover:bg-green-700"
               disabled={!customMessage.trim()}
             >
-              <Send className="mr-2 h-4 w-4" />
+              <WhatsAppIcon className="mr-2 h-4 w-4" />
               Abrir WhatsApp
             </Button>
           )}

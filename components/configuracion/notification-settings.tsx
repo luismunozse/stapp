@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Save, Bell, Mail, Package, MessageSquare, ChevronRight } from "lucide-react"
+import { Save, Bell, Mail, Package, ChevronRight } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import Link from "next/link"
 
@@ -236,7 +236,7 @@ export function NotificationSettings({ allowEdit = true }: NotificationSettingsP
           className="flex items-center justify-between p-3 sm:p-4 border rounded-lg hover:bg-muted/50 transition-colors gap-3"
         >
           <div className="flex items-start gap-2 sm:gap-3 min-w-0">
-            <MessageSquare className="h-4 w-4 sm:h-5 sm:w-5 text-green-600 mt-0.5 shrink-0" />
+            <WhatsAppIcon className="h-4 w-4 sm:h-5 sm:w-5 text-green-600 mt-0.5 shrink-0" />
             <div className="min-w-0">
               <Label className="text-sm sm:text-base cursor-pointer">Plantillas de WhatsApp</Label>
               <p className="text-xs sm:text-sm text-muted-foreground">

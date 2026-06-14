@@ -1,7 +1,8 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { X, Send, Loader2, Bot, MessageCircle, CheckCircle2 } from "lucide-react"
+import { X, Send, Loader2, Bot, CheckCircle2 } from "lucide-react"
+import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
@@ -236,7 +237,7 @@ export function ChatbotPanel({ isOpen, onClose }: ChatbotPanelProps) {
             rel="noopener noreferrer"
             className="flex items-center gap-1 text-xs text-green-600 hover:text-green-700 font-medium transition-colors"
           >
-            <MessageCircle className="w-3.5 h-3.5" />
+            <WhatsAppIcon className="w-3.5 h-3.5" />
             Hablar con una persona
           </a>
         </div>

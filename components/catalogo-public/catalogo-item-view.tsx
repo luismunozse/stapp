@@ -6,9 +6,10 @@ import { useState, useRef } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
-  Plus, Minus, ShoppingCart, Package, Wrench, MessageCircle,
+  Plus, Minus, ShoppingCart, Package, Wrench,
   Star, Share2, ChevronLeft, ChevronRight, ArrowLeft, Sparkles, Copy,
 } from "lucide-react"
+import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { toast } from "sonner"
 import { useCart } from "./use-cart"
@@ -203,7 +204,7 @@ export function CatalogoItemView({ data }: { data: Data }) {
                     rel="noreferrer"
                     className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm hover:bg-muted transition-colors"
                   >
-                    <MessageCircle className="h-4 w-4 text-green-600" />
+                    <WhatsAppIcon className="h-4 w-4 text-green-600" />
                     WhatsApp
                   </a>
                   <button
@@ -344,7 +345,7 @@ export function CatalogoItemView({ data }: { data: Data }) {
             ) : whatsappLink && (
               <Button asChild className="gap-2 w-full h-11" style={{ backgroundColor: config.color_primary }}>
                 <a href={whatsappLink} target="_blank" rel="noreferrer">
-                  <MessageCircle className="h-4 w-4" />
+                  <WhatsAppIcon className="h-4 w-4" />
                   Consultar por WhatsApp
                 </a>
               </Button>

@@ -18,11 +18,11 @@ import {
   Sparkles,
   UserX,
   AlertTriangle,
-  MessageCircle,
   Users,
   BarChart3,
   CheckCircle,
 } from "lucide-react"
+import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { EmptyState } from "@/components/ui/empty-state"
 import { useCurrency } from "@/contexts/currency-context"
 import { formatPhoneForWhatsApp } from "@/lib/notifications/whatsapp-templates"
@@ -255,7 +255,7 @@ export function ClientesSegmentacion({ open, onOpenChange }: Props) {
                                   rel="noopener noreferrer"
                                   className="inline-flex items-center gap-1 text-xs text-success-600 hover:text-success-700"
                                 >
-                                  <MessageCircle className="h-3.5 w-3.5" />
+                                  <WhatsAppIcon className="h-3.5 w-3.5" />
                                 </a>
                               )}
                             </td>

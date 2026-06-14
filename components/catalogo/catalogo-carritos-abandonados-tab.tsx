@@ -5,9 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
-  MessageCircle, Clock, CheckCircle2, Loader2, Trash2,
+  Clock, CheckCircle2, Loader2, Trash2,
   ShoppingCart, RefreshCw, Mail, Phone,
 } from "lucide-react"
+import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { toast } from "sonner"
 import { resolvePlantilla } from "@/lib/whatsapp/plantillas-catalog"
 import { useCurrency } from "@/contexts/currency-context"
@@ -304,7 +305,7 @@ export function CatalogoCarritosAbandonadosTab() {
                               if (!c.contacted_at) handleContacted(c.id)
                             }}
                           >
-                            <MessageCircle className="h-3.5 w-3.5" />
+                            <WhatsAppIcon className="h-3.5 w-3.5" />
                             WhatsApp
                           </a>
                         </Button>
