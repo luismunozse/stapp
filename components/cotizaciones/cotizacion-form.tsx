@@ -912,13 +912,13 @@ export function CotizacionForm({
                 <span>{formatPrice(subtotalBruto)}</span>
               </div>
               {descuentoItems > 0 && (
-                <div className="flex justify-between text-sm text-green-600">
+                <div className="flex justify-between text-sm text-success-600">
                   <span>Desc. items:</span>
                   <span>-{formatPrice(descuentoItems)}</span>
                 </div>
               )}
               {descuentoGlobal > 0 && (
-                <div className="flex justify-between text-sm text-green-600">
+                <div className="flex justify-between text-sm text-success-600">
                   <span>Desc. global:</span>
                   <span>-{formatPrice(descuentoGlobal)}</span>
                 </div>
@@ -945,7 +945,7 @@ export function CotizacionForm({
                     <span>Costo repuestos:</span>
                     <span>{formatPrice(costoRepuestos)}</span>
                   </div>
-                  <div className="flex justify-between text-sm font-medium text-emerald-600">
+                  <div className="flex justify-between text-sm font-medium text-success-600">
                     <span>Ganancia bruta:</span>
                     <span>{formatPrice(Math.max(0, subtotalGravable - costoRepuestos))}</span>
                   </div>
