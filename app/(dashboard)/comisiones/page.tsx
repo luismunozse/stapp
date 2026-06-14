@@ -3,17 +3,11 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ComisionesView } from "@/components/comisiones/comisiones-view"
 import { ComisionesVendedoresView } from "@/components/comisiones/comisiones-vendedores-view"
+import { PageShell } from "@/components/ui/page-shell"
 
 export default function ComisionesPage() {
   return (
-    <div className="space-y-4 sm:space-y-6">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-bold">Comisiones</h1>
-        <p className="text-sm sm:text-base text-muted-foreground">
-          Liquidación de comisiones de técnicos y vendedores.
-        </p>
-      </div>
-
+    <PageShell title="Comisiones" description="Liquidación de comisiones de técnicos y vendedores.">
       <Tabs defaultValue="tecnicos" className="space-y-4">
         <TabsList>
           <TabsTrigger value="tecnicos">Técnicos</TabsTrigger>
@@ -28,6 +22,6 @@ export default function ComisionesPage() {
           <ComisionesVendedoresView />
         </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   )
 }

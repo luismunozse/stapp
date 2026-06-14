@@ -5,20 +5,17 @@ import { EmailCompose } from "@/components/emails/email-compose"
 import { EmailHistory } from "@/components/emails/email-history"
 import { Button } from "@/components/ui/button"
 import { Mail, History } from "lucide-react"
+import { PageShell } from "@/components/ui/page-shell"
 
 export default function EmailsPage() {
   const [view, setView] = useState<"compose" | "history">("compose")
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Emails</h1>
-          <p className="text-sm text-muted-foreground">
-            Envía emails individuales a clientes, técnicos o vendedores
-          </p>
-        </div>
-        <div className="flex gap-2">
+    <PageShell
+      title="Emails"
+      description="Envía emails individuales a clientes, técnicos o vendedores"
+      actions={
+        <>
           <Button
             variant={view === "compose" ? "default" : "outline"}
             onClick={() => setView("compose")}
@@ -35,10 +32,10 @@ export default function EmailsPage() {
             <History className="h-4 w-4" />
             Historial
           </Button>
-        </div>
-      </div>
-
+        </>
+      }
+    >
       {view === "compose" ? <EmailCompose /> : <EmailHistory />}
-    </div>
+    </PageShell>
   )
 }
