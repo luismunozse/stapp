@@ -189,8 +189,10 @@ export async function GET(
 
 /**
  * DELETE /api/superadmin/organizations/[id]
- * Elimina una organización y todos sus datos (CASCADE en DB).
- * También limpia archivos de storage.
+ * Por defecto ARCHIVA (soft-delete: setea deleted_at). El tenant queda inaccesible
+ * pero los datos se preservan y se pueden restaurar.
+ * Borrado permanente (CASCADE + limpieza de storage): solo con ?hard=true y
+ * confirmSlug === slug de la org en el body.
  */
 export async function DELETE(
   request: Request,
@@ -201,22 +203,17 @@ export async function DELETE(
     if (authError) return authError
 
     const { id } = await params
+    const hard = new URL(request.url).searchParams.get("hard") === "true"
 
-    // Verificar que la organización existe
     const { data: org, error: orgError } = await supabaseAdmin
       .from("organizations")
-      .select("id, nombre, slug")
+      .select("id, nombre, slug, deleted_at")
       .eq("id", id)
       .single()
 
     if (orgError || !org) {
-      return NextResponse.json(
-        { error: "Organización no encontrada" },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: "Organización no encontrada" }, { status: 404 })
     }
-
-    // Guard: nunca borrar la org del panel admin
     if (org.slug === "superadmin") {
       return NextResponse.json(
         { error: "No se puede eliminar la organización del panel admin" },
@@ -224,7 +221,75 @@ export async function DELETE(
       )
     }
 
-    // Limpiar archivos de storage (best effort, no bloquea el delete)
+    // ── Soft-delete (default) ──
+    if (!hard) {
+      if (org.deleted_at) {
+        return NextResponse.json({ error: "La organización ya está archivada" }, { status: 409 })
+      }
+      let reason: string | null = null
+      try {
+        const body = await request.json()
+        if (body && typeof body.reason === "string") reason = body.reason
+      } catch {
+        // sin body es válido
+      }
+
+      const { data: archivedRows, error: archiveError } = await supabaseAdmin
+        .from("organizations")
+        .update({
+          deleted_at: new Date().toISOString(),
+          deleted_by: email,
+          archived_reason: reason,
+        })
+        .eq("id", id)
+        .is("deleted_at", null)
+        .select("id")
+
+      if (archiveError) {
+        console.error("Error archiving organization:", archiveError)
+        return NextResponse.json({ error: "Error al archivar la organización" }, { status: 500 })
+      }
+      if (!archivedRows || archivedRows.length === 0) {
+        // Otra request la archivó entre el pre-check y este update (TOCTOU)
+        return NextResponse.json({ error: "La organización ya está archivada" }, { status: 409 })
+      }
+
+      try {
+        await supabaseAdmin.from("audit_logs").insert({
+          organization_id: id,
+          user_id: null,
+          action: "ARCHIVE",
+          entity: "organizations",
+          entity_id: id,
+          changes: { superadmin_email: email, reason },
+        })
+      } catch {
+        // best effort
+      }
+
+      return NextResponse.json({
+        success: true,
+        archived: true,
+        message: `Organización "${org.nombre}" archivada`,
+      })
+    }
+
+    // ── Hard purge (requiere confirmación explícita) ──
+    let confirmSlug: string | undefined
+    try {
+      const body = await request.json()
+      confirmSlug = body?.confirmSlug
+    } catch {
+      // sin body → confirmSlug undefined → rechazo abajo
+    }
+    if (confirmSlug !== org.slug) {
+      return NextResponse.json(
+        { error: "Confirmación inválida: repetí el slug exacto para el borrado permanente" },
+        { status: 400 }
+      )
+    }
+
+    // Limpiar archivos de storage (best effort)
     const bucketsToClean = [
       STORAGE_BUCKETS.FOTOS_ORDENES,
       STORAGE_BUCKETS.FOTOS_INVENTARIO,
@@ -233,24 +298,19 @@ export async function DELETE(
       STORAGE_BUCKETS.AVATARS,
       STORAGE_BUCKETS.COMPROBANTES_GASTOS,
     ]
-
     await Promise.allSettled(
       bucketsToClean.map(async (bucket) => {
         try {
-          const { data: files } = await supabaseAdmin.storage
-            .from(bucket)
-            .list(id, { limit: 1000 })
+          const { data: files } = await supabaseAdmin.storage.from(bucket).list(id, { limit: 1000 })
           if (files && files.length > 0) {
-            const paths = files.map((f) => `${id}/${f.name}`)
-            await supabaseAdmin.storage.from(bucket).remove(paths)
+            await supabaseAdmin.storage.from(bucket).remove(files.map((f) => `${id}/${f.name}`))
           }
         } catch {
-          // Storage cleanup is best-effort
+          // best effort
         }
       })
     )
 
-    // Eliminar organización (CASCADE borra users, orders, subscriptions, etc.)
     const { error: deleteError } = await supabaseAdmin
       .from("organizations")
       .delete()
@@ -258,13 +318,9 @@ export async function DELETE(
 
     if (deleteError) {
       console.error("Error deleting organization:", deleteError)
-      return NextResponse.json(
-        { error: "Error al eliminar la organización" },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: "Error al eliminar la organización" }, { status: 500 })
     }
 
-    // Registrar en audit_logs (la org ya no existe, log sin org_id)
     try {
       await supabaseAdmin.from("audit_logs").insert({
         organization_id: null,
@@ -283,14 +339,12 @@ export async function DELETE(
 
     return NextResponse.json({
       success: true,
+      archived: false,
       message: `Organización "${org.nombre}" eliminada permanentemente`,
     })
   } catch (error) {
     console.error("Error in DELETE /api/superadmin/organizations/[id]:", error)
-    return NextResponse.json(
-      { error: "Error interno del servidor" },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }
 
