@@ -24,6 +24,7 @@ import {
   Calendar,
   Plus,
   AlertTriangle,
+  AlertCircle,
   Calculator,
   FileSpreadsheet,
   TrendingDown,
@@ -32,6 +33,8 @@ import {
   Star,
   Truck,
 } from "lucide-react"
+import { EmptyState } from "@/components/ui/empty-state"
+import { FieldSectionLabel } from "@/components/ui/field-section-label"
 import { ProveedorContactosTab } from "./proveedor-contactos-tab"
 import { ProveedorAdjuntosTab } from "./proveedor-adjuntos-tab"
 import { ProveedorCatalogoTab } from "./proveedor-catalogo-tab"
@@ -244,11 +247,12 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
 
   if (!proveedor) {
     return (
-      <Card>
-        <CardContent className="py-8 text-center text-muted-foreground">
-          Proveedor no encontrado.
-        </CardContent>
-      </Card>
+      <EmptyState
+        variant="error"
+        icon={AlertCircle}
+        title="Proveedor no encontrado"
+        description="El proveedor que buscás no existe o fue eliminado."
+      />
     )
   }
 
@@ -332,7 +336,7 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
           value={stats?.productosCount.toLocaleString("es-AR") ?? "—"}
           sub={
             stats && (stats.itemsSinStock > 0 || stats.itemsBajoStock > 0) ? (
-              <span className="flex items-center gap-1 text-amber-600 text-[11px]">
+              <span className="flex items-center gap-1 text-warning-600 text-[11px]">
                 <AlertTriangle className="h-3 w-3" />
                 {stats.itemsSinStock > 0 && `${stats.itemsSinStock} sin stock`}
                 {stats.itemsSinStock > 0 && stats.itemsBajoStock > 0 && " · "}
@@ -374,7 +378,7 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
         <TabsContent value="info" className="space-y-4">
           <Card>
             <CardContent className="p-4 sm:p-6 space-y-3">
-              <h3 className="font-semibold text-sm">Contacto</h3>
+              <FieldSectionLabel>Contacto</FieldSectionLabel>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {proveedor.telefono && (
                   <a href={`tel:${proveedor.telefono}`} className="flex items-center gap-2 text-sm hover:text-primary">
@@ -428,7 +432,7 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
           {(proveedor.razonSocial || proveedor.cuit || proveedor.condicionIva || proveedor.ingresosBrutos || proveedor.condicionPago || proveedor.diasPago != null) && (
             <Card>
               <CardContent className="p-4 sm:p-6 space-y-3">
-                <h3 className="font-semibold text-sm">Datos fiscales y condiciones</h3>
+                <FieldSectionLabel>Datos fiscales y condiciones</FieldSectionLabel>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">
                   {proveedor.razonSocial && (
                     <FiscalField label="Razón social" value={proveedor.razonSocial} />
@@ -453,10 +457,7 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
           {(proveedor.leadTimeDias != null || proveedor.pedidoMinimo != null) && (
             <Card>
               <CardContent className="p-4 sm:p-6 space-y-3">
-                <h3 className="font-semibold text-sm flex items-center gap-2">
-                  <Truck className="h-4 w-4" />
-                  Operativa
-                </h3>
+                <FieldSectionLabel icon={Truck}>Operativa</FieldSectionLabel>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">
                   {proveedor.leadTimeDias != null && (
                     <FiscalField label="Lead time" value={`${proveedor.leadTimeDias} día${proveedor.leadTimeDias === 1 ? "" : "s"}`} />
@@ -472,7 +473,7 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
           {proveedor.notas && (
             <Card>
               <CardContent className="p-4 sm:p-6">
-                <h3 className="font-semibold text-sm mb-2">Notas</h3>
+                <FieldSectionLabel className="mb-2">Notas</FieldSectionLabel>
                 <p className="text-sm whitespace-pre-wrap text-muted-foreground">{proveedor.notas}</p>
               </CardContent>
             </Card>
@@ -480,7 +481,7 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
 
           <Card>
             <CardContent className="p-4 sm:p-6">
-              <h3 className="font-semibold text-sm mb-3">Valor del stock asociado</h3>
+              <FieldSectionLabel className="mb-3">Valor del stock asociado</FieldSectionLabel>
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <div className="text-muted-foreground text-xs uppercase tracking-wide">A costo</div>
@@ -488,7 +489,7 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
                 </div>
                 <div>
                   <div className="text-muted-foreground text-xs uppercase tracking-wide">A venta</div>
-                  <div className="font-semibold text-emerald-600">{stats ? formatPrice(stats.valorVentaStock) : "—"}</div>
+                  <div className="font-semibold text-success-600">{stats ? formatPrice(stats.valorVentaStock) : "—"}</div>
                 </div>
               </div>
             </CardContent>
@@ -511,9 +512,11 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
           <Card>
             <CardContent className="p-0">
               {inventario.length === 0 ? (
-                <div className="py-8 text-center text-sm text-muted-foreground">
-                  No hay productos asociados a este proveedor.
-                </div>
+                <EmptyState
+                  icon={Package}
+                  title="Sin productos"
+                  description="No hay productos asociados a este proveedor."
+                />
               ) : (
                 <div className="divide-y">
                   {inventario.map((item) => (
@@ -560,9 +563,11 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
           <Card>
             <CardContent className="p-0">
               {ordenes.length === 0 ? (
-                <div className="py-8 text-center text-sm text-muted-foreground">
-                  Sin órdenes de compra registradas.
-                </div>
+                <EmptyState
+                  icon={ShoppingCart}
+                  title="Sin órdenes de compra"
+                  description="No hay órdenes de compra registradas para este proveedor."
+                />
               ) : (
                 <div className="divide-y">
                   {ordenes.map((oc) => {
@@ -611,7 +616,7 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
                 <span className="font-semibold">Productos compartidos con otros proveedores:</span>
                 <Badge variant="outline">{comparativa.length}</Badge>
                 {cheapestCount > 0 && (
-                  <Badge variant="default" className="bg-emerald-600">
+                  <Badge variant="default" className="bg-success">
                     <TrendingDown className="h-3 w-3 mr-1" />
                     {cheapestCount} más baratos acá
                   </Badge>
@@ -632,9 +637,11 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
           <Card className="mt-3">
             <CardContent className="p-0">
               {comparativa.length === 0 ? (
-                <div className="py-8 text-center text-sm text-muted-foreground">
-                  No hay productos compartidos con otros proveedores.
-                </div>
+                <EmptyState
+                  icon={ArrowLeftRight}
+                  title="Sin comparativa"
+                  description="No hay productos compartidos con otros proveedores."
+                />
               ) : (
                 <div className="overflow-auto">
                   <table className="w-full text-xs sm:text-sm">
@@ -660,14 +667,14 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
                             <td className="px-3 py-2 max-w-[240px] truncate" title={c.nombre}>{c.nombre}</td>
                             <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">
                               {c.mine?.precioCompra != null ? (
-                                <span className={cheapest ? "text-emerald-600 font-semibold" : ""}>
+                                <span className={cheapest ? "text-success-600 font-semibold" : ""}>
                                   {formatPrice(c.mine.precioCompra)}
                                 </span>
                               ) : (
                                 "—"
                               )}
                               {dif != null && dif > 0 && (
-                                <span className="ml-1 text-[10px] text-red-500">+{dif.toFixed(0)}%</span>
+                                <span className="ml-1 text-[10px] text-destructive">+{dif.toFixed(0)}%</span>
                               )}
                             </td>
                             <td className="px-3 py-2">
@@ -677,7 +684,7 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
                                     key={o.itemId}
                                     className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] border ${
                                       o.precioCompra != null && o.precioCompra === c.minPrecioCompra
-                                        ? "border-emerald-500/50 bg-emerald-500/10"
+                                        ? "border-success/50 bg-success/10"
                                         : "border-muted-foreground/20 bg-muted/30"
                                     }`}
                                     title={o.proveedorNombre}
@@ -695,7 +702,7 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
                                 ))}
                               </div>
                             </td>
-                            <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap font-semibold text-emerald-700 dark:text-emerald-400">
+                            <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap font-semibold text-success-700 dark:text-success-500">
                               {c.minPrecioCompra != null ? formatPrice(c.minPrecioCompra) : "—"}
                             </td>
                           </tr>

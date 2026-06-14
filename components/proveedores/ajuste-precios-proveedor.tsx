@@ -5,7 +5,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import useSWR from "swr"
 import { toast } from "sonner"
-import { ArrowLeft, Loader2, Calculator, Check, X } from "lucide-react"
+import { Loader2, Calculator, Check, X, Package } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -20,6 +20,8 @@ import {
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useCurrency } from "@/contexts/currency-context"
+import { PageShell } from "@/components/ui/page-shell"
+import { EmptyState } from "@/components/ui/empty-state"
 
 interface Proveedor {
   id: string
@@ -187,23 +189,12 @@ export function AjustePreciosProveedor({ proveedorId }: { proveedorId: string })
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" asChild>
-          <Link href={`/proveedores/${proveedorId}`}><ArrowLeft className="h-4 w-4" /></Link>
-        </Button>
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
-            <Calculator className="h-5 w-5" />
-            Ajuste masivo de precios
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {proveedor?.nombre ? `Proveedor: ${proveedor.nombre}` : "Aplicá un % o editá precios por ítem"}
-          </p>
-        </div>
-      </div>
-
+    <PageShell
+      title="Ajuste masivo de precios"
+      description={proveedor?.nombre ?? "..."}
+      icon={Calculator}
+      backHref={`/proveedores/${proveedorId}`}
+    >
       {/* Controles */}
       <Card>
         <CardHeader>
@@ -300,9 +291,11 @@ export function AjustePreciosProveedor({ proveedorId }: { proveedorId: string })
               <Skeleton className="h-8 w-full" />
             </div>
           ) : items.length === 0 ? (
-            <div className="py-8 text-center text-sm text-muted-foreground">
-              Este proveedor no tiene productos asociados en el inventario.
-            </div>
+            <EmptyState
+              icon={Package}
+              title="Sin productos"
+              description="Este proveedor no tiene productos asociados en el inventario."
+            />
           ) : (
             <div className="overflow-auto max-h-[60vh]">
               <table className="w-full text-xs sm:text-sm">
@@ -401,6 +394,6 @@ export function AjustePreciosProveedor({ proveedorId }: { proveedorId: string })
           </Button>
         </div>
       </div>
-    </div>
+    </PageShell>
   )
 }
