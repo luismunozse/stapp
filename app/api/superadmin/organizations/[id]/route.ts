@@ -234,7 +234,7 @@ export async function DELETE(
         // sin body es válido
       }
 
-      const { error: archiveError } = await supabaseAdmin
+      const { data: archivedRows, error: archiveError } = await supabaseAdmin
         .from("organizations")
         .update({
           deleted_at: new Date().toISOString(),
@@ -242,10 +242,16 @@ export async function DELETE(
           archived_reason: reason,
         })
         .eq("id", id)
+        .is("deleted_at", null)
+        .select("id")
 
       if (archiveError) {
         console.error("Error archiving organization:", archiveError)
         return NextResponse.json({ error: "Error al archivar la organización" }, { status: 500 })
+      }
+      if (!archivedRows || archivedRows.length === 0) {
+        // Otra request la archivó entre el pre-check y este update (TOCTOU)
+        return NextResponse.json({ error: "La organización ya está archivada" }, { status: 409 })
       }
 
       try {

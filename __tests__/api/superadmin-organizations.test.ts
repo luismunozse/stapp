@@ -24,22 +24,22 @@ describe("DELETE /api/superadmin/organizations/[id]", () => {
   beforeEach(() => vi.clearAllMocks())
 
   it("archives (soft-delete) by default and sets deleted_at", async () => {
-    const updateChain = createChainMock(null, null)
-    const orgRouter = {
+    const updateChain = createChainMock([{ id: "o1" }], null)
+    const orgChain = {
       ...createChainMock({ id: "o1", nombre: "GuruTech", slug: "guru-tech", deleted_at: null }),
       update: vi.fn().mockReturnValue(updateChain),
     }
-    mockSupabaseFrom({ organizations: orgRouter as any, audit_logs: createChainMock(null, null) })
+    mockSupabaseFrom({ organizations: orgChain as any, audit_logs: createChainMock(null, null) })
 
     const res = await DELETE(req("http://localhost/api/superadmin/organizations/o1"), ctx("o1"))
     const { status, body } = await parseResponse(res)
 
     expect(status).toBe(200)
     expect(body.archived).toBe(true)
-    expect(orgRouter.update).toHaveBeenCalledWith(
+    expect(orgChain.update).toHaveBeenCalledWith(
       expect.objectContaining({ deleted_by: "admin@stapp.com.ar" })
     )
-    const payload = orgRouter.update.mock.calls[0][0]
+    const payload = orgChain.update.mock.calls[0][0]
     expect(payload.deleted_at).toBeTruthy()
   })
 
@@ -58,5 +58,28 @@ describe("DELETE /api/superadmin/organizations/[id]", () => {
       ctx("o1")
     )
     expect((await parseResponse(res)).status).toBe(400)
+  })
+
+  it("returns 409 when the org is already archived", async () => {
+    const orgChain = createChainMock({ id: "o1", nombre: "GuruTech", slug: "guru-tech", deleted_at: "2026-01-01T00:00:00Z" })
+    mockSupabaseFrom({ organizations: orgChain })
+    const res = await DELETE(req("http://localhost/api/superadmin/organizations/o1"), ctx("o1"))
+    expect((await parseResponse(res)).status).toBe(409)
+  })
+
+  it("hard-purges when hard=true and confirmSlug matches", async () => {
+    const orgChain = {
+      ...createChainMock({ id: "o1", nombre: "GuruTech", slug: "guru-tech", deleted_at: null }),
+      delete: vi.fn().mockReturnValue(createChainMock(null, null)),
+    }
+    mockSupabaseFrom({ organizations: orgChain as any, audit_logs: createChainMock(null, null) })
+    const res = await DELETE(
+      req("http://localhost/api/superadmin/organizations/o1?hard=true", { confirmSlug: "guru-tech" }),
+      ctx("o1")
+    )
+    const { status, body } = await parseResponse(res)
+    expect(status).toBe(200)
+    expect(body.archived).toBe(false)
+    expect(orgChain.delete).toHaveBeenCalled()
   })
 })
