@@ -1,7 +1,8 @@
 "use client"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Phone, Mail, MapPin, IdCard, Building2, MessageCircle } from "lucide-react"
+import { Phone, Mail, MapPin, IdCard, Building2 } from "lucide-react"
+import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import type { Cliente } from "@/types"
 
 function Row({ icon: Icon, label, value }: { icon: typeof Phone; label: string; value: string }) {
@@ -25,7 +26,11 @@ export function ClienteDetalleDatos({ cliente }: { cliente: Cliente }) {
         {cliente.dni && <Row icon={IdCard} label="DNI" value={cliente.dni} />}
         {cliente.razonSocial && <Row icon={Building2} label="Razón social" value={cliente.razonSocial} />}
         {cliente.cuit && <Row icon={IdCard} label="CUIT" value={cliente.cuit} />}
-        <Row icon={MessageCircle} label="WhatsApp" value={cliente.aceptaWhatsapp === false ? "No recibe" : "Recibe"} />
+        <div className="flex items-center gap-2 text-sm">
+          <WhatsAppIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+          <span className="text-muted-foreground">WhatsApp:</span>
+          <span className="truncate">{cliente.aceptaWhatsapp === false ? "No recibe" : "Recibe"}</span>
+        </div>
       </CardContent>
     </Card>
   )

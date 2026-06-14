@@ -4,8 +4,9 @@ import { useState } from "react"
 import useSWR from "swr"
 import { toast } from "sonner"
 import {
-  Phone, Mail, MessageCircle, Star, Trash2, Edit, Plus, Save, X, User,
+  Phone, Mail, Star, Trash2, Edit, Plus, Save, X, User,
 } from "lucide-react"
+import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { ContactRow } from "./contact-row"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -243,7 +244,7 @@ export function ProveedorContactosTab({ proveedorId }: { proveedorId: string }) 
                 )}
                 {c.whatsapp && (
                   <ContactRow
-                    icon={MessageCircle}
+                    icon={WhatsAppIcon}
                     href={`https://wa.me/${c.whatsapp}`}
                     external
                     iconSize="xs"

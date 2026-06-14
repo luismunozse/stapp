@@ -6,7 +6,8 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/compone
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Minus, ShoppingCart, Package, Wrench, MessageCircle, Star, Share2, ChevronLeft, ChevronRight, Copy, Heart, Sparkles } from "lucide-react"
+import { Plus, Minus, ShoppingCart, Package, Wrench, Star, Share2, ChevronLeft, ChevronRight, Copy, Heart, Sparkles } from "lucide-react"
+import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { toast } from "sonner"
 import type { CartItem } from "./use-cart"
 import { useViewTracking } from "./use-view-tracking"
@@ -320,7 +321,7 @@ export function ItemDetailDialog({
                   rel="noreferrer"
                   className="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm hover:bg-muted transition-colors"
                 >
-                  <MessageCircle className="h-4 w-4 text-green-600" />
+                  <WhatsAppIcon className="h-4 w-4 text-green-600" />
                   WhatsApp
                 </a>
                 <button
@@ -533,7 +534,7 @@ export function ItemDetailDialog({
               {whatsappLink ? (
                 <Button asChild className="gap-2 w-full h-12 text-base font-semibold" style={{ backgroundColor: brandColor }}>
                   <a href={whatsappLink} target="_blank" rel="noreferrer">
-                    <MessageCircle className="h-5 w-5" />
+                    <WhatsAppIcon className="h-5 w-5" />
                     Consultar por WhatsApp
                   </a>
                 </Button>

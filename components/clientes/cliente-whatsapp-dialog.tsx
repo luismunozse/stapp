@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Copy, Check, Send } from "lucide-react"
+import { Copy, Check } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import {
   getWhatsAppTemplates,
@@ -198,7 +198,7 @@ export function ClienteWhatsAppDialog({
               className="flex-1 bg-success hover:bg-success/90"
               disabled={!customMessage.trim()}
             >
-              <Send className="mr-2 h-4 w-4" />
+              <WhatsAppIcon className="mr-2 h-4 w-4" />
               Abrir WhatsApp
             </Button>
           </div>

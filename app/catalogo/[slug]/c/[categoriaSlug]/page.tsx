@@ -5,7 +5,8 @@ import { unstable_cache } from "next/cache"
 import { CatalogoView } from "@/components/catalogo-public/catalogo-view"
 import { CatalogoBreadcrumb } from "@/components/catalogo-public/catalogo-breadcrumb"
 import { Button } from "@/components/ui/button"
-import { Inbox, MessageCircle } from "lucide-react"
+import { Inbox } from "lucide-react"
+import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { fetchCatalogoBaseData } from "@/lib/catalogo/fetch-data"
 import type { Metadata, Viewport } from "next"
 
@@ -220,7 +221,7 @@ export default async function CatalogoCategoriaPage({ params }: PageProps) {
                     target="_blank"
                     rel="noreferrer"
                   >
-                    <MessageCircle className="h-4 w-4" />
+                    <WhatsAppIcon className="h-4 w-4" />
                     Consultar por WhatsApp
                   </a>
                 </Button>

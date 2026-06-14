@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
-import { Loader2, MessageCircle, CheckCircle2, RefreshCw } from "lucide-react"
+import { Loader2, CheckCircle2, RefreshCw } from "lucide-react"
+import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 
 type Status = "loading" | "disconnected" | "pairing" | "connected"
 
@@ -102,7 +103,7 @@ export function WhatsAppSetup() {
   return (
     <div className="rounded-lg border bg-card p-6 max-w-lg">
       <div className="flex items-center gap-2 mb-1">
-        <MessageCircle className="h-5 w-5 text-green-600" />
+        <WhatsAppIcon className="h-5 w-5 text-green-600" />
         <h2 className="text-base font-semibold">WhatsApp</h2>
       </div>
       <p className="text-sm text-muted-foreground mb-4">
@@ -129,7 +130,7 @@ export function WhatsAppSetup() {
 
       {status === "disconnected" && (
         <Button onClick={handleConnect}>
-          <MessageCircle className="h-4 w-4 mr-2" /> Conectar WhatsApp
+          <WhatsAppIcon className="h-4 w-4 mr-2" /> Conectar WhatsApp
         </Button>
       )}
 
