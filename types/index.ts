@@ -8,6 +8,7 @@ export interface CampoConfig {
   label?: string
   placeholder?: string
   maxLength?: number
+  validacion?: "imei"
 }
 
 export interface CampoExtra {

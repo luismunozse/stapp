@@ -12,7 +12,7 @@
 export const TIPOS_BASE_CONFIG: Record<string, any> = {
   CELULAR: {
     campos: {
-      imei: { visible: true, label: "IMEI", placeholder: "123456789012345", maxLength: 15 },
+      imei: { visible: true, label: "IMEI", placeholder: "123456789012345", maxLength: 15, validacion: "imei" },
       password: { visible: true },
       color: { visible: true },
       marca: { visible: true },
