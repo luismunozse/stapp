@@ -2,10 +2,11 @@ import { NextResponse } from "next/server"
 import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
+import { sucursalParaLectura } from "@/lib/sucursal"
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAdminOrVendedor()
+    const { error, organizationId, role } = await requireAdminOrVendedor()
     if (error) return error
 
     const hasFeature = await hasPlanFeature(organizationId!, "advanced_reports")
@@ -33,14 +34,22 @@ export async function GET(request: Request) {
         fechaInicio = new Date(now.getFullYear(), now.getMonth() - 1, 1)
     }
 
+    const filtro = await sucursalParaLectura({ role, userSucursalId: null })
+
     // Obtener órdenes completadas con fechas
-    const { data: ordenes } = await supabaseAdmin
+    let ordenesQuery = supabaseAdmin
       .from("ordenes_servicio")
       .select("tipo_dispositivo, fecha_ingreso, fecha_completado")
       .eq("organization_id", organizationId!)
       .not("fecha_completado", "is", null)
       .gte("fecha_completado", fechaInicio.toISOString())
       .in("estado", ["REPARADO", "ENTREGADO"])
+
+    if (!filtro.verTodas && filtro.sucursalId) {
+      ordenesQuery = ordenesQuery.eq("sucursal_id", filtro.sucursalId)
+    }
+
+    const { data: ordenes } = await ordenesQuery
 
     if (!ordenes || ordenes.length === 0) {
       return NextResponse.json({ data: [], promedioGeneral: 0 })

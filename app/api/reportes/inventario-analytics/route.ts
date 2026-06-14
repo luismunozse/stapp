@@ -166,6 +166,7 @@ export async function GET() {
     const tendenciaVentas = Object.entries(tendenciaMap).map(([fecha, unidades]) => ({ fecha, unidades }))
 
     return NextResponse.json({
+      scope: "organization",
       valorizacion,
       rotacion,
       sinMovimiento,
