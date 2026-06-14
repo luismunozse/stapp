@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaEscritura } from "@/lib/sucursal"
 import { z } from "zod"
 
 const convertSchema = z.object({
@@ -21,13 +22,25 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role } = await requireAuth()
+    const { error, session, organizationId, userId, role } = await requireAuth()
     if (error) return error
 
     if (role !== "ADMIN") {
       return NextResponse.json(
         { error: "Solo administradores pueden convertir cotizaciones a venta" },
         { status: 403 }
+      )
+    }
+
+    const sucursalId = await sucursalParaEscritura({
+      role,
+      organizationId: organizationId!,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
+    if (!sucursalId) {
+      return NextResponse.json(
+        { error: "La organización no tiene sucursal principal configurada" },
+        { status: 500 }
       )
     }
 
@@ -193,6 +206,7 @@ export async function POST(
       p_recargo_porcentaje: null,
       p_monto_original: null,
       p_items: pItems,
+      p_sucursal_id: sucursalId,
     }
 
     const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc("crear_venta_atomica", rpcParams)

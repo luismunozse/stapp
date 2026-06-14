@@ -27,64 +27,88 @@ export async function fetchMovimientosDia(
   organizationId: string,
   fechaDesde: string,
   fechaHasta: string,
-  filters?: FetchMovimientosOptions
+  filters?: FetchMovimientosOptions,
+  sucursalId?: string | null,
 ) {
   // 1. Cobros de órdenes
-  const { data: cobrosOrdenes } = await supabaseAdmin
+  let cobrosQuery = supabaseAdmin
     .from("cobros_orden")
-    .select("monto, metodo_pago, created_at, orden_id, observaciones, ordenes_servicio:orden_id(numero_orden)")
+    .select("monto, metodo_pago, created_at, orden_id, observaciones, ordenes_servicio:orden_id!inner(numero_orden, sucursal_id)")
     .eq("organization_id", organizationId)
     .gte("created_at", fechaDesde)
     .lte("created_at", fechaHasta)
     .order("created_at", { ascending: false })
+  if (sucursalId) {
+    cobrosQuery = cobrosQuery.eq("ordenes_servicio.sucursal_id", sucursalId)
+  }
+  const { data: cobrosOrdenes } = await cobrosQuery
 
   // 2. Pagos de facturas
-  const { data: pagosFacturas } = await supabaseAdmin
+  let pagosFacturasQuery = supabaseAdmin
     .from("pagos_parciales")
     .select(`
       monto, metodo_pago, fecha, factura_id, observaciones,
       costo_financiero_porcentaje, costo_financiero_monto,
       facturas!inner(
         id, numero_factura,
-        ordenes_servicio!inner(organization_id, numero_orden)
+        ordenes_servicio!inner(organization_id, numero_orden, sucursal_id)
       )
     `)
     .eq("facturas.ordenes_servicio.organization_id", organizationId)
     .gte("fecha", fechaDesde)
     .lte("fecha", fechaHasta)
     .order("fecha", { ascending: false })
+  if (sucursalId) {
+    pagosFacturasQuery = pagosFacturasQuery.eq("facturas.ordenes_servicio.sucursal_id", sucursalId)
+  }
+  const { data: pagosFacturas } = await pagosFacturasQuery
 
   // 3. Pagos de ventas
-  const { data: pagosVentas } = await supabaseAdmin
+  let pagosVentasQuery = supabaseAdmin
     .from("pagos_venta")
     .select(`
       monto, metodo_pago, fecha, venta_id, observaciones,
       costo_financiero_porcentaje, costo_financiero_monto,
-      ventas!inner(organization_id, numero_venta)
+      ventas!inner(organization_id, numero_venta, sucursal_id)
     `)
     .eq("ventas.organization_id", organizationId)
     .gte("fecha", fechaDesde)
     .lte("fecha", fechaHasta)
     .order("fecha", { ascending: false })
+  if (sucursalId) {
+    pagosVentasQuery = pagosVentasQuery.eq("ventas.sucursal_id", sucursalId)
+  }
+  const { data: pagosVentas } = await pagosVentasQuery
 
   // 4. Depósitos cuenta corriente
-  const { data: depositos } = await supabaseAdmin
-    .from("cuenta_corriente")
-    .select("monto, metodo_pago, created_at, observaciones, cliente_id")
-    .eq("organization_id", organizationId)
-    .eq("tipo", "DEPOSITO")
-    .gte("created_at", fechaDesde)
-    .lte("created_at", fechaHasta)
-    .order("created_at", { ascending: false })
+  // NOTE: cuenta_corriente has no branch column today — when sucursalId is provided,
+  // this source is omitted from per-branch arqueo (Fase 2 gap: add branch attribution
+  // to cuenta_corriente). Without scoping, all deposits are included as before.
+  let depositosData: any[] | null = null
+  if (!sucursalId) {
+    const { data } = await supabaseAdmin
+      .from("cuenta_corriente")
+      .select("monto, metodo_pago, created_at, observaciones, cliente_id")
+      .eq("organization_id", organizationId)
+      .eq("tipo", "DEPOSITO")
+      .gte("created_at", fechaDesde)
+      .lte("created_at", fechaHasta)
+      .order("created_at", { ascending: false })
+    depositosData = data
+  }
 
   // 5. Movimientos manuales de caja
-  const { data: movimientosManuales } = await supabaseAdmin
+  let movimientosQuery = supabaseAdmin
     .from("movimientos_caja")
     .select("id, tipo, monto, metodo_pago, concepto, observaciones, fecha")
     .eq("organization_id", organizationId)
     .gte("fecha", fechaDesde)
     .lte("fecha", fechaHasta)
     .order("fecha", { ascending: false })
+  if (sucursalId) {
+    movimientosQuery = movimientosQuery.eq("sucursal_id", sucursalId)
+  }
+  const { data: movimientosManuales } = await movimientosQuery
 
   // Construir lista unificada
   const movimientos: MovimientoUnificado[] = []
@@ -137,7 +161,7 @@ export async function fetchMovimientosDia(
     })
   }
 
-  for (const d of depositos || []) {
+  for (const d of depositosData || []) {
     movimientos.push({
       tipo: "DEPOSITO_CUENTA",
       monto: parseFloat(d.monto),
