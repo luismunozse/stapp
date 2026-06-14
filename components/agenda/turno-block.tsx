@@ -2,17 +2,8 @@
 
 import { Clock, MapPin, Wrench, FileText } from "lucide-react"
 import { format, parseISO } from "date-fns"
-import type { EstadoTurno, TipoTurno, TurnoConRelaciones } from "@/types"
-
-const ESTADO_STYLES: Record<EstadoTurno, { bar: string; bg: string; text: string }> = {
-  agendado:        { bar: "bg-blue-500",    bg: "bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-950/60",          text: "text-blue-900 dark:text-blue-200" },
-  confirmado:      { bar: "bg-cyan-500",    bg: "bg-cyan-50 dark:bg-cyan-950/40 hover:bg-cyan-100 dark:hover:bg-cyan-950/60",          text: "text-cyan-900 dark:text-cyan-200" },
-  en_camino:       { bar: "bg-amber-500",   bg: "bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-950/60",       text: "text-amber-900 dark:text-amber-200" },
-  realizado:       { bar: "bg-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-950/60", text: "text-emerald-900 dark:text-emerald-200" },
-  orden_generada:  { bar: "bg-violet-500",  bg: "bg-violet-50 dark:bg-violet-950/40 hover:bg-violet-100 dark:hover:bg-violet-950/60",   text: "text-violet-900 dark:text-violet-200" },
-  cancelado:       { bar: "bg-zinc-400",    bg: "bg-zinc-100 dark:bg-zinc-900/40 hover:bg-zinc-200 dark:hover:bg-zinc-900/60",          text: "text-zinc-600 dark:text-zinc-400 line-through" },
-  no_show:         { bar: "bg-red-500",     bg: "bg-red-50 dark:bg-red-950/40 hover:bg-red-100 dark:hover:bg-red-950/60",                text: "text-red-900 dark:text-red-200" },
-}
+import type { TipoTurno, TurnoConRelaciones } from "@/types"
+import { TURNO_ESTADO_STYLES } from "@/lib/turno-colors"
 
 const TIPO_SHORT: Record<TipoTurno, string> = {
   visita_diagnostico: "Diag.",
@@ -31,7 +22,7 @@ interface TurnoBlockProps {
 }
 
 export function TurnoBlock({ turno, onClick, variant = "calendar", style, compact }: TurnoBlockProps) {
-  const s = ESTADO_STYLES[turno.estado]
+  const s = TURNO_ESTADO_STYLES[turno.estado]
   const clienteNombre = turno.cliente?.nombre || turno.clienteSnapshot?.nombre || "Sin cliente"
   const hora = format(parseISO(turno.inicio), "HH:mm")
   const horaFin = turno.fin ? format(parseISO(turno.fin), "HH:mm") : null

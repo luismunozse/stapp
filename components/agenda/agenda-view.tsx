@@ -45,6 +45,7 @@ import { TurnoDetailSheet } from "./turno-detail-sheet"
 import { TurnoBlock } from "./turno-block"
 import { EmptyState } from "@/components/ui/empty-state"
 import type { TurnoConRelaciones } from "@/types"
+import { TURNO_ESTADO_STYLES } from "@/lib/turno-colors"
 
 const fetcher = (u: string) => fetch(u).then(r => r.json())
 
@@ -547,16 +548,6 @@ function MesView({
     return out
   }, [days])
 
-  const ESTADO_DOT: Record<string, string> = {
-    agendado: "bg-blue-500",
-    confirmado: "bg-cyan-500",
-    en_camino: "bg-amber-500",
-    realizado: "bg-emerald-500",
-    orden_generada: "bg-violet-500",
-    cancelado: "bg-zinc-400",
-    no_show: "bg-red-500",
-  }
-
   return (
     <div className="border rounded-lg bg-card overflow-hidden relative">
       {isLoading && (
@@ -622,7 +613,7 @@ function MesView({
                         hover:bg-accent transition-colors text-left
                       `}
                     >
-                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${ESTADO_DOT[t.estado] || "bg-zinc-400"}`} />
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${TURNO_ESTADO_STYLES[t.estado].dot}`} />
                       <span className="font-medium shrink-0">{format(parseISO(t.inicio), "HH:mm")}</span>
                       <span className="truncate opacity-80">{clienteNombre}</span>
                     </button>
