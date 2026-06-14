@@ -142,7 +142,7 @@ export function ClienteWhatsAppDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <WhatsAppIcon className="h-5 w-5 text-green-600" />
+            <WhatsAppIcon className="h-5 w-5 text-success-600" />
             WhatsApp a {cliente.nombre}
           </DialogTitle>
         </DialogHeader>
@@ -195,7 +195,7 @@ export function ClienteWhatsAppDialog({
 
             <Button
               onClick={handleSend}
-              className="flex-1 bg-green-600 hover:bg-green-700"
+              className="flex-1 bg-success hover:bg-success/90"
               disabled={!customMessage.trim()}
             >
               <Send className="mr-2 h-4 w-4" />

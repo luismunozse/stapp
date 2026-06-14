@@ -5,7 +5,7 @@ import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DataTable, DataTablePagination, type Column } from "@/components/ui/data-table"
-import { Plus, Search, Phone, Mail, Edit, Trash2, User, Building2, Upload, PiggyBank, DollarSign, MoreHorizontal } from "lucide-react"
+import { Plus, Search, Phone, Mail, Edit, Trash2, User, Building2, Upload, PiggyBank, DollarSign, MoreHorizontal, Users } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { ClienteForm } from "./cliente-form"
 import { CuentaCorrienteDialog } from "@/components/clientes/cuenta-corriente-dialog"
@@ -15,6 +15,7 @@ import { ExportButton } from "@/components/export/export-button"
 import { ClienteMobileCard } from "./cliente-mobile-card"
 import { ClienteWhatsAppDialog } from "./cliente-whatsapp-dialog"
 import { Card, CardContent } from "@/components/ui/card"
+import { EmptyState } from "@/components/ui/empty-state"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import type { Cliente } from "@/types"
 import { useModal } from "@/contexts/modal-context"
@@ -142,10 +143,10 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
       render: (cliente) => (
         <div className="flex items-center gap-3">
           <div className={`h-9 w-9 rounded-full flex items-center justify-center ${
-            cliente.tipoCliente === "EMPRESA" ? "bg-amber-500/10" : "bg-primary/10"
+            cliente.tipoCliente === "EMPRESA" ? "bg-warning/10" : "bg-primary/10"
           }`}>
             {cliente.tipoCliente === "EMPRESA" ? (
-              <Building2 className="h-4 w-4 text-amber-600" />
+              <Building2 className="h-4 w-4 text-warning-600" />
             ) : (
               <User className="h-4 w-4 text-primary" />
             )}
@@ -154,7 +155,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
             <div className="font-medium flex items-center gap-2">
               {cliente.nombre}
               {cliente.tipoCliente === "EMPRESA" && (
-                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-700">
+                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-warning/10 text-warning-700">
                   Empresa
                 </span>
               )}
@@ -225,7 +226,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
         return (
           <button
             type="button"
-            className="flex items-center gap-1 text-blue-600 hover:text-blue-700 font-medium text-sm"
+            className="flex items-center gap-1 text-info-600 hover:text-info-700 font-medium text-sm"
             onClick={(e) => { e.stopPropagation(); setCuentaCorrienteCliente(cliente) }}
           >
             <PiggyBank className="h-3.5 w-3.5" />
@@ -268,7 +269,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
                 className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
                 onClick={(e) => { e.stopPropagation(); setWhatsappCliente(cliente) }}
               >
-                <WhatsAppIcon className="h-4 w-4 text-green-600" />
+                <WhatsAppIcon className="h-4 w-4 text-success-600" />
                 Enviar WhatsApp
               </button>
               <button
@@ -276,7 +277,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
                 className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
                 onClick={(e) => { e.stopPropagation(); setCobrarCliente(cliente) }}
               >
-                <DollarSign className="h-4 w-4 text-green-600" />
+                <DollarSign className="h-4 w-4 text-success-600" />
                 Cobrar órdenes
               </button>
               <button
@@ -284,7 +285,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
                 className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
                 onClick={(e) => { e.stopPropagation(); setCuentaCorrienteCliente(cliente) }}
               >
-                <PiggyBank className="h-4 w-4 text-blue-600" />
+                <PiggyBank className="h-4 w-4 text-info-600" />
                 Cuenta corriente
               </button>
               <div className="h-px bg-border my-1" />
@@ -441,11 +442,12 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
             ))}
           </div>
         ) : clientes.length === 0 ? (
-          <Card>
-            <CardContent className="py-8 text-center text-sm text-muted-foreground">
-              No hay clientes registrados
-            </CardContent>
-          </Card>
+          <EmptyState
+            icon={Users}
+            title="No hay clientes registrados"
+            variant="search"
+            action={{ label: "Nuevo cliente", onClick: () => setShowForm(true) }}
+          />
         ) : (
           <>
             <div className="space-y-3">

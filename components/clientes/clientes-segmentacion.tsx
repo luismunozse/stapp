@@ -21,18 +21,20 @@ import {
   MessageCircle,
   Users,
   BarChart3,
+  CheckCircle,
 } from "lucide-react"
+import { EmptyState } from "@/components/ui/empty-state"
 import { useCurrency } from "@/contexts/currency-context"
 import { formatPhoneForWhatsApp } from "@/lib/notifications/whatsapp-templates"
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
 const SEGMENT_CONFIG = {
-  VIP: { label: "VIP", icon: Star, color: "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800" },
-  FRECUENTE: { label: "Frecuente", icon: RefreshCw, color: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800" },
-  REGULAR: { label: "Regular", icon: UserCheck, color: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800" },
-  NUEVO: { label: "Nuevo", icon: Sparkles, color: "bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800" },
-  INACTIVO: { label: "Inactivo", icon: UserX, color: "bg-gray-100 dark:bg-gray-800/50 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700" },
+  VIP: { label: "VIP", icon: Star, color: "bg-primary/10 text-primary border-primary/20" },
+  FRECUENTE: { label: "Frecuente", icon: RefreshCw, color: "bg-info-50 text-info-700 dark:bg-info/15 border-info-200" },
+  REGULAR: { label: "Regular", icon: UserCheck, color: "bg-success-50 text-success-700 dark:bg-success/15 border-success-200" },
+  NUEVO: { label: "Nuevo", icon: Sparkles, color: "bg-info-50 text-info-600 dark:bg-info/10 border-info-200" },
+  INACTIVO: { label: "Inactivo", icon: UserX, color: "bg-muted text-muted-foreground border-border" },
 } as const
 
 type SegmentKey = keyof typeof SEGMENT_CONFIG
@@ -84,7 +86,7 @@ export function ClientesSegmentacion({ open, onOpenChange }: Props) {
             <div className="h-48 bg-muted animate-pulse rounded" />
           </div>
         ) : !data || data.error ? (
-          <p className="text-sm text-muted-foreground py-8 text-center">Error al cargar datos</p>
+          <EmptyState icon={AlertTriangle} title="Error al cargar datos" variant="error" />
         ) : (
           <div className="space-y-4">
             {/* Segment Cards */}
@@ -169,7 +171,7 @@ export function ClientesSegmentacion({ open, onOpenChange }: Props) {
             {activeTab === "top" && (
               <div>
                 {data.topClientes.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-4 text-center">Sin datos</p>
+                  <EmptyState icon={Users} title="Sin datos" variant="search" />
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
@@ -188,7 +190,7 @@ export function ClientesSegmentacion({ open, onOpenChange }: Props) {
                           <tr key={c.id} className="border-b last:border-0">
                             <td className="py-2 pr-2">
                               <span className={`text-xs font-bold ${
-                                i === 0 ? "text-amber-500" : i === 1 ? "text-gray-400" : i === 2 ? "text-amber-700" : "text-muted-foreground"
+                                i === 0 ? "text-warning" : i === 1 ? "text-muted-foreground" : i === 2 ? "text-warning-700" : "text-muted-foreground"
                               }`}>
                                 {i + 1}
                               </span>
@@ -217,7 +219,7 @@ export function ClientesSegmentacion({ open, onOpenChange }: Props) {
                   Clientes con 2+ compras que no compran hace 60-180 días
                 </p>
                 {data.clientesEnRiesgo.length === 0 ? (
-                  <p className="text-sm text-emerald-600 py-4 text-center">No hay clientes en riesgo</p>
+                  <EmptyState icon={CheckCircle} title="Sin clientes en riesgo" variant="success" />
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
@@ -234,7 +236,7 @@ export function ClientesSegmentacion({ open, onOpenChange }: Props) {
                       <tbody>
                         {data.clientesEnRiesgo.map((c: any) => (
                           <tr key={c.id} className={`border-b last:border-0 ${
-                            c.diasInactivo > 120 ? "bg-destructive/5" : c.diasInactivo > 90 ? "bg-amber-50 dark:bg-amber-900/10" : ""
+                            c.diasInactivo > 120 ? "bg-destructive/5" : c.diasInactivo > 90 ? "bg-warning-50 dark:bg-warning/10" : ""
                           }`}>
                             <td className="py-2 pr-2 font-medium">{c.nombre}</td>
                             <td className="py-2 pr-2 text-muted-foreground">{c.telefono}</td>
@@ -251,7 +253,7 @@ export function ClientesSegmentacion({ open, onOpenChange }: Props) {
                                   href={formatWhatsAppLink(c.telefono)}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-700"
+                                  className="inline-flex items-center gap-1 text-xs text-success-600 hover:text-success-700"
                                 >
                                   <MessageCircle className="h-3.5 w-3.5" />
                                 </a>
@@ -305,7 +307,7 @@ export function ClientesSegmentacion({ open, onOpenChange }: Props) {
                         <span className="text-xs w-24">{f.rango}</span>
                         <div className="flex-1 h-6 bg-muted rounded-full overflow-hidden">
                           <div
-                            className="h-full bg-blue-200 dark:bg-blue-800 rounded-full flex items-center px-2"
+                            className="h-full bg-info-200 dark:bg-info-600 rounded-full flex items-center px-2"
                             style={{ width: `${Math.max(pct, 8)}%` }}
                           >
                             <span className="text-[10px] font-medium">{f.count} clientes</span>
