@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaLectura } from "@/lib/sucursal"
 
 interface VendedorPerformance {
   vendedorId: string
@@ -19,8 +20,12 @@ interface VendedorPerformance {
  */
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAdmin()
+    const { error, organizationId, role } = await requireAdmin()
     if (error) return error
+
+    // Resolve branch filter — filtro wired in PR2; RPC param wiring lands in PR3b
+    const filtro = await sucursalParaLectura({ role, userSucursalId: null })
+    // TODO(PR3b): pass filtro.sucursalId as p_sucursal_id to get_vendedores_stats RPC
 
     const { searchParams } = new URL(request.url)
     const desdeParam = searchParams.get("desde")

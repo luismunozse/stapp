@@ -1,17 +1,21 @@
 import { NextResponse } from "next/server"
 import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaLectura } from "@/lib/sucursal"
 
 /**
  * GET /api/reportes/comparativa-ingresos
  * Compara ingresos del mes actual vs mes anterior (cash basis).
  * Suma: ventas COMPLETADA + facturas PAGADO + cobros_orden no anulados.
  * Dedupe: si la orden tiene cobros directos en el período, no se cuenta su factura.
+ * Branch filter: ventas direct, facturas via ordenes_servicio!inner, cobros via ordenes_servicio!inner.
  */
 export async function GET() {
   try {
-    const { error, organizationId } = await requireAdminOrVendedor()
+    const { error, organizationId, role } = await requireAdminOrVendedor()
     if (error) return error
+
+    const filtro = await sucursalParaLectura({ role, userSucursalId: null })
 
     const now = new Date()
     const inicioActual = new Date(now.getFullYear(), now.getMonth(), 1)
@@ -22,29 +26,38 @@ export async function GET() {
       const desdeISO = desde.toISOString()
       const hastaISO = hasta?.toISOString()
 
-      const ventasQuery = supabaseAdmin
+      let ventasQuery = supabaseAdmin
         .from("ventas")
         .select("id, total")
         .eq("organization_id", organizationId!)
         .eq("estado", "COMPLETADA")
         .gte("created_at", desdeISO)
-      if (hastaISO) ventasQuery.lte("created_at", hastaISO)
+      if (!filtro.verTodas && filtro.sucursalId) {
+        ventasQuery = ventasQuery.eq("sucursal_id", filtro.sucursalId)
+      }
+      if (hastaISO) ventasQuery = ventasQuery.lte("created_at", hastaISO)
 
-      const facturasQuery = supabaseAdmin
+      let facturasQuery = supabaseAdmin
         .from("facturas")
-        .select("id, total, orden_id, ordenes_servicio!inner(organization_id)")
+        .select("id, total, orden_id, ordenes_servicio!inner(organization_id, sucursal_id)")
         .eq("ordenes_servicio.organization_id", organizationId!)
         .eq("estado_pago", "PAGADO")
         .gte("fecha", desdeISO)
-      if (hastaISO) facturasQuery.lte("fecha", hastaISO)
+      if (!filtro.verTodas && filtro.sucursalId) {
+        facturasQuery = facturasQuery.eq("ordenes_servicio.sucursal_id", filtro.sucursalId)
+      }
+      if (hastaISO) facturasQuery = facturasQuery.lte("fecha", hastaISO)
 
-      const cobrosQuery = supabaseAdmin
+      let cobrosQuery = supabaseAdmin
         .from("cobros_orden")
-        .select("id, monto, orden_id")
-        .eq("organization_id", organizationId!)
+        .select("id, monto, orden_id, ordenes_servicio!inner(organization_id, sucursal_id)")
+        .eq("ordenes_servicio.organization_id", organizationId!)
         .neq("anulado", true)
         .gte("created_at", desdeISO)
-      if (hastaISO) cobrosQuery.lte("created_at", hastaISO)
+      if (!filtro.verTodas && filtro.sucursalId) {
+        cobrosQuery = cobrosQuery.eq("ordenes_servicio.sucursal_id", filtro.sucursalId)
+      }
+      if (hastaISO) cobrosQuery = cobrosQuery.lte("created_at", hastaISO)
 
       const [ventasR, facturasR, cobrosR] = await Promise.all([ventasQuery, facturasQuery, cobrosQuery])
 

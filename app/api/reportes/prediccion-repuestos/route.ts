@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server"
 import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaLectura } from "@/lib/sucursal"
 import { hasPlanFeature } from "@/lib/subscriptions"
 
 export async function GET() {
   try {
-    const { error, organizationId } = await requireAdminOrVendedor()
+    const { error, organizationId, role } = await requireAdminOrVendedor()
     if (error) return error
+
+    const filtro = await sucursalParaLectura({ role, userSucursalId: null })
 
     const hasFeature = await hasPlanFeature(organizationId!, "advanced_reports")
     if (!hasFeature) {
@@ -23,25 +26,36 @@ export async function GET() {
       .eq("organization_id", organizationId!)
 
     if (!inventario || inventario.length === 0) {
-      return NextResponse.json({ data: [] })
+      return NextResponse.json({
+        data: [],
+        scope: "mixed",
+        scopeNote: "Uso por sucursal; stock total de la organización",
+      })
     }
 
-    // Obtener uso de repuestos en los últimos 3 meses
+    // Obtener uso de repuestos en los últimos 3 meses (branch-filtered via ordenes_servicio!inner)
+    // Stock stays org-wide by design (inventory is organization-level)
     const tresAtras = new Date()
     tresAtras.setMonth(tresAtras.getMonth() - 3)
 
-    const { data: usoRepuestos } = await supabaseAdmin
+    let usoQuery = supabaseAdmin
       .from("repuestos_orden")
       .select(`
         inventario_id,
         cantidad,
         ordenes_servicio!inner (
-          organization_id,
+          organization_id, sucursal_id,
           fecha_ingreso
         )
       `)
       .eq("ordenes_servicio.organization_id", organizationId!)
       .gte("ordenes_servicio.fecha_ingreso", tresAtras.toISOString())
+
+    if (!filtro.verTodas && filtro.sucursalId) {
+      usoQuery = usoQuery.eq("ordenes_servicio.sucursal_id", filtro.sucursalId)
+    }
+
+    const { data: usoRepuestos } = await usoQuery
 
     // Calcular uso mensual promedio por repuesto
     const usoPorRepuesto: Record<string, number> = {}
@@ -84,7 +98,11 @@ export async function GET() {
         return urgenciaOrder[a.urgencia] - urgenciaOrder[b.urgencia]
       })
 
-    return NextResponse.json({ data })
+    return NextResponse.json({
+      data,
+      scope: "mixed",
+      scopeNote: "Uso por sucursal; stock total de la organización",
+    })
   } catch (err) {
     console.error("Error en reporte prediccion-repuestos:", err)
     return NextResponse.json({ error: "Error interno" }, { status: 500 })

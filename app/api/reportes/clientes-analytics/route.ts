@@ -1,10 +1,13 @@
 import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaLectura } from "@/lib/sucursal"
 import { NextResponse } from "next/server"
 
 export async function GET() {
-  const { error, organizationId } = await requireAdminOrVendedor()
+  const { error, organizationId, role } = await requireAdminOrVendedor()
   if (error) return error
+
+  const filtro = await sucursalParaLectura({ role, userSucursalId: null })
 
   const now = new Date()
   const hace30Dias = new Date(now)
@@ -19,17 +22,23 @@ export async function GET() {
   hace6Meses.setMonth(now.getMonth() - 6)
 
   try {
+    // Build ventas query with optional branch filter
+    let ventasQuery = supabaseAdmin
+      .from("ventas")
+      .select("id, cliente_id, cliente_nombre, total, estado, created_at")
+      .eq("organization_id", organizationId!)
+      .eq("estado", "COMPLETADA")
+
+    if (!filtro.verTodas && filtro.sucursalId) {
+      ventasQuery = ventasQuery.eq("sucursal_id", filtro.sucursalId)
+    }
+
     const [clientesResult, ventasResult] = await Promise.all([
       supabaseAdmin
         .from("clientes")
         .select("id, nombre, telefono, email, created_at")
         .eq("organization_id", organizationId!),
-
-      supabaseAdmin
-        .from("ventas")
-        .select("id, cliente_id, cliente_nombre, total, estado, created_at")
-        .eq("organization_id", organizationId!)
-        .eq("estado", "COMPLETADA"),
+      ventasQuery,
     ])
 
     const clientes = clientesResult.data || []
