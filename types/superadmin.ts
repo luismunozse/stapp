@@ -220,6 +220,16 @@ export interface MonthlyOrders {
   count: number
 }
 
+export interface OrganizationLimitOverrides {
+  organization_id: string
+  limite_ordenes: number | null
+  limite_tecnicos: number | null
+  limite_clientes: number | null
+  limite_vendedores: number | null
+  limite_storage_mb: number | null
+  motivo: string | null
+}
+
 export interface OrganizationDetailResponse {
   organization: OrganizationDetail
   users: OrganizationUser[]
@@ -227,6 +237,7 @@ export interface OrganizationDetailResponse {
   subscription: SubscriptionWithPlan | null
   payments: PaymentWithOrg[]
   ordersHistory?: MonthlyOrders[]
+  limitOverrides: OrganizationLimitOverrides | null
 }
 
 export interface SubscriptionsListResponse {

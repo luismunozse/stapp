@@ -76,7 +76,7 @@ export async function GET(
 
     const { id } = await params
 
-    const [orgResult, usersResult, usageResult, subscriptionResult] =
+    const [orgResult, usersResult, usageResult, subscriptionResult, overridesResult] =
       await Promise.all([
         // Organización
         supabaseAdmin
@@ -110,6 +110,13 @@ export async function GET(
           )
           .eq("organization_id", id)
           .single(),
+
+        // Overrides de límites
+        supabaseAdmin
+          .from("organization_limit_overrides")
+          .select("organization_id, limite_ordenes, limite_tecnicos, limite_clientes, limite_vendedores, limite_storage_mb, motivo")
+          .eq("organization_id", id)
+          .maybeSingle(),
       ])
 
     if (orgResult.error || !orgResult.data) {
@@ -175,6 +182,7 @@ export async function GET(
       subscription: subscriptionResult.data || null,
       payments,
       ordersHistory,
+      limitOverrides: overridesResult.data ?? null,
     }
 
     return NextResponse.json(response)
