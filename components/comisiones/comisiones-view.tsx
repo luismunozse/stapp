@@ -19,6 +19,7 @@ import { Percent, CheckCircle2, DollarSign, Users, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { useCurrency } from "@/contexts/currency-context"
 import { useModal } from "@/contexts/modal-context"
+import { EmptyState } from "@/components/ui/empty-state"
 
 interface Item {
   ordenId: string
@@ -289,8 +290,8 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
 
       {/* Acciones bulk */}
       {selected.size > 0 && (
-        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 p-3 rounded-md bg-primary/10 border border-primary/30">
-          <div className="text-sm">
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 p-3 rounded-md bg-info-50 border border-info/30">
+          <div className="text-sm text-info-700">
             <strong>{selected.size}</strong> seleccionada(s) ·{" "}
             Total: <strong>{formatPrice(totalSeleccionado)}</strong>
           </div>
@@ -311,9 +312,12 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
           {isLoading ? (
             <div className="py-10 text-center text-muted-foreground">Cargando…</div>
           ) : items.length === 0 ? (
-            <div className="py-10 text-center text-muted-foreground">
-              No hay comisiones en el rango seleccionado.
-            </div>
+            <EmptyState
+              icon={Percent}
+              title="Sin comisiones"
+              description="Ajustá el período o los filtros."
+              variant="search"
+            />
           ) : (
             <table className="w-full text-sm">
               <thead className="bg-muted/50 text-xs uppercase">
@@ -378,13 +382,13 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
                       {i.comisionPagada ? (
                         <button
                           onClick={() => handleRevertir(i.ordenId)}
-                          className="inline-flex items-center gap-1 text-xs text-green-700 hover:underline"
+                          className="inline-flex items-center gap-1 text-xs text-success-700 dark:text-success-500 hover:underline"
                         >
                           <CheckCircle2 className="h-3 w-3" />
                           Pagada
                         </button>
                       ) : (
-                        <Badge variant="secondary" className="text-xs">Pendiente</Badge>
+                        <Badge variant="warning" className="text-xs">Pendiente</Badge>
                       )}
                     </td>
                   </tr>

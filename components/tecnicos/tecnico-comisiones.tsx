@@ -16,7 +16,6 @@ import {
   Download,
   TrendingUp,
   Wallet,
-  Clock,
   Hash,
   Calendar as CalIcon,
   ExternalLink,
@@ -26,6 +25,8 @@ import { toast } from "sonner"
 import { useCurrency } from "@/contexts/currency-context"
 import { useModal } from "@/contexts/modal-context"
 import { cn } from "@/lib/utils"
+import { EmptyState } from "@/components/ui/empty-state"
+import { FieldSectionLabel } from "@/components/ui/field-section-label"
 
 interface Item {
   ordenId: string
@@ -340,8 +341,8 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
 
       {/* Barra de acción para selección */}
       {!readOnly && selected.size > 0 && (
-        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 p-3 rounded-md bg-primary/10 border border-primary/30">
-          <div className="text-sm">
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 p-3 rounded-md bg-info-50 border border-info/30">
+          <div className="text-sm text-info-700">
             <strong>{selected.size}</strong> seleccionada(s) · Total a pagar:{" "}
             <strong>{formatPrice(totalSeleccionado)}</strong>
           </div>
@@ -369,10 +370,7 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
               <Loader2 className="h-4 w-4 animate-spin" /> Cargando comisiones…
             </div>
           ) : items.length === 0 ? (
-            <div className="py-12 text-center text-muted-foreground">
-              <Hash className="h-8 w-8 mx-auto mb-2 text-muted-foreground/40" />
-              No hay órdenes cobradas en el rango seleccionado.
-            </div>
+            <EmptyState icon={Hash} title="Sin órdenes" variant="search" />
           ) : (
             <>
               {/* Barra de selección todas pendientes */}
@@ -457,7 +455,7 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
                         {i.comisionPagada ? (
                           readOnly ? (
                             <span
-                              className="inline-flex items-center gap-1 text-[10px] text-green-700"
+                              className="inline-flex items-center gap-1 text-[10px] text-success-700 dark:text-success-500"
                               title={
                                 i.fechaPagoComision ? `Pagada ${formatDate(i.fechaPagoComision)}` : ""
                               }
@@ -468,7 +466,7 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
                           ) : (
                             <button
                               onClick={() => handleRevertir(i.ordenId)}
-                              className="inline-flex items-center gap-1 text-[10px] text-green-700 hover:underline"
+                              className="inline-flex items-center gap-1 text-[10px] text-success-700 dark:text-success-500 hover:underline"
                               title={i.fechaPagoComision ? `Pagada ${formatDate(i.fechaPagoComision)}` : ""}
                             >
                               <CheckCircle2 className="h-3 w-3" />
@@ -477,8 +475,7 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
                             </button>
                           )
                         ) : (
-                          <Badge variant="secondary" className="text-[10px]">
-                            <Clock className="h-3 w-3 mr-0.5" />
+                          <Badge variant="warning" className="text-[10px]">
                             Pendiente
                           </Badge>
                         )}
@@ -495,10 +492,9 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
       {/* Historial de pagos */}
       {pagosAgrupados.length > 0 && (
         <div>
-          <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-green-600" />
+          <FieldSectionLabel icon={CheckCircle2} className="mb-2">
             Historial de liquidaciones
-          </h3>
+          </FieldSectionLabel>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {pagosAgrupados.map((p) => (
               <Card key={p.fecha}>
@@ -544,7 +540,7 @@ function KpiCard({
             className={cn(
               "p-1 rounded-md",
               accent === "primary" && "bg-primary/10 text-primary",
-              accent === "success" && "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400",
+              accent === "success" && "bg-success-100/60 text-success-700 dark:bg-success/15 dark:text-success-400",
               !accent && "bg-muted text-muted-foreground"
             )}
           >
@@ -555,7 +551,7 @@ function KpiCard({
           className={cn(
             "text-xl sm:text-2xl font-bold truncate",
             accent === "primary" && "text-primary",
-            accent === "success" && "text-green-600"
+            accent === "success" && "text-success-600"
           )}
         >
           {value}
