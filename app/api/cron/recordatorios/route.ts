@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
-import {
-  NotificationService,
-  createNotificationContext,
-} from "@/lib/notifications"
+import { queueNotification } from "@/lib/notifications/queue"
 import { requireCronAuth } from "@/lib/cron-auth"
 
 // Este endpoint puede ser llamado por:
@@ -19,7 +16,7 @@ export async function GET(request: Request) {
     // Obtener todas las organizaciones con sus configuraciones
     const { data: organizations } = await supabaseAdmin
       .from("organizations")
-      .select("id, dias_recordatorio, notificaciones_email, moneda, zona_horaria")
+      .select("id, nombre, nombre_mostrar, slug, dias_recordatorio, notificaciones_email, notificaciones_whatsapp, moneda, zona_horaria")
       .eq("activo", true)
 
     if (!organizations) {
@@ -35,7 +32,7 @@ export async function GET(request: Request) {
     let totalErrores = 0
 
     for (const org of organizations) {
-      if (!org.notificaciones_email) continue
+      if (!org.notificaciones_email && !org.notificaciones_whatsapp) continue
 
       const diasLimite = org.dias_recordatorio || 3
       const fechaLimite = new Date()
@@ -46,17 +43,25 @@ export async function GET(request: Request) {
         .from("ordenes_servicio")
         .select(`
           id,
-          clientes (email)
+          numero_orden,
+          dispositivo,
+          public_token,
+          clientes (id, nombre, email, telefono)
         `)
         .eq("organization_id", org.id)
         .eq("estado", "REPARADO")
         .lte("fecha_completado", fechaLimite.toISOString()) as {
-          data: { id: string; clientes: { email: string | null } | null }[] | null
+          data: {
+            id: string
+            numero_orden: number
+            dispositivo: string
+            public_token: string | null
+            clientes: { id: string; nombre: string; email: string | null; telefono: string | null } | null
+          }[] | null
         }
 
       if (!ordenesParaRecordar) continue
 
-      const notificationService = new NotificationService(org.id)
       const todayStart = new Date(new Date().setHours(0, 0, 0, 0)).toISOString()
 
       for (const orden of ordenesParaRecordar) {
@@ -71,29 +76,38 @@ export async function GET(request: Request) {
         // Saltar si ya se envio recordatorio hoy
         if (count && count > 0) continue
 
-        // Saltar si cliente no tiene email
-        if (!orden.clientes?.email) continue
-
-        const context = await createNotificationContext(orden.id)
-        if (!context) continue
+        // Saltar si cliente no tiene ningun canal de contacto
+        if (!orden.clientes?.email && !orden.clientes?.telefono) continue
 
         try {
-          const results = await notificationService.sendNotification(
-            "RECORDATORIO_RETIRO",
-            context,
-            ["EMAIL"]
-          )
-
-          if (results[0]?.success) {
-            totalEnviados++
-          } else {
-            totalErrores++
-          }
+          await queueNotification({
+            organizationId: org.id,
+            ordenId: orden.id,
+            clienteId: orden.clientes!.id,
+            tipo: "RECORDATORIO_RETIRO",
+            context: {
+              organizationName: org.nombre_mostrar || org.nombre,
+              organizationSlug: org.slug,
+              moneda: org.moneda || "ARS",
+              zonaHoraria: org.zona_horaria || "America/Argentina/Buenos_Aires",
+              cliente: {
+                id: orden.clientes!.id,
+                nombre: orden.clientes!.nombre,
+                email: orden.clientes!.email,
+                telefono: orden.clientes!.telefono ?? "",
+              },
+              orden: {
+                id: orden.id,
+                numeroOrden: orden.numero_orden,
+                dispositivo: orden.dispositivo,
+                estado: "REPARADO",
+                publicToken: orden.public_token,
+              },
+            },
+          })
+          totalEnviados++
         } catch (err) {
-          console.error(
-            `Error enviando recordatorio para orden ${orden.id}:`,
-            err
-          )
+          console.error(`Error recordatorio orden ${orden.id}:`, err)
           totalErrores++
         }
       }
