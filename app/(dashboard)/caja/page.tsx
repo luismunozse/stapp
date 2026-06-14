@@ -18,6 +18,7 @@ import { MovimientoManualForm } from "@/components/caja/movimiento-manual-form"
 import { MovimientosManualesList } from "@/components/caja/movimientos-manuales-list"
 import { HistorialCierres } from "@/components/caja/historial-cierres"
 import { ExportButton } from "@/components/caja/export-button"
+import { PageShell } from "@/components/ui/page-shell"
 
 export default function CajaPage() {
   const { data: session } = useSession()
@@ -69,16 +70,11 @@ export default function CajaPage() {
   const sesionActual = data?.sesionActual || null
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-3">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Caja Diaria</h1>
-          <p className="text-sm text-muted-foreground">Resumen de ingresos y egresos del día</p>
-        </div>
-        <ExportButton fecha={fecha} />
-      </div>
-
+    <PageShell
+      title="Caja Diaria"
+      description="Resumen de ingresos y egresos del día"
+      actions={<ExportButton fecha={fecha} />}
+    >
       {/* Banner de sesión */}
       {isAdmin && (
         <CajaSessionBanner
@@ -205,6 +201,6 @@ export default function CajaPage() {
           onSuccess={handleSessionChange}
         />
       )}
-    </div>
+    </PageShell>
   )
 }

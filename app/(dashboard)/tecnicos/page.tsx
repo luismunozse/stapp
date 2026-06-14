@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 import { auth } from "@/lib/auth"
 import { TecnicosList } from "@/components/tecnicos/tecnicos-list"
+import { PageShell } from "@/components/ui/page-shell"
 
 export default async function TecnicosPage() {
   const session = await auth()
@@ -12,14 +13,8 @@ export default async function TecnicosPage() {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-bold">Técnicos</h1>
-        <p className="text-sm sm:text-base text-muted-foreground">
-          Gestiona los técnicos y sus asignaciones
-        </p>
-      </div>
+    <PageShell title="Técnicos" description="Gestiona los técnicos y sus asignaciones">
       <TecnicosList />
-    </div>
+    </PageShell>
   )
 }

@@ -1,6 +1,7 @@
 import { LeadsList } from "@/components/leads/leads-list"
 import { requireAuth } from "@/lib/auth-utils"
 import { redirect } from "next/navigation"
+import { PageShell } from "@/components/ui/page-shell"
 
 export const metadata = {
   title: "Leads del Chatbot - STApp",
@@ -12,14 +13,8 @@ export default async function LeadsPage() {
   if (error) redirect("/login")
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-bold">Leads del Chatbot</h1>
-        <p className="text-sm sm:text-base text-muted-foreground">
-          Contactos capturados por Santi, tu asistente virtual
-        </p>
-      </div>
+    <PageShell title="Leads del Chatbot" description="Contactos capturados por Santi, tu asistente virtual">
       <LeadsList />
-    </div>
+    </PageShell>
   )
 }

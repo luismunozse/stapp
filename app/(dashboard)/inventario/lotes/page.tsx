@@ -14,7 +14,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
-  ArrowLeft,
   Loader2,
   Layers,
   CalendarClock,
@@ -22,6 +21,7 @@ import {
   Trash2,
   RefreshCw,
 } from "lucide-react"
+import { PageShell } from "@/components/ui/page-shell"
 
 interface LoteVencer {
   lote_id: string
@@ -79,24 +79,13 @@ export default function LotesPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-3">
-          <Link href="/inventario">
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
-              <Layers className="h-6 w-6" /> Lotes y vencimientos
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Lotes activos próximos a vencer y vencidos pendientes de baja
-            </p>
-          </div>
-        </div>
-        <div className="flex gap-2 flex-wrap">
+    <PageShell
+      title="Lotes y vencimientos"
+      description="Lotes activos próximos a vencer y vencidos pendientes de baja"
+      icon={Layers}
+      backHref="/inventario"
+      actions={
+        <>
           <Select value={dias} onValueChange={setDias}>
             <SelectTrigger className="w-[140px]">
               <SelectValue />
@@ -125,9 +114,9 @@ export default function LotesPage() {
             )}
             Marcar vencidos ({stats.vencidos})
           </Button>
-        </div>
-      </div>
-
+        </>
+      }
+    >
       {error && (
         <div className="flex items-start gap-2 text-sm rounded-md border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-800 dark:text-red-200 text-red-900 p-3">
           <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
@@ -251,6 +240,6 @@ export default function LotesPage() {
           )}
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   )
 }

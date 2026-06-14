@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useMemo, useCallback, useEffect } from "react"
-import Link from "next/link"
 import { useRouter } from "next/navigation"
 import useSWR from "swr"
 import { Button } from "@/components/ui/button"
@@ -10,7 +9,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
-  ArrowLeft,
   Truck,
   Loader2,
   AlertTriangle,
@@ -21,6 +19,7 @@ import {
   ChevronRight,
   Sparkles,
 } from "lucide-react"
+import { PageShell } from "@/components/ui/page-shell"
 import { useCurrency } from "@/contexts/currency-context"
 
 interface RepoItem {
@@ -172,25 +171,13 @@ export default function ReposicionPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-3">
-          <Link href="/inventario">
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
-              <Sparkles className="h-6 w-6 text-primary" /> Reposición sugerida
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Sugerencias basadas en stock, umbrales, demanda 30d y lead time del proveedor.
-            </p>
-          </div>
-        </div>
-      </div>
-
+    <PageShell
+      title="Reposición sugerida"
+      description="Sugerencias basadas en stock, umbrales, demanda 30d y lead time del proveedor."
+      icon={Sparkles}
+      backHref="/inventario"
+      className="space-y-4"
+    >
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-2">
           <label className="text-xs text-muted-foreground">Cobertura</label>
@@ -363,6 +350,6 @@ export default function ReposicionPage() {
           </Button>
         </div>
       )}
-    </div>
+    </PageShell>
   )
 }

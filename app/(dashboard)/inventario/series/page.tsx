@@ -2,18 +2,17 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import {
-  ArrowLeft,
   Hash,
   Loader2,
   Search,
   ShieldCheck,
   ScanLine,
 } from "lucide-react"
+import { PageShell } from "@/components/ui/page-shell"
 
 interface SerieRow {
   id: string
@@ -77,25 +76,12 @@ export default function SeriesGlobalPage() {
   }, [q])
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-3">
-          <Link href="/inventario">
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
-              <Hash className="h-6 w-6" /> Búsqueda de series
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Buscá un número de serie globalmente para ver su estado, garantía e historial de venta
-            </p>
-          </div>
-        </div>
-      </div>
-
+    <PageShell
+      title="Búsqueda de series"
+      description="Buscá un número de serie globalmente para ver su estado, garantía e historial de venta"
+      icon={Hash}
+      backHref="/inventario"
+    >
       <Card>
         <CardContent className="p-4 space-y-3">
           <div className="relative">
@@ -204,6 +190,6 @@ export default function SeriesGlobalPage() {
           )}
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   )
 }
