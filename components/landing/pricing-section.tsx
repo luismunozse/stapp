@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch"
 import { Check, X, Globe, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { m, LazyMotion, domAnimation } from "@/components/animations/motion"
+import { revealHeader, revealStagger, revealFocal } from "./reveal"
 import type { PlanPrices, AllPlansPrices } from "@/lib/pricing"
 
 interface PlanFeature {
@@ -140,10 +141,10 @@ export function PricingSection({ prices, allPlans }: PricingSectionProps) {
           {/* Header */}
           <m.div
             className="text-center max-w-3xl mx-auto mb-10"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
+            variants={revealHeader}
+            initial="hidden"
+            whileInView="visible"
             viewport={{ once: true, margin: "0px" }}
-            transition={{ duration: 0.6 }}
           >
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-balance text-foreground mb-4">
               Elegí el plan que mejor se adapte a tu taller
@@ -181,9 +182,15 @@ export function PricingSection({ prices, allPlans }: PricingSectionProps) {
             </span>
           </div>
 
-          {/* Plans grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto items-start">
-            {plans.map((plan, index) => {
+          {/* Plans grid: cards focales que se presentan con leve scale, escalonadas */}
+          <m.div
+            className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto items-start"
+            variants={revealStagger}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: "0px" }}
+          >
+            {plans.map((plan) => {
               const { ars: priceArs, usd: priceUsd } = getPlanPrice(plan)
 
               return (
@@ -195,10 +202,7 @@ export function PricingSection({ prices, allPlans }: PricingSectionProps) {
                       ? "border-primary shadow-xl md:-mt-4 md:mb-0 md:pb-10"
                       : "border-border/50 shadow-sm hover:border-border"
                   )}
-                  initial={{ opacity: 0, y: 40 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, margin: "0px" }}
-                  transition={{ duration: 0.5, delay: index * 0.1 }}
+                  variants={revealFocal}
                 >
                   {/* Badge */}
                   {plan.badge && (
@@ -297,7 +301,7 @@ export function PricingSection({ prices, allPlans }: PricingSectionProps) {
                 </m.div>
               )
             })}
-          </div>
+          </m.div>
 
           {/* Trust signals */}
           <div className="text-center mt-10 space-y-4">

@@ -3,7 +3,8 @@
 import { useState } from "react"
 import { ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { LazyMotion, domAnimation, m } from "framer-motion"
+import { LazyMotion, domAnimation, m } from "@/components/animations/motion"
+import { revealHeader, revealStagger, revealRow } from "./reveal"
 
 interface FAQItem {
   question: string
@@ -24,10 +25,10 @@ export function FAQ({ faqs }: FAQProps) {
           {/* Header */}
           <m.div
             className="text-center max-w-3xl mx-auto mb-6"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
+            variants={revealHeader}
+            initial="hidden"
+            whileInView="visible"
             viewport={{ once: true, margin: "0px" }}
-            transition={{ duration: 0.6 }}
           >
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-balance text-foreground mb-4">
               Preguntas frecuentes
@@ -37,16 +38,19 @@ export function FAQ({ faqs }: FAQProps) {
             </p>
           </m.div>
 
-          {/* FAQ list */}
-          <div className="max-w-3xl mx-auto">
+          {/* FAQ list: filas que entran desde el borde de lectura, escalonadas */}
+          <m.div
+            className="max-w-3xl mx-auto"
+            variants={revealStagger}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: "0px" }}
+          >
             {faqs.map((faq, index) => (
               <m.div
                 key={faq.question}
                 className="border-b"
-                initial={{ opacity: 0, x: -20 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true, margin: "0px" }}
-                transition={{ duration: 0.4, delay: index * 0.1 }}
+                variants={revealRow}
               >
                 <m.button
                   type="button"
@@ -98,7 +102,7 @@ export function FAQ({ faqs }: FAQProps) {
                 </m.div>
               </m.div>
             ))}
-          </div>
+          </m.div>
         </div>
       </section>
     </LazyMotion>

@@ -1,17 +1,28 @@
+"use client"
+
 import Link from "next/link"
 import { Card } from "@/components/ui/card"
 import { ArrowRight } from "lucide-react"
 import { useCases } from "@/lib/use-cases-data"
+import { m, LazyMotion, domAnimation } from "@/components/animations/motion"
+import { revealHeader, revealStagger, revealCard } from "./reveal"
 
 export function UseCasesGrid() {
   return (
+    <LazyMotion features={domAnimation}>
     <section
       id="casos-de-uso"
       className="py-16 sm:py-20 bg-muted/30"
       aria-labelledby="casos-heading"
     >
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center max-w-3xl mx-auto mb-12">
+        <m.div
+          className="text-center max-w-3xl mx-auto mb-12"
+          variants={revealHeader}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "0px" }}
+        >
           <h2
             id="casos-heading"
             className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-balance text-foreground mb-4"
@@ -22,14 +33,21 @@ export function UseCasesGrid() {
             STApp se adapta a lo que reparás. Mirá cómo resuelve los problemas
             puntuales de cada rubro.
           </p>
-        </div>
+        </m.div>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
+        {/* Grid de casos: cards que suben, escalonadas en orden de lectura */}
+        <m.div
+          className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto"
+          variants={revealStagger}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "0px" }}
+        >
           {useCases.map((useCase) => {
             const Icon = useCase.icon
             return (
+              <m.div key={useCase.slug} variants={revealCard} className="h-full">
               <Link
-                key={useCase.slug}
                 href={`/casos-de-uso/${useCase.slug}`}
                 className="group"
               >
@@ -48,9 +66,11 @@ export function UseCasesGrid() {
                   </span>
                 </Card>
               </Link>
+              </m.div>
             )
           })}
 
+          <m.div variants={revealCard} className="h-full">
           <Link href="/casos-de-uso" className="group">
             <Card className="p-6 h-full flex flex-col justify-center items-center text-center border-dashed hover:border-primary/50 hover:bg-primary/5 transition-[border-color,background-color]">
               <h3 className="text-lg font-semibold text-foreground mb-2">
@@ -61,8 +81,10 @@ export function UseCasesGrid() {
               </span>
             </Card>
           </Link>
-        </div>
+          </m.div>
+        </m.div>
       </div>
     </section>
+    </LazyMotion>
   )
 }

@@ -31,6 +31,7 @@ import {
 } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { m, LazyMotion, domAnimation } from "@/components/animations/motion"
+import { revealHeader, revealPanel, revealStagger, revealCard } from "./reveal"
 
 const categories = [
   {
@@ -259,10 +260,10 @@ export function Features() {
           {/* Header */}
           <m.div
             className="text-center max-w-3xl mx-auto mb-10"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
+            variants={revealHeader}
+            initial="hidden"
+            whileInView="visible"
             viewport={{ once: true, margin: "0px" }}
-            transition={{ duration: 0.6 }}
           >
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-balance text-foreground mb-4">
               Todo tu taller en una sola plataforma
@@ -307,10 +308,10 @@ export function Features() {
                 <div className="grid gap-4 sm:gap-6">
                   <m.div
                     className="bg-card rounded-2xl p-6 sm:p-8 shadow-sm border hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5 group transition-colors flex flex-col sm:flex-row sm:items-center gap-5"
-                    initial={{ opacity: 0, y: 24 }}
-                    whileInView={{ opacity: 1, y: 0 }}
+                    variants={revealPanel}
+                    initial="hidden"
+                    whileInView="visible"
                     viewport={{ once: true, margin: "0px" }}
-                    transition={{ duration: 0.5 }}
                   >
                     <m.div
                       className="bg-primary text-primary-foreground w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0"
@@ -330,15 +331,18 @@ export function Features() {
                   </m.div>
 
                   {/* Resto: grid compacto, icon-tiles tintados en brand */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                    {rest.map((feature, index) => (
+                  <m.div
+                    className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6"
+                    variants={revealStagger}
+                    initial="hidden"
+                    whileInView="visible"
+                    viewport={{ once: true, margin: "0px" }}
+                  >
+                    {rest.map((feature) => (
                       <m.div
                         key={feature.name}
                         className="bg-card rounded-xl p-5 shadow-sm border hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 group h-full transition-colors"
-                        initial={{ opacity: 0, y: 24 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true, margin: "0px" }}
-                        transition={{ duration: 0.45, delay: index * 0.08 }}
+                        variants={revealCard}
                         whileHover={{ y: -6 }}
                       >
                         <div className="bg-primary/10 text-primary w-11 h-11 rounded-xl flex items-center justify-center mb-3.5 group-hover:bg-primary/15 transition-colors">
@@ -352,7 +356,7 @@ export function Features() {
                         </p>
                       </m.div>
                     ))}
-                  </div>
+                  </m.div>
                 </div>
               </TabsContent>
               )
