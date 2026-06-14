@@ -61,8 +61,7 @@ export function OrdenComisionCard({
           <Percent className="h-4 w-4" />
           Comisión Técnico
           {comisionPagada && (
-            <Badge variant="secondary" className="gap-1 ml-auto">
-              <CheckCircle2 className="h-3 w-3 text-green-600" />
+            <Badge variant="success" showIcon className="gap-1 ml-auto">
               Pagada
             </Badge>
           )}
