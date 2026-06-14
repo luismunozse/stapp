@@ -22,8 +22,11 @@
 DROP INDEX IF EXISTS depositos_org_principal_unique;
 
 -- 2a. Backfill: crear depósito principal para sucursales SIN ningún depósito
+-- Nombre único por org: existe constraint depositos_org_nombre_unique sobre
+-- (organization_id, lower(nombre)). Se usa 'Depósito ' || nombre de la sucursal
+-- (único por org, ya que el nombre de sucursal es único por org).
 INSERT INTO depositos (organization_id, nombre, principal, activo, sucursal_id)
-SELECT s.organization_id, 'Principal', true, true, s.id
+SELECT s.organization_id, 'Depósito ' || s.nombre, true, true, s.id
 FROM sucursales s
 WHERE s.deleted_at IS NULL
   AND NOT EXISTS (
@@ -91,7 +94,7 @@ CREATE OR REPLACE FUNCTION sucursal_crear_deposito_principal()
 RETURNS TRIGGER AS $$
 BEGIN
   INSERT INTO depositos (organization_id, nombre, principal, activo, sucursal_id)
-  SELECT NEW.organization_id, 'Principal', true, true, NEW.id
+  SELECT NEW.organization_id, 'Depósito ' || NEW.nombre, true, true, NEW.id
   WHERE NOT EXISTS (
     SELECT 1 FROM depositos d
     WHERE d.sucursal_id = NEW.id
