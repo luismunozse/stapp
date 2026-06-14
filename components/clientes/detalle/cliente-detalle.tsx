@@ -9,6 +9,9 @@ import { ClienteDetalleHeader } from "./cliente-detalle-header"
 import { ClienteForm } from "@/components/clientes/cliente-form"
 import { ClienteWhatsAppDialog } from "@/components/clientes/cliente-whatsapp-dialog"
 import { ClienteDetalleDatos } from "./cliente-detalle-datos"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { CuentaCorrientePanel } from "./cuenta-corriente-panel"
+import { ClienteOrdenesPendientes } from "./cliente-ordenes-pendientes"
 import type { Cliente } from "@/types"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
@@ -74,8 +77,17 @@ export function ClienteDetalle({ clienteId }: { clienteId: string }) {
 
       <div className="space-y-6 pt-6">
         <ClienteDetalleDatos cliente={cliente} />
-        {/* Task 3 panel: Cuenta corriente */}
-        {/* Task 6: Órdenes pendientes + cobrar */}
+        <Card>
+          <CardHeader><CardTitle className="text-base">Cuenta corriente</CardTitle></CardHeader>
+          <CardContent>
+            <CuentaCorrientePanel cliente={cliente} onDeposito={() => mutateCC()} />
+          </CardContent>
+        </Card>
+        <ClienteOrdenesPendientes
+          clienteId={clienteId}
+          clienteNombre={cliente.nombre}
+          onCobrado={() => mutateCC()}
+        />
         {/* Task 7: Historial de órdenes */}
         {/* Task 8: Cotizaciones */}
         {/* Task 9: Sectores (solo EMPRESA) */}
