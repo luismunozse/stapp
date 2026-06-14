@@ -1,118 +1,8 @@
 import { supabaseAdmin } from "@/lib/supabase"
 import { Resend } from "resend"
 import { formatDateValue } from "@/lib/timezone"
-import { renderTemplate } from "@/lib/whatsapp/plantillas-catalog"
-import { formatCurrencyValue, type CurrencyCode, DEFAULT_CURRENCY } from "@/lib/currency"
 import { sendPushToUsers } from "@/lib/push/send"
-import { generateWhatsAppMessage, getBaseUrl, formatEstado } from "@/lib/notifications/whatsapp-message"
-
-/**
- * Mapeo de NotificationType (legacy) a la key del catálogo de plantillas.
- * Si el override existe se renderiza con las variables del context.
- */
-const TIPO_TO_CATALOG_KEY: Record<string, string> = {
-  CAMBIO_ESTADO: "orden_estado_actual",
-  PRESUPUESTO_DEFINIDO: "orden_presupuesto",
-  GARANTIA_CREADA: "garantia_creada",
-  RECORDATORIO_RETIRO: "orden_listo_retirar",
-  BIENVENIDA_CLIENTE: "bienvenida_cliente",
-  RESPUESTA_CONSULTA: "respuesta_consulta",
-  RECORDATORIO_PAGO: "cobranza_recordatorio_pago",
-  CONFIRMACION_PAGO: "cobranza_confirmacion_pago",
-  LINK_PAGO: "cobranza_link_pago",
-  MANTENIMIENTO_PREVENTIVO: "mantenimiento_preventivo",
-  PROMOCION: "promocion",
-  ENCUESTA_SATISFACCION: "encuesta_satisfaccion",
-  FELICITACION: "felicitacion",
-  SOLICITUD_INFO: "orden_solicitud_info",
-  REPUESTO_DISPONIBLE: "orden_repuesto_disponible",
-  REPUESTO_NO_DISPONIBLE: "orden_repuesto_no_disponible",
-  AVISO_DEMORA: "orden_aviso_demora",
-  REINGRESO_GARANTIA: "garantia_reingreso",
-  CLIENTE_INACTIVO: "cliente_inactivo",
-  SEGUIMIENTO_PRESUPUESTO_RECHAZADO: "orden_seguimiento_rechazado",
-}
-
-function buildVarsForContext(context: any): Record<string, string | number> {
-  const currency: CurrencyCode = (context.moneda as CurrencyCode) || DEFAULT_CURRENCY
-  const formatCurrency = (amount: number | null | undefined) =>
-    formatCurrencyValue(amount ?? 0, currency)
-
-  const baseUrl = getBaseUrl(context.organizationSlug)
-  const publicToken: string | null | undefined = context.orden?.publicToken
-
-  const vars: Record<string, string | number> = {
-    cliente: context.cliente?.nombre || "",
-    empresa: context.organizationName || "",
-    fecha: new Date().toLocaleDateString("es-AR"),
-  }
-
-  if (context.orden) {
-    vars.numero_orden = context.orden.numeroOrden ?? ""
-    vars.dispositivo = context.orden.dispositivo || ""
-    vars.estado = formatEstado(context.orden.estado || "")
-    vars.presupuesto = context.orden.presupuesto != null
-      ? formatCurrency(context.orden.presupuesto)
-      : ""
-    vars.link_seguimiento = publicToken ? `${baseUrl}/seguimiento/${publicToken}` : ""
-    vars.link_pdf = publicToken ? `${baseUrl}/api/public/ordenes/${publicToken}/pdf` : ""
-  }
-
-  if (context.garantia) {
-    vars.garantia_dias = context.garantia.diasValidez ?? ""
-    vars.garantia_fecha = context.garantia.fechaVencimiento
-      ? formatDateValue(context.garantia.fechaVencimiento, context.zonaHoraria)
-      : ""
-  }
-
-  if (context.pago) {
-    vars.monto_pago = context.pago.monto ? formatCurrency(context.pago.monto) : ""
-    vars.saldo = context.pago.saldoPendiente
-      ? formatCurrency(context.pago.saldoPendiente)
-      : "Al día"
-    vars.link_pago = context.pago.linkPago || ""
-  }
-
-  if (context.repuesto) {
-    vars.repuesto = context.repuesto.nombre || "necesario"
-  }
-
-  if (context.demora) {
-    vars.motivo_demora = context.demora.motivo || ""
-  }
-
-  if (context.promocion) {
-    vars.promo_titulo = context.promocion.titulo || ""
-    vars.promo_descripcion = context.promocion.descripcion || ""
-  }
-
-  return vars
-}
-
-function resolvePlantillaForTipo(
-  tipo: string,
-  context: any,
-  plantillasOverride: Record<string, string> | null | undefined,
-): string | null {
-  if (!plantillasOverride) return null
-
-  // Lookup especial para CAMBIO_ESTADO: primero buscar override por estado específico
-  // (ej. orden_estado_recibido). Si no existe, cae al override genérico orden_estado_actual.
-  if (tipo === "CAMBIO_ESTADO" && context.orden?.estado) {
-    const estadoKey = `orden_estado_${String(context.orden.estado).toLowerCase()}`
-    const tplEstado = plantillasOverride[estadoKey]
-    if (tplEstado && tplEstado.trim()) {
-      return renderTemplate(tplEstado, buildVarsForContext(context))
-    }
-  }
-
-  const key = TIPO_TO_CATALOG_KEY[tipo]
-  if (!key) return null
-  const tpl = plantillasOverride[key]
-  if (!tpl || !tpl.trim()) return null
-
-  return renderTemplate(tpl, buildVarsForContext(context))
-}
+import { generateWhatsAppMessage, formatEstado, resolvePlantillaForTipo } from "@/lib/notifications/whatsapp-message"
 
 let _resend: Resend | null = null
 function getResend(): Resend {
@@ -264,12 +154,12 @@ export async function sendNotificationDirect(params: NotificationParams) {
       if (canSendViaApi) {
         const { sendWhatsAppText } = await import("@/lib/whatsapp/providers")
 
-        // Texto del mensaje: override de la org si existe, si no el generador rico
-        // (copy por estado + link de seguimiento). Antes el path API usaba el
-        // fallback pelado de NOTIFICATION_TEMPLATES (sin link y con "responda SI/NO"
-        // que en Evolution no hace nada); unificado con el path wa.me.
-        const overrideText = resolvePlantillaForTipo(tipo, context, orgConfig.plantillas_whatsapp)
-        const fallbackText = overrideText ?? generateWhatsAppMessage(tipo, context)
+        // Texto del mensaje: catálogo como única fuente de verdad (override de la org
+        // si existe, si no el defaultText del catálogo por estado). La función ya
+        // cae al catálogo cuando no hay override, y generateWhatsAppMessage es el
+        // último fallback genérico para tipos sin entrada en el catálogo.
+        const resolvedText = resolvePlantillaForTipo(tipo, context, orgConfig.plantillas_whatsapp)
+        const fallbackText = resolvedText ?? generateWhatsAppMessage(tipo, context)
 
         const result = await sendWhatsAppText(
           organizationId,
@@ -301,8 +191,8 @@ export async function sendNotificationDirect(params: NotificationParams) {
         }
       } else {
         // Fallback: generar URL
-        const overrideTextWa = resolvePlantillaForTipo(tipo, context, orgConfig.plantillas_whatsapp)
-        const message = overrideTextWa ?? generateWhatsAppMessage(tipo, context)
+        const resolvedText = resolvePlantillaForTipo(tipo, context, orgConfig.plantillas_whatsapp)
+        const message = resolvedText ?? generateWhatsAppMessage(tipo, context)
         const { formatPhoneForWhatsApp } = await import("@/lib/notifications/whatsapp-templates")
         const formattedPhone = formatPhoneForWhatsApp(context.cliente.telefono, orgConfig.pais)
         const whatsappUrl = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`
