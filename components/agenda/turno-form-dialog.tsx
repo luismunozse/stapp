@@ -21,8 +21,9 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { ClienteSelector } from "@/components/cotizaciones/cliente-selector"
-import { Loader2 } from "lucide-react"
+import { Loader2, AlertTriangle, AlertCircle } from "lucide-react"
 import type { TipoTurno, TurnoConRelaciones } from "@/types"
+import { StatusBanner } from "@/components/ui/status-banner"
 
 const fetcher = (u: string) => fetch(u).then(r => r.json())
 
@@ -417,7 +418,7 @@ export function TurnoFormDialog({
                   type="checkbox"
                   checked={recurrente}
                   onChange={(e) => setRecurrente(e.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300"
+                  className="h-4 w-4 rounded border-input"
                 />
                 <span className="text-sm font-medium">Repetir (mantenimiento periódico)</span>
               </label>
@@ -463,31 +464,31 @@ export function TurnoFormDialog({
 
           {/* Disponibilidad warning */}
           {dispCheck && (dispCheck.conflictos.length > 0 || dispCheck.fueraDeHorario) && (
-            <div className="text-sm rounded p-2 border bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900 text-amber-900 dark:text-amber-200">
-              {dispCheck.fueraDeHorario && (
-                <p>⚠️ {dispCheck.razonHorario || "Fuera del horario laboral del técnico"}</p>
-              )}
-              {dispCheck.conflictos.length > 0 && (
-                <div className="mt-1">
-                  <p>⚠️ Conflicto con {dispCheck.conflictos.length} turno{dispCheck.conflictos.length !== 1 ? "s" : ""} del mismo técnico:</p>
-                  <ul className="list-disc list-inside text-xs mt-1">
-                    {dispCheck.conflictos.slice(0, 3).map((c) => (
-                      <li key={c.id}>
-                        {new Date(c.inicio).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })}
-                        {c.clienteNombre ? ` — ${c.clienteNombre}` : ""}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              <p className="text-xs mt-1 opacity-80">Se puede guardar igualmente.</p>
-            </div>
+            <StatusBanner tone="warning" icon={AlertTriangle}>
+              <div>
+                {dispCheck.fueraDeHorario && (
+                  <p>{dispCheck.razonHorario || "Fuera del horario laboral del técnico"}</p>
+                )}
+                {dispCheck.conflictos.length > 0 && (
+                  <div className="mt-1">
+                    <p>Conflicto con {dispCheck.conflictos.length} turno{dispCheck.conflictos.length !== 1 ? "s" : ""} del mismo técnico:</p>
+                    <ul className="list-disc list-inside text-xs mt-1">
+                      {dispCheck.conflictos.slice(0, 3).map((c) => (
+                        <li key={c.id}>
+                          {new Date(c.inicio).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })}
+                          {c.clienteNombre ? ` — ${c.clienteNombre}` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <p className="text-xs mt-1 opacity-80">Se puede guardar igualmente.</p>
+              </div>
+            </StatusBanner>
           )}
 
           {error && (
-            <div className="text-sm text-red-600 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded p-2">
-              {error}
-            </div>
+            <StatusBanner tone="danger" icon={AlertCircle}>{error}</StatusBanner>
           )}
 
           <div className="flex justify-end gap-2 pt-2">
