@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireApiKey } from "@/lib/api-auth"
 import { supabaseAdmin } from "@/lib/supabase"
+import { assertSucursalEnOrg } from "@/lib/sucursal"
 
 const COLUMNS =
   "id, numero_orden, codigo_orden, estado, dispositivo, tipo_dispositivo, marca, problema_reportado, presupuesto, costo_final, cliente_id, tecnico_id, fecha_ingreso, fecha_prometida, fecha_completado, created_at"
@@ -15,6 +16,16 @@ export async function GET(request: Request) {
     const limit = Math.min(parseInt(searchParams.get("limit") || "20"), 100)
     const offset = (page - 1) * limit
     const estado = searchParams.get("estado") || ""
+    const sucursalId = searchParams.get("sucursal_id") || ""
+
+    // Optional branch scoping. Validate ownership to prevent cross-org enumeration.
+    // 404 (not 403) so a foreign sucursal_id is indistinguishable from a nonexistent one.
+    if (sucursalId) {
+      const pertenece = await assertSucursalEnOrg(sucursalId, organizationId!)
+      if (!pertenece) {
+        return NextResponse.json({ error: "Sucursal no encontrada" }, { status: 404 })
+      }
+    }
 
     let query = supabaseAdmin
       .from("ordenes_servicio")
@@ -24,6 +35,7 @@ export async function GET(request: Request) {
       .range(offset, offset + limit - 1)
 
     if (estado) query = query.eq("estado", estado)
+    if (sucursalId) query = query.eq("sucursal_id", sucursalId)
 
     const { data, error: dbError, count } = await query
     if (dbError) throw dbError

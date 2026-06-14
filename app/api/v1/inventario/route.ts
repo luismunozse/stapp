@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 const COLUMNS =
   "id, codigo, nombre, descripcion, categoria, tipo_dispositivo, stock, precio_venta, created_at"
 
+// Org-wide by design: inventario is centralized (no sucursal_id; per-branch stock is multi-depósito).
 export async function GET(request: Request) {
   const { error, organizationId } = await requireApiKey(request)
   if (error) return error
