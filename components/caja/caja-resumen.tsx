@@ -19,6 +19,7 @@ import {
   TrendingDown,
   Receipt,
 } from "lucide-react"
+import { StatCard } from "@/components/dashboard/stat-card"
 import { useCurrency } from "@/contexts/currency-context"
 import { EmptyState } from "@/components/ui/empty-state"
 import Link from "next/link"
@@ -84,34 +85,29 @@ export function CajaResumen({
   return (
     <div className="space-y-4">
       {/* Total del día */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="text-center">
-            <div className="text-sm text-muted-foreground">Total del Día</div>
-            <div className="text-4xl font-bold text-primary mt-1">
-              {formatPrice(data.totalDia)}
-            </div>
-            <div className="text-sm text-muted-foreground mt-1">
-              {data.movimientos.length} movimiento{data.movimientos.length !== 1 ? "s" : ""}
-              {data.totalEgresos > 0 && (
-                <span className="ml-2">
-                  (Ingresos: <span className="text-success-600">{formatPrice(data.totalIngresos)}</span>
-                  {" · "}Egresos: <span className="text-destructive">{formatPrice(data.totalEgresos)}</span>)
-                </span>
-              )}
-            </div>
-            {data.totalCostosFinancieros != null && data.totalCostosFinancieros > 0 && (
-              <div className="mt-2 p-2 bg-destructive/10 dark:bg-destructive/15 border border-destructive/25 rounded-lg inline-block">
-                <div className="text-xs text-muted-foreground">Costo terminales</div>
-                <div className="text-sm font-medium text-destructive">-{formatPrice(data.totalCostosFinancieros)}</div>
-                <div className="text-xs text-muted-foreground">
-                  Ingreso real: <span className="font-semibold text-foreground">{formatPrice(data.ingresoReal ?? data.totalDia)}</span>
-                </div>
-              </div>
-            )}
+      <StatCard
+        title="Total del Día"
+        value={formatPrice(data.totalDia)}
+        description={[
+          `${data.movimientos.length} movimiento${data.movimientos.length !== 1 ? "s" : ""}`,
+          data.totalEgresos > 0
+            ? `Ingresos: ${formatPrice(data.totalIngresos)} · Egresos: ${formatPrice(data.totalEgresos)}`
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        icon={Banknote}
+        tone="default"
+      />
+      {data.totalCostosFinancieros != null && data.totalCostosFinancieros > 0 && (
+        <div className="mt-2 p-2 bg-destructive/10 dark:bg-destructive/15 border border-destructive/25 rounded-lg inline-block">
+          <div className="text-xs text-muted-foreground">Costo terminales</div>
+          <div className="text-sm font-medium text-destructive">-{formatPrice(data.totalCostosFinancieros)}</div>
+          <div className="text-xs text-muted-foreground">
+            Ingreso real: <span className="font-semibold text-foreground">{formatPrice(data.ingresoReal ?? data.totalDia)}</span>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      )}
 
       {/* Resumen por método de pago */}
       {Object.keys(data.porMetodo).length > 0 && (
