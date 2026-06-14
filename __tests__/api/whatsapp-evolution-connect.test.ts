@@ -51,4 +51,12 @@ describe("POST /api/whatsapp/evolution/connect", () => {
       apiKey: "platform-key",
     })
   })
+
+  it("returns 502 when createInstance fails", async () => {
+    mockAuthSuccess({ organizationId: "org-1" })
+    vi.mocked(createInstance).mockResolvedValue({ success: false, error: "boom" } as any)
+    const res = await POST()
+    expect(res.status).toBe(502)
+    expect(connectInstance).not.toHaveBeenCalled()
+  })
 })
