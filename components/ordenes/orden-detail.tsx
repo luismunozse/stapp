@@ -67,6 +67,8 @@ import { OrdenRepuestosTab } from "@/components/ordenes/orden-repuestos-tab"
 import { CobrarOrdenDialog } from "@/components/ordenes/cobrar-orden-dialog"
 import { NotaCreditoDialog } from "@/components/notas-credito/nota-credito-dialog"
 import { PatternDisplay } from "@/components/ui/pattern-display"
+import { StatusBanner } from "@/components/ui/status-banner"
+import { FieldSectionLabel } from "@/components/ui/field-section-label"
 import { useModal } from "@/contexts/modal-context"
 import { toast } from "sonner"
 import { useVisibilityPolling } from "@/hooks/use-visibility-polling"
@@ -747,35 +749,26 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
 
       {/* Banner de retiro sin reparación */}
       {isRetiro && (
-        <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-sm">
-          <Package className="h-4 w-4 text-amber-600 shrink-0" />
-          <span className="text-amber-800 dark:text-amber-300">
-            Retirado sin reparacion — El cliente retiro el equipo sin reparar.
-          </span>
-        </div>
+        <StatusBanner tone="warning" icon={Package}>
+          Retirado sin reparacion — El cliente retiro el equipo sin reparar.
+        </StatusBanner>
       )}
 
       {/* Banner de entrega sin cobro */}
       {isSinCobro && (
-        <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 text-sm">
-          <HandCoins className="h-4 w-4 text-green-600 shrink-0" />
-          <span className="text-green-800 dark:text-green-300">
-            Entregado sin cobro — El equipo fue entregado al cliente sin cargo.
-          </span>
-        </div>
+        <StatusBanner tone="success" icon={HandCoins}>
+          Entregado sin cobro — El equipo fue entregado al cliente sin cargo.
+        </StatusBanner>
       )}
 
       {/* Banner de re-ingreso */}
       {orden.esReingreso && orden.ordenOrigenId && (
-        <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-sm">
-          <Shield className="h-4 w-4 text-blue-600 shrink-0" />
-          <span className="text-blue-800 dark:text-blue-300">
-            Re-ingreso por garantia — Orden original:{" "}
-            <Link href={`/ordenes/${orden.ordenOrigenId}`} className="underline hover:text-blue-600">
-              ver orden original
-            </Link>
-          </span>
-        </div>
+        <StatusBanner tone="info" icon={Shield}>
+          Re-ingreso por garantia — Orden original:{" "}
+          <Link href={`/ordenes/${orden.ordenOrigenId}`} className="underline hover:text-blue-600">
+            ver orden original
+          </Link>
+        </StatusBanner>
       )}
 
       {/* Progress Bar */}
@@ -824,10 +817,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
               <div className="grid gap-6 md:grid-cols-2">
                 {/* Cliente */}
                 <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    <User className="h-3.5 w-3.5" />
-                    Cliente
-                  </div>
+                  <FieldSectionLabel icon={User}>Cliente</FieldSectionLabel>
                   <div className="space-y-2">
                     <h3 className="text-lg font-semibold">{orden.cliente?.nombre}</h3>
                     <div className="flex items-center gap-2 text-sm">
@@ -853,10 +843,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
 
                 {/* Dispositivo */}
                 <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    <Smartphone className="h-3.5 w-3.5" />
-                    Dispositivo
-                  </div>
+                  <FieldSectionLabel icon={Smartphone}>Dispositivo</FieldSectionLabel>
                   <div className="space-y-2">
                     {orden.marca && (
                       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{orden.marca}</p>
@@ -898,10 +885,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
               {/* Problema Reportado */}
               <div className="mt-6 pt-6 border-t">
                 <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    <Wrench className="h-3.5 w-3.5" />
-                    Problema Reportado
-                  </div>
+                  <FieldSectionLabel icon={Wrench}>Problema Reportado</FieldSectionLabel>
                   {!editingProblema && (
                     <Button
                       variant="ghost"
@@ -944,10 +928,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
               {(orden.estado !== "RECIBIDO" || orden.diagnostico) && (
                 <div className="mt-4 pt-4 border-t">
                   <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                      <Search className="h-3.5 w-3.5" />
-                      Diagnostico
-                    </div>
+                    <FieldSectionLabel icon={Search}>Diagnostico</FieldSectionLabel>
                     {!editingDiagnostico && (
                       <Button
                         variant="ghost"
@@ -1009,11 +990,10 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
               {/* Notas internas - solo uso interno, no visible al cliente */}
               <div className="mt-4 pt-4 border-t">
                 <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2 text-xs font-medium text-amber-700 dark:text-amber-400 uppercase tracking-wider">
-                    <Lock className="h-3.5 w-3.5" />
+                  <FieldSectionLabel icon={Lock}>
                     Notas internas
                     <span className="text-[10px] font-normal normal-case text-muted-foreground">(no visibles para el cliente)</span>
-                  </div>
+                  </FieldSectionLabel>
                   {!editingNotasInternas && (
                     <Button
                       variant="ghost"

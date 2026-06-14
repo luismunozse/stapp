@@ -136,13 +136,13 @@ export function OrdenCostosCard({
             {sena > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Sena</span>
-                <span className="text-blue-600 font-medium">{formatPrice(sena)}</span>
+                <span className="text-info font-medium">{formatPrice(sena)}</span>
               </div>
             )}
             {totalCobrado > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Cobrado</span>
-                <span className="text-green-600 font-medium">{formatPrice(totalCobrado)}</span>
+                <span className="text-success font-medium">{formatPrice(totalCobrado)}</span>
               </div>
             )}
             {descuentoCobro > 0 && (
@@ -153,7 +153,7 @@ export function OrdenCostosCard({
             )}
             <div className="flex justify-between font-semibold">
               <span>{pendienteReal <= 0 ? "Cobrado" : "Pendiente"}</span>
-              <span className={`text-lg ${pendienteReal <= 0 ? "text-green-600" : ""}`}>
+              <span className={`text-lg ${pendienteReal <= 0 ? "text-success" : ""}`}>
                 {formatPrice(pendienteReal)}
               </span>
             </div>
