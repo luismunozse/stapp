@@ -23,6 +23,8 @@ import { cn } from "@/lib/utils"
 import { useCurrency } from "@/contexts/currency-context"
 import { autoSelectSeries } from "./pos-types"
 import type { PosCartItem, PosCliente, SerieDisponible } from "./pos-types"
+import { EmptyState } from "@/components/ui/empty-state"
+import { TotalRow } from "@/components/pos/total-row"
 
 interface PosCartProps {
   items: PosCartItem[]
@@ -252,11 +254,11 @@ export function PosCart({
       {/* Cart items */}
       <div className="flex-1 overflow-y-auto">
         {items.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-8">
-            <ShoppingCart className="h-10 w-10 mb-2 opacity-20" />
-            <p className="text-sm">Carrito vacío</p>
-            <p className="text-xs mt-1">Busca o escanea un producto</p>
-          </div>
+          <EmptyState
+            icon={ShoppingCart}
+            title="Carrito vacío"
+            description="Buscá o escaneá un producto para empezar"
+          />
         ) : (
           <div className="divide-y">
             {items.map((item) => {
@@ -280,7 +282,7 @@ export function PosCart({
                       <div className="flex items-center gap-1">
                         <span className="text-sm font-medium truncate">{item.nombre}</span>
                         {item.diasGarantia > 0 && (
-                          <Shield className="h-3 w-3 text-green-600 shrink-0" />
+                          <Shield className="h-3 w-3 text-success shrink-0" />
                         )}
                         {isExpanded ? (
                           <ChevronUp className="h-3 w-3 text-muted-foreground shrink-0" />
@@ -292,7 +294,7 @@ export function PosCart({
                         <span>{formatPrice(item.precioUnitario)} c/u</span>
                         {item.codigo && <span className="font-mono">{item.codigo}</span>}
                         {item.stockDisponible <= 3 && (
-                          <span className="text-red-500">Stock: {item.stockDisponible}</span>
+                          <span className="text-destructive">Stock: {item.stockDisponible}</span>
                         )}
                       </div>
                     </button>
@@ -364,7 +366,7 @@ export function PosCart({
                               Series ({item.serieIds.length}/{item.cantidad})
                             </span>
                             {item.serieIds.length !== item.cantidad && (
-                              <span className="text-red-500">
+                              <span className="text-destructive">
                                 Seleccioná {item.cantidad}
                               </span>
                             )}
@@ -394,7 +396,7 @@ export function PosCart({
                                 )
                               })}
                               {(seriesDisp[item.lineId] ?? []).length === 0 && (
-                                <span className="text-red-500 col-span-2">Sin series disponibles</span>
+                                <span className="text-destructive col-span-2">Sin series disponibles</span>
                               )}
                             </div>
                           )}
@@ -414,14 +416,15 @@ export function PosCart({
         {/* Totals */}
         {items.length > 0 && (
           <div className="px-4 pt-3 space-y-1">
-            <div className="flex justify-between text-sm text-muted-foreground">
-              <span>Subtotal ({items.reduce((s, i) => s + i.cantidad, 0)} items)</span>
-              <span>{formatPrice(subtotal)}</span>
-            </div>
-            <div className="flex justify-between text-xl font-bold">
-              <span>TOTAL</span>
-              <span className="text-primary">{formatPrice(total)}</span>
-            </div>
+            <TotalRow
+              label={`Subtotal (${items.reduce((s, i) => s + i.cantidad, 0)} items)`}
+              amount={formatPrice(subtotal)}
+            />
+            <TotalRow
+              label="TOTAL"
+              amount={formatPrice(total)}
+              emphasis
+            />
           </div>
         )}
 
@@ -450,7 +453,7 @@ export function PosCart({
               variant="outline"
               size="sm"
               onClick={onRecallSale}
-              className={cn("h-9", heldCount > 0 && "border-amber-500 text-amber-600")}
+              className={cn("h-9", heldCount > 0 && "border-warning text-warning")}
             >
               <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
               Recuperar (F6)

@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { RotateCcw, Trash2, Clock, ShoppingCart, User } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import type { HeldSale } from "./pos-types"
+import { EmptyState } from "@/components/ui/empty-state"
 
 interface PosHeldSalesProps {
   open: boolean
@@ -51,10 +52,10 @@ export function PosHeldSales({
         </DialogHeader>
 
         {heldSales.length === 0 ? (
-          <div className="py-8 text-center text-muted-foreground">
-            <ShoppingCart className="h-10 w-10 mx-auto mb-2 opacity-20" />
-            <p className="text-sm">No hay ventas apartadas</p>
-          </div>
+          <EmptyState
+            icon={ShoppingCart}
+            title="No hay ventas apartadas"
+          />
         ) : (
           <div className="space-y-3 max-h-[60vh] overflow-y-auto">
             {heldSales.map((sale) => (

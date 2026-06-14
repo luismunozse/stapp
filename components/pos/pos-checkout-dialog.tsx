@@ -25,6 +25,7 @@ import { useModal } from "@/contexts/modal-context"
 import { MultiPagoInput, createPagoLine, type PagoLineItem } from "@/components/pagos/multi-pago-input"
 import type { PosCartItem, PosCliente } from "./pos-types"
 import { buildVentaPayload } from "./pos-payload"
+import { TotalRow } from "@/components/pos/total-row"
 
 interface PosCheckoutDialogProps {
   open: boolean
@@ -202,10 +203,7 @@ export function PosCheckoutDialog({
                 </Badge>
               )}
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-lg font-semibold">Total a cobrar</span>
-              <span className="text-2xl font-bold text-primary">{formatPrice(total)}</span>
-            </div>
+            <TotalRow label="Total a cobrar" amount={formatPrice(total)} emphasis />
           </div>
 
           {/* Quick action: Paga despues */}
@@ -232,7 +230,7 @@ export function PosCheckoutDialog({
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-7 text-xs text-amber-600 border-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                className="h-7 text-xs text-warning border-warning/40 hover:bg-warning-50"
                 onClick={() => {
                   setPagoParcial(true)
                   setPagosLines([createPagoLine(0)])
@@ -256,11 +254,11 @@ export function PosCheckoutDialog({
             />
           </div>
           ) : (
-            <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-4 text-center space-y-2">
-              <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+            <div className="rounded-lg bg-warning-50 border border-warning/30 p-4 text-center space-y-2">
+              <p className="text-sm font-medium text-warning">
                 Venta sin pago — el total queda pendiente
               </p>
-              <p className="text-2xl font-bold text-red-600">{formatPrice(total)}</p>
+              <p className="text-2xl font-bold text-destructive">{formatPrice(total)}</p>
               <p className="text-xs text-muted-foreground">
                 El cobro se registra después desde el detalle de la venta
               </p>
@@ -283,25 +281,19 @@ export function PosCheckoutDialog({
             const totalPagosBase = pagosLines.reduce((sum, p) => sum + (p.monto || 0), 0)
             const pendiente = total - totalPagosBase
             return (pendiente > 0.01 && totalPagosBase > 0) ? (
-              <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3 space-y-1">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Total pagos:</span>
-                  <span className="font-medium text-green-600">{formatPrice(totalPagosBase)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Saldo pendiente:</span>
-                  <span className="font-bold text-red-600">{formatPrice(pendiente)}</span>
-                </div>
+              <div className="rounded-lg bg-warning-50 border border-warning/30 p-3 space-y-1">
+                <TotalRow label="Total pagos:" amount={formatPrice(totalPagosBase)} tone="success" />
+                <TotalRow label="Saldo pendiente:" amount={formatPrice(pendiente)} tone="danger" />
               </div>
             ) : null
           })()}
 
           {/* Cash change calculator */}
           {isCashOnly && (
-            <div className="rounded-lg border-2 border-dashed border-green-300 dark:border-green-800 p-4 space-y-3">
+            <div className="rounded-lg border border-info/20 bg-info-50 p-4 space-y-3">
               <div className="flex items-center gap-2">
-                <Banknote className="h-4 w-4 text-green-600" />
-                <Label className="text-sm font-medium text-green-700 dark:text-green-400">
+                <Banknote className="h-4 w-4 text-info" />
+                <Label className="text-sm font-medium text-info">
                   Cálculo de vuelto
                 </Label>
               </div>
@@ -339,7 +331,7 @@ export function PosCheckoutDialog({
                 <ArrowDownUp className="h-4 w-4 text-muted-foreground shrink-0" />
                 <div className={cn(
                   "text-right min-w-[100px]",
-                  vuelto > 0 ? "text-green-600" : "text-muted-foreground"
+                  vuelto > 0 ? "text-success" : "text-muted-foreground"
                 )}>
                   <div className="text-xs text-muted-foreground">Vuelto</div>
                   <div className="text-xl font-bold">{formatPrice(vuelto)}</div>
@@ -347,7 +339,7 @@ export function PosCheckoutDialog({
               </div>
 
               {montoRecibido !== "" && montoRecibido < total && (
-                <p className="text-xs text-red-500">
+                <p className="text-xs text-destructive">
                   Faltan {formatPrice(total - montoRecibido)}
                 </p>
               )}
