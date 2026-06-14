@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaLectura, type ResultadoLectura } from "@/lib/sucursal"
 import {
   arrayToCSV,
   arrayToXLSX,
@@ -41,7 +42,7 @@ export async function GET(
   { params }: { params: Promise<{ entity: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role, session } = await requireAuth()
     if (error) return error
 
     const { entity } = await params
@@ -57,13 +58,18 @@ export async function GET(
     const filters = Object.fromEntries(searchParams.entries())
     const format = (filters.format || "csv").toLowerCase()
 
+    const lectura = await sucursalParaLectura({
+      role,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
+
     let payload: ExportPayload
     switch (entity as EntityType) {
       case "ordenes":
-        payload = await exportOrdenes(organizationId!, filters)
+        payload = await exportOrdenes(organizationId!, filters, lectura)
         break
       case "ventas":
-        payload = await exportVentas(organizationId!, filters)
+        payload = await exportVentas(organizationId!, filters, lectura)
         break
       case "clientes":
         payload = await exportClientes(organizationId!, filters)
@@ -115,7 +121,8 @@ function formatDateFilename(): string {
 
 async function exportOrdenes(
   organizationId: string,
-  filters: Record<string, string>
+  filters: Record<string, string>,
+  lectura: ResultadoLectura
 ): Promise<ExportPayload> {
   let query = supabaseAdmin
     .from("ordenes_servicio")
@@ -130,6 +137,9 @@ async function exportOrdenes(
     .order("fecha_ingreso", { ascending: false })
     .limit(10000)
 
+  if (!lectura.verTodas && lectura.sucursalId)
+    query = query.eq("sucursal_id", lectura.sucursalId)
+
   if (filters.estado) query = query.eq("estado", filters.estado)
   if (filters.desde) query = query.gte("fecha_ingreso", filters.desde)
   if (filters.hasta) query = query.lte("fecha_ingreso", filters.hasta)
@@ -141,7 +151,8 @@ async function exportOrdenes(
 
 async function exportVentas(
   organizationId: string,
-  filters: Record<string, string>
+  filters: Record<string, string>,
+  lectura: ResultadoLectura
 ): Promise<ExportPayload> {
   let query = supabaseAdmin
     .from("ventas")
@@ -149,6 +160,9 @@ async function exportVentas(
     .eq("organization_id", organizationId)
     .order("created_at", { ascending: false })
     .limit(10000)
+
+  if (!lectura.verTodas && lectura.sucursalId)
+    query = query.eq("sucursal_id", lectura.sucursalId)
 
   if (filters.estado) query = query.eq("estado", filters.estado)
   if (filters.desde) query = query.gte("created_at", filters.desde)

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
-import { sucursalParaEscritura } from "@/lib/sucursal"
+import { sucursalParaEscritura, sucursalParaLectura } from "@/lib/sucursal"
 import { z } from "zod"
 
 const createSchema = z.object({
@@ -28,11 +28,16 @@ function formatDeposito(row: any) {
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role, session } = await requireAuth()
     if (error) return error
 
     const { searchParams } = new URL(request.url)
     const includeInactive = searchParams.get("includeInactive") === "true"
+
+    const lectura = await sucursalParaLectura({
+      role,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
 
     let query = supabaseAdmin
       .from("depositos")
@@ -45,6 +50,9 @@ export async function GET(request: Request) {
     if (!includeInactive) {
       query = query.eq("activo", true)
     }
+
+    if (!lectura.verTodas && lectura.sucursalId)
+      query = query.eq("sucursal_id", lectura.sucursalId)
 
     const { data, error: dbErr } = await query
     if (dbErr) throw dbErr
