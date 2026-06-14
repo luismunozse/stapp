@@ -71,11 +71,14 @@
     --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
     --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
 
-    /* Background & Foreground */
-    --background: 0 0% 100%;
+    /* Background & Foreground
+       --background es un off-white frío muy sutil (no blanco puro): crea la
+       escala de superficies canvas < card < popover. Las cards quedan en
+       blanco puro y "levantan" del fondo. Esto mata el white-on-white. */
+    --background: 214 24% 97%;
     --foreground: 222.2 84% 4.9%;
 
-    /* Card */
+    /* Card - blanco puro, levanta sobre el canvas tintado */
     --card: 0 0% 100%;
     --card-foreground: 222.2 84% 4.9%;
 
@@ -97,16 +100,18 @@
     --primary: 221.2 83.2% 53.3%;
     --primary-foreground: 210 40% 98%;
 
-    /* Secondary - Gris azulado distintivo */
-    --secondary: 215 20% 95%;
+    /* Secondary - Gris azulado, claramente recesado del card blanco */
+    --secondary: 214 22% 93%;
     --secondary-foreground: 222.2 47.4% 11.2%;
 
-    /* Muted - Para texto secundario */
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    /* Muted - wells, chips, filas alternadas (recesado) y texto secundario.
+       muted-foreground oscurecido a L41% para pasar WCAG AA (~6:1 sobre card)
+       y sacar el "texto lavado". */
+    --muted: 214 20% 94%;
+    --muted-foreground: 215 19% 41%;
 
-    /* Accent - Para highlights y hovers */
-    --accent: 214 100% 97%;
+    /* Accent - highlight/hover azulado (un poco más saturado para que lea) */
+    --accent: 214 95% 95%;
     --accent-foreground: 222.2 47.4% 11.2%;
 
     /* Destructive */
@@ -143,18 +148,19 @@
     --info-600: 200 98% 39%;
     --info-700: 201 96% 32%;
 
-    /* Border, Input, Ring */
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
+    /* Border, Input, Ring - borde un poco más definido para que las cards
+       y los campos se lean sobre el canvas tintado. */
+    --border: 214 25% 88%;
+    --input: 214 25% 88%;
     --ring: 221.2 83.2% 53.3%;
 
     /* Radius */
     --radius: 0.5rem;
 
-    /* Sidebar */
+    /* Sidebar - blanco puro: levanta sobre el canvas como superficie elevada */
     --sidebar: 0 0% 100%;
     --sidebar-foreground: 222.2 84% 4.9%;
-    --sidebar-border: 214.3 31.8% 91.4%;
+    --sidebar-border: 214 25% 88%;
     --sidebar-accent: 214 100% 97%;
     --sidebar-accent-foreground: 221.2 83.2% 53.3%;
 
