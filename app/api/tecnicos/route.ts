@@ -87,6 +87,7 @@ export async function POST(request: Request) {
       email,
       password,
       porcentajeComision,
+      costoHora,
       telefono,
       especialidades,
       fechaIngresoTecnico,
@@ -103,6 +104,14 @@ export async function POST(request: Request) {
     if (!Number.isFinite(porcentajeNum) || porcentajeNum < 0 || porcentajeNum > 100) {
       return NextResponse.json(
         { error: "El porcentaje de comisión debe estar entre 0 y 100" },
+        { status: 400 }
+      )
+    }
+
+    const costoHoraNum = Number(costoHora ?? 0)
+    if (!Number.isFinite(costoHoraNum) || costoHoraNum < 0) {
+      return NextResponse.json(
+        { error: "El costo por hora debe ser mayor o igual a 0" },
         { status: 400 }
       )
     }
@@ -137,12 +146,13 @@ export async function POST(request: Request) {
         organization_id: organizationId!,
         email_verified: true,
         porcentaje_comision: porcentajeNum,
+        costo_hora: costoHoraNum,
         telefono: telefono || null,
         especialidades: especialidadesArr,
         fecha_ingreso_tecnico: fechaIngresoTecnico || null,
         activo: true,
       })
-      .select("id, nombre, email, porcentaje_comision, telefono, especialidades, fecha_ingreso_tecnico, activo")
+      .select("id, nombre, email, porcentaje_comision, costo_hora, telefono, especialidades, fecha_ingreso_tecnico, activo")
       .single()
 
     if (dbError) {

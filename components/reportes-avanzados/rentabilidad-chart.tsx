@@ -21,6 +21,7 @@ interface RentabilidadData {
   ganancia: number
   margen: number
   cantidad: number
+  costoManoObra?: number
 }
 
 export function RentabilidadChart() {
@@ -72,7 +73,7 @@ export function RentabilidadChart() {
       <CardHeader>
         <CardTitle>Rentabilidad por Tipo de Dispositivo</CardTitle>
         <CardDescription>
-          Ingresos vs costos de repuestos con margen resultante
+          Ingresos vs costos de repuestos y mano de obra, con margen resultante
         </CardDescription>
       </CardHeader>
       <CardContent>

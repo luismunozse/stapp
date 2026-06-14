@@ -41,6 +41,7 @@ interface TecnicoDetalle {
   fechaIngresoTecnico?: string | null
   avatarUrl?: string | null
   porcentajeComision?: number
+  costoHora?: number
   createdAt: string
   ordenesActivas: number
   ordenesCompletadas: number
@@ -312,6 +313,12 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
               <span className="text-xs sm:text-sm text-muted-foreground">% Comisión</span>
               <Badge variant="outline" className="text-[10px] sm:text-xs">
                 {Number(tecnico.porcentajeComision ?? 0).toFixed(2)}%
+              </Badge>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs sm:text-sm text-muted-foreground">Costo/hora</span>
+              <Badge variant="outline" className="text-[10px] sm:text-xs">
+                ${Number(tecnico.costoHora ?? 0).toFixed(2)}
               </Badge>
             </div>
           </CardContent>
