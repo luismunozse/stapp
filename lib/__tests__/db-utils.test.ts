@@ -171,6 +171,7 @@ describe('formatCliente', () => {
       tipoCliente: 'INDIVIDUAL',
       razonSocial: undefined,
       cuit: undefined,
+      aceptaWhatsapp: true,
       saldoCuenta: 0,
       organizationId: 'org-1',
       createdAt: '2024-01-01',

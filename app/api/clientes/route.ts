@@ -14,6 +14,7 @@ const clienteSchema = z.object({
   tipoCliente: z.enum(["INDIVIDUAL", "EMPRESA"]).optional().default("INDIVIDUAL"),
   razonSocial: z.string().optional(),
   cuit: z.string().optional(),
+  aceptaWhatsapp: z.boolean().optional(),
 })
 
 export async function GET(request: Request) {
@@ -103,6 +104,7 @@ export async function POST(request: Request) {
         razon_social: data.razonSocial || null,
         cuit: data.cuit || null,
         organization_id: organizationId!,
+        acepta_whatsapp: data.aceptaWhatsapp ?? true,
       })
       .select()
       .single()

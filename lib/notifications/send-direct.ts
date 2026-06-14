@@ -136,7 +136,17 @@ export async function sendNotificationDirect(params: NotificationParams) {
   }
 
   // WhatsApp si está habilitado
-  if (orgConfig.notificaciones_whatsapp && context.cliente.telefono) {
+  let aceptaWhatsapp = true
+  if (clienteId) {
+    const { data: cli } = await supabaseAdmin
+      .from("clientes")
+      .select("acepta_whatsapp")
+      .eq("id", clienteId)
+      .single()
+    aceptaWhatsapp = cli?.acepta_whatsapp ?? true
+  }
+
+  if (orgConfig.notificaciones_whatsapp && context.cliente.telefono && aceptaWhatsapp) {
     try {
       const { data: waConfig } = await supabaseAdmin
         .from("whatsapp_config")
