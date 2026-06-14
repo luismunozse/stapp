@@ -46,6 +46,7 @@ import { ApkDownloadBanner } from "@/components/shared/apk-download-banner"
 import { GlobalSearch } from "@/components/shared/global-search"
 import { NotificationBell } from "@/components/notifications/notification-bell"
 import { useSidebar } from "@/components/layout/sidebar-context"
+import { SucursalSwitcher } from "@/components/layout/sucursal-switcher"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { UserAvatar } from "@/components/shared/user-avatar"
 import { DeadlineCalendar } from "@/components/ordenes/deadline-calendar"
@@ -480,6 +481,7 @@ export function Navbar() {
         <PlanBadge />
         <GlobalSearch />
         <DeadlineCalendar />
+        <SucursalSwitcher />
         <NotificationBell />
         <ThemeToggle variant="icon" />
         <DropdownMenu>

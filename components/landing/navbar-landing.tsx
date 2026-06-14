@@ -87,8 +87,8 @@ export function NavbarLanding() {
                 <Link href="/login">
                   <Button variant="ghost" className="whitespace-nowrap">Iniciar Sesión</Button>
                 </Link>
-                <Link href="/registro">
-                  <Button className="whitespace-nowrap">Comenzar Gratis</Button>
+                <Link href="/registro?plan=profesional">
+                  <Button className="whitespace-nowrap">Probar gratis 30 días</Button>
                 </Link>
               </>
             )}
@@ -155,8 +155,8 @@ export function NavbarLanding() {
                         Iniciar Sesión
                       </Button>
                     </Link>
-                    <Link href="/registro">
-                      <Button className="w-full">Comenzar Gratis</Button>
+                    <Link href="/registro?plan=profesional">
+                      <Button className="w-full">Probar gratis 30 días</Button>
                     </Link>
                   </>
                 )}

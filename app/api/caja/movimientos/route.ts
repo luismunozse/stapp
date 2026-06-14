@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaEscritura, sucursalParaLectura } from "@/lib/sucursal"
 import { z } from "zod"
 
 const movimientoSchema = z.object({
@@ -17,21 +18,29 @@ const movimientoSchema = z.object({
 // GET - Lista movimientos manuales del día
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAdmin()
+    const { error, organizationId, role, session } = await requireAdmin()
     if (error) return error
+
+    const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
 
     const { searchParams } = new URL(request.url)
     const fecha = searchParams.get("fecha") || new Date().toISOString().split("T")[0]
     const fechaDesde = `${fecha}T00:00:00`
     const fechaHasta = `${fecha}T23:59:59`
 
-    const { data: movimientos } = await supabaseAdmin
+    let movimientosQuery = supabaseAdmin
       .from("movimientos_caja")
       .select("*, users(id, nombre), categorias_gasto(id, nombre, color, icono)")
       .eq("organization_id", organizationId!)
       .gte("fecha", fechaDesde)
       .lte("fecha", fechaHasta)
       .order("fecha", { ascending: false })
+
+    if (!filtro.verTodas && filtro.sucursalId) {
+      movimientosQuery = movimientosQuery.eq("sucursal_id", filtro.sucursalId)
+    }
+
+    const { data: movimientos } = await movimientosQuery
 
     return NextResponse.json({
       movimientos: (movimientos || []).map((m) => ({
@@ -67,11 +76,17 @@ export async function GET(request: Request) {
 // POST - Crear movimiento manual
 export async function POST(request: Request) {
   try {
-    const { error, organizationId, userId } = await requireAdmin()
+    const { error, organizationId, userId, role, session } = await requireAdmin()
     if (error) return error
 
     const body = await request.json()
     const parsed = movimientoSchema.parse(body)
+
+    const sucursalId = await sucursalParaEscritura({
+      role,
+      organizationId: organizationId!,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
 
     // Buscar sesión abierta (opcional)
     const { data: sesionAbierta } = await supabaseAdmin
@@ -97,6 +112,7 @@ export async function POST(request: Request) {
       .from("movimientos_caja")
       .insert({
         organization_id: organizationId!,
+        sucursal_id: sucursalId,
         sesion_caja_id: sesionAbierta?.id || null,
         tipo: parsed.tipo,
         monto: parsed.monto,

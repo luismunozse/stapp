@@ -31,6 +31,7 @@ vi.mock("@/lib/storage", () => ({
 }))
 
 import { enforcePlanLimit } from "@/lib/plan-limits"
+import { auth } from "@/lib/auth"
 import { GET, POST } from "@/app/api/ordenes/route"
 
 describe("GET /api/ordenes", () => {
@@ -198,6 +199,31 @@ describe("POST /api/ordenes", () => {
     expect(body.codigoOrden).toBe("CEL-001")
     expect(body.dispositivo).toBe("iPhone 14")
     expect(body.organizationName).toBe("Mi Taller Pro")
+  })
+
+  it("la orden nace con sucursal_id del contexto", async () => {
+    vi.mocked(auth).mockResolvedValue({
+      user: { id: "u-1", organizationId: "org-1", role: "TECNICO", sucursalId: "suc-1", email: "t@t.com" },
+      expires: new Date(Date.now() + 86400000).toISOString(),
+    } as any)
+
+    const insertSpy = vi.fn().mockReturnValue(createChainMock({ id: "ord-1", clientes: { id: "c1" } }, null))
+    mockSupabaseFrom({
+      sucursales: createChainMock({ id: "suc-p" }, null), // getPrincipalId
+      ordenes_servicio: { ...createChainMock({ id: "ord-1", clientes: { id: "c1" } }, null), insert: insertSpy } as any,
+      organizations: createChainMock({ nombre: "Mi Taller", nombre_mostrar: "Mi Taller Pro" }, null),
+    })
+
+    await POST(
+      createPostRequest({
+        clienteId: "c1",
+        dispositivo: "iPhone 14",
+        tipoDispositivo: "CELULAR",
+        problemaReportado: "No enciende",
+      })
+    )
+
+    expect(insertSpy).toHaveBeenCalledWith(expect.objectContaining({ sucursal_id: "suc-1" }))
   })
 
   it("enforces plan limits", async () => {

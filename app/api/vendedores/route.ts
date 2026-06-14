@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaEscritura, assertSucursalEnOrg } from "@/lib/sucursal"
 import { enforcePlanLimit, isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
 import bcrypt from "bcryptjs"
 import { z } from "zod"
@@ -16,6 +17,7 @@ const vendedorCreateSchema = z.object({
     .max(100, "La comisión no puede superar 100")
     .optional()
     .default(0),
+  sucursalId: z.string().optional().nullable(),
 })
 
 export async function GET(request: Request) {
@@ -109,7 +111,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { error, organizationId } = await requireAdmin()
+    const { error, organizationId, role, session } = await requireAdmin()
     if (error) return error
 
     // Verificar límite de vendedores del plan
@@ -118,6 +120,18 @@ export async function POST(request: Request) {
 
     const body = await request.json()
     const data = vendedorCreateSchema.parse(body)
+
+    // El nuevo vendedor se asigna a la sucursal activa del admin (principal por defecto).
+    let sucursalId = await sucursalParaEscritura({
+      role,
+      organizationId: organizationId!,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
+
+    // Si el form mandó una sucursal explícita y es válida para la org, usarla.
+    if (data.sucursalId && (await assertSucursalEnOrg(data.sucursalId, organizationId!))) {
+      sucursalId = data.sucursalId
+    }
 
     // Verificar si el email ya existe
     const { data: existingUser } = await supabaseAdmin
@@ -143,6 +157,7 @@ export async function POST(request: Request) {
         password: hashedPassword,
         rol: "VENDEDOR",
         organization_id: organizationId!,
+        sucursal_id: sucursalId,
         email_verified: true,
         telefono: data.telefono?.trim() || null,
         porcentaje_comision: data.porcentajeComision,

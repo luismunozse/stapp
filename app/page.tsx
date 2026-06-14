@@ -8,6 +8,7 @@ import { Features } from "@/components/landing/features"
 import { PricingSection } from "@/components/landing/pricing-section"
 import { Comparison } from "@/components/landing/comparison"
 import { UseCasesGrid } from "@/components/landing/use-cases-grid"
+import { Testimonials } from "@/components/landing/testimonials"
 import { BlogTeaser } from "@/components/landing/blog-teaser"
 import { FAQ } from "@/components/landing/faq"
 import { DownloadApp } from "@/components/landing/download-app"
@@ -57,7 +58,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "STApp - Software de Gestión para Talleres de Celulares",
     description:
-      "Gestión completa de tu taller: órdenes, inventario, ventas y finanzas. +500 talleres en Argentina. Probá 30 días gratis.",
+      "Gestión completa de tu taller: órdenes, inventario, ventas y finanzas. Probá 30 días gratis, sin tarjeta de crédito.",
     url: "https://stapp.com.ar",
   },
   alternates: {
@@ -67,6 +68,16 @@ export const metadata: Metadata = {
 
 const faqData = [
   {
+    question: "\u00bfEs complicado de usar si no soy experto en tecnolog\u00eda?",
+    answer:
+      "No. STApp est\u00e1 pensado para t\u00e9cnicos, no para inform\u00e1ticos: carg\u00e1s una orden en pocos pasos y la interfaz te gu\u00eda. Si te trab\u00e1s, el asistente Santi te explica cualquier funci\u00f3n dentro de la app. Pod\u00e9s empezar a cargar \u00f3rdenes el mismo d\u00eda, sin capacitaci\u00f3n previa.",
+  },
+  {
+    question: "\u00bfCu\u00e1nto tardo en pasar los datos de mi taller?",
+    answer:
+      "Poco: import\u00e1s clientes e inventario desde Excel o CSV con plantillas descargables y validaci\u00f3n autom\u00e1tica, as\u00ed no carg\u00e1s todo a mano. Pod\u00e9s arrancar el mismo d\u00eda y completar el resto sobre la marcha. Y tus datos son tuyos: los export\u00e1s cuando quieras, sin ataduras.",
+  },
+  {
     question: "\u00bfNecesito instalar algo en mi computadora?",
     answer:
       "No, STApp es una aplicaci\u00f3n web que funciona directamente en tu navegador desde cualquier dispositivo. Solo necesitas conexi\u00f3n a internet. Adem\u00e1s, pod\u00e9s descargar la app nativa para Android (APK), instalarla como PWA en cualquier dispositivo, y pr\u00f3ximamente estar\u00e1 disponible tambi\u00e9n en iOS.",
@@ -74,7 +85,7 @@ const faqData = [
   {
     question: "\u00bfPuedo probar antes de pagar?",
     answer:
-      "\u00a1Por supuesto! Tienes 30 d\u00edas gratis con acceso completo a todas las funciones, sin necesidad de tarjeta de cr\u00e9dito. Si no te convence, simplemente no hac\u00e9s nada y la prueba finaliza sin ning\u00fan cargo.",
+      "\u00a1Por supuesto! Ten\u00e9s 30 d\u00edas gratis con acceso completo a todas las funciones, sin necesidad de tarjeta de cr\u00e9dito. Si no te convence, simplemente no hac\u00e9s nada y la prueba finaliza sin ning\u00fan cargo.",
   },
   {
     question: "\u00bfQu\u00e9 m\u00e9todos de pago aceptan?",
@@ -177,10 +188,11 @@ export default async function Home() {
       <main id="main-content" className="min-h-dvh">
         <ReducedMotionProvider>
           <NavbarLanding />
-          <Hero />
+          <Hero prices={prices} />
           <Features />
           <Comparison />
           <UseCasesGrid />
+          <Testimonials />
           <PricingSection prices={prices} allPlans={allPlans} />
           <BlogTeaser />
           <FAQ faqs={faqData} />

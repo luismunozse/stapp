@@ -35,7 +35,13 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import type { PlanPrices } from "@/lib/pricing"
 import { LazyMotion, domAnimation, m, AnimatePresence, useReducedMotion } from "framer-motion"
+
+// Formatea con separador de miles (igual que pricing-section): 12500 -> "12.500"
+function formatThousands(price: number): string {
+  return price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
+}
 
 const modules = [
   { id: "ordenes", name: "Órdenes", icon: ClipboardList },
@@ -552,10 +558,14 @@ function MockupSlider() {
 // MAIN HERO COMPONENT
 // ========================================
 
-export function Hero() {
+export function Hero({ prices }: { prices: PlanPrices }) {
   const reduceMotion = useReducedMotion()
   // Capturar UTM params de la URL al cargar la landing
   useEffect(() => { captureUtmParams() }, [])
+
+  // Ancla de precio: piso real = tarifa mensual del plan anual (lo más barato
+  // pagando). "Desde" es honesto porque existe Free ($0) y el mensual es mayor.
+  const anchorArs = formatThousands(Math.round(prices.ars.yearly / 12))
 
   const benefits = [
     "Órdenes ilimitadas",
@@ -640,7 +650,7 @@ export function Hero() {
                 transition={{ duration: 0.5, delay: 0.4 }}
               >
                 <Link
-                  href="/registro"
+                  href="/registro?plan=profesional"
                   onClick={() => track("landing_cta_click", { cta: "hero_primary", label: "Comenzar Gratis" })}
                 >
                   <m.div
@@ -649,13 +659,13 @@ export function Hero() {
                     transition={{ type: "spring", stiffness: 400, damping: 17 }}
                   >
                     <Button size="lg" className="text-sm sm:text-base px-4 sm:px-6 py-4 sm:py-5 shadow-lg hover:shadow-xl transition-shadow group">
-                      Comenzar Gratis
+                      Probar gratis 30 días
                       <ArrowRight className="ml-1.5 sm:ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
                     </Button>
                   </m.div>
                 </Link>
                 <a
-                  href="#features"
+                  href="#demo"
                   onClick={() => track("landing_cta_click", { cta: "hero_secondary", label: "Ver cómo funciona" })}
                 >
                   <m.div
@@ -677,13 +687,14 @@ export function Hero() {
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.5, delay: 0.5 }}
               >
-                Configuración en 2 min • Soporte en español • Cancelás cuando quieras
+                Desde <span className="font-semibold text-foreground">${anchorArs}/mes</span> • Configuración en minutos • Cancelás cuando quieras
               </m.p>
             </div>
 
             {/* Right column - Interactive Mockup Slider */}
             <m.div
-              className="relative"
+              id="demo"
+              className="relative scroll-mt-24"
               initial={{ opacity: 0, x: 30 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.6, delay: 0.3 }}
