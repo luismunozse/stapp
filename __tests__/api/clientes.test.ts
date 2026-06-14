@@ -189,4 +189,67 @@ describe("POST /api/clientes", () => {
     expect(status).toBe(403)
     expect(body.error).toContain("Límite")
   })
+
+  it("persists acepta_whatsapp: false when explicitly set", async () => {
+    mockAuthSuccess()
+
+    const newCliente = {
+      id: "c-wa",
+      nombre: "Ana Torres",
+      telefono: "9988776655",
+      email: null,
+      direccion: null,
+      dni: null,
+      organization_id: "org-1",
+      acepta_whatsapp: false,
+    }
+
+    const chain = createChainMock(newCliente)
+    mockSupabaseFrom({ clientes: chain })
+
+    const response = await POST(
+      createPostRequest({
+        nombre: "Ana Torres",
+        telefono: "9988776655",
+        aceptaWhatsapp: false,
+      })
+    )
+    const { status } = await parseResponse(response)
+
+    expect(status).toBe(201)
+    expect(chain.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ acepta_whatsapp: false })
+    )
+  })
+
+  it("defaults acepta_whatsapp to true when omitted", async () => {
+    mockAuthSuccess()
+
+    const newCliente = {
+      id: "c-wa2",
+      nombre: "Luis Perez",
+      telefono: "1234509876",
+      email: null,
+      direccion: null,
+      dni: null,
+      organization_id: "org-1",
+      acepta_whatsapp: true,
+    }
+
+    const chain = createChainMock(newCliente)
+    mockSupabaseFrom({ clientes: chain })
+
+    const response = await POST(
+      createPostRequest({
+        nombre: "Luis Perez",
+        telefono: "1234509876",
+      })
+    )
+    const { status } = await parseResponse(response)
+
+    expect(status).toBe(201)
+    expect(chain.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ acepta_whatsapp: true })
+    )
+  })
 })
