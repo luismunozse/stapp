@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { LazyMotion, domAnimation, m } from "framer-motion"
+import { LazyMotion, domAnimation, m } from "@/components/animations/motion"
 import { revealHeader, revealStagger, revealRow } from "./reveal"
 
 interface FAQItem {

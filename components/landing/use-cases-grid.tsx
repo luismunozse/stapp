@@ -46,7 +46,7 @@ export function UseCasesGrid() {
           {useCases.map((useCase) => {
             const Icon = useCase.icon
             return (
-              <m.div key={useCase.slug} variants={revealCard}>
+              <m.div key={useCase.slug} variants={revealCard} className="h-full">
               <Link
                 href={`/casos-de-uso/${useCase.slug}`}
                 className="group"
@@ -70,7 +70,7 @@ export function UseCasesGrid() {
             )
           })}
 
-          <m.div variants={revealCard}>
+          <m.div variants={revealCard} className="h-full">
           <Link href="/casos-de-uso" className="group">
             <Card className="p-6 h-full flex flex-col justify-center items-center text-center border-dashed hover:border-primary/50 hover:bg-primary/5 transition-[border-color,background-color]">
               <h3 className="text-lg font-semibold text-foreground mb-2">
