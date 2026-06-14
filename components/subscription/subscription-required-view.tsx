@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { signOut } from "next-auth/react"
 
-import { Clock, AlertTriangle, CreditCard, LogOut, Check, X, CheckCircle2, ArrowRight, Zap } from "lucide-react"
+import { Clock, AlertTriangle, CreditCard, LogOut, Check, X, CheckCircle2, ArrowRight, Zap, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { BusinessLogo } from "@/components/shared/business-logo"
@@ -267,6 +267,32 @@ export function SubscriptionRequiredView({
               </Card>
             )
           })}
+        </div>
+
+        {/* Portabilidad: exportar datos propios incluso con la cuenta bloqueada */}
+        <div className="mt-10 max-w-md mx-auto rounded-lg border bg-card p-5">
+          <h2 className="text-sm font-semibold mb-1">Exportá tus datos</h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            Tus datos son tuyos. Descargalos cuando quieras, incluso con la
+            suscripción pausada.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { entity: "clientes", label: "Clientes" },
+              { entity: "ordenes", label: "Órdenes" },
+              { entity: "ventas", label: "Ventas" },
+              { entity: "inventario", label: "Inventario" },
+            ].map((it) => (
+              <a
+                key={it.entity}
+                href={`/api/export/${it.entity}?format=xlsx`}
+                className="inline-flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted transition-colors"
+              >
+                <Download className="h-4 w-4" />
+                {it.label}
+              </a>
+            ))}
+          </div>
         </div>
 
         <div className="text-center text-sm text-muted-foreground mt-8 space-y-1">

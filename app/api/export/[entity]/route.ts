@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
-import { hasPlanFeature } from "@/lib/subscriptions"
 import { supabaseAdmin } from "@/lib/supabase"
 import {
   arrayToCSV,
+  arrayToXLSX,
+  type CSVColumn,
   ORDENES_COLUMNS,
   VENTAS_COLUMNS,
   CLIENTES_COLUMNS,
@@ -21,9 +22,19 @@ const VALID_ENTITIES: EntityType[] = [
   "garantias",
 ]
 
+interface ExportPayload {
+  data: any[]
+  columns: CSVColumn<any>[]
+}
+
 /**
  * GET /api/export/[entity]
- * Exporta datos a CSV - Solo usuarios Premium
+ * Exporta los datos propios de la organización a CSV o XLSX.
+ *
+ * Portabilidad de datos: NO está gateado por plan. Cualquier organización
+ * autenticada puede exportar SUS PROPIOS datos (org-scoped por organization_id),
+ * en cualquier plan o estado de suscripción. El gate de plan se mantiene solo
+ * para la exportación de reportes/analytics (/api/export/reportes).
  */
 export async function GET(
   request: NextRequest,
@@ -32,19 +43,6 @@ export async function GET(
   try {
     const { error, organizationId } = await requireAuth()
     if (error) return error
-
-    // Verificar feature data_export
-    const hasFeature = await hasPlanFeature(organizationId!, "data_export")
-    if (!hasFeature) {
-      return NextResponse.json(
-        {
-          error: "La exportación de datos requiere el plan Profesional",
-          code: "FEATURE_REQUIRED",
-          feature: "data_export",
-        },
-        { status: 403 }
-      )
-    }
 
     const { entity } = await params
 
@@ -55,33 +53,26 @@ export async function GET(
       )
     }
 
-    // Obtener filtros de query params
     const searchParams = request.nextUrl.searchParams
     const filters = Object.fromEntries(searchParams.entries())
+    const format = (filters.format || "csv").toLowerCase()
 
-    let csvContent: string
-    let filename: string
-
+    let payload: ExportPayload
     switch (entity as EntityType) {
       case "ordenes":
-        csvContent = await exportOrdenes(organizationId!, filters)
-        filename = `ordenes_${formatDateFilename()}.csv`
+        payload = await exportOrdenes(organizationId!, filters)
         break
       case "ventas":
-        csvContent = await exportVentas(organizationId!, filters)
-        filename = `ventas_${formatDateFilename()}.csv`
+        payload = await exportVentas(organizationId!, filters)
         break
       case "clientes":
-        csvContent = await exportClientes(organizationId!, filters)
-        filename = `clientes_${formatDateFilename()}.csv`
+        payload = await exportClientes(organizationId!, filters)
         break
       case "inventario":
-        csvContent = await exportInventario(organizationId!, filters)
-        filename = `inventario_${formatDateFilename()}.csv`
+        payload = await exportInventario(organizationId!, filters)
         break
       case "garantias":
-        csvContent = await exportGarantias(organizationId!, filters)
-        filename = `garantias_${formatDateFilename()}.csv`
+        payload = await exportGarantias(organizationId!, filters)
         break
       default:
         return NextResponse.json(
@@ -90,11 +81,22 @@ export async function GET(
         )
     }
 
-    // Retornar archivo CSV
+    if (format === "xlsx") {
+      const buffer = await arrayToXLSX(payload.data, payload.columns)
+      return new NextResponse(new Uint8Array(buffer), {
+        headers: {
+          "Content-Type":
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "Content-Disposition": `attachment; filename="${entity}_${formatDateFilename()}.xlsx"`,
+        },
+      })
+    }
+
+    const csvContent = arrayToCSV(payload.data, payload.columns)
     return new NextResponse(csvContent, {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Content-Disposition": `attachment; filename="${entity}_${formatDateFilename()}.csv"`,
       },
     })
   } catch (error) {
@@ -114,7 +116,7 @@ function formatDateFilename(): string {
 async function exportOrdenes(
   organizationId: string,
   filters: Record<string, string>
-): Promise<string> {
+): Promise<ExportPayload> {
   let query = supabaseAdmin
     .from("ordenes_servicio")
     .select(
@@ -128,62 +130,39 @@ async function exportOrdenes(
     .order("fecha_ingreso", { ascending: false })
     .limit(10000)
 
-  // Aplicar filtros
-  if (filters.estado) {
-    query = query.eq("estado", filters.estado)
-  }
-  if (filters.desde) {
-    query = query.gte("fecha_ingreso", filters.desde)
-  }
-  if (filters.hasta) {
-    query = query.lte("fecha_ingreso", filters.hasta)
-  }
+  if (filters.estado) query = query.eq("estado", filters.estado)
+  if (filters.desde) query = query.gte("fecha_ingreso", filters.desde)
+  if (filters.hasta) query = query.lte("fecha_ingreso", filters.hasta)
 
   const { data, error } = await query
-
   if (error) throw error
-
-  return arrayToCSV(data || [], ORDENES_COLUMNS)
+  return { data: data || [], columns: ORDENES_COLUMNS }
 }
 
 async function exportVentas(
   organizationId: string,
   filters: Record<string, string>
-): Promise<string> {
+): Promise<ExportPayload> {
   let query = supabaseAdmin
     .from("ventas")
-    .select(
-      `
-      *,
-      vendedor:users!vendedor_id(nombre)
-    `
-    )
+    .select(`*, vendedor:users!vendedor_id(nombre)`)
     .eq("organization_id", organizationId)
     .order("created_at", { ascending: false })
     .limit(10000)
 
-  // Aplicar filtros
-  if (filters.estado) {
-    query = query.eq("estado", filters.estado)
-  }
-  if (filters.desde) {
-    query = query.gte("created_at", filters.desde)
-  }
-  if (filters.hasta) {
-    query = query.lte("created_at", filters.hasta)
-  }
+  if (filters.estado) query = query.eq("estado", filters.estado)
+  if (filters.desde) query = query.gte("created_at", filters.desde)
+  if (filters.hasta) query = query.lte("created_at", filters.hasta)
 
   const { data, error } = await query
-
   if (error) throw error
-
-  return arrayToCSV(data || [], VENTAS_COLUMNS)
+  return { data: data || [], columns: VENTAS_COLUMNS }
 }
 
 async function exportClientes(
   organizationId: string,
   filters: Record<string, string>
-): Promise<string> {
+): Promise<ExportPayload> {
   let query = supabaseAdmin
     .from("clientes")
     .select("*")
@@ -191,7 +170,6 @@ async function exportClientes(
     .order("created_at", { ascending: false })
     .limit(10000)
 
-  // Aplicar filtro de búsqueda
   if (filters.search) {
     query = query.or(
       `nombre.ilike.%${filters.search}%,telefono.ilike.%${filters.search}%,email.ilike.%${filters.search}%`
@@ -199,16 +177,14 @@ async function exportClientes(
   }
 
   const { data, error } = await query
-
   if (error) throw error
-
-  return arrayToCSV(data || [], CLIENTES_COLUMNS)
+  return { data: data || [], columns: CLIENTES_COLUMNS }
 }
 
 async function exportInventario(
   organizationId: string,
   filters: Record<string, string>
-): Promise<string> {
+): Promise<ExportPayload> {
   let query = supabaseAdmin
     .from("inventario")
     .select("*")
@@ -216,13 +192,9 @@ async function exportInventario(
     .order("nombre", { ascending: true })
     .limit(10000)
 
-  // Aplicar filtros
-  if (filters.categoria) {
-    query = query.eq("categoria", filters.categoria)
-  }
-  if (filters.tipo_dispositivo) {
+  if (filters.categoria) query = query.eq("categoria", filters.categoria)
+  if (filters.tipo_dispositivo)
     query = query.eq("tipo_dispositivo", filters.tipo_dispositivo)
-  }
   if (filters.proveedor_id) {
     if (filters.proveedor_id === "none") {
       query = query.is("proveedor_id", null)
@@ -230,21 +202,17 @@ async function exportInventario(
       query = query.eq("proveedor_id", filters.proveedor_id)
     }
   }
-  if (filters.bajo_stock === "true") {
-    query = query.lt("stock", 5)
-  }
+  if (filters.bajo_stock === "true") query = query.lt("stock", 5)
 
   const { data, error } = await query
-
   if (error) throw error
-
-  return arrayToCSV(data || [], INVENTARIO_COLUMNS)
+  return { data: data || [], columns: INVENTARIO_COLUMNS }
 }
 
 async function exportGarantias(
   organizationId: string,
   filters: Record<string, string>
-): Promise<string> {
+): Promise<ExportPayload> {
   let query = supabaseAdmin
     .from("garantias")
     .select(
@@ -261,17 +229,10 @@ async function exportGarantias(
     .order("fecha_vencimiento", { ascending: true })
     .limit(10000)
 
-  // Aplicar filtros
-  if (filters.estado) {
-    query = query.eq("estado", filters.estado)
-  }
+  if (filters.estado) query = query.eq("estado", filters.estado)
 
   const { data, error } = await query
-
   if (error) throw error
-
-  // Filtrar resultados donde la orden pertenece a la organización
-  const filteredData = (data || []).filter((g) => g.orden !== null)
-
-  return arrayToCSV(filteredData, GARANTIAS_COLUMNS)
+  const filteredData = (data || []).filter((g: any) => g.orden !== null)
+  return { data: filteredData, columns: GARANTIAS_COLUMNS }
 }
