@@ -81,7 +81,7 @@ export const PLANTILLAS_CATALOG: PlantillaDefinition[] = [
     category: "ordenes",
     description: "Se envía cuando la orden cambia de estado.",
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_ESTADO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra {estado}.
+    defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra {estado}. Puede ver el detalle en el link.
 
 Seguimiento: {link_seguimiento}
 
@@ -93,13 +93,14 @@ Seguimiento: {link_seguimiento}
     category: "ordenes",
     description: "Aviso al cliente con el monto del presupuesto definido.",
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_PRESUPUESTO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, le informamos el presupuesto para la reparación de su {dispositivo}:
+    defaultText: `Hola {cliente}, ya tenemos el presupuesto para la reparación de su {dispositivo}:
 
 *Presupuesto: {presupuesto}*
 
 Orden #{numero_orden}
 
-Por favor confirmenos si desea proceder con la reparación.
+Para avanzar, *apruebe o rechace el presupuesto* desde el link de abajo.
+
 Seguimiento: {link_seguimiento}
 
 {empresa}`,
@@ -202,7 +203,7 @@ Seguimiento: {link_seguimiento}
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
     defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra recibido.
 
-Hemos recibido su equipo correctamente. Pronto comenzaremos con el diagnóstico y le informaremos novedades.
+Recibimos su equipo y ya está en cola de diagnóstico. Le avisaremos apenas tengamos novedades.
 
 Seguimiento: {link_seguimiento}
 
@@ -216,7 +217,7 @@ Seguimiento: {link_seguimiento}
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
     defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra en diagnóstico.
 
-Nuestro técnico está evaluando el equipo. Le enviaremos el presupuesto a la brevedad.
+Estamos revisando su equipo para detectar la falla. En breve le enviamos el presupuesto.
 
 Seguimiento: {link_seguimiento}
 
@@ -228,9 +229,9 @@ Seguimiento: {link_seguimiento}
     category: "ordenes",
     description: "Aviso al cliente cuando la orden entra al estado PRESUPUESTADO.",
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra presupuestado - esperando su respuesta.
+    defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra presupuestado.
 
-Por favor confirme si desea continuar con la reparación.
+Para avanzar, *apruebe o rechace el presupuesto* desde el link de seguimiento de abajo. Cualquier duda, escríbanos.
 
 Seguimiento: {link_seguimiento}
 
@@ -242,9 +243,9 @@ Seguimiento: {link_seguimiento}
     category: "ordenes",
     description: "Aviso al cliente cuando la orden entra al estado APROBADO.",
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra aprobado - en cola de reparación.
+    defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra aprobado.
 
-Gracias por aprobar el presupuesto. Su equipo entrará en cola de reparación y le avisaremos cuando esté listo.
+¡Gracias por aprobar el presupuesto! Su equipo entra en cola de reparación. Le avisamos cuando esté listo.
 
 Seguimiento: {link_seguimiento}
 
@@ -258,7 +259,7 @@ Seguimiento: {link_seguimiento}
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
     defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra en reparación.
 
-Nuestro técnico está trabajando en su equipo. Le avisaremos cuando la reparación esté completa.
+Ya estamos reparando su equipo. Le avisamos en cuanto esté terminado.
 
 Seguimiento: {link_seguimiento}
 
@@ -272,7 +273,7 @@ Seguimiento: {link_seguimiento}
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
     defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra esperando repuesto.
 
-Le avisaremos cuando llegue el repuesto para continuar con la reparación.
+Su reparación está en pausa esperando un repuesto. Apenas llegue, retomamos y le avisamos.
 
 Seguimiento: {link_seguimiento}
 
@@ -284,9 +285,9 @@ Seguimiento: {link_seguimiento}
     category: "ordenes",
     description: "Aviso al cliente cuando la orden entra al estado REPARADO.",
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra listo para retirar.
+    defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra reparado.
 
-Puede pasar a retirarlo en nuestro local en horario de atención. Lo esperamos!
+Su equipo está reparado y *listo para retirar*. Lo esperamos en horario de atención.
 
 Seguimiento: {link_seguimiento}
 
@@ -300,7 +301,7 @@ Seguimiento: {link_seguimiento}
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
     defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra entregado.
 
-Gracias por confiar en nosotros!
+Su equipo fue entregado. ¡Gracias por confiar en nosotros! Si necesita algo más, escríbanos.
 
 Seguimiento: {link_seguimiento}
 
@@ -314,7 +315,7 @@ Seguimiento: {link_seguimiento}
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
     defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra retirado sin reparación.
 
-Su equipo fue retirado sin reparación. Gracias por habernos consultado.
+Su equipo fue retirado sin reparación. Gracias por consultarnos; quedamos a disposición.
 
 Seguimiento: {link_seguimiento}
 
@@ -328,7 +329,7 @@ Seguimiento: {link_seguimiento}
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
     defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra entregado sin cobro.
 
-Gracias por confiar en nosotros!
+Su equipo fue entregado. ¡Gracias por confiar en nosotros!
 
 Seguimiento: {link_seguimiento}
 
@@ -342,7 +343,7 @@ Seguimiento: {link_seguimiento}
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
     defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra cancelado.
 
-Si tiene alguna consulta o desea ingresar un nuevo servicio, no dude en contactarnos.
+La orden fue cancelada. Si desea retomar o ingresar un nuevo servicio, escríbanos.
 
 Seguimiento: {link_seguimiento}
 
@@ -356,7 +357,7 @@ Seguimiento: {link_seguimiento}
     variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
     defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra sin posibilidad de reparación.
 
-Lamentablemente no fue posible realizar la reparación. Puede pasar a retirar su equipo en horario de atención.
+No fue posible reparar su equipo. Puede pasar a retirarlo en horario de atención. Quedamos a disposición.
 
 Seguimiento: {link_seguimiento}
 

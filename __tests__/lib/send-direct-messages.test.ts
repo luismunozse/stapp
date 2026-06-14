@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { generateWhatsAppMessage } from "@/lib/notifications/whatsapp-message"
+import { generateWhatsAppMessage, resolvePlantillaForTipo } from "@/lib/notifications/whatsapp-message"
 
 const ctx = (orden: Record<string, unknown> = {}) =>
   ({
@@ -19,35 +19,52 @@ const ctx = (orden: Record<string, unknown> = {}) =>
 
 const msg = (tipo: string, c: unknown) => generateWhatsAppMessage(tipo, c as any)
 
-describe("generateWhatsAppMessage (path automático)", () => {
-  it("CAMBIO_ESTADO PRESUPUESTADO: monto + CTA aprobar/rechazar + link", () => {
+describe("generateWhatsAppMessage (fallback genérico)", () => {
+  it("retorna mensaje genérico con nombre de empresa y referencia a la orden", () => {
     const m = msg("CAMBIO_ESTADO", ctx({ estado: "PRESUPUESTADO", presupuesto: 15000 }))
-    expect(m).toMatch(/apruebe o rechace/i)
-    expect(m).toMatch(/seguimiento\/tok/)
-    expect(m).toMatch(/15[.,]000/)
+    expect(m).toMatch(/GuruTech/i)
+    expect(m).toMatch(/actualización/i)
   })
 
-  it("CAMBIO_ESTADO REPARADO: listo para retirar + link", () => {
-    const m = msg("CAMBIO_ESTADO", ctx({ estado: "REPARADO" }))
+  it("incluye link de seguimiento cuando hay publicToken", () => {
+    const m = msg("CAMBIO_ESTADO", ctx({ estado: "RECIBIDO" }))
+    expect(m).toMatch(/seguimiento\/tok/)
+  })
+
+  it("no rompe sin publicToken (link vacío)", () => {
+    const m = msg("CAMBIO_ESTADO", ctx({ estado: "EN_REPARACION", publicToken: null }))
+    expect(m).not.toMatch(/seguimiento\//)
+    expect(m).toMatch(/GuruTech/i)
+  })
+})
+
+describe("resolvePlantillaForTipo (copy por estado — catálogo como fuente de verdad)", () => {
+  it("CAMBIO_ESTADO PRESUPUESTADO sin override → default del catálogo con CTA aprobar/rechazar + link", () => {
+    const m = resolvePlantillaForTipo("CAMBIO_ESTADO", ctx({ estado: "PRESUPUESTADO", presupuesto: 15000 }), null)!
+    expect(m).toMatch(/apruebe o rechace/i)
+    expect(m).toMatch(/seguimiento\/tok/)
+  })
+
+  it("CAMBIO_ESTADO REPARADO sin override → default del catálogo con listo para retirar + link", () => {
+    const m = resolvePlantillaForTipo("CAMBIO_ESTADO", ctx({ estado: "REPARADO" }), null)!
     expect(m).toMatch(/listo para retirar/i)
     expect(m).toMatch(/seguimiento\/tok/)
   })
 
-  it("CAMBIO_ESTADO RECIBIDO: copy específico (no genérico 'cambió a')", () => {
-    const m = msg("CAMBIO_ESTADO", ctx({ estado: "RECIBIDO" }))
+  it("CAMBIO_ESTADO RECIBIDO sin override → default del catálogo (copy específico, no genérico)", () => {
+    const m = resolvePlantillaForTipo("CAMBIO_ESTADO", ctx({ estado: "RECIBIDO" }), null)!
     expect(m).toMatch(/cola de diagn/i)
-    expect(m).not.toMatch(/cambió a/i)
   })
 
-  it("PRESUPUESTO_DEFINIDO: monto + CTA + link, sin 'responda SI'", () => {
-    const m = msg("PRESUPUESTO_DEFINIDO", ctx({ presupuesto: 20000 }))
+  it("PRESUPUESTO_DEFINIDO sin override → default orden_presupuesto con CTA + link, sin 'responda SI'", () => {
+    const m = resolvePlantillaForTipo("PRESUPUESTO_DEFINIDO", ctx({ presupuesto: 20000 }), null)!
     expect(m).toMatch(/apruebe o rechace/i)
     expect(m).toMatch(/seguimiento\/tok/)
     expect(m).not.toMatch(/responda\s+\*?si\*?/i)
   })
 
   it("sin publicToken no rompe (link vacío)", () => {
-    const m = msg("CAMBIO_ESTADO", ctx({ estado: "EN_REPARACION", publicToken: null }))
+    const m = resolvePlantillaForTipo("CAMBIO_ESTADO", ctx({ estado: "EN_REPARACION", publicToken: null }), null)!
     expect(m).toMatch(/en reparaci/i)
     expect(m).not.toMatch(/seguimiento\//)
   })
