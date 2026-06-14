@@ -24,6 +24,8 @@ import { es } from "date-fns/locale"
 import type { EstadoTurno, TipoTurno, TurnoConRelaciones } from "@/types"
 import { StatusBanner } from "@/components/ui/status-banner"
 import { FieldSectionLabel } from "@/components/ui/field-section-label"
+import { ESTADO_LABELS } from "@/lib/turno-colors"
+import { TurnoEstadoBadge } from "@/components/agenda/turno-estado-badge"
 
 const TIPO_LABELS: Record<TipoTurno, string> = {
   visita_diagnostico: "Visita de diagnóstico",
@@ -31,26 +33,6 @@ const TIPO_LABELS: Record<TipoTurno, string> = {
   retiro: "Retiro de equipo",
   entrega: "Entrega de equipo",
   mantenimiento: "Mantenimiento",
-}
-
-const ESTADO_LABELS: Record<EstadoTurno, string> = {
-  agendado: "Agendado",
-  confirmado: "Confirmado",
-  en_camino: "En camino",
-  realizado: "Realizado",
-  orden_generada: "Orden generada",
-  cancelado: "Cancelado",
-  no_show: "No se presentó",
-}
-
-const ESTADO_COLORS: Record<EstadoTurno, string> = {
-  agendado: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
-  confirmado: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-300",
-  en_camino: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
-  realizado: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
-  orden_generada: "bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300",
-  cancelado: "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400",
-  no_show: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
 }
 
 const ESTADOS_EDITABLES: EstadoTurno[] = [
@@ -150,9 +132,7 @@ export function TurnoDetailSheet({ open, onClose, turno, onChanged, onEdit }: Tu
         <DialogHeader>
           <div className="flex items-center justify-between pr-8">
             <DialogTitle>Detalle del turno</DialogTitle>
-            <span className={`text-xs font-medium px-2 py-1 rounded-full ${ESTADO_COLORS[turno.estado]}`}>
-              {ESTADO_LABELS[turno.estado]}
-            </span>
+            <TurnoEstadoBadge estado={turno.estado} />
           </div>
           <DialogDescription>
             {TIPO_LABELS[turno.tipo]}
