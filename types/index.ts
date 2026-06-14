@@ -100,6 +100,7 @@ export interface Cliente {
   tipoCliente?: TipoCliente
   razonSocial?: string | null
   cuit?: string | null
+  aceptaWhatsapp?: boolean
   sectores?: SectorCliente[]
   saldoCuenta?: number
   createdAt: Date

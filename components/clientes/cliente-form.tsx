@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog"
 import { FormActionBar } from "@/components/ui/form-action-bar"
 import { User, Building2 } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
 import type { Cliente } from "@/types"
 import { useCurrency } from "@/contexts/currency-context"
 import { useModal } from "@/contexts/modal-context"
@@ -35,6 +36,7 @@ const clienteSchema = z.object({
   dni: z.string().optional().or(z.literal("")),
   razonSocial: z.string().optional(),
   cuit: z.string().optional().or(z.literal("")),
+  aceptaWhatsapp: z.boolean().default(true),
 })
 
 type ClienteFormData = z.infer<typeof clienteSchema>
@@ -71,6 +73,7 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
           dni: cliente.dni || "",
           razonSocial: cliente.razonSocial || "",
           cuit: cliente.cuit || "",
+          aceptaWhatsapp: cliente.aceptaWhatsapp ?? true,
         }
       : {
           tipoCliente: "INDIVIDUAL",
@@ -81,6 +84,7 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
           dni: "",
           razonSocial: "",
           cuit: "",
+          aceptaWhatsapp: true,
         },
   })
 
@@ -98,6 +102,7 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
             dni: cliente.dni || "",
             razonSocial: cliente.razonSocial || "",
             cuit: cliente.cuit || "",
+            aceptaWhatsapp: cliente.aceptaWhatsapp ?? true,
           }
         : {
             tipoCliente: "INDIVIDUAL",
@@ -108,6 +113,7 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
             dni: "",
             razonSocial: "",
             cuit: "",
+            aceptaWhatsapp: true,
           }
       )
     }
@@ -307,6 +313,20 @@ export function ClienteForm({ cliente, open, onClose, onSuccess }: ClienteFormPr
               autoComplete="street-address"
               {...register("direccion")}
               placeholder="Dirección completa"
+            />
+          </div>
+
+          <div className="flex items-center justify-between rounded-md border p-3">
+            <div className="space-y-0.5">
+              <Label htmlFor="aceptaWhatsapp">Acepta notificaciones por WhatsApp</Label>
+              <p className="text-xs text-muted-foreground">
+                Desactivar para no enviar mensajes automáticos de WhatsApp a este cliente.
+              </p>
+            </div>
+            <Switch
+              id="aceptaWhatsapp"
+              checked={watch("aceptaWhatsapp") ?? true}
+              onCheckedChange={(checked) => setValue("aceptaWhatsapp", checked)}
             />
           </div>
 

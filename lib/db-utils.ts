@@ -143,6 +143,7 @@ export function formatCliente(cliente: any) {
     tipoCliente: cliente.tipo_cliente || "INDIVIDUAL",
     razonSocial: cliente.razon_social,
     cuit: cliente.cuit,
+    aceptaWhatsapp: cliente.acepta_whatsapp ?? true,
     saldoCuenta: parseFloat(cliente.saldo_cuenta || "0"),
     organizationId: cliente.organization_id,
     createdAt: cliente.created_at,
