@@ -2,11 +2,13 @@ import { auth } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ClipboardList, Users, Package, DollarSign, Shield, ShoppingCart, TrendingUp, CheckCircle, AlertTriangle, Clock, Wrench } from "lucide-react"
-import { formatCurrency, cn } from "@/lib/utils"
+import { formatCurrency } from "@/lib/utils"
 import type { CurrencyCode } from "@/lib/currency"
 import { redirect } from "next/navigation"
 import Link from "next/link"
 import { QuickActions } from "@/components/dashboard/quick-actions"
+import { StatCard, type StatCardProps } from "@/components/dashboard/stat-card"
+import { AlertItem } from "@/components/dashboard/alert-item"
 import { OnboardingPanel } from "@/components/dashboard/onboarding-panel"
 import { SetupChecklist } from "@/components/onboarding/setup-checklist"
 import { DolarWidget } from "@/components/cotizacion-dolar"
@@ -676,16 +678,15 @@ export default async function DashboardPage() {
   const ventasMesCount = ventasMesData?.length || 0
   const garantiasVentaPorVencer = garantiasVentaPorVencerResult.data || []
 
-  // Stats filtrados por rol
-  const adminStats = [
+  // Stats filtrados por rol. `tone` usa el sistema semántico (info/success/
+  // warning/danger) en vez del arcoíris de colores hardcodeados anterior.
+  const adminStats: StatCardProps[] = [
     {
       title: "Órdenes Pendientes",
       value: ordenesPendientes.toString(),
       description: `${totalOrdenes} totales`,
       icon: ClipboardList,
-      colorClass: "text-info-600 dark:text-info-500",
-      bgClass: "bg-info-50 dark:bg-info-100/50",
-      hoverBorder: "hover:border-blue-300 dark:hover:border-blue-700",
+      tone: "info",
       urgent: ordenesPendientes > 0,
       href: "/ordenes",
     },
@@ -694,9 +695,7 @@ export default async function DashboardPage() {
       value: itemsBajoStock.toString(),
       description: "Items a reponer",
       icon: Package,
-      colorClass: "text-warning-600 dark:text-warning-500",
-      bgClass: "bg-warning-50 dark:bg-warning-100/50",
-      hoverBorder: "hover:border-amber-300 dark:hover:border-amber-700",
+      tone: "warning",
       urgent: itemsBajoStock > 0,
       href: "/inventario",
     },
@@ -705,9 +704,7 @@ export default async function DashboardPage() {
       value: totalClientes.toString(),
       description: "Total registrados",
       icon: Users,
-      colorClass: "text-success-600 dark:text-success-500",
-      bgClass: "bg-success-50 dark:bg-success-100/50",
-      hoverBorder: "hover:border-green-300 dark:hover:border-green-700",
+      tone: "success",
       href: "/clientes",
       change: clientesChange,
     },
@@ -716,9 +713,7 @@ export default async function DashboardPage() {
       value: formatCurrency(ingresos, moneda),
       description: "Ventas, servicios y cobros",
       icon: DollarSign,
-      colorClass: "text-purple-600 dark:text-purple-400",
-      bgClass: "bg-purple-50 dark:bg-purple-900/30",
-      hoverBorder: "hover:border-purple-300 dark:hover:border-purple-700",
+      tone: "default",
       href: "/finanzas",
       change: ingresosChange,
     },
@@ -727,9 +722,7 @@ export default async function DashboardPage() {
       value: formatCurrency(ingresosHoyTotal, moneda),
       description: "Ventas, servicios y cobros",
       icon: DollarSign,
-      colorClass: "text-emerald-600 dark:text-emerald-400",
-      bgClass: "bg-emerald-50 dark:bg-emerald-900/30",
-      hoverBorder: "hover:border-emerald-300 dark:hover:border-emerald-700",
+      tone: "success",
       href: "/caja",
     },
     {
@@ -737,23 +730,19 @@ export default async function DashboardPage() {
       value: formatCurrency(totalDeudaPendiente, moneda),
       description: `${ordenesPendienteCobro.length} orden${ordenesPendienteCobro.length !== 1 ? "es" : ""} sin cobrar`,
       icon: AlertTriangle,
-      colorClass: "text-red-600 dark:text-red-400",
-      bgClass: "bg-red-50 dark:bg-red-900/30",
-      hoverBorder: "hover:border-red-300 dark:hover:border-red-700",
+      tone: "danger",
       urgent: ordenesPendienteCobro.length > 0,
       href: "/ordenes?estado_cobro=PENDIENTE",
     },
   ]
 
-  const vendedorStats = [
+  const vendedorStats: StatCardProps[] = [
     {
       title: "Órdenes Pendientes",
       value: ordenesPendientes.toString(),
       description: `${totalOrdenes} totales`,
       icon: ClipboardList,
-      colorClass: "text-info-600 dark:text-info-500",
-      bgClass: "bg-info-50 dark:bg-info-100/50",
-      hoverBorder: "hover:border-blue-300 dark:hover:border-blue-700",
+      tone: "info",
       href: "/ordenes",
     },
     {
@@ -761,9 +750,7 @@ export default async function DashboardPage() {
       value: totalClientes.toString(),
       description: "Total registrados",
       icon: Users,
-      colorClass: "text-success-600 dark:text-success-500",
-      bgClass: "bg-success-50 dark:bg-success-100/50",
-      hoverBorder: "hover:border-green-300 dark:hover:border-green-700",
+      tone: "success",
       href: "/clientes",
     },
     {
@@ -771,9 +758,7 @@ export default async function DashboardPage() {
       value: formatCurrency(misVentasHoyTotal, moneda),
       description: `${misVentasHoyCount} venta${misVentasHoyCount !== 1 ? "s" : ""}`,
       icon: ShoppingCart,
-      colorClass: "text-emerald-600 dark:text-emerald-400",
-      bgClass: "bg-emerald-50 dark:bg-emerald-900/30",
-      hoverBorder: "hover:border-emerald-300 dark:hover:border-emerald-700",
+      tone: "success",
       href: "/ventas",
     },
     {
@@ -781,22 +766,18 @@ export default async function DashboardPage() {
       value: formatCurrency(misVentasMesTotal, moneda),
       description: `${misVentasMesCount} ventas completadas`,
       icon: TrendingUp,
-      colorClass: "text-cyan-600 dark:text-cyan-400",
-      bgClass: "bg-cyan-50 dark:bg-cyan-900/30",
-      hoverBorder: "hover:border-cyan-300 dark:hover:border-cyan-700",
+      tone: "default",
       href: "/ventas",
     },
   ]
 
-  const tecnicoStats = [
+  const tecnicoStats: StatCardProps[] = [
     {
       title: "Mis Órdenes Activas",
       value: misOrdenesActivas.toString(),
       description: "Asignadas a mí",
       icon: ClipboardList,
-      colorClass: "text-info-600 dark:text-info-500",
-      bgClass: "bg-info-50 dark:bg-info-100/50",
-      hoverBorder: "hover:border-blue-300 dark:hover:border-blue-700",
+      tone: "info",
       href: "/ordenes",
     },
     {
@@ -804,9 +785,8 @@ export default async function DashboardPage() {
       value: misSinDiagnostico.toString(),
       description: "Requieren atención",
       icon: AlertTriangle,
-      colorClass: misSinDiagnostico > 0 ? "text-warning-600 dark:text-warning-500" : "text-success-600 dark:text-success-500",
-      bgClass: misSinDiagnostico > 0 ? "bg-warning-50 dark:bg-warning-100/50" : "bg-success-50 dark:bg-success-100/50",
-      hoverBorder: misSinDiagnostico > 0 ? "hover:border-amber-300 dark:hover:border-amber-700" : "hover:border-green-300 dark:hover:border-green-700",
+      tone: misSinDiagnostico > 0 ? "warning" : "success",
+      urgent: misSinDiagnostico > 0,
       href: "/ordenes?estado=RECIBIDO",
     },
     {
@@ -814,9 +794,7 @@ export default async function DashboardPage() {
       value: misEsperandoRepuesto.toString(),
       description: "En espera de piezas",
       icon: Clock,
-      colorClass: misEsperandoRepuesto > 0 ? "text-orange-600 dark:text-orange-400" : "text-success-600 dark:text-success-500",
-      bgClass: misEsperandoRepuesto > 0 ? "bg-orange-50 dark:bg-orange-900/30" : "bg-success-50 dark:bg-success-100/50",
-      hoverBorder: misEsperandoRepuesto > 0 ? "hover:border-orange-300 dark:hover:border-orange-700" : "hover:border-green-300 dark:hover:border-green-700",
+      tone: misEsperandoRepuesto > 0 ? "warning" : "success",
       href: "/ordenes?estado=ESPERANDO_REPUESTO",
     },
     {
@@ -824,9 +802,7 @@ export default async function DashboardPage() {
       value: misOrdenesCompletadas.toString(),
       description: avgDiasResolucion !== null ? `Prom. ${avgDiasResolucion} día${avgDiasResolucion !== 1 ? "s" : ""}` : "Reparadas/entregadas",
       icon: CheckCircle,
-      colorClass: "text-success-600 dark:text-success-500",
-      bgClass: "bg-success-50 dark:bg-success-100/50",
-      hoverBorder: "hover:border-green-300 dark:hover:border-green-700",
+      tone: "success",
       href: "/ordenes",
     },
   ]
@@ -861,72 +837,9 @@ export default async function DashboardPage() {
 
       {/* Stats Cards */}
       <div className={`grid gap-3 sm:gap-4 grid-cols-2 ${isTecnico ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
-        {stats.map((stat: any) => {
-          const Icon = stat.icon
-          const isUrgent = stat.urgent
-          const card = (
-            <Card key={stat.title} className={cn(
-              "group transition-all duration-200 cursor-pointer",
-              "hover:shadow-lg",
-              stat.hoverBorder || "hover:border-primary/50",
-              isUrgent && "border-l-4 border-l-warning shadow-sm ring-1 ring-warning/10"
-            )}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-                <CardTitle className={cn(
-                  "text-xs sm:text-sm font-medium",
-                  isUrgent ? "text-foreground font-semibold" : "text-foreground"
-                )}>
-                  {stat.title}
-                </CardTitle>
-                <div className={`p-1.5 sm:p-2 rounded-lg ${stat.bgClass}`}>
-                  <Icon className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${stat.colorClass}`} />
-                </div>
-              </CardHeader>
-              <CardContent className="p-3 sm:p-6 pt-0">
-                <div className={cn(
-                  "font-bold",
-                  // Montos monetarios: más grandes y negros
-                  stat.value?.toString().startsWith("$") || stat.value?.toString().startsWith("-$")
-                    ? "text-xl sm:text-[1.75rem] text-[#111] dark:text-white"
-                    : "text-lg sm:text-2xl",
-                  isUrgent && "!text-warning-700 dark:!text-warning-400",
-                  // Cobros pendientes en naranja
-                  stat.title === "Cobros Pendientes" && "!text-amber-600 dark:!text-amber-400",
-                  // Ingresos en verde
-                  stat.title === "Ingresos Hoy" && "!text-emerald-700 dark:!text-emerald-400",
-                  !isUrgent && !stat.value?.toString().startsWith("$") && "text-foreground"
-                )}>{stat.value}</div>
-                <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">
-                  {stat.description}
-                </p>
-                {/* Comparativa mes anterior */}
-                {stat.change ? (
-                  <p className={cn(
-                    "text-[10px] sm:text-xs mt-1",
-                    stat.change.direction === "up" ? "text-green-600 dark:text-green-400" :
-                    stat.change.direction === "down" ? "text-red-600 dark:text-red-400" :
-                    "text-muted-foreground"
-                  )}>
-                    {stat.change.direction === "up" ? "↑" : stat.change.direction === "down" ? "↓" : "→"}{" "}
-                    {stat.change.pct}% vs. mes anterior
-                  </p>
-                ) : stat.change === null ? (
-                  <p className="text-[10px] sm:text-xs text-muted-foreground/60 mt-1">
-                    — sin datos anteriores
-                  </p>
-                ) : null}
-                {stat.href && (
-                  <p className="text-[10px] sm:text-xs text-muted-foreground/50 group-hover:text-muted-foreground mt-1.5 transition-colors duration-200">
-                    → Ver detalle
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          )
-          return stat.href ? (
-            <Link key={stat.title} href={stat.href}>{card}</Link>
-          ) : card
-        })}
+        {stats.map((stat) => (
+          <StatCard key={stat.title} {...stat} />
+        ))}
       </div>
 
       {/* Gráficos con lazy loading (Recharts) + Órdenes recientes - Solo Admin */}
@@ -958,164 +871,145 @@ export default async function DashboardPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             {isAdmin && garantiasPorVencer.length > 0 && (
-              <div className="p-3 bg-warning-50 dark:bg-warning-100/40 border border-warning/30 dark:border-warning/20 rounded-lg">
-                <div className="flex items-center gap-2 text-warning-700 dark:text-warning-500 font-medium">
-                  <Shield className="h-4 w-4" />
-                  {garantiasPorVencer.length} garantía{garantiasPorVencer.length > 1 ? "s" : ""} por vencer
-                </div>
-                <div className="mt-2 space-y-1">
-                  {garantiasPorVencer.slice(0, 3).map((g: any) => {
-                    const diasRestantes = Math.ceil(
-                      (new Date(g.fecha_vencimiento).getTime() - new Date().getTime()) /
-                        (1000 * 60 * 60 * 24)
-                    )
-                    return (
-                      <Link
-                        key={g.id}
-                        href={`/ordenes/${g.orden_id}`}
-                        className="block text-sm text-warning-700 dark:text-warning-600 hover:underline"
-                      >
-                        Orden #{g.ordenes_servicio.numero_orden} - {g.ordenes_servicio.clientes?.nombre}
-                        <span className="text-warning-600 dark:text-warning-500 ml-1">
-                          ({diasRestantes} día{diasRestantes !== 1 ? "s" : ""})
-                        </span>
-                      </Link>
-                    )
-                  })}
-                  {garantiasPorVencer.length > 3 && (
-                    <p className="text-xs text-warning-600 dark:text-warning-500">
-                      y {garantiasPorVencer.length - 3} más...
-                    </p>
-                  )}
-                </div>
-              </div>
+              <AlertItem
+                tone="warning"
+                icon={Shield}
+                title={`${garantiasPorVencer.length} garantía${garantiasPorVencer.length > 1 ? "s" : ""} por vencer`}
+              >
+                {garantiasPorVencer.slice(0, 3).map((g: any) => {
+                  const diasRestantes = Math.ceil(
+                    (new Date(g.fecha_vencimiento).getTime() - new Date().getTime()) /
+                      (1000 * 60 * 60 * 24)
+                  )
+                  return (
+                    <Link
+                      key={g.id}
+                      href={`/ordenes/${g.orden_id}`}
+                      className="block hover:underline"
+                    >
+                      Orden #{g.ordenes_servicio.numero_orden} - {g.ordenes_servicio.clientes?.nombre}
+                      <span className="ml-1 opacity-80">
+                        ({diasRestantes} día{diasRestantes !== 1 ? "s" : ""})
+                      </span>
+                    </Link>
+                  )
+                })}
+                {garantiasPorVencer.length > 3 && (
+                  <p className="text-xs opacity-80">
+                    y {garantiasPorVencer.length - 3} más...
+                  </p>
+                )}
+              </AlertItem>
             )}
             {(isAdmin || isVendedor) && garantiasVentaPorVencer.length > 0 && (
-              <Link href="/ventas" className="block">
-                <div className="p-3 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors">
-                  <div className="flex items-center gap-2 text-purple-700 dark:text-purple-400 font-medium">
-                    <ShoppingCart className="h-4 w-4" />
-                    {garantiasVentaPorVencer.length} garantía{garantiasVentaPorVencer.length > 1 ? "s" : ""} de venta por vencer
-                  </div>
-                  <div className="mt-2 space-y-1">
-                    {garantiasVentaPorVencer.slice(0, 3).map((g: any) => {
-                      const diasRestantes = Math.ceil(
-                        (new Date(g.fecha_vencimiento).getTime() - new Date().getTime()) /
-                          (1000 * 60 * 60 * 24)
-                      )
-                      return (
-                        <div key={g.id} className="text-sm text-purple-600 dark:text-purple-400">
-                          V{String((g.ventas as any)?.numero_venta).padStart(4, "0")} - {(g.ventas as any)?.cliente_nombre} - {(g.items_venta as any)?.descripcion}
-                          <span className="ml-1">({diasRestantes} día{diasRestantes !== 1 ? "s" : ""})</span>
-                        </div>
-                      )
-                    })}
-                    {garantiasVentaPorVencer.length > 3 && (
-                      <p className="text-xs text-purple-500">
-                        y {garantiasVentaPorVencer.length - 3} más...
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </Link>
+              <AlertItem
+                tone="warning"
+                icon={ShoppingCart}
+                href="/ventas"
+                title={`${garantiasVentaPorVencer.length} garantía${garantiasVentaPorVencer.length > 1 ? "s" : ""} de venta por vencer`}
+              >
+                {garantiasVentaPorVencer.slice(0, 3).map((g: any) => {
+                  const diasRestantes = Math.ceil(
+                    (new Date(g.fecha_vencimiento).getTime() - new Date().getTime()) /
+                      (1000 * 60 * 60 * 24)
+                  )
+                  return (
+                    <div key={g.id}>
+                      V{String((g.ventas as any)?.numero_venta).padStart(4, "0")} - {(g.ventas as any)?.cliente_nombre} - {(g.items_venta as any)?.descripcion}
+                      <span className="ml-1 opacity-80">({diasRestantes} día{diasRestantes !== 1 ? "s" : ""})</span>
+                    </div>
+                  )
+                })}
+                {garantiasVentaPorVencer.length > 3 && (
+                  <p className="text-xs opacity-80">
+                    y {garantiasVentaPorVencer.length - 3} más...
+                  </p>
+                )}
+              </AlertItem>
             )}
             {!isTecnico && itemsBajoStock > 0 && (
-              <Link href="/inventario" className="block">
-                <div className="p-3 bg-warning-50 dark:bg-warning-100/40 border border-warning/30 dark:border-warning/20 rounded-lg hover:bg-warning-100 dark:hover:bg-warning-200/40 transition-colors">
-                  <div className="flex items-center gap-2 text-warning-700 dark:text-warning-500">
-                    <Package className="h-4 w-4" />
-                    {itemsBajoStock} items con stock bajo
-                  </div>
-                </div>
-              </Link>
+              <AlertItem
+                tone="warning"
+                icon={Package}
+                href="/inventario"
+                title={`${itemsBajoStock} items con stock bajo`}
+              />
             )}
             {!isTecnico && ordenesPendientes > 0 && (
-              <Link href="/ordenes?estado=pendientes" className="block">
-                <div className="p-3 bg-info-50 dark:bg-info-100/40 border border-info/30 dark:border-info/20 rounded-lg hover:bg-info-100 dark:hover:bg-info-200/40 transition-colors">
-                  <div className="flex items-center gap-2 text-info-700 dark:text-info-500">
-                    <ClipboardList className="h-4 w-4" />
-                    {ordenesPendientes} órdenes pendientes
-                  </div>
-                </div>
-              </Link>
+              <AlertItem
+                tone="info"
+                icon={ClipboardList}
+                href="/ordenes?estado=pendientes"
+                title={`${ordenesPendientes} órdenes pendientes`}
+              />
             )}
             {/* SLA: Órdenes con fecha vencida - Solo Admin */}
             {isAdmin && ordenesFechaVencida.length > 0 && (
-              <div className="p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg">
-                <div className="flex items-center gap-2 text-red-700 dark:text-red-400 font-medium">
-                  <ClipboardList className="h-4 w-4" />
-                  {ordenesFechaVencida.length} orden{ordenesFechaVencida.length > 1 ? "es" : ""} con fecha prometida vencida
-                </div>
-                <div className="mt-2 space-y-1">
-                  {ordenesFechaVencida.slice(0, 3).map((o: any) => (
-                    <Link
-                      key={o.id}
-                      href={`/ordenes/${o.id}`}
-                      className="block text-sm text-red-600 dark:text-red-400 hover:underline"
-                    >
-                      {o.codigoOrden || `#${o.numeroOrden}`} - {o.cliente}
-                      <span className="ml-1">({o.diasAtraso} día{o.diasAtraso !== 1 ? "s" : ""} de atraso)</span>
-                    </Link>
-                  ))}
-                  {ordenesFechaVencida.length > 3 && (
-                    <p className="text-xs text-red-500">y {ordenesFechaVencida.length - 3} más...</p>
-                  )}
-                </div>
-              </div>
+              <AlertItem
+                tone="danger"
+                icon={ClipboardList}
+                title={`${ordenesFechaVencida.length} orden${ordenesFechaVencida.length > 1 ? "es" : ""} con fecha prometida vencida`}
+              >
+                {ordenesFechaVencida.slice(0, 3).map((o: any) => (
+                  <Link
+                    key={o.id}
+                    href={`/ordenes/${o.id}`}
+                    className="block hover:underline"
+                  >
+                    {o.codigoOrden || `#${o.numeroOrden}`} - {o.cliente}
+                    <span className="ml-1 opacity-80">({o.diasAtraso} día{o.diasAtraso !== 1 ? "s" : ""} de atraso)</span>
+                  </Link>
+                ))}
+                {ordenesFechaVencida.length > 3 && (
+                  <p className="text-xs opacity-80">y {ordenesFechaVencida.length - 3} más...</p>
+                )}
+              </AlertItem>
             )}
             {/* Deuda pendiente de cobro - Solo Admin */}
             {isAdmin && ordenesPendienteCobro.length > 0 && (
-              <div className="p-3 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg">
-                <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-medium">
-                  <DollarSign className="h-4 w-4" />
-                  {ordenesPendienteCobro.length} orden{ordenesPendienteCobro.length > 1 ? "es" : ""} sin cobrar — {formatCurrency(totalDeudaPendiente, moneda)}
-                </div>
-                <div className="mt-2 space-y-1 text-xs text-amber-600 dark:text-amber-400">
-                  {deuda30dias.length > 0 && <div>0-30 días: {deuda30dias.length} ({formatCurrency(deuda30dias.reduce((s: number, o: any) => s + o.pendiente, 0), moneda)})</div>}
-                  {deuda60dias.length > 0 && <div>31-60 días: {deuda60dias.length} ({formatCurrency(deuda60dias.reduce((s: number, o: any) => s + o.pendiente, 0), moneda)})</div>}
-                  {deuda90dias.length > 0 && <div className="font-semibold">+60 días: {deuda90dias.length} ({formatCurrency(deuda90dias.reduce((s: number, o: any) => s + o.pendiente, 0), moneda)})</div>}
-                </div>
-              </div>
+              <AlertItem
+                tone="warning"
+                icon={DollarSign}
+                title={`${ordenesPendienteCobro.length} orden${ordenesPendienteCobro.length > 1 ? "es" : ""} sin cobrar — ${formatCurrency(totalDeudaPendiente, moneda)}`}
+              >
+                {deuda30dias.length > 0 && <div>0-30 días: {deuda30dias.length} ({formatCurrency(deuda30dias.reduce((s: number, o: any) => s + o.pendiente, 0), moneda)})</div>}
+                {deuda60dias.length > 0 && <div>31-60 días: {deuda60dias.length} ({formatCurrency(deuda60dias.reduce((s: number, o: any) => s + o.pendiente, 0), moneda)})</div>}
+                {deuda90dias.length > 0 && <div className="font-semibold">+60 días: {deuda90dias.length} ({formatCurrency(deuda90dias.reduce((s: number, o: any) => s + o.pendiente, 0), moneda)})</div>}
+              </AlertItem>
             )}
             {/* Alertas específicas del técnico */}
             {isTecnico && misVencidas.length > 0 && (
-              <div className="p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg">
-                <div className="flex items-center gap-2 text-red-700 dark:text-red-400 font-medium">
-                  <AlertTriangle className="h-4 w-4" />
-                  {misVencidas.length} orden{misVencidas.length > 1 ? "es" : ""} con fecha prometida vencida
-                </div>
-                <div className="mt-2 space-y-1">
-                  {misVencidas.slice(0, 3).map((o: any) => (
-                    <Link key={o.id} href={`/ordenes/${o.id}`} className="block text-sm text-red-600 dark:text-red-400 hover:underline">
-                      {o.codigoOrden || `#${o.numeroOrden}`} - {o.cliente}
-                      <span className="ml-1">({o.diasAtraso} día{o.diasAtraso !== 1 ? "s" : ""} de atraso)</span>
-                    </Link>
-                  ))}
-                  {misVencidas.length > 3 && (
-                    <p className="text-xs text-red-500">y {misVencidas.length - 3} más...</p>
-                  )}
-                </div>
-              </div>
+              <AlertItem
+                tone="danger"
+                icon={AlertTriangle}
+                title={`${misVencidas.length} orden${misVencidas.length > 1 ? "es" : ""} con fecha prometida vencida`}
+              >
+                {misVencidas.slice(0, 3).map((o: any) => (
+                  <Link key={o.id} href={`/ordenes/${o.id}`} className="block hover:underline">
+                    {o.codigoOrden || `#${o.numeroOrden}`} - {o.cliente}
+                    <span className="ml-1 opacity-80">({o.diasAtraso} día{o.diasAtraso !== 1 ? "s" : ""} de atraso)</span>
+                  </Link>
+                ))}
+                {misVencidas.length > 3 && (
+                  <p className="text-xs opacity-80">y {misVencidas.length - 3} más...</p>
+                )}
+              </AlertItem>
             )}
             {isTecnico && misEsperandoRepuesto > 0 && (
-              <Link href="/ordenes?estado=ESPERANDO_REPUESTO" className="block">
-                <div className="p-3 bg-orange-50 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800 rounded-lg hover:bg-orange-100 dark:hover:bg-orange-900/40 transition-colors">
-                  <div className="flex items-center gap-2 text-orange-700 dark:text-orange-400">
-                    <Clock className="h-4 w-4" />
-                    {misEsperandoRepuesto} orden{misEsperandoRepuesto > 1 ? "es" : ""} esperando repuesto
-                  </div>
-                </div>
-              </Link>
+              <AlertItem
+                tone="info"
+                icon={Clock}
+                href="/ordenes?estado=ESPERANDO_REPUESTO"
+                title={`${misEsperandoRepuesto} orden${misEsperandoRepuesto > 1 ? "es" : ""} esperando repuesto`}
+              />
             )}
             {isTecnico && misSinDiagnostico > 0 && (
-              <Link href="/ordenes?estado=RECIBIDO" className="block">
-                <div className="p-3 bg-warning-50 dark:bg-warning-100/40 border border-warning/30 dark:border-warning/20 rounded-lg hover:bg-warning-100 dark:hover:bg-warning-200/40 transition-colors">
-                  <div className="flex items-center gap-2 text-warning-700 dark:text-warning-500">
-                    <Wrench className="h-4 w-4" />
-                    {misSinDiagnostico} orden{misSinDiagnostico > 1 ? "es" : ""} sin diagnóstico
-                  </div>
-                </div>
-              </Link>
+              <AlertItem
+                tone="warning"
+                icon={Wrench}
+                href="/ordenes?estado=RECIBIDO"
+                title={`${misSinDiagnostico} orden${misSinDiagnostico > 1 ? "es" : ""} sin diagnóstico`}
+              />
             )}
             {isTecnico && misVencidas.length === 0 && misEsperandoRepuesto === 0 && misSinDiagnostico === 0 && (
               <p className="text-sm text-muted-foreground">No hay alertas pendientes</p>
