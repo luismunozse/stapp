@@ -40,34 +40,41 @@ export async function GET() {
       ventasDiaBaseQuery = ventasDiaBaseQuery.eq("sucursal_id", filtro.sucursalId)
     }
 
+    // Items from completed sales this month (for top products), branch-filtered via parent
+    let itemsVentaMesQuery = supabaseAdmin
+      .from("items_venta")
+      .select("descripcion, cantidad, subtotal, inventario_id, precio_unitario, venta_id, ventas!inner(organization_id, estado, created_at, vendedor_id, sucursal_id)")
+      .eq("ventas.organization_id", organizationId!)
+      .eq("ventas.estado", "COMPLETADA")
+      .gte("ventas.created_at", inicioMes.toISOString())
+
+    if (!filtro.verTodas && filtro.sucursalId) {
+      itemsVentaMesQuery = itemsVentaMesQuery.eq("ventas.sucursal_id", filtro.sucursalId)
+    }
+
+    // Margin: items with inventory link for cost calculation, branch-filtered via parent
+    let margenQuery = supabaseAdmin
+      .from("items_venta")
+      .select("cantidad, precio_unitario, subtotal, inventario_id, inventario!inner(precio_compra), ventas!inner(organization_id, estado, created_at, sucursal_id)")
+      .eq("ventas.organization_id", organizationId!)
+      .eq("ventas.estado", "COMPLETADA")
+      .gte("ventas.created_at", inicioMes.toISOString())
+      .not("inventario_id", "is", null)
+
+    if (!filtro.verTodas && filtro.sucursalId) {
+      margenQuery = margenQuery.eq("ventas.sucursal_id", filtro.sucursalId)
+    }
+
     const [
       ventasDelMesResult,
       itemsVentaMesResult,
       ventasPorDiaResult,
       margenResult,
     ] = await Promise.all([
-      // All sales this month (branch-filtered)
       ventasMesBaseQuery,
-
-      // Items from completed sales this month (for top products)
-      supabaseAdmin
-        .from("items_venta")
-        .select("descripcion, cantidad, subtotal, inventario_id, precio_unitario, venta_id, ventas!inner(organization_id, estado, created_at, vendedor_id)")
-        .eq("ventas.organization_id", organizationId!)
-        .eq("ventas.estado", "COMPLETADA")
-        .gte("ventas.created_at", inicioMes.toISOString()),
-
-      // Daily sales last 30 days (branch-filtered)
+      itemsVentaMesQuery,
       ventasDiaBaseQuery,
-
-      // Margin: items with inventory link for cost calculation
-      supabaseAdmin
-        .from("items_venta")
-        .select("cantidad, precio_unitario, subtotal, inventario_id, inventario!inner(precio_compra), ventas!inner(organization_id, estado, created_at)")
-        .eq("ventas.organization_id", organizationId!)
-        .eq("ventas.estado", "COMPLETADA")
-        .gte("ventas.created_at", inicioMes.toISOString())
-        .not("inventario_id", "is", null),
+      margenQuery,
     ])
 
     // Fetch vendedor names
