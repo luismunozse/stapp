@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { TrendingUp, TrendingDown, Minus, DollarSign, Receipt, Calculator } from "lucide-react"
+import { TrendingUp, TrendingDown, Minus, DollarSign, Receipt, Calculator, AlertCircle } from "lucide-react"
+import { EmptyState } from "@/components/ui/empty-state"
 import { useCurrency } from "@/contexts/currency-context"
 import {
   BarChart,
@@ -81,8 +82,13 @@ export function ComparativaIngresos() {
   if (error || !data) {
     return (
       <Card>
-        <CardContent className="py-8 text-center text-muted-foreground">
-          {error || "No hay datos disponibles"}
+        <CardContent className="py-4">
+          <EmptyState
+            icon={AlertCircle}
+            title={error ? "Error al cargar datos" : "Sin datos disponibles"}
+            description={error || "No hay datos de ingresos para mostrar"}
+            variant={error ? "error" : "search"}
+          />
         </CardContent>
       </Card>
     )
@@ -100,10 +106,10 @@ export function ComparativaIngresos() {
     : Minus
 
   const trendColor = data.cambio.direccion === "up"
-    ? "text-green-600"
+    ? "text-success"
     : data.cambio.direccion === "down"
-    ? "text-red-600"
-    : "text-gray-500"
+    ? "text-destructive"
+    : "text-muted-foreground"
 
   return (
     <div className="space-y-6">

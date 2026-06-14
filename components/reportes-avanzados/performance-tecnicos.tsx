@@ -5,7 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { UserCog, Clock, CheckCircle, Loader2 } from "lucide-react"
+import { UserCog, Clock, CheckCircle, Loader2, AlertCircle } from "lucide-react"
+import { EmptyState } from "@/components/ui/empty-state"
 import {
   BarChart,
   Bar,
@@ -93,8 +94,13 @@ export function PerformanceTecnicos() {
   if (error || !data) {
     return (
       <Card>
-        <CardContent className="py-8 text-center text-muted-foreground">
-          {error || "No hay datos disponibles"}
+        <CardContent className="py-4">
+          <EmptyState
+            icon={AlertCircle}
+            title={error ? "Error al cargar datos" : "Sin datos disponibles"}
+            description={error || "No hay datos de técnicos para mostrar"}
+            variant={error ? "error" : "search"}
+          />
         </CardContent>
       </Card>
     )
@@ -124,10 +130,10 @@ export function PerformanceTecnicos() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
             <CardTitle className="text-xs sm:text-sm font-medium">Completadas</CardTitle>
-            <CheckCircle className="h-4 w-4 text-green-500 hidden sm:block" />
+            <CheckCircle className="h-4 w-4 text-success hidden sm:block" />
           </CardHeader>
           <CardContent className="p-3 sm:p-6 pt-0">
-            <div className="text-base sm:text-2xl font-bold text-green-600">{data.totales.totalCompletadas}</div>
+            <div className="text-base sm:text-2xl font-bold text-success">{data.totales.totalCompletadas}</div>
             <p className="text-[10px] sm:text-xs text-muted-foreground">
               {data.totales.totalOrdenes > 0
                 ? `${Math.round((data.totales.totalCompletadas / data.totales.totalOrdenes) * 100)}%`
@@ -189,9 +195,12 @@ export function PerformanceTecnicos() {
         </CardHeader>
         <CardContent>
           {data.tecnicos.length === 0 ? (
-            <p className="text-center text-muted-foreground py-4">
-              No hay técnicos con órdenes asignadas este mes
-            </p>
+            <EmptyState
+              icon={UserCog}
+              title="Sin técnicos asignados"
+              description="No hay técnicos con órdenes asignadas este mes"
+              variant="search"
+            />
           ) : (
             <div className="space-y-3">
               {data.tecnicos.map((tecnico) => (
@@ -214,7 +223,7 @@ export function PerformanceTecnicos() {
                   <div className="grid grid-cols-4 gap-2">
                     <div className="text-center">
                       <p className="text-[10px] sm:text-xs text-muted-foreground">Hechas</p>
-                      <Badge variant="default" className="bg-green-500 text-[10px] sm:text-xs">
+                      <Badge variant="default" className="bg-success text-white text-[10px] sm:text-xs">
                         {tecnico.ordenesCompletadas}
                       </Badge>
                     </div>

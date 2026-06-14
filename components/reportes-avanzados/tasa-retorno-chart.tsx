@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Loader2 } from "lucide-react"
+import { Loader2, AlertCircle } from "lucide-react"
+import { EmptyState } from "@/components/ui/empty-state"
 import {
   PieChart,
   Pie,
@@ -53,8 +54,13 @@ export function TasaRetornoChart() {
   if (error || !data) {
     return (
       <Card>
-        <CardContent className="py-12 text-center text-muted-foreground">
-          {error ? "Error al cargar datos" : "No hay datos suficientes"}
+        <CardContent className="py-4">
+          <EmptyState
+            icon={AlertCircle}
+            title={error ? "Error al cargar datos" : "Sin datos suficientes"}
+            description={error ? "No se pudo cargar la tasa de retorno" : "No hay datos suficientes para calcular la tasa de retorno"}
+            variant={error ? "error" : "search"}
+          />
         </CardContent>
       </Card>
     )

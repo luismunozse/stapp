@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
 import { DateRangePicker } from "@/components/ui/date-picker"
-import { TrendingUp, DollarSign, CheckCircle } from "lucide-react"
+import { TrendingUp, DollarSign, CheckCircle, AlertCircle } from "lucide-react"
+import { EmptyState } from "@/components/ui/empty-state"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import {
@@ -214,8 +215,13 @@ export function PerformanceVendedores() {
       <div className="space-y-4">
         {toolbar}
         <Card>
-          <CardContent className="py-8 text-center text-muted-foreground">
-            {error || "No hay datos disponibles"}
+          <CardContent className="py-4">
+            <EmptyState
+              icon={AlertCircle}
+              title={error ? "Error al cargar datos" : "Sin datos disponibles"}
+              description={error || "No hay datos de vendedores para mostrar"}
+              variant={error ? "error" : "search"}
+            />
           </CardContent>
         </Card>
       </div>
@@ -252,10 +258,10 @@ export function PerformanceVendedores() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
             <CardTitle className="text-xs sm:text-sm font-medium">Monto Total</CardTitle>
-            <DollarSign className="h-4 w-4 text-green-500 hidden sm:block" />
+            <DollarSign className="h-4 w-4 text-success hidden sm:block" />
           </CardHeader>
           <CardContent className="p-3 sm:p-6 pt-0">
-            <div className="text-base sm:text-2xl font-bold text-green-600">
+            <div className="text-base sm:text-2xl font-bold text-success">
               {formatCurrency(data.totales.montoTotal)}
             </div>
             <p className="text-[10px] sm:text-xs text-muted-foreground">Ventas completadas</p>
@@ -319,9 +325,12 @@ export function PerformanceVendedores() {
         </CardHeader>
         <CardContent>
           {data.vendedores.length === 0 ? (
-            <p className="text-center text-muted-foreground py-4">
-              No hay vendedores con ventas registradas en el periodo seleccionado
-            </p>
+            <EmptyState
+              icon={TrendingUp}
+              title="Sin ventas registradas"
+              description="No hay vendedores con ventas en el periodo seleccionado"
+              variant="search"
+            />
           ) : (
             <div className="space-y-3">
               {data.vendedores.map((vendedor) => (
@@ -344,7 +353,7 @@ export function PerformanceVendedores() {
                   <div className="grid grid-cols-4 gap-2">
                     <div className="text-center">
                       <p className="text-[10px] sm:text-xs text-muted-foreground">Ventas</p>
-                      <Badge variant="default" className="bg-green-500 text-[10px] sm:text-xs">
+                      <Badge variant="default" className="bg-success text-white text-[10px] sm:text-xs">
                         {vendedor.ventasCompletadas}
                       </Badge>
                     </div>

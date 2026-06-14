@@ -5,7 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { DateRangePicker } from "@/components/ui/date-picker"
-import { Loader2, TrendingUp, DollarSign, Clock, Users } from "lucide-react"
+import { Loader2, TrendingUp, DollarSign, Clock, Users, Lock, AlertCircle } from "lucide-react"
+import { EmptyState } from "@/components/ui/empty-state"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import {
@@ -216,11 +217,13 @@ export function RentabilidadTecnicos() {
       <div className="space-y-4">
         {toolbar}
         <Card>
-          <CardContent className="py-12 text-center space-y-2">
-            <p className="text-lg font-semibold">Función no disponible</p>
-            <p className="text-muted-foreground">
-              Este reporte requiere el plan Profesional
-            </p>
+          <CardContent className="py-4">
+            <EmptyState
+              icon={Lock}
+              title="Función no disponible"
+              description="Este reporte requiere el plan Profesional"
+              variant="default"
+            />
           </CardContent>
         </Card>
       </div>
@@ -232,8 +235,13 @@ export function RentabilidadTecnicos() {
       <div className="space-y-4">
         {toolbar}
         <Card>
-          <CardContent className="py-8 text-center text-muted-foreground">
-            {error}
+          <CardContent className="py-4">
+            <EmptyState
+              icon={AlertCircle}
+              title="Error al cargar datos"
+              description={error}
+              variant="error"
+            />
           </CardContent>
         </Card>
       </div>
@@ -245,8 +253,13 @@ export function RentabilidadTecnicos() {
       <div className="space-y-4">
         {toolbar}
         <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">
-            No hay datos suficientes
+          <CardContent className="py-4">
+            <EmptyState
+              icon={Users}
+              title="Sin datos suficientes"
+              description="No hay datos de rentabilidad para mostrar en el periodo seleccionado"
+              variant="search"
+            />
           </CardContent>
         </Card>
       </div>
@@ -278,10 +291,10 @@ export function RentabilidadTecnicos() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
             <CardTitle className="text-xs sm:text-sm font-medium">Ganancia total</CardTitle>
-            <DollarSign className="h-4 w-4 text-green-500 hidden sm:block" />
+            <DollarSign className="h-4 w-4 text-success hidden sm:block" />
           </CardHeader>
           <CardContent className="p-3 sm:p-6 pt-0">
-            <div className="text-base sm:text-2xl font-bold text-green-600">
+            <div className="text-base sm:text-2xl font-bold text-success">
               {formatCurrency(totales?.ganancia ?? 0)}
             </div>
             <p className="text-[10px] sm:text-xs text-muted-foreground">Todos los técnicos</p>
@@ -368,19 +381,19 @@ export function RentabilidadTecnicos() {
                   <td className="py-2 pr-3 font-medium whitespace-nowrap">{t.nombre}</td>
                   <td className="py-2 pr-3 text-right tabular-nums">{t.ordenes}</td>
                   <td className="py-2 pr-3 text-right tabular-nums">{t.horasTrabajadas}</td>
-                  <td className="py-2 pr-3 text-right tabular-nums text-green-600">
+                  <td className="py-2 pr-3 text-right tabular-nums text-success">
                     {formatCurrency(t.ingresos)}
                   </td>
-                  <td className="py-2 pr-3 text-right tabular-nums text-red-500">
+                  <td className="py-2 pr-3 text-right tabular-nums text-destructive">
                     {formatCurrency(t.costoRepuestos)}
                   </td>
-                  <td className="py-2 pr-3 text-right tabular-nums text-red-500">
+                  <td className="py-2 pr-3 text-right tabular-nums text-destructive">
                     {formatCurrency(t.costoManoObra)}
                   </td>
                   <td className="py-2 pr-3 text-right tabular-nums">
                     {formatCurrency(t.comision)}
                   </td>
-                  <td className="py-2 pr-3 text-right tabular-nums font-semibold text-green-600">
+                  <td className="py-2 pr-3 text-right tabular-nums font-semibold text-success">
                     {formatCurrency(t.ganancia)}
                   </td>
                   <td className="py-2 pr-3 text-right tabular-nums">{t.margen}%</td>

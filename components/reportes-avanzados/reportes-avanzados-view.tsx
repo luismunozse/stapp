@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Users, Package, BarChart3, Clock, AlertTriangle, DollarSign, Boxes, ShoppingCart } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import { PageShell } from "@/components/ui/page-shell"
 import { ExportButton } from "./export-button"
 import { BranchScopeLabel } from "./branch-scope-label"
 
@@ -93,20 +94,12 @@ export function ReportesAvanzadosView() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">Reportes</h1>
-          <p className="text-muted-foreground">
-            Analiza el rendimiento de tu taller con metricas detalladas
-          </p>
-          <BranchScopeLabel />
-        </div>
-        {exportableReports[activeTab] && (
-          <ExportButton reportType={exportableReports[activeTab]} />
-        )}
-      </div>
+    <PageShell
+      title="Reportes"
+      description="Analiza el rendimiento de tu taller con métricas detalladas"
+      actions={exportableReports[activeTab] ? <ExportButton reportType={exportableReports[activeTab]} /> : undefined}
+    >
+      <BranchScopeLabel />
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -195,6 +188,6 @@ export function ReportesAvanzadosView() {
           <PrediccionRepuestosChart />
         </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   )
 }

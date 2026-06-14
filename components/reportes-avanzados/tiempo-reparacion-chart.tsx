@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Loader2 } from "lucide-react"
+import { Loader2, AlertCircle } from "lucide-react"
+import { EmptyState } from "@/components/ui/empty-state"
 import {
   BarChart,
   Bar,
@@ -50,8 +51,13 @@ export function TiempoReparacionChart() {
   if (error || data.length === 0) {
     return (
       <Card>
-        <CardContent className="py-12 text-center text-muted-foreground">
-          {error ? "Error al cargar datos" : "No hay datos suficientes para este reporte"}
+        <CardContent className="py-4">
+          <EmptyState
+            icon={AlertCircle}
+            title={error ? "Error al cargar datos" : "Sin datos suficientes"}
+            description={error ? "No se pudo cargar el reporte de tiempos" : "No hay datos suficientes para este reporte"}
+            variant={error ? "error" : "search"}
+          />
         </CardContent>
       </Card>
     )
