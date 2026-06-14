@@ -17,6 +17,8 @@ vi.mock("@/lib/counters", () => ({
 vi.mock("@/lib/audit", () => ({
   createAuditLogger: vi.fn(() => ({
     create: vi.fn().mockResolvedValue(undefined),
+    update: vi.fn().mockResolvedValue(undefined),
+    delete: vi.fn().mockResolvedValue(undefined),
   })),
 }))
 
@@ -26,6 +28,7 @@ vi.mock("@/lib/webhooks/dispatcher", () => ({
 
 import { supabaseAdmin } from "@/lib/supabase"
 import { GET, POST } from "@/app/api/ventas/route"
+import { PUT } from "@/app/api/ventas/[id]/route"
 
 describe("GET /api/ventas", () => {
   beforeEach(() => {
@@ -303,5 +306,185 @@ describe("POST /api/ventas — serieIds + idempotencia", () => {
 
     expect(status).toBe(201)
     expect(body.numeroVenta).toBe(7)
+  })
+})
+
+describe("POST /api/ventas — depositoId", () => {
+  const baseBody = {
+    clienteNombre: "Consumidor Final",
+    items: [{ inventarioId: "i1", descripcion: "Notebook", cantidad: 1, precioUnitario: 100, diasGarantia: 0 }],
+    metodoPago: "EFECTIVO",
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it("pasa depositoId a la RPC como p_deposito_id", async () => {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ventaId: "v1" }, error: null } as any)
+    mockSupabaseFrom({
+      ventas: createChainMock({ id: "v1", numero_venta: 1, total: 100 }),
+      organizations: createChainMock({ nombre: "Org", nombre_mostrar: "Org" }),
+    })
+
+    const res = await POST(createPostRequest({ ...baseBody, depositoId: "dep-2" }))
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(201)
+    const rpcArgs = vi.mocked(supabaseAdmin.rpc).mock.calls[0][1] as any
+    expect(rpcArgs.p_deposito_id).toBe("dep-2")
+  })
+
+  it("manda p_deposito_id null cuando el body no trae depositoId", async () => {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ventaId: "v1" }, error: null } as any)
+    mockSupabaseFrom({
+      ventas: createChainMock({ id: "v1", numero_venta: 1, total: 100 }),
+      organizations: createChainMock({ nombre: "Org", nombre_mostrar: "Org" }),
+    })
+
+    const res = await POST(createPostRequest(baseBody))
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(201)
+    const rpcArgs = vi.mocked(supabaseAdmin.rpc).mock.calls[0][1] as any
+    expect(rpcArgs.p_deposito_id).toBeNull()
+  })
+
+  it("mapea P0010 a 400 con mensaje claro", async () => {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
+      data: null,
+      error: { code: "P0010", message: "STOCK_INSUFICIENTE_DEPOSITO: deposito dep-2" },
+    } as any)
+
+    const res = await POST(createPostRequest({ ...baseBody, depositoId: "dep-2" }))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(400)
+    expect(body.error).toContain("Stock insuficiente en el depósito")
+  })
+
+  it("mapea P0011 a 400 con mensaje claro", async () => {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
+      data: null,
+      error: { code: "P0011", message: "ORG_SIN_DEPOSITO_PRINCIPAL: org-1" },
+    } as any)
+
+    const res = await POST(createPostRequest(baseBody))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(400)
+    expect(body.error).toContain("depósito principal")
+  })
+})
+
+// ─── PUT /api/ventas/[id] — depositoId ───
+
+function createPutRequest(body: any, id = "v1"): [Request, { params: Promise<{ id: string }> }] {
+  const req = new Request(`http://localhost:3000/api/ventas/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+  return [req, { params: Promise.resolve({ id }) }]
+}
+
+describe("PUT /api/ventas/[id] — depositoId", () => {
+  const editBody = {
+    action: "edit",
+    clienteNombre: "Cliente Test",
+    items: [{ inventarioId: "i1", descripcion: "Notebook", cantidad: 1, precioUnitario: 100 }],
+    descuento: 0,
+    tipoDescuento: "MONTO",
+    porcentajeDescuento: 0,
+    metodoPago: "EFECTIVO",
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it("pasa depositoId a la RPC editar_venta_atomica como p_deposito_id", async () => {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: null, error: null } as any)
+    mockSupabaseFrom({
+      ventas: createChainMock({ id: "v1", estado: "COMPLETADA", cliente_nombre: "X", total: 100, items_venta: [] }),
+    })
+
+    const [req, ctx] = createPutRequest({ ...editBody, depositoId: "dep-2" })
+    const res = await PUT(req, ctx)
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    const rpcArgs = vi.mocked(supabaseAdmin.rpc).mock.calls[0][1] as any
+    expect(rpcArgs.p_deposito_id).toBe("dep-2")
+  })
+
+  it("manda p_deposito_id null cuando el body no trae depositoId", async () => {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: null, error: null } as any)
+    mockSupabaseFrom({
+      ventas: createChainMock({ id: "v1", estado: "COMPLETADA", cliente_nombre: "X", total: 100, items_venta: [] }),
+    })
+
+    const [req, ctx] = createPutRequest(editBody)
+    const res = await PUT(req, ctx)
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    const rpcArgs = vi.mocked(supabaseAdmin.rpc).mock.calls[0][1] as any
+    expect(rpcArgs.p_deposito_id).toBeNull()
+  })
+
+  it("rechaza depositoId vacío con 400", async () => {
+    mockAuthSuccess()
+    mockSupabaseFrom({
+      ventas: createChainMock({ id: "v1", estado: "COMPLETADA", cliente_nombre: "X", total: 100, items_venta: [] }),
+    })
+
+    const [req, ctx] = createPutRequest({ ...editBody, depositoId: "" })
+    const res = await PUT(req, ctx)
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(400)
+  })
+
+  it("mapea P0010 a 400 con mensaje claro en PUT", async () => {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
+      data: null,
+      error: { code: "P0010", message: "STOCK_INSUFICIENTE_DEPOSITO: dep-2" },
+    } as any)
+    mockSupabaseFrom({
+      ventas: createChainMock({ id: "v1", estado: "COMPLETADA", cliente_nombre: "X", total: 100, items_venta: [] }),
+    })
+
+    const [req, ctx] = createPutRequest({ ...editBody, depositoId: "dep-2" })
+    const res = await PUT(req, ctx)
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(400)
+    expect(body.error).toContain("Stock insuficiente en el depósito")
+  })
+
+  it("mapea P0011 a 400 con mensaje claro en PUT", async () => {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
+      data: null,
+      error: { code: "P0011", message: "ORG_SIN_DEPOSITO_PRINCIPAL: org-1" },
+    } as any)
+    mockSupabaseFrom({
+      ventas: createChainMock({ id: "v1", estado: "COMPLETADA", cliente_nombre: "X", total: 100, items_venta: [] }),
+    })
+
+    const [req, ctx] = createPutRequest(editBody)
+    const res = await PUT(req, ctx)
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(400)
+    expect(body.error).toContain("depósito principal")
   })
 })

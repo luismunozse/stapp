@@ -21,6 +21,7 @@ const adjustSchema = z.object({
   // duplicados al crear un item nuevo pasamos "ENTRADA" y referenciaTipo "CONSOLIDACION".
   tipo: z.enum(["AJUSTE", "ENTRADA"]).optional(),
   referenciaTipo: z.string().max(50).optional(),
+  depositoId: z.string().min(1).nullable().optional(),
 })
 
 export async function POST(
@@ -33,7 +34,7 @@ export async function POST(
 
     const { id } = await params
     const body = await request.json()
-    const { mode, value, motivo, tipo, referenciaTipo } = adjustSchema.parse(body)
+    const { mode, value, motivo, tipo, referenciaTipo, depositoId } = adjustSchema.parse(body)
 
     const { data, error: rpcErr } = await supabaseAdmin.rpc("adjust_stock_atomic", {
       p_inventario_id: id,
@@ -44,6 +45,7 @@ export async function POST(
       p_motivo: motivo ?? null,
       p_tipo: tipo ?? "AJUSTE",
       p_referencia_tipo: referenciaTipo ?? "AJUSTE_MANUAL",
+      p_deposito_id: depositoId ?? null,
     })
 
     if (rpcErr) {
@@ -59,6 +61,18 @@ export async function POST(
       }
       if (rpcErr.code === "22023") {
         return NextResponse.json({ error: rpcErr.message }, { status: 400 })
+      }
+      if (rpcErr.code === "P0010") {
+        return NextResponse.json(
+          { error: "Stock insuficiente en el depósito seleccionado" },
+          { status: 400 }
+        )
+      }
+      if (rpcErr.code === "P0011") {
+        return NextResponse.json(
+          { error: "La organización no tiene depósito principal configurado" },
+          { status: 400 }
+        )
       }
       throw rpcErr
     }
