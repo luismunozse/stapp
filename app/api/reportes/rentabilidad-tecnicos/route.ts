@@ -58,6 +58,7 @@ export async function GET(request: Request) {
       }
     } else {
       hasta = new Date()
+      hasta.setHours(23, 59, 59, 999)
     }
     if (desde > hasta) {
       return NextResponse.json({ error: "'desde' no puede ser posterior a 'hasta'" }, { status: 400 })
