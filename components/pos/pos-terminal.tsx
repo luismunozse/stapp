@@ -566,8 +566,8 @@ export function PosTerminal() {
               size="sm"
               className={cn(
                 "h-8 gap-1.5 text-xs",
-                printer.connected && "text-green-600",
-                printer.error && "text-red-500"
+                printer.connected && "text-success",
+                printer.error && "text-destructive"
               )}
               onClick={printer.connected ? printer.disconnect : printer.connect}
               disabled={printer.connecting}
@@ -840,11 +840,11 @@ export function PosTerminal() {
       {successData && (
         <div className="fixed inset-0 z-[60] bg-background/95 flex items-center justify-center p-4">
           <div className="max-w-sm w-full text-center space-y-4">
-            <div className="mx-auto w-16 h-16 rounded-full bg-green-100 dark:bg-green-950 flex items-center justify-center">
-              <Check className="h-8 w-8 text-green-600" />
+            <div className="mx-auto w-16 h-16 rounded-2xl bg-success/10 flex items-center justify-center">
+              <Check className="h-8 w-8 text-success" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-green-600">Venta registrada</h2>
+              <h2 className="text-2xl font-bold text-success">Venta registrada</h2>
               <p className="text-muted-foreground mt-1">
                 Venta #{successData.numeroVenta} — {formatPrice(successData.total)}
               </p>
@@ -854,14 +854,14 @@ export function PosTerminal() {
             </div>
 
             {successData.garantias?.length > 0 && (
-              <p className="text-sm text-green-600">
+              <p className="text-sm text-success">
                 {successData.garantias.length} certificado(s) de garantía generados
               </p>
             )}
 
             {/* Auto-print indicator */}
             {printer.connected && (
-              <p className="text-xs text-green-600">
+              <p className="text-xs text-success">
                 {printing ? "Imprimiendo ticket..." : "Ticket impreso automaticamente"}
               </p>
             )}

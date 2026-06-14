@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Search, Package, Loader2, Plus, Barcode, PenLine, X, ScanLine } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import type { InventarioResult } from "./pos-types"
+import { EmptyState } from "@/components/ui/empty-state"
 
 interface ManualProduct {
   nombre: string
@@ -280,22 +281,13 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
               ))}
             </div>
           ) : displayProducts.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-12">
-              <Package className="h-12 w-12 mb-3 opacity-30" />
-              <p className="text-sm">
-                {query.trim() ? "No se encontraron productos en inventario" : "Sin productos en inventario"}
-              </p>
-              {query.trim() && !loading && !showManualForm && (
-                <Button
-                  variant="outline"
-                  className="mt-4 gap-2"
-                  onClick={openManualForm}
-                >
-                  <PenLine className="h-4 w-4" />
-                  Agregar manualmente
-                </Button>
-              )}
-            </div>
+            <EmptyState
+              icon={Package}
+              title={query.trim() ? "Sin resultados" : "Sin productos"}
+              description={query.trim() ? "No se encontraron productos en inventario" : "Sin productos en inventario"}
+              variant="search"
+              action={query.trim() && !loading && !showManualForm ? { label: "Agregar manualmente", onClick: openManualForm } : undefined}
+            />
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-2 pb-20 lg:pb-0">
               {displayProducts.map((product) => (
@@ -320,7 +312,7 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
                     </span>
                     <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
                       product.stock <= 3
-                        ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400"
+                        ? "bg-destructive/10 text-destructive"
                         : "bg-muted text-muted-foreground"
                     }`}>
                       Stock: {product.stock}
