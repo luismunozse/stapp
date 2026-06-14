@@ -110,6 +110,6 @@ export const LIMIT_MESSAGES = {
   sucursales: {
     title: "Límite de sucursales alcanzado",
     description: "Alcanzaste el límite de sucursales de tu plan.",
-    action: "Subí a Pro para crear sucursales ilimitadas.",
+    action: "Actualizá tu plan para crear sucursales ilimitadas.",
   },
 }
