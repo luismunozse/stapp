@@ -2,10 +2,11 @@ import { NextResponse } from "next/server"
 import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
+import { sucursalParaLectura } from "@/lib/sucursal"
 
 export async function GET() {
   try {
-    const { error, organizationId } = await requireAdminOrVendedor()
+    const { error, organizationId, role } = await requireAdminOrVendedor()
     if (error) return error
 
     const hasFeature = await hasPlanFeature(organizationId!, "advanced_reports")
@@ -16,8 +17,10 @@ export async function GET() {
       )
     }
 
+    const filtro = await sucursalParaLectura({ role, userSucursalId: null })
+
     // Obtener órdenes completadas con costo final y repuestos
-    const { data: ordenes } = await supabaseAdmin
+    let ordenesQuery = supabaseAdmin
       .from("ordenes_servicio")
       .select(`
         id, tipo_dispositivo, costo_final,
@@ -31,6 +34,12 @@ export async function GET() {
       .eq("organization_id", organizationId!)
       .not("costo_final", "is", null)
       .in("estado", ["REPARADO", "ENTREGADO", "ENTREGADO_SIN_REPARACION"])
+
+    if (!filtro.verTodas && filtro.sucursalId) {
+      ordenesQuery = ordenesQuery.eq("sucursal_id", filtro.sucursalId)
+    }
+
+    const { data: ordenes } = await ordenesQuery
 
     if (!ordenes || ordenes.length === 0) {
       return NextResponse.json({ data: [], margenPromedio: 0 })

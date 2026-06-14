@@ -141,6 +141,7 @@ export async function GET() {
     }
 
     return NextResponse.json({
+      scope: "organization",
       resumen,
       stockCritico,
       sinStock: sinStock.slice(0, 10),

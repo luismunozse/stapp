@@ -1,9 +1,10 @@
 import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { NextResponse } from "next/server"
+import { sucursalParaLectura } from "@/lib/sucursal"
 
 export async function GET() {
-  const { error, organizationId } = await requireAdminOrVendedor()
+  const { error, organizationId, role } = await requireAdminOrVendedor()
   if (error) return error
 
   const now = new Date()
@@ -15,18 +16,38 @@ export async function GET() {
   hace30Dias.setDate(now.getDate() - 30)
 
   try {
+    const filtro = await sucursalParaLectura({ role, userSucursalId: null })
+
+    // Base ventas query for this month, with optional branch filter
+    let ventasMesBaseQuery = supabaseAdmin
+      .from("ventas")
+      .select("id, total, descuento, tipo_descuento, porcentaje_descuento, estado, metodo_pago, vendedor_id, created_at, monto_abonado, estado_pago")
+      .eq("organization_id", organizationId!)
+      .gte("created_at", inicioMes.toISOString())
+
+    if (!filtro.verTodas && filtro.sucursalId) {
+      ventasMesBaseQuery = ventasMesBaseQuery.eq("sucursal_id", filtro.sucursalId)
+    }
+
+    let ventasDiaBaseQuery = supabaseAdmin
+      .from("ventas")
+      .select("total, estado, created_at")
+      .eq("organization_id", organizationId!)
+      .eq("estado", "COMPLETADA")
+      .gte("created_at", hace30Dias.toISOString())
+
+    if (!filtro.verTodas && filtro.sucursalId) {
+      ventasDiaBaseQuery = ventasDiaBaseQuery.eq("sucursal_id", filtro.sucursalId)
+    }
+
     const [
       ventasDelMesResult,
       itemsVentaMesResult,
       ventasPorDiaResult,
       margenResult,
     ] = await Promise.all([
-      // All sales this month
-      supabaseAdmin
-        .from("ventas")
-        .select("id, total, descuento, tipo_descuento, porcentaje_descuento, estado, metodo_pago, vendedor_id, created_at, monto_abonado, estado_pago")
-        .eq("organization_id", organizationId!)
-        .gte("created_at", inicioMes.toISOString()),
+      // All sales this month (branch-filtered)
+      ventasMesBaseQuery,
 
       // Items from completed sales this month (for top products)
       supabaseAdmin
@@ -36,13 +57,8 @@ export async function GET() {
         .eq("ventas.estado", "COMPLETADA")
         .gte("ventas.created_at", inicioMes.toISOString()),
 
-      // Daily sales last 30 days
-      supabaseAdmin
-        .from("ventas")
-        .select("total, estado, created_at")
-        .eq("organization_id", organizationId!)
-        .eq("estado", "COMPLETADA")
-        .gte("created_at", hace30Dias.toISOString()),
+      // Daily sales last 30 days (branch-filtered)
+      ventasDiaBaseQuery,
 
       // Margin: items with inventory link for cost calculation
       supabaseAdmin

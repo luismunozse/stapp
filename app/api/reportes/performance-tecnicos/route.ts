@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { ESTADOS_ACTIVOS, ESTADOS_COMPLETADOS } from "@/lib/order-states"
+import { sucursalParaLectura } from "@/lib/sucursal"
 
 interface TecnicoPerformance {
   tecnicoId: string
@@ -18,7 +19,7 @@ interface TecnicoPerformance {
  */
 export async function GET() {
   try {
-    const { error, organizationId } = await requireAdminOrVendedor()
+    const { error, organizationId, role } = await requireAdminOrVendedor()
     if (error) return error
 
     // Obtener técnicos de la organización
@@ -35,12 +36,20 @@ export async function GET() {
     primerDiaMes.setDate(1)
     primerDiaMes.setHours(0, 0, 0, 0)
 
-    const { data: ordenes, error: ordenesError } = await supabaseAdmin
+    const filtro = await sucursalParaLectura({ role, userSucursalId: null })
+
+    let ordenesQuery = supabaseAdmin
       .from("ordenes_servicio")
       .select("tecnico_id, estado, fecha_ingreso, fecha_completado")
       .eq("organization_id", organizationId!)
       .not("tecnico_id", "is", null)
       .gte("fecha_ingreso", primerDiaMes.toISOString())
+
+    if (!filtro.verTodas && filtro.sucursalId) {
+      ordenesQuery = ordenesQuery.eq("sucursal_id", filtro.sucursalId)
+    }
+
+    const { data: ordenes, error: ordenesError } = await ordenesQuery
 
     if (ordenesError) throw ordenesError
 
