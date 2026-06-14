@@ -38,10 +38,15 @@ vi.mock("@/lib/notifications/queue", () => ({
   queueNotification: vi.fn().mockResolvedValue(undefined),
 }))
 
+vi.mock("@/lib/tipos-dispositivo-config", () => ({
+  tipoValidaImei: vi.fn(),
+}))
+
 import { enforcePlanLimit } from "@/lib/plan-limits"
 import { auth } from "@/lib/auth"
 import { GET, POST } from "@/app/api/ordenes/route"
 import { queueNotification } from "@/lib/notifications/queue"
+import { tipoValidaImei } from "@/lib/tipos-dispositivo-config"
 
 describe("GET /api/ordenes", () => {
   beforeEach(() => {
@@ -314,5 +319,106 @@ describe("POST /api/ordenes", () => {
     expect(arg.tipo).toBe("CAMBIO_ESTADO")
     expect(arg.context.orden?.estado).toBe("RECIBIDO")
     expect(arg.context.orden?.publicToken).toBeTruthy()
+  })
+
+  it("rejects invalid IMEI (not 15 digits) when tipo validates IMEI — returns 400", async () => {
+    mockAuthSuccess()
+    vi.mocked(tipoValidaImei).mockResolvedValue(true)
+
+    const response = await POST(
+      createPostRequest({
+        clienteId: "c1",
+        dispositivo: "Samsung A54",
+        tipoDispositivo: "CELULAR",
+        problemaReportado: "No enciende",
+        imei: "123",
+      })
+    )
+    const { status, body } = await parseResponse(response)
+
+    expect(status).toBe(400)
+    expect(body.error).toMatch(/IMEI/)
+  })
+
+  it("accepts valid 15-digit IMEI when tipo validates IMEI — returns 201", async () => {
+    mockAuthSuccess()
+    vi.mocked(tipoValidaImei).mockResolvedValue(true)
+
+    const mockOrden = {
+      id: "o-imei",
+      numero_orden: 3,
+      codigo_orden: "CEL-003",
+      cliente_id: "c1",
+      organization_id: "org-1",
+      tipo_dispositivo: "CELULAR",
+      dispositivo: "Samsung A54",
+      problema_reportado: "No enciende",
+      estado: "RECIBIDO",
+      fecha_ingreso: "2024-01-01",
+      fecha_prometida: null,
+      public_token: "tok-imei",
+      clientes: { id: "c1", nombre: "Juan" },
+    }
+
+    const ordenChain = createChainMock(mockOrden)
+    const orgChain = createChainMock({ nombre: "Mi Taller", nombre_mostrar: "Mi Taller Pro" })
+    mockSupabaseFrom({
+      ordenes_servicio: ordenChain,
+      organizations: orgChain,
+    })
+
+    const response = await POST(
+      createPostRequest({
+        clienteId: "c1",
+        dispositivo: "Samsung A54",
+        tipoDispositivo: "CELULAR",
+        problemaReportado: "No enciende",
+        imei: "123456789012345",
+      })
+    )
+    const { status } = await parseResponse(response)
+
+    expect(status).toBe(201)
+  })
+
+  it("does not validate IMEI when tipo does not mark it — returns 201 even with short imei", async () => {
+    mockAuthSuccess()
+    vi.mocked(tipoValidaImei).mockResolvedValue(false)
+
+    const mockOrden = {
+      id: "o-serial",
+      numero_orden: 4,
+      codigo_orden: "CONS-004",
+      cliente_id: "c1",
+      organization_id: "org-1",
+      tipo_dispositivo: "CONSOLA",
+      dispositivo: "PS5",
+      problema_reportado: "No enciende",
+      estado: "RECIBIDO",
+      fecha_ingreso: "2024-01-01",
+      fecha_prometida: null,
+      public_token: "tok-serial",
+      clientes: { id: "c1", nombre: "Juan" },
+    }
+
+    const ordenChain = createChainMock(mockOrden)
+    const orgChain = createChainMock({ nombre: "Mi Taller", nombre_mostrar: "Mi Taller Pro" })
+    mockSupabaseFrom({
+      ordenes_servicio: ordenChain,
+      organizations: orgChain,
+    })
+
+    const response = await POST(
+      createPostRequest({
+        clienteId: "c1",
+        dispositivo: "PS5",
+        tipoDispositivo: "CONSOLA",
+        problemaReportado: "No enciende",
+        imei: "123",
+      })
+    )
+    const { status } = await parseResponse(response)
+
+    expect(status).toBe(201)
   })
 })

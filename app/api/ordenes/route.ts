@@ -10,6 +10,8 @@ import { formatOrden } from "@/lib/db-utils"
 import { queueNotification } from "@/lib/notifications/queue"
 import { sucursalParaEscritura, sucursalParaLectura } from "@/lib/sucursal"
 import { z } from "zod"
+import { tipoValidaImei } from "@/lib/tipos-dispositivo-config"
+import { isValidImei } from "@/lib/imei"
 
 // Generar token público único
 function generatePublicToken(): string {
@@ -259,6 +261,17 @@ export async function POST(request: Request) {
 
     const body = await request.json()
     const data = ordenSchema.parse(body)
+
+    // Server-side IMEI validation: only when tipo marks campo imei as validacion "imei"
+    if (data.imei && data.imei.trim() && data.tipoDispositivo) {
+      const validaImei = await tipoValidaImei(organizationId!, data.tipoDispositivo)
+      if (validaImei && !isValidImei(data.imei)) {
+        return NextResponse.json(
+          { error: "El IMEI debe tener exactamente 15 dígitos" },
+          { status: 400 }
+        )
+      }
+    }
 
     // Si la orden se origina en un turno: validar que pertenece a la org y que
     // todavía no fue vinculado a otra orden.
