@@ -30,6 +30,7 @@ export async function GET(request: Request) {
       supabaseAdmin
         .from("organizations")
         .select("id, nombre, slug, email, activo")
+        .is("deleted_at", null)
         .or(
           `nombre.ilike.${searchPattern},slug.ilike.${searchPattern},email.ilike.${searchPattern}`
         )

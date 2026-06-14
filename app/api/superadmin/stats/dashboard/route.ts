@@ -29,18 +29,20 @@ export async function GET() {
     if (superadminOrgId) totalUsersQuery.neq("organization_id", superadminOrgId)
 
     const results = await Promise.allSettled([
-      // 0 - Total organizaciones (excluye org del panel admin)
+      // 0 - Total organizaciones (excluye org del panel admin y archivadas)
       supabaseAdmin
         .from("organizations")
         .select("id", { count: "exact", head: true })
-        .neq("slug", "superadmin"),
+        .neq("slug", "superadmin")
+        .is("deleted_at", null),
 
       // 1 - Organizaciones activas
       supabaseAdmin
         .from("organizations")
         .select("id", { count: "exact", head: true })
         .eq("activo", true)
-        .neq("slug", "superadmin"),
+        .neq("slug", "superadmin")
+        .is("deleted_at", null),
 
       // 2 - Total usuarios (excluye los del panel admin)
       totalUsersQuery,
@@ -69,13 +71,15 @@ export async function GET() {
         .from("organizations")
         .select("id", { count: "exact", head: true })
         .gte("created_at", primerDiaMes.toISOString())
-        .neq("slug", "superadmin"),
+        .neq("slug", "superadmin")
+        .is("deleted_at", null),
 
       // 6 - Organizaciones recientes
       supabaseAdmin
         .from("organizations")
         .select("id, nombre, slug, activo, created_at")
         .neq("slug", "superadmin")
+        .is("deleted_at", null)
         .order("created_at", { ascending: false })
         .limit(5),
 
@@ -91,7 +95,8 @@ export async function GET() {
         .from("organizations")
         .select("id, created_at")
         .gte("created_at", sixMonthsAgo.toISOString())
-        .neq("slug", "superadmin"),
+        .neq("slug", "superadmin")
+        .is("deleted_at", null),
 
       // 9 - All active subscriptions with plan type + payment provider
       // (for plan distribution chart). Necesitamos payment_provider para
