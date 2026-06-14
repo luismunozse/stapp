@@ -1,40 +1,28 @@
 "use client"
 
 import { useEffect, useCallback, use } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   ArrowLeft,
   Building2,
-  Power,
-  PowerOff,
-  ExternalLink,
+  CreditCard,
+  AlertTriangle,
+  CheckCircle,
+  Clock,
 } from "lucide-react"
-import { useSuperadminFetch, useSuperadminMutation } from "@/hooks/use-superadmin-fetch"
+import { useSuperadminFetch } from "@/hooks/use-superadmin-fetch"
+import { OrgCommandHeader } from "./_components/org-command-header"
+import { OrgQuickActions } from "./_components/org-quick-actions"
+import { OrgLimitsSection } from "./_components/org-limits-section"
 import { OrgInfoTab } from "./_components/org-info-tab"
 import { OrgUsersTab } from "./_components/org-users-tab"
 import { OrgUsageTab } from "./_components/org-usage-tab"
-import { OrgSubscriptionTab } from "./_components/org-subscription-tab"
 import { OrgPaymentsTab } from "./_components/org-payments-tab"
-import type {
-  OrganizationDetail,
-  OrganizationUser,
-  OrganizationUsage,
-  SubscriptionWithPlan,
-  PaymentWithOrg,
-  MonthlyOrders,
-} from "@/types/superadmin"
-
-interface OrgData {
-  organization: OrganizationDetail
-  users: OrganizationUser[]
-  usage: OrganizationUsage | null
-  subscription: SubscriptionWithPlan | null
-  payments: PaymentWithOrg[]
-  ordersHistory?: MonthlyOrders[]
-}
+import { formatDate } from "@/lib/utils"
+import type { OrganizationDetailResponse } from "@/types/superadmin"
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -43,34 +31,15 @@ interface PageProps {
 export default function OrganizacionDetallePage({ params }: PageProps) {
   const { id } = use(params)
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const activeTab = searchParams.get("tab") || "info"
-  const { data, loading, fetchData } = useSuperadminFetch<OrgData>()
-  const { mutate, loading: togglingStatus } = useSuperadminMutation()
+  const { data, loading, fetchData } = useSuperadminFetch<OrganizationDetailResponse>()
 
-  const loadOrganization = useCallback(() => {
+  const refresh = useCallback(() => {
     fetchData(`/api/superadmin/organizations/${id}`)
   }, [id, fetchData])
 
   useEffect(() => {
-    loadOrganization()
-  }, [loadOrganization])
-
-  const handleToggleStatus = async () => {
-    if (!data?.organization) return
-    await mutate(
-      `/api/superadmin/organizations/${id}/toggle-status`,
-      {
-        method: "POST",
-        body: { activo: !data.organization.activo },
-        successMessage: data.organization.activo
-          ? "Organización desactivada"
-          : "Organización activada",
-        errorMessage: "Error al cambiar el estado",
-        onSuccess: loadOrganization,
-      }
-    )
-  }
+    refresh()
+  }, [refresh])
 
   if (loading) {
     return (
@@ -91,7 +60,7 @@ export default function OrganizacionDetallePage({ params }: PageProps) {
             <ArrowLeft className="h-4 w-4 mr-2" />
             Volver
           </Button>
-          <Button onClick={loadOrganization}>
+          <Button onClick={refresh}>
             Reintentar
           </Button>
         </div>
@@ -99,101 +68,130 @@ export default function OrganizacionDetallePage({ params }: PageProps) {
     )
   }
 
-  const users = data?.users || []
-  const usage = data?.usage || null
-  const subscription = data?.subscription || null
-  const payments = data?.payments || []
-  const ordersHistory = data?.ordersHistory || []
+  const subscription = data?.subscription ?? null
+  const usage = data?.usage ?? null
+  const users = data?.users ?? []
+  const payments = data?.payments ?? []
+  const ordersHistory = data?.ordersHistory ?? []
+  const limitOverrides = data?.limitOverrides ?? null
+
+  // Inline read-only subscription summary
+  const subscriptionSummaryCard = (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <CreditCard className="h-4 w-4" />
+          Suscripción
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {subscription ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <Badge className="text-sm px-3 py-0.5">
+              {subscription.plans?.nombre ?? "Plan"}
+            </Badge>
+            <Badge variant={subscription.status === "ACTIVE" ? "default" : "secondary"}>
+              {subscription.status}
+            </Badge>
+            {subscription.billing_period && (
+              <Badge variant="outline">{subscription.billing_period}</Badge>
+            )}
+            {subscription.payment_provider && (
+              <Badge variant="outline" className="text-muted-foreground">
+                {subscription.payment_provider}
+              </Badge>
+            )}
+            {(() => {
+              const endDate = subscription.trial_end ?? subscription.current_period_end
+              if (!endDate) return null
+              const daysLeft = Math.ceil(
+                (new Date(endDate).getTime() - Date.now()) / 86400000
+              )
+              const label = subscription.trial_end ? "Trial" : "Período"
+              if (daysLeft < 0) {
+                return (
+                  <Badge variant="destructive" className="flex items-center gap-1">
+                    <AlertTriangle className="h-3 w-3" />
+                    {label} vencido
+                  </Badge>
+                )
+              }
+              if (daysLeft < 15) {
+                return (
+                  <Badge variant="destructive" className="flex items-center gap-1">
+                    <AlertTriangle className="h-3 w-3" />
+                    {label} vence en {daysLeft}d · {formatDate(endDate)}
+                  </Badge>
+                )
+              }
+              if (daysLeft <= 60) {
+                return (
+                  <Badge className="flex items-center gap-1 bg-amber-500 hover:bg-amber-600">
+                    <Clock className="h-3 w-3" />
+                    {label} · {daysLeft}d restantes
+                  </Badge>
+                )
+              }
+              return (
+                <Badge className="flex items-center gap-1 bg-green-600 hover:bg-green-700">
+                  <CheckCircle className="h-3 w-3" />
+                  {label} · {daysLeft}d restantes
+                </Badge>
+              )
+            })()}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Sin suscripción activa — Plan Free
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  )
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.back()}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold flex items-center gap-2">
-              <Building2 className="h-8 w-8" />
-              {organization.nombre}
-            </h1>
-            <a
-              href={`https://${organization.slug}.stapp.com.ar`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-muted-foreground hover:text-primary hover:underline inline-flex items-center gap-1"
-            >
-              {organization.slug}.stapp.com.ar
-              <ExternalLink className="h-3 w-3" />
-            </a>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <Badge
-            variant={organization.activo ? "default" : "destructive"}
-            className="text-sm px-3 py-1"
-          >
-            {organization.activo ? "Activa" : "Inactiva"}
-          </Badge>
-          <Button
-            variant={organization.activo ? "destructive" : "default"}
-            onClick={handleToggleStatus}
-            disabled={togglingStatus}
-          >
-            {organization.activo ? (
-              <>
-                <PowerOff className="h-4 w-4 mr-2" />
-                Desactivar
-              </>
-            ) : (
-              <>
-                <Power className="h-4 w-4 mr-2" />
-                Activar
-              </>
-            )}
-          </Button>
-        </div>
+      {/* Back navigation */}
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="icon" onClick={() => router.back()}>
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+        <span className="text-sm text-muted-foreground">Organizaciones</span>
       </div>
 
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={(tab) => router.replace(`?tab=${tab}`, { scroll: false })}>
-        <TabsList>
-          <TabsTrigger value="info">Información</TabsTrigger>
-          <TabsTrigger value="users">Usuarios ({users.length})</TabsTrigger>
-          <TabsTrigger value="usage">Uso</TabsTrigger>
-          <TabsTrigger value="subscription">Suscripción</TabsTrigger>
-          <TabsTrigger value="payments">Pagos ({payments.length})</TabsTrigger>
-        </TabsList>
+      {/* 1. Identity + status header */}
+      <OrgCommandHeader organization={organization} subscription={subscription} />
 
-        <TabsContent value="info" className="space-y-4">
-          <OrgInfoTab
-            organization={organization}
-            onUpdated={loadOrganization}
-          />
-        </TabsContent>
+      {/* 2. Quick actions (suspend/reactivate, extend trial, change plan, cancel, archive) */}
+      <OrgQuickActions
+        organization={organization}
+        subscription={subscription}
+        onUpdated={refresh}
+      />
 
-        <TabsContent value="users">
-          <OrgUsersTab users={users} onUpdated={loadOrganization} />
-        </TabsContent>
+      {/* 3. Usage summary */}
+      <OrgUsageTab usage={usage} ordersHistory={ordersHistory} />
 
-        <TabsContent value="usage">
-          <OrgUsageTab usage={usage} ordersHistory={ordersHistory} />
-        </TabsContent>
+      {/* 4. Subscription read-only summary (actions are in QuickActions) */}
+      {subscriptionSummaryCard}
 
-        <TabsContent value="subscription">
-          <OrgSubscriptionTab
-            subscription={subscription}
-            organizationId={id}
-            organizationName={organization.nombre}
-            onUpdated={loadOrganization}
-          />
-        </TabsContent>
+      {/* 5. Limits + overrides */}
+      <OrgLimitsSection
+        organization={organization}
+        subscription={subscription}
+        usage={usage}
+        limitOverrides={limitOverrides}
+        onUpdated={refresh}
+      />
 
-        <TabsContent value="payments">
-          <OrgPaymentsTab payments={payments} />
-        </TabsContent>
-      </Tabs>
+      {/* 6. Users */}
+      <OrgUsersTab users={users} onUpdated={refresh} />
+
+      {/* 7. Payments */}
+      <OrgPaymentsTab payments={payments} />
+
+      {/* 8. Identity / editable info */}
+      <OrgInfoTab organization={organization} onUpdated={refresh} />
     </div>
   )
 }
