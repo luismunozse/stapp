@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { UserCog, Clock, CheckCircle, Loader2, AlertCircle } from "lucide-react"
 import { EmptyState } from "@/components/ui/empty-state"
+import { StatCard } from "@/components/dashboard/stat-card"
 import {
   BarChart,
   Bar,
@@ -116,46 +117,31 @@ export function PerformanceTecnicos() {
     <div className="space-y-6">
       {/* Stats Cards */}
       <div className="grid grid-cols-3 gap-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">Total Órdenes</CardTitle>
-            <UserCog className="h-4 w-4 text-muted-foreground hidden sm:block" />
-          </CardHeader>
-          <CardContent className="p-3 sm:p-6 pt-0">
-            <div className="text-base sm:text-2xl font-bold">{data.totales.totalOrdenes}</div>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">Este mes</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">Completadas</CardTitle>
-            <CheckCircle className="h-4 w-4 text-success hidden sm:block" />
-          </CardHeader>
-          <CardContent className="p-3 sm:p-6 pt-0">
-            <div className="text-base sm:text-2xl font-bold text-success">{data.totales.totalCompletadas}</div>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">
-              {data.totales.totalOrdenes > 0
-                ? `${Math.round((data.totales.totalCompletadas / data.totales.totalOrdenes) * 100)}%`
-                : "-"}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">Tiempo Prom.</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground hidden sm:block" />
-          </CardHeader>
-          <CardContent className="p-3 sm:p-6 pt-0">
-            <div className="text-base sm:text-2xl font-bold">
-              {data.totales.promedioTiempo !== null
-                ? `${data.totales.promedioTiempo.toFixed(1)}d`
-                : "-"}
-            </div>
-            <p className="text-[10px] sm:text-xs text-muted-foreground hidden sm:block">Para completar</p>
-          </CardContent>
-        </Card>
+        <StatCard
+          title="Total Órdenes"
+          value={String(data.totales.totalOrdenes)}
+          description="Este mes"
+          icon={UserCog}
+          tone="default"
+        />
+        <StatCard
+          title="Completadas"
+          value={String(data.totales.totalCompletadas)}
+          description={
+            data.totales.totalOrdenes > 0
+              ? `${Math.round((data.totales.totalCompletadas / data.totales.totalOrdenes) * 100)}%`
+              : "-"
+          }
+          icon={CheckCircle}
+          tone="success"
+        />
+        <StatCard
+          title="Tiempo Prom."
+          value={data.totales.promedioTiempo !== null ? `${data.totales.promedioTiempo.toFixed(1)}d` : "-"}
+          description="Para completar"
+          icon={Clock}
+          tone="default"
+        />
       </div>
 
       {/* Chart */}

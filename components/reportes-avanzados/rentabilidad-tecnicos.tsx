@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { DateRangePicker } from "@/components/ui/date-picker"
 import { Loader2, TrendingUp, DollarSign, Clock, Users, Lock, AlertCircle } from "lucide-react"
 import { EmptyState } from "@/components/ui/empty-state"
+import { StatCard } from "@/components/dashboard/stat-card"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import {
@@ -277,51 +278,34 @@ export function RentabilidadTecnicos() {
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">Técnicos</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground hidden sm:block" />
-          </CardHeader>
-          <CardContent className="p-3 sm:p-6 pt-0">
-            <div className="text-base sm:text-2xl font-bold">{totales?.tecnicos ?? 0}</div>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">En el periodo</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">Ganancia total</CardTitle>
-            <DollarSign className="h-4 w-4 text-success hidden sm:block" />
-          </CardHeader>
-          <CardContent className="p-3 sm:p-6 pt-0">
-            <div className="text-base sm:text-2xl font-bold text-success">
-              {formatCurrency(totales?.ganancia ?? 0)}
-            </div>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">Todos los técnicos</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">Margen promedio</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground hidden sm:block" />
-          </CardHeader>
-          <CardContent className="p-3 sm:p-6 pt-0">
-            <div className="text-base sm:text-2xl font-bold">{margenPromedio}%</div>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">Sobre ingresos</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">Horas totales</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground hidden sm:block" />
-          </CardHeader>
-          <CardContent className="p-3 sm:p-6 pt-0">
-            <div className="text-base sm:text-2xl font-bold">{totales?.horas ?? 0}</div>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">Trabajadas</p>
-          </CardContent>
-        </Card>
+        <StatCard
+          title="Técnicos"
+          value={String(totales?.tecnicos ?? 0)}
+          description="En el periodo"
+          icon={Users}
+          tone="default"
+        />
+        <StatCard
+          title="Ganancia total"
+          value={formatCurrency(totales?.ganancia ?? 0)}
+          description="Todos los técnicos"
+          icon={DollarSign}
+          tone="success"
+        />
+        <StatCard
+          title="Margen promedio"
+          value={`${margenPromedio}%`}
+          description="Sobre ingresos"
+          icon={TrendingUp}
+          tone="default"
+        />
+        <StatCard
+          title="Horas totales"
+          value={String(totales?.horas ?? 0)}
+          description="Trabajadas"
+          icon={Clock}
+          tone="default"
+        />
       </div>
 
       {/* Chart */}

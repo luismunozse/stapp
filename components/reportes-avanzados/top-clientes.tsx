@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Users, DollarSign, ShoppingCart, Award, Phone, Mail, AlertCircle } from "lucide-react"
 import { EmptyState } from "@/components/ui/empty-state"
+import { StatCard } from "@/components/dashboard/stat-card"
 import { useCurrency } from "@/contexts/currency-context"
 import {
   BarChart,
@@ -112,44 +113,27 @@ export function TopClientes() {
     <div className="space-y-6">
       {/* Stats Cards */}
       <div className="grid grid-cols-3 gap-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">Clientes Activos</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground hidden sm:block" />
-          </CardHeader>
-          <CardContent className="p-3 sm:p-6 pt-0">
-            <div className="text-base sm:text-2xl font-bold">{data.estadisticas.clientesActivos}</div>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">
-              de {data.estadisticas.totalClientes}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">Prom. Órdenes</CardTitle>
-            <ShoppingCart className="h-4 w-4 text-muted-foreground hidden sm:block" />
-          </CardHeader>
-          <CardContent className="p-3 sm:p-6 pt-0">
-            <div className="text-base sm:text-2xl font-bold">
-              {data.estadisticas.promedioOrdenesCliente.toFixed(1)}
-            </div>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">por cliente</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">Gasto Prom.</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground hidden sm:block" />
-          </CardHeader>
-          <CardContent className="p-3 sm:p-6 pt-0">
-            <div className="text-base sm:text-2xl font-bold truncate">
-              {formatPrice(data.estadisticas.promedioGastoCliente)}
-            </div>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">por cliente</p>
-          </CardContent>
-        </Card>
+        <StatCard
+          title="Clientes Activos"
+          value={String(data.estadisticas.clientesActivos)}
+          description={`de ${data.estadisticas.totalClientes}`}
+          icon={Users}
+          tone="default"
+        />
+        <StatCard
+          title="Prom. Órdenes"
+          value={data.estadisticas.promedioOrdenesCliente.toFixed(1)}
+          description="por cliente"
+          icon={ShoppingCart}
+          tone="default"
+        />
+        <StatCard
+          title="Gasto Prom."
+          value={formatPrice(data.estadisticas.promedioGastoCliente)}
+          description="por cliente"
+          icon={DollarSign}
+          tone="default"
+        />
       </div>
 
       {/* Ordenar por */}

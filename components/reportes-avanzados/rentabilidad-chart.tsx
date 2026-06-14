@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Loader2, AlertCircle } from "lucide-react"
+import { Loader2, AlertCircle, DollarSign, TrendingDown, TrendingUp } from "lucide-react"
 import { EmptyState } from "@/components/ui/empty-state"
+import { StatCard } from "@/components/dashboard/stat-card"
 import {
   BarChart,
   Bar,
@@ -100,25 +101,25 @@ export function RentabilidadChart() {
           </BarChart>
         </ResponsiveContainer>
 
-        <div className="mt-4 grid grid-cols-3 gap-3 text-center text-sm">
-          <div>
-            <p className="text-muted-foreground">Total Ingresos</p>
-            <p className="font-bold text-success">
-              ${data.reduce((s, d) => s + d.ingresos, 0).toLocaleString()}
-            </p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">Total Costos</p>
-            <p className="font-bold text-destructive">
-              ${data.reduce((s, d) => s + d.costos, 0).toLocaleString()}
-            </p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">Margen Total</p>
-            <p className="font-bold text-info">
-              ${data.reduce((s, d) => s + d.ganancia, 0).toLocaleString()}
-            </p>
-          </div>
+        <div className="mt-4 grid grid-cols-3 gap-3">
+          <StatCard
+            title="Total Ingresos"
+            value={`$${data.reduce((s, d) => s + d.ingresos, 0).toLocaleString()}`}
+            icon={DollarSign}
+            tone="success"
+          />
+          <StatCard
+            title="Total Costos"
+            value={`$${data.reduce((s, d) => s + d.costos, 0).toLocaleString()}`}
+            icon={TrendingDown}
+            tone="danger"
+          />
+          <StatCard
+            title="Margen Total"
+            value={`$${data.reduce((s, d) => s + d.ganancia, 0).toLocaleString()}`}
+            icon={TrendingUp}
+            tone="info"
+          />
         </div>
       </CardContent>
     </Card>
