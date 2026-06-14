@@ -383,8 +383,13 @@ export async function PUT(
       }).catch(() => {})
     }
 
+    const presupuestoCambio =
+      data.presupuesto !== undefined &&
+      data.presupuesto !== null &&
+      data.presupuesto !== orden.presupuesto
+
     // Notificación de cambio de estado
-    if (estadoFinal && estadoFinal !== orden.estado) {
+    if (estadoFinal && estadoFinal !== orden.estado && !(estadoFinal === "PRESUPUESTADO" && presupuestoCambio)) {
       queueNotification({
         organizationId: organizationId!,
         ordenId: id,
@@ -407,6 +412,7 @@ export async function PUT(
             dispositivo: orden.dispositivo,
             estado: estadoFinal,
             estadoAnterior: orden.estado,
+            presupuesto: orden.presupuesto,
             publicToken: orden.public_token,
             // Técnico efectivo: el reasignado en este request si vino, si no el actual.
             tecnicoId: (data.tecnicoId !== undefined ? data.tecnicoId : orden.tecnico_id) ?? null,
@@ -416,11 +422,7 @@ export async function PUT(
     }
 
     // Notificación de presupuesto definido
-    if (
-      data.presupuesto !== undefined &&
-      data.presupuesto !== null &&
-      data.presupuesto !== orden.presupuesto
-    ) {
+    if (presupuestoCambio) {
       queueNotification({
         organizationId: organizationId!,
         ordenId: id,

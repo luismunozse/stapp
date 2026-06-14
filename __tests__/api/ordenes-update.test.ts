@@ -19,7 +19,12 @@ vi.mock("@/lib/notifications/queue", () => ({
   queueNotification: vi.fn().mockResolvedValue(undefined),
 }))
 
+vi.mock("@/lib/webhooks/dispatcher", () => ({
+  emitWebhookEvent: vi.fn().mockResolvedValue(undefined),
+}))
+
 import { PUT } from "@/app/api/ordenes/[id]/route"
+import { queueNotification } from "@/lib/notifications/queue"
 
 function createPutRequest(body: any, url?: string) {
   return new Request(url || "http://localhost:3000/api/ordenes/o1", {
@@ -401,5 +406,43 @@ describe("PUT /api/ordenes/[id] - Campos Requeridos", () => {
 
     expect(status).toBe(400)
     expect(body.error).toContain("negativo")
+  })
+})
+
+describe("PUT /api/ordenes/[id] - Dedup notificaciones al presupuestar", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it("al presupuestar (auto-PRESUPUESTADO) encola PRESUPUESTO_DEFINIDO y NO CAMBIO_ESTADO", async () => {
+    mockAuthSuccess()
+
+    const mockOrden = createMockOrden({ estado: "EN_DIAGNOSTICO", presupuesto: null })
+    const mockUpdated = { ...mockOrden, estado: "PRESUPUESTADO", presupuesto: 5000 }
+
+    let callCount = 0
+    const chain = createChainMock(null)
+    chain.single = vi.fn().mockImplementation(() => {
+      callCount++
+      if (callCount === 1) return Promise.resolve({ data: mockOrden, error: null })
+      return Promise.resolve({ data: mockUpdated, error: null })
+    })
+
+    mockSupabaseFrom({
+      ordenes_servicio: chain,
+      orden_eventos: createChainMock(null),
+    })
+
+    const response = await PUT(
+      createPutRequest({ presupuesto: 5000 }),
+      createParams("o1")
+    )
+    const { status } = await parseResponse(response)
+
+    expect(status).toBe(200)
+
+    const tipos = vi.mocked(queueNotification).mock.calls.map((c) => c[0].tipo)
+    expect(tipos).toContain("PRESUPUESTO_DEFINIDO")
+    expect(tipos).not.toContain("CAMBIO_ESTADO")
   })
 })
