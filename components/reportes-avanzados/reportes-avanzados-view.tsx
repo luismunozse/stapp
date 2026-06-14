@@ -97,9 +97,9 @@ export function ReportesAvanzadosView() {
       {/* Header */}
       <div className="flex flex-col gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Reportes</h1>
+          <h1 className="text-headline">Reportes</h1>
           <p className="text-muted-foreground">
-            Analiza el rendimiento de tu taller con metricas detalladas
+            Analiza el rendimiento de tu taller con métricas detalladas
           </p>
           <BranchScopeLabel />
         </div>

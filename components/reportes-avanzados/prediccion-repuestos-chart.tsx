@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Loader2 } from "lucide-react"
+import { Loader2, AlertCircle } from "lucide-react"
+import { EmptyState } from "@/components/ui/empty-state"
 
 interface PrediccionItem {
   id: string
@@ -44,8 +45,13 @@ export function PrediccionRepuestosChart() {
   if (error || data.length === 0) {
     return (
       <Card>
-        <CardContent className="py-12 text-center text-muted-foreground">
-          {error ? "Error al cargar datos" : "No hay datos suficientes"}
+        <CardContent className="py-4">
+          <EmptyState
+            icon={AlertCircle}
+            title={error ? "Error al cargar datos" : "Sin datos suficientes"}
+            description={error ? "No se pudo cargar la predicción de repuestos" : "No hay datos suficientes para generar predicciones"}
+            variant={error ? "error" : "search"}
+          />
         </CardContent>
       </Card>
     )
@@ -56,7 +62,7 @@ export function PrediccionRepuestosChart() {
       case "CRITICO":
         return <Badge variant="destructive">Critico</Badge>
       case "BAJO":
-        return <Badge className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">Bajo</Badge>
+        return <Badge className="bg-warning/15 text-warning dark:bg-warning/20">Bajo</Badge>
       case "SIN_USO":
         return <Badge variant="outline">Sin uso</Badge>
       default:

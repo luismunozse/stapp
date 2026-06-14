@@ -5,7 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Users, DollarSign, ShoppingCart, Award, Phone, Mail } from "lucide-react"
+import { Users, DollarSign, ShoppingCart, Award, Phone, Mail, AlertCircle } from "lucide-react"
+import { EmptyState } from "@/components/ui/empty-state"
 import { useCurrency } from "@/contexts/currency-context"
 import {
   BarChart,
@@ -90,8 +91,13 @@ export function TopClientes() {
   if (error || !data) {
     return (
       <Card>
-        <CardContent className="py-8 text-center text-muted-foreground">
-          {error || "No hay datos disponibles"}
+        <CardContent className="py-4">
+          <EmptyState
+            icon={AlertCircle}
+            title={error ? "Error al cargar datos" : "Sin datos disponibles"}
+            description={error || "No hay datos de clientes para mostrar"}
+            variant={error ? "error" : "search"}
+          />
         </CardContent>
       </Card>
     )
@@ -203,7 +209,7 @@ export function TopClientes() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Award className="h-5 w-5 text-yellow-500" />
+            <Award className="h-5 w-5 text-warning" />
             Top 10 Clientes
           </CardTitle>
           <CardDescription>
@@ -212,9 +218,12 @@ export function TopClientes() {
         </CardHeader>
         <CardContent>
           {data.clientes.length === 0 ? (
-            <p className="text-center text-muted-foreground py-4">
-              No hay clientes con actividad registrada
-            </p>
+            <EmptyState
+              icon={Users}
+              title="Sin actividad registrada"
+              description="No hay clientes con actividad registrada"
+              variant="search"
+            />
           ) : (
             <div className="space-y-3">
               {data.clientes.map((cliente, index) => (
@@ -226,7 +235,7 @@ export function TopClientes() {
                     <div
                       className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-sm font-bold shrink-0 ${
                         index < 3
-                          ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-500"
+                          ? "bg-warning/10 text-warning dark:bg-warning/20"
                           : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
                       }`}
                     >
@@ -255,7 +264,7 @@ export function TopClientes() {
                     <Badge variant="secondary" className="text-[10px] sm:text-xs">
                       {cliente.totalOrdenes} {cliente.totalOrdenes === 1 ? "orden" : "órdenes"}
                     </Badge>
-                    <Badge variant="default" className="bg-green-500 text-[10px] sm:text-xs">
+                    <Badge variant="default" className="bg-success text-white text-[10px] sm:text-xs">
                       {formatPrice(cliente.totalGastado)}
                     </Badge>
                     {cliente.ultimaVisita && (

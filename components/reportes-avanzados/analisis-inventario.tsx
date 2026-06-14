@@ -5,7 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { Package, AlertTriangle, DollarSign, Layers, TrendingUp } from "lucide-react"
+import { Package, AlertTriangle, DollarSign, Layers, TrendingUp, AlertCircle } from "lucide-react"
+import { EmptyState } from "@/components/ui/empty-state"
 import { useCurrency } from "@/contexts/currency-context"
 import {
   PieChart,
@@ -102,8 +103,13 @@ export function AnalisisInventario() {
   if (error || !data) {
     return (
       <Card>
-        <CardContent className="py-8 text-center text-muted-foreground">
-          {error || "No hay datos disponibles"}
+        <CardContent className="py-4">
+          <EmptyState
+            icon={AlertCircle}
+            title={error ? "Error al cargar datos" : "Sin datos disponibles"}
+            description={error || "No hay datos de inventario para mostrar"}
+            variant={error ? "error" : "search"}
+          />
         </CardContent>
       </Card>
     )
@@ -145,10 +151,10 @@ export function AnalisisInventario() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
             <CardTitle className="text-xs sm:text-sm font-medium">Margen Pot.</CardTitle>
-            <TrendingUp className="h-4 w-4 text-green-500 hidden sm:block" />
+            <TrendingUp className="h-4 w-4 text-success hidden sm:block" />
           </CardHeader>
           <CardContent className="p-3 sm:p-6 pt-0">
-            <div className="text-base sm:text-2xl font-bold text-green-600 truncate">
+            <div className="text-base sm:text-2xl font-bold text-success truncate">
               {formatPrice(data.resumen.margenPotencial)}
             </div>
             <p className="text-[10px] sm:text-xs text-muted-foreground hidden sm:block">
@@ -160,10 +166,10 @@ export function AnalisisInventario() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
             <CardTitle className="text-xs sm:text-sm font-medium">Stock Crítico</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-yellow-500 hidden sm:block" />
+            <AlertTriangle className="h-4 w-4 text-warning hidden sm:block" />
           </CardHeader>
           <CardContent className="p-3 sm:p-6 pt-0">
-            <div className="text-base sm:text-2xl font-bold text-yellow-600">
+            <div className="text-base sm:text-2xl font-bold text-warning">
               {data.resumen.itemsStockCritico}
             </div>
             <p className="text-[10px] sm:text-xs text-muted-foreground">
@@ -217,7 +223,7 @@ export function AnalisisInventario() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-              <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-green-500" />
+              <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-success" />
               Items Más Valiosos
             </CardTitle>
             <CardDescription className="text-xs sm:text-sm">
@@ -226,9 +232,12 @@ export function AnalisisInventario() {
           </CardHeader>
           <CardContent>
             {data.masValiosos.length === 0 ? (
-              <p className="text-center text-muted-foreground py-4">
-                No hay items con valor en stock
-              </p>
+              <EmptyState
+                icon={Package}
+                title="Sin items con valor"
+                description="No hay items con valor en stock"
+                variant="search"
+              />
             ) : (
               <div className="space-y-2">
                 {data.masValiosos.slice(0, 5).map((item, index) => (
@@ -247,7 +256,7 @@ export function AnalisisInventario() {
                         </p>
                       </div>
                     </div>
-                    <Badge variant="default" className="bg-green-500 text-[10px] sm:text-xs shrink-0">
+                    <Badge variant="default" className="bg-success text-white text-[10px] sm:text-xs shrink-0">
                       {formatPrice(item.valorEnStock)}
                     </Badge>
                   </div>
@@ -262,7 +271,7 @@ export function AnalisisInventario() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-yellow-500" />
+            <AlertTriangle className="h-5 w-5 text-warning" />
             Stock Crítico
           </CardTitle>
           <CardDescription>
@@ -271,9 +280,12 @@ export function AnalisisInventario() {
         </CardHeader>
         <CardContent>
           {data.stockCritico.length === 0 ? (
-            <p className="text-center text-muted-foreground py-4">
-              No hay items con stock crítico
-            </p>
+            <EmptyState
+              icon={AlertTriangle}
+              title="Sin stock crítico"
+              description="No hay items con stock crítico"
+              variant="search"
+            />
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {data.stockCritico.slice(0, 12).map((item) => (
@@ -281,8 +293,8 @@ export function AnalisisInventario() {
                   key={item.id}
                   className={`p-3 border rounded-lg ${
                     item.stock === 0
-                      ? "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/20"
-                      : "border-yellow-200 bg-yellow-50 dark:border-yellow-900 dark:bg-yellow-950/20"
+                      ? "border-destructive/20 bg-destructive/5"
+                      : "border-warning/25 bg-warning-50 dark:bg-warning/10"
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
@@ -314,7 +326,7 @@ export function AnalisisInventario() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Layers className="h-5 w-5 text-blue-500" />
+            <Layers className="h-5 w-5 text-info" />
             Resumen por Categoría
           </CardTitle>
         </CardHeader>

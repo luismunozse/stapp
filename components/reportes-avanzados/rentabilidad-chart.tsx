@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Loader2 } from "lucide-react"
+import { Loader2, AlertCircle } from "lucide-react"
+import { EmptyState } from "@/components/ui/empty-state"
 import {
   BarChart,
   Bar,
@@ -53,8 +54,13 @@ export function RentabilidadChart() {
   if (error || data.length === 0) {
     return (
       <Card>
-        <CardContent className="py-12 text-center text-muted-foreground">
-          {error ? "Error al cargar datos" : "No hay datos suficientes"}
+        <CardContent className="py-4">
+          <EmptyState
+            icon={AlertCircle}
+            title={error ? "Error al cargar datos" : "Sin datos suficientes"}
+            description={error ? "No se pudo cargar el reporte de rentabilidad" : "No hay datos suficientes para generar este reporte"}
+            variant={error ? "error" : "search"}
+          />
         </CardContent>
       </Card>
     )
@@ -97,19 +103,19 @@ export function RentabilidadChart() {
         <div className="mt-4 grid grid-cols-3 gap-3 text-center text-sm">
           <div>
             <p className="text-muted-foreground">Total Ingresos</p>
-            <p className="font-bold text-green-600">
+            <p className="font-bold text-success">
               ${data.reduce((s, d) => s + d.ingresos, 0).toLocaleString()}
             </p>
           </div>
           <div>
             <p className="text-muted-foreground">Total Costos</p>
-            <p className="font-bold text-red-600">
+            <p className="font-bold text-destructive">
               ${data.reduce((s, d) => s + d.costos, 0).toLocaleString()}
             </p>
           </div>
           <div>
             <p className="text-muted-foreground">Margen Total</p>
-            <p className="font-bold text-blue-600">
+            <p className="font-bold text-info">
               ${data.reduce((s, d) => s + d.ganancia, 0).toLocaleString()}
             </p>
           </div>
