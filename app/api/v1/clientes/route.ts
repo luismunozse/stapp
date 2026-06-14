@@ -24,9 +24,8 @@ export async function GET(request: Request) {
       .range(offset, offset + limit - 1)
 
     if (search) {
-      query = query.or(
-        `nombre.ilike.%${search}%,telefono.ilike.%${search}%,email.ilike.%${search}%`
-      )
+      const s = search.replace(/[%,()\\]/g, "")
+      if (s) query = query.or(`nombre.ilike.%${s}%,telefono.ilike.%${s}%,email.ilike.%${s}%`)
     }
 
     const { data, error: dbError, count } = await query

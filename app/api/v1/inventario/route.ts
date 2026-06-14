@@ -28,7 +28,8 @@ export async function GET(request: Request) {
     if (categoria) query = query.eq("categoria", categoria)
     if (tipoDispositivo) query = query.eq("tipo_dispositivo", tipoDispositivo)
     if (search) {
-      query = query.or(`nombre.ilike.%${search}%,codigo.ilike.%${search}%`)
+      const s = search.replace(/[%,()\\]/g, "")
+      if (s) query = query.or(`nombre.ilike.%${s}%,codigo.ilike.%${s}%`)
     }
 
     const { data, error: dbError, count } = await query
