@@ -33,6 +33,16 @@ const badgeVariants = cva(
         warning:
           "border-transparent bg-warning text-warning-foreground hover:bg-warning/80",
         info: "border-transparent bg-info text-info-foreground hover:bg-info/80",
+        // Soft (tinted) variants — the light bg + colored text/border look used
+        // for status pills, replacing scattered `bg-X-50 text-X-700 border-X-200`.
+        successSoft:
+          "border-success/30 bg-success-50 text-success-700 dark:bg-success/15 dark:text-success-400",
+        warningSoft:
+          "border-warning/30 bg-warning-50 text-warning-700 dark:bg-warning/15 dark:text-warning-500",
+        infoSoft:
+          "border-info/30 bg-info-50 text-info-700 dark:bg-info/15 dark:text-info-400",
+        destructiveSoft:
+          "border-destructive/30 bg-destructive/10 text-destructive",
         // Estados de órdenes con colores semánticos
         recibido:
           "border-transparent bg-slate-500 text-white",
@@ -72,6 +82,10 @@ const variantIcons: Record<string, React.ComponentType<{ className?: string }>> 
   warning: AlertTriangle,
   destructive: XCircle,
   info: Info,
+  successSoft: CheckCircle,
+  warningSoft: AlertTriangle,
+  infoSoft: Info,
+  destructiveSoft: XCircle,
   recibido: Clock,
   en_diagnostico: Wrench,
   presupuestado: FileCheck,
