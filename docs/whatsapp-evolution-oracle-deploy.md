@@ -94,6 +94,12 @@ services:
     environment:
       - SERVER_URL=https://evo.tudominio.com        # tu hostname del Tunnel (Parte 4)
       - AUTHENTICATION_API_KEY=TU_API_KEY_SECRETA    # openssl rand -hex 32
+      # CRÍTICO: versión de WhatsApp Web que Baileys presenta. Si queda vieja,
+      # WhatsApp rechaza el handshake (isBelowHard) y NUNCA se genera el QR
+      # (connect devuelve {count:0} y los logs loopean "Baileys version env").
+      # Vigente: curl -s https://raw.githubusercontent.com/WhiskeySockets/Baileys/master/src/Defaults/baileys-version.json
+      # y formatear [2,3000,1035194821] -> 2.3000.1035194821
+      - CONFIG_SESSION_PHONE_VERSION=2.3000.1035194821
       - DATABASE_ENABLED=true
       - DATABASE_PROVIDER=postgresql
       - DATABASE_CONNECTION_URI=postgresql://evo:evopass@postgres:5432/evolution?schema=public
@@ -233,3 +239,4 @@ Seguí desde la **Parte B** de `docs/whatsapp-evolution-pruebas.md` (QR pairing 
 | Evolution no arranca | Env var inválida para esa versión | Cruzá con `.env.example` del tag; mirá `docker compose logs evolution-api` |
 | QR se conecta y se cae | VM se reinició / volumen perdido | `restart: always` ya está; verificá que los volúmenes persistan |
 | "Out of capacity" al crear VM | Falta cupo ARM en la región | Otra AD/región o reintentar |
+| `connect` devuelve `{count:0}`, no hay QR, logs loopean "Baileys version env" | Versión WA Web vieja, WhatsApp la rechaza (`isBelowHard`) | Setear `CONFIG_SESSION_PHONE_VERSION` a la vigente (ver compose), `docker compose up -d evolution-api`, borrar la instancia stale (`DELETE /instance/delete/{name}`) y reconectar |
