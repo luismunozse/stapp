@@ -38,5 +38,23 @@ vi.mock('@/lib/supabase', () => ({
       single: vi.fn(),
     })),
     rpc: vi.fn(),
+    storage: {
+      from: vi.fn(() => ({
+        list: vi.fn().mockResolvedValue({ data: [], error: null }),
+        remove: vi.fn().mockResolvedValue({ data: null, error: null }),
+      })),
+    },
+  },
+  STORAGE_BUCKETS: {
+    FOTOS_ORDENES: 'fotos-ordenes',
+    FOTOS_INVENTARIO: 'fotos-inventario',
+    LOGOS: 'logos',
+    FIRMAS: 'firmas',
+    CSV_IMPORTS: 'csv-imports',
+    APK_RELEASES: 'apk-releases',
+    SOPORTE_ATTACHMENTS: 'soporte-attachments',
+    AVATARS: 'avatars',
+    COMPROBANTES_GASTOS: 'comprobantes-gastos',
+    CATALOGO: 'catalogo',
   },
 }))
