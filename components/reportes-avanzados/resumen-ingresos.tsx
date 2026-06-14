@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton"
 import { DollarSign, Wrench, ShoppingBag, Smartphone } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
+import { StatCard } from "@/components/dashboard/stat-card"
 import {
   BarChart,
   Bar,
@@ -120,61 +121,34 @@ export function ResumenIngresos() {
     <div className="space-y-6">
       {/* Summary Cards */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">Total Ingresos</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground hidden sm:block" />
-          </CardHeader>
-          <CardContent className="p-3 sm:p-6 pt-0">
-            <div className="text-base sm:text-2xl font-bold truncate">{formatPrice(data.resumen.totalIngresos)}</div>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">
-              Últimos {data.periodo.meses} meses
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">Reparaciones</CardTitle>
-            <Wrench className="h-4 w-4 text-blue-500 hidden sm:block" />
-          </CardHeader>
-          <CardContent className="p-3 sm:p-6 pt-0">
-            <div className="text-base sm:text-2xl font-bold text-blue-600 truncate">
-              {formatPrice(data.resumen.totalServicios)}
-            </div>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">
-              {data.resumen.cantidadServicios} facturas · {porcentajeServicios}%
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">Ventas</CardTitle>
-            <ShoppingBag className="h-4 w-4 text-green-500 hidden sm:block" />
-          </CardHeader>
-          <CardContent className="p-3 sm:p-6 pt-0">
-            <div className="text-base sm:text-2xl font-bold text-green-600 truncate">
-              {formatPrice(data.resumen.totalVentas)}
-            </div>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">
-              {data.resumen.cantidadVentas} ventas · {100 - porcentajeServicios}%
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">Dispositivos</CardTitle>
-            <Smartphone className="h-4 w-4 text-muted-foreground hidden sm:block" />
-          </CardHeader>
-          <CardContent className="p-3 sm:p-6 pt-0">
-            <div className="text-base sm:text-2xl font-bold">{data.porDispositivo.length}</div>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">
-              Tipos atendidos
-            </p>
-          </CardContent>
-        </Card>
+        <StatCard
+          title="Total Ingresos"
+          value={formatPrice(data.resumen.totalIngresos)}
+          description={`Últimos ${data.periodo.meses} meses`}
+          icon={DollarSign}
+          tone="default"
+        />
+        <StatCard
+          title="Reparaciones"
+          value={formatPrice(data.resumen.totalServicios)}
+          description={`${data.resumen.cantidadServicios} facturas · ${porcentajeServicios}%`}
+          icon={Wrench}
+          tone="info"
+        />
+        <StatCard
+          title="Ventas"
+          value={formatPrice(data.resumen.totalVentas)}
+          description={`${data.resumen.cantidadVentas} ventas · ${100 - porcentajeServicios}%`}
+          icon={ShoppingBag}
+          tone="success"
+        />
+        <StatCard
+          title="Dispositivos"
+          value={String(data.porDispositivo.length)}
+          description="Tipos atendidos"
+          icon={Smartphone}
+          tone="default"
+        />
       </div>
 
       {/* Monthly Chart - Stacked by source */}

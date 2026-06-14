@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton"
 import { TrendingUp, TrendingDown, Minus, DollarSign, Receipt, Calculator, AlertCircle } from "lucide-react"
 import { EmptyState } from "@/components/ui/empty-state"
+import { StatCard } from "@/components/dashboard/stat-card"
 import { useCurrency } from "@/contexts/currency-context"
 import {
   BarChart,
@@ -115,59 +116,34 @@ export function ComparativaIngresos() {
     <div className="space-y-6">
       {/* Stats Cards */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">Ingresos Mes Actual</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground hidden sm:block" />
-          </CardHeader>
-          <CardContent className="p-3 sm:p-6 pt-0">
-            <div className="text-base sm:text-2xl font-bold truncate">{formatPrice(data.mesActual.total)}</div>
-            <p className="text-[10px] sm:text-xs text-muted-foreground capitalize">{data.mesActual.nombre}</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">Mes Anterior</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground hidden sm:block" />
-          </CardHeader>
-          <CardContent className="p-3 sm:p-6 pt-0">
-            <div className="text-base sm:text-2xl font-bold text-muted-foreground truncate">
-              {formatPrice(data.mesAnterior.total)}
-            </div>
-            <p className="text-[10px] sm:text-xs text-muted-foreground capitalize">{data.mesAnterior.nombre}</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">Cambio</CardTitle>
-            <TrendIcon className={`h-4 w-4 ${trendColor} hidden sm:block`} />
-          </CardHeader>
-          <CardContent className="p-3 sm:p-6 pt-0">
-            <div className={`text-base sm:text-2xl font-bold ${trendColor}`}>
-              {data.cambio.direccion === "up" ? "+" : ""}
-              {data.cambio.porcentaje}%
-            </div>
-            <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
-              {data.cambio.diferencia >= 0 ? "+" : ""}
-              {formatPrice(data.cambio.diferencia)}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">Facturas Este Mes</CardTitle>
-            <Receipt className="h-4 w-4 text-muted-foreground hidden sm:block" />
-          </CardHeader>
-          <CardContent className="p-3 sm:p-6 pt-0">
-            <div className="text-base sm:text-2xl font-bold">{data.mesActual.cantidad}</div>
-            <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
-              Prom: {formatPrice(data.mesActual.promedio)}
-            </p>
-          </CardContent>
-        </Card>
+        <StatCard
+          title="Ingresos Mes Actual"
+          value={formatPrice(data.mesActual.total)}
+          description={data.mesActual.nombre}
+          icon={DollarSign}
+          tone="default"
+        />
+        <StatCard
+          title="Mes Anterior"
+          value={formatPrice(data.mesAnterior.total)}
+          description={data.mesAnterior.nombre}
+          icon={DollarSign}
+          tone="default"
+        />
+        <StatCard
+          title="Cambio"
+          value={`${data.cambio.direccion === "up" ? "+" : ""}${data.cambio.porcentaje}%`}
+          description={`${data.cambio.diferencia >= 0 ? "+" : ""}${formatPrice(data.cambio.diferencia)}`}
+          icon={TrendIcon}
+          tone={data.cambio.direccion === "up" ? "success" : data.cambio.direccion === "down" ? "danger" : "default"}
+        />
+        <StatCard
+          title="Facturas Este Mes"
+          value={String(data.mesActual.cantidad)}
+          description={`Prom: ${formatPrice(data.mesActual.promedio)}`}
+          icon={Receipt}
+          tone="default"
+        />
       </div>
 
       {/* Chart */}

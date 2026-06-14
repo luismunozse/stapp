@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Package, AlertTriangle, DollarSign, Layers, TrendingUp, AlertCircle } from "lucide-react"
 import { EmptyState } from "@/components/ui/empty-state"
+import { StatCard } from "@/components/dashboard/stat-card"
 import { useCurrency } from "@/contexts/currency-context"
 import {
   PieChart,
@@ -124,59 +125,34 @@ export function AnalisisInventario() {
     <div className="space-y-6">
       {/* Stats Cards */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">Total Items</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground hidden sm:block" />
-          </CardHeader>
-          <CardContent className="p-3 sm:p-6 pt-0">
-            <div className="text-base sm:text-2xl font-bold">{data.resumen.totalItems}</div>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">
-              {data.resumen.totalUnidades} uds
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">Valor Inventario</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground hidden sm:block" />
-          </CardHeader>
-          <CardContent className="p-3 sm:p-6 pt-0">
-            <div className="text-base sm:text-2xl font-bold truncate">{formatPrice(data.resumen.valorCompra)}</div>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">Costo compra</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">Margen Pot.</CardTitle>
-            <TrendingUp className="h-4 w-4 text-success hidden sm:block" />
-          </CardHeader>
-          <CardContent className="p-3 sm:p-6 pt-0">
-            <div className="text-base sm:text-2xl font-bold text-success truncate">
-              {formatPrice(data.resumen.margenPotencial)}
-            </div>
-            <p className="text-[10px] sm:text-xs text-muted-foreground hidden sm:block">
-              Si se vende todo
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-            <CardTitle className="text-xs sm:text-sm font-medium">Stock Crítico</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-warning hidden sm:block" />
-          </CardHeader>
-          <CardContent className="p-3 sm:p-6 pt-0">
-            <div className="text-base sm:text-2xl font-bold text-warning">
-              {data.resumen.itemsStockCritico}
-            </div>
-            <p className="text-[10px] sm:text-xs text-muted-foreground">
-              {data.resumen.itemsSinStock} sin stock
-            </p>
-          </CardContent>
-        </Card>
+        <StatCard
+          title="Total Items"
+          value={String(data.resumen.totalItems)}
+          description={`${data.resumen.totalUnidades} uds`}
+          icon={Package}
+          tone="default"
+        />
+        <StatCard
+          title="Valor Inventario"
+          value={formatPrice(data.resumen.valorCompra)}
+          description="Costo compra"
+          icon={DollarSign}
+          tone="default"
+        />
+        <StatCard
+          title="Margen Pot."
+          value={formatPrice(data.resumen.margenPotencial)}
+          description="Si se vende todo"
+          icon={TrendingUp}
+          tone="success"
+        />
+        <StatCard
+          title="Stock Crítico"
+          value={String(data.resumen.itemsStockCritico)}
+          description={`${data.resumen.itemsSinStock} sin stock`}
+          icon={AlertTriangle}
+          tone="warning"
+        />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
