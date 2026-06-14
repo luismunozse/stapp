@@ -2,7 +2,7 @@ import { formatCurrencyValue, type CurrencyCode, DEFAULT_CURRENCY } from "@/lib/
 import { formatDateValue } from "@/lib/timezone"
 import { formatPhoneForCountry } from "@/lib/countries"
 import { EstadoOrden, NotificationContext, MetodoPagoVenta } from "./types"
-import { renderTemplate } from "@/lib/whatsapp/plantillas-catalog"
+import { renderTemplate, getPlantilla } from "@/lib/whatsapp/plantillas-catalog"
 
 export interface WhatsAppTemplate {
   id: string
@@ -109,6 +109,7 @@ function buildVarsFromContext(ctx: NotificationContext): Record<string, string |
 
 /**
  * Aplica el override del usuario (si existe) reemplazando el mensaje generado.
+ * Priority: org override > catalog defaultText > legacy generator (fallback).
  */
 function applyOverride(
   legacyId: string,
@@ -116,25 +117,29 @@ function applyOverride(
   ctx: NotificationContext,
   plantillasOverride?: Record<string, string> | null,
 ): string {
-  if (!plantillasOverride) return defaultMessage
+  const vars = buildVarsFromContext(ctx)
 
-  // Lookup especial para estado_actual: primero buscar override por estado específico
-  // (ej. orden_estado_recibido). Si no existe, cae al override genérico orden_estado_actual.
+  const keys: string[] = []
   if (legacyId === "estado_actual" && ctx.orden?.estado) {
-    const estadoKey = `orden_estado_${ctx.orden.estado.toLowerCase()}`
-    const overrideEstado = plantillasOverride[estadoKey]
-    if (overrideEstado && overrideEstado.trim()) {
-      const vars = buildVarsFromContext(ctx)
-      return renderTemplate(overrideEstado, vars)
+    keys.push(`orden_estado_${ctx.orden.estado.toLowerCase()}`)
+  }
+  const catalogKey = LEGACY_ID_TO_CATALOG_KEY[legacyId]
+  if (catalogKey) keys.push(catalogKey)
+
+  // 1) Override de la org
+  if (plantillasOverride) {
+    for (const key of keys) {
+      const o = plantillasOverride[key]
+      if (o && o.trim()) return renderTemplate(o, vars)
     }
   }
-
-  const catalogKey = LEGACY_ID_TO_CATALOG_KEY[legacyId]
-  if (!catalogKey) return defaultMessage
-  const override = plantillasOverride[catalogKey]
-  if (!override || !override.trim()) return defaultMessage
-  const vars = buildVarsFromContext(ctx)
-  return renderTemplate(override, vars)
+  // 2) Default del catálogo (única fuente de verdad)
+  for (const key of keys) {
+    const def = getPlantilla(key)?.defaultText
+    if (def && def.trim()) return renderTemplate(def, vars)
+  }
+  // 3) Fallback: generador propio (legacyIds sin entrada en catálogo)
+  return defaultMessage
 }
 
 const estadoLabels: Record<EstadoOrden, string> = {

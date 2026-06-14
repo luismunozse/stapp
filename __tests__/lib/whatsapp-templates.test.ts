@@ -156,6 +156,20 @@ describe("copy accionable por estado", () => {
   it("copy PRESUPUESTADO es accionable (aprobar/rechazar)", () => {
     expect(estadoMsg("PRESUPUESTADO")).toMatch(/apruebe o rechace/i)
   })
+
+  it("sin override usa el defaultText del catalogo (PRESUPUESTADO accionable)", () => {
+    // The catalog defaultText does NOT add the extended label 'presupuestado - esperando su respuesta'
+    // that the old generator injected. RED until applyOverride uses catalog defaultText.
+    const msg = estadoMsg("PRESUPUESTADO")
+    expect(msg).toMatch(/apruebe o rechace/i)
+    expect(msg).not.toContain("presupuestado - esperando su respuesta")
+  })
+  it("override per-estado gana sobre el catalogo", () => {
+    const m = getWhatsAppTemplates(ctxOrden({ estado: "RECIBIDO" }), {
+      orden_estado_recibido: "Custom {numero_orden}",
+    }).find((t) => t.id === "estado_actual")!.mensaje
+    expect(m).toBe("Custom 42")
+  })
   it("copy REPARADO dice listo para retirar", () => {
     expect(estadoMsg("REPARADO")).toMatch(/listo para retirar/i)
   })
