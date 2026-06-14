@@ -22,6 +22,10 @@ vi.mock("@/lib/plan-limits", () => ({
   enforcePlanLimit: vi.fn().mockResolvedValue(null),
 }))
 
+vi.mock("@/lib/sucursal", () => ({
+  getPrincipalId: vi.fn().mockResolvedValue("suc-1"),
+}))
+
 import { POST } from "@/app/api/ordenes/[id]/reingreso/route"
 
 function createParams(id: string) {
@@ -48,6 +52,7 @@ function createMockOrdenOriginal(overrides: Record<string, any> = {}) {
     password_dispositivo: "1234",
     metadata: {},
     sector_id: null,
+    sucursal_id: "suc-1",
     clientes: { id: "c1", nombre: "Juan" },
     ...overrides,
   }

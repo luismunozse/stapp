@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getNextOrderNumberByType } from "@/lib/counters"
 import { createAuditLogger } from "@/lib/audit"
+import { sucursalParaEscritura } from "@/lib/sucursal"
 import { randomBytes } from "crypto"
 
 /**
@@ -21,13 +22,25 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role } = await requireAuth()
+    const { error, session, organizationId, userId, role } = await requireAuth()
     if (error) return error
 
     if (role !== "ADMIN") {
       return NextResponse.json(
         { error: "Solo administradores pueden convertir presupuestos en órdenes" },
         { status: 403 }
+      )
+    }
+
+    const sucursalId = await sucursalParaEscritura({
+      role,
+      organizationId: organizationId!,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
+    if (!sucursalId) {
+      return NextResponse.json(
+        { error: "La organización no tiene sucursal principal configurada" },
+        { status: 500 }
       )
     }
 
@@ -158,6 +171,7 @@ export async function POST(
         observaciones: obsLines.join("\n"),
         public_token: publicToken,
         estado: "RECIBIDO",
+        sucursal_id: sucursalId,
         sector_id: cotizacion.sector_id || null,
         metadata: equipo.modelo || equipo.numeroSerie
           ? { modelo: equipo.modelo, numeroSerie: equipo.numeroSerie }

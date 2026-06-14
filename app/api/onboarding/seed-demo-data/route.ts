@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { getPrincipalId } from "@/lib/sucursal"
 
 /**
  * POST /api/onboarding/seed-demo-data
@@ -36,6 +37,15 @@ export async function POST() {
           error:
             "Ya tenés clientes o órdenes cargadas. Los datos de ejemplo solo se pueden cargar en cuentas vacías.",
         },
+        { status: 400 }
+      )
+    }
+
+    // Resolve principal branch — required to stamp sucursal_id on demo orders
+    const principalId = await getPrincipalId(organizationId!)
+    if (!principalId) {
+      return NextResponse.json(
+        { error: "Organización sin sucursal principal" },
         { status: 400 }
       )
     }
@@ -170,6 +180,7 @@ export async function POST() {
           estado: "RECIBIDO",
           fecha_ingreso: new Date().toISOString(),
           observaciones: "[demo] Orden de ejemplo cargada automáticamente.",
+          sucursal_id: principalId,
         },
         {
           numero_orden: baseNumber + 1,
@@ -187,6 +198,7 @@ export async function POST() {
           ).toISOString(),
           diagnostico: "[demo] Disco HDD con sectores defectuosos. Migrar a SSD 480GB.",
           observaciones: "[demo] Orden de ejemplo cargada automáticamente.",
+          sucursal_id: principalId,
         },
       ]
 

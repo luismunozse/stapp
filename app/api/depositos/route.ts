@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaEscritura } from "@/lib/sucursal"
 import { z } from "zod"
 
 const createSchema = z.object({
@@ -57,8 +58,20 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { error, organizationId } = await requireAdmin()
+    const { error, session, organizationId, role } = await requireAdmin()
     if (error) return error
+
+    const sucursalId = await sucursalParaEscritura({
+      role,
+      organizationId: organizationId!,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
+    if (!sucursalId) {
+      return NextResponse.json(
+        { error: "La organización no tiene sucursal principal configurada" },
+        { status: 500 }
+      )
+    }
 
     const body = await request.json()
     const data = createSchema.parse(body)
@@ -85,6 +98,7 @@ export async function POST(request: Request) {
         notas: data.notas ?? null,
         principal: !!data.principal,
         activo: true,
+        sucursal_id: sucursalId,
       })
       .select("*")
       .single()
