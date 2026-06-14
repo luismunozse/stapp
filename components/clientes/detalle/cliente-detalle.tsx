@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { CuentaCorrientePanel } from "./cuenta-corriente-panel"
 import { ClienteOrdenesPendientes } from "./cliente-ordenes-pendientes"
 import { ClienteOrdenesHistorial } from "./cliente-ordenes-historial"
+import { ClienteCotizaciones } from "./cliente-cotizaciones"
 import type { Cliente } from "@/types"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
@@ -90,7 +91,7 @@ export function ClienteDetalle({ clienteId }: { clienteId: string }) {
           onCobrado={() => mutateCC()}
         />
         <ClienteOrdenesHistorial clienteId={clienteId} />
-        {/* Task 8: Cotizaciones */}
+        <ClienteCotizaciones clienteId={clienteId} />
         {/* Task 9: Sectores (solo EMPRESA) */}
       </div>
 
