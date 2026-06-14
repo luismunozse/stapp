@@ -7,7 +7,9 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DatePicker } from "@/components/ui/date-picker"
 import { DataTable, DataTablePagination, type Column } from "@/components/ui/data-table"
-import { Badge, PaymentStatusBadge } from "@/components/ui/badge"
+import { PaymentStatusBadge } from "@/components/ui/badge"
+import { VentaEstadoBadge } from "@/components/ventas/venta-estado-badge"
+import { EmptyState } from "@/components/ui/empty-state"
 import {
   Search,
   Eye,
@@ -189,9 +191,7 @@ export function VentasList() {
       key: "estado",
       header: "Estado",
       render: (venta) => (
-        <Badge variant={venta.estado === "COMPLETADA" ? "success" : "destructive"}>
-          {venta.estado === "COMPLETADA" ? "Completada" : "Anulada"}
-        </Badge>
+        <VentaEstadoBadge estado={venta.estado} />
       ),
     },
     {
@@ -199,7 +199,7 @@ export function VentasList() {
       header: "Garantías",
       hideOnMobile: true,
       render: (venta) => (
-        <span className={venta.garantias.length > 0 ? "text-green-600 font-medium" : "text-muted-foreground"}>
+        <span className={venta.garantias.length > 0 ? "text-success font-medium" : "text-muted-foreground"}>
           {venta.garantias.length > 0 ? `${venta.garantias.length} cert.` : "-"}
         </span>
       ),
@@ -375,11 +375,7 @@ export function VentasList() {
             ))}
           </div>
         ) : ventas.length === 0 ? (
-          <Card>
-            <CardContent className="py-8 text-center text-sm text-muted-foreground">
-              No hay ventas registradas
-            </CardContent>
-          </Card>
+          <EmptyState icon={ShoppingCart} title="Sin ventas" description="No hay ventas registradas todavía" variant="search" />
         ) : (
           <>
             <div className="space-y-3">

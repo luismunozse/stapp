@@ -19,6 +19,7 @@ import {
   MessageCircle,
 } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
+import { EmptyState } from "@/components/ui/empty-state"
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
@@ -72,8 +73,8 @@ export function GarantiasVentasPanel({ open, onOpenChange }: Props) {
             <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
               <Card>
                 <CardContent className="p-3 flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-900/30">
-                    <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                  <div className="p-2 rounded-lg bg-success-50 dark:bg-success/15">
+                    <ShieldCheck className="h-4 w-4 text-success" />
                   </div>
                   <div>
                     <div className="text-lg font-bold">{data.resumen.totalActivas}</div>
@@ -83,8 +84,8 @@ export function GarantiasVentasPanel({ open, onOpenChange }: Props) {
               </Card>
               <Card>
                 <CardContent className="p-3 flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-900/30">
-                    <ShieldAlert className="h-4 w-4 text-amber-600" />
+                  <div className="p-2 rounded-lg bg-warning-50 dark:bg-warning/15">
+                    <ShieldAlert className="h-4 w-4 text-warning" />
                   </div>
                   <div>
                     <div className="text-lg font-bold">{data.porVencer?.length || 0}</div>
@@ -94,7 +95,7 @@ export function GarantiasVentasPanel({ open, onOpenChange }: Props) {
               </Card>
               <Card>
                 <CardContent className="p-3 flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-red-50 dark:bg-red-900/30">
+                  <div className="p-2 rounded-lg bg-destructive/10">
                     <ShieldX className="h-4 w-4 text-destructive" />
                   </div>
                   <div>
@@ -105,7 +106,7 @@ export function GarantiasVentasPanel({ open, onOpenChange }: Props) {
               </Card>
               <Card>
                 <CardContent className="p-3 flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+                  <div className="p-2 rounded-lg bg-muted">
                     <Clock className="h-4 w-4 text-muted-foreground" />
                   </div>
                   <div>
@@ -119,12 +120,12 @@ export function GarantiasVentasPanel({ open, onOpenChange }: Props) {
             {/* Por Vencer */}
             <div>
               <h3 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
-                <AlertTriangle className="h-4 w-4 text-amber-500" />
+                <AlertTriangle className="h-4 w-4 text-warning" />
                 Garantías por Vencer
               </h3>
 
               {data.porVencer?.length === 0 ? (
-                <p className="text-sm text-emerald-600 py-3 text-center">No hay garantías próximas a vencer</p>
+                <EmptyState icon={ShieldCheck} title="Sin garantías por vencer" variant="success" />
               ) : (
                 <div className="space-y-3">
                   {/* 7 días */}
@@ -143,8 +144,8 @@ export function GarantiasVentasPanel({ open, onOpenChange }: Props) {
 
                   {/* 15 días */}
                   {porVencer15.length > 0 && (
-                    <div className="rounded-lg border border-amber-300/30 bg-amber-50/50 dark:bg-amber-900/10 p-3">
-                      <div className="text-xs font-semibold text-amber-600 mb-2">
+                    <div className="rounded-lg border border-warning/30 bg-warning-50/50 p-3">
+                      <div className="text-xs font-semibold text-warning mb-2">
                         Vencen en 15 días ({porVencer15.length})
                       </div>
                       <div className="space-y-2">
@@ -197,8 +198,8 @@ export function GarantiasVentasPanel({ open, onOpenChange }: Props) {
                               variant="outline"
                               className={`text-[10px] ${
                                 p.tasaReclamo > 10 ? "border-destructive text-destructive" :
-                                p.tasaReclamo > 5 ? "border-amber-500 text-amber-600" :
-                                "border-emerald-500 text-emerald-600"
+                                p.tasaReclamo > 5 ? "border-warning text-warning" :
+                                "border-success text-success"
                               }`}
                             >
                               {p.tasaReclamo}%
@@ -264,7 +265,7 @@ function GarantiaItem({ garantia: g, formatDate, formatWhatsAppLink }: {
             href={formatWhatsAppLink(g.clienteTelefono)}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-emerald-600 hover:text-emerald-700"
+            className="text-success hover:text-success/80"
             title="Notificar por WhatsApp"
           >
             <MessageCircle className="h-3.5 w-3.5" />

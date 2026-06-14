@@ -2,7 +2,8 @@
 
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge, PaymentStatusBadge } from "@/components/ui/badge"
+import { PaymentStatusBadge } from "@/components/ui/badge"
+import { VentaEstadoBadge } from "@/components/ventas/venta-estado-badge"
 import { Eye, FileText, Calendar, ShoppingCart } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 
@@ -49,9 +50,7 @@ export function VentaMobileCard({ venta, onClick }: VentaMobileCardProps) {
             <span className="font-mono font-medium text-primary text-sm">
               V{String(venta.numeroVenta).padStart(4, "0")}
             </span>
-            <Badge variant={venta.estado === "COMPLETADA" ? "success" : "destructive"} className="text-[10px]">
-              {venta.estado === "COMPLETADA" ? "Completada" : "Anulada"}
-            </Badge>
+            <VentaEstadoBadge estado={venta.estado} className="text-[10px]" />
           </div>
           <PaymentStatusBadge status={venta.estadoPago} />
         </div>

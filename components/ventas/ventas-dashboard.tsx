@@ -101,7 +101,7 @@ export function VentasDashboard() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs font-medium text-muted-foreground">Ventas del Mes</span>
-              <Calendar className="h-4 w-4 text-blue-500" />
+              <Calendar className="h-4 w-4 text-info" />
             </div>
             <div className="text-xl font-bold">{formatPrice(data.ventasMes.total)}</div>
             <p className="text-xs text-muted-foreground">{data.ventasMes.count} ventas</p>
@@ -123,9 +123,9 @@ export function VentasDashboard() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs font-medium text-muted-foreground">Margen Bruto</span>
-              <TrendingUp className="h-4 w-4 text-emerald-500" />
+              <TrendingUp className="h-4 w-4 text-success" />
             </div>
-            <div className={`text-xl font-bold ${data.margenBruto.porcentaje >= 0 ? "text-emerald-600" : "text-destructive"}`}>
+            <div className={`text-xl font-bold ${data.margenBruto.porcentaje >= 0 ? "text-success" : "text-destructive"}`}>
               {data.margenBruto.porcentaje.toFixed(1)}%
             </div>
             <p className="text-xs text-muted-foreground">{formatPrice(data.margenBruto.margen)}</p>
@@ -150,7 +150,7 @@ export function VentasDashboard() {
                       <div key={i} className="flex items-center justify-between text-sm">
                         <div className="flex items-center gap-2 min-w-0">
                           <span className={`text-xs font-bold w-5 text-center ${
-                            i === 0 ? "text-amber-500" : i === 1 ? "text-gray-400" : i === 2 ? "text-amber-700" : "text-muted-foreground"
+                            i === 0 ? "text-warning" : i === 1 ? "text-muted-foreground" : i === 2 ? "text-warning-700" : "text-muted-foreground"
                           }`}>
                             {i + 1}
                           </span>
@@ -180,7 +180,7 @@ export function VentasDashboard() {
                       <div key={i} className="flex items-center justify-between text-sm">
                         <div className="flex items-center gap-2 min-w-0">
                           <span className={`text-xs font-bold w-5 text-center ${
-                            i === 0 ? "text-amber-500" : i === 1 ? "text-gray-400" : i === 2 ? "text-amber-700" : "text-muted-foreground"
+                            i === 0 ? "text-warning" : i === 1 ? "text-muted-foreground" : i === 2 ? "text-warning-700" : "text-muted-foreground"
                           }`}>
                             {i + 1}
                           </span>
@@ -258,7 +258,7 @@ export function VentasDashboard() {
               <CardContent className="pt-0">
                 <div className={`text-3xl font-bold ${
                   data.tasaAnulacion.porcentaje > 10 ? "text-destructive" :
-                  data.tasaAnulacion.porcentaje > 5 ? "text-amber-500" : "text-emerald-600"
+                  data.tasaAnulacion.porcentaje > 5 ? "text-warning" : "text-success"
                 }`}>
                   {data.tasaAnulacion.porcentaje.toFixed(1)}%
                 </div>
