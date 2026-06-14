@@ -4,19 +4,7 @@ import { formatDateValue } from "@/lib/timezone"
 import { renderTemplate } from "@/lib/whatsapp/plantillas-catalog"
 import { formatCurrencyValue, type CurrencyCode, DEFAULT_CURRENCY } from "@/lib/currency"
 import { sendPushToUsers } from "@/lib/push/send"
-
-/**
- * Replica de getBaseUrl de lib/notifications/whatsapp-templates.ts.
- * Inlined aquí para mantener la paridad con el path cliente sin
- * tocar el módulo de templates.
- */
-function getBaseUrl(organizationSlug?: string | null): string {
-  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
-  if (organizationSlug) {
-    return `https://${organizationSlug}.${rootDomain}`
-  }
-  return `https://${rootDomain}`
-}
+import { generateWhatsAppMessage, getBaseUrl, formatEstado } from "@/lib/notifications/whatsapp-message"
 
 /**
  * Mapeo de NotificationType (legacy) a la key del catálogo de plantillas.
@@ -275,19 +263,13 @@ export async function sendNotificationDirect(params: NotificationParams) {
 
       if (canSendViaApi) {
         const { sendWhatsAppText } = await import("@/lib/whatsapp/providers")
-        const { NOTIFICATION_TEMPLATES } = await import("@/lib/whatsapp/templates")
 
-        const template = NOTIFICATION_TEMPLATES[tipo]
+        // Texto del mensaje: override de la org si existe, si no el generador rico
+        // (copy por estado + link de seguimiento). Antes el path API usaba el
+        // fallback pelado de NOTIFICATION_TEMPLATES (sin link y con "responda SI/NO"
+        // que en Evolution no hace nada); unificado con el path wa.me.
         const overrideText = resolvePlantillaForTipo(tipo, context, orgConfig.plantillas_whatsapp)
-        const fallbackText = overrideText
-          ?? (template
-            ? template.getFallbackText({
-                ...context.orden,
-                organizationName: context.organizationName,
-                moneda: context.moneda,
-                ...context.garantia,
-              })
-            : generateWhatsAppMessage(tipo, context))
+        const fallbackText = overrideText ?? generateWhatsAppMessage(tipo, context)
 
         const result = await sendWhatsAppText(
           organizationId,
@@ -521,36 +503,3 @@ function generateEmailContent(
   }
 }
 
-function generateWhatsAppMessage(
-  tipo: string,
-  context: NotificationParams["context"]
-): string {
-  switch (tipo) {
-    case "CAMBIO_ESTADO":
-      return `Hola ${context.cliente.nombre}!\n\nTu orden #${context.orden?.numeroOrden} (${context.orden?.dispositivo}) ha cambiado a: *${formatEstado(context.orden?.estado || "")}*\n\n${context.organizationName}`
-    case "PRESUPUESTO_DEFINIDO":
-      return `Hola ${context.cliente.nombre}!\n\nSe ha definido el presupuesto para tu orden #${context.orden?.numeroOrden} (${context.orden?.dispositivo}):\n\n*$${context.orden?.presupuesto?.toLocaleString()}*\n\n¿Deseas proceder con la reparación?\n\n${context.organizationName}`
-    case "GARANTIA_CREADA":
-      return `Hola ${context.cliente.nombre}!\n\nTu reparación ha sido completada\n\nOrden: #${context.orden?.numeroOrden}\nDispositivo: ${context.orden?.dispositivo}\nGarantía: ${context.garantia?.diasValidez} días\n\nGuarda este mensaje como comprobante.\n\n${context.organizationName}`
-    case "RECORDATORIO_RETIRO":
-      return `Hola ${context.cliente.nombre}!\n\nTe recordamos que tu dispositivo (${context.orden?.dispositivo}) ya está listo para retirar.\n\nOrden: #${context.orden?.numeroOrden}\n\nTe esperamos!\n\n${context.organizationName}`
-    default:
-      return `Hola ${context.cliente.nombre}, tienes una nueva notificación de ${context.organizationName}.`
-  }
-}
-
-function formatEstado(estado: string): string {
-  const estados: Record<string, string> = {
-    RECIBIDO: "Recibido",
-    EN_DIAGNOSTICO: "En Diagnóstico",
-    PRESUPUESTADO: "Presupuestado",
-    APROBADO: "Aprobado",
-    EN_REPARACION: "En Reparación",
-    ESPERANDO_REPUESTO: "Esperando Repuesto",
-    REPARADO: "Reparado",
-    ENTREGADO: "Entregado",
-    CANCELADO: "Cancelado",
-    SIN_REPARACION: "Sin Reparación",
-  }
-  return estados[estado] || estado
-}
