@@ -374,48 +374,37 @@ function generateEstadoMessage(ctx: NotificationContext): string {
 
   switch (estado) {
     case "RECIBIDO":
-      mensaje +=
-        "\n\nHemos recibido su equipo correctamente. Pronto comenzaremos con el diagnostico y le informaremos novedades."
+      mensaje += "\n\nRecibimos su equipo y ya esta en cola de diagnostico. Le avisaremos apenas tengamos novedades."
       break
     case "EN_DIAGNOSTICO":
-      mensaje +=
-        "\n\nNuestro tecnico esta evaluando el equipo. Le enviaremos el presupuesto a la brevedad."
+      mensaje += "\n\nEstamos revisando su equipo para detectar la falla. En breve le enviamos el presupuesto."
       break
     case "PRESUPUESTADO":
-      mensaje +=
-        "\n\nPor favor confirme si desea continuar con la reparacion."
+      mensaje += "\n\nPara avanzar, *apruebe o rechace el presupuesto* desde el link de seguimiento de abajo. Cualquier duda, escribanos."
       break
     case "APROBADO":
-      mensaje +=
-        "\n\nGracias por aprobar el presupuesto. Su equipo entrara en cola de reparacion y le avisaremos cuando este listo."
+      mensaje += "\n\nGracias por aprobar el presupuesto! Su equipo entra en cola de reparacion. Le avisamos cuando este listo."
       break
     case "EN_REPARACION":
-      mensaje +=
-        "\n\nNuestro tecnico esta trabajando en su equipo. Le avisaremos cuando la reparacion este completa."
+      mensaje += "\n\nYa estamos reparando su equipo. Le avisamos en cuanto este terminado."
       break
     case "ESPERANDO_REPUESTO":
-      mensaje +=
-        "\n\nLe avisaremos cuando llegue el repuesto para continuar con la reparacion."
+      mensaje += "\n\nSu reparacion esta en pausa esperando un repuesto. Apenas llegue, retomamos y le avisamos."
       break
     case "REPARADO":
-      mensaje +=
-        "\n\nPuede pasar a retirarlo en nuestro local en horario de atencion. Lo esperamos!"
+      mensaje += "\n\nSu equipo esta reparado y *listo para retirar*. Lo esperamos en horario de atencion. Comprobante en el link."
       break
     case "ENTREGADO":
-      mensaje +=
-        "\n\nGracias por confiar en nosotros!"
+      mensaje += "\n\nSu equipo fue entregado. Gracias por confiar en nosotros! Si necesita algo mas, escribanos."
       break
     case "ENTREGADO_SIN_REPARACION":
-      mensaje +=
-        "\n\nSu equipo fue retirado sin reparacion. Gracias por habernos consultado."
+      mensaje += "\n\nSu equipo fue retirado sin reparacion. Gracias por consultarnos; quedamos a disposicion."
       break
     case "CANCELADO":
-      mensaje +=
-        "\n\nSi tiene alguna consulta o desea ingresar un nuevo servicio, no dude en contactarnos."
+      mensaje += "\n\nLa orden fue cancelada. Si desea retomar o ingresar un nuevo servicio, escribanos."
       break
     case "SIN_REPARACION":
-      mensaje +=
-        "\n\nLamentablemente no fue posible realizar la reparacion. Puede pasar a retirar su equipo en horario de atencion."
+      mensaje += "\n\nNo fue posible reparar su equipo. Puede pasar a retirarlo en horario de atencion. Quedamos a disposicion."
       break
   }
 
@@ -431,13 +420,13 @@ function generatePresupuestoMessage(ctx: NotificationContext): string {
 
   const links = getOrdenLinks(ctx)
 
-  return `Hola ${ctx.cliente.nombre}, le informamos el presupuesto para la reparacion de su ${ctx.orden!.dispositivo}:
+  return `Hola ${ctx.cliente.nombre}, ya tenemos el presupuesto para la reparacion de su ${ctx.orden!.dispositivo}:
 
 *Presupuesto: ${formatCurrency(ctx.orden!.presupuesto || 0)}*
 
 Orden #${ctx.orden!.numeroOrden}
 
-Por favor confirmenos si desea proceder con la reparacion.${appendOrdenLinks(links)}
+Para avanzar, *apruebe o rechace el presupuesto* desde el link de abajo.${appendOrdenLinks(links)}
 
 ${ctx.organizationName}`
 }
