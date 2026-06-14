@@ -17,8 +17,10 @@ import {
   FileText,
   TrendingUp,
   TrendingDown,
+  Receipt,
 } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
+import { EmptyState } from "@/components/ui/empty-state"
 import Link from "next/link"
 
 const METODO_ICONS: Record<string, any> = {
@@ -42,12 +44,12 @@ const METODO_LABELS: Record<string, string> = {
 }
 
 const TIPO_LABELS: Record<string, { label: string; icon: any; color: string }> = {
-  COBRO_ORDEN: { label: "Cobro de Orden", icon: Wrench, color: "text-blue-600" },
+  COBRO_ORDEN: { label: "Cobro de Orden", icon: Wrench, color: "text-info-600" },
   PAGO_FACTURA: { label: "Pago Factura", icon: FileText, color: "text-purple-600" },
-  PAGO_VENTA: { label: "Venta", icon: ShoppingBag, color: "text-green-600" },
-  DEPOSITO_CUENTA: { label: "Depósito a Cuenta", icon: PiggyBank, color: "text-amber-600" },
-  INGRESO_MANUAL: { label: "Ingreso Manual", icon: TrendingUp, color: "text-emerald-600" },
-  EGRESO_MANUAL: { label: "Egreso Manual", icon: TrendingDown, color: "text-red-600" },
+  PAGO_VENTA: { label: "Venta", icon: ShoppingBag, color: "text-success-600" },
+  DEPOSITO_CUENTA: { label: "Depósito a Cuenta", icon: PiggyBank, color: "text-warning-600" },
+  INGRESO_MANUAL: { label: "Ingreso Manual", icon: TrendingUp, color: "text-success-600" },
+  EGRESO_MANUAL: { label: "Egreso Manual", icon: TrendingDown, color: "text-destructive" },
 }
 
 interface CajaResumenProps {
@@ -93,15 +95,15 @@ export function CajaResumen({
               {data.movimientos.length} movimiento{data.movimientos.length !== 1 ? "s" : ""}
               {data.totalEgresos > 0 && (
                 <span className="ml-2">
-                  (Ingresos: <span className="text-green-600">{formatPrice(data.totalIngresos)}</span>
-                  {" · "}Egresos: <span className="text-red-600">{formatPrice(data.totalEgresos)}</span>)
+                  (Ingresos: <span className="text-success-600">{formatPrice(data.totalIngresos)}</span>
+                  {" · "}Egresos: <span className="text-destructive">{formatPrice(data.totalEgresos)}</span>)
                 </span>
               )}
             </div>
             {data.totalCostosFinancieros != null && data.totalCostosFinancieros > 0 && (
-              <div className="mt-2 p-2 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg inline-block">
+              <div className="mt-2 p-2 bg-destructive/10 dark:bg-destructive/15 border border-destructive/25 rounded-lg inline-block">
                 <div className="text-xs text-muted-foreground">Costo terminales</div>
-                <div className="text-sm font-medium text-red-600">-{formatPrice(data.totalCostosFinancieros)}</div>
+                <div className="text-sm font-medium text-destructive">-{formatPrice(data.totalCostosFinancieros)}</div>
                 <div className="text-xs text-muted-foreground">
                   Ingreso real: <span className="font-semibold text-foreground">{formatPrice(data.ingresoReal ?? data.totalDia)}</span>
                 </div>
@@ -127,7 +129,7 @@ export function CajaResumen({
                         {METODO_LABELS[metodo] || metodo}
                       </span>
                     </div>
-                    <div className={`text-lg font-bold ${total < 0 ? "text-red-600" : ""}`}>
+                    <div className={`text-lg font-bold ${total < 0 ? "text-destructive" : ""}`}>
                       {formatPrice(total)}
                     </div>
                   </CardContent>
@@ -159,7 +161,7 @@ export function CajaResumen({
                         <span className="text-sm">{tipoInfo.label}</span>
                         <Badge variant="outline" className="text-xs">{info.count}</Badge>
                       </div>
-                      <span className={`font-medium ${tipo === "EGRESO_MANUAL" ? "text-red-600" : ""}`}>
+                      <span className={`font-medium ${tipo === "EGRESO_MANUAL" ? "text-destructive" : ""}`}>
                         {tipo === "EGRESO_MANUAL" ? "-" : ""}{formatPrice(info.total)}
                       </span>
                     </div>
@@ -206,7 +208,7 @@ export function CajaResumen({
                     Orden #{String(o.numeroOrden).padStart(4, "0")}
                   </span>
                   <div className="text-right">
-                    <div className="text-sm font-medium text-red-600">
+                    <div className="text-sm font-medium text-destructive">
                       {formatPrice(o.pendiente)}
                     </div>
                     {o.totalCobrado > 0 && (
@@ -255,9 +257,12 @@ export function CajaResumen({
         </CardHeader>
         <CardContent>
           {data.movimientos.length === 0 ? (
-            <div className="text-center py-8 text-sm text-muted-foreground">
-              No hay movimientos en esta fecha
-            </div>
+            <EmptyState
+              icon={Receipt}
+              title="Sin movimientos"
+              description="No hay movimientos en esta fecha"
+              variant="search"
+            />
           ) : (
             <div className="space-y-2">
               {data.movimientos.map((mov: any, i: number) => {
@@ -297,12 +302,12 @@ export function CajaResumen({
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className={`text-sm font-bold ${mov.esEgreso ? "text-red-600" : "text-green-600"}`}>
+                      <div className={`text-sm font-bold ${mov.esEgreso ? "text-destructive" : "text-success-600"}`}>
                         {mov.esEgreso ? "-" : "+"}
                         {formatPrice(mov.monto)}
                       </div>
                       {mov.costoFinancieroMonto > 0 && (
-                        <div className="text-xs text-red-500">
+                        <div className="text-xs text-destructive">
                           Terminal: -{formatPrice(mov.costoFinancieroMonto)}
                           <span className="text-muted-foreground ml-1">({mov.costoFinancieroPorcentaje}%)</span>
                         </div>

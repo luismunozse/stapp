@@ -33,14 +33,14 @@ export function CajaSessionBanner({ sesion, loading, onAbrir, onCerrar }: CajaSe
 
   if (!sesion) {
     return (
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-lg border-2 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-lg border-2 border-warning/40 dark:border-warning/30 bg-warning-50 dark:bg-warning/10">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-full bg-amber-100 dark:bg-amber-900/50">
-            <Lock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+          <div className="p-2 rounded-full bg-warning-100 dark:bg-warning/20">
+            <Lock className="h-5 w-5 text-warning-600 dark:text-warning-400" />
           </div>
           <div>
-            <span className="font-semibold text-amber-800 dark:text-amber-300">Caja cerrada</span>
-            <p className="text-xs text-amber-600 dark:text-amber-400">Abrí la caja para registrar movimientos del día</p>
+            <span className="font-semibold text-warning-700 dark:text-warning-300">Caja cerrada</span>
+            <p className="text-xs text-warning-600 dark:text-warning-400">Abrí la caja para registrar movimientos del día</p>
           </div>
         </div>
         <Button onClick={onAbrir} className="w-full sm:w-auto">
@@ -57,13 +57,13 @@ export function CajaSessionBanner({ sesion, loading, onAbrir, onCerrar }: CajaSe
   })
 
   return (
-    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-lg border-2 border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-800">
+    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-lg border-2 border-success/30 bg-success-50 dark:bg-success/15 dark:border-success/20">
       <div className="flex items-center gap-3">
-        <LockOpen className="h-5 w-5 text-green-600" />
+        <LockOpen className="h-5 w-5 text-success-600" />
         <div>
           <div className="flex items-center gap-2">
             <span className="font-medium">Caja abierta</span>
-            <Badge variant="outline" className="text-green-600 border-green-300">
+            <Badge variant="outline" className="text-success-600 border-success-200">
               Desde {horaApertura}
             </Badge>
           </div>

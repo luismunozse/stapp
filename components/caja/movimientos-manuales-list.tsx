@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { EmptyState } from "@/components/ui/empty-state"
 import { Trash2, TrendingUp, TrendingDown, Loader2, Paperclip, Repeat } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 
@@ -63,8 +64,13 @@ export function MovimientosManualesList({ fecha, refreshKey }: MovimientosManual
   if (movimientos.length === 0) {
     return (
       <Card>
-        <CardContent className="py-8 text-center text-muted-foreground">
-          No hay movimientos manuales en esta fecha
+        <CardContent>
+          <EmptyState
+            icon={TrendingUp}
+            title="Sin movimientos"
+            description="No hay movimientos manuales en esta fecha"
+            variant="search"
+          />
         </CardContent>
       </Card>
     )
@@ -87,9 +93,9 @@ export function MovimientosManualesList({ fecha, refreshKey }: MovimientosManual
               >
                 <div className="flex items-start gap-2">
                   {m.tipo === "INGRESO" ? (
-                    <TrendingUp className="h-4 w-4 mt-0.5 text-green-600" />
+                    <TrendingUp className="h-4 w-4 mt-0.5 text-success-600" />
                   ) : (
-                    <TrendingDown className="h-4 w-4 mt-0.5 text-red-600" />
+                    <TrendingDown className="h-4 w-4 mt-0.5 text-destructive" />
                   )}
                   <div className="space-y-0.5">
                     <div className="text-sm font-medium flex items-center gap-2 flex-wrap">
@@ -141,7 +147,14 @@ export function MovimientosManualesList({ fecha, refreshKey }: MovimientosManual
                       )}
                     </div>
                     <div className="text-caption-mobile flex items-center gap-1">
-                      <Badge variant="outline" className="text-xs">
+                      <Badge
+                        variant="outline"
+                        className={`text-xs ${
+                          m.tipo === "INGRESO"
+                            ? "text-success-600 border-success-200"
+                            : "text-destructive border-destructive/30"
+                        }`}
+                      >
                         {m.tipo === "INGRESO" ? "Ingreso" : "Egreso"}
                       </Badge>
                       {METODO_LABELS[m.metodoPago] || m.metodoPago}
@@ -160,7 +173,7 @@ export function MovimientosManualesList({ fecha, refreshKey }: MovimientosManual
                 <div className="flex items-center gap-2">
                   <span
                     className={`text-sm font-bold ${
-                      m.tipo === "INGRESO" ? "text-green-600" : "text-red-600"
+                      m.tipo === "INGRESO" ? "text-success-600" : "text-destructive"
                     }`}
                   >
                     {m.tipo === "INGRESO" ? "+" : "-"}

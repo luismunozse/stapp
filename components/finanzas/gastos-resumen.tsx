@@ -9,7 +9,8 @@ import { Input } from "@/components/ui/input"
 import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useCurrency } from "@/contexts/currency-context"
-import { Receipt, Landmark, Settings, Repeat, TrendingDown } from "lucide-react"
+import { Receipt, Landmark, Settings, Repeat, TrendingDown, AlertTriangle } from "lucide-react"
+import { StatusBanner } from "@/components/ui/status-banner"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -118,7 +119,7 @@ export function GastosResumen() {
         <Link href="/caja">
           <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
             <CardContent className="pt-6 flex items-start gap-3">
-              <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950/30 text-blue-600">
+              <div className="p-2 rounded-lg bg-info-50 dark:bg-info/15 text-info-600">
                 <Landmark className="h-5 w-5" />
               </div>
               <div>
@@ -144,7 +145,7 @@ export function GastosResumen() {
         <Link href="/configuracion/categorias-gasto">
           <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
             <CardContent className="pt-6 flex items-start gap-3">
-              <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-900/30 text-slate-600 dark:text-slate-300">
+              <div className="p-2 rounded-lg bg-muted text-muted-foreground">
                 <Settings className="h-5 w-5" />
               </div>
               <div>
@@ -181,11 +182,11 @@ export function GastosResumen() {
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-xs text-muted-foreground">Total gastos</p>
-                    <p className="text-2xl font-bold text-red-600">
+                    <p className="text-2xl font-bold text-destructive">
                       {formatPrice(data.gastos.total)}
                     </p>
                   </div>
-                  <div className="p-2 rounded-lg bg-red-50 dark:bg-red-950/30 text-red-600">
+                  <div className="p-2 rounded-lg bg-destructive/10 dark:bg-destructive/15 text-destructive">
                     <TrendingDown className="h-5 w-5" />
                   </div>
                 </div>
@@ -194,7 +195,7 @@ export function GastosResumen() {
             <Card>
               <CardContent className="pt-6">
                 <p className="text-xs text-muted-foreground">Gastos fijos</p>
-                <p className="text-2xl font-bold text-orange-600">
+                <p className="text-2xl font-bold text-warning-600">
                   {formatPrice(data.gastos.fijos)}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
@@ -205,7 +206,7 @@ export function GastosResumen() {
             <Card>
               <CardContent className="pt-6">
                 <p className="text-xs text-muted-foreground">Gastos variables</p>
-                <p className="text-2xl font-bold text-amber-600">
+                <p className="text-2xl font-bold text-warning-600">
                   {formatPrice(data.gastos.variables)}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
@@ -273,19 +274,19 @@ export function GastosResumen() {
 
           {/* Diagnóstico: hay EGRESO en período pero $0 computables */}
           {data.gastos.total === 0 && (data.meta.movEgresosCount ?? 0) === 0 && (
-            <div className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-lg p-3 space-y-1">
-              <div className="font-medium">No hay movimientos EGRESO en este período</div>
-              <div>
-                Verificá el rango de fechas. Para registrar un gasto: <Link href="/caja" className="underline">Caja → Movimientos → Nuevo</Link>
-              </div>
-            </div>
+            <StatusBanner tone="warning" icon={AlertTriangle}>
+              <span className="font-medium">No hay movimientos EGRESO en este período.</span>{" "}
+              Verificá el rango de fechas. Para registrar un gasto:{" "}
+              <Link href="/caja" className="underline">Caja → Movimientos → Nuevo</Link>
+            </StatusBanner>
           )}
 
           {data.gastos.total === 0 && (data.meta.movEgresosCount ?? 0) > 0 && data.meta.gastosNoComputables === 0 && (
-            <div className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-lg p-3 space-y-1">
-              <div className="font-medium">Hay {data.meta.movEgresosCount} EGRESO en el período pero suman $0 computable</div>
-              <div>Posible causa: monto cero, o problema de datos. Revisá <Link href="/caja" className="underline">Caja → Movimientos</Link>.</div>
-            </div>
+            <StatusBanner tone="warning" icon={AlertTriangle}>
+              <span className="font-medium">Hay {data.meta.movEgresosCount} EGRESO en el período pero suman $0 computable.</span>{" "}
+              Posible causa: monto cero, o problema de datos. Revisá{" "}
+              <Link href="/caja" className="underline">Caja → Movimientos</Link>.
+            </StatusBanner>
           )}
         </>
       )}

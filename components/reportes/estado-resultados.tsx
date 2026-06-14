@@ -17,8 +17,11 @@ import {
   Download,
   ArrowUp,
   ArrowDown,
+  Receipt,
 } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
+import { EmptyState } from "@/components/ui/empty-state"
+import { StatusBanner } from "@/components/ui/status-banner"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -311,8 +314,8 @@ export function EstadoResultados() {
               value={formatPrice(data.ingresos.total)}
               prev={dataPrev?.ingresos.total}
               current={data.ingresos.total}
-              color="text-blue-600"
-              bg="bg-blue-50 dark:bg-blue-950/30"
+              color="text-info-600"
+              bg="bg-info-50 dark:bg-info/15"
               positiveIsGood
             />
             <SummaryCard
@@ -322,8 +325,8 @@ export function EstadoResultados() {
               subtitle={`Margen ${data.margenBruto}%`}
               prev={dataPrev?.gananciaBruta}
               current={data.gananciaBruta}
-              color="text-emerald-600"
-              bg="bg-emerald-50 dark:bg-emerald-950/30"
+              color="text-success-600"
+              bg="bg-success-50 dark:bg-success/15"
               positiveIsGood
             />
             <SummaryCard
@@ -332,8 +335,8 @@ export function EstadoResultados() {
               value={formatPrice(data.gastos.total)}
               prev={dataPrev?.gastos.total}
               current={data.gastos.total}
-              color="text-orange-600"
-              bg="bg-orange-50 dark:bg-orange-950/30"
+              color="text-warning-600"
+              bg="bg-warning-50 dark:bg-warning/10"
               positiveIsGood={false}
             />
             <SummaryCard
@@ -343,11 +346,11 @@ export function EstadoResultados() {
               subtitle={`Margen ${data.margenNeto}%`}
               prev={dataPrev?.gananciaNeta}
               current={data.gananciaNeta}
-              color={data.gananciaNeta >= 0 ? "text-green-700" : "text-red-700"}
+              color={data.gananciaNeta >= 0 ? "text-success-700" : "text-destructive"}
               bg={
                 data.gananciaNeta >= 0
-                  ? "bg-green-50 dark:bg-green-950/30"
-                  : "bg-red-50 dark:bg-red-950/30"
+                  ? "bg-success-50 dark:bg-success/15"
+                  : "bg-destructive/10 dark:bg-destructive/15"
               }
               highlight
               positiveIsGood
@@ -424,9 +427,12 @@ export function EstadoResultados() {
               </CardHeader>
               <CardContent>
                 {data.gastos.porCategoria.length === 0 ? (
-                  <div className="text-sm text-muted-foreground text-center py-6">
-                    No hay gastos registrados en este período
-                  </div>
+                  <EmptyState
+                    icon={Receipt}
+                    title="Sin gastos"
+                    description="No hay gastos registrados en este período"
+                    variant="search"
+                  />
                 ) : (
                   <div className="space-y-3">
                     {data.gastos.porCategoria.map((c) => (
@@ -461,24 +467,18 @@ export function EstadoResultados() {
           {(data.meta.itemsSinCostoConocido > 0 || data.meta.gastosNoComputables > 0) && (
             <div className="space-y-2">
               {data.meta.itemsSinCostoConocido > 0 && (
-                <div className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-lg p-3">
-                  <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                  <div>
-                    Hay <strong>{data.meta.itemsSinCostoConocido}</strong> items vendidos sin costo
-                    histórico registrado (ventas previas a la migración 090). Su costo no se incluyó
-                    en el cálculo, por lo que la ganancia bruta puede estar sobreestimada.
-                  </div>
-                </div>
+                <StatusBanner tone="warning" icon={AlertTriangle}>
+                  Hay <strong>{data.meta.itemsSinCostoConocido}</strong> items vendidos sin costo
+                  histórico registrado (ventas previas a la migración 090). Su costo no se incluyó
+                  en el cálculo, por lo que la ganancia bruta puede estar sobreestimada.
+                </StatusBanner>
               )}
               {data.meta.gastosNoComputables > 0 && (
-                <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/50 border rounded-lg p-3">
-                  <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                  <div>
-                    Se excluyeron {formatPrice(data.meta.gastosNoComputables)} en movimientos
-                    marcados como "no afecta resultado" (retiros de socio, transferencias internas,
-                    etc).
-                  </div>
-                </div>
+                <StatusBanner tone="info" icon={Info}>
+                  Se excluyeron {formatPrice(data.meta.gastosNoComputables)} en movimientos
+                  marcados como "no afecta resultado" (retiros de socio, transferencias internas,
+                  etc).
+                </StatusBanner>
               )}
             </div>
           )}
@@ -521,7 +521,7 @@ function SummaryCard({
       const isUp = pct > 0
       const isGood = positiveIsGood ? isUp : !isUp
       deltaText = `${isUp ? "+" : ""}${pct.toFixed(1)}%`
-      deltaColor = isGood ? "text-green-600" : "text-red-600"
+      deltaColor = isGood ? "text-success-600" : "text-destructive"
       DeltaIcon = isUp ? ArrowUp : ArrowDown
     }
   } else if (prev === 0 && current !== 0) {
@@ -577,8 +577,8 @@ function Row({
         className={
           highlight
             ? positive === false
-              ? "text-red-600"
-              : "text-green-700"
+              ? "text-destructive"
+              : "text-success-700"
             : muted
             ? "text-muted-foreground"
             : ""
