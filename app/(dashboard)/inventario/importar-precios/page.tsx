@@ -1,11 +1,11 @@
 "use client"
 
 import { useMemo, useRef, useState } from "react"
-import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { ArrowLeft, FileSpreadsheet, Upload, Loader2, Check, X, AlertTriangle } from "lucide-react"
+import { FileSpreadsheet, Upload, Loader2, Check, X, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { PageShell } from "@/components/ui/page-shell"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
@@ -277,24 +277,12 @@ export default function ImportarPreciosPage() {
     : 0
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Link href="/inventario">
-          <Button variant="ghost" size="icon">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-        </Link>
-        <div className="flex-1">
-          <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
-            <FileSpreadsheet className="h-6 w-6" />
-            Importar lista de precios
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Subí un archivo Excel del proveedor para actualizar precios masivamente
-          </p>
-        </div>
-      </div>
-
+    <PageShell
+      title="Importar lista de precios"
+      description="Subí un archivo Excel del proveedor para actualizar precios masivamente"
+      icon={FileSpreadsheet}
+      backHref="/inventario"
+    >
       <div className="flex gap-2 text-xs">
         {(["upload", "sheet", "mapping", "preview"] as Step[]).map((s, idx) => {
           const active = s === step
@@ -748,6 +736,6 @@ export default function ImportarPreciosPage() {
           </Card>
         </div>
       )}
-    </div>
+    </PageShell>
   )
 }

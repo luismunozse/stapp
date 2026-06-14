@@ -1,5 +1,7 @@
-import type { LucideIcon } from "lucide-react"
+import Link from "next/link"
+import { ArrowLeft, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { Button } from "./button"
 
 interface PageHeaderProps {
   /** Page title. Rendered with the system `text-headline` scale. */
@@ -10,6 +12,10 @@ interface PageHeaderProps {
   actions?: React.ReactNode
   /** Optional leading icon chip, keyed to the page domain. */
   icon?: LucideIcon
+  /** When set, renders a ghost back button (←) linking here, before the title. */
+  backHref?: string
+  /** Accessible label for the back button. Defaults to "Volver". */
+  backLabel?: string
   className?: string
 }
 
@@ -24,6 +30,8 @@ export function PageHeader({
   description,
   actions,
   icon: Icon,
+  backHref,
+  backLabel = "Volver",
   className,
 }: PageHeaderProps) {
   return (
@@ -34,7 +42,19 @@ export function PageHeader({
       )}
     >
       <div className="min-w-0 space-y-1">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
+          {backHref && (
+            <Button
+              asChild
+              variant="ghost"
+              size="icon"
+              className="-ml-2 flex-shrink-0"
+            >
+              <Link href={backHref} aria-label={backLabel}>
+                <ArrowLeft className="h-4 w-4" />
+              </Link>
+            </Button>
+          )}
           {Icon && (
             <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-accent text-primary">
               <Icon className="h-5 w-5" />

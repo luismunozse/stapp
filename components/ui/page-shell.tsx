@@ -11,6 +11,10 @@ interface PageShellProps {
   actions?: React.ReactNode
   /** Optional leading icon chip in the header. */
   icon?: LucideIcon
+  /** When set, the header shows a ghost back button (←) linking here. */
+  backHref?: string
+  /** Accessible label for the back button. Defaults to "Volver". */
+  backLabel?: string
   /** Escape hatch: render a fully custom header instead of the title/description props. */
   header?: React.ReactNode
   children: React.ReactNode
@@ -31,6 +35,8 @@ export function PageShell({
   description,
   actions,
   icon,
+  backHref,
+  backLabel,
   header,
   children,
   className,
@@ -44,6 +50,8 @@ export function PageShell({
             description={description}
             actions={actions}
             icon={icon}
+            backHref={backHref}
+            backLabel={backLabel}
           />
         ))}
       {children}

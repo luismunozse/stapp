@@ -13,7 +13,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import {
-  ArrowLeft,
   Plus,
   ClipboardCheck,
   Loader2,
@@ -22,6 +21,7 @@ import {
   Clock,
   PlayCircle,
 } from "lucide-react"
+import { PageShell } from "@/components/ui/page-shell"
 
 interface Conteo {
   id: string
@@ -146,28 +146,17 @@ export default function ConteosPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-3">
-          <Link href="/inventario">
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
-              <ClipboardCheck className="h-6 w-6" /> Conteos físicos
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Arqueo de stock con ajustes automáticos. El sistema saca foto del stock al iniciar y compara con lo que cargues.
-            </p>
-          </div>
-        </div>
+    <PageShell
+      title="Conteos físicos"
+      description="Arqueo de stock con ajustes automáticos. El sistema saca foto del stock al iniciar y compara con lo que cargues."
+      icon={ClipboardCheck}
+      backHref="/inventario"
+      actions={
         <Button onClick={() => setDialogOpen(true)}>
           <Plus className="h-4 w-4 mr-1" /> Nuevo conteo
         </Button>
-      </div>
-
+      }
+    >
       {isLoading ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -335,6 +324,6 @@ export default function ConteosPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </PageShell>
   )
 }

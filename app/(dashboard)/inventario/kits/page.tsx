@@ -23,7 +23,6 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import {
-  ArrowLeft,
   Loader2,
   Package,
   Plus,
@@ -32,6 +31,7 @@ import {
   Search,
   Settings,
 } from "lucide-react"
+import { PageShell } from "@/components/ui/page-shell"
 import { useCurrency } from "@/contexts/currency-context"
 import { KitDialog } from "@/components/inventario/kit-dialog"
 
@@ -86,28 +86,18 @@ export default function KitsPage() {
   }, [])
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-3">
-          <Link href="/inventario">
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
-              <Package className="h-6 w-6 text-primary" /> Kits / Combos
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Items compuestos por otros items. Ensamblá para producir kit ENSAMBLADO o usá VIRTUAL para vender componentes en grupo.
-            </p>
-          </div>
-        </div>
+    <PageShell
+      title="Kits / Combos"
+      description="Items compuestos por otros items. Ensamblá para producir kit ENSAMBLADO o usá VIRTUAL para vender componentes en grupo."
+      icon={Package}
+      backHref="/inventario"
+      actions={
         <Button onClick={() => setNuevoOpen(true)}>
           <Plus className="h-4 w-4 mr-1" /> Nuevo kit
         </Button>
-      </div>
-
+      }
+      className="space-y-4"
+    >
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative w-full sm:w-72">
           <Search className="absolute left-2 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
@@ -237,7 +227,7 @@ export default function KitsPage() {
           setOpenKitNombre(nombre)
         }}
       />
-    </div>
+    </PageShell>
   )
 }
 
