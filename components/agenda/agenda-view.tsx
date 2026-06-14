@@ -43,6 +43,7 @@ import { es } from "date-fns/locale"
 import { TurnoFormDialog } from "./turno-form-dialog"
 import { TurnoDetailSheet } from "./turno-detail-sheet"
 import { TurnoBlock } from "./turno-block"
+import { EmptyState } from "@/components/ui/empty-state"
 import type { TurnoConRelaciones } from "@/types"
 
 const fetcher = (u: string) => fetch(u).then(r => r.json())
@@ -390,10 +391,10 @@ function StatCard({
   sub?: string
 }) {
   const tones = {
-    blue: "bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border-blue-200/50 dark:border-blue-900/50",
-    amber: "bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 border-amber-200/50 dark:border-amber-900/50",
-    emerald: "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 border-emerald-200/50 dark:border-emerald-900/50",
-    red: "bg-red-50 dark:bg-red-950/30 text-red-800 dark:text-red-300 border-red-200/50 dark:border-red-900/50",
+    blue: "bg-info-50 text-info-700 border-info-200/50 dark:bg-info/15 dark:text-info-300 dark:border-info/30",
+    amber: "bg-warning-50 text-warning-700 border-warning-200/50 dark:bg-warning/15 dark:text-warning-300 dark:border-warning/30",
+    emerald: "bg-success-50 text-success-700 border-success-200/50 dark:bg-success/15 dark:text-success-300 dark:border-success/30",
+    red: "bg-destructive/10 text-destructive border-destructive/25",
   }
   return (
     <div className={`rounded-lg border p-3 ${tones[tone]}`}>
@@ -503,8 +504,8 @@ function TimelineView({
                     className="absolute left-0 right-0 z-10 pointer-events-none"
                     style={{ top: `${nowOffsetPx}px` }}
                   >
-                    <div className="h-px bg-red-500" />
-                    <div className="absolute -left-1 -top-1 w-2 h-2 rounded-full bg-red-500" />
+                    <div className="h-px bg-destructive" />
+                    <div className="absolute -left-1 -top-1 w-2 h-2 rounded-full bg-destructive" />
                   </div>
                 )}
                 {/* Turnos */}
@@ -668,13 +669,13 @@ function ListaView({
   }
   if (diasConData.length === 0) {
     return (
-      <div className="border rounded-lg bg-card p-12 text-center">
-        <CalendarDays className="h-10 w-10 mx-auto mb-3 opacity-30" />
-        <p className="text-sm text-muted-foreground mb-3">Sin turnos en este rango</p>
-        <Button size="sm" onClick={() => onNuevo(new Date())}>
-          <Plus className="mr-1 h-3 w-3" />
-          Crear turno
-        </Button>
+      <div className="border rounded-lg bg-card">
+        <EmptyState
+          icon={CalendarDays}
+          title="Sin turnos en este rango"
+          description="No hay citas programadas para este período."
+          action={{ label: "Crear turno", onClick: () => onNuevo(new Date()) }}
+        />
       </div>
     )
   }

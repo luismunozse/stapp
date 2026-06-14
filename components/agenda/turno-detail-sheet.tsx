@@ -18,10 +18,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Loader2, FileText, Pencil, Trash2, ExternalLink, Bell } from "lucide-react"
+import { Loader2, FileText, Pencil, Trash2, ExternalLink, Bell, AlertCircle } from "lucide-react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import type { EstadoTurno, TipoTurno, TurnoConRelaciones } from "@/types"
+import { StatusBanner } from "@/components/ui/status-banner"
+import { FieldSectionLabel } from "@/components/ui/field-section-label"
 
 const TIPO_LABELS: Record<TipoTurno, string> = {
   visita_diagnostico: "Visita de diagnóstico",
@@ -160,7 +162,7 @@ export function TurnoDetailSheet({ open, onClose, turno, onChanged, onEdit }: Tu
         <div className="space-y-4">
           {/* Fecha */}
           <div>
-            <p className="text-xs text-muted-foreground">Fecha y hora</p>
+            <FieldSectionLabel>Fecha y hora</FieldSectionLabel>
             <p className="font-medium">
               {format(new Date(turno.inicio), "EEEE d 'de' MMMM, HH:mm", { locale: es })}
               {turno.fin && (
@@ -173,7 +175,7 @@ export function TurnoDetailSheet({ open, onClose, turno, onChanged, onEdit }: Tu
 
           {/* Cliente */}
           <div>
-            <p className="text-xs text-muted-foreground">Cliente</p>
+            <FieldSectionLabel>Cliente</FieldSectionLabel>
             {cliente ? (
               <div>
                 <p className="font-medium">{cliente.nombre}</p>
@@ -181,7 +183,7 @@ export function TurnoDetailSheet({ open, onClose, turno, onChanged, onEdit }: Tu
               </div>
             ) : snap ? (
               <div>
-                <p className="font-medium">{snap.nombre} <span className="text-xs text-amber-700 dark:text-amber-400">(sin registrar)</span></p>
+                <p className="font-medium">{snap.nombre} <span className="text-xs text-warning-700 dark:text-warning-600">(sin registrar)</span></p>
                 <p className="text-sm text-muted-foreground">{snap.telefono}</p>
               </div>
             ) : (
@@ -192,7 +194,7 @@ export function TurnoDetailSheet({ open, onClose, turno, onChanged, onEdit }: Tu
           {/* Técnico */}
           {turno.tecnico && (
             <div>
-              <p className="text-xs text-muted-foreground">Técnico</p>
+              <FieldSectionLabel>Técnico</FieldSectionLabel>
               <p className="font-medium">{turno.tecnico.nombre}</p>
             </div>
           )}
@@ -200,7 +202,7 @@ export function TurnoDetailSheet({ open, onClose, turno, onChanged, onEdit }: Tu
           {/* Dirección */}
           {turno.direccion && (
             <div>
-              <p className="text-xs text-muted-foreground">Dirección</p>
+              <FieldSectionLabel>Dirección</FieldSectionLabel>
               <p className="text-sm">{turno.direccion}</p>
             </div>
           )}
@@ -208,7 +210,7 @@ export function TurnoDetailSheet({ open, onClose, turno, onChanged, onEdit }: Tu
           {/* Equipo */}
           {(turno.tipoDispositivo || turno.marca || turno.modelo) && (
             <div>
-              <p className="text-xs text-muted-foreground">Equipo</p>
+              <FieldSectionLabel>Equipo</FieldSectionLabel>
               <p className="text-sm">
                 {[turno.tipoDispositivo, turno.marca, turno.modelo].filter(Boolean).join(" — ")}
               </p>
@@ -217,14 +219,14 @@ export function TurnoDetailSheet({ open, onClose, turno, onChanged, onEdit }: Tu
 
           {turno.problemaReportado && (
             <div>
-              <p className="text-xs text-muted-foreground">Problema reportado</p>
+              <FieldSectionLabel>Problema reportado</FieldSectionLabel>
               <p className="text-sm whitespace-pre-wrap">{turno.problemaReportado}</p>
             </div>
           )}
 
           {turno.notas && (
             <div>
-              <p className="text-xs text-muted-foreground">Notas internas</p>
+              <FieldSectionLabel>Notas internas</FieldSectionLabel>
               <p className="text-sm whitespace-pre-wrap">{turno.notas}</p>
             </div>
           )}
@@ -232,7 +234,7 @@ export function TurnoDetailSheet({ open, onClose, turno, onChanged, onEdit }: Tu
           {/* Orden vinculada */}
           {turno.orden && (
             <div className="border rounded-lg p-3 bg-muted/30">
-              <p className="text-xs text-muted-foreground mb-1">Orden generada</p>
+              <FieldSectionLabel className="mb-1">Orden generada</FieldSectionLabel>
               <Link
                 href={`/ordenes/${turno.orden.id}`}
                 className="font-medium text-primary hover:underline flex items-center gap-1"
@@ -246,7 +248,7 @@ export function TurnoDetailSheet({ open, onClose, turno, onChanged, onEdit }: Tu
           {/* Cambio de estado */}
           {puedeEditarEstado && (
             <div>
-              <p className="text-xs text-muted-foreground mb-1">Cambiar estado</p>
+              <FieldSectionLabel className="mb-1">Cambiar estado</FieldSectionLabel>
               <Select
                 value={turno.estado}
                 onValueChange={(v) => updateEstado(v as EstadoTurno)}
@@ -265,9 +267,7 @@ export function TurnoDetailSheet({ open, onClose, turno, onChanged, onEdit }: Tu
           )}
 
           {error && (
-            <div className="text-sm text-red-600 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded p-2">
-              {error}
-            </div>
+            <StatusBanner tone="danger" icon={AlertCircle}>{error}</StatusBanner>
           )}
 
           {/* Acciones */}
@@ -293,7 +293,7 @@ export function TurnoDetailSheet({ open, onClose, turno, onChanged, onEdit }: Tu
             {!tieneOrden && (
               <Button
                 variant="ghost"
-                className="text-red-600 hover:text-red-700"
+                className="text-destructive hover:text-destructive/80"
                 onClick={handleEliminar}
                 disabled={busy}
               >
