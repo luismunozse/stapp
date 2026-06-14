@@ -5,6 +5,7 @@
 
 import { supabaseAdmin } from "@/lib/supabase"
 import { decrypt } from "@/lib/whatsapp/encryption"
+import { getPlatformEvolutionConfig } from "@/lib/whatsapp/platform-config"
 import { sendTextMessage as metaSendText, sendTemplateMessage as metaSendTemplate, type TemplateComponent } from "@/lib/whatsapp/client"
 import { sendText as evoSendText, type EvolutionCredentials } from "@/lib/whatsapp/providers/evolution"
 
@@ -41,13 +42,14 @@ async function loadConfig(organizationId: string): Promise<ConfigRow | null> {
 }
 
 export function getEvolutionCreds(config: ConfigRow): EvolutionCredentials | null {
-  if (!config.evolution_base_url || !config.evolution_instance_name || !config.evolution_api_key_encrypted) {
+  const platform = getPlatformEvolutionConfig()
+  if (!platform || !config.evolution_instance_name) {
     return null
   }
   return {
-    baseUrl: config.evolution_base_url,
+    baseUrl: platform.baseUrl,
     instanceName: config.evolution_instance_name,
-    apiKey: decrypt(config.evolution_api_key_encrypted),
+    apiKey: platform.apiKey,
   }
 }
 

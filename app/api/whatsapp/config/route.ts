@@ -4,7 +4,6 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { encrypt } from "@/lib/whatsapp/encryption"
 import { verifyCredentials } from "@/lib/whatsapp/client"
-import { createInstance, getConnectionState } from "@/lib/whatsapp/providers/evolution"
 
 export async function GET() {
   try {
@@ -110,67 +109,14 @@ export async function PUT(request: Request) {
       })
     }
 
-    // Evolution
-    const { baseUrl, instanceName, apiKey } = body
-    if (!baseUrl || !instanceName || !apiKey) {
+    // Evolution: el alta se hace ahora vía POST /api/whatsapp/evolution/connect
+    // (servidor compartido de plataforma, sin credenciales por org).
+    if (provider === "evolution") {
       return NextResponse.json(
-        { error: "baseUrl, instanceName y apiKey son requeridos" },
-        { status: 400 }
+        { error: "Usá Conectar WhatsApp (Evolution compartido). Esta ruta quedó obsoleta para Evolution.", code: "USE_CONNECT" },
+        { status: 410 }
       )
     }
-
-    const normalizedBaseUrl = String(baseUrl).trim().replace(/\/+$/, "")
-    const normalizedInstance = String(instanceName).trim()
-    if (!/^https?:\/\//i.test(normalizedBaseUrl)) {
-      return NextResponse.json({ error: "baseUrl debe ser http(s)://..." }, { status: 400 })
-    }
-    if (!/^[a-zA-Z0-9_-]{1,64}$/.test(normalizedInstance)) {
-      return NextResponse.json(
-        { error: "instanceName invalida (solo letras, numeros, - y _, max 64)" },
-        { status: 400 }
-      )
-    }
-
-    const creds = { baseUrl: normalizedBaseUrl, instanceName: normalizedInstance, apiKey }
-
-    // Crear instancia (idempotente)
-    const created = await createInstance(creds)
-    if (!created.success) {
-      return NextResponse.json(
-        { error: `No se pudo crear instancia: ${created.error}` },
-        { status: 400 }
-      )
-    }
-
-    // Estado actual
-    const state = await getConnectionState(creds)
-
-    const encryptedKey = encrypt(apiKey)
-
-    const configData = {
-      organization_id: organizationId!,
-      provider: "evolution",
-      evolution_base_url: normalizedBaseUrl,
-      evolution_instance_name: normalizedInstance,
-      evolution_api_key_encrypted: encryptedKey,
-      evolution_connection_state: state.state,
-      is_configured: true,
-      is_verified: state.state === "open",
-    }
-
-    const { error: dbError } = await supabaseAdmin
-      .from("whatsapp_config")
-      .upsert(configData, { onConflict: "organization_id" })
-
-    if (dbError) throw dbError
-
-    return NextResponse.json({
-      provider: "evolution",
-      isConfigured: true,
-      isVerified: state.state === "open",
-      connectionState: state.state,
-      alreadyExists: created.alreadyExists ?? false,
-    })
   } catch (err) {
     console.error("Error updating WA config:", err)
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
