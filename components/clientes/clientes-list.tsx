@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -28,6 +29,7 @@ interface ClientesListProps {
 }
 
 export function ClientesList({ allowImport = true }: ClientesListProps) {
+  const router = useRouter()
   const { confirm, showError } = useModal()
   const { formatDate, formatPrice } = useCurrency()
   const [showForm, setShowForm] = useState(false)
@@ -414,6 +416,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
           sortKey={sortKey}
           sortDirection={sortDirection}
           onSort={handleSort}
+          onRowClick={(cliente) => router.push(`/clientes/${cliente.id}`)}
           pagination={{
             page,
             pageSize,
