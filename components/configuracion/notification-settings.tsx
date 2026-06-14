@@ -124,8 +124,8 @@ export function NotificationSettings({ allowEdit = true }: NotificationSettingsP
           <div
             className={`px-3 sm:px-4 py-2 sm:py-3 rounded text-xs sm:text-sm ${
               message.type === "success"
-                ? "bg-green-50 dark:bg-green-950/50 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400"
-                : "bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400"
+                ? "bg-success-50 dark:bg-success/15 border border-success-200 dark:border-success/30 text-success-600 dark:text-success-500"
+                : "bg-destructive/10 dark:bg-destructive/15 border border-destructive/30 text-destructive"
             }`}
           >
             {message.text}
@@ -134,7 +134,7 @@ export function NotificationSettings({ allowEdit = true }: NotificationSettingsP
 
         <div className="flex items-center justify-between p-3 sm:p-4 border rounded-lg gap-3">
           <div className="flex items-start gap-2 sm:gap-3 min-w-0">
-            <Mail className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 mt-0.5 shrink-0" />
+            <Mail className="h-4 w-4 sm:h-5 sm:w-5 text-info-600 mt-0.5 shrink-0" />
             <div className="min-w-0">
               <Label className="text-sm sm:text-base">Email</Label>
               <p className="text-xs sm:text-sm text-muted-foreground">
@@ -152,7 +152,7 @@ export function NotificationSettings({ allowEdit = true }: NotificationSettingsP
               disabled={!allowEdit}
               className="sr-only peer"
             />
-            <div className="w-11 h-6 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 dark:after:border-gray-600 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+            <div className="w-11 h-6 bg-muted peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-info-200 dark:peer-focus:ring-info/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-info-600"></div>
           </label>
         </div>
 
@@ -179,13 +179,13 @@ export function NotificationSettings({ allowEdit = true }: NotificationSettingsP
               disabled={!allowEdit}
               className="sr-only peer"
             />
-            <div className="w-11 h-6 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 dark:peer-focus:ring-green-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 dark:after:border-gray-600 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+            <div className="w-11 h-6 bg-muted peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 dark:peer-focus:ring-green-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
           </label>
         </div>
 
         <div className="flex items-center justify-between p-3 sm:p-4 border rounded-lg gap-3">
           <div className="flex items-start gap-2 sm:gap-3 min-w-0">
-            <Package className="h-4 w-4 sm:h-5 sm:w-5 text-red-600 mt-0.5 shrink-0" />
+            <Package className="h-4 w-4 sm:h-5 sm:w-5 text-destructive mt-0.5 shrink-0" />
             <div className="min-w-0">
               <Label className="text-sm sm:text-base">Stock bajo</Label>
               <p className="text-xs sm:text-sm text-muted-foreground">
@@ -203,7 +203,7 @@ export function NotificationSettings({ allowEdit = true }: NotificationSettingsP
               disabled={!allowEdit}
               className="sr-only peer"
             />
-            <div className="w-11 h-6 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 dark:peer-focus:ring-red-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 dark:after:border-gray-600 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
+            <div className="w-11 h-6 bg-muted peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-destructive/20 dark:peer-focus:ring-destructive/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-destructive"></div>
           </label>
         </div>
 

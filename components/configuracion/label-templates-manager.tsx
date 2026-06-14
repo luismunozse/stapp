@@ -34,6 +34,7 @@ import {
   Play,
   AlertTriangle,
 } from "lucide-react"
+import { StatusBanner } from "@/components/ui/status-banner"
 import {
   generateZpl,
   generateEpl,
@@ -195,7 +196,7 @@ export function LabelTemplatesManager() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {byFormato[f].map((t) => (
-                  <Card key={t.id} className={t.es_default ? "border-amber-500/60" : ""}>
+                  <Card key={t.id} className={t.es_default ? "border-warning-500/60" : ""}>
                     <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-2">
                       <div className="min-w-0">
                         <CardTitle className="text-base truncate">{t.nombre}</CardTitle>
@@ -204,7 +205,7 @@ export function LabelTemplatesManager() {
                         </p>
                       </div>
                       {t.es_default && (
-                        <Badge className="bg-amber-500 hover:bg-amber-500 text-white gap-1 shrink-0">
+                        <Badge className="bg-warning hover:bg-warning text-white gap-1 shrink-0">
                           <Star className="h-3 w-3" /> Default
                         </Badge>
                       )}
@@ -458,14 +459,11 @@ function TemplateEditorDialog({ open, onOpenChange, template, onSave, busy }: Ed
                 <PlaceholderRow code="{{precio}}" desc="Precio de venta (decimal)" />
                 <PlaceholderRow code="{{org_nombre}}" desc="Nombre de tu organización" />
               </div>
-              <div className="border rounded-md p-3 bg-amber-50 dark:bg-amber-950/30 text-[11px] text-amber-900 dark:text-amber-200 flex gap-2">
-                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                <div>
-                  Los valores se escapan automáticamente para evitar romper el
-                  spool (ZPL: <code>^</code>→<code>\5E</code>; EPL:{" "}
-                  <code>&quot;</code>→<code>\&quot;</code>).
-                </div>
-              </div>
+              <StatusBanner tone="warning" icon={AlertTriangle} className="text-[11px]">
+                Los valores se escapan automáticamente para evitar romper el
+                spool (ZPL: <code>^</code>→<code>\5E</code>; EPL:{" "}
+                <code>&quot;</code>→<code>\&quot;</code>).
+              </StatusBanner>
             </div>
           </div>
 

@@ -161,7 +161,7 @@ export function ApiKeysManager() {
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <span className="font-semibold truncate">{k.name}</span>
                         {isActive ? (
-                          <Badge variant="outline" className="text-xs text-green-600 border-green-300">
+                          <Badge variant="outline" className="text-xs text-success-600 border-success-200">
                             Activa
                           </Badge>
                         ) : (
@@ -228,7 +228,7 @@ export function ApiKeysManager() {
                 onKeyDown={(e) => e.key === "Enter" && handleCreate()}
               />
             </div>
-            {formError && <p className="text-sm text-red-600">{formError}</p>}
+            {formError && <p className="text-sm text-destructive">{formError}</p>}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
@@ -247,7 +247,7 @@ export function ApiKeysManager() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              <AlertTriangle className="h-5 w-5 text-warning-500" />
               Guardá esta key ahora
             </DialogTitle>
             <DialogDescription>
