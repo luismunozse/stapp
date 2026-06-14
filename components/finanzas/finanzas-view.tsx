@@ -4,7 +4,8 @@ import dynamic from "next/dynamic"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { LayoutDashboard, FileBarChart, TrendingUp, Receipt } from "lucide-react"
+import { PageShell } from "@/components/ui/page-shell"
+import { LayoutDashboard, FileBarChart, TrendingUp, Receipt, DollarSign } from "lucide-react"
 import { TendenciaFinanciera } from "./tendencia-financiera"
 
 function ReporteSkeleton() {
@@ -38,14 +39,11 @@ const GastosResumen = dynamic(
 
 export function FinanzasView() {
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-bold">Finanzas</h1>
-        <p className="text-muted-foreground text-sm sm:text-base">
-          Panorama financiero del negocio: ingresos, costos, gastos y rentabilidad
-        </p>
-      </div>
-
+    <PageShell
+      title="Finanzas"
+      description="Panorama financiero del negocio: ingresos, costos, gastos y rentabilidad"
+      icon={DollarSign}
+    >
       <Tabs defaultValue="resumen" className="space-y-4">
         <div className="overflow-x-auto">
           <TabsList className="inline-flex w-auto min-w-full sm:grid sm:grid-cols-4 sm:w-full">
@@ -85,6 +83,6 @@ export function FinanzasView() {
           <GastosResumen />
         </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   )
 }

@@ -96,12 +96,12 @@ export function CierreDialog({
               <span className="font-medium">{formatPrice(saldoInicial)}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-green-600">+ Ingresos efectivo</span>
-              <span className="font-medium text-green-600">{formatPrice(totalIngresosEfectivo)}</span>
+              <span className="text-success-600">+ Ingresos efectivo</span>
+              <span className="font-medium text-success-600">{formatPrice(totalIngresosEfectivo)}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-red-600">- Egresos efectivo</span>
-              <span className="font-medium text-red-600">{formatPrice(totalEgresosEfectivo)}</span>
+              <span className="text-destructive">- Egresos efectivo</span>
+              <span className="font-medium text-destructive">{formatPrice(totalEgresosEfectivo)}</span>
             </div>
             <div className="border-t pt-2 flex justify-between font-bold">
               <span>Efectivo esperado</span>
@@ -110,8 +110,8 @@ export function CierreDialog({
             {totalCostosFinancieros > 0 && (
               <div className="border-t pt-2 mt-2">
                 <div className="flex justify-between text-sm">
-                  <span className="text-red-500">Costo terminales (tarjetas)</span>
-                  <span className="font-medium text-red-500">-{formatPrice(totalCostosFinancieros)}</span>
+                  <span className="text-destructive">Costo terminales (tarjetas)</span>
+                  <span className="font-medium text-destructive">-{formatPrice(totalCostosFinancieros)}</span>
                 </div>
                 <div className="flex justify-between text-sm mt-1">
                   <span className="font-medium">Ingreso real del día</span>
@@ -142,19 +142,19 @@ export function CierreDialog({
             <div
               className={`flex items-center justify-between p-3 rounded-lg border-2 ${
                 diferencia === 0
-                  ? "border-green-200 bg-green-50 dark:bg-green-950/20"
+                  ? "border-success/30 bg-success-50 dark:bg-success/15"
                   : diferencia > 0
-                  ? "border-amber-200 bg-amber-50 dark:bg-amber-950/20"
-                  : "border-red-200 bg-red-50 dark:bg-red-950/20"
+                  ? "border-warning/30 bg-warning-50 dark:bg-warning/10"
+                  : "border-destructive/30 bg-destructive/10 dark:bg-destructive/15"
               }`}
             >
               <div className="flex items-center gap-2">
                 {diferencia === 0 ? (
-                  <Minus className="h-4 w-4 text-green-600" />
+                  <Minus className="h-4 w-4 text-success-600" />
                 ) : diferencia > 0 ? (
-                  <TrendingUp className="h-4 w-4 text-amber-600" />
+                  <TrendingUp className="h-4 w-4 text-warning-600" />
                 ) : (
-                  <TrendingDown className="h-4 w-4 text-red-600" />
+                  <TrendingDown className="h-4 w-4 text-destructive" />
                 )}
                 <span className="text-sm font-medium">
                   {diferencia === 0
@@ -167,10 +167,10 @@ export function CierreDialog({
               <span
                 className={`font-bold ${
                   diferencia === 0
-                    ? "text-green-600"
+                    ? "text-success-600"
                     : diferencia > 0
-                    ? "text-amber-600"
-                    : "text-red-600"
+                    ? "text-warning-600"
+                    : "text-destructive"
                 }`}
               >
                 {formatPrice(Math.abs(diferencia))}
@@ -190,7 +190,7 @@ export function CierreDialog({
             />
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>

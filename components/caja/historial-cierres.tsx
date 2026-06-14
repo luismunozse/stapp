@@ -12,7 +12,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Loader2, TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp } from "lucide-react"
+import { EmptyState } from "@/components/ui/empty-state"
+import { Loader2, TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp, Archive } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
@@ -78,8 +79,13 @@ export function HistorialCierres() {
 
       {sesiones.length === 0 ? (
         <Card>
-          <CardContent className="py-8 text-center text-muted-foreground">
-            No hay cierres de caja registrados
+          <CardContent>
+            <EmptyState
+              icon={Archive}
+              title="Sin historial"
+              description="No hay cierres de caja registrados"
+              variant="search"
+            />
           </CardContent>
         </Card>
       ) : (
@@ -106,10 +112,10 @@ export function HistorialCierres() {
                       {s.usuarioApertura?.nombre || "-"}
                     </td>
                     <td className="p-3 text-right">{formatPrice(s.saldoInicial)}</td>
-                    <td className="p-3 text-right hidden md:table-cell text-green-600">
+                    <td className="p-3 text-right hidden md:table-cell text-success-600">
                       {s.totalIngresos != null ? formatPrice(s.totalIngresos) : "-"}
                     </td>
-                    <td className="p-3 text-right hidden md:table-cell text-red-600">
+                    <td className="p-3 text-right hidden md:table-cell text-destructive">
                       {s.totalEgresos != null ? formatPrice(s.totalEgresos) : "-"}
                     </td>
                     <td className="p-3 text-right">
@@ -154,7 +160,7 @@ export function HistorialCierres() {
 function DiferenciaBadge({ diferencia, formatPrice }: { diferencia: number; formatPrice: (n: number) => string }) {
   if (diferencia === 0) {
     return (
-      <Badge variant="outline" className="text-green-600 border-green-300">
+      <Badge variant="outline" className="text-success-600 border-success-200">
         <Minus className="h-3 w-3 mr-1" />
         Cuadra
       </Badge>
@@ -162,14 +168,14 @@ function DiferenciaBadge({ diferencia, formatPrice }: { diferencia: number; form
   }
   if (diferencia > 0) {
     return (
-      <Badge variant="outline" className="text-amber-600 border-amber-300">
+      <Badge variant="outline" className="text-warning-600 border-warning-200">
         <TrendingUp className="h-3 w-3 mr-1" />
         +{formatPrice(diferencia)}
       </Badge>
     )
   }
   return (
-    <Badge variant="outline" className="text-red-600 border-red-300">
+    <Badge variant="outline" className="text-destructive border-destructive/30">
       <TrendingDown className="h-3 w-3 mr-1" />
       -{formatPrice(Math.abs(diferencia))}
     </Badge>
@@ -217,11 +223,11 @@ function SesionDetailDialog({
               </div>
               <div className="p-3 bg-muted rounded-lg text-center">
                 <div className="text-xs text-muted-foreground">Ingresos</div>
-                <div className="font-bold text-green-600">{formatPrice(sesion.totalIngresos || 0)}</div>
+                <div className="font-bold text-success-600">{formatPrice(sesion.totalIngresos || 0)}</div>
               </div>
               <div className="p-3 bg-muted rounded-lg text-center">
                 <div className="text-xs text-muted-foreground">Egresos</div>
-                <div className="font-bold text-red-600">{formatPrice(sesion.totalEgresos || 0)}</div>
+                <div className="font-bold text-destructive">{formatPrice(sesion.totalEgresos || 0)}</div>
               </div>
               <div className="p-3 bg-muted rounded-lg text-center">
                 <div className="text-xs text-muted-foreground">Conteo Físico</div>
@@ -237,12 +243,12 @@ function SesionDetailDialog({
                 <span>{formatPrice(sesion.saldoInicial)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-green-600">+ Ingresos efectivo</span>
-                <span className="text-green-600">{formatPrice(sesion.totalIngresosEfectivo || 0)}</span>
+                <span className="text-success-600">+ Ingresos efectivo</span>
+                <span className="text-success-600">{formatPrice(sesion.totalIngresosEfectivo || 0)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-red-600">- Egresos efectivo</span>
-                <span className="text-red-600">{formatPrice(sesion.totalEgresosEfectivo || 0)}</span>
+                <span className="text-destructive">- Egresos efectivo</span>
+                <span className="text-destructive">{formatPrice(sesion.totalEgresosEfectivo || 0)}</span>
               </div>
               <div className="border-t pt-2 flex justify-between font-bold text-sm">
                 <span>Esperado</span>
@@ -262,10 +268,10 @@ function SesionDetailDialog({
                 <div
                   className={`flex justify-between font-bold text-sm pt-1 border-t ${
                     sesion.diferencia === 0
-                      ? "text-green-600"
+                      ? "text-success-600"
                       : sesion.diferencia > 0
-                      ? "text-amber-600"
-                      : "text-red-600"
+                      ? "text-warning-600"
+                      : "text-destructive"
                   }`}
                 >
                   <span>
@@ -333,7 +339,7 @@ function SesionDetailDialog({
                           })}
                         </span>
                       </div>
-                      <span className={`font-medium ${m.esEgreso ? "text-red-600" : "text-green-600"}`}>
+                      <span className={`font-medium ${m.esEgreso ? "text-destructive" : "text-success-600"}`}>
                         {m.esEgreso ? "-" : "+"}
                         {formatPrice(m.monto)}
                       </span>

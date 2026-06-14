@@ -6,6 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useCurrency } from "@/contexts/currency-context"
+import { EmptyState } from "@/components/ui/empty-state"
+import { TrendingUp } from "lucide-react"
 import {
   BarChart,
   Bar,
@@ -77,8 +79,13 @@ export function TendenciaFinanciera() {
   if (error || !data) {
     return (
       <Card>
-        <CardContent className="py-8 text-center text-muted-foreground">
-          Error al cargar la tendencia
+        <CardContent>
+          <EmptyState
+            icon={TrendingUp}
+            title="Sin datos"
+            description="Error al cargar la tendencia"
+            variant="error"
+          />
         </CardContent>
       </Card>
     )
@@ -185,13 +192,13 @@ export function TendenciaFinanciera() {
 
         {/* Period totals */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t">
-          <TotalItem label="Ingresos" value={formatPrice(data.totales.ingresos)} color="text-green-600" />
-          <TotalItem label="Costos" value={formatPrice(data.totales.costos)} color="text-orange-600" />
-          <TotalItem label="Gastos" value={formatPrice(data.totales.gastos)} color="text-red-600" />
+          <TotalItem label="Ingresos" value={formatPrice(data.totales.ingresos)} color="text-success-600" />
+          <TotalItem label="Costos" value={formatPrice(data.totales.costos)} color="text-warning-600" />
+          <TotalItem label="Gastos" value={formatPrice(data.totales.gastos)} color="text-destructive" />
           <TotalItem
             label="Ganancia neta"
             value={formatPrice(data.totales.gananciaNeta)}
-            color={data.totales.gananciaNeta >= 0 ? "text-blue-600" : "text-red-700"}
+            color={data.totales.gananciaNeta >= 0 ? "text-info-600" : "text-destructive"}
             bold
           />
         </div>
