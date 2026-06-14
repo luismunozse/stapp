@@ -14,6 +14,7 @@ import { CuentaCorrientePanel } from "./cuenta-corriente-panel"
 import { ClienteOrdenesPendientes } from "./cliente-ordenes-pendientes"
 import { ClienteOrdenesHistorial } from "./cliente-ordenes-historial"
 import { ClienteCotizaciones } from "./cliente-cotizaciones"
+import { ClienteSectores } from "./cliente-sectores"
 import type { Cliente } from "@/types"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
@@ -92,7 +93,9 @@ export function ClienteDetalle({ clienteId }: { clienteId: string }) {
         />
         <ClienteOrdenesHistorial clienteId={clienteId} />
         <ClienteCotizaciones clienteId={clienteId} />
-        {/* Task 9: Sectores (solo EMPRESA) */}
+        {cliente.tipoCliente === "EMPRESA" && (
+          <ClienteSectores sectores={cliente.sectores || []} />
+        )}
       </div>
 
       <ClienteForm
