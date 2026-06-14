@@ -39,6 +39,7 @@ import { ProveedorContactosTab } from "./proveedor-contactos-tab"
 import { ProveedorAdjuntosTab } from "./proveedor-adjuntos-tab"
 import { ProveedorCatalogoTab } from "./proveedor-catalogo-tab"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
+import { ContactRow } from "./contact-row"
 import { ProveedorForm } from "./proveedor-form"
 import { useModal } from "@/contexts/modal-context"
 import { useCurrency } from "@/contexts/currency-context"
@@ -381,40 +382,46 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
               <FieldSectionLabel>Contacto</FieldSectionLabel>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {proveedor.telefono && (
-                  <a href={`tel:${proveedor.telefono}`} className="flex items-center gap-2 text-sm hover:text-primary">
-                    <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <ContactRow
+                    icon={Phone}
+                    href={`tel:${proveedor.telefono}`}
+                    className="text-sm hover:text-primary"
+                  >
                     {proveedor.telefono}
-                  </a>
+                  </ContactRow>
                 )}
                 {proveedor.whatsapp && (
-                  <a
+                  <ContactRow
+                    icon={WhatsAppIcon}
                     href={`https://wa.me/${proveedor.whatsapp}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-sm text-green-600 hover:text-green-700"
+                    external
+                    iconClassName="text-green-600"
+                    className="text-sm text-green-600 hover:text-green-700"
                   >
-                    <WhatsAppIcon className="h-4 w-4 shrink-0" />
                     {proveedor.whatsapp}
                     <ExternalLink className="h-3 w-3" />
-                  </a>
+                  </ContactRow>
                 )}
                 {proveedor.email && (
-                  <a href={`mailto:${proveedor.email}`} className="flex items-center gap-2 text-sm hover:text-primary min-w-0">
-                    <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <ContactRow
+                    icon={Mail}
+                    href={`mailto:${proveedor.email}`}
+                    className="text-sm hover:text-primary min-w-0"
+                  >
                     <span className="truncate">{proveedor.email}</span>
-                  </a>
+                  </ContactRow>
                 )}
                 {proveedor.website && (
-                  <a
+                  <ContactRow
+                    icon={Globe}
                     href={proveedor.website}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-sm text-primary hover:underline min-w-0"
+                    external
+                    iconClassName=""
+                    className="text-sm text-primary hover:underline min-w-0"
                   >
-                    <Globe className="h-4 w-4 shrink-0" />
                     <span className="truncate">{proveedor.website}</span>
                     <ExternalLink className="h-3 w-3 shrink-0" />
-                  </a>
+                  </ContactRow>
                 )}
                 {proveedor.direccion && (
                   <div className="flex items-start gap-2 text-sm sm:col-span-2">

@@ -31,6 +31,7 @@ import {
   Truck,
 } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
+import { ContactRow } from "./contact-row"
 import { ProveedorForm } from "./proveedor-form"
 import { useCurrency } from "@/contexts/currency-context"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -381,45 +382,49 @@ export function ProveedoresList() {
                   {/* Contacto compacto */}
                   <div className="flex flex-wrap gap-x-3 gap-y-1.5 text-xs">
                     {proveedor.telefono && (
-                      <a
+                      <ContactRow
+                        icon={Phone}
                         href={`tel:${proveedor.telefono}`}
-                        className="flex items-center gap-1 hover:text-primary"
+                        iconSize="xs"
+                        className="gap-1 hover:text-primary"
                       >
-                        <Phone className="h-3 w-3 text-muted-foreground" />
                         {proveedor.telefono}
-                      </a>
+                      </ContactRow>
                     )}
                     {proveedor.whatsapp && (
-                      <a
+                      <ContactRow
+                        icon={WhatsAppIcon}
                         href={`https://wa.me/${proveedor.whatsapp}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1 text-green-600 hover:text-green-700"
+                        external
+                        iconSize="xs"
+                        iconClassName="text-green-600"
+                        className="gap-1 text-green-600 hover:text-green-700"
                       >
-                        <WhatsAppIcon className="h-3 w-3" />
                         WhatsApp
-                      </a>
+                      </ContactRow>
                     )}
                     {proveedor.email && (
-                      <a
+                      <ContactRow
+                        icon={Mail}
                         href={`mailto:${proveedor.email}`}
-                        className="flex items-center gap-1 hover:text-primary min-w-0 max-w-full"
+                        iconSize="xs"
+                        className="gap-1 hover:text-primary min-w-0 max-w-full"
                       >
-                        <Mail className="h-3 w-3 text-muted-foreground shrink-0" />
                         <span className="truncate">{proveedor.email}</span>
-                      </a>
+                      </ContactRow>
                     )}
                     {proveedor.website && (
-                      <a
+                      <ContactRow
+                        icon={Globe}
                         href={proveedor.website}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1 text-primary hover:underline"
+                        external
+                        iconSize="xs"
+                        iconClassName=""
+                        className="gap-1 text-primary hover:underline"
                       >
-                        <Globe className="h-3 w-3" />
                         Web
                         <ExternalLink className="h-2.5 w-2.5" />
-                      </a>
+                      </ContactRow>
                     )}
                     {!proveedor.telefono && !proveedor.whatsapp && !proveedor.email && !proveedor.website && (
                       <span className="text-muted-foreground italic">Sin datos de contacto</span>
