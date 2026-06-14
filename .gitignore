@@ -47,3 +47,4 @@ nul
 
 # Claude Code worktrees (separate git repos, not submodules)
 .claude/worktrees/
+shots/

@@ -92,7 +92,7 @@ export default async function DashboardLayout({
   return (
     <SidebarProvider>
       <OfflineProvider>
-        <div className="min-h-dvh bg-muted/30 dark:bg-background">
+        <div className="min-h-dvh bg-background">
           <SkipLinks />
           <OfflineBanner />
           <Navbar />
