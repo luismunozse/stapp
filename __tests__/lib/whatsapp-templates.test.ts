@@ -149,6 +149,26 @@ describe("plantilla por estado individual", () => {
   })
 })
 
+describe("copy accionable por estado", () => {
+  const estadoMsg = (estado: any, extra = {}) =>
+    getWhatsAppTemplates(ctxOrden({ estado, ...extra })).find((t) => t.id === "estado_actual")!.mensaje
+
+  it("copy PRESUPUESTADO es accionable (aprobar/rechazar)", () => {
+    expect(estadoMsg("PRESUPUESTADO")).toMatch(/apruebe o rechace/i)
+  })
+  it("copy REPARADO dice listo para retirar", () => {
+    expect(estadoMsg("REPARADO")).toMatch(/listo para retirar/i)
+  })
+  it("copy APROBADO agradece y anuncia cola de reparacion", () => {
+    expect(estadoMsg("APROBADO")).toMatch(/cola de reparaci/i)
+  })
+  it("mensaje de presupuesto incluye monto y CTA aprobar/rechazar", () => {
+    const t = getWhatsAppTemplates(ctxOrden({ presupuesto: 1000 })).find((x) => x.id === "presupuesto")!.mensaje
+    expect(t).toMatch(/apruebe o rechace/i)
+    expect(t).toMatch(/Presupuesto:/i)
+  })
+})
+
 describe("link_seguimiento / link_pdf en plantillas", () => {
   it("inyecta link_seguimiento basado en organizationSlug + publicToken", () => {
     const override = { orden_estado_actual: "Link: {link_seguimiento}" }
