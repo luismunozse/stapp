@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
+import { EmptyState } from "@/components/ui/empty-state"
 
 interface Contacto {
   id: string
@@ -192,11 +193,11 @@ export function ProveedorContactosTab({ proveedorId }: { proveedorId: string }) 
       )}
 
       {contactos.length === 0 && !adding && (
-        <Card>
-          <CardContent className="py-8 text-center text-sm text-muted-foreground">
-            Sin contactos cargados. Agregá uno para tener referencias rápidas.
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={User}
+          title="Sin contactos"
+          description="Agregá un contacto para tener referencias rápidas."
+        />
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

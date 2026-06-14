@@ -33,6 +33,7 @@ import {
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { ProveedorForm } from "./proveedor-form"
 import { useCurrency } from "@/contexts/currency-context"
+import { EmptyState } from "@/components/ui/empty-state"
 
 interface Proveedor {
   id: string
@@ -223,55 +224,33 @@ export function ProveedoresList() {
       {loading ? (
         <div className="text-center py-8 text-muted-foreground">Cargando...</div>
       ) : filtered.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center space-y-4">
-            {proveedores.length === 0 ? (
-              <>
-                <div className="mx-auto h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
-                  <Package className="h-8 w-8 text-primary" />
-                </div>
-                <div className="space-y-1">
-                  <h3 className="font-semibold text-base">Empezá a registrar tus proveedores</h3>
-                  <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-                    Llevá un control de contactos, precios, condiciones de pago y órdenes de compra. Vinculá items de inventario y compará precios entre proveedores.
-                  </p>
-                </div>
-                <div className="flex gap-2 justify-center flex-wrap pt-2">
-                  <Button onClick={() => { setEditingProveedor(null); setShowForm(true) }}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Crear primer proveedor
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground pt-2">
-                  Tip: cargá el CUIT y condición IVA para facturación A.
-                </p>
-              </>
-            ) : (
-              <>
-                <div className="mx-auto h-12 w-12 rounded-full bg-muted flex items-center justify-center">
-                  <Search className="h-5 w-5 text-muted-foreground" />
-                </div>
-                <div className="space-y-1">
-                  <h3 className="font-semibold text-sm">Sin resultados</h3>
-                  <p className="text-xs text-muted-foreground">
-                    Ningún proveedor coincide con los filtros aplicados.
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setSearch("")
-                    setEstadoFilter("todos")
-                    setTagFilter("__all__")
-                  }}
-                >
-                  Limpiar filtros
-                </Button>
-              </>
-            )}
-          </CardContent>
-        </Card>
+        proveedores.length === 0 ? (
+          <EmptyState
+            variant="default"
+            icon={Package}
+            title="Empezá a registrar tus proveedores"
+            description="Llevá un control de contactos, precios, condiciones de pago y órdenes de compra. Vinculá items de inventario y compará precios entre proveedores."
+            action={{
+              label: "Crear primer proveedor",
+              onClick: () => { setEditingProveedor(null); setShowForm(true) },
+            }}
+          />
+        ) : (
+          <EmptyState
+            variant="search"
+            icon={Search}
+            title="Sin resultados"
+            description="Ningún proveedor coincide con los filtros aplicados."
+            action={{
+              label: "Limpiar filtros",
+              onClick: () => {
+                setSearch("")
+                setEstadoFilter("todos")
+                setTagFilter("__all__")
+              },
+            }}
+          />
+        )
       ) : (
         <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((proveedor) => {
@@ -370,7 +349,7 @@ export function ProveedoresList() {
                         {proveedor.activo ? (
                           <Archive className="h-4 w-4" />
                         ) : (
-                          <ArchiveRestore className="h-4 w-4 text-emerald-600" />
+                          <ArchiveRestore className="h-4 w-4 text-success-600" />
                         )}
                       </Button>
                     </div>

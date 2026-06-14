@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { EmptyState } from "@/components/ui/empty-state"
+import { FieldSectionLabel } from "@/components/ui/field-section-label"
 
 interface Adjunto {
   id: string
@@ -26,10 +28,10 @@ const fetcher = (url: string) => fetch(url).then(r => r.json())
 
 function fileIcon(mime: string | null) {
   if (!mime) return <FileIcon className="h-5 w-5" />
-  if (mime === "application/pdf") return <FileText className="h-5 w-5 text-red-500" />
-  if (mime.startsWith("image/")) return <FileImage className="h-5 w-5 text-blue-500" />
+  if (mime === "application/pdf") return <FileText className="h-5 w-5 text-destructive" />
+  if (mime.startsWith("image/")) return <FileImage className="h-5 w-5 text-info-500" />
   if (mime.includes("excel") || mime.includes("spreadsheet") || mime === "text/csv")
-    return <FileSpreadsheet className="h-5 w-5 text-emerald-500" />
+    return <FileSpreadsheet className="h-5 w-5 text-success-500" />
   return <FileIcon className="h-5 w-5" />
 }
 
@@ -110,7 +112,7 @@ export function ProveedorAdjuntosTab({ proveedorId }: { proveedorId: string }) {
     <div className="space-y-3">
       <Card>
         <CardContent className="p-4 space-y-3">
-          <h3 className="font-semibold text-sm">Subir archivo</h3>
+          <FieldSectionLabel>Subir archivo</FieldSectionLabel>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label>Nombre (opcional)</Label>
@@ -158,11 +160,11 @@ export function ProveedorAdjuntosTab({ proveedorId }: { proveedorId: string }) {
       </Card>
 
       {adjuntos.length === 0 ? (
-        <Card>
-          <CardContent className="py-8 text-center text-sm text-muted-foreground">
-            Sin adjuntos. Subí la lista de precios o catálogo del proveedor.
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={Upload}
+          title="Sin adjuntos"
+          description="Subí la lista de precios o catálogo del proveedor."
+        />
       ) : (
         <Card>
           <CardContent className="p-0">

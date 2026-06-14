@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { useCurrency } from "@/contexts/currency-context"
+import { EmptyState } from "@/components/ui/empty-state"
 
 interface CatalogoItem {
   id: string
@@ -228,11 +229,11 @@ export function ProveedorCatalogoTab({ proveedorId }: { proveedorId: string }) {
       )}
 
       {items.length === 0 && !adding ? (
-        <Card>
-          <CardContent className="py-8 text-center text-sm text-muted-foreground">
-            Sin items en catálogo. Cargá los productos que ofrece el proveedor con su precio de referencia.
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={Link2}
+          title="Sin items en catálogo"
+          description="Cargá los productos que ofrece el proveedor con su precio de referencia."
+        />
       ) : (
         <Card>
           <CardContent className="p-0">
@@ -264,11 +265,11 @@ export function ProveedorCatalogoTab({ proveedorId }: { proveedorId: string }) {
                           {i.unidad && <span className="text-[10px] text-muted-foreground ml-1">/ {i.unidad}</span>}
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap">
-                          <span className={stale ? "text-amber-600" : ""}>
+                          <span className={stale ? "text-warning-600" : ""}>
                             {fmtDate(i.precioActualizadoAt)}
                           </span>
                           {stale && (
-                            <span className="ml-1 inline-flex items-center text-[10px] text-amber-600">
+                            <span className="ml-1 inline-flex items-center text-[10px] text-warning-600">
                               <AlertCircle className="h-3 w-3 mr-0.5" />
                               {dias}d
                             </span>
