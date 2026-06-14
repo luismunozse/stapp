@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { revalidateTag } from "next/cache"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaEscritura } from "@/lib/sucursal"
 import { z } from "zod"
 
 const ajusteSchema = z.object({
@@ -70,7 +71,7 @@ export async function GET(request: Request) {
 // POST - crear ajuste atómico
 export async function POST(request: Request) {
   try {
-    const { error, organizationId, userId } = await requireAdmin()
+    const { error, organizationId, userId, role } = await requireAdmin()
     if (error) return error
 
     const body = await request.json()
@@ -86,6 +87,13 @@ export async function POST(request: Request) {
 
     if (!item) return NextResponse.json({ error: "Item no encontrado" }, { status: 404 })
 
+    // Resolve write-path sucursal (stamps sucursal_id on the new ajuste row)
+    const sucursalId = await sucursalParaEscritura({
+      role: role ?? "ADMIN",
+      organizationId: organizationId!,
+      userSucursalId: null,
+    })
+
     const { data: result, error: rpcError } = await supabaseAdmin.rpc("aplicar_ajuste_inventario", {
       p_inventario_id: data.inventarioId,
       p_tipo: data.tipo,
@@ -95,6 +103,7 @@ export async function POST(request: Request) {
       p_comprobante_url: data.comprobanteUrl || null,
       p_afecta_rentabilidad: data.afectaRentabilidad,
       p_user_id: userId!,
+      p_sucursal_id: sucursalId,
     })
 
     if (rpcError) throw rpcError
