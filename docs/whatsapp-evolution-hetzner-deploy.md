@@ -19,11 +19,12 @@ Plan B de `whatsapp-evolution-oracle-deploy.md` cuando Oracle ARM no tiene cupo 
 1. Creá cuenta en **Hetzner Cloud** (https://console.hetzner.cloud). Cuentas nuevas a veces piden verificación de identidad/pago — normal.
 2. Creá un **Project** (ej. `stapp-whatsapp`).
 3. **Add Server**:
-   - **Location**: **Ashburn (US-East)** o **Hillsboro (US-West)** — más cerca de Argentina = menos latencia. (EU Falkenstein también sirve; la latencia no es crítica acá.)
    - **Image**: **Ubuntu 22.04**.
-   - **Type**:
-     - **CAX11** (Arm64, 2 vCPU / 4 GB / 40 GB, ~€3.79/mes) — **recomendado**, el más barato y alcanza sobrado.
-     - Alternativa x86: **CX22** (2 vCPU / 4 GB, ~€4.5/mes).
+   - **Type + Location** (atención, los ARM son EU-only):
+     - **CX22** (x86, 2 vCPU / 4 GB, ~€4.5/mes) — disponible en **todas** las locations (US Ashburn/Hillsboro y EU). **Recomendado para arrancar sin trabas.**
+     - **CAX11** (Arm64, 2 vCPU / 4 GB / 40 GB, ~€3.79/mes) — más barato, pero **solo en EU** (Falkenstein / Nuremberg / Helsinki). Si elegís location US, NO aparece.
+   - **Location**: cualquiera sirve (latencia a Argentina ~200ms en US o EU). Si vas con CAX11, tiene que ser **EU**.
+   - Nota cloudflared (Parte 4): CX22 = binario **`amd64`**; CAX11 = **`arm64`**.
    - **SSH key**: agregá tu clave pública (Add SSH key → pegás tu `id_ed25519.pub` o `id_rsa.pub`). Sin esto no entrás.
    - **Firewall**: opcional. Si lo activás, permití **solo inbound TCP 22 (SSH)**. Con Cloudflare Tunnel **no** necesitás abrir 80/443 (el túnel sale por conexión saliente).
    - El resto (volumes, backups, placement): default. Backups de Hetzner (+20%) son opcionales — recomendable si querés snapshot automático de la sesión.
