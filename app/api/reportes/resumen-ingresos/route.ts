@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server"
 import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaLectura } from "@/lib/sucursal"
 import { getDeviceTypeLabel } from "@/lib/device-types"
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAdminOrVendedor()
+    const { error, organizationId, role } = await requireAdminOrVendedor()
     if (error) return error
+
+    const filtro = await sucursalParaLectura({ role, userSucursalId: null })
 
     const { searchParams } = new URL(request.url)
     const meses = parseInt(searchParams.get("meses") || "6")
@@ -17,46 +20,59 @@ export async function GET(request: Request) {
 
     const desdeISO = fechaDesde.toISOString()
 
-    // Facturas pagadas
-    const { data: facturas, error: facturasError } = await supabaseAdmin
+    // Facturas pagadas (branch-filtered via ordenes_servicio!inner)
+    let facturasQuery = supabaseAdmin
       .from("facturas")
       .select(`
         id, total, fecha, orden_id,
         ordenes_servicio!inner (
-          id, organization_id, tipo_dispositivo, dispositivo,
+          id, organization_id, sucursal_id, tipo_dispositivo, dispositivo,
           tipos_dispositivo:tipo_dispositivo_id(nombre)
         )
       `)
       .eq("ordenes_servicio.organization_id", organizationId!)
       .eq("estado_pago", "PAGADO")
       .gte("fecha", desdeISO)
+    if (!filtro.verTodas && filtro.sucursalId) {
+      facturasQuery = facturasQuery.eq("ordenes_servicio.sucursal_id", filtro.sucursalId)
+    }
 
+    const { data: facturas, error: facturasError } = await facturasQuery
     if (facturasError) throw facturasError
 
-    // Ventas completadas
-    const { data: ventas, error: ventasError } = await supabaseAdmin
+    // Ventas completadas (branch-filtered directly)
+    let ventasQuery = supabaseAdmin
       .from("ventas")
       .select("id, total, created_at")
       .eq("organization_id", organizationId!)
       .eq("estado", "COMPLETADA")
       .gte("created_at", desdeISO)
+    if (!filtro.verTodas && filtro.sucursalId) {
+      ventasQuery = ventasQuery.eq("sucursal_id", filtro.sucursalId)
+    }
 
+    const { data: ventas, error: ventasError } = await ventasQuery
     if (ventasError) throw ventasError
 
-    // Cobros directos a órdenes (sin factura formal)
-    const { data: cobros, error: cobrosError } = await supabaseAdmin
+    // Cobros directos a órdenes (branch-filtered via ordenes_servicio!inner)
+    let cobrosQuery = supabaseAdmin
       .from("cobros_orden")
       .select(`
         id, monto, created_at, orden_id,
         ordenes_servicio!inner (
-          tipo_dispositivo, dispositivo,
+          organization_id, sucursal_id, tipo_dispositivo, dispositivo,
           tipos_dispositivo:tipo_dispositivo_id(nombre)
         )
       `)
       .eq("organization_id", organizationId!)
+      .eq("ordenes_servicio.organization_id", organizationId!)
       .neq("anulado", true)
       .gte("created_at", desdeISO)
+    if (!filtro.verTodas && filtro.sucursalId) {
+      cobrosQuery = cobrosQuery.eq("ordenes_servicio.sucursal_id", filtro.sucursalId)
+    }
 
+    const { data: cobros, error: cobrosError } = await cobrosQuery
     if (cobrosError) throw cobrosError
 
     // Set de órdenes con cobro directo — para excluir factura duplicada

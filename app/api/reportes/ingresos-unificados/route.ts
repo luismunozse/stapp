@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server"
 import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaLectura } from "@/lib/sucursal"
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAdminOrVendedor()
+    const { error, organizationId, role } = await requireAdminOrVendedor()
     if (error) return error
+
+    const filtro = await sucursalParaLectura({ role, userSucursalId: null })
 
     const { searchParams } = new URL(request.url)
     const desde = searchParams.get("desde")
@@ -23,7 +26,7 @@ export async function GET(request: Request) {
       fechaDesde.setDate(fechaDesde.getDate() - 30)
     }
 
-    // Obtener ventas POS completadas
+    // Obtener ventas POS completadas (branch-filtered directly)
     let ventasData: any[] = []
     if (!tipo || tipo === "VENTA") {
       let ventasQuery = supabaseAdmin
@@ -33,6 +36,10 @@ export async function GET(request: Request) {
         .eq("estado", "COMPLETADA")
         .gte("created_at", fechaDesde.toISOString())
         .order("created_at", { ascending: false })
+
+      if (!filtro.verTodas && filtro.sucursalId) {
+        ventasQuery = ventasQuery.eq("sucursal_id", filtro.sucursalId)
+      }
 
       if (fechaHasta) {
         ventasQuery = ventasQuery.lte("created_at", fechaHasta.toISOString())
@@ -53,6 +60,7 @@ export async function GET(request: Request) {
     }
 
     // Obtener ingresos de facturas de servicio + cobros directos (dedupe por orden)
+    // Branch filter: facturas via ordenes_servicio!inner, cobros via ordenes_servicio!inner
     let facturasData: any[] = []
     let cobrosData: any[] = []
     if (!tipo || tipo === "SERVICIO") {
@@ -61,13 +69,17 @@ export async function GET(request: Request) {
         .select(`
           id, numero_factura, total, estado_pago, fecha, orden_id,
           ordenes_servicio!inner (
-            id, organization_id,
+            id, organization_id, sucursal_id,
             clientes (nombre)
           )
         `)
         .eq("ordenes_servicio.organization_id", organizationId!)
         .gte("fecha", fechaDesde.toISOString())
         .order("fecha", { ascending: false })
+
+      if (!filtro.verTodas && filtro.sucursalId) {
+        facturasQuery = facturasQuery.eq("ordenes_servicio.sucursal_id", filtro.sucursalId)
+      }
 
       if (fechaHasta) {
         facturasQuery = facturasQuery.lte("fecha", fechaHasta.toISOString())
@@ -78,14 +90,19 @@ export async function GET(request: Request) {
         .select(`
           id, monto, created_at, orden_id, metodo_pago,
           ordenes_servicio!inner (
-            id, organization_id, numero_orden, codigo_orden,
+            id, organization_id, sucursal_id, numero_orden, codigo_orden,
             clientes (nombre)
           )
         `)
         .eq("organization_id", organizationId!)
+        .eq("ordenes_servicio.organization_id", organizationId!)
         .neq("anulado", true)
         .gte("created_at", fechaDesde.toISOString())
         .order("created_at", { ascending: false })
+
+      if (!filtro.verTodas && filtro.sucursalId) {
+        cobrosQuery = cobrosQuery.eq("ordenes_servicio.sucursal_id", filtro.sucursalId)
+      }
 
       if (fechaHasta) {
         cobrosQuery = cobrosQuery.lte("created_at", fechaHasta.toISOString())

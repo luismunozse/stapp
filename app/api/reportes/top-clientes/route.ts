@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaLectura } from "@/lib/sucursal"
 
 interface ClienteTop {
   clienteId: string
@@ -19,8 +20,10 @@ interface ClienteTop {
  */
 export async function GET(request: NextRequest) {
   try {
-    const { error, organizationId } = await requireAdminOrVendedor()
+    const { error, organizationId, role } = await requireAdminOrVendedor()
     if (error) return error
+
+    const filtro = await sucursalParaLectura({ role, userSucursalId: null })
 
     const searchParams = request.nextUrl.searchParams
     const tipo = searchParams.get("tipo") || "ordenes" // 'ordenes' | 'monto'
@@ -34,11 +37,17 @@ export async function GET(request: NextRequest) {
 
     if (clientesError) throw clientesError
 
-    // Query 2: Get ordenes with facturas (separate queries to avoid nested embed issues)
-    const { data: ordenes, error: ordenesError } = await supabaseAdmin
+    // Query 2: Get ordenes with facturas, branch-filtered directly on ordenes_servicio
+    let ordenesQuery = supabaseAdmin
       .from("ordenes_servicio")
       .select("id, cliente_id, fecha_ingreso, facturas(total, estado_pago)")
       .eq("organization_id", organizationId!)
+
+    if (!filtro.verTodas && filtro.sucursalId) {
+      ordenesQuery = ordenesQuery.eq("sucursal_id", filtro.sucursalId)
+    }
+
+    const { data: ordenes, error: ordenesError } = await ordenesQuery
 
     if (ordenesError) throw ordenesError
 
