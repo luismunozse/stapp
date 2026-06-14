@@ -1,14 +1,14 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import Link from "next/link"
 import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowLeft, Loader2, Search, BarChart3, Flame, TrendingUp, TrendingDown, Skull, Sparkles, Download } from "lucide-react"
+import { Loader2, Search, BarChart3, Flame, TrendingUp, TrendingDown, Skull, Sparkles, Download } from "lucide-react"
+import { PageShell } from "@/components/ui/page-shell"
 import { useCurrency } from "@/contexts/currency-context"
 
 type AbcClass = "A" | "B" | "C" | "SIN_VENTAS"
@@ -120,28 +120,18 @@ export default function AnalisisAbcPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-3">
-          <Link href="/inventario">
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
-              <BarChart3 className="h-6 w-6 text-primary" /> Análisis ABC + Rotación
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Clasifica items por revenue (Pareto) y velocidad de rotación. Detecta dead stock y capital inmovilizado.
-            </p>
-          </div>
-        </div>
+    <PageShell
+      title="Análisis ABC + Rotación"
+      description="Clasifica items por revenue (Pareto) y velocidad de rotación. Detecta dead stock y capital inmovilizado."
+      icon={BarChart3}
+      backHref="/inventario"
+      actions={
         <Button variant="outline" size="sm" onClick={exportCsv} disabled={!data}>
           <Download className="h-3.5 w-3.5 mr-1" /> Exportar CSV
         </Button>
-      </div>
-
+      }
+      className="space-y-4"
+    >
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-2">
           <label className="text-xs text-muted-foreground">Período</label>
@@ -346,6 +336,6 @@ export default function AnalisisAbcPage() {
           </CardContent>
         </Card>
       )}
-    </div>
+    </PageShell>
   )
 }

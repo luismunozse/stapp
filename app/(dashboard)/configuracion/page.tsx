@@ -8,6 +8,7 @@ import { ClipboardCheck, ChevronRight, CreditCard, FileSpreadsheet, Smartphone, 
 import { canEditConfiguration } from "@/lib/auth-utils"
 import { SecuritySettings } from "@/components/configuracion/security-settings"
 import { supabaseAdmin } from "@/lib/supabase"
+import { PageShell } from "@/components/ui/page-shell"
 
 export default async function ConfiguracionPage() {
   const session = await auth()
@@ -32,13 +33,7 @@ export default async function ConfiguracionPage() {
   const totpEnabled = userData?.totp_enabled || false
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-bold">Configuracion</h1>
-        <p className="text-sm sm:text-base text-muted-foreground">
-          Personaliza la apariencia de tu aplicacion
-        </p>
-      </div>
+    <PageShell title="Configuracion" description="Personaliza la apariencia de tu aplicacion">
 
       {/* Links a configuraciones adicionales */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
@@ -315,6 +310,6 @@ export default async function ConfiguracionPage() {
       <ConfiguracionForm allowEdit={allowEdit} />
 
       <CookieSettings />
-    </div>
+    </PageShell>
   )
 }

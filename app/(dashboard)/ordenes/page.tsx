@@ -1,16 +1,13 @@
 import { OrdenesList } from "@/components/ordenes/ordenes-list"
+import { PageShell } from "@/components/ui/page-shell"
 
 export default function OrdenesPage() {
   return (
-    <div className="space-y-4 sm:space-y-6">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-bold">Órdenes de Servicio</h1>
-        <p className="text-sm text-muted-foreground">
-          Gestiona las órdenes de servicio y su estado
-        </p>
-      </div>
+    <PageShell
+      title="Órdenes de Servicio"
+      description="Gestiona las órdenes de servicio y su estado"
+    >
       <OrdenesList />
-    </div>
+    </PageShell>
   )
 }
-
