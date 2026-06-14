@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import useSWR from "swr"
 import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
+import { StatCard } from "@/components/dashboard/stat-card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -311,31 +312,33 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
 
       {/* KPIs */}
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
-        <KpiCard
-          icon={<Wallet className="h-4 w-4" />}
-          label="Comisión pendiente"
+        <StatCard
+          icon={Wallet}
+          title="Comisión pendiente"
           value={formatPrice(totalPendiente)}
-          hint={`${pendientes.length} orden(es)`}
-          accent="primary"
+          description={`${pendientes.length} orden(es)`}
+          tone="default"
         />
-        <KpiCard
-          icon={<CheckCircle2 className="h-4 w-4" />}
-          label="Comisión pagada"
+        <StatCard
+          icon={CheckCircle2}
+          title="Comisión pagada"
           value={formatPrice(totalPagado)}
-          hint={`${pagadas.length} orden(es)`}
-          accent="success"
+          description={`${pagadas.length} orden(es)`}
+          tone="success"
         />
-        <KpiCard
-          icon={<TrendingUp className="h-4 w-4" />}
-          label="Ganancia generada"
+        <StatCard
+          icon={TrendingUp}
+          title="Ganancia generada"
           value={formatPrice(totalGanancia)}
-          hint={`Ticket prom. ${formatPrice(ticketPromedio)}`}
+          description={`Ticket prom. ${formatPrice(ticketPromedio)}`}
+          tone="default"
         />
-        <KpiCard
-          icon={<Percent className="h-4 w-4" />}
-          label="Comisión promedio"
+        <StatCard
+          icon={Percent}
+          title="Comisión promedio"
           value={formatPrice(comisionPromedio)}
-          hint={`% base: ${Number(porcentajeDefault ?? 0).toFixed(2)}%`}
+          description={`% base: ${Number(porcentajeDefault ?? 0).toFixed(2)}%`}
+          tone="default"
         />
       </div>
 
@@ -518,46 +521,3 @@ export function TecnicoComisiones({ tecnicoId, tecnicoNombre, porcentajeDefault,
   )
 }
 
-function KpiCard({
-  icon,
-  label,
-  value,
-  hint,
-  accent,
-}: {
-  icon: React.ReactNode
-  label: string
-  value: string
-  hint?: string
-  accent?: "primary" | "success"
-}) {
-  return (
-    <Card>
-      <CardContent className="p-3 sm:p-4">
-        <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-          <span>{label}</span>
-          <span
-            className={cn(
-              "p-1 rounded-md",
-              accent === "primary" && "bg-primary/10 text-primary",
-              accent === "success" && "bg-success-100/60 text-success-700 dark:bg-success/15 dark:text-success-400",
-              !accent && "bg-muted text-muted-foreground"
-            )}
-          >
-            {icon}
-          </span>
-        </div>
-        <div
-          className={cn(
-            "text-xl sm:text-2xl font-bold truncate",
-            accent === "primary" && "text-primary",
-            accent === "success" && "text-success-600"
-          )}
-        >
-          {value}
-        </div>
-        {hint && <div className="text-[11px] text-muted-foreground mt-0.5">{hint}</div>}
-      </CardContent>
-    </Card>
-  )
-}

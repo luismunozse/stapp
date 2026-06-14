@@ -15,10 +15,10 @@ import {
   AlertTriangle,
   Info,
   Download,
-  ArrowUp,
-  ArrowDown,
   Receipt,
 } from "lucide-react"
+import { StatCard } from "@/components/dashboard/stat-card"
+import type { StatChange } from "@/components/dashboard/stat-card"
 import { useCurrency } from "@/contexts/currency-context"
 import { EmptyState } from "@/components/ui/empty-state"
 import { StatusBanner } from "@/components/ui/status-banner"
@@ -308,52 +308,61 @@ export function EstadoResultados() {
         <>
           {/* Tarjetas resumen */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <SummaryCard
-              icon={<TrendingUp className="h-5 w-5" />}
-              label="Ingresos"
+            <StatCard
+              icon={TrendingUp}
+              title="Ingresos"
               value={formatPrice(data.ingresos.total)}
-              prev={dataPrev?.ingresos.total}
-              current={data.ingresos.total}
-              color="text-info-600"
-              bg="bg-info-50 dark:bg-info/15"
-              positiveIsGood
+              tone="info"
+              change={(() => {
+                const prev = dataPrev?.ingresos.total
+                if (prev === undefined || prev === 0) return prev === 0 && data.ingresos.total !== 0 ? null : undefined
+                const pct = ((data.ingresos.total - prev) / Math.abs(prev)) * 100
+                if (Math.abs(pct) < 0.1) return undefined
+                return { pct: Math.round(pct * 10) / 10, direction: pct > 0 ? "up" : "down" } satisfies StatChange
+              })()}
             />
-            <SummaryCard
-              icon={<DollarSign className="h-5 w-5" />}
-              label="Ganancia bruta"
+            <StatCard
+              icon={DollarSign}
+              title="Ganancia bruta"
               value={formatPrice(data.gananciaBruta)}
-              subtitle={`Margen ${data.margenBruto}%`}
-              prev={dataPrev?.gananciaBruta}
-              current={data.gananciaBruta}
-              color="text-success-600"
-              bg="bg-success-50 dark:bg-success/15"
-              positiveIsGood
+              description={`Margen ${data.margenBruto}%`}
+              tone="success"
+              change={(() => {
+                const prev = dataPrev?.gananciaBruta
+                if (prev === undefined || prev === 0) return prev === 0 && data.gananciaBruta !== 0 ? null : undefined
+                const pct = ((data.gananciaBruta - prev) / Math.abs(prev)) * 100
+                if (Math.abs(pct) < 0.1) return undefined
+                return { pct: Math.round(pct * 10) / 10, direction: pct > 0 ? "up" : "down" } satisfies StatChange
+              })()}
             />
-            <SummaryCard
-              icon={<TrendingDown className="h-5 w-5" />}
-              label="Gastos operativos"
+            <StatCard
+              icon={TrendingDown}
+              title="Gastos operativos"
               value={formatPrice(data.gastos.total)}
-              prev={dataPrev?.gastos.total}
-              current={data.gastos.total}
-              color="text-warning-600"
-              bg="bg-warning-50 dark:bg-warning/10"
-              positiveIsGood={false}
+              tone="warning"
+              change={(() => {
+                const prev = dataPrev?.gastos.total
+                if (prev === undefined || prev === 0) return prev === 0 && data.gastos.total !== 0 ? null : undefined
+                const pct = ((data.gastos.total - prev) / Math.abs(prev)) * 100
+                if (Math.abs(pct) < 0.1) return undefined
+                // positiveIsGood=false: spending more is bad, so direction flips
+                return { pct: Math.round(pct * 10) / 10, direction: pct > 0 ? "down" : "up" } satisfies StatChange
+              })()}
             />
-            <SummaryCard
-              icon={<Wallet className="h-5 w-5" />}
-              label="Ganancia neta"
+            <StatCard
+              icon={Wallet}
+              title="Ganancia neta"
               value={formatPrice(data.gananciaNeta)}
-              subtitle={`Margen ${data.margenNeto}%`}
-              prev={dataPrev?.gananciaNeta}
-              current={data.gananciaNeta}
-              color={data.gananciaNeta >= 0 ? "text-success-700" : "text-destructive"}
-              bg={
-                data.gananciaNeta >= 0
-                  ? "bg-success-50 dark:bg-success/15"
-                  : "bg-destructive/10 dark:bg-destructive/15"
-              }
-              highlight
-              positiveIsGood
+              description={`Margen ${data.margenNeto}%`}
+              tone={data.gananciaNeta >= 0 ? "success" : "danger"}
+              urgent
+              change={(() => {
+                const prev = dataPrev?.gananciaNeta
+                if (prev === undefined || prev === 0) return prev === 0 && data.gananciaNeta !== 0 ? null : undefined
+                const pct = ((data.gananciaNeta - prev) / Math.abs(prev)) * 100
+                if (Math.abs(pct) < 0.1) return undefined
+                return { pct: Math.round(pct * 10) / 10, direction: pct > 0 ? "up" : "down" } satisfies StatChange
+              })()}
             />
           </div>
 
@@ -485,69 +494,6 @@ export function EstadoResultados() {
         </>
       )}
     </div>
-  )
-}
-
-function SummaryCard({
-  icon,
-  label,
-  value,
-  subtitle,
-  prev,
-  current,
-  color,
-  bg,
-  highlight,
-  positiveIsGood = true,
-}: {
-  icon: React.ReactNode
-  label: string
-  value: string
-  subtitle?: string
-  prev?: number
-  current: number
-  color: string
-  bg: string
-  highlight?: boolean
-  positiveIsGood?: boolean
-}) {
-  // Calcular delta vs período anterior
-  let deltaText: string | null = null
-  let deltaColor = ""
-  let DeltaIcon: typeof ArrowUp | null = null
-  if (prev !== undefined && prev !== 0) {
-    const pct = ((current - prev) / Math.abs(prev)) * 100
-    if (Math.abs(pct) >= 0.1) {
-      const isUp = pct > 0
-      const isGood = positiveIsGood ? isUp : !isUp
-      deltaText = `${isUp ? "+" : ""}${pct.toFixed(1)}%`
-      deltaColor = isGood ? "text-success-600" : "text-destructive"
-      DeltaIcon = isUp ? ArrowUp : ArrowDown
-    }
-  } else if (prev === 0 && current !== 0) {
-    deltaText = "nuevo"
-    deltaColor = "text-muted-foreground"
-  }
-
-  return (
-    <Card className={highlight ? "border-2" : ""}>
-      <CardContent className="pt-6">
-        <div className="flex items-start justify-between">
-          <div className="space-y-1">
-            <p className="text-xs text-muted-foreground">{label}</p>
-            <p className={`text-xl sm:text-2xl font-bold ${color}`}>{value}</p>
-            {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
-            {deltaText && (
-              <p className={`text-xs flex items-center gap-0.5 ${deltaColor}`}>
-                {DeltaIcon && <DeltaIcon className="h-3 w-3" />}
-                {deltaText} <span className="text-muted-foreground ml-1">vs período anterior</span>
-              </p>
-            )}
-          </div>
-          <div className={`p-2 rounded-lg ${bg} ${color}`}>{icon}</div>
-        </div>
-      </CardContent>
-    </Card>
   )
 }
 
