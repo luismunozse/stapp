@@ -29,9 +29,6 @@ import {
   Check,
   ExternalLink,
   DollarSign,
-  Pencil,
-  Loader2,
-  X,
   MoreHorizontal,
   Search,
   Receipt,
@@ -67,6 +64,9 @@ import { OrdenRepuestosTab } from "@/components/ordenes/orden-repuestos-tab"
 import { CobrarOrdenDialog } from "@/components/ordenes/cobrar-orden-dialog"
 import { NotaCreditoDialog } from "@/components/notas-credito/nota-credito-dialog"
 import { PatternDisplay } from "@/components/ui/pattern-display"
+import { StatusBanner } from "@/components/ui/status-banner"
+import { FieldSectionLabel } from "@/components/ui/field-section-label"
+import { EditableTextField } from "@/components/ui/editable-text-field"
 import { useModal } from "@/contexts/modal-context"
 import { toast } from "sonner"
 import { useVisibilityPolling } from "@/hooks/use-visibility-polling"
@@ -107,15 +107,6 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const [showCobrarDialog, setShowCobrarDialog] = useState(false)
   const [showNCDialog, setShowNCDialog] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
-  const [editingProblema, setEditingProblema] = useState(false)
-  const [problemaText, setProblemaText] = useState("")
-  const [savingProblema, setSavingProblema] = useState(false)
-  const [editingDiagnostico, setEditingDiagnostico] = useState(false)
-  const [diagnosticoText, setDiagnosticoText] = useState("")
-  const [savingDiagnostico, setSavingDiagnostico] = useState(false)
-  const [editingNotasInternas, setEditingNotasInternas] = useState(false)
-  const [notasInternasText, setNotasInternasText] = useState("")
-  const [savingNotasInternas, setSavingNotasInternas] = useState(false)
 
   const isAdmin = session?.user?.role === "ADMIN"
   const userRole = session?.user?.role
@@ -124,82 +115,61 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
     ? `${typeof window !== "undefined" ? window.location.origin : ""}/seguimiento/${orden.publicToken}`
     : null
 
-  const handleSaveProblema = async () => {
-    if (!orden || problemaText.trim() === orden.problemaReportado) {
-      setEditingProblema(false)
-      return
-    }
-    setSavingProblema(true)
+  // Persist a single order text field. Returns true on success/no-op (closes the
+  // editor), false on error (keeps it open). Used by EditableTextField.
+  const saveOrdenField = async (
+    body: Record<string, unknown>,
+    patch: Partial<OrdenServicio>,
+    successMsg: string
+  ): Promise<boolean> => {
+    if (!orden) return false
     try {
       const res = await fetch(`/api/ordenes/${orden.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ problemaReportado: problemaText.trim() }),
+        body: JSON.stringify(body),
       })
       if (res.ok) {
-        setOrden({ ...orden, problemaReportado: problemaText.trim() })
-        setEditingProblema(false)
-        toast.success("Problema reportado actualizado")
-      } else {
-        toast.error("Error al guardar")
+        setOrden({ ...orden, ...patch })
+        toast.success(successMsg)
+        return true
       }
+      toast.error("Error al guardar")
+      return false
     } catch {
       toast.error("Error al guardar")
-    } finally {
-      setSavingProblema(false)
+      return false
     }
   }
 
-  const handleSaveDiagnostico = async () => {
-    if (!orden || diagnosticoText.trim() === (orden.diagnostico || "")) {
-      setEditingDiagnostico(false)
-      return
-    }
-    setSavingDiagnostico(true)
-    try {
-      const res = await fetch(`/api/ordenes/${orden.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ diagnostico: diagnosticoText.trim() || null }),
-      })
-      if (res.ok) {
-        setOrden({ ...orden, diagnostico: diagnosticoText.trim() || null })
-        setEditingDiagnostico(false)
-        toast.success("Diagnostico actualizado")
-      } else {
-        toast.error("Error al guardar")
-      }
-    } catch {
-      toast.error("Error al guardar")
-    } finally {
-      setSavingDiagnostico(false)
-    }
+  const handleSaveProblema = async (next: string): Promise<boolean> => {
+    const value = next.trim()
+    if (!orden || value === orden.problemaReportado) return true
+    return saveOrdenField(
+      { problemaReportado: value },
+      { problemaReportado: value },
+      "Problema reportado actualizado"
+    )
   }
 
-  const handleSaveNotasInternas = async () => {
-    if (!orden || notasInternasText.trim() === (orden.notasInternas || "")) {
-      setEditingNotasInternas(false)
-      return
-    }
-    setSavingNotasInternas(true)
-    try {
-      const res = await fetch(`/api/ordenes/${orden.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ notasInternas: notasInternasText.trim() || null }),
-      })
-      if (res.ok) {
-        setOrden({ ...orden, notasInternas: notasInternasText.trim() || null })
-        setEditingNotasInternas(false)
-        toast.success("Notas internas actualizadas")
-      } else {
-        toast.error("Error al guardar")
-      }
-    } catch {
-      toast.error("Error al guardar")
-    } finally {
-      setSavingNotasInternas(false)
-    }
+  const handleSaveDiagnostico = async (next: string): Promise<boolean> => {
+    const value = next.trim() || null
+    if (!orden || (value || "") === (orden.diagnostico || "")) return true
+    return saveOrdenField(
+      { diagnostico: value },
+      { diagnostico: value },
+      "Diagnostico actualizado"
+    )
+  }
+
+  const handleSaveNotasInternas = async (next: string): Promise<boolean> => {
+    const value = next.trim() || null
+    if (!orden || (value || "") === (orden.notasInternas || "")) return true
+    return saveOrdenField(
+      { notasInternas: value },
+      { notasInternas: value },
+      "Notas internas actualizadas"
+    )
   }
 
   const handleCopyLink = async () => {
@@ -747,35 +717,26 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
 
       {/* Banner de retiro sin reparación */}
       {isRetiro && (
-        <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-sm">
-          <Package className="h-4 w-4 text-amber-600 shrink-0" />
-          <span className="text-amber-800 dark:text-amber-300">
-            Retirado sin reparacion — El cliente retiro el equipo sin reparar.
-          </span>
-        </div>
+        <StatusBanner tone="warning" icon={Package}>
+          Retirado sin reparacion — El cliente retiro el equipo sin reparar.
+        </StatusBanner>
       )}
 
       {/* Banner de entrega sin cobro */}
       {isSinCobro && (
-        <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 text-sm">
-          <HandCoins className="h-4 w-4 text-green-600 shrink-0" />
-          <span className="text-green-800 dark:text-green-300">
-            Entregado sin cobro — El equipo fue entregado al cliente sin cargo.
-          </span>
-        </div>
+        <StatusBanner tone="success" icon={HandCoins}>
+          Entregado sin cobro — El equipo fue entregado al cliente sin cargo.
+        </StatusBanner>
       )}
 
       {/* Banner de re-ingreso */}
       {orden.esReingreso && orden.ordenOrigenId && (
-        <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-sm">
-          <Shield className="h-4 w-4 text-blue-600 shrink-0" />
-          <span className="text-blue-800 dark:text-blue-300">
-            Re-ingreso por garantia — Orden original:{" "}
-            <Link href={`/ordenes/${orden.ordenOrigenId}`} className="underline hover:text-blue-600">
-              ver orden original
-            </Link>
-          </span>
-        </div>
+        <StatusBanner tone="info" icon={Shield}>
+          Re-ingreso por garantia — Orden original:{" "}
+          <Link href={`/ordenes/${orden.ordenOrigenId}`} className="underline hover:text-blue-600">
+            ver orden original
+          </Link>
+        </StatusBanner>
       )}
 
       {/* Progress Bar */}
@@ -824,10 +785,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
               <div className="grid gap-6 md:grid-cols-2">
                 {/* Cliente */}
                 <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    <User className="h-3.5 w-3.5" />
-                    Cliente
-                  </div>
+                  <FieldSectionLabel icon={User}>Cliente</FieldSectionLabel>
                   <div className="space-y-2">
                     <h3 className="text-lg font-semibold">{orden.cliente?.nombre}</h3>
                     <div className="flex items-center gap-2 text-sm">
@@ -853,10 +811,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
 
                 {/* Dispositivo */}
                 <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    <Smartphone className="h-3.5 w-3.5" />
-                    Dispositivo
-                  </div>
+                  <FieldSectionLabel icon={Smartphone}>Dispositivo</FieldSectionLabel>
                   <div className="space-y-2">
                     {orden.marca && (
                       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{orden.marca}</p>
@@ -897,96 +852,26 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
 
               {/* Problema Reportado */}
               <div className="mt-6 pt-6 border-t">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    <Wrench className="h-3.5 w-3.5" />
-                    Problema Reportado
-                  </div>
-                  {!editingProblema && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 px-2 text-muted-foreground hover:text-foreground"
-                      onClick={() => {
-                        setProblemaText(orden.problemaReportado || "")
-                        setEditingProblema(true)
-                      }}
-                    >
-                      <Pencil className="h-3 w-3" />
-                    </Button>
-                  )}
-                </div>
-                {editingProblema ? (
-                  <div className="space-y-2">
-                    <textarea
-                      className="w-full min-h-[80px] p-2 text-sm border rounded-md resize-y bg-background"
-                      value={problemaText}
-                      onChange={(e) => setProblemaText(e.target.value)}
-                      disabled={savingProblema}
-                      autoFocus
-                    />
-                    <div className="flex gap-2 justify-end">
-                      <Button variant="ghost" size="sm" onClick={() => setEditingProblema(false)} disabled={savingProblema}>
-                        <X className="h-3 w-3 mr-1" />Cancelar
-                      </Button>
-                      <Button size="sm" onClick={handleSaveProblema} disabled={savingProblema || !problemaText.trim()}>
-                        {savingProblema ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Check className="h-3 w-3 mr-1" />}
-                        Guardar
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-sm whitespace-pre-wrap">{orden.problemaReportado}</p>
-                )}
+                <EditableTextField
+                  icon={Wrench}
+                  label="Problema Reportado"
+                  value={orden.problemaReportado || ""}
+                  onSave={handleSaveProblema}
+                  requireValue
+                />
               </div>
 
               {/* Diagnostico - visible desde EN_DIAGNOSTICO en adelante */}
               {(orden.estado !== "RECIBIDO" || orden.diagnostico) && (
                 <div className="mt-4 pt-4 border-t">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                      <Search className="h-3.5 w-3.5" />
-                      Diagnostico
-                    </div>
-                    {!editingDiagnostico && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2 text-muted-foreground hover:text-foreground"
-                        onClick={() => {
-                          setDiagnosticoText(orden.diagnostico || "")
-                          setEditingDiagnostico(true)
-                        }}
-                      >
-                        <Pencil className="h-3 w-3" />
-                      </Button>
-                    )}
-                  </div>
-                  {editingDiagnostico ? (
-                    <div className="space-y-2">
-                      <textarea
-                        className="w-full min-h-[80px] p-2 text-sm border rounded-md resize-y bg-background"
-                        value={diagnosticoText}
-                        onChange={(e) => setDiagnosticoText(e.target.value)}
-                        placeholder="Describir el diagnostico del equipo..."
-                        disabled={savingDiagnostico}
-                        autoFocus
-                      />
-                      <div className="flex gap-2 justify-end">
-                        <Button variant="ghost" size="sm" onClick={() => setEditingDiagnostico(false)} disabled={savingDiagnostico}>
-                          <X className="h-3 w-3 mr-1" />Cancelar
-                        </Button>
-                        <Button size="sm" onClick={handleSaveDiagnostico} disabled={savingDiagnostico}>
-                          {savingDiagnostico ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Check className="h-3 w-3 mr-1" />}
-                          Guardar
-                        </Button>
-                      </div>
-                    </div>
-                  ) : orden.diagnostico ? (
-                    <p className="text-sm whitespace-pre-wrap">{orden.diagnostico}</p>
-                  ) : (
-                    <p className="text-sm text-muted-foreground italic">Sin diagnostico aun. Haz clic en el lapiz para agregar.</p>
-                  )}
+                  <EditableTextField
+                    icon={Search}
+                    label="Diagnostico"
+                    value={orden.diagnostico || ""}
+                    onSave={handleSaveDiagnostico}
+                    placeholder="Describir el diagnostico del equipo..."
+                    emptyHint="Sin diagnostico aun. Haz clic en el lapiz para agregar."
+                  />
                 </div>
               )}
 
@@ -1008,51 +893,21 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
 
               {/* Notas internas - solo uso interno, no visible al cliente */}
               <div className="mt-4 pt-4 border-t">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2 text-xs font-medium text-amber-700 dark:text-amber-400 uppercase tracking-wider">
-                    <Lock className="h-3.5 w-3.5" />
-                    Notas internas
-                    <span className="text-[10px] font-normal normal-case text-muted-foreground">(no visibles para el cliente)</span>
-                  </div>
-                  {!editingNotasInternas && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 px-2 text-muted-foreground hover:text-foreground"
-                      onClick={() => {
-                        setNotasInternasText(orden.notasInternas || "")
-                        setEditingNotasInternas(true)
-                      }}
-                    >
-                      <Pencil className="h-3 w-3" />
-                    </Button>
-                  )}
-                </div>
-                {editingNotasInternas ? (
-                  <div className="space-y-2">
-                    <textarea
-                      className="w-full min-h-[80px] p-2 text-sm border rounded-md resize-y bg-amber-50/40 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900"
-                      value={notasInternasText}
-                      onChange={(e) => setNotasInternasText(e.target.value)}
-                      placeholder="Notas privadas del equipo (no se muestran al cliente)..."
-                      disabled={savingNotasInternas}
-                      autoFocus
-                    />
-                    <div className="flex gap-2 justify-end">
-                      <Button variant="ghost" size="sm" onClick={() => setEditingNotasInternas(false)} disabled={savingNotasInternas}>
-                        <X className="h-3 w-3 mr-1" />Cancelar
-                      </Button>
-                      <Button size="sm" onClick={handleSaveNotasInternas} disabled={savingNotasInternas}>
-                        {savingNotasInternas ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Check className="h-3 w-3 mr-1" />}
-                        Guardar
-                      </Button>
-                    </div>
-                  </div>
-                ) : orden.notasInternas ? (
-                  <p className="text-sm whitespace-pre-wrap bg-amber-50/40 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-md p-2">{orden.notasInternas}</p>
-                ) : (
-                  <p className="text-sm text-muted-foreground italic">Sin notas internas. Haz clic en el lapiz para agregar.</p>
-                )}
+                <EditableTextField
+                  icon={Lock}
+                  label={
+                    <>
+                      Notas internas
+                      <span className="text-[10px] font-normal normal-case text-muted-foreground">(no visibles para el cliente)</span>
+                    </>
+                  }
+                  value={orden.notasInternas || ""}
+                  onSave={handleSaveNotasInternas}
+                  placeholder="Notas privadas del equipo (no se muestran al cliente)..."
+                  emptyHint="Sin notas internas. Haz clic en el lapiz para agregar."
+                  textareaClassName="bg-amber-50/40 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900"
+                  valueClassName="bg-amber-50/40 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-md p-2"
+                />
               </div>
             </CardContent>
           </Card>

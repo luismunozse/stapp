@@ -89,9 +89,9 @@ export function OrdenEstadoCard({
         )}
 
         {fechaPrometidaVencida && (
-          <div className="flex items-center gap-2 p-2 rounded-md bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-xs">
-            <AlertTriangle className="h-3.5 w-3.5 text-red-600 shrink-0" />
-            <span className="text-red-700 dark:text-red-400 font-medium">
+          <div className="flex items-center gap-2 p-2 rounded-md bg-destructive/10 border border-destructive/25 text-xs">
+            <AlertTriangle className="h-3.5 w-3.5 text-destructive shrink-0" />
+            <span className="text-destructive font-medium">
               Fecha prometida vencida
             </span>
           </div>
