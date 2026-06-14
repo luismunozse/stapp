@@ -61,6 +61,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const estado = searchParams.get("estado") || ""
     const tecnicoId = searchParams.get("tecnicoId") || ""
+    const clienteId = searchParams.get("clienteId") || ""
     const search = searchParams.get("search") || ""
 
     // Filtros adicionales
@@ -129,6 +130,10 @@ export async function GET(request: Request) {
 
     if (tecnicoId) {
       query = query.eq("tecnico_id", tecnicoId)
+    }
+
+    if (clienteId) {
+      query = query.eq("cliente_id", clienteId)
     }
 
     if (fechaDesde) {
