@@ -6,6 +6,7 @@ import { toast } from "sonner"
 import {
   Phone, Mail, MessageCircle, Star, Trash2, Edit, Plus, Save, X, User,
 } from "lucide-react"
+import { ContactRow } from "./contact-row"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -231,22 +232,36 @@ export function ProveedorContactosTab({ proveedorId }: { proveedorId: string }) 
               </div>
               <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs pl-6">
                 {c.telefono && (
-                  <a href={`tel:${c.telefono}`} className="flex items-center gap-1 hover:text-primary">
-                    <Phone className="h-3 w-3 text-muted-foreground" />
+                  <ContactRow
+                    icon={Phone}
+                    href={`tel:${c.telefono}`}
+                    iconSize="xs"
+                    className="gap-1 hover:text-primary"
+                  >
                     {c.telefono}
-                  </a>
+                  </ContactRow>
                 )}
                 {c.whatsapp && (
-                  <a href={`https://wa.me/${c.whatsapp}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-green-600 hover:text-green-700">
-                    <MessageCircle className="h-3 w-3" />
+                  <ContactRow
+                    icon={MessageCircle}
+                    href={`https://wa.me/${c.whatsapp}`}
+                    external
+                    iconSize="xs"
+                    iconClassName="text-green-600"
+                    className="gap-1 text-green-600 hover:text-green-700"
+                  >
                     WhatsApp
-                  </a>
+                  </ContactRow>
                 )}
                 {c.email && (
-                  <a href={`mailto:${c.email}`} className="flex items-center gap-1 hover:text-primary min-w-0">
-                    <Mail className="h-3 w-3 text-muted-foreground shrink-0" />
+                  <ContactRow
+                    icon={Mail}
+                    href={`mailto:${c.email}`}
+                    iconSize="xs"
+                    className="gap-1 hover:text-primary min-w-0"
+                  >
                     <span className="truncate">{c.email}</span>
-                  </a>
+                  </ContactRow>
                 )}
               </div>
               {c.notas && <p className="text-xs text-muted-foreground pl-6 whitespace-pre-wrap">{c.notas}</p>}
