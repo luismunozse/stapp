@@ -44,3 +44,6 @@ nul
 
 # Sentry Config File
 .env.sentry-build-plugin
+
+# Claude Code worktrees (separate git repos, not submodules)
+.claude/worktrees/

@@ -437,6 +437,32 @@
   }
 }
 
+/* ResponsiveDialog (bottom-sheet) — animación móvil slide-up/down.
+   Solo <640px: en >=sm la animación zoom/fade la maneja tailwindcss-animate
+   vía clases sm:data-[state]. Easing fuerte de Emil (--ease-out). */
+@media (max-width: 639.98px) {
+  @keyframes sheet-in {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+  @keyframes sheet-out {
+    from { transform: translateY(0); }
+    to { transform: translateY(100%); }
+  }
+  .responsive-sheet[data-state="open"] {
+    animation: sheet-in 300ms var(--ease-out);
+  }
+  .responsive-sheet[data-state="closed"] {
+    animation: sheet-out 200ms var(--ease-out);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .responsive-sheet[data-state="open"],
+  .responsive-sheet[data-state="closed"] {
+    animation: none;
+  }
+}
+
 /* Branded spinner - usa el color primario del brand */
 @keyframes brand-spin {
   to { transform: rotate(360deg); }
@@ -458,7 +484,8 @@
 /* Transiciones globales para elementos interactivos */
 @layer utilities {
   .clickable-card {
-    @apply transition-all duration-200 cursor-pointer hover:shadow-lg;
+    @apply cursor-pointer hover:shadow-lg active:scale-[0.99];
+    transition: box-shadow 200ms var(--ease-out), transform 200ms var(--ease-out);
   }
 }
 

@@ -1145,6 +1145,46 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
                 const sinStock = item.stock === 0
                 return `${sinStock && !isArchived ? "bg-destructive/5" : ""} ${isArchived ? "opacity-50" : ""}`
               }}
+              renderMobileCard={(item) => {
+                const itemThreshold = item.stockMinimo ?? umbralStockBajo
+                const esStockBajo = item.stock <= itemThreshold
+                const sinStock = item.stock === 0
+                const margen = item.precioVenta - item.precioCompra
+                return (
+                  <div className="flex items-start gap-3">
+                    <div className="h-11 w-11 shrink-0 rounded-md overflow-hidden bg-muted/50 flex items-center justify-center border">
+                      {item.imagenUrl ? (
+                        <img src={item.imagenUrl} alt={item.nombre} className="h-full w-full object-cover" loading="lazy" />
+                      ) : (
+                        <Package className="h-5 w-5 text-muted-foreground/50" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium text-sm truncate">{item.nombre}</div>
+                      <div className="text-xs text-muted-foreground truncate">{item.codigo}</div>
+                      <div className="mt-1.5 flex items-center gap-2 text-sm">
+                        <span className="font-semibold">{formatPrice(item.precioVenta)}</span>
+                        {margen > 0 && (
+                          <span className="text-[11px] text-emerald-600 dark:text-emerald-400">+{formatPrice(margen)}</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                      {item.deletedAt ? (
+                        <span className="text-sm font-bold tabular-nums">{item.stock}</span>
+                      ) : (
+                        <QuickStockAdjust
+                          itemId={item.id}
+                          currentStock={item.stock}
+                          esStockBajo={esStockBajo}
+                          sinStock={sinStock}
+                          onAdjusted={() => setRefreshKey((k) => k + 1)}
+                        />
+                      )}
+                    </div>
+                  </div>
+                )
+              }}
               pagination={total > pageSize ? {
                 page,
                 pageSize,

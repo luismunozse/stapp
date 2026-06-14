@@ -62,6 +62,10 @@ export interface DataTableProps<T> {
   expandedKeys?: Set<string>
   // Usa padding reducido por celda (ideal para tablas anchas con muchas columnas)
   compact?: boolean
+  // Render alternativo en móvil (<sm): en vez de scroll horizontal de la tabla,
+  // muestra una pila de tarjetas. La tabla queda oculta en móvil. Si no se
+  // provee, se mantiene el comportamiento clásico (tabla con scroll-x).
+  renderMobileCard?: (item: T) => React.ReactNode
 }
 
 const EMPTY_KEYS: string[] = []
@@ -84,6 +88,7 @@ export function DataTable<T>({
   renderExpandedRow,
   expandedKeys,
   compact = false,
+  renderMobileCard,
 }: DataTableProps<T>) {
   const cellPad = compact ? "px-2 py-2" : "px-4 py-3"
   // Scroll shadow: detect if table is scrollable and show right-edge gradient
@@ -140,7 +145,51 @@ export function DataTable<T>({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border bg-card overflow-hidden relative">
+      {/* Móvil: pila de tarjetas (evita scroll horizontal de la tabla) */}
+      {renderMobileCard && (
+        <div className="sm:hidden space-y-2">
+          {loading ? (
+            Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="rounded-lg border bg-card p-4 animate-pulse space-y-2">
+                <div className="h-4 w-1/3 rounded bg-muted" />
+                <div className="h-3 w-2/3 rounded bg-muted" />
+                <div className="h-3 w-1/2 rounded bg-muted" />
+              </div>
+            ))
+          ) : data.length === 0 ? (
+            <div className="rounded-lg border bg-card">
+              <EmptyState
+                icon={FileX}
+                title={emptyMessage}
+                description="Intenta ajustar los filtros o crea un nuevo registro"
+              />
+            </div>
+          ) : (
+            data.map((item) => {
+              const key = keyExtractor(item)
+              return (
+                <div
+                  key={key}
+                  onClick={() => onRowClick?.(item)}
+                  className={cn(
+                    "rounded-lg border bg-card p-4 transition-transform",
+                    onRowClick && "cursor-pointer active:scale-[0.99] active:bg-muted/40",
+                    selectedKeys.includes(key) && "ring-1 ring-primary/40 bg-primary/5",
+                    rowClassName?.(item)
+                  )}
+                >
+                  {renderMobileCard(item)}
+                </div>
+              )
+            })
+          )}
+        </div>
+      )}
+
+      <div className={cn(
+        "rounded-lg border bg-card overflow-hidden relative",
+        renderMobileCard && "hidden sm:block"
+      )}>
         {/* Scroll shadow: visible gradient on right edge when content overflows */}
         <div
           className={cn(
