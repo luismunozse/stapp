@@ -1,5 +1,6 @@
 "use client"
 
+import { useRouter } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { User, Building2, Phone, Mail, MapPin, Edit, Trash2, PiggyBank, DollarSign, MoreHorizontal } from "lucide-react"
@@ -19,6 +20,7 @@ interface ClienteMobileCardProps {
 }
 
 export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCuentaCorriente, onCobrar, deleting }: ClienteMobileCardProps) {
+  const router = useRouter()
   const { formatDate } = useCurrency()
 
   return (
@@ -122,7 +124,10 @@ export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCue
         </div>
 
         {/* Info */}
-        <div className="space-y-1.5 text-sm">
+        <div
+          className="space-y-1.5 text-sm cursor-pointer"
+          onClick={() => router.push(`/clientes/${cliente.id}`)}
+        >
           <div className="flex items-center gap-2 text-muted-foreground">
             <Phone className="h-3.5 w-3.5 shrink-0" />
             <span>{cliente.telefono}</span>
