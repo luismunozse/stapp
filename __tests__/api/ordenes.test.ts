@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+﻿import { describe, it, expect, vi, beforeEach } from "vitest"
 import { NextResponse } from "next/server"
 import {
   mockAuthSuccess,
@@ -30,9 +30,18 @@ vi.mock("@/lib/storage", () => ({
   base64ToBuffer: vi.fn().mockReturnValue(Buffer.from("fake")),
 }))
 
+vi.mock("@/lib/push/send", () => ({
+  sendPushToUsers: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock("@/lib/notifications/queue", () => ({
+  queueNotification: vi.fn().mockResolvedValue(undefined),
+}))
+
 import { enforcePlanLimit } from "@/lib/plan-limits"
 import { auth } from "@/lib/auth"
 import { GET, POST } from "@/app/api/ordenes/route"
+import { queueNotification } from "@/lib/notifications/queue"
 
 describe("GET /api/ordenes", () => {
   beforeEach(() => {
@@ -230,7 +239,7 @@ describe("POST /api/ordenes", () => {
     mockAuthSuccess()
 
     vi.mocked(enforcePlanLimit).mockResolvedValueOnce(
-      NextResponse.json({ error: "Límite de órdenes alcanzado" }, { status: 403 }) as any
+      NextResponse.json({ error: "LÃ­mite de Ã³rdenes alcanzado" }, { status: 403 }) as any
     )
 
     const response = await POST(
@@ -244,5 +253,66 @@ describe("POST /api/ordenes", () => {
     const { status } = await parseResponse(response)
 
     expect(status).toBe(403)
+  })
+
+  it("queues CAMBIO_ESTADO notification with initial estado when order is created", async () => {
+    mockAuthSuccess()
+
+    const mockOrden = {
+      id: "o-new",
+      numero_orden: 2,
+      codigo_orden: "CEL-002",
+      cliente_id: "c1",
+      organization_id: "org-1",
+      tipo_dispositivo: "CELULAR",
+      dispositivo: "Samsung S24",
+      problema_reportado: "Pantalla rota",
+      estado: "RECIBIDO",
+      fecha_ingreso: "2024-01-01",
+      fecha_prometida: null,
+      public_token: "tok-abc123",
+      clientes: {
+        id: "c1",
+        nombre: "Maria Lopez",
+        email: "maria@test.com",
+        telefono: "+541112345678",
+      },
+    }
+
+    const ordenChain = createChainMock(mockOrden)
+    const orgChain = createChainMock({
+      nombre: "Mi Taller",
+      nombre_mostrar: "Mi Taller Pro",
+      slug: "mi-taller",
+      moneda: "ARS",
+      zona_horaria: "America/Argentina/Buenos_Aires",
+      logo_url: null,
+      telefono: null,
+      direccion: null,
+      comprobante_terminos: null,
+    })
+    mockSupabaseFrom({
+      ordenes_servicio: ordenChain,
+      organizations: orgChain,
+    })
+
+        const response = await POST(
+      createPostRequest({
+        clienteId: "c1",
+        dispositivo: "Samsung S24",
+        tipoDispositivo: "CELULAR",
+        problemaReportado: "Pantalla rota",
+      })
+    )
+    const { status } = await parseResponse(response)
+
+    expect(status).toBe(201)
+
+    const calls = vi.mocked(queueNotification).mock.calls
+    expect(calls.length).toBeGreaterThan(0)
+    const arg = calls[0][0]
+    expect(arg.tipo).toBe("CAMBIO_ESTADO")
+    expect(arg.context.orden?.estado).toBe("RECIBIDO")
+    expect(arg.context.orden?.publicToken).toBeTruthy()
   })
 })

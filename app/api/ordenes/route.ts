@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server"
+﻿import { NextResponse } from "next/server"
 import { randomBytes } from "crypto"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
@@ -7,6 +7,7 @@ import { createAuditLogger } from "@/lib/audit"
 import { uploadOrderPhoto, base64ToBuffer } from "@/lib/storage"
 import { enforcePlanLimit, isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
 import { formatOrden } from "@/lib/db-utils"
+import { queueNotification } from "@/lib/notifications/queue"
 import { sucursalParaEscritura, sucursalParaLectura } from "@/lib/sucursal"
 import { z } from "zod"
 
@@ -431,7 +432,7 @@ export async function POST(request: Request) {
     // Obtener datos de la organización para el mensaje de WhatsApp y comprobante térmico
     const { data: org } = await supabaseAdmin
       .from("organizations")
-      .select("nombre, nombre_mostrar, logo_url, telefono, direccion, comprobante_terminos")
+      .select("nombre, nombre_mostrar, slug, moneda, zona_horaria, logo_url, telefono, direccion, comprobante_terminos")
       .eq("id", organizationId!)
       .single()
 
@@ -455,6 +456,37 @@ export async function POST(request: Request) {
       organizationTelefono: org?.telefono ?? null,
       organizationDireccion: org?.direccion ?? null,
       organizationComprobanteTerminos: org?.comprobante_terminos ?? null,
+    }
+
+    // Fire-and-forget customer notification on order creation (reuses CAMBIO_ESTADO)
+    const clienteOrden = orden.clientes as { id: string; nombre: string; email: string | null; telefono: string | null } | null
+    if (clienteOrden) {
+      queueNotification({
+        organizationId: organizationId!,
+        ordenId: orden.id,
+        clienteId: clienteOrden.id,
+        tipo: "CAMBIO_ESTADO",
+        context: {
+          organizationName: org?.nombre_mostrar || org?.nombre || "",
+          organizationSlug: (org as any)?.slug,
+          moneda: (org as any)?.moneda || "ARS",
+          zonaHoraria: (org as any)?.zona_horaria || "America/Argentina/Buenos_Aires",
+          cliente: {
+            id: clienteOrden.id,
+            nombre: clienteOrden.nombre,
+            email: clienteOrden.email,
+            telefono: clienteOrden.telefono ?? "",
+          },
+          orden: {
+            id: orden.id,
+            numeroOrden: orden.numero_orden,
+            dispositivo: orden.dispositivo,
+            estado: estadoInicial,
+            estadoAnterior: undefined,
+            publicToken: orden.public_token,
+          },
+        },
+      }).catch((err) => console.error("Error queueing notification (orden creada):", err))
     }
 
     return NextResponse.json(ordenFormatted, { status: 201 })
