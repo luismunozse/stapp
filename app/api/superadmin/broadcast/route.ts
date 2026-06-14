@@ -80,6 +80,7 @@ export async function POST(request: Request) {
       .from("organizations")
       .select("id")
       .eq("activo", true)
+      .is("deleted_at", null)
 
     const activeOrgIds = activeOrgs?.map((o) => o.id) || []
 

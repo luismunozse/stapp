@@ -16,6 +16,7 @@ export async function GET(request: Request) {
     const plan = searchParams.get("plan") || ""
     const sort = searchParams.get("sort") || ""
     const dir = searchParams.get("dir") || "desc"
+    const includeArchived = searchParams.get("includeArchived") === "true"
     const { page, limit, offset } = parsePagination(searchParams)
 
     // Filtro por email del admin de la organización: resolver a org IDs vía
@@ -84,6 +85,7 @@ export async function GET(request: Request) {
       const { data: allOrgs } = await supabaseAdmin
         .from("organizations")
         .select("id")
+        .is("deleted_at", null)
       noActivityOrgIds = (allOrgs || [])
         .map((o) => o.id)
         .filter((id) => !activeOrgIds.includes(id))
@@ -114,6 +116,11 @@ export async function GET(request: Request) {
         { count: "exact" }
       )
       .order(sortColumn, { ascending })
+
+    // Por defecto ocultar organizaciones archivadas (soft-delete)
+    if (!includeArchived) {
+      query = query.is("deleted_at", null)
+    }
 
     // Filtro de búsqueda
     if (search) {
@@ -295,6 +302,7 @@ export async function GET(request: Request) {
     const { data: allOrgsForDup } = await supabaseAdmin
       .from("organizations")
       .select("id, nombre, slug")
+      .is("deleted_at", null)
 
     const dupGroups = new Map<string, { id: string; nombre: string; slug: string }[]>()
     for (const org of allOrgsForDup || []) {
@@ -362,17 +370,19 @@ export async function GET(request: Request) {
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
 
       const [totalRes, trialRes, premiumRes, newRes] = await Promise.all([
-        // Total de orgs activas
+        // Total de orgs activas (excluye archivadas)
         supabaseAdmin
           .from("organizations")
           .select("id", { count: "exact", head: true })
-          .eq("activo", true),
+          .eq("activo", true)
+          .is("deleted_at", null),
         // Activas en trial: plan FREE y activa (sin suscripción premium activa)
-        // Son las orgs activas que NO están en premiumOrgIds
+        // Son las orgs activas que NO están en premiumOrgIds (excluye archivadas)
         supabaseAdmin
           .from("organizations")
           .select("id", { count: "exact", head: true })
-          .eq("activo", true),
+          .eq("activo", true)
+          .is("deleted_at", null),
         // Premium: ya tenemos premiumOrgIds si lo calculamos antes, sino recalculamos
         premiumOrgIds
           ? Promise.resolve({ count: premiumOrgIds.length })
@@ -382,11 +392,12 @@ export async function GET(request: Request) {
               .eq("status", "ACTIVE")
               .not("payment_provider", "is", null)
               .eq("plans.tipo", "PREMIUM"),
-        // Nuevas este mes
+        // Nuevas este mes (excluye archivadas)
         supabaseAdmin
           .from("organizations")
           .select("id", { count: "exact", head: true })
-          .gte("created_at", startOfMonth),
+          .gte("created_at", startOfMonth)
+          .is("deleted_at", null),
       ])
 
       // Para trial necesitamos restar las premium de las activas
