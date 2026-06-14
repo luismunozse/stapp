@@ -7,6 +7,7 @@ import { Users, Package, BarChart3, Clock, AlertTriangle, DollarSign, Boxes, Sho
 import { Skeleton } from "@/components/ui/skeleton"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { ExportButton } from "./export-button"
+import { BranchScopeLabel } from "./branch-scope-label"
 
 // Loading skeleton para reportes
 function ReporteSkeleton() {
@@ -100,6 +101,7 @@ export function ReportesAvanzadosView() {
           <p className="text-muted-foreground">
             Analiza el rendimiento de tu taller con metricas detalladas
           </p>
+          <BranchScopeLabel />
         </div>
         {exportableReports[activeTab] && (
           <ExportButton reportType={exportableReports[activeTab]} />

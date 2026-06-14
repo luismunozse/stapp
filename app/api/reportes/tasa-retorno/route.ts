@@ -2,10 +2,11 @@ import { NextResponse } from "next/server"
 import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
+import { sucursalParaLectura } from "@/lib/sucursal"
 
 export async function GET() {
   try {
-    const { error, organizationId } = await requireAdminOrVendedor()
+    const { error, organizationId, role } = await requireAdminOrVendedor()
     if (error) return error
 
     const hasFeature = await hasPlanFeature(organizationId!, "advanced_reports")
@@ -19,6 +20,8 @@ export async function GET() {
     const seisAtras = new Date()
     seisAtras.setMonth(seisAtras.getMonth() - 6)
 
+    const filtro = await sucursalParaLectura({ role, userSucursalId: null })
+
     // Obtener clientes con cantidad de órdenes
     const { data: clientes } = await supabaseAdmin
       .from("clientes")
@@ -30,11 +33,17 @@ export async function GET() {
     }
 
     // Obtener órdenes de los últimos 6 meses agrupadas por cliente
-    const { data: ordenes } = await supabaseAdmin
+    let ordenesQuery = supabaseAdmin
       .from("ordenes_servicio")
       .select("cliente_id")
       .eq("organization_id", organizationId!)
       .gte("fecha_ingreso", seisAtras.toISOString())
+
+    if (!filtro.verTodas && filtro.sucursalId) {
+      ordenesQuery = ordenesQuery.eq("sucursal_id", filtro.sucursalId)
+    }
+
+    const { data: ordenes } = await ordenesQuery
 
     if (!ordenes || ordenes.length === 0) {
       return NextResponse.json({ tasaRetorno: 0, totalClientes: clientes.length, clientesRecurrentes: 0, topClientes: [] })

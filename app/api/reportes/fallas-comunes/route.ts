@@ -2,10 +2,11 @@ import { NextResponse } from "next/server"
 import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
+import { sucursalParaLectura } from "@/lib/sucursal"
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAdminOrVendedor()
+    const { error, organizationId, role } = await requireAdminOrVendedor()
     if (error) return error
 
     const hasFeature = await hasPlanFeature(organizationId!, "advanced_reports")
@@ -19,11 +20,17 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const tipoDispositivo = searchParams.get("tipo") || null
 
+    const filtro = await sucursalParaLectura({ role, userSucursalId: null })
+
     // Obtener problemas reportados y diagnósticos
     let query = supabaseAdmin
       .from("ordenes_servicio")
       .select("problema_reportado, diagnostico, tipo_dispositivo")
       .eq("organization_id", organizationId!)
+
+    if (!filtro.verTodas && filtro.sucursalId) {
+      query = query.eq("sucursal_id", filtro.sucursalId)
+    }
 
     if (tipoDispositivo) {
       query = query.eq("tipo_dispositivo", tipoDispositivo)

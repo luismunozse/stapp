@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
+import { sucursalParaLectura } from "@/lib/sucursal"
 
 interface TecnicoRentabilidad {
   tecnicoId: string
@@ -24,7 +25,7 @@ interface TecnicoRentabilidad {
  */
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAdminOrVendedor()
+    const { error, organizationId, role } = await requireAdminOrVendedor()
     if (error) return error
 
     const hasFeature = await hasPlanFeature(organizationId!, "advanced_reports")
@@ -64,7 +65,9 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "'desde' no puede ser posterior a 'hasta'" }, { status: 400 })
     }
 
-    const { data: ordenes, error: dbError } = await supabaseAdmin
+    const filtro = await sucursalParaLectura({ role, userSucursalId: null })
+
+    let ordenesQuery = supabaseAdmin
       .from("ordenes_servicio")
       .select(`
         id, tecnico_id, costo_final, porcentaje_comision,
@@ -82,6 +85,12 @@ export async function GET(request: Request) {
       .in("estado", ["REPARADO", "ENTREGADO", "ENTREGADO_SIN_REPARACION"])
       .gte("fecha_completado", desde.toISOString())
       .lte("fecha_completado", hasta.toISOString())
+
+    if (!filtro.verTodas && filtro.sucursalId) {
+      ordenesQuery = ordenesQuery.eq("sucursal_id", filtro.sucursalId)
+    }
+
+    const { data: ordenes, error: dbError } = await ordenesQuery
 
     if (dbError) throw dbError
 
