@@ -30,18 +30,20 @@ export async function GET() {
       newOrgsThisMonthResult,
       recentPaymentsResult,
     ] = await Promise.all([
-      // Total organizaciones (excluye org del panel admin)
+      // Total organizaciones (excluye org del panel admin y archivadas)
       supabaseAdmin
         .from("organizations")
         .select("id", { count: "exact", head: true })
-        .neq("slug", "superadmin"),
+        .neq("slug", "superadmin")
+        .is("deleted_at", null),
 
       // Organizaciones activas
       supabaseAdmin
         .from("organizations")
         .select("id", { count: "exact", head: true })
         .eq("activo", true)
-        .neq("slug", "superadmin"),
+        .neq("slug", "superadmin")
+        .is("deleted_at", null),
 
       // Total usuarios (excluye los del panel admin)
       totalUsersQuery,
@@ -72,7 +74,8 @@ export async function GET() {
         .from("organizations")
         .select("id", { count: "exact", head: true })
         .gte("created_at", primerDiaMes.toISOString())
-        .neq("slug", "superadmin"),
+        .neq("slug", "superadmin")
+        .is("deleted_at", null),
 
       // Últimos 5 pagos
       supabaseAdmin
