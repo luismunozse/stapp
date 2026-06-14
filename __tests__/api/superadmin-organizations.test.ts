@@ -10,6 +10,7 @@ vi.mock("@/lib/superadmin-auth", () => ({
 }))
 
 import { DELETE } from "@/app/api/superadmin/organizations/[id]/route"
+import { POST as RESTORE } from "@/app/api/superadmin/organizations/[id]/restore/route"
 
 function req(url: string, body?: unknown): Request {
   return new Request(url, {
@@ -81,5 +82,37 @@ describe("DELETE /api/superadmin/organizations/[id]", () => {
     expect(status).toBe(200)
     expect(body.archived).toBe(false)
     expect(orgChain.delete).toHaveBeenCalled()
+  })
+})
+
+describe("POST /api/superadmin/organizations/[id]/restore", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("clears the archival fields", async () => {
+    const updateChain = createChainMock(null, null)
+    const orgChain = {
+      ...createChainMock({ id: "o1", slug: "guru-tech", deleted_at: "2026-06-01T00:00:00Z" }),
+      update: vi.fn().mockReturnValue(updateChain),
+    }
+    mockSupabaseFrom({ organizations: orgChain as any, audit_logs: createChainMock(null, null) })
+
+    const r = new Request("http://localhost/api/superadmin/organizations/o1/restore", { method: "POST" })
+    const res = await RESTORE(r, { params: Promise.resolve({ id: "o1" }) })
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    expect(body.success).toBe(true)
+    const payload = orgChain.update.mock.calls[0][0]
+    expect(payload).toEqual(
+      expect.objectContaining({ deleted_at: null, deleted_by: null, archived_reason: null })
+    )
+  })
+
+  it("returns 409 when the org is not archived", async () => {
+    const orgChain = createChainMock({ id: "o1", slug: "guru-tech", deleted_at: null })
+    mockSupabaseFrom({ organizations: orgChain })
+    const r = new Request("http://localhost/api/superadmin/organizations/o1/restore", { method: "POST" })
+    const res = await RESTORE(r, { params: Promise.resolve({ id: "o1" }) })
+    expect((await parseResponse(res)).status).toBe(409)
   })
 })

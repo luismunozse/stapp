@@ -42,7 +42,7 @@ export async function getTenantStatusBySlug(
 
   const url = `${base}/rest/v1/organizations?slug=eq.${encodeURIComponent(
     slug
-  )}&select=id,activo&limit=1`
+  )}&select=id,activo,deleted_at&limit=1`
 
   try {
     const res = await fetch(url, {
@@ -55,8 +55,10 @@ export async function getTenantStatusBySlug(
       // No cacheamos el error: queremos reintentar en el próximo request.
       return { kind: "error" }
     }
-    const rows = (await res.json()) as Array<TenantStatus>
-    const data = rows[0] ?? null
+    const rows = (await res.json()) as Array<TenantStatus & { deleted_at: string | null }>
+    const row = rows[0]
+    const data: TenantStatus | null =
+      row && !row.deleted_at ? { id: row.id, activo: row.activo } : null
     store.set(slug, { data, expiresAt: now + TTL_MS })
     return { kind: "ok", status: data }
   } catch {
