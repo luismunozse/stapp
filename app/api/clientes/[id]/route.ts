@@ -13,6 +13,7 @@ const clienteSchema = z.object({
   tipoCliente: z.enum(["INDIVIDUAL", "EMPRESA"]).optional(),
   razonSocial: z.string().optional(),
   cuit: z.string().optional(),
+  aceptaWhatsapp: z.boolean().optional(),
 })
 
 export async function GET(
@@ -131,6 +132,7 @@ export async function PUT(
     if (data.tipoCliente !== undefined) updateData.tipo_cliente = data.tipoCliente
     if (data.razonSocial !== undefined) updateData.razon_social = data.razonSocial || null
     if (data.cuit !== undefined) updateData.cuit = data.cuit || null
+    if (data.aceptaWhatsapp !== undefined) updateData.acepta_whatsapp = data.aceptaWhatsapp
 
     const { data: cliente, error: updateError } = await supabaseAdmin
       .from("clientes")
