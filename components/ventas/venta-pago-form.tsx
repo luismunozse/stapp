@@ -138,13 +138,13 @@ export function VentaPagoForm({
             </div>
             <div>
               <span className="text-muted-foreground">Abonado</span>
-              <div className="font-semibold text-green-600">
+              <div className="font-semibold text-success">
                 {formatPrice(montoAbonado)}
               </div>
             </div>
             <div>
               <span className="text-muted-foreground">Pendiente</span>
-              <div className="font-semibold text-red-600">
+              <div className="font-semibold text-destructive">
                 {formatPrice(pendiente)}
               </div>
             </div>

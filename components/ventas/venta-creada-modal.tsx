@@ -16,9 +16,11 @@ import {
   Check,
   FileText,
   Loader2,
+  AlertTriangle,
 } from "lucide-react"
 import type { VentaCreadaData } from "./venta-form"
 import { useCurrency } from "@/contexts/currency-context"
+import { StatusBanner } from "@/components/ui/status-banner"
 import { PosTicketShare } from "@/components/pos/pos-ticket-share"
 import {
   buildVentaContext,
@@ -123,7 +125,7 @@ export function VentaCreadaModal({ open, onClose, venta }: VentaCreadaModalProps
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-green-600">
+          <DialogTitle className="flex items-center gap-2 text-success">
             <Check className="h-5 w-5" />
             Venta #{venta.numeroVenta} registrada
           </DialogTitle>
@@ -206,9 +208,9 @@ export function VentaCreadaModal({ open, onClose, venta }: VentaCreadaModalProps
 
           {/* Aviso si no hay teléfono */}
           {!hasPhone && (
-            <div className="text-sm text-amber-600 bg-amber-50 dark:bg-amber-950/30 rounded-lg px-3 py-2">
+            <StatusBanner tone="warning" icon={AlertTriangle}>
               No se registró teléfono del cliente. Puede descargar la imagen y enviarla manualmente.
-            </div>
+            </StatusBanner>
           )}
 
           {/* Boton cerrar */}

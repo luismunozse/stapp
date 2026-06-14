@@ -12,6 +12,7 @@ import {
   ArrowLeft,
   FileText,
   Shield,
+  ShoppingCart,
   User,
   Calendar,
   CreditCard,
@@ -30,6 +31,9 @@ import {
   RotateCcw,
 } from "lucide-react"
 import Link from "next/link"
+import { EmptyState } from "@/components/ui/empty-state"
+import { StatusBanner } from "@/components/ui/status-banner"
+import { VentaEstadoBadge } from "@/components/ventas/venta-estado-badge"
 import { WhatsAppDialog } from "@/components/ordenes/whatsapp-dialog"
 import { VentaEditForm } from "@/components/ventas/venta-edit-form"
 import { DevolucionForm } from "@/components/ventas/devolucion-form"
@@ -238,12 +242,12 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
 
   if (!venta) {
     return (
-      <div className="flex flex-col items-center justify-center py-12">
-        <p className="text-muted-foreground">Venta no encontrada</p>
+      <>
+        <EmptyState icon={ShoppingCart} title="Venta no encontrada" variant="error" />
         <Link href="/ventas">
           <Button variant="link">Volver a ventas</Button>
         </Link>
-      </div>
+      </>
     )
   }
 
@@ -259,9 +263,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
             <h1 className="text-xl font-bold sm:text-2xl">
               Venta V{String(venta.numeroVenta).padStart(4, "0")}
             </h1>
-            <Badge variant={venta.estado === "COMPLETADA" ? "success" : "destructive"}>
-              {venta.estado === "COMPLETADA" ? "Completada" : "Anulada"}
-            </Badge>
+            <VentaEstadoBadge estado={venta.estado} />
           </div>
           <p className="text-sm text-muted-foreground">
             {formatDate(venta.createdAt)} - {metodoPagoLabels[venta.metodoPago]}
@@ -468,21 +470,21 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                   </div>
                   <div>
                     <div className="text-xs text-muted-foreground">Abonado</div>
-                    <div className="font-medium text-base sm:text-lg text-green-600">
+                    <div className="font-medium text-base sm:text-lg text-success">
                       {formatPrice(venta.montoAbonado || 0)}
                     </div>
                   </div>
                   <div>
                     <div className="text-xs text-muted-foreground">Pendiente</div>
-                    <div className="font-medium text-base sm:text-lg text-red-600">
+                    <div className="font-medium text-base sm:text-lg text-destructive">
                       {formatPrice(venta.total - (venta.montoAbonado || 0))}
                     </div>
                   </div>
                 </div>
                 {totalCostoFinanciero > 0 && (
-                  <div className="flex items-center justify-between p-2 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg text-sm">
+                  <div className="flex items-center justify-between p-2 bg-destructive/10 border border-destructive/25 rounded-lg text-sm">
                     <span className="text-muted-foreground">Costo terminales:</span>
-                    <span className="text-red-600 font-medium">-{formatPrice(totalCostoFinanciero)}</span>
+                    <span className="text-destructive font-medium">-{formatPrice(totalCostoFinanciero)}</span>
                     <span className="text-muted-foreground">Ingreso real:</span>
                     <span className="font-bold">{formatPrice((venta.montoAbonado || 0) - totalCostoFinanciero)}</span>
                   </div>
@@ -496,7 +498,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 border border-dashed rounded-lg">
               <div>
                 <div className="text-sm text-muted-foreground">Pendiente de pago</div>
-                <div className="text-xl font-bold text-red-600">
+                <div className="text-xl font-bold text-destructive">
                   {formatPrice(venta.total - (venta.montoAbonado || 0))}
                 </div>
               </div>
@@ -572,7 +574,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                       )}
                     </div>
                     {item.diasGarantia > 0 && (
-                      <Badge variant="outline" className="shrink-0 text-green-600">
+                      <Badge variant="outline" className="shrink-0 text-success">
                         {item.diasGarantia}d
                       </Badge>
                     )}
@@ -653,7 +655,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                         <td className="py-3 text-right font-medium">{formatPrice(item.subtotal)}</td>
                         <td className="py-3 text-center">
                           {item.diasGarantia > 0 ? (
-                            <Badge variant="outline" className="text-green-600">
+                            <Badge variant="outline" className="text-success">
                               {item.diasGarantia} días
                             </Badge>
                           ) : (
@@ -732,10 +734,10 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                 return (
                   <div
                     key={garantia.id}
-                    className="rounded-lg border bg-green-50 p-4 dark:bg-green-950/20"
+                    className="rounded-lg border bg-success-50 p-4 dark:bg-success/10"
                   >
                     <div className="mb-2 flex items-center justify-between">
-                      <span className="font-mono text-sm font-medium text-green-700 dark:text-green-400">
+                      <span className="font-mono text-sm font-medium text-success-700 dark:text-success-500">
                         {garantia.numeroGarantia}
                       </span>
                       <Badge
