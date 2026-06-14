@@ -4,6 +4,7 @@ import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger } from "@/lib/audit"
 import { notifyTurno } from "@/lib/turnos/notifications"
+import { sucursalParaLectura, sucursalParaEscritura } from "@/lib/sucursal"
 
 const clienteSnapshotSchema = z.object({
   nombre: z.string().min(1),
@@ -110,7 +111,7 @@ function formatTurno(t: any) {
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId, userId, role } = await requireAuth()
+    const { error, organizationId, userId, role, session } = await requireAuth()
     if (error) return error
 
     const { searchParams } = new URL(request.url)
@@ -119,6 +120,11 @@ export async function GET(request: Request) {
     const tecnicoId = searchParams.get("tecnicoId") || ""
     const estado = searchParams.get("estado") || ""
     const conOrden = searchParams.get("conOrden") || ""
+
+    const lectura = await sucursalParaLectura({
+      role,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
 
     let query = supabaseAdmin
       .from("turnos")
@@ -135,6 +141,11 @@ export async function GET(request: Request) {
       query = query.eq("tecnico_id", userId!)
     } else if (tecnicoId) {
       query = query.eq("tecnico_id", tecnicoId)
+    }
+
+    // Branch filter — additive with the existing TECNICO filter above
+    if (!lectura.verTodas && lectura.sucursalId) {
+      query = query.eq("sucursal_id", lectura.sucursalId)
     }
     if (estado) query = query.eq("estado", estado)
     if (conOrden === "sin") query = query.is("orden_id", null)
@@ -156,8 +167,21 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { error, organizationId, userId, role } = await requireAuth()
+    const { error, organizationId, userId, role, session } = await requireAuth()
     if (error) return error
+
+    // Resolve branch for write stamping
+    const sucursalId = await sucursalParaEscritura({
+      role,
+      organizationId: organizationId!,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
+    if (!sucursalId) {
+      return NextResponse.json(
+        { error: "La organización no tiene una sucursal principal configurada" },
+        { status: 500 },
+      )
+    }
 
     // Verificar módulo agenda activo
     const { data: org } = await supabaseAdmin
@@ -216,6 +240,7 @@ export async function POST(request: Request) {
 
     const rows = fechas.map((f, idx) => ({
       organization_id: organizationId!,
+      sucursal_id: sucursalId,
       cliente_id: data.clienteId || null,
       cliente_snapshot: data.clienteSnapshot || null,
       tecnico_id: tecnicoAsignadoId,

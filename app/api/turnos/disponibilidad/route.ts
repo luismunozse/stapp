@@ -5,6 +5,8 @@ import { dentroDeHorarioLaboral, type HorarioLaboral } from "@/lib/turnos/dispon
 
 // GET ?tecnicoId=&inicio=ISO&fin=ISO&excludeTurnoId=
 // Devuelve: { disponible, conflictos: [...], fueraDeHorario, razon? }
+// No branch filter — tecnico availability is person-scoped, not branch-scoped.
+// A tecnico cannot be double-booked regardless of which branch a turno belongs to.
 export async function GET(request: Request) {
   try {
     const { error, organizationId } = await requireAuth()
