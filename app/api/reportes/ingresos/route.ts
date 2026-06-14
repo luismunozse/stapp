@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server"
 import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaLectura } from "@/lib/sucursal"
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAdminOrVendedor()
+    const { error, organizationId, role } = await requireAdminOrVendedor()
     if (error) return error
+
+    const filtro = await sucursalParaLectura({ role, userSucursalId: null })
 
     const { searchParams } = new URL(request.url)
     const desde = searchParams.get("desde")
@@ -28,7 +31,7 @@ export async function GET(request: Request) {
       .select(`
         *,
         ordenes_servicio!inner (
-          id, numero_orden, organization_id,
+          id, numero_orden, organization_id, sucursal_id,
           clientes (*)
         )
       `)
@@ -36,6 +39,10 @@ export async function GET(request: Request) {
       .eq("estado_pago", "PAGADO")
       .gte("fecha", fechaDesde.toISOString())
       .order("fecha", { ascending: true })
+
+    if (!filtro.verTodas && filtro.sucursalId) {
+      query = query.eq("ordenes_servicio.sucursal_id", filtro.sucursalId)
+    }
 
     if (fechaHasta) {
       query = query.lte("fecha", fechaHasta.toISOString())

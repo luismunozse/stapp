@@ -1,10 +1,13 @@
 import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaLectura } from "@/lib/sucursal"
 import { NextResponse } from "next/server"
 
 export async function GET() {
-  const { error, organizationId } = await requireAdminOrVendedor()
+  const { error, organizationId, role } = await requireAdminOrVendedor()
   if (error) return error
+
+  const filtro = await sucursalParaLectura({ role, userSucursalId: null })
 
   const now = new Date()
   const en30Dias = new Date(now)
@@ -13,40 +16,48 @@ export async function GET() {
   hace30Dias.setDate(now.getDate() - 30)
 
   try {
+    // Build base garantias queries — filter via ventas!inner when a branch is active
+    let resumenQuery = supabaseAdmin
+      .from("garantias_venta")
+      .select("id, estado, ventas!inner(organization_id, sucursal_id)")
+      .eq("ventas.organization_id", organizationId!)
+
+    let porVencerQuery = supabaseAdmin
+      .from("garantias_venta")
+      .select(`
+        id, numero_garantia, dias_validez, fecha_inicio, fecha_vencimiento, estado,
+        items_venta!inner(descripcion, cantidad, precio_unitario),
+        ventas!inner(numero_venta, cliente_nombre, cliente_telefono, organization_id, sucursal_id)
+      `)
+      .eq("ventas.organization_id", organizationId!)
+      .eq("estado", "ACTIVA")
+      .gte("fecha_vencimiento", now.toISOString())
+      .lte("fecha_vencimiento", en30Dias.toISOString())
+      .order("fecha_vencimiento", { ascending: true })
+
+    let todasGarantiasQuery = supabaseAdmin
+      .from("garantias_venta")
+      .select(`
+        id, estado, numero_garantia, fecha_inicio, created_at,
+        items_venta!inner(descripcion),
+        ventas!inner(numero_venta, cliente_nombre, organization_id, sucursal_id)
+      `)
+      .eq("ventas.organization_id", organizationId!)
+
+    if (!filtro.verTodas && filtro.sucursalId) {
+      resumenQuery = resumenQuery.eq("ventas.sucursal_id", filtro.sucursalId)
+      porVencerQuery = porVencerQuery.eq("ventas.sucursal_id", filtro.sucursalId)
+      todasGarantiasQuery = todasGarantiasQuery.eq("ventas.sucursal_id", filtro.sucursalId)
+    }
+
     const [
       resumenResult,
       porVencerResult,
       todasGarantiasResult,
     ] = await Promise.all([
-      // Summary counts
-      supabaseAdmin
-        .from("garantias_venta")
-        .select("id, estado")
-        .eq("organization_id", organizationId!),
-
-      // Warranties expiring in next 30 days
-      supabaseAdmin
-        .from("garantias_venta")
-        .select(`
-          id, numero_garantia, dias_validez, fecha_inicio, fecha_vencimiento, estado,
-          items_venta!inner(descripcion, cantidad, precio_unitario),
-          ventas!inner(numero_venta, cliente_nombre, cliente_telefono, organization_id)
-        `)
-        .eq("organization_id", organizationId!)
-        .eq("estado", "ACTIVA")
-        .gte("fecha_vencimiento", now.toISOString())
-        .lte("fecha_vencimiento", en30Dias.toISOString())
-        .order("fecha_vencimiento", { ascending: true }),
-
-      // All warranties with product info (for claim rate)
-      supabaseAdmin
-        .from("garantias_venta")
-        .select(`
-          id, estado, numero_garantia, fecha_inicio, created_at,
-          items_venta!inner(descripcion),
-          ventas!inner(numero_venta, cliente_nombre, organization_id)
-        `)
-        .eq("organization_id", organizationId!),
+      resumenQuery,
+      porVencerQuery,
+      todasGarantiasQuery,
     ])
 
     // --- Resumen ---
