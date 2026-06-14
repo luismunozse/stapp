@@ -23,9 +23,8 @@ export async function GET(request: Request) {
     const { error, organizationId, role } = await requireAdmin()
     if (error) return error
 
-    // Resolve branch filter — filtro wired in PR2; RPC param wiring lands in PR3b
+    // Resolve branch filter and pass to RPC
     const filtro = await sucursalParaLectura({ role, userSucursalId: null })
-    // TODO(PR3b): pass filtro.sucursalId as p_sucursal_id to get_vendedores_stats RPC
 
     const { searchParams } = new URL(request.url)
     const desdeParam = searchParams.get("desde")
@@ -68,6 +67,7 @@ export async function GET(request: Request) {
         p_org_id: organizationId!,
         p_desde: desde.toISOString(),
         p_hasta: hasta.toISOString(),
+        p_sucursal_id: filtro.verTodas ? null : filtro.sucursalId,
       }),
     ])
 

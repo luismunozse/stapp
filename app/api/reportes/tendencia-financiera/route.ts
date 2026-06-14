@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaLectura } from "@/lib/sucursal"
 
 /**
  * Tendencia financiera mensual — últimos N meses.
@@ -16,8 +17,12 @@ import { supabaseAdmin } from "@/lib/supabase"
  */
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAdmin()
+    const { error, organizationId, role } = await requireAdmin()
     if (error) return error
+
+    // Resolve branch filter — applied to every P&L sub-source
+    const filtro = await sucursalParaLectura({ role, userSucursalId: null })
+    const sid = !filtro.verTodas && filtro.sucursalId ? filtro.sucursalId : null
 
     const { searchParams } = new URL(request.url)
     const meses = Math.max(1, Math.min(24, parseInt(searchParams.get("meses") || "6")))
@@ -77,7 +82,7 @@ export async function GET(request: Request) {
     }
 
     // 1. Ventas (ingresos por ventas + costo de mercadería + comisión vendedor)
-    const { data: ventas } = await supabaseAdmin
+    let ventasQuery = supabaseAdmin
       .from("ventas")
       .select(`
         id, total, created_at, estado,
@@ -88,6 +93,8 @@ export async function GET(request: Request) {
       .eq("estado", "COMPLETADA")
       .gte("created_at", desdeISO)
       .lte("created_at", hastaISO)
+    if (sid) ventasQuery = ventasQuery.eq("sucursal_id", sid)
+    const { data: ventas } = await ventasQuery
 
     for (const v of ventas || []) {
       const key = keyFor(v.created_at)
@@ -112,7 +119,7 @@ export async function GET(request: Request) {
     //    Incluye estados terminales con ingreso o costo de repuestos.
     // (A) Órdenes terminales por fecha_completado.
     //     Para el bucket mensual, ingreso = costo_final - cobros_previos_al_mes.
-    const { data: ordenes } = await supabaseAdmin
+    let ordenesQuery = supabaseAdmin
       .from("ordenes_servicio")
       .select(`
         id, costo_final, fecha_completado, estado,
@@ -128,6 +135,8 @@ export async function GET(request: Request) {
       .not("fecha_completado", "is", null)
       .gte("fecha_completado", desdeISO)
       .lte("fecha_completado", hastaISO)
+    if (sid) ordenesQuery = ordenesQuery.eq("sucursal_id", sid)
+    const { data: ordenes } = await ordenesQuery
 
     // Cobros previos por orden (estrictamente antes del inicio de cada mes destino).
     // Para simplificar: agrupar cobros por orden_id ordenados por fecha,
@@ -197,13 +206,15 @@ export async function GET(request: Request) {
     //       - Cobro del mismo mes que completó la orden (ya en (A))
     //       - Orden CANCELADO / SIN_REPARACION (nunca devengará)
     //       - Cobro POSTERIOR al mes de completado (ya devengó full en su mes)
-    const { data: cobrosPeriodo } = await supabaseAdmin
+    let cobrosPeriodoQuery = supabaseAdmin
       .from("cobros_orden")
-      .select("orden_id, monto, created_at, ordenes_servicio!inner(estado, fecha_completado, organization_id)")
+      .select("orden_id, monto, created_at, ordenes_servicio!inner(estado, fecha_completado, organization_id, sucursal_id)")
       .eq("ordenes_servicio.organization_id", organizationId!)
       .neq("anulado", true)
       .gte("created_at", desdeISO)
       .lte("created_at", hastaISO)
+    if (sid) cobrosPeriodoQuery = cobrosPeriodoQuery.eq("ordenes_servicio.sucursal_id", sid)
+    const { data: cobrosPeriodo } = await cobrosPeriodoQuery
 
     const ESTADOS_NUNCA_DEVENGAN = new Set(["CANCELADO", "SIN_REPARACION"])
     const ESTADOS_TERMINALES_DEV = new Set(["REPARADO", "ENTREGADO", "ENTREGADO_SIN_REPARACION", "ENTREGADO_SIN_COBRO"])
@@ -228,12 +239,14 @@ export async function GET(request: Request) {
     }
 
     // 3. Movimientos manuales de caja (otros ingresos + gastos operativos)
-    const { data: movimientos } = await supabaseAdmin
+    let movimientosQuery = supabaseAdmin
       .from("movimientos_caja")
       .select("tipo, monto, fecha, afecta_rentabilidad")
       .eq("organization_id", organizationId!)
       .gte("fecha", desdeISO)
       .lte("fecha", hastaISO)
+    if (sid) movimientosQuery = movimientosQuery.eq("sucursal_id", sid)
+    const { data: movimientos } = await movimientosQuery
 
     for (const m of movimientos || []) {
       if (m.afecta_rentabilidad === false) continue
@@ -251,15 +264,17 @@ export async function GET(request: Request) {
     // 4. Costos financieros (comisiones de terminales)
     //    Bucketing por fecha de devengado del parent (created_at venta / fecha_completado orden)
     //    para alinear con ingresos.
-    const { data: pagosVentaCF } = await supabaseAdmin
+    let pagosVentaCFQuery = supabaseAdmin
       .from("pagos_venta")
-      .select("costo_financiero_monto, ventas!inner(organization_id, estado, created_at)")
+      .select("costo_financiero_monto, ventas!inner(organization_id, estado, created_at, sucursal_id)")
       .eq("ventas.organization_id", organizationId!)
       .eq("ventas.estado", "COMPLETADA")
       .not("costo_financiero_monto", "is", null)
       .gt("costo_financiero_monto", 0)
       .gte("ventas.created_at", desdeISO)
       .lte("ventas.created_at", hastaISO)
+    if (sid) pagosVentaCFQuery = pagosVentaCFQuery.eq("ventas.sucursal_id", sid)
+    const { data: pagosVentaCF } = await pagosVentaCFQuery
 
     for (const p of (pagosVentaCF || []) as any[]) {
       const ventaCreated = p.ventas?.created_at
@@ -270,15 +285,17 @@ export async function GET(request: Request) {
       bucket.costosFinancieros += parseFloat(p.costo_financiero_monto || "0")
     }
 
-    const { data: pagosParcialCF } = await supabaseAdmin
+    let pagosParcialCFQuery = supabaseAdmin
       .from("pagos_parciales")
-      .select("costo_financiero_monto, facturas!inner(ordenes_servicio!inner(organization_id, fecha_completado))")
+      .select("costo_financiero_monto, facturas!inner(ordenes_servicio!inner(organization_id, fecha_completado, sucursal_id))")
       .eq("facturas.ordenes_servicio.organization_id", organizationId!)
       .not("costo_financiero_monto", "is", null)
       .gt("costo_financiero_monto", 0)
       .not("facturas.ordenes_servicio.fecha_completado", "is", null)
       .gte("facturas.ordenes_servicio.fecha_completado", desdeISO)
       .lte("facturas.ordenes_servicio.fecha_completado", hastaISO)
+    if (sid) pagosParcialCFQuery = pagosParcialCFQuery.eq("facturas.ordenes_servicio.sucursal_id", sid)
+    const { data: pagosParcialCF } = await pagosParcialCFQuery
 
     for (const p of (pagosParcialCF || []) as any[]) {
       const fc = p.facturas?.ordenes_servicio?.fecha_completado
@@ -290,15 +307,18 @@ export async function GET(request: Request) {
     }
 
     // CF de cobros directos a orden (sin factura)
-    const { data: cobrosCF } = await supabaseAdmin
+    let cobrosCFQuery = supabaseAdmin
       .from("cobros_orden")
-      .select("costo_financiero_monto, created_at")
+      .select("costo_financiero_monto, created_at, ordenes_servicio!inner(organization_id, sucursal_id)")
       .eq("organization_id", organizationId!)
+      .eq("ordenes_servicio.organization_id", organizationId!)
       .neq("anulado", true)
       .not("costo_financiero_monto", "is", null)
       .gt("costo_financiero_monto", 0)
       .gte("created_at", desdeISO)
       .lte("created_at", hastaISO)
+    if (sid) cobrosCFQuery = cobrosCFQuery.eq("ordenes_servicio.sucursal_id", sid)
+    const { data: cobrosCF } = await cobrosCFQuery
 
     for (const c of (cobrosCF || []) as any[]) {
       const key = keyFor(c.created_at)
@@ -308,13 +328,15 @@ export async function GET(request: Request) {
     }
 
     // 4.5 Notas de crédito (restan ingresos del mes)
-    const { data: notasCredito } = await supabaseAdmin
+    let notasCreditoQuery = supabaseAdmin
       .from("notas_credito")
       .select("monto, fecha, venta_id, orden_id")
       .eq("organization_id", organizationId!)
       .eq("anulada", false)
       .gte("fecha", desdeISO)
       .lte("fecha", hastaISO)
+    if (sid) notasCreditoQuery = notasCreditoQuery.eq("sucursal_id", sid)
+    const { data: notasCredito } = await notasCreditoQuery
 
     for (const n of (notasCredito || []) as any[]) {
       const key = keyFor(n.fecha)
@@ -326,13 +348,15 @@ export async function GET(request: Request) {
     }
 
     // 5. Mermas / ajustes de inventario por mes
-    const { data: ajustes } = await supabaseAdmin
+    let ajustesQuery = supabaseAdmin
       .from("ajustes_inventario")
       .select("cantidad, costo_unitario_snapshot, fecha, afecta_rentabilidad")
       .eq("organization_id", organizationId!)
       .eq("direccion", "SALIDA")
       .gte("fecha", desdeISO)
       .lte("fecha", hastaISO)
+    if (sid) ajustesQuery = ajustesQuery.eq("sucursal_id", sid)
+    const { data: ajustes } = await ajustesQuery
 
     for (const a of (ajustes || []) as any[]) {
       if (a.afecta_rentabilidad === false) continue
