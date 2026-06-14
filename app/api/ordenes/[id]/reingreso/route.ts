@@ -4,6 +4,7 @@ import { requireAuth, requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getNextOrderNumberByType } from "@/lib/counters"
 import { createAuditLogger } from "@/lib/audit"
+import { getPrincipalId } from "@/lib/sucursal"
 import { z } from "zod"
 
 const reingresoSchema = z.object({
@@ -51,6 +52,18 @@ export async function POST(
       )
     }
 
+    // Resolver sucursal_id: inherit from origin, fallback to principal
+    let reingresoSucursalId: string | null = ordenOrigen.sucursal_id ?? null
+    if (!reingresoSucursalId) {
+      reingresoSucursalId = await getPrincipalId(organizationId!)
+    }
+    if (!reingresoSucursalId) {
+      return NextResponse.json(
+        { error: "No se pudo determinar la sucursal del re-ingreso" },
+        { status: 500 }
+      )
+    }
+
     // Generar número de orden
     const { codigo: codigoOrden, numero: numeroOrden } = await getNextOrderNumberByType(
       organizationId!,
@@ -80,6 +93,7 @@ export async function POST(
         observaciones: data.observaciones || `Re-ingreso por garantía de orden ${ordenOrigen.codigo_orden || `#${ordenOrigen.numero_orden}`}`,
         metadata: ordenOrigen.metadata || {},
         sector_id: ordenOrigen.sector_id,
+        sucursal_id: reingresoSucursalId,
         // Campos de re-ingreso
         orden_origen_id: ordenOrigenId,
         es_reingreso: true,

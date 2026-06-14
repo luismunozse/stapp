@@ -42,7 +42,7 @@ export async function POST(
     const fechaDesde = sesion.opened_at
     const fechaHasta = new Date().toISOString()
 
-    const movimientos = await fetchMovimientosDia(organizationId!, fechaDesde, fechaHasta)
+    const movimientos = await fetchMovimientosDia(organizationId!, fechaDesde, fechaHasta, undefined, sesion.sucursal_id)
     const totales = computeTotales(movimientos)
 
     // Calcular arqueo

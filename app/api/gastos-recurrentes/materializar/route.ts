@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaEscritura } from "@/lib/sucursal"
 
 /**
  * Materializa todos los gastos recurrentes vencidos (proximo_vencimiento <= hoy)
@@ -17,8 +18,20 @@ import { supabaseAdmin } from "@/lib/supabase"
  */
 export async function POST() {
   try {
-    const { error, organizationId, userId } = await requireAdmin()
+    const { error, session, organizationId, userId, role } = await requireAdmin()
     if (error) return error
+
+    const sucursalId = await sucursalParaEscritura({
+      role,
+      organizationId: organizationId!,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
+    if (!sucursalId) {
+      return NextResponse.json(
+        { error: "La organización no tiene sucursal principal configurada" },
+        { status: 500 }
+      )
+    }
 
     const hoy = new Date().toISOString().split("T")[0]
 
@@ -80,6 +93,7 @@ export async function POST() {
           categoria_gasto_id: g.categoria_gasto_id,
           afecta_rentabilidad: afectaRent,
           es_recurrente: true,
+          sucursal_id: sucursalId,
         })
         .select("id")
         .single()
