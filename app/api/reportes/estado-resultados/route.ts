@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaLectura } from "@/lib/sucursal"
 
 /**
  * Estado de Resultados (P&L) — devengado
@@ -25,8 +26,12 @@ import { supabaseAdmin } from "@/lib/supabase"
  */
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAdmin()
+    const { error, organizationId, role } = await requireAdmin()
     if (error) return error
+
+    // Resolve branch filter — applied to every P&L sub-source
+    const filtro = await sucursalParaLectura({ role, userSucursalId: null })
+    const sid = !filtro.verTodas && filtro.sucursalId ? filtro.sucursalId : null
 
     const { searchParams } = new URL(request.url)
     const desdeParam = searchParams.get("desde")
@@ -47,7 +52,7 @@ export async function GET(request: Request) {
     // ========================================
     // 1. VENTAS (productos) en el período
     // ========================================
-    const { data: ventas } = await supabaseAdmin
+    let ventasQuery = supabaseAdmin
       .from("ventas")
       .select(`
         id, total, created_at, estado,
@@ -58,6 +63,8 @@ export async function GET(request: Request) {
       .eq("estado", "COMPLETADA")
       .gte("created_at", desdeISO)
       .lte("created_at", hastaISO)
+    if (sid) ventasQuery = ventasQuery.eq("sucursal_id", sid)
+    const { data: ventas } = await ventasQuery
 
     let ingresosVentas = 0
     let costoProductos = 0
@@ -95,7 +102,7 @@ export async function GET(request: Request) {
     //     (resta lo ya contado como adelanto en períodos anteriores).
     // (B) Cobros en período de órdenes NO terminales en período: ingreso adelanto.
     // Evita doble counting cross-período.
-    const { data: ordenes } = await supabaseAdmin
+    let ordenesQuery = supabaseAdmin
       .from("ordenes_servicio")
       .select(`
         id, costo_final, fecha_completado, estado,
@@ -111,6 +118,8 @@ export async function GET(request: Request) {
       .not("fecha_completado", "is", null)
       .gte("fecha_completado", desdeISO)
       .lte("fecha_completado", hastaISO)
+    if (sid) ordenesQuery = ordenesQuery.eq("sucursal_id", sid)
+    const { data: ordenes } = await ordenesQuery
 
     // Cobros previos al inicio del período para órdenes terminales en período
     const terminalIds = (ordenes || []).map((o: any) => o.id)
@@ -172,13 +181,15 @@ export async function GET(request: Request) {
     //       - Terminales con fecha_completado <= hasta (ya devengaron full costo_final en su mes)
     //       - CANCELADO / SIN_REPARACION (nunca devengarán)
     const terminalIdsSet = new Set(terminalIds)
-    const { data: cobrosPeriodo } = await supabaseAdmin
+    let cobrosPeriodoQuery = supabaseAdmin
       .from("cobros_orden")
-      .select("orden_id, monto, ordenes_servicio!inner(estado, fecha_completado, organization_id)")
+      .select("orden_id, monto, ordenes_servicio!inner(estado, fecha_completado, organization_id, sucursal_id)")
       .eq("ordenes_servicio.organization_id", organizationId!)
       .neq("anulado", true)
       .gte("created_at", desdeISO)
       .lte("created_at", hastaISO)
+    if (sid) cobrosPeriodoQuery = cobrosPeriodoQuery.eq("ordenes_servicio.sucursal_id", sid)
+    const { data: cobrosPeriodo } = await cobrosPeriodoQuery
 
     const ESTADOS_NUNCA_DEVENGAN = new Set(["CANCELADO", "SIN_REPARACION"])
     const ESTADOS_TERMINALES_DEV = new Set(["REPARADO", "ENTREGADO", "ENTREGADO_SIN_REPARACION", "ENTREGADO_SIN_COBRO"])
@@ -200,13 +211,15 @@ export async function GET(request: Request) {
     // ========================================
     // 3. OTROS INGRESOS (movimientos manuales tipo INGRESO)
     // ========================================
-    const { data: movIngresos } = await supabaseAdmin
+    let movIngresosQuery = supabaseAdmin
       .from("movimientos_caja")
       .select("monto, afecta_rentabilidad")
       .eq("organization_id", organizationId!)
       .eq("tipo", "INGRESO")
       .gte("fecha", desdeISO)
       .lte("fecha", hastaISO)
+    if (sid) movIngresosQuery = movIngresosQuery.eq("sucursal_id", sid)
+    const { data: movIngresos } = await movIngresosQuery
 
     let otrosIngresos = 0
     for (const m of movIngresos || []) {
@@ -229,7 +242,7 @@ export async function GET(request: Request) {
     let costosFinancierosVentas = 0
     if (pagosVentaCF && pagosVentaCF.length > 0) {
       const ventaIds = [...new Set(pagosVentaCF.map(p => p.venta_id))]
-      const { data: ventasValidas } = await supabaseAdmin
+      let ventasValidasQuery = supabaseAdmin
         .from("ventas")
         .select("id")
         .eq("organization_id", organizationId!)
@@ -237,6 +250,8 @@ export async function GET(request: Request) {
         .gte("created_at", desdeISO)
         .lte("created_at", hastaISO)
         .in("id", ventaIds)
+      if (sid) ventasValidasQuery = ventasValidasQuery.eq("sucursal_id", sid)
+      const { data: ventasValidas } = await ventasValidasQuery
 
       const ventaIdsValidos = new Set((ventasValidas || []).map(v => v.id))
       for (const p of pagosVentaCF) {
@@ -256,10 +271,12 @@ export async function GET(request: Request) {
     let costosFinancierosServicios = 0
     if (pagosParcialCF && pagosParcialCF.length > 0) {
       const facturaIds = [...new Set(pagosParcialCF.map(p => p.factura_id))]
-      const { data: facturasValidas } = await supabaseAdmin
+      let facturasValidasQuery = supabaseAdmin
         .from("facturas")
-        .select("id, ordenes_servicio!inner(organization_id, fecha_completado, estado)")
+        .select("id, ordenes_servicio!inner(organization_id, fecha_completado, estado, sucursal_id)")
         .in("id", facturaIds)
+      if (sid) facturasValidasQuery = facturasValidasQuery.eq("ordenes_servicio.sucursal_id", sid)
+      const { data: facturasValidas } = await facturasValidasQuery
 
       const facturaIdsValidos = new Set(
         (facturasValidas || [])
@@ -280,15 +297,18 @@ export async function GET(request: Request) {
     }
 
     // CF de cobros directos a orden (sin factura) en período
-    const { data: cobrosCF } = await supabaseAdmin
+    let cobrosCFQuery = supabaseAdmin
       .from("cobros_orden")
-      .select("costo_financiero_monto, created_at")
+      .select("costo_financiero_monto, created_at, ordenes_servicio!inner(organization_id, sucursal_id)")
       .eq("organization_id", organizationId!)
+      .eq("ordenes_servicio.organization_id", organizationId!)
       .neq("anulado", true)
       .not("costo_financiero_monto", "is", null)
       .gt("costo_financiero_monto", 0)
       .gte("created_at", desdeISO)
       .lte("created_at", hastaISO)
+    if (sid) cobrosCFQuery = cobrosCFQuery.eq("ordenes_servicio.sucursal_id", sid)
+    const { data: cobrosCF } = await cobrosCFQuery
 
     let costosFinancierosCobrosOrden = 0
     for (const c of (cobrosCF || []) as any[]) {
@@ -300,13 +320,15 @@ export async function GET(request: Request) {
     // ========================================
     // 4.4 NOTAS DE CRÉDITO en período → restan ingresos
     // ========================================
-    const { data: notasCredito } = await supabaseAdmin
+    let notasCreditoQuery = supabaseAdmin
       .from("notas_credito")
       .select("monto, venta_id, orden_id")
       .eq("organization_id", organizationId!)
       .eq("anulada", false)
       .gte("fecha", desdeISO)
       .lte("fecha", hastaISO)
+    if (sid) notasCreditoQuery = notasCreditoQuery.eq("sucursal_id", sid)
+    const { data: notasCredito } = await notasCreditoQuery
 
     let ncVentas = 0
     let ncServicios = 0
@@ -320,13 +342,15 @@ export async function GET(request: Request) {
     // ========================================
     // 4.5 MERMAS / AJUSTES DE INVENTARIO (SALIDA con afecta_rentabilidad=true)
     // ========================================
-    const { data: ajustes } = await supabaseAdmin
+    let ajustesQuery = supabaseAdmin
       .from("ajustes_inventario")
       .select("tipo, cantidad, costo_unitario_snapshot, afecta_rentabilidad")
       .eq("organization_id", organizationId!)
       .eq("direccion", "SALIDA")
       .gte("fecha", desdeISO)
       .lte("fecha", hastaISO)
+    if (sid) ajustesQuery = ajustesQuery.eq("sucursal_id", sid)
+    const { data: ajustes } = await ajustesQuery
 
     let costoMerma = 0
     const mermaPorTipo: Record<string, number> = {}
@@ -340,7 +364,7 @@ export async function GET(request: Request) {
     // ========================================
     // 5. GASTOS (movimientos manuales tipo EGRESO con afecta_rentabilidad = true)
     // ========================================
-    const { data: movEgresos } = await supabaseAdmin
+    let movEgresosQuery = supabaseAdmin
       .from("movimientos_caja")
       .select(`
         monto, afecta_rentabilidad, categoria_gasto_id,
@@ -350,6 +374,8 @@ export async function GET(request: Request) {
       .eq("tipo", "EGRESO")
       .gte("fecha", desdeISO)
       .lte("fecha", hastaISO)
+    if (sid) movEgresosQuery = movEgresosQuery.eq("sucursal_id", sid)
+    const { data: movEgresos } = await movEgresosQuery
 
     let gastosFijos = 0
     let gastosVariables = 0
