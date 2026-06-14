@@ -29,9 +29,6 @@ import {
   Check,
   ExternalLink,
   DollarSign,
-  Pencil,
-  Loader2,
-  X,
   MoreHorizontal,
   Search,
   Receipt,
@@ -69,6 +66,7 @@ import { NotaCreditoDialog } from "@/components/notas-credito/nota-credito-dialo
 import { PatternDisplay } from "@/components/ui/pattern-display"
 import { StatusBanner } from "@/components/ui/status-banner"
 import { FieldSectionLabel } from "@/components/ui/field-section-label"
+import { EditableTextField } from "@/components/ui/editable-text-field"
 import { useModal } from "@/contexts/modal-context"
 import { toast } from "sonner"
 import { useVisibilityPolling } from "@/hooks/use-visibility-polling"
@@ -109,15 +107,6 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const [showCobrarDialog, setShowCobrarDialog] = useState(false)
   const [showNCDialog, setShowNCDialog] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
-  const [editingProblema, setEditingProblema] = useState(false)
-  const [problemaText, setProblemaText] = useState("")
-  const [savingProblema, setSavingProblema] = useState(false)
-  const [editingDiagnostico, setEditingDiagnostico] = useState(false)
-  const [diagnosticoText, setDiagnosticoText] = useState("")
-  const [savingDiagnostico, setSavingDiagnostico] = useState(false)
-  const [editingNotasInternas, setEditingNotasInternas] = useState(false)
-  const [notasInternasText, setNotasInternasText] = useState("")
-  const [savingNotasInternas, setSavingNotasInternas] = useState(false)
 
   const isAdmin = session?.user?.role === "ADMIN"
   const userRole = session?.user?.role
@@ -126,82 +115,61 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
     ? `${typeof window !== "undefined" ? window.location.origin : ""}/seguimiento/${orden.publicToken}`
     : null
 
-  const handleSaveProblema = async () => {
-    if (!orden || problemaText.trim() === orden.problemaReportado) {
-      setEditingProblema(false)
-      return
-    }
-    setSavingProblema(true)
+  // Persist a single order text field. Returns true on success/no-op (closes the
+  // editor), false on error (keeps it open). Used by EditableTextField.
+  const saveOrdenField = async (
+    body: Record<string, unknown>,
+    patch: Partial<OrdenServicio>,
+    successMsg: string
+  ): Promise<boolean> => {
+    if (!orden) return false
     try {
       const res = await fetch(`/api/ordenes/${orden.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ problemaReportado: problemaText.trim() }),
+        body: JSON.stringify(body),
       })
       if (res.ok) {
-        setOrden({ ...orden, problemaReportado: problemaText.trim() })
-        setEditingProblema(false)
-        toast.success("Problema reportado actualizado")
-      } else {
-        toast.error("Error al guardar")
+        setOrden({ ...orden, ...patch })
+        toast.success(successMsg)
+        return true
       }
+      toast.error("Error al guardar")
+      return false
     } catch {
       toast.error("Error al guardar")
-    } finally {
-      setSavingProblema(false)
+      return false
     }
   }
 
-  const handleSaveDiagnostico = async () => {
-    if (!orden || diagnosticoText.trim() === (orden.diagnostico || "")) {
-      setEditingDiagnostico(false)
-      return
-    }
-    setSavingDiagnostico(true)
-    try {
-      const res = await fetch(`/api/ordenes/${orden.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ diagnostico: diagnosticoText.trim() || null }),
-      })
-      if (res.ok) {
-        setOrden({ ...orden, diagnostico: diagnosticoText.trim() || null })
-        setEditingDiagnostico(false)
-        toast.success("Diagnostico actualizado")
-      } else {
-        toast.error("Error al guardar")
-      }
-    } catch {
-      toast.error("Error al guardar")
-    } finally {
-      setSavingDiagnostico(false)
-    }
+  const handleSaveProblema = async (next: string): Promise<boolean> => {
+    const value = next.trim()
+    if (!orden || value === orden.problemaReportado) return true
+    return saveOrdenField(
+      { problemaReportado: value },
+      { problemaReportado: value },
+      "Problema reportado actualizado"
+    )
   }
 
-  const handleSaveNotasInternas = async () => {
-    if (!orden || notasInternasText.trim() === (orden.notasInternas || "")) {
-      setEditingNotasInternas(false)
-      return
-    }
-    setSavingNotasInternas(true)
-    try {
-      const res = await fetch(`/api/ordenes/${orden.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ notasInternas: notasInternasText.trim() || null }),
-      })
-      if (res.ok) {
-        setOrden({ ...orden, notasInternas: notasInternasText.trim() || null })
-        setEditingNotasInternas(false)
-        toast.success("Notas internas actualizadas")
-      } else {
-        toast.error("Error al guardar")
-      }
-    } catch {
-      toast.error("Error al guardar")
-    } finally {
-      setSavingNotasInternas(false)
-    }
+  const handleSaveDiagnostico = async (next: string): Promise<boolean> => {
+    const value = next.trim() || null
+    if (!orden || (value || "") === (orden.diagnostico || "")) return true
+    return saveOrdenField(
+      { diagnostico: value },
+      { diagnostico: value },
+      "Diagnostico actualizado"
+    )
+  }
+
+  const handleSaveNotasInternas = async (next: string): Promise<boolean> => {
+    const value = next.trim() || null
+    if (!orden || (value || "") === (orden.notasInternas || "")) return true
+    return saveOrdenField(
+      { notasInternas: value },
+      { notasInternas: value },
+      "Notas internas actualizadas"
+    )
   }
 
   const handleCopyLink = async () => {
@@ -884,90 +852,26 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
 
               {/* Problema Reportado */}
               <div className="mt-6 pt-6 border-t">
-                <div className="flex items-center justify-between mb-2">
-                  <FieldSectionLabel icon={Wrench}>Problema Reportado</FieldSectionLabel>
-                  {!editingProblema && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 px-2 text-muted-foreground hover:text-foreground"
-                      onClick={() => {
-                        setProblemaText(orden.problemaReportado || "")
-                        setEditingProblema(true)
-                      }}
-                    >
-                      <Pencil className="h-3 w-3" />
-                    </Button>
-                  )}
-                </div>
-                {editingProblema ? (
-                  <div className="space-y-2">
-                    <textarea
-                      className="w-full min-h-[80px] p-2 text-sm border rounded-md resize-y bg-background"
-                      value={problemaText}
-                      onChange={(e) => setProblemaText(e.target.value)}
-                      disabled={savingProblema}
-                      autoFocus
-                    />
-                    <div className="flex gap-2 justify-end">
-                      <Button variant="ghost" size="sm" onClick={() => setEditingProblema(false)} disabled={savingProblema}>
-                        <X className="h-3 w-3 mr-1" />Cancelar
-                      </Button>
-                      <Button size="sm" onClick={handleSaveProblema} disabled={savingProblema || !problemaText.trim()}>
-                        {savingProblema ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Check className="h-3 w-3 mr-1" />}
-                        Guardar
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-sm whitespace-pre-wrap">{orden.problemaReportado}</p>
-                )}
+                <EditableTextField
+                  icon={Wrench}
+                  label="Problema Reportado"
+                  value={orden.problemaReportado || ""}
+                  onSave={handleSaveProblema}
+                  requireValue
+                />
               </div>
 
               {/* Diagnostico - visible desde EN_DIAGNOSTICO en adelante */}
               {(orden.estado !== "RECIBIDO" || orden.diagnostico) && (
                 <div className="mt-4 pt-4 border-t">
-                  <div className="flex items-center justify-between mb-2">
-                    <FieldSectionLabel icon={Search}>Diagnostico</FieldSectionLabel>
-                    {!editingDiagnostico && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2 text-muted-foreground hover:text-foreground"
-                        onClick={() => {
-                          setDiagnosticoText(orden.diagnostico || "")
-                          setEditingDiagnostico(true)
-                        }}
-                      >
-                        <Pencil className="h-3 w-3" />
-                      </Button>
-                    )}
-                  </div>
-                  {editingDiagnostico ? (
-                    <div className="space-y-2">
-                      <textarea
-                        className="w-full min-h-[80px] p-2 text-sm border rounded-md resize-y bg-background"
-                        value={diagnosticoText}
-                        onChange={(e) => setDiagnosticoText(e.target.value)}
-                        placeholder="Describir el diagnostico del equipo..."
-                        disabled={savingDiagnostico}
-                        autoFocus
-                      />
-                      <div className="flex gap-2 justify-end">
-                        <Button variant="ghost" size="sm" onClick={() => setEditingDiagnostico(false)} disabled={savingDiagnostico}>
-                          <X className="h-3 w-3 mr-1" />Cancelar
-                        </Button>
-                        <Button size="sm" onClick={handleSaveDiagnostico} disabled={savingDiagnostico}>
-                          {savingDiagnostico ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Check className="h-3 w-3 mr-1" />}
-                          Guardar
-                        </Button>
-                      </div>
-                    </div>
-                  ) : orden.diagnostico ? (
-                    <p className="text-sm whitespace-pre-wrap">{orden.diagnostico}</p>
-                  ) : (
-                    <p className="text-sm text-muted-foreground italic">Sin diagnostico aun. Haz clic en el lapiz para agregar.</p>
-                  )}
+                  <EditableTextField
+                    icon={Search}
+                    label="Diagnostico"
+                    value={orden.diagnostico || ""}
+                    onSave={handleSaveDiagnostico}
+                    placeholder="Describir el diagnostico del equipo..."
+                    emptyHint="Sin diagnostico aun. Haz clic en el lapiz para agregar."
+                  />
                 </div>
               )}
 
@@ -989,50 +893,21 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
 
               {/* Notas internas - solo uso interno, no visible al cliente */}
               <div className="mt-4 pt-4 border-t">
-                <div className="flex items-center justify-between mb-2">
-                  <FieldSectionLabel icon={Lock}>
-                    Notas internas
-                    <span className="text-[10px] font-normal normal-case text-muted-foreground">(no visibles para el cliente)</span>
-                  </FieldSectionLabel>
-                  {!editingNotasInternas && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 px-2 text-muted-foreground hover:text-foreground"
-                      onClick={() => {
-                        setNotasInternasText(orden.notasInternas || "")
-                        setEditingNotasInternas(true)
-                      }}
-                    >
-                      <Pencil className="h-3 w-3" />
-                    </Button>
-                  )}
-                </div>
-                {editingNotasInternas ? (
-                  <div className="space-y-2">
-                    <textarea
-                      className="w-full min-h-[80px] p-2 text-sm border rounded-md resize-y bg-amber-50/40 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900"
-                      value={notasInternasText}
-                      onChange={(e) => setNotasInternasText(e.target.value)}
-                      placeholder="Notas privadas del equipo (no se muestran al cliente)..."
-                      disabled={savingNotasInternas}
-                      autoFocus
-                    />
-                    <div className="flex gap-2 justify-end">
-                      <Button variant="ghost" size="sm" onClick={() => setEditingNotasInternas(false)} disabled={savingNotasInternas}>
-                        <X className="h-3 w-3 mr-1" />Cancelar
-                      </Button>
-                      <Button size="sm" onClick={handleSaveNotasInternas} disabled={savingNotasInternas}>
-                        {savingNotasInternas ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Check className="h-3 w-3 mr-1" />}
-                        Guardar
-                      </Button>
-                    </div>
-                  </div>
-                ) : orden.notasInternas ? (
-                  <p className="text-sm whitespace-pre-wrap bg-amber-50/40 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-md p-2">{orden.notasInternas}</p>
-                ) : (
-                  <p className="text-sm text-muted-foreground italic">Sin notas internas. Haz clic en el lapiz para agregar.</p>
-                )}
+                <EditableTextField
+                  icon={Lock}
+                  label={
+                    <>
+                      Notas internas
+                      <span className="text-[10px] font-normal normal-case text-muted-foreground">(no visibles para el cliente)</span>
+                    </>
+                  }
+                  value={orden.notasInternas || ""}
+                  onSave={handleSaveNotasInternas}
+                  placeholder="Notas privadas del equipo (no se muestran al cliente)..."
+                  emptyHint="Sin notas internas. Haz clic en el lapiz para agregar."
+                  textareaClassName="bg-amber-50/40 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900"
+                  valueClassName="bg-amber-50/40 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-md p-2"
+                />
               </div>
             </CardContent>
           </Card>
