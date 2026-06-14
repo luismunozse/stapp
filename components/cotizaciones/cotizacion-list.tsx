@@ -34,6 +34,7 @@ import { CotizacionForm } from "./cotizacion-form"
 import { CotizacionApprovalDialog } from "./cotizacion-approval-dialog"
 import { SignatureDisplay } from "@/components/firma/signature-display"
 import { useModal } from "@/contexts/modal-context"
+import { EmptyState } from "@/components/ui/empty-state"
 
 interface Cotizacion {
   id: string
@@ -77,10 +78,10 @@ interface CotizacionListProps {
 }
 
 const estadoConfig: Record<string, { label: string; icon: typeof Clock; color: string }> = {
-  BORRADOR: { label: "Borrador", icon: Edit, color: "bg-gray-100 text-gray-800" },
-  ENVIADA: { label: "Enviada", icon: Mail, color: "bg-blue-100 text-blue-800" },
-  ACEPTADA: { label: "Aceptada", icon: CheckCircle, color: "bg-green-100 text-green-800" },
-  RECHAZADA: { label: "Rechazada", icon: XCircle, color: "bg-red-100 text-red-800" },
+  BORRADOR: { label: "Borrador", icon: Edit, color: "bg-muted text-muted-foreground" },
+  ENVIADA: { label: "Enviada", icon: Mail, color: "bg-info-50 text-info-700 dark:bg-info/15 dark:text-info-500" },
+  ACEPTADA: { label: "Aceptada", icon: CheckCircle, color: "bg-success-50 text-success-700 dark:bg-success/15 dark:text-success-500" },
+  RECHAZADA: { label: "Rechazada", icon: XCircle, color: "bg-destructive/10 text-destructive" },
 }
 
 export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repuestos = [] }: CotizacionListProps) {
@@ -373,9 +374,11 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
       )}
 
       {cotizaciones.length === 0 && !showForm ? (
-        <p className="text-sm text-muted-foreground text-center py-4">
-          No hay cotizaciones para esta orden
-        </p>
+        <EmptyState
+          icon={FileText}
+          title="No hay cotizaciones para esta orden"
+          variant="search"
+        />
       ) : (
         <div className="space-y-3">
           {cotizaciones.map((cotizacion) => {
@@ -480,7 +483,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
                         <Button
                           size="sm"
                           variant="outline"
-                          className="text-green-600 hover:text-green-700"
+                          className="text-success-600 hover:text-success-700"
                           onClick={() => setApprovingCotizacion(cotizacion)}
                         >
                           <PenTool className="mr-2 h-3 w-3" />
@@ -489,7 +492,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
                         <Button
                           size="sm"
                           variant="outline"
-                          className="text-red-600 hover:text-red-700"
+                          className="text-destructive hover:text-destructive/80"
                           onClick={() => handleUpdateEstado(cotizacion.id, "RECHAZADA")}
                         >
                           <XCircle className="mr-2 h-3 w-3" />
@@ -546,7 +549,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="text-green-600 hover:text-green-700"
+                        className="text-success-600 hover:text-success-700"
                         onClick={() => handleShareWhatsApp(cotizacion)}
                         title={cotizacion.clienteTelefono ? "Compartir por WhatsApp al cliente" : "Compartir por WhatsApp"}
                       >

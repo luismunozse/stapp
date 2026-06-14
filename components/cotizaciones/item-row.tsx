@@ -313,7 +313,7 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
         {showCostInfo && (
           <div className="text-xs text-muted-foreground flex justify-between">
             <span>Costo: {formatPrice(costoUnit)} · Total: {formatPrice(costoTotal)}</span>
-            {margenPct !== null && <span className="text-emerald-600">margen {margenPct}%</span>}
+            {margenPct !== null && <span className="text-success-600">margen {margenPct}%</span>}
           </div>
         )}
       </div>
@@ -371,7 +371,7 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
           {showCostInfo && (
             <div className="text-[11px] text-muted-foreground mt-1 flex justify-between gap-2">
               <span>Costo {formatPrice(costoUnit)} · Total {formatPrice(costoTotal)}</span>
-              {margenPct !== null && <span className="text-emerald-600">margen {margenPct}%</span>}
+              {margenPct !== null && <span className="text-success-600">margen {margenPct}%</span>}
             </div>
           )}
           {!item.inventarioId && (

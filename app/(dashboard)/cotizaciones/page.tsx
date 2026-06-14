@@ -56,6 +56,8 @@ import { ConvertirVentaDialog } from "@/components/cotizaciones/convertir-venta-
 import { OrdenSelector, type OrdenLite } from "@/components/cotizaciones/orden-selector"
 import { SignatureDisplay } from "@/components/firma/signature-display"
 import { useModal } from "@/contexts/modal-context"
+import { PageShell } from "@/components/ui/page-shell"
+import { EmptyState } from "@/components/ui/empty-state"
 
 interface Cotizacion {
   id: string
@@ -126,10 +128,10 @@ interface PaginatedResponse {
 }
 
 const estadoConfig: Record<string, { label: string; icon: typeof Clock; color: string }> = {
-  BORRADOR: { label: "Borrador", icon: Edit, color: "bg-gray-100 text-gray-800" },
-  ENVIADA: { label: "Enviada", icon: Mail, color: "bg-blue-100 text-blue-800" },
-  ACEPTADA: { label: "Aceptada", icon: CheckCircle, color: "bg-green-100 text-green-800" },
-  RECHAZADA: { label: "Rechazada", icon: XCircle, color: "bg-red-100 text-red-800" },
+  BORRADOR: { label: "Borrador", icon: Edit, color: "bg-muted text-muted-foreground" },
+  ENVIADA: { label: "Enviada", icon: Mail, color: "bg-info-50 text-info-700 dark:bg-info/15 dark:text-info-500" },
+  ACEPTADA: { label: "Aceptada", icon: CheckCircle, color: "bg-success-50 text-success-700 dark:bg-success/15 dark:text-success-500" },
+  RECHAZADA: { label: "Rechazada", icon: XCircle, color: "bg-destructive/10 text-destructive" },
 }
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
@@ -491,19 +493,18 @@ export default function CotizacionesPage() {
   }
 
   return (
-    <div className="container py-6 space-y-4">
-      <div className="flex flex-col gap-3">
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Receipt className="h-6 w-6" />
-          Cotizaciones
-        </h1>
-        {!showForm && !editingCotizacion && (
+    <div className="container py-6">
+      <PageShell
+        title="Cotizaciones"
+        icon={Receipt}
+        className="space-y-4"
+        actions={!showForm && !editingCotizacion ? (
           <Button onClick={() => setShowTipoSelector(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Nueva Cotización
           </Button>
-        )}
-      </div>
+        ) : undefined}
+      >
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
@@ -651,29 +652,15 @@ export default function CotizacionesPage() {
           ))}
         </div>
       ) : cotizaciones.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12 px-4">
-            <div className="flex items-center justify-center w-16 h-16 mb-4 rounded-full bg-muted">
-              <Receipt className="h-8 w-8 text-muted-foreground" />
-            </div>
-            <h3 className="text-lg font-semibold mb-2">
-              {!debouncedSearch && estadoFilter === "TODOS"
-                ? "Todavía no hay cotizaciones"
-                : "Sin resultados"}
-            </h3>
-            <p className="text-sm text-muted-foreground text-center max-w-sm mb-4">
-              {!debouncedSearch && estadoFilter === "TODOS"
-                ? "Creá tu primera cotización para enviar presupuestos a tus clientes."
-                : "No se encontraron cotizaciones con los filtros aplicados."}
-            </p>
-            {!debouncedSearch && estadoFilter === "TODOS" && (
-              <Button onClick={() => setShowForm(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                Nueva Cotización
-              </Button>
-            )}
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={Receipt}
+          variant={!debouncedSearch && estadoFilter === "TODOS" ? "default" : "search"}
+          title={!debouncedSearch && estadoFilter === "TODOS" ? "Todavía no hay cotizaciones" : "Sin resultados"}
+          description={!debouncedSearch && estadoFilter === "TODOS"
+            ? "Creá tu primera cotización para enviar presupuestos a tus clientes."
+            : "No se encontraron cotizaciones con los filtros aplicados."}
+          action={!debouncedSearch && estadoFilter === "TODOS" ? { label: "Nueva Cotización", onClick: () => setShowForm(true) } : undefined}
+        />
       ) : (
         <>
           {/* Result count */}
@@ -768,7 +755,7 @@ export default function CotizacionesPage() {
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    className="text-green-600 hover:text-green-700"
+                                    className="text-success-600 hover:text-success-700"
                                     onClick={() => setApprovingCotizacion(cotizacion)}
                                     title="Aprobar con firma"
                                   >
@@ -777,7 +764,7 @@ export default function CotizacionesPage() {
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    className="text-red-600 hover:text-red-700"
+                                    className="text-destructive hover:text-destructive/80"
                                     onClick={() => handleUpdateEstado(cotizacion.id, "RECHAZADA")}
                                     title="Rechazar"
                                   >
@@ -789,7 +776,7 @@ export default function CotizacionesPage() {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="text-green-600 hover:text-green-700"
+                                  className="text-success-600 hover:text-success-700"
                                   onClick={() => setConvertingCotizacion(cotizacion)}
                                   title="Convertir a venta"
                                 >
@@ -800,7 +787,7 @@ export default function CotizacionesPage() {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="text-blue-600 hover:text-blue-700"
+                                  className="text-info-600 hover:text-info-700"
                                   onClick={() => handleConvertirOrden(cotizacion)}
                                   disabled={convertingOrdenId === cotizacion.id}
                                   title="Convertir a orden"
@@ -812,7 +799,7 @@ export default function CotizacionesPage() {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="text-blue-600 hover:text-blue-700"
+                                  className="text-info-600 hover:text-info-700"
                                   onClick={() => { setLinkOrdenId(null); setLinkingCotizacion(cotizacion) }}
                                   title="Vincular a orden existente"
                                 >
@@ -841,7 +828,7 @@ export default function CotizacionesPage() {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="text-green-600 hover:text-green-700"
+                                  className="text-success-600 hover:text-success-700"
                                   onClick={() => handleShareWhatsApp(cotizacion)}
                                   title={cotizacion.clienteTelefono ? "Compartir por WhatsApp al cliente" : "Compartir por WhatsApp"}
                                 >
@@ -1021,7 +1008,7 @@ export default function CotizacionesPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            className="text-green-600 hover:text-green-700"
+                            className="text-success-600 hover:text-success-700"
                             onClick={() => setApprovingCotizacion(cotizacion)}
                           >
                             <PenTool className="mr-2 h-3 w-3" />
@@ -1030,7 +1017,7 @@ export default function CotizacionesPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            className="text-red-600 hover:text-red-700"
+                            className="text-destructive hover:text-destructive/80"
                             onClick={() => handleUpdateEstado(cotizacion.id, "RECHAZADA")}
                           >
                             <XCircle className="mr-2 h-3 w-3" />
@@ -1051,7 +1038,7 @@ export default function CotizacionesPage() {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="text-green-600 hover:text-green-700"
+                          className="text-success-600 hover:text-success-700"
                           onClick={() => setConvertingCotizacion(cotizacion)}
                         >
                           <ShoppingCart className="mr-2 h-3 w-3" />
@@ -1062,7 +1049,7 @@ export default function CotizacionesPage() {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="text-blue-600 hover:text-blue-700"
+                          className="text-info-600 hover:text-info-700"
                           onClick={() => handleConvertirOrden(cotizacion)}
                           disabled={convertingOrdenId === cotizacion.id}
                         >
@@ -1074,7 +1061,7 @@ export default function CotizacionesPage() {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="text-blue-600 hover:text-blue-700"
+                          className="text-info-600 hover:text-info-700"
                           onClick={() => { setLinkOrdenId(null); setLinkingCotizacion(cotizacion) }}
                         >
                           <Paperclip className="mr-2 h-3 w-3" />
@@ -1114,7 +1101,7 @@ export default function CotizacionesPage() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="text-green-600 hover:text-green-700"
+                          className="text-success-600 hover:text-success-700"
                           onClick={() => handleShareWhatsApp(cotizacion)}
                         >
                           <WhatsAppIcon className="mr-2 h-3 w-3" />
@@ -1237,6 +1224,7 @@ export default function CotizacionesPage() {
           </div>
         </DialogContent>
       </Dialog>
+      </PageShell>
     </div>
   )
 }
