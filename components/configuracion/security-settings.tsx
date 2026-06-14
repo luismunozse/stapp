@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Shield, ShieldCheck, ShieldOff, Copy, Check, RefreshCw } from "lucide-react"
+import { Shield, ShieldCheck, ShieldOff, Copy, Check, RefreshCw, AlertTriangle } from "lucide-react"
 import Image from "next/image"
+import { StatusBanner } from "@/components/ui/status-banner"
 
 interface SecuritySettingsProps {
   totpEnabled: boolean
@@ -143,7 +144,7 @@ export function SecuritySettings({ totpEnabled: initialEnabled }: SecuritySettin
           </div>
         )}
         {success && (
-          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 px-4 py-3 rounded text-sm flex items-center gap-2">
+          <div className="bg-success-50 dark:bg-success/15 border border-success-200 dark:border-success/30 text-success-600 dark:text-success-500 px-4 py-3 rounded text-sm flex items-center gap-2">
             <ShieldCheck className="h-4 w-4" />
             {success}
           </div>
@@ -154,7 +155,7 @@ export function SecuritySettings({ totpEnabled: initialEnabled }: SecuritySettin
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               {totpEnabled ? (
-                <ShieldCheck className="h-8 w-8 text-green-600" />
+                <ShieldCheck className="h-8 w-8 text-success-600" />
               ) : (
                 <ShieldOff className="h-8 w-8 text-muted-foreground" />
               )}
@@ -251,10 +252,10 @@ export function SecuritySettings({ totpEnabled: initialEnabled }: SecuritySettin
         {/* Paso 2: Backup codes */}
         {step === "backup" && (
           <div className="space-y-4">
-            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 px-4 py-3 rounded text-sm">
-              <p className="font-medium">Guarda estos codigos de respaldo</p>
-              <p>Usa estos codigos si pierdes acceso a tu app de autenticacion. Cada codigo solo se puede usar una vez.</p>
-            </div>
+            <StatusBanner tone="warning" icon={AlertTriangle}>
+              <span className="font-medium">Guarda estos codigos de respaldo.</span>{" "}
+              Usa estos codigos si pierdes acceso a tu app de autenticacion. Cada codigo solo se puede usar una vez.
+            </StatusBanner>
 
             <div className="bg-muted rounded p-4 font-mono text-sm grid grid-cols-2 gap-2">
               {backupCodes.map((code, i) => (

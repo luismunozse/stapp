@@ -364,7 +364,7 @@ export function TiposDispositivoEditor() {
                         title={tipo.activo ? "Desactivar" : "Activar"}
                       >
                         {tipo.activo ? (
-                          <Power className="h-4 w-4 text-green-600" />
+                          <Power className="h-4 w-4 text-success-600" />
                         ) : (
                           <PowerOff className="h-4 w-4 text-muted-foreground" />
                         )}
@@ -373,7 +373,7 @@ export function TiposDispositivoEditor() {
                         variant="ghost"
                         size="icon"
                         onClick={() => handleDelete(tipo)}
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
                         title={tipo.esBase ? "Desactivar tipo" : "Eliminar tipo"}
                       >
                         <Trash2 className="h-4 w-4" />

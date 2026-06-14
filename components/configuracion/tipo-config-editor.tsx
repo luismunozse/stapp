@@ -301,7 +301,7 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
                     <button
                       type="button"
                       onClick={() => removeCampoExtra(idx)}
-                      className="text-red-500 hover:text-red-700"
+                      className="text-destructive hover:text-destructive/80"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -427,7 +427,7 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
                 <button
                   type="button"
                   onClick={() => setAccesorios((prev) => prev.filter((_, j) => j !== i))}
-                  className="text-muted-foreground hover:text-red-500"
+                  className="text-muted-foreground hover:text-destructive"
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -463,7 +463,7 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
                 <button
                   type="button"
                   onClick={() => setMarcas((prev) => prev.filter((_, j) => j !== i))}
-                  className="text-muted-foreground hover:text-red-500"
+                  className="text-muted-foreground hover:text-destructive"
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -499,7 +499,7 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
                 <button
                   type="button"
                   onClick={() => setProblemas((prev) => prev.filter((_, j) => j !== i))}
-                  className="text-muted-foreground hover:text-red-500"
+                  className="text-muted-foreground hover:text-destructive"
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -538,7 +538,7 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
                 <button
                   type="button"
                   onClick={() => setCategoriasInventario((prev) => prev.filter((_, j) => j !== i))}
-                  className="text-muted-foreground hover:text-red-500"
+                  className="text-muted-foreground hover:text-destructive"
                 >
                   <X className="h-3 w-3" />
                 </button>

@@ -233,7 +233,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
         <div
           className={`px-3 sm:px-4 py-2 sm:py-3 rounded text-sm ${
             message.type === "success"
-              ? "bg-green-500/10 border border-green-500/30 text-green-600 dark:text-green-400"
+              ? "bg-success-50 dark:bg-success/15 border border-success-200 dark:border-success/30 text-success-600 dark:text-success-500"
               : "bg-destructive/10 border border-destructive/30 text-destructive"
           }`}
         >
@@ -486,7 +486,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
               checked={moduloAgenda}
               onChange={(e) => setModuloAgenda(e.target.checked)}
               disabled={!allowEdit}
-              className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+              className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
             />
             <div className="flex-1">
               <div className="text-sm font-medium">Agenda de turnos</div>

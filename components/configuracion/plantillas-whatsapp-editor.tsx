@@ -36,6 +36,7 @@ import {
   type PlantillaDefinition,
   type PlantillaVariable,
 } from "@/lib/whatsapp/plantillas-catalog"
+import { StatusBanner } from "@/components/ui/status-banner"
 import { cn } from "@/lib/utils"
 
 type PlantillasMap = Record<string, string>
@@ -262,7 +263,7 @@ function PlantillaEditor({
               </Badge>
             )}
             {isDirty && (
-              <Badge className="text-[10px] font-normal h-5 bg-amber-500 hover:bg-amber-500 text-white">
+              <Badge className="text-[10px] font-normal h-5 bg-warning hover:bg-warning text-white">
                 Sin guardar
               </Badge>
             )}
@@ -305,23 +306,16 @@ function PlantillaEditor({
 
         {/* Unknown variables warning */}
         {unknownVars.length > 0 && (
-          <div className="border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 rounded-md p-3 flex gap-2 text-xs">
-            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-medium text-amber-800 dark:text-amber-300">
-                Variables desconocidas
-              </p>
-              <p className="text-amber-700 dark:text-amber-400 mt-0.5">
-                Estas variables no se reemplazarán y aparecerán vacías:{" "}
-                {unknownVars.map((v, i) => (
-                  <span key={v}>
-                    <code className="font-mono bg-amber-100 dark:bg-amber-900/40 px-1 rounded">{`{${v}}`}</code>
-                    {i < unknownVars.length - 1 ? ", " : ""}
-                  </span>
-                ))}
-              </p>
-            </div>
-          </div>
+          <StatusBanner tone="warning" icon={AlertTriangle}>
+            <span className="font-medium">Variables desconocidas:</span>{" "}
+            Estas variables no se reemplazarán y aparecerán vacías:{" "}
+            {unknownVars.map((v, i) => (
+              <span key={v}>
+                <code className="font-mono bg-warning-100/60 px-1 rounded">{`{${v}}`}</code>
+                {i < unknownVars.length - 1 ? ", " : ""}
+              </span>
+            ))}
+          </StatusBanner>
         )}
 
         {/* Editor + Preview side-by-side on desktop */}
@@ -645,8 +639,8 @@ export function PlantillasWhatsappEditor() {
             className={cn(
               "px-4 py-3 rounded-lg text-sm flex items-center gap-2 ease-snappy animate-in slide-in-from-top-2",
               message.type === "success"
-                ? "bg-green-50 dark:bg-green-950/50 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400"
-                : "bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400",
+                ? "bg-success-50 dark:bg-success/15 border border-success-200 dark:border-success/30 text-success-600 dark:text-success-500"
+                : "bg-destructive/10 dark:bg-destructive/15 border border-destructive/30 text-destructive",
             )}
           >
             {message.type === "success" ? (
@@ -661,8 +655,8 @@ export function PlantillasWhatsappEditor() {
         {/* Stats bar */}
         <div className="border rounded-lg p-3 sm:p-4 bg-muted/30 flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
-            <div className="bg-green-100 dark:bg-green-950 rounded-full p-2">
-              <WhatsAppIcon className="h-4 w-4 text-green-600" />
+            <div className="bg-success-100 dark:bg-success/15 rounded-full p-2">
+              <WhatsAppIcon className="h-4 w-4 text-success-600" />
             </div>
             <div>
               <div className="text-sm font-semibold">
@@ -791,7 +785,7 @@ export function PlantillasWhatsappEditor() {
                           {CATEGORIES[cat].label}
                         </span>
                         {dirtyInCat > 0 && (
-                          <span className="text-[10px] bg-amber-500 text-white px-1.5 py-0.5 rounded-full font-medium">
+                          <span className="text-[10px] bg-warning text-white px-1.5 py-0.5 rounded-full font-medium">
                             {dirtyInCat}
                           </span>
                         )}
@@ -865,13 +859,13 @@ export function PlantillasWhatsappEditor() {
             className={cn(
               "border rounded-lg p-3 shadow-lg flex items-center justify-between gap-3",
               hasChanges
-                ? "bg-amber-50 dark:bg-amber-950/50 border-amber-300 dark:border-amber-800"
+                ? "bg-warning-50 dark:bg-warning/10 border-warning-200 dark:border-warning/30"
                 : "bg-background",
             )}
           >
             <span className="text-xs sm:text-sm">
               {hasChanges ? (
-                <span className="text-amber-700 dark:text-amber-400 font-medium">
+                <span className="text-warning-700 dark:text-warning-600 font-medium">
                   {dirtyCount} {dirtyCount === 1 ? "cambio" : "cambios"} sin guardar
                 </span>
               ) : (
