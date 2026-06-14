@@ -153,6 +153,7 @@ export async function GET(request: Request) {
     const ordenId = searchParams.get("ordenId")
     const estado = searchParams.get("estado")
     const search = searchParams.get("search")
+    const clienteId = searchParams.get("clienteId")
 
     if (ordenId) {
       // Modo legacy: filtrar por orden_id con inner join
@@ -201,6 +202,7 @@ export async function GET(request: Request) {
       .order("created_at", { ascending: false })
 
     if (estado && estado !== "TODOS") query = query.eq("estado", estado)
+    if (clienteId) query = query.eq("cliente_id", clienteId)
     if (search) {
       // Buscar por número de cotización o nombre de cliente.
       // Supabase no soporta OR cross-table en un select, así que resolvemos
