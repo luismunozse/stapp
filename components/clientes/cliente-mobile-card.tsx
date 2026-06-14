@@ -28,10 +28,10 @@ export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCue
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-3">
             <div className={`h-9 w-9 rounded-full flex items-center justify-center shrink-0 ${
-              cliente.tipoCliente === "EMPRESA" ? "bg-amber-500/10" : "bg-primary/10"
+              cliente.tipoCliente === "EMPRESA" ? "bg-warning/10" : "bg-primary/10"
             }`}>
               {cliente.tipoCliente === "EMPRESA" ? (
-                <Building2 className="h-4 w-4 text-amber-600" />
+                <Building2 className="h-4 w-4 text-warning-600" />
               ) : (
                 <User className="h-4 w-4 text-primary" />
               )}
@@ -40,7 +40,7 @@ export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCue
               <div className="font-medium text-sm">{cliente.nombre}</div>
               <div className="flex items-center gap-2">
                 {cliente.tipoCliente === "EMPRESA" && (
-                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-700">
+                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-warning/10 text-warning-700">
                     Empresa
                   </span>
                 )}
@@ -82,7 +82,7 @@ export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCue
                     className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
                     onClick={(e) => onWhatsApp(e, cliente)}
                   >
-                    <WhatsAppIcon className="h-4 w-4 text-green-600" />
+                    <WhatsAppIcon className="h-4 w-4 text-success-600" />
                     Enviar WhatsApp
                   </button>
                 )}
@@ -92,7 +92,7 @@ export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCue
                     className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
                     onClick={(e) => onCobrar(e, cliente)}
                   >
-                    <DollarSign className="h-4 w-4 text-green-600" />
+                    <DollarSign className="h-4 w-4 text-success-600" />
                     Cobrar órdenes
                   </button>
                 )}
@@ -102,7 +102,7 @@ export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCue
                     className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
                     onClick={(e) => onCuentaCorriente(e, cliente)}
                   >
-                    <PiggyBank className="h-4 w-4 text-blue-600" />
+                    <PiggyBank className="h-4 w-4 text-info-600" />
                     Cuenta corriente
                   </button>
                 )}

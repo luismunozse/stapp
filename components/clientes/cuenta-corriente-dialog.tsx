@@ -26,6 +26,7 @@ import {
   Loader2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { EmptyState } from "@/components/ui/empty-state"
 import { useCurrency } from "@/contexts/currency-context"
 import { useModal } from "@/contexts/modal-context"
 import type { Cliente } from "@/types"
@@ -186,8 +187,8 @@ export function CuentaCorrienteDialog({
             <div className="text-center">
               <div className="text-sm text-muted-foreground">Saldo disponible</div>
               <div className={cn(
-                "text-3xl font-bold mt-1",
-                saldo > 0 ? "text-blue-600" : "text-muted-foreground"
+                "text-2xl font-bold tabular-nums mt-1",
+                saldo > 0 ? "text-info-600" : "text-muted-foreground"
               )}>
                 {formatPrice(saldo)}
               </div>
@@ -296,9 +297,7 @@ export function CuentaCorrienteDialog({
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : movimientos.length === 0 ? (
-            <div className="text-center py-8 text-sm text-muted-foreground">
-              No hay movimientos registrados
-            </div>
+            <EmptyState icon={ArrowRightLeft} title="Sin movimientos" variant="default" />
           ) : (
             <div className="space-y-2 max-h-[300px] overflow-y-auto">
               {movimientos.map((mov) => (
@@ -308,15 +307,15 @@ export function CuentaCorrienteDialog({
                 >
                   <div className="flex items-start gap-2">
                     {mov.monto >= 0 ? (
-                      <ArrowDownCircle className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
+                      <ArrowDownCircle className="h-4 w-4 text-success-600 mt-0.5 shrink-0" />
                     ) : (
-                      <ArrowUpCircle className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
+                      <ArrowUpCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
                     )}
                     <div className="space-y-0.5">
                       <div className="flex items-center gap-2">
                         <span className={cn(
                           "font-medium text-sm",
-                          mov.monto >= 0 ? "text-green-600" : "text-red-600"
+                          mov.monto >= 0 ? "text-success-600" : "text-destructive"
                         )}>
                           {mov.monto >= 0 ? "+" : ""}{formatPrice(Math.abs(mov.monto))}
                         </span>
