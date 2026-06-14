@@ -25,6 +25,7 @@ import { SignaturePad } from "@/components/firma/signature-pad"
 import { useOffline } from "@/contexts/offline-context"
 import { STORES } from "@/lib/offline/constants"
 import type { Cliente, TipoDispositivoConfig, CampoExtra } from "@/types"
+import { isValidImei, sanitizeImei } from "@/lib/imei"
 
 interface FotoPreview {
   id: string
@@ -165,6 +166,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId }: OrdenFormProps) {
     watch,
     trigger,
     clearErrors,
+    setError,
   } = useForm<OrdenFormData>({
     resolver: zodResolver(ordenSchema),
     defaultValues: {
@@ -244,6 +246,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId }: OrdenFormProps) {
   const imeiLabel = config.campos?.imei?.label || "Numero de Serie"
   const imeiPlaceholder = config.campos?.imei?.placeholder || "S/N del equipo"
   const imeiMaxLength = config.campos?.imei?.maxLength
+  const imeiEsImei = config.campos?.imei?.validacion === "imei"
 
   // Handle campo extra changes with autoMarca and usarComoDispositivo support
   const handleCampoExtraChange = (campo: CampoExtra, value: any) => {
@@ -557,6 +560,11 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId }: OrdenFormProps) {
   }
 
   const onSubmit = async (data: OrdenFormData) => {
+    // Validate IMEI only when the field is configured as IMEI (15 digits)
+    if (imeiEsImei && !isValidImei(data.imei)) {
+      setError("imei", { message: "El IMEI debe tener exactamente 15 dígitos" })
+      return
+    }
     setLoading(true)
     try {
       // Build accessories labels
@@ -1018,9 +1026,16 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId }: OrdenFormProps) {
                   <Label htmlFor="imei">{imeiLabel}</Label>
                   <Input
                     id="imei"
-                    {...register("imei")}
+                    {...register("imei", {
+                      onChange: imeiEsImei
+                        ? (e) => {
+                            e.target.value = sanitizeImei(e.target.value)
+                          }
+                        : undefined,
+                    })}
                     placeholder={imeiPlaceholder}
-                    maxLength={imeiMaxLength}
+                    maxLength={imeiEsImei ? 15 : imeiMaxLength}
+                    inputMode={imeiEsImei ? "numeric" : undefined}
                   />
                   {errors.imei && (
                     <p className="text-sm text-destructive mt-1">

@@ -42,6 +42,7 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
   const [imeiVisible, setImeiVisible] = useState(config.campos?.imei?.visible !== false)
   const [imeiLabel, setImeiLabel] = useState(config.campos?.imei?.label || "Numero de Serie")
   const [imeiPlaceholder, setImeiPlaceholder] = useState(config.campos?.imei?.placeholder || "")
+  const [imeiValidacionImei, setImeiValidacionImei] = useState(config.campos?.imei?.validacion === "imei")
   const [passwordVisible, setPasswordVisible] = useState(config.campos?.password?.visible !== false)
   const [colorVisible, setColorVisible] = useState(config.campos?.color?.visible !== false)
   const [marcaVisible, setMarcaVisible] = useState(config.campos?.marca?.visible !== false)
@@ -73,7 +74,7 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
     try {
       const newConfig: TipoDispositivoConfig = {
         campos: {
-          imei: { visible: imeiVisible, label: imeiLabel, placeholder: imeiPlaceholder },
+          imei: { visible: imeiVisible, label: imeiLabel, placeholder: imeiPlaceholder, ...(imeiValidacionImei ? { validacion: "imei" as const } : {}) },
           password: { visible: passwordVisible },
           color: { visible: colorVisible },
           marca: { visible: marcaVisible },
@@ -198,6 +199,15 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
                     placeholder="Placeholder"
                     className="h-7 text-xs"
                   />
+                  <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={imeiValidacionImei}
+                      onChange={(e) => setImeiValidacionImei(e.target.checked)}
+                      className="h-3.5 w-3.5"
+                    />
+                    Validar como IMEI (15 dígitos)
+                  </label>
                 </>
               )}
             </div>
