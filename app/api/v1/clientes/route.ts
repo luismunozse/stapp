@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 const COLUMNS =
   "id, nombre, telefono, email, direccion, dni, tipo_cliente, razon_social, cuit, created_at"
 
+// Org-wide by design: clientes has no sucursal_id column (shared CRM across branches).
 export async function GET(request: Request) {
   const { error, organizationId } = await requireApiKey(request)
   if (error) return error
