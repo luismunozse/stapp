@@ -145,6 +145,46 @@ export function PosCheckoutDialog({
       return
     }
 
+    // Pre-checkout stock re-validation (fail-open: RPC is the real guard)
+    const invItems = items.filter((i) => i.inventarioId)
+    if (invItems.length > 0) {
+      const ids = invItems.map((i) => i.inventarioId!)
+      try {
+        const stockRes = await fetch("/api/inventario/check-stock", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids }),
+        })
+        if (stockRes.ok) {
+          const stockData = await stockRes.json()
+          const stock: Record<string, number> = stockData.stock ?? {}
+          // Sum requested quantities per inventarioId
+          const pedidoPorId: Record<string, number> = {}
+          const nombrePorId: Record<string, string> = {}
+          for (const item of invItems) {
+            const id = item.inventarioId!
+            pedidoPorId[id] = (pedidoPorId[id] ?? 0) + item.cantidad
+            nombrePorId[id] = item.nombre
+          }
+          const conflicts: string[] = []
+          for (const [id, pedido] of Object.entries(pedidoPorId)) {
+            const disponible = stock[id] ?? 0
+            if (pedido > disponible) {
+              conflicts.push(`${nombrePorId[id]}: pedís ${pedido}, hay ${disponible}`)
+            }
+          }
+          if (conflicts.length > 0) {
+            setLoading(false)
+            await showError(`Stock insuficiente:\n${conflicts.join("\n")}`)
+            return
+          }
+        }
+        // If !stockRes.ok → fail open, continue with sale
+      } catch {
+        // Network/fetch error → fail open, continue with sale
+      }
+    }
+
     setLoading(true)
     try {
       const payload = buildVentaPayload({

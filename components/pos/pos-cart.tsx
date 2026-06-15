@@ -46,6 +46,7 @@ interface PosCartProps {
   onSetItemDescuento: (lineId: string, d: { tipo: TipoDescuento; valor: number }) => void
   onSetDescuentoGlobal: (d: DescuentoConfig | null) => void
   onSetDescuentoMotivo: (m: string) => void
+  onSetPrecio: (lineId: string, precio: number) => void
 }
 
 interface ClienteResult {
@@ -74,6 +75,7 @@ export function PosCart({
   onSetItemDescuento,
   onSetDescuentoGlobal,
   onSetDescuentoMotivo,
+  onSetPrecio,
 }: PosCartProps) {
   const { formatPrice } = useCurrency()
   const [clienteQuery, setClienteQuery] = useState("")
@@ -81,6 +83,7 @@ export function PosCart({
   const [clienteLoading, setClienteLoading] = useState(false)
   const [expandedItem, setExpandedItem] = useState<string | null>(null)
   const [garantiaDraft, setGarantiaDraft] = useState<string>("")
+  const [precioDraft, setPrecioDraft] = useState<string>("")
   const [seriesDisp, setSeriesDisp] = useState<Record<string, SerieDisponible[]>>({})
   const [seriesLoading, setSeriesLoading] = useState<string | null>(null)
   // Per-item discount drafts (tipo toggle + value input)
@@ -289,6 +292,7 @@ export function PosCart({
                         } else {
                           setExpandedItem(item.lineId)
                           setGarantiaDraft(String(item.diasGarantia))
+                          setPrecioDraft(String(item.precioUnitario))
                         }
                       }}
                     >
@@ -382,6 +386,23 @@ export function PosCart({
                             onSetGarantia(item.lineId, parseInt(e.target.value, 10) || 0)
                           }}
                           className="h-7 w-16 text-xs text-center"
+                        />
+                      </label>
+
+                      {/* Per-line unit price override */}
+                      <label className="flex items-center gap-1.5">
+                        <span className="text-muted-foreground">Precio unit.:</span>
+                        <Input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={precioDraft}
+                          onChange={(e) => {
+                            setPrecioDraft(e.target.value)
+                            const parsed = parseFloat(e.target.value)
+                            if (parsed > 0) onSetPrecio(item.lineId, parsed)
+                          }}
+                          className="h-7 w-24 text-xs text-center"
                         />
                       </label>
 
