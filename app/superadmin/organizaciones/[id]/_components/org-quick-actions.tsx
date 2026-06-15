@@ -342,6 +342,12 @@ export function OrgQuickActions({
                 </SelectContent>
               </Select>
             </div>
+
+            <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+              Al confirmar se <strong>activa</strong> el plan (estado ACTIVO), se
+              finaliza cualquier trial en curso y se registra un{" "}
+              <strong>pago MANUAL</strong> para el período elegido.
+            </p>
           </div>
 
           <DialogFooter>
