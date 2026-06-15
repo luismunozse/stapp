@@ -179,17 +179,35 @@ export async function POST(request: Request) {
     const body = await request.json()
     const data = ventaSchema.parse(body)
 
-    // Calcular totales
-    const subtotal = data.items.reduce(
-      (sum, item) => sum + item.cantidad * item.precioUnitario,
-      0
-    )
+    // Calcular totales. Convención: venta.subtotal = bruto (Σ cantidad×precio);
+    // venta.descuento = descuento total (por línea + global); venta.total =
+    // bruto − descuento. Los descuentos por línea se restan del neto sobre el
+    // que se aplica el descuento global (% global sobre el neto post-línea).
+    const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100
 
-    let descuentoMonto = data.descuento
-    if (data.tipoDescuento === "PORCENTAJE") {
-      descuentoMonto = subtotal * (data.porcentajeDescuento / 100)
+    let subtotalBruto = 0
+    let descuentoItems = 0
+    for (const item of data.items) {
+      const lineaBruto = item.cantidad * item.precioUnitario
+      subtotalBruto += lineaBruto
+      const lineaDesc =
+        item.tipoDescuento === "PORCENTAJE"
+          ? lineaBruto * (item.porcentajeDescuento / 100)
+          : Math.min(item.descuento, lineaBruto)
+      descuentoItems += lineaDesc
     }
-    const total = subtotal - descuentoMonto
+    const subtotalNeto = subtotalBruto - descuentoItems
+
+    let descuentoGlobal = data.descuento
+    if (data.tipoDescuento === "PORCENTAJE") {
+      descuentoGlobal = subtotalNeto * (data.porcentajeDescuento / 100)
+    }
+    // Clamp: el descuento global no puede exceder el neto (total nunca negativo)
+    descuentoGlobal = Math.min(Math.max(descuentoGlobal, 0), subtotalNeto)
+
+    const subtotal = round2(subtotalBruto)
+    const descuentoMonto = round2(descuentoItems + descuentoGlobal)
+    const total = round2(Math.max(subtotalBruto - descuentoItems - descuentoGlobal, 0))
 
     // Preparar items para la función atómica
     const pItems = data.items.map(item => ({

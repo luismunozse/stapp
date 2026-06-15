@@ -689,3 +689,92 @@ describe("POST /api/ventas — saldo pendiente requiere cliente", () => {
     expect(status).not.toBe(400)
   })
 })
+
+describe("POST /api/ventas — descuentos por línea + global", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  async function rpcArgsFor(body: any) {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ventaId: "v1" }, error: null } as any)
+    mockSupabaseFrom({
+      ventas: createChainMock({ id: "v1", numero_venta: 1, total: 0 }),
+      organizations: createChainMock({ nombre: "Org", nombre_mostrar: "Org" }),
+    })
+    const res = await POST(createPostRequest(body))
+    const { status } = await parseResponse(res)
+    expect(status).toBe(201)
+    return vi.mocked(supabaseAdmin.rpc).mock.calls[0][1] as any
+  }
+
+  it("descuento por línea PORCENTAJE reduce subtotal/total (200 línea, 10% = 180)", async () => {
+    const args = await rpcArgsFor({
+      clienteNombre: "CF",
+      metodoPago: "EFECTIVO",
+      items: [{ inventarioId: "i1", descripcion: "X", cantidad: 2, precioUnitario: 100, diasGarantia: 0, tipoDescuento: "PORCENTAJE", porcentajeDescuento: 10 }],
+    })
+    expect(args.p_subtotal).toBe(200) // gross
+    expect(args.p_descuento).toBe(20)
+    expect(args.p_total).toBe(180)
+  })
+
+  it("descuento por línea MONTO ($30 off de 200 = 170)", async () => {
+    const args = await rpcArgsFor({
+      clienteNombre: "CF",
+      metodoPago: "EFECTIVO",
+      items: [{ inventarioId: "i1", descripcion: "X", cantidad: 2, precioUnitario: 100, diasGarantia: 0, tipoDescuento: "MONTO", descuento: 30 }],
+    })
+    expect(args.p_subtotal).toBe(200)
+    expect(args.p_descuento).toBe(30)
+    expect(args.p_total).toBe(170)
+  })
+
+  it("descuento global PORCENTAJE sin descuento por línea (100, 10% = 90)", async () => {
+    const args = await rpcArgsFor({
+      clienteNombre: "CF",
+      metodoPago: "EFECTIVO",
+      tipoDescuento: "PORCENTAJE",
+      porcentajeDescuento: 10,
+      items: [{ inventarioId: "i1", descripcion: "X", cantidad: 1, precioUnitario: 100, diasGarantia: 0 }],
+    })
+    expect(args.p_subtotal).toBe(100)
+    expect(args.p_descuento).toBe(10)
+    expect(args.p_total).toBe(90)
+  })
+
+  it("combinado: línea 10% (sobre 100 = 10) + global $20 → descuento 30, total 70", async () => {
+    const args = await rpcArgsFor({
+      clienteNombre: "CF",
+      metodoPago: "EFECTIVO",
+      tipoDescuento: "MONTO",
+      descuento: 20,
+      items: [{ inventarioId: "i1", descripcion: "X", cantidad: 1, precioUnitario: 100, diasGarantia: 0, tipoDescuento: "PORCENTAJE", porcentajeDescuento: 10 }],
+    })
+    expect(args.p_subtotal).toBe(100)
+    expect(args.p_descuento).toBe(30) // 10 línea + 20 global
+    expect(args.p_total).toBe(70)
+  })
+
+  it("combinado con global %: línea 10% sobre 200 (neto 180) + global 10% sobre neto (18) → total 162", async () => {
+    const args = await rpcArgsFor({
+      clienteNombre: "CF",
+      metodoPago: "EFECTIVO",
+      tipoDescuento: "PORCENTAJE",
+      porcentajeDescuento: 10,
+      items: [{ inventarioId: "i1", descripcion: "X", cantidad: 2, precioUnitario: 100, diasGarantia: 0, tipoDescuento: "PORCENTAJE", porcentajeDescuento: 10 }],
+    })
+    expect(args.p_subtotal).toBe(200)
+    expect(args.p_descuento).toBe(38) // 20 línea + 18 global
+    expect(args.p_total).toBe(162)
+  })
+
+  it("nunca produce total negativo (descuento global clampeado)", async () => {
+    const args = await rpcArgsFor({
+      clienteNombre: "CF",
+      metodoPago: "EFECTIVO",
+      tipoDescuento: "MONTO",
+      descuento: 9999,
+      items: [{ inventarioId: "i1", descripcion: "X", cantidad: 1, precioUnitario: 100, diasGarantia: 0 }],
+    })
+    expect(args.p_total).toBe(0)
+  })
+})

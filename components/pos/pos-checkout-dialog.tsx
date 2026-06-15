@@ -23,7 +23,8 @@ import { cn } from "@/lib/utils"
 import { useCurrency } from "@/contexts/currency-context"
 import { useModal } from "@/contexts/modal-context"
 import { MultiPagoInput, createPagoLine, type PagoLineItem } from "@/components/pagos/multi-pago-input"
-import type { PosCartItem, PosCliente } from "./pos-types"
+import type { PosCartItem, PosCliente, DescuentoConfig } from "./pos-types"
+import { computeVentaTotals } from "./pos-types"
 import { buildVentaPayload } from "./pos-payload"
 import { TotalRow } from "@/components/pos/total-row"
 
@@ -33,6 +34,8 @@ interface PosCheckoutDialogProps {
   items: PosCartItem[]
   cliente: PosCliente
   onComplete: (ventaData: any) => void
+  descuentoGlobal?: DescuentoConfig | null
+  descuentoMotivo?: string
 }
 
 export function PosCheckoutDialog({
@@ -41,6 +44,8 @@ export function PosCheckoutDialog({
   items,
   cliente,
   onComplete,
+  descuentoGlobal = null,
+  descuentoMotivo,
 }: PosCheckoutDialogProps) {
   const { formatPrice } = useCurrency()
   const { showError } = useModal()
@@ -54,8 +59,8 @@ export function PosCheckoutDialog({
   // Cash change calculation
   const [montoRecibido, setMontoRecibido] = useState<number | "">("")
 
-  const subtotal = items.reduce((sum, item) => sum + item.precioUnitario * item.cantidad, 0)
-  const total = subtotal
+  const t = computeVentaTotals(items, descuentoGlobal)
+  const total = t.total
 
   const isCashOnly = pagosLines.length === 1 && pagosLines[0].metodo === "EFECTIVO"
   const vuelto = useMemo(() => {
@@ -149,6 +154,8 @@ export function PosCheckoutDialog({
         pagoParcial,
         observaciones,
         idempotencyKey,
+        descuentoGlobal,
+        ...(descuentoMotivo ? { descuentoMotivo } : {}),
       })
 
       const res = await fetch("/api/ventas", {
@@ -214,6 +221,12 @@ export function PosCheckoutDialog({
                 </Badge>
               )}
             </div>
+            {t.descuentoTotal > 0 && (
+              <div className="space-y-1 mb-2">
+                <TotalRow label="Subtotal" amount={formatPrice(t.subtotal)} />
+                <TotalRow label="Descuento" amount={`- ${formatPrice(t.descuentoTotal)}`} tone="success" />
+              </div>
+            )}
             <TotalRow label="Total a cobrar" amount={formatPrice(total)} emphasis />
           </div>
 

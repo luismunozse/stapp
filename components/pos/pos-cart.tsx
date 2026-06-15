@@ -21,8 +21,8 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useCurrency } from "@/contexts/currency-context"
-import { autoSelectSeries } from "./pos-types"
-import type { PosCartItem, PosCliente, SerieDisponible } from "./pos-types"
+import { autoSelectSeries, computeVentaTotals } from "./pos-types"
+import type { PosCartItem, PosCliente, SerieDisponible, DescuentoConfig, TipoDescuento } from "./pos-types"
 import { EmptyState } from "@/components/ui/empty-state"
 import { TotalRow } from "@/components/pos/total-row"
 
@@ -41,6 +41,11 @@ interface PosCartProps {
   heldCount: number
   showClienteSearch: boolean
   onToggleClienteSearch: () => void
+  descuentoGlobal: DescuentoConfig | null
+  descuentoMotivo: string
+  onSetItemDescuento: (lineId: string, d: { tipo: TipoDescuento; valor: number }) => void
+  onSetDescuentoGlobal: (d: DescuentoConfig | null) => void
+  onSetDescuentoMotivo: (m: string) => void
 }
 
 interface ClienteResult {
@@ -64,6 +69,11 @@ export function PosCart({
   heldCount,
   showClienteSearch,
   onToggleClienteSearch,
+  descuentoGlobal,
+  descuentoMotivo,
+  onSetItemDescuento,
+  onSetDescuentoGlobal,
+  onSetDescuentoMotivo,
 }: PosCartProps) {
   const { formatPrice } = useCurrency()
   const [clienteQuery, setClienteQuery] = useState("")
@@ -73,10 +83,13 @@ export function PosCart({
   const [garantiaDraft, setGarantiaDraft] = useState<string>("")
   const [seriesDisp, setSeriesDisp] = useState<Record<string, SerieDisponible[]>>({})
   const [seriesLoading, setSeriesLoading] = useState<string | null>(null)
+  // Per-item discount drafts (tipo toggle + value input)
+  const [itemDescTipo, setItemDescTipo] = useState<Record<string, TipoDescuento>>({})
   const clienteInputRef = useRef<HTMLInputElement>(null)
 
-  const subtotal = items.reduce((sum, item) => sum + item.precioUnitario * item.cantidad, 0)
-  const total = subtotal
+  // Global discount local draft state
+  const [globalDescTipo, setGlobalDescTipo] = useState<TipoDescuento>(descuentoGlobal?.tipo ?? "PORCENTAJE")
+  const [globalDescValor, setGlobalDescValor] = useState<string>(descuentoGlobal ? String(descuentoGlobal.valor) : "")
 
   // Focus client search when toggled
   useEffect(() => {
@@ -325,9 +338,22 @@ export function PosCart({
 
                     {/* Line total */}
                     <div className="text-right shrink-0 w-20">
-                      <span className="text-sm font-semibold">
-                        {formatPrice(item.precioUnitario * item.cantidad)}
-                      </span>
+                      {(() => {
+                        const gross = item.precioUnitario * item.cantidad
+                        const lineDesc =
+                          item.tipoDescuento === "PORCENTAJE"
+                            ? gross * ((item.porcentajeDescuento || 0) / 100)
+                            : Math.min(item.descuento || 0, gross)
+                        const net = gross - lineDesc
+                        return lineDesc > 0 ? (
+                          <>
+                            <div className="text-xs text-muted-foreground line-through">{formatPrice(gross)}</div>
+                            <span className="text-sm font-semibold text-success">{formatPrice(net)}</span>
+                          </>
+                        ) : (
+                          <span className="text-sm font-semibold">{formatPrice(gross)}</span>
+                        )
+                      })()}
                     </div>
 
                     {/* Remove */}
@@ -358,6 +384,51 @@ export function PosCart({
                           className="h-7 w-16 text-xs text-center"
                         />
                       </label>
+
+                      {/* Per-line discount */}
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-muted-foreground shrink-0">Descuento:</span>
+                        <div className="flex items-center rounded-md border overflow-hidden h-7">
+                          {(["PORCENTAJE", "MONTO"] as TipoDescuento[]).map((t) => {
+                            const currentTipo = itemDescTipo[item.lineId] ?? (item.tipoDescuento ?? "PORCENTAJE")
+                            return (
+                              <button
+                                key={t}
+                                type="button"
+                                onClick={() => {
+                                  setItemDescTipo((prev) => ({ ...prev, [item.lineId]: t }))
+                                  const val = t === "PORCENTAJE" ? (item.porcentajeDescuento ?? 0) : (item.descuento ?? 0)
+                                  onSetItemDescuento(item.lineId, { tipo: t, valor: val })
+                                }}
+                                className={cn(
+                                  "px-2 h-full text-[10px] font-medium transition-colors",
+                                  currentTipo === t
+                                    ? "bg-primary text-primary-foreground"
+                                    : "bg-background text-muted-foreground hover:bg-muted"
+                                )}
+                              >
+                                {t === "PORCENTAJE" ? "%" : "$"}
+                              </button>
+                            )
+                          })}
+                        </div>
+                        <Input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={(() => {
+                            const tipo = itemDescTipo[item.lineId] ?? (item.tipoDescuento ?? "PORCENTAJE")
+                            return tipo === "PORCENTAJE" ? (item.porcentajeDescuento ?? 0) : (item.descuento ?? 0)
+                          })()}
+                          onChange={(e) => {
+                            const tipo = itemDescTipo[item.lineId] ?? (item.tipoDescuento ?? "PORCENTAJE")
+                            const val = parseFloat(e.target.value) || 0
+                            onSetItemDescuento(item.lineId, { tipo, valor: val })
+                          }}
+                          className="h-7 w-20 text-xs text-center"
+                          placeholder="0"
+                        />
+                      </div>
 
                       {item.trackeaSeries && (
                         <div className="rounded border bg-muted/30 p-2 space-y-1.5">
@@ -413,18 +484,86 @@ export function PosCart({
 
       {/* Footer: Totals + Actions */}
       <div className="border-t bg-muted/30 shrink-0">
+        {/* Global discount control */}
+        {items.length > 0 && (
+          <div className="px-4 pt-3 space-y-1.5">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-xs text-muted-foreground shrink-0">Descuento global:</span>
+              <div className="flex items-center rounded-md border overflow-hidden h-7">
+                {(["PORCENTAJE", "MONTO"] as TipoDescuento[]).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => {
+                      setGlobalDescTipo(t)
+                      const val = parseFloat(globalDescValor) || 0
+                      if (val > 0) onSetDescuentoGlobal({ tipo: t, valor: val })
+                    }}
+                    className={cn(
+                      "px-2 h-full text-[10px] font-medium transition-colors",
+                      globalDescTipo === t
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-background text-muted-foreground hover:bg-muted"
+                    )}
+                  >
+                    {t === "PORCENTAJE" ? "%" : "$"}
+                  </button>
+                ))}
+              </div>
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                value={globalDescValor}
+                onChange={(e) => {
+                  const raw = e.target.value
+                  setGlobalDescValor(raw)
+                  const val = parseFloat(raw) || 0
+                  if (val > 0) {
+                    onSetDescuentoGlobal({ tipo: globalDescTipo, valor: val })
+                  } else {
+                    onSetDescuentoGlobal(null)
+                  }
+                }}
+                className="h-7 w-20 text-xs text-center"
+                placeholder="0"
+              />
+            </div>
+            <Input
+              value={descuentoMotivo}
+              onChange={(e) => onSetDescuentoMotivo(e.target.value)}
+              placeholder="Motivo del descuento (opcional)"
+              className="h-7 text-xs"
+            />
+          </div>
+        )}
+
         {/* Totals */}
         {items.length > 0 && (
-          <div className="px-4 pt-3 space-y-1">
-            <TotalRow
-              label={`Subtotal (${items.reduce((s, i) => s + i.cantidad, 0)} items)`}
-              amount={formatPrice(subtotal)}
-            />
-            <TotalRow
-              label="TOTAL"
-              amount={formatPrice(total)}
-              emphasis
-            />
+          <div className="px-4 pt-2 space-y-1">
+            {(() => {
+              const t = computeVentaTotals(items, descuentoGlobal)
+              return (
+                <>
+                  <TotalRow
+                    label={`Subtotal (${items.reduce((s, i) => s + i.cantidad, 0)} items)`}
+                    amount={formatPrice(t.subtotal)}
+                  />
+                  {t.descuentoTotal > 0 && (
+                    <TotalRow
+                      label="Descuento"
+                      amount={`- ${formatPrice(t.descuentoTotal)}`}
+                      tone="success"
+                    />
+                  )}
+                  <TotalRow
+                    label="TOTAL"
+                    amount={formatPrice(t.total)}
+                    emphasis
+                  />
+                </>
+              )
+            })()}
           </div>
         )}
 
