@@ -24,50 +24,82 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url)
     const search = searchParams.get("search") || ""
+    const tipoCliente = searchParams.get("tipoCliente") || ""
+    const conDeuda = searchParams.get("conDeuda") === "true"
+    const fechaDesde = searchParams.get("fechaDesde") || ""
+    const fechaHasta = searchParams.get("fechaHasta") || ""
+    const aceptaWhatsappParam = searchParams.get("aceptaWhatsapp")
 
-    // Paginación
     const page = parseInt(searchParams.get("page") || "1")
     const limit = Math.min(parseInt(searchParams.get("limit") || "20"), 100)
     const offset = (page - 1) * limit
 
-    // Sorting
     const sortByParam = searchParams.get("sortBy") || "createdAt"
     const sortMap: Record<string, string> = {
       createdAt: "created_at",
       nombre: "nombre",
       telefono: "telefono",
       email: "email",
+      deudaPendiente: "deuda_pendiente",
+      ordenes: "ordenes_count",
+      ultimaVisita: "ultima_visita",
     }
     const sortBy = sortMap[sortByParam] || "created_at"
     const sortOrder = searchParams.get("sortOrder") === "asc"
 
-    let query = supabaseAdmin
-      .from("clientes")
-      .select("*", { count: "exact" })
-      .eq("organization_id", organizationId!)
-      .order(sortBy, { ascending: sortOrder })
-
-    if (search) {
-      query = query.or(
-        `nombre.ilike.%${search}%,telefono.ilike.%${search}%,dni.ilike.%${search}%,email.ilike.%${search}%`
-      )
+    // Helper para aplicar los mismos filtros a cualquier builder sobre la vista
+    const applyFilters = (q: any) => {
+      let query = q.eq("organization_id", organizationId!)
+      if (search) {
+        query = query.or(
+          `nombre.ilike.%${search}%,telefono.ilike.%${search}%,dni.ilike.%${search}%,email.ilike.%${search}%`
+        )
+      }
+      if (tipoCliente) query = query.eq("tipo_cliente", tipoCliente)
+      if (conDeuda) query = query.gt("deuda_pendiente", 0)
+      if (fechaDesde) query = query.gte("created_at", `${fechaDesde}T00:00:00`)
+      if (fechaHasta) query = query.lte("created_at", `${fechaHasta}T23:59:59`)
+      if (aceptaWhatsappParam === "true") query = query.eq("acepta_whatsapp", true)
+      if (aceptaWhatsappParam === "false") query = query.eq("acepta_whatsapp", false)
+      return query
     }
 
-    // Aplicar paginación
-    query = query.range(offset, offset + limit - 1)
+    // Listado paginado
+    const listQuery = applyFilters(
+      supabaseAdmin.from("v_clientes_resumen").select("*", { count: "exact" })
+    )
+      .order(sortBy, { ascending: sortOrder })
+      .range(offset, offset + limit - 1)
 
-    const { data: clientes, error: dbError, count } = await query
+    const { data: clientes, error: dbError, count } = await listQuery
+    if (dbError) throw dbError
 
-    if (dbError) {
-      throw dbError
+    // Total adeudado del set filtrado (sin paginar)
+    let totalDeuda = 0
+    try {
+      const { data: deudaRows } = await applyFilters(
+        supabaseAdmin.from("v_clientes_resumen").select("deuda_pendiente")
+      )
+      totalDeuda = (deudaRows || []).reduce(
+        (acc: number, r: any) => acc + parseFloat(r.deuda_pendiente || "0"),
+        0
+      )
+    } catch (e) {
+      console.error("Error calculando totalDeuda:", e)
     }
 
     return NextResponse.json({
-      data: (clientes || []).map(formatCliente),
+      data: (clientes || []).map((c: any) => ({
+        ...formatCliente(c),
+        deudaPendiente: parseFloat(c.deuda_pendiente || "0"),
+        ordenesCount: c.ordenes_count ?? 0,
+        ultimaVisita: c.ultima_visita ?? null,
+      })),
       total: count || 0,
       page,
       limit,
       totalPages: Math.ceil((count || 0) / limit),
+      totalDeuda,
     }, {
       headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
     })

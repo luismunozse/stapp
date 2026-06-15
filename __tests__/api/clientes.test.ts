@@ -41,7 +41,7 @@ describe("GET /api/clientes", () => {
     ]
 
     const chain = createChainMock(mockClientes, null, 2)
-    mockSupabaseFrom({ clientes: chain })
+    mockSupabaseFrom({ v_clientes_resumen: chain })
 
     const response = await GET(createGetRequest("http://localhost:3000/api/clientes"))
     const { status, body } = await parseResponse(response)
@@ -58,7 +58,7 @@ describe("GET /api/clientes", () => {
     mockAuthSuccess()
 
     const chain = createChainMock([])
-    mockSupabaseFrom({ clientes: chain })
+    mockSupabaseFrom({ v_clientes_resumen: chain })
 
     await GET(createGetRequest("http://localhost:3000/api/clientes?search=juan"))
 
@@ -68,7 +68,7 @@ describe("GET /api/clientes", () => {
   it("sets no-cache headers", async () => {
     mockAuthSuccess()
     const chain = createChainMock([])
-    mockSupabaseFrom({ clientes: chain })
+    mockSupabaseFrom({ v_clientes_resumen: chain })
 
     const response = await GET(createGetRequest("http://localhost:3000/api/clientes"))
 
@@ -80,7 +80,7 @@ describe("GET /api/clientes", () => {
 
     const chain = createChainMock(null, { message: "DB connection failed" })
     chain.then = (resolve: any) => resolve({ data: null, error: { message: "DB connection failed" } })
-    mockSupabaseFrom({ clientes: chain })
+    mockSupabaseFrom({ v_clientes_resumen: chain })
 
     const response = await GET(createGetRequest("http://localhost:3000/api/clientes"))
     const { status, body } = await parseResponse(response)
