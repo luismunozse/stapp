@@ -6,6 +6,8 @@ import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DataTable, DataTablePagination, type Column } from "@/components/ui/data-table"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
 import { Plus, Search, Phone, Mail, Edit, Trash2, User, Building2, Upload, PiggyBank, DollarSign, MoreHorizontal, Users } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { ClienteForm } from "./cliente-form"
@@ -43,6 +45,11 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
   // Filters
   const [search, setSearch] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
+  const [tipoCliente, setTipoCliente] = useState<string>("")
+  const [conDeuda, setConDeuda] = useState(false)
+  const [aceptaWhatsapp, setAceptaWhatsapp] = useState<string>("")
+  const [fechaDesde, setFechaDesde] = useState<string>("")
+  const [fechaHasta, setFechaHasta] = useState<string>("")
 
   // Sorting
   const [sortKey, setSortKey] = useState<string>("createdAt")
@@ -64,6 +71,8 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
     return () => { if (debounceTimer.current) clearTimeout(debounceTimer.current) }
   }, [])
 
+  const onFilterChange = (fn: () => void) => { fn(); setPage(1) }
+
   // Build API URL for SWR
   const apiUrl = useMemo(() => {
     const params = new URLSearchParams()
@@ -72,8 +81,13 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
     params.append("limit", pageSize.toString())
     params.append("sortBy", sortKey)
     params.append("sortOrder", sortDirection)
+    if (tipoCliente) params.append("tipoCliente", tipoCliente)
+    if (conDeuda) params.append("conDeuda", "true")
+    if (aceptaWhatsapp) params.append("aceptaWhatsapp", aceptaWhatsapp)
+    if (fechaDesde) params.append("fechaDesde", fechaDesde)
+    if (fechaHasta) params.append("fechaHasta", fechaHasta)
     return `/api/clientes?${params.toString()}`
-  }, [debouncedSearch, page, pageSize, sortKey, sortDirection])
+  }, [debouncedSearch, page, pageSize, sortKey, sortDirection, tipoCliente, conDeuda, aceptaWhatsapp, fechaDesde, fechaHasta])
 
   // SWR for fetching with cache
   const { data, isLoading, mutate } = useSWR(apiUrl, fetcher, {
@@ -92,6 +106,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
   // Extract data from response
   const clientes: Cliente[] = data?.data || (Array.isArray(data) ? data : [])
   const total = data?.total || (Array.isArray(data) ? data.length : 0)
+  const totalDeuda: number = data?.totalDeuda || 0
 
   const handleSort = (key: string) => {
     if (sortKey === key) {
@@ -219,7 +234,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
     },
     {
       key: "saldoCuenta",
-      header: "Saldo",
+      header: "Crédito",
       sortable: false,
       hideOnMobile: true,
       render: (cliente) => {
@@ -236,6 +251,31 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
           </button>
         )
       },
+    },
+    {
+      key: "deudaPendiente",
+      header: "Deuda",
+      sortable: true,
+      hideOnTablet: true,
+      render: (cliente) => {
+        const d = cliente.deudaPendiente || 0
+        if (d <= 0) return <span className="text-muted-foreground">-</span>
+        return <span className="font-medium text-destructive tabular-nums">{formatPrice(d)}</span>
+      },
+    },
+    {
+      key: "ordenes",
+      header: "Órdenes",
+      sortable: true,
+      hideOnMobile: true,
+      render: (cliente) => <span className="tabular-nums">{cliente.ordenesCount ?? 0}</span>,
+    },
+    {
+      key: "ultimaVisita",
+      header: "Última visita",
+      sortable: true,
+      hideOnMobile: true,
+      render: (cliente) => cliente.ultimaVisita ? formatDate(cliente.ultimaVisita) : <span className="text-muted-foreground">-</span>,
     },
     {
       key: "actions",
@@ -344,6 +384,63 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
         </div>
       </div>
 
+      {/* Filter bar */}
+      <div className="flex flex-wrap items-end gap-2">
+        <Select value={tipoCliente || "TODOS"} onValueChange={(v) => onFilterChange(() => setTipoCliente(v === "TODOS" ? "" : v))}>
+          <SelectTrigger className="w-[150px]"><SelectValue placeholder="Tipo" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="TODOS">Todos los tipos</SelectItem>
+            <SelectItem value="INDIVIDUAL">Individual</SelectItem>
+            <SelectItem value="EMPRESA">Empresa</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={aceptaWhatsapp || "TODOS"} onValueChange={(v) => onFilterChange(() => setAceptaWhatsapp(v === "TODOS" ? "" : v))}>
+          <SelectTrigger className="w-[170px]"><SelectValue placeholder="WhatsApp" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="TODOS">WhatsApp: todos</SelectItem>
+            <SelectItem value="true">Acepta WhatsApp</SelectItem>
+            <SelectItem value="false">No acepta</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <input
+          type="date"
+          value={fechaDesde}
+          onChange={(e) => onFilterChange(() => setFechaDesde(e.target.value))}
+          className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+          aria-label="Fecha desde"
+        />
+        <input
+          type="date"
+          value={fechaHasta}
+          onChange={(e) => onFilterChange(() => setFechaHasta(e.target.value))}
+          className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+          aria-label="Fecha hasta"
+        />
+
+        <label className="flex items-center gap-2 text-sm">
+          <Switch checked={conDeuda} onCheckedChange={(v) => onFilterChange(() => setConDeuda(!!v))} />
+          Solo con deuda
+        </label>
+
+        {(tipoCliente || conDeuda || aceptaWhatsapp || fechaDesde || fechaHasta) && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onFilterChange(() => {
+              setTipoCliente("")
+              setConDeuda(false)
+              setAceptaWhatsapp("")
+              setFechaDesde("")
+              setFechaHasta("")
+            })}
+          >
+            Limpiar
+          </Button>
+        )}
+      </div>
+
       {/* Form Modal */}
       <ClienteForm
         open={showForm}
@@ -403,6 +500,14 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
           cliente={whatsappCliente}
           organizationName={organizationName}
         />
+      )}
+
+      {/* Total adeudado bar */}
+      {conDeuda && (
+        <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-2 text-sm">
+          <span className="text-muted-foreground">Total adeudado:</span>
+          <span className="font-semibold text-destructive tabular-nums">{formatPrice(totalDeuda)}</span>
+        </div>
       )}
 
       {/* Desktop: Data Table */}
