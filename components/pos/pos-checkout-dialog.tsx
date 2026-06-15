@@ -113,6 +113,13 @@ export function PosCheckoutDialog({
       return
     }
 
+    // A sale with pending balance requires a registered client (cuenta corriente)
+    const saldoPendiente = total - totalPagosBase
+    if (pagoParcial && saldoPendiente > 0.01 && !cliente.id) {
+      await showError("Seleccioná un cliente para dejar saldo pendiente / fiar")
+      return
+    }
+
     // Validate cuenta corriente
     const pagoCC = pagosLines.find((p) => p.metodo === "CUENTA_CORRIENTE")
     if (pagoCC && pagoCC.monto > saldoCuenta) {
@@ -168,6 +175,13 @@ export function PosCheckoutDialog({
       setLoading(false)
     }
   }
+
+  // Whether the confirm button should be blocked due to missing client for pending balance
+  const pendienteRequiereCliente = useMemo(() => {
+    const totalPagosBase = pagosLines.reduce((sum, p) => sum + (p.monto || 0), 0)
+    const saldoPendiente = total - totalPagosBase
+    return pagoParcial && saldoPendiente > 0.01 && !cliente.id
+  }, [pagoParcial, pagosLines, total, cliente.id])
 
   // Quick cash amounts
   const quickAmounts = useMemo(() => {
@@ -359,6 +373,11 @@ export function PosCheckoutDialog({
           </div>
 
           {/* Submit */}
+          {pendienteRequiereCliente && (
+            <p className="text-xs text-destructive text-center">
+              Seleccioná un cliente para dejar saldo pendiente / fiar
+            </p>
+          )}
           <div className="flex gap-2">
             <Button variant="outline" className="flex-1" onClick={onClose} disabled={loading}>
               Cancelar
@@ -366,7 +385,7 @@ export function PosCheckoutDialog({
             <Button
               className="flex-1 h-12 text-base font-semibold"
               onClick={handleSubmit}
-              disabled={loading}
+              disabled={loading || pendienteRequiereCliente}
             >
               {loading ? (
                 <>
