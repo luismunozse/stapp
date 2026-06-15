@@ -25,15 +25,11 @@ const baseInput: BuildVentaPayloadInput = {
   idempotencyKey: "key-123",
 }
 
-describe("buildVentaPayload — depositoId", () => {
-  it("incluye depositoId en el payload cuando hay deposito activo", () => {
-    const payload = buildVentaPayload({ ...baseInput, depositoId: "dep-2" })
-    expect(payload.depositoId).toBe("dep-2")
-  })
-
-  it("manda depositoId null sin seleccion", () => {
-    const payload = buildVentaPayload({ ...baseInput, depositoId: null })
-    expect(payload.depositoId).toBeNull()
+describe("buildVentaPayload — depositoId eliminado (server-resolved)", () => {
+  it("el payload NO contiene depositoId (el server lo resuelve)", () => {
+    // The POS no longer sends depositoId — it's resolved server-side from sucursal
+    const payload = buildVentaPayload(baseInput)
+    expect(payload).not.toHaveProperty("depositoId")
   })
 })
 

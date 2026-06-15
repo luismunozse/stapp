@@ -108,3 +108,22 @@ export async function sucursalParaLectura(params: {
     cookieSucursalId,
   })
 }
+
+/**
+ * Returns the principal deposito id for a sucursal, or null if none exists.
+ * Used by sales routes to resolve the strict deposit for stock deduction.
+ */
+export async function getDepositoDeSucursal(
+  organizationId: string,
+  sucursalId: string
+): Promise<string | null> {
+  const { data } = await supabaseAdmin
+    .from("depositos")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("sucursal_id", sucursalId)
+    .eq("principal", true)
+    .is("deleted_at", null)
+    .maybeSingle()
+  return data?.id ?? null
+}
