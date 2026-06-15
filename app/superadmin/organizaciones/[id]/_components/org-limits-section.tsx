@@ -365,6 +365,7 @@ export function OrgLimitsSection({
                     id={`limit-${resource.overrideField}`}
                     type="number"
                     min={0}
+                    step={1}
                     value={fieldValues[resource.overrideField] ?? ""}
                     onChange={(e) =>
                       setFieldValues((prev) => ({

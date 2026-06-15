@@ -108,7 +108,7 @@ export default function OrganizacionDetallePage({ params }: PageProps) {
                 (new Date(endDate).getTime() - Date.now()) / 86400000
               )
               const label = subscription.trial_end ? "Trial" : "Período"
-              if (daysLeft < 0) {
+              if (daysLeft <= 0) {
                 return (
                   <Badge variant="destructive" className="flex items-center gap-1">
                     <AlertTriangle className="h-3 w-3" />
