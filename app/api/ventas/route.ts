@@ -246,6 +246,18 @@ export async function POST(request: Request) {
       rpcParams.p_pagos = []
     }
 
+    // Validate: a sale with pending balance requires a cliente_id
+    const montoPagado = data.pagos && data.pagos.length > 0
+      ? data.pagos.reduce((sum, p) => sum + p.monto, 0)
+      : data.pagosParcial ? 0 : total
+    const saldoPendiente = total - montoPagado
+    if (saldoPendiente > 0 && !data.clienteId) {
+      return NextResponse.json(
+        { error: "Para una venta a cuenta corriente (sin cobro total) tenés que seleccionar un cliente." },
+        { status: 400 }
+      )
+    }
+
     const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc("crear_venta_atomica", rpcParams)
 
     if (rpcError) {
