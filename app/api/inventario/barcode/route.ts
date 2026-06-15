@@ -70,8 +70,9 @@ export async function GET(request: Request) {
       return NextResponse.json({ found: false, code })
     }
 
-    // Format the item using the standard formatter (includes aggregate stock)
-    const formattedItem = formatInventario(item)
+    // Format the item using the standard formatter (includes aggregate stock).
+    // item is guaranteed non-null at this point (guarded above).
+    const formattedItem = formatInventario(item)!
 
     // If scoped to a sucursal, override stock with the per-deposito value
     if (!verTodas && sucursalId) {
