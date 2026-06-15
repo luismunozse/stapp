@@ -237,6 +237,7 @@ export async function POST(
             p_referencia_id: devolucion.id,
             p_observaciones: `Devolución ${numeroDevolucion} - ${data.motivo}`,
             p_deposito_id: null,
+            p_venta_id: id,
           }
         )
 
