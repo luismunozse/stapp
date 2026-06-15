@@ -33,7 +33,6 @@ interface PosCheckoutDialogProps {
   items: PosCartItem[]
   cliente: PosCliente
   onComplete: (ventaData: any) => void
-  depositoId?: string | null
 }
 
 export function PosCheckoutDialog({
@@ -42,7 +41,6 @@ export function PosCheckoutDialog({
   items,
   cliente,
   onComplete,
-  depositoId = null,
 }: PosCheckoutDialogProps) {
   const { formatPrice } = useCurrency()
   const { showError } = useModal()
@@ -151,7 +149,6 @@ export function PosCheckoutDialog({
         pagoParcial,
         observaciones,
         idempotencyKey,
-        depositoId,
       })
 
       const res = await fetch("/api/ventas", {

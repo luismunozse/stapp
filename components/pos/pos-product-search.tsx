@@ -3,7 +3,12 @@
 import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Search, Package, Loader2, Plus, Barcode, PenLine, X, ScanLine } from "lucide-react"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { Search, Package, Loader2, Plus, Barcode, PenLine, X, ScanLine, MapPin } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import type { InventarioResult } from "./pos-types"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -23,6 +28,117 @@ interface PosProductSearchProps {
 export interface PosProductSearchRef {
   focusSearch: () => void
 }
+
+// ─── Cross-sucursal stock popover ───────────────────────────────────────────
+
+interface DepositoStockRow {
+  depositoId: string
+  depositoNombre: string
+  sucursalNombre: string | null
+  stock: number
+  disponible: number
+}
+
+interface StockOtrasSucursalesProps {
+  inventarioId: string
+  productName: string
+}
+
+function StockOtrasSucursales({ inventarioId, productName }: StockOtrasSucursalesProps) {
+  const [rows, setRows] = useState<DepositoStockRow[] | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [open, setOpen] = useState(false)
+
+  const loadStock = useCallback(async () => {
+    if (rows !== null) return // already loaded
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/inventario/${inventarioId}/depositos`)
+      if (!res.ok) throw new Error("fetch failed")
+      const json = await res.json()
+      setRows((json.data || []) as DepositoStockRow[])
+    } catch {
+      setRows([])
+    } finally {
+      setLoading(false)
+    }
+  }, [inventarioId, rows])
+
+  const handleOpen = (isOpen: boolean) => {
+    setOpen(isOpen)
+    if (isOpen) loadStock()
+  }
+
+  return (
+    <Popover open={open} onOpenChange={handleOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+          }}
+          className="absolute top-2 right-2 flex items-center gap-0.5 rounded px-1 py-0.5 text-[9px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors z-10"
+          title="Ver stock en otras sucursales"
+          aria-label="Ver stock en otras sucursales"
+        >
+          <MapPin className="h-3 w-3" />
+          <span className="hidden sm:inline">Otras</span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        side="top"
+        align="end"
+        className="w-72 p-3"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="space-y-2">
+          <p className="text-xs font-semibold truncate">{productName}</p>
+          <p className="text-[10px] text-muted-foreground">Stock por sucursal / depósito</p>
+          {loading ? (
+            <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Cargando...
+            </div>
+          ) : !rows || rows.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-2">Sin datos de stock por depósito.</p>
+          ) : (
+            <div className="space-y-1">
+              {rows.map((row) => (
+                <div
+                  key={row.depositoId}
+                  className="flex items-center justify-between text-xs py-1 border-b border-border/50 last:border-0"
+                >
+                  <div className="min-w-0">
+                    <span className="font-medium truncate block">
+                      {row.sucursalNombre ?? row.depositoNombre}
+                    </span>
+                    {row.sucursalNombre && (
+                      <span className="text-[10px] text-muted-foreground block truncate">
+                        {row.depositoNombre}
+                      </span>
+                    )}
+                  </div>
+                  <span
+                    className={`ml-2 shrink-0 font-semibold tabular-nums ${
+                      row.disponible > 0 ? "text-foreground" : "text-muted-foreground"
+                    }`}
+                  >
+                    {row.disponible}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+          <p className="text-[9px] text-muted-foreground pt-1">
+            Solo lectura — para transferir usá el módulo de transferencias.
+          </p>
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+// ─── Main component ──────────────────────────────────────────────────────────
 
 export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearchProps>(
   function PosProductSearch({ onAddProduct, onAddManualProduct, onOpenScanner }, ref) {
@@ -297,6 +413,12 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
                   onClick={() => handleAdd(product)}
                   className="group relative flex flex-col items-start rounded-xl border bg-card p-3 sm:p-3 text-left transition-all hover:border-primary hover:shadow-md active:scale-[0.97] min-h-[5.5rem]"
                 >
+                  {/* Cross-sucursal stock popover — read only, no add-to-cart */}
+                  <StockOtrasSucursales
+                    inventarioId={product.id}
+                    productName={product.nombre}
+                  />
+
                   <div className="flex items-center gap-1.5 mb-1">
                     <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                     <span className="text-[10px] font-mono text-muted-foreground truncate">

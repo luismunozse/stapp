@@ -4,7 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger } from "@/lib/audit"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { formatVenta } from "@/lib/db-utils"
-import { sucursalParaEscritura, sucursalParaLectura } from "@/lib/sucursal"
+import { sucursalParaEscritura, sucursalParaLectura, getDepositoDeSucursal } from "@/lib/sucursal"
 import { z } from "zod"
 
 const itemSchema = z.object({
@@ -213,6 +213,20 @@ export async function POST(request: Request) {
       userSucursalId: session!.user.sucursalId ?? null,
     })
 
+    // Resolve the principal deposito of this sucursal to enforce strict deduction
+    // (p_deposito_id explicit → RPC drains only from that deposito, not across all).
+    // If null (sucursal has no principal deposito — misconfiguration), fall back to
+    // null (drain across org) and log a warning.
+    let resolvedDepositoId: string | null = null
+    if (sucursalId) {
+      resolvedDepositoId = await getDepositoDeSucursal(organizationId!, sucursalId)
+      if (!resolvedDepositoId) {
+        console.warn(
+          `[ventas] Sucursal ${sucursalId} has no principal deposito — falling back to drain mode`
+        )
+      }
+    }
+
     // Crear venta atómicamente
     const rpcParams: Record<string, any> = {
       p_org_id: organizationId!,
@@ -233,7 +247,7 @@ export async function POST(request: Request) {
       p_monto_original: data.montoOriginal || null,
       p_items: pItems,
       p_idempotency_key: data.idempotencyKey || null,
-      p_deposito_id: data.depositoId ?? null,
+      p_deposito_id: resolvedDepositoId,
       p_sucursal_id: sucursalId,
     }
 

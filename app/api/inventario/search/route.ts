@@ -2,14 +2,16 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatInventario } from "@/lib/db-utils"
+import { getCookieSucursalId, resolveSucursalLectura, getDepositoDeSucursal } from "@/lib/sucursal"
 
 // GET /api/inventario/search?q=term&limit=10
 // Server-side search for inventory items (used by sale form)
 // Returns minimal payload: id, codigo, nombre, stock, precioVenta
-// Filters: stock > 0, matches query on nombre OR codigo with ilike
+// If VENDEDOR (or ADMIN with sucursal cookie): filters to items with stock in that
+// sucursal's principal deposito. ADMIN "ver todas" returns aggregate stock (original behavior).
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role, session } = await requireAuth()
     if (error) return error
 
     const { searchParams } = new URL(request.url)
@@ -17,54 +19,109 @@ export async function GET(request: Request) {
     const limit = Math.min(parseInt(searchParams.get("limit") || "10"), 50)
     const includeZeroStock = searchParams.get("includeZeroStock") === "true"
 
-    let query = supabaseAdmin
-      .from("inventario")
-      .select("id, codigo, nombre, stock, stock_reservado, precio_venta, precio_compra, trackea_series")
-      .eq("organization_id", organizationId!)
-      .is("deleted_at", null)
+    // Resolve sucursal scope
+    const cookieSucursalId = await getCookieSucursalId()
+    const userSucursalId = session?.user?.sucursalId ?? null
+    const { sucursalId, verTodas } = resolveSucursalLectura({
+      role,
+      userSucursalId,
+      cookieSucursalId,
+    })
 
-    if (!includeZeroStock) {
-      query = query.gt("stock", 0)
-    }
+    // Sanitize query terms for ILIKE filter
+    const terms = q
+      .trim()
+      .split(/\s+/)
+      .map((t) => t.replace(/[%_,()*\\]/g, "").trim())
+      .filter(Boolean)
+      .slice(0, 6)
 
-    query = query.order("nombre", { ascending: true }).limit(limit)
+    if (verTodas || !sucursalId) {
+      // ADMIN "ver todas": aggregate stock, original behavior
+      let query = supabaseAdmin
+        .from("inventario")
+        .select("id, codigo, nombre, stock, stock_reservado, precio_venta, precio_compra, trackea_series")
+        .eq("organization_id", organizationId!)
+        .is("deleted_at", null)
 
-    // Substring search by name + code. Each whitespace-separated term must
-    // match (AND); a term matches nombre OR codigo via ILIKE substring. This
-    // finds partial names ("tornil" → "tornillo") and partial/alphanumeric
-    // codes ("ABC1" → "ABC123") — cases the previous full-text search missed,
-    // because to_tsvector only matched whole stemmed lexemes, not substrings.
-    if (q.trim()) {
-      const terms = q
-        .trim()
-        .split(/\s+/)
-        // Strip LIKE wildcards (% _) and PostgREST filter delimiters ( , ( ) * \ )
-        // so user input can't break or inject into the .or() filter string.
-        .map((t) => t.replace(/[%_,()*\\]/g, "").trim())
-        .filter(Boolean)
-        .slice(0, 6)
+      if (!includeZeroStock) {
+        query = query.gt("stock", 0)
+      }
+
+      query = query.order("nombre", { ascending: true }).limit(limit)
 
       for (const term of terms) {
         query = query.or(`nombre.ilike.%${term}%,codigo.ilike.%${term}%`)
       }
+
+      const { data: items, error: dbError } = await query
+      if (dbError) throw dbError
+
+      const formatted = (items || []).map((item) => ({
+        id: item.id,
+        codigo: item.codigo,
+        nombre: item.nombre,
+        stock: item.stock,
+        stockReservado: item.stock_reservado ?? 0,
+        precioVenta: item.precio_venta,
+        precioCompra: item.precio_compra ?? 0,
+        trackeaSeries: item.trackea_series ?? false,
+      }))
+
+      return NextResponse.json(formatted)
+    }
+
+    // Sucursal-scoped: resolve the principal deposito of this sucursal
+    const depId = await getDepositoDeSucursal(organizationId!, sucursalId)
+
+    if (!depId) {
+      // No principal deposito configured for this sucursal — return empty
+      return NextResponse.json([])
+    }
+
+    // Query inventario joined with inventario_depositos for this specific deposito.
+    // Use !inner to ensure only items that have a row in inventario_depositos for depId.
+    // PostgREST column filter on embedded resource: eq("inventario_depositos.deposito_id", depId)
+    let query = supabaseAdmin
+      .from("inventario")
+      .select(
+        "id, codigo, nombre, precio_venta, precio_compra, trackea_series, inventario_depositos!inner(stock, stock_reservado, deposito_id)"
+      )
+      .eq("organization_id", organizationId!)
+      .is("deleted_at", null)
+      .eq("inventario_depositos.deposito_id", depId)
+
+    if (!includeZeroStock) {
+      query = query.gt("inventario_depositos.stock", 0)
+    }
+
+    query = query.order("nombre", { ascending: true }).limit(limit)
+
+    for (const term of terms) {
+      query = query.or(`nombre.ilike.%${term}%,codigo.ilike.%${term}%`)
     }
 
     const { data: items, error: dbError } = await query
+    if (dbError) throw dbError
 
-    if (dbError) {
-      throw dbError
-    }
-
-    const formatted = (items || []).map((item) => ({
-      id: item.id,
-      codigo: item.codigo,
-      nombre: item.nombre,
-      stock: item.stock,
-      stockReservado: item.stock_reservado ?? 0,
-      precioVenta: item.precio_venta,
-      precioCompra: item.precio_compra ?? 0,
-      trackeaSeries: item.trackea_series ?? false,
-    }))
+    const formatted = (items || []).map((item: any) => {
+      // inventario_depositos is an array when using !inner embed; take first row
+      const depRow = Array.isArray(item.inventario_depositos)
+        ? item.inventario_depositos[0]
+        : item.inventario_depositos
+      const stock = depRow?.stock ?? 0
+      const stockReservado = depRow?.stock_reservado ?? 0
+      return {
+        id: item.id,
+        codigo: item.codigo,
+        nombre: item.nombre,
+        stock,
+        stockReservado,
+        precioVenta: item.precio_venta,
+        precioCompra: item.precio_compra ?? 0,
+        trackeaSeries: item.trackea_series ?? false,
+      }
+    })
 
     return NextResponse.json(formatted)
   } catch (error) {
