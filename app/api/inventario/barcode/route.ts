@@ -2,12 +2,16 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatInventario } from "@/lib/db-utils"
+import { getCookieSucursalId, resolveSucursalLectura, getDepositoDeSucursal } from "@/lib/sucursal"
 
 // GET /api/inventario/barcode?code=123456
 // Search inventory by barcode
+// If VENDEDOR (or ADMIN with sucursal cookie): returns stock from that sucursal's
+// principal deposito. If 0 there, stock=0 is returned so the POS rejects it.
+// ADMIN "ver todas" returns the aggregate stock field as before.
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role, session } = await requireAuth()
     if (error) return error
 
     const { searchParams } = new URL(request.url)
@@ -17,6 +21,15 @@ export async function GET(request: Request) {
     if (!code) {
       return NextResponse.json({ error: "Código requerido" }, { status: 400 })
     }
+
+    // Resolve sucursal scope for stock reporting
+    const cookieSucursalId = await getCookieSucursalId()
+    const userSucursalId = session?.user?.sucursalId ?? null
+    const { sucursalId, verTodas } = resolveSucursalLectura({
+      role,
+      userSucursalId,
+      cookieSucursalId,
+    })
 
     // Search by barcode first, fallback to codigo (products may store EAN in either field).
     // Usamos ILIKE para match case-insensitive: códigos Code 128 alfanuméricos
@@ -57,11 +70,33 @@ export async function GET(request: Request) {
       return NextResponse.json({ found: false, code })
     }
 
+    // Format the item using the standard formatter (includes aggregate stock)
+    const formattedItem = formatInventario(item)
+
+    // If scoped to a sucursal, override stock with the per-deposito value
+    if (!verTodas && sucursalId) {
+      const depId = await getDepositoDeSucursal(organizationId!, sucursalId)
+      if (depId) {
+        const { data: depRow } = await supabaseAdmin
+          .from("inventario_depositos")
+          .select("stock, stock_reservado")
+          .eq("inventario_id", item.id)
+          .eq("deposito_id", depId)
+          .maybeSingle()
+        formattedItem.stock = depRow?.stock ?? 0
+        formattedItem.stockReservado = depRow?.stock_reservado ?? 0
+      } else {
+        // No principal deposito for this sucursal — treat as 0 stock
+        formattedItem.stock = 0
+        formattedItem.stockReservado = 0
+      }
+    }
+
     return NextResponse.json({
       found: true,
       code,
       matchedByCodigo,
-      item: formatInventario(item),
+      item: formattedItem,
     })
   } catch (error) {
     console.error("Error searching by barcode:", error)
