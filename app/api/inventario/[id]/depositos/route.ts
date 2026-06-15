@@ -30,7 +30,7 @@ export async function GET(
 
     const { data: depositos } = await supabaseAdmin
       .from("depositos")
-      .select("id, nombre, principal, activo")
+      .select("id, nombre, principal, activo, sucursal_id, sucursales(id, nombre)")
       .eq("organization_id", organizationId!)
       .is("deleted_at", null)
       .order("principal", { ascending: false })
@@ -50,13 +50,17 @@ export async function GET(
       })
     }
 
-    const data = (depositos || []).map((d) => {
+    const data = (depositos || []).map((d: any) => {
       const s = stockMap.get(d.id) ?? { stock: 0, stockReservado: 0 }
+      // sucursales may come back as an object or array from PostgREST join
+      const sucursalRow = Array.isArray(d.sucursales) ? d.sucursales[0] : d.sucursales
       return {
         depositoId: d.id,
         depositoNombre: d.nombre,
         principal: d.principal,
         activo: d.activo,
+        sucursalId: d.sucursal_id ?? null,
+        sucursalNombre: sucursalRow?.nombre ?? null,
         stock: s.stock,
         stockReservado: s.stockReservado,
         disponible: Math.max(0, s.stock - s.stockReservado),
