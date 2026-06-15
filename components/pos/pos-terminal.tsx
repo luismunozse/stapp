@@ -271,6 +271,14 @@ export function PosTerminal() {
     )
   }, [])
 
+  const setItemPrecio = useCallback((lineId: string, precio: number) => {
+    setCartItems((prev) =>
+      prev.map((item) =>
+        item.lineId === lineId ? { ...item, precioUnitario: precio } : item
+      )
+    )
+  }, [])
+
   const clearCart = useCallback(async () => {
     if (cartItems.length === 0) return
     const confirmed = await confirm({
@@ -694,6 +702,7 @@ export function PosTerminal() {
             onSetItemDescuento={setItemDescuento}
             onSetDescuentoGlobal={setDescuentoGlobal}
             onSetDescuentoMotivo={setDescuentoMotivo}
+            onSetPrecio={setItemPrecio}
           />
         </div>
       </div>
@@ -732,6 +741,7 @@ export function PosTerminal() {
               onSetItemDescuento={setItemDescuento}
               onSetDescuentoGlobal={setDescuentoGlobal}
               onSetDescuentoMotivo={setDescuentoMotivo}
+              onSetPrecio={setItemPrecio}
             />
           </div>
         </div>
