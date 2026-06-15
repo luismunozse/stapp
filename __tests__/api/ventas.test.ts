@@ -519,3 +519,85 @@ describe("PUT /api/ventas/[id] — depositoId", () => {
     expect(body.error).toContain("depósito principal")
   })
 })
+
+// ─── POST /api/ventas — saldo pendiente requiere cliente ───
+
+describe("POST /api/ventas — saldo pendiente requiere cliente", () => {
+  const baseItems = [{ inventarioId: "i1", descripcion: "Notebook", cantidad: 1, precioUnitario: 100, diasGarantia: 0 }]
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it("pagosParcial:true sin clienteId devuelve 400", async () => {
+    mockAuthSuccess()
+
+    const res = await POST(createPostRequest({
+      clienteNombre: "Consumidor Final",
+      items: baseItems,
+      metodoPago: "EFECTIVO",
+      pagosParcial: true,
+      // clienteId ausente
+    }))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(400)
+    expect(body.error).toContain("cliente")
+  })
+
+  it("pagosParcial:true con clienteId no devuelve 400 por falta de cliente", async () => {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ventaId: "v1" }, error: null } as any)
+    mockSupabaseFrom({
+      ventas: createChainMock({ id: "v1", numero_venta: 1, total: 100 }),
+      organizations: createChainMock({ nombre: "Org", nombre_mostrar: "Org" }),
+    })
+
+    const res = await POST(createPostRequest({
+      clienteNombre: "Juan Perez",
+      clienteId: "cliente-1",
+      items: baseItems,
+      metodoPago: "EFECTIVO",
+      pagosParcial: true,
+    }))
+    const { status } = await parseResponse(res)
+
+    expect(status).not.toBe(400)
+  })
+
+  it("pagos parciales (suma < total) sin clienteId devuelve 400", async () => {
+    mockAuthSuccess()
+
+    const res = await POST(createPostRequest({
+      clienteNombre: "Consumidor Final",
+      items: baseItems,
+      metodoPago: "EFECTIVO",
+      pagos: [{ metodo: "EFECTIVO", monto: 50 }], // suma < total (100)
+      // clienteId ausente
+    }))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(400)
+    expect(body.error).toContain("cliente")
+  })
+
+  it("pagos que cubren el total sin clienteId no devuelven 400 por falta de cliente", async () => {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ventaId: "v1" }, error: null } as any)
+    mockSupabaseFrom({
+      ventas: createChainMock({ id: "v1", numero_venta: 1, total: 100 }),
+      organizations: createChainMock({ nombre: "Org", nombre_mostrar: "Org" }),
+    })
+
+    const res = await POST(createPostRequest({
+      clienteNombre: "Consumidor Final",
+      items: baseItems,
+      metodoPago: "EFECTIVO",
+      pagos: [{ metodo: "EFECTIVO", monto: 100 }], // suma == total
+      // clienteId ausente: OK porque no queda saldo pendiente
+    }))
+    const { status } = await parseResponse(res)
+
+    expect(status).not.toBe(400)
+  })
+})
