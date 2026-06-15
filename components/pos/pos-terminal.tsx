@@ -24,7 +24,9 @@ import {
   Unplug,
   Loader2,
   Warehouse,
+  AlertTriangle,
 } from "lucide-react"
+import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { PosProductSearch, type PosProductSearchRef } from "./pos-product-search"
 import { PosCart } from "./pos-cart"
@@ -154,6 +156,31 @@ export function PosTerminal() {
   }, [])
 
   const showDepositoSelector = multiDepositoEnabled && depositos.length >= 2
+
+  // Caja session awareness: a cash sale made with no open caja session falls
+  // outside any arqueo window, so the cash never shows up in the cash-register
+  // reconciliation. We surface a banner (soft nudge) when no session is open.
+  // null = still checking; re-checks on window focus so it clears after opening.
+  const [cajaAbierta, setCajaAbierta] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    const check = () => {
+      fetch("/api/caja/sesiones?current=true")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (!cancelled) setCajaAbierta(!!data?.sesion)
+        })
+        .catch(() => {})
+    }
+    check()
+    const onFocus = () => check()
+    window.addEventListener("focus", onFocus)
+    return () => {
+      cancelled = true
+      window.removeEventListener("focus", onFocus)
+    }
+  }, [])
 
   // Mobile tab state
   const [mobileTab, setMobileTab] = useState<MobileTab>("products")
@@ -668,6 +695,24 @@ export function PosTerminal() {
           <span><kbd className="px-1.5 py-0.5 rounded bg-background border text-[10px] font-mono">F7</kbd> Cliente</span>
           <span><kbd className="px-1.5 py-0.5 rounded bg-background border text-[10px] font-mono">F8</kbd> Cobrar</span>
           <span><kbd className="px-1.5 py-0.5 rounded bg-background border text-[10px] font-mono">Scanner</kbd> Código de barras</span>
+        </div>
+      )}
+
+      {/* Caja cerrada: las ventas no entran en ningún arqueo */}
+      {cajaAbierta === false && (
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-warning/30 bg-warning-50 px-3 py-2 text-sm font-medium text-warning-700 dark:bg-warning/10 dark:text-warning-500">
+          <span className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span>Caja cerrada — las ventas no quedan registradas en el arqueo.</span>
+          </span>
+          <Button
+            asChild
+            size="sm"
+            variant="outline"
+            className="h-8 shrink-0 border-warning/40 text-warning-700 hover:bg-warning-100 dark:text-warning-500 dark:hover:bg-warning/15"
+          >
+            <Link href="/caja">Abrir caja</Link>
+          </Button>
         </div>
       )}
 
