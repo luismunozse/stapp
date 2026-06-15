@@ -102,9 +102,10 @@ export function OrdenesList() {
 
   // Si llega ?fromTurno=<id>, abrir form de creación con prefill desde turno
   const fromTurnoId = searchParams?.get("fromTurno") || null
+  const clienteIdParam = searchParams?.get("clienteId") || null
   useEffect(() => {
-    if (fromTurnoId) setShowForm(true)
-  }, [fromTurnoId])
+    if (fromTurnoId || clienteIdParam) setShowForm(true)
+  }, [fromTurnoId, clienteIdParam])
 
   // Placeholder rotativo cada 3 segundos
   const [placeholderIdx, setPlaceholderIdx] = useState(0)
@@ -792,13 +793,14 @@ export function OrdenesList() {
       {showForm && (
         <OrdenForm
           fromTurnoId={fromTurnoId || undefined}
+          initialClienteId={clienteIdParam || undefined}
           onClose={() => {
             setShowForm(false)
-            if (fromTurnoId) router.replace(pathname)
+            if (fromTurnoId || clienteIdParam) router.replace(pathname)
           }}
           onSuccess={() => {
             setShowForm(false)
-            if (fromTurnoId) router.replace(pathname)
+            if (fromTurnoId || clienteIdParam) router.replace(pathname)
             mutate()
           }}
         />

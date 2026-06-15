@@ -82,6 +82,7 @@ interface OrdenFormProps {
   onClose: () => void
   onSuccess: () => void
   fromTurnoId?: string
+  initialClienteId?: string
 }
 
 interface OrdenCreadaData {
@@ -116,7 +117,7 @@ interface OrdenCreadaData {
   organizationComprobanteTerminos?: string | null
 }
 
-export function OrdenForm({ onClose, onSuccess, fromTurnoId }: OrdenFormProps) {
+export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId }: OrdenFormProps) {
   const { offlineFetch } = useOffline()
   const { data: session } = useSession()
   const isTecnicoRole = session?.user?.role === "TECNICO"
@@ -224,6 +225,22 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId }: OrdenFormProps) {
     return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fromTurnoId])
+
+  // Preselección de cliente vía deep-link (?clienteId=) — no aplica si viene de turno
+  useEffect(() => {
+    if (!initialClienteId || fromTurnoId) return
+    let cancelled = false
+    setValue("clienteId", initialClienteId, { shouldValidate: true })
+    fetch(`/api/clientes/${initialClienteId}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((cliente) => {
+        if (cancelled || !cliente || cliente.error) return
+        setSelectedClienteObj(cliente)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialClienteId])
 
   // Get the selected tipo object and its config
   const tipoSeleccionado = useMemo(
