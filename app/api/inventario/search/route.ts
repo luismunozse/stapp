@@ -29,11 +29,23 @@ export async function GET(request: Request) {
 
     query = query.order("nombre", { ascending: true }).limit(limit)
 
+    // Substring search by name + code. Each whitespace-separated term must
+    // match (AND); a term matches nombre OR codigo via ILIKE substring. This
+    // finds partial names ("tornil" → "tornillo") and partial/alphanumeric
+    // codes ("ABC1" → "ABC123") — cases the previous full-text search missed,
+    // because to_tsvector only matched whole stemmed lexemes, not substrings.
     if (q.trim()) {
-      if (q.trim().length >= 3) {
-        query = query.textSearch("search_vector", q, { type: "plain", config: "spanish" })
-      } else {
-        query = query.or(`nombre.ilike.%${q}%,codigo.ilike.%${q}%`)
+      const terms = q
+        .trim()
+        .split(/\s+/)
+        // Strip LIKE wildcards (% _) and PostgREST filter delimiters ( , ( ) * \ )
+        // so user input can't break or inject into the .or() filter string.
+        .map((t) => t.replace(/[%_,()*\\]/g, "").trim())
+        .filter(Boolean)
+        .slice(0, 6)
+
+      for (const term of terms) {
+        query = query.or(`nombre.ilike.%${term}%,codigo.ilike.%${term}%`)
       }
     }
 
