@@ -340,7 +340,7 @@ describe("POST /api/ventas — serieIds + idempotencia", () => {
   })
 })
 
-describe("POST /api/ventas — depositoId", () => {
+describe("POST /api/ventas — depositoId server-resolved (T4)", () => {
   const baseBody = {
     clienteNombre: "Consumidor Final",
     items: [{ inventarioId: "i1", descripcion: "Notebook", cantidad: 1, precioUnitario: 100, diasGarantia: 0 }],
@@ -351,28 +351,60 @@ describe("POST /api/ventas — depositoId", () => {
     vi.clearAllMocks()
   })
 
-  it("pasa depositoId a la RPC como p_deposito_id", async () => {
-    mockAuthSuccess()
+  it("server resuelve p_deposito_id desde la sucursal del vendedor (no desde body)", async () => {
+    // VENDEDOR con sucursal fija "suc-1" cuyo principal deposito es "dep-suc-1"
+    vi.mocked(auth).mockResolvedValue({
+      user: {
+        id: "vendedor-1",
+        organizationId: "org-1",
+        role: "VENDEDOR",
+        sucursalId: "suc-1",
+        email: "v@v.com",
+      },
+      expires: new Date(Date.now() + 86400000).toISOString(),
+    } as any)
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ventaId: "v1" }, error: null } as any)
-    mockSupabaseFrom({
-      ventas: createChainMock({ id: "v1", numero_venta: 1, total: 100 }),
-      organizations: createChainMock({ nombre: "Org", nombre_mostrar: "Org" }),
+
+    // sucursalParaEscritura → sucursales (principal), then getDepositoDeSucursal → depositos
+    const sucursalesChain = createChainMock({ id: "suc-principal" })
+    const depositosChain: any = {}
+    for (const m of ["select", "eq", "is"]) depositosChain[m] = vi.fn().mockReturnValue(depositosChain)
+    depositosChain.maybeSingle = vi.fn().mockResolvedValue({ data: { id: "dep-suc-1" }, error: null })
+
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "sucursales") return sucursalesChain as any
+      if (table === "depositos") return depositosChain as any
+      if (table === "ventas") return createChainMock({ id: "v1", numero_venta: 1, total: 100 }) as any
+      if (table === "organizations") return createChainMock({ nombre: "Org", nombre_mostrar: "Org" }) as any
+      return createChainMock(null, { message: `No mock for: ${table}` }) as any
     })
 
-    const res = await POST(createPostRequest({ ...baseBody, depositoId: "dep-2" }))
+    // POS no manda depositoId (body doesn't include it)
+    const res = await POST(createPostRequest(baseBody))
     const { status } = await parseResponse(res)
 
     expect(status).toBe(201)
     const rpcArgs = vi.mocked(supabaseAdmin.rpc).mock.calls[0][1] as any
-    expect(rpcArgs.p_deposito_id).toBe("dep-2")
+    // p_deposito_id must be the server-resolved deposito, not null/body value
+    expect(rpcArgs.p_deposito_id).toBe("dep-suc-1")
   })
 
-  it("manda p_deposito_id null cuando el body no trae depositoId", async () => {
-    mockAuthSuccess()
+  it("ADMIN sin deposito configurado en sucursal → p_deposito_id null con fallback (drain mode)", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ventaId: "v1" }, error: null } as any)
-    mockSupabaseFrom({
-      ventas: createChainMock({ id: "v1", numero_venta: 1, total: 100 }),
-      organizations: createChainMock({ nombre: "Org", nombre_mostrar: "Org" }),
+
+    // sucursalParaEscritura needs principal sucursal; depositos returns null (no principal)
+    const sucursalesChain = createChainMock({ id: "suc-principal" })
+    const depositosChain: any = {}
+    for (const m of ["select", "eq", "is"]) depositosChain[m] = vi.fn().mockReturnValue(depositosChain)
+    depositosChain.maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null })
+
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "sucursales") return sucursalesChain as any
+      if (table === "depositos") return depositosChain as any
+      if (table === "ventas") return createChainMock({ id: "v1", numero_venta: 1, total: 100 }) as any
+      if (table === "organizations") return createChainMock({ nombre: "Org", nombre_mostrar: "Org" }) as any
+      return createChainMock(null, { message: `No mock for: ${table}` }) as any
     })
 
     const res = await POST(createPostRequest(baseBody))
@@ -383,14 +415,61 @@ describe("POST /api/ventas — depositoId", () => {
     expect(rpcArgs.p_deposito_id).toBeNull()
   })
 
+  it("body depositoId es ignorado — p_deposito_id viene del server", async () => {
+    // Even if the client sends depositoId, the server uses the resolved one
+    vi.mocked(auth).mockResolvedValue({
+      user: {
+        id: "vendedor-1",
+        organizationId: "org-1",
+        role: "VENDEDOR",
+        sucursalId: "suc-1",
+        email: "v@v.com",
+      },
+      expires: new Date(Date.now() + 86400000).toISOString(),
+    } as any)
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ventaId: "v1" }, error: null } as any)
+
+    const sucursalesChain = createChainMock({ id: "suc-principal" })
+    const depositosChain: any = {}
+    for (const m of ["select", "eq", "is"]) depositosChain[m] = vi.fn().mockReturnValue(depositosChain)
+    depositosChain.maybeSingle = vi.fn().mockResolvedValue({ data: { id: "dep-suc-1" }, error: null })
+
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "sucursales") return sucursalesChain as any
+      if (table === "depositos") return depositosChain as any
+      if (table === "ventas") return createChainMock({ id: "v1", numero_venta: 1, total: 100 }) as any
+      if (table === "organizations") return createChainMock({ nombre: "Org", nombre_mostrar: "Org" }) as any
+      return createChainMock(null, { message: `No mock for: ${table}` }) as any
+    })
+
+    // body sends a different depositoId — server must ignore it
+    const res = await POST(createPostRequest({ ...baseBody, depositoId: "dep-WRONG" }))
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(201)
+    const rpcArgs = vi.mocked(supabaseAdmin.rpc).mock.calls[0][1] as any
+    // Must be the server-resolved value, not "dep-WRONG"
+    expect(rpcArgs.p_deposito_id).toBe("dep-suc-1")
+    expect(rpcArgs.p_deposito_id).not.toBe("dep-WRONG")
+  })
+
   it("mapea P0010 a 400 con mensaje claro", async () => {
     mockAuthSuccess()
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
       data: null,
       error: { code: "P0010", message: "STOCK_INSUFICIENTE_DEPOSITO: deposito dep-2" },
     } as any)
+    mockSupabaseFrom({
+      sucursales: createChainMock({ id: "suc-p" }),
+      depositos: (() => {
+        const c: any = {}
+        for (const m of ["select", "eq", "is"]) c[m] = vi.fn().mockReturnValue(c)
+        c.maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null })
+        return c
+      })(),
+    })
 
-    const res = await POST(createPostRequest({ ...baseBody, depositoId: "dep-2" }))
+    const res = await POST(createPostRequest(baseBody))
     const { status, body } = await parseResponse(res)
 
     expect(status).toBe(400)
@@ -403,6 +482,15 @@ describe("POST /api/ventas — depositoId", () => {
       data: null,
       error: { code: "P0011", message: "ORG_SIN_DEPOSITO_PRINCIPAL: org-1" },
     } as any)
+    mockSupabaseFrom({
+      sucursales: createChainMock({ id: "suc-p" }),
+      depositos: (() => {
+        const c: any = {}
+        for (const m of ["select", "eq", "is"]) c[m] = vi.fn().mockReturnValue(c)
+        c.maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null })
+        return c
+      })(),
+    })
 
     const res = await POST(createPostRequest(baseBody))
     const { status, body } = await parseResponse(res)
