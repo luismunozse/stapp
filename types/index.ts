@@ -103,6 +103,9 @@ export interface Cliente {
   aceptaWhatsapp?: boolean
   sectores?: SectorCliente[]
   saldoCuenta?: number
+  deudaPendiente?: number
+  ordenesCount?: number
+  ultimaVisita?: string | null
   createdAt: Date
   updatedAt: Date
 }
