@@ -17,6 +17,7 @@ import { useSuperadminFetch } from "@/hooks/use-superadmin-fetch"
 import { OrgCommandHeader } from "./_components/org-command-header"
 import { OrgQuickActions } from "./_components/org-quick-actions"
 import { OrgLimitsSection } from "./_components/org-limits-section"
+import { OrgFeatureFlagsSection } from "./_components/org-feature-flags-section"
 import { OrgInfoTab } from "./_components/org-info-tab"
 import { OrgUsersTab } from "./_components/org-users-tab"
 import { OrgUsageTab } from "./_components/org-usage-tab"
@@ -183,6 +184,9 @@ export default function OrganizacionDetallePage({ params }: PageProps) {
         limitOverrides={limitOverrides}
         onUpdated={refresh}
       />
+
+      {/* 5b. Feature flags per org */}
+      <OrgFeatureFlagsSection organization={organization} />
 
       {/* 6. Users */}
       <OrgUsersTab users={users} onUpdated={refresh} />

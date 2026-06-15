@@ -11,6 +11,9 @@ declare module "next-auth" {
       sucursalId: string | null
       isSuperadmin?: boolean
       avatar?: string | null
+      // Set when a superadmin is impersonating this tenant (read-only session).
+      isImpersonating?: boolean
+      impersonatorEmail?: string | null
     } & DefaultSession["user"]
     error?: string
   }
@@ -37,5 +40,8 @@ declare module "next-auth/jwt" {
     refreshToken?: string
     avatar?: string | null
     error?: string
+    // Impersonation claims (minted in lib/impersonation.ts, never on real login).
+    isImpersonating?: boolean
+    impersonatorEmail?: string | null
   }
 }

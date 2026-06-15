@@ -8,6 +8,7 @@ import { PolicyChangeModal } from "@/components/subscription/policy-change-modal
 import { SkipLinks } from "@/components/shared/skip-links"
 import { ApkDownloadBanner } from "@/components/shared/apk-download-banner"
 import { MaintenanceBanner } from "@/components/shared/maintenance-banner"
+import { ImpersonationBanner } from "@/components/superadmin/impersonation-banner"
 import { SampleDataBannerWrapper } from "@/components/onboarding/sample-data-banner-wrapper"
 import { GuidedTour } from "@/components/guided-tour"
 import { OfflineProvider } from "@/contexts/offline-context"
@@ -94,6 +95,9 @@ export default async function DashboardLayout({
       <OfflineProvider>
         <div className="min-h-dvh bg-background">
           <SkipLinks />
+          {session.user.isImpersonating && (
+            <ImpersonationBanner viewingAs={session.user.name || session.user.email || "tenant"} />
+          )}
           <OfflineBanner />
           <Navbar />
           {/* Banner de mantenimiento (gestionado por superadmin) */}

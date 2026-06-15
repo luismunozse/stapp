@@ -320,6 +320,41 @@ export async function getPlanSlug(organizationId: string): Promise<PlanSlug> {
   return subscription.planSlug
 }
 
+/**
+ * Pure resolver: returns the override value when it is not null, otherwise
+ * falls back to the plan-level flag. Access gating (trial expiry, CANCELED,
+ * PAST_DUE) is handled by hasPlanFeature before this is called.
+ */
+export function resolveFeatureAccess(
+  planHasFeature: boolean,
+  override: boolean | null
+): boolean {
+  return override !== null ? override : planHasFeature
+}
+
+/**
+ * Fetches a per-org feature override from the DB.
+ * Returns null when no row exists or on any error (safe fallback to plan).
+ */
+async function getFeatureOverride(
+  organizationId: string,
+  featureKey: string
+): Promise<boolean | null> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("organization_feature_overrides")
+      .select("enabled")
+      .eq("organization_id", organizationId)
+      .eq("feature_key", featureKey)
+      .single()
+
+    if (error || data === null) return null
+    return data.enabled
+  } catch {
+    return null
+  }
+}
+
 // Verifica si el plan actual tiene una feature específica habilitada
 // Usado para feature gating granular (reportes, whatsapp, kiosco, etc)
 export async function hasPlanFeature(
@@ -350,8 +385,10 @@ export async function hasPlanFeature(
     return false
   }
 
-  // Chequear el flag específico en el JSONB del plan
-  return subscription.featureFlags?.[featureKey] === true
+  // Resolve plan flag + per-org override
+  const planHas = subscription.featureFlags?.[featureKey] === true
+  const override = await getFeatureOverride(organizationId, featureKey)
+  return resolveFeatureAccess(planHas, override)
 }
 
 // Obtener todos los planes disponibles

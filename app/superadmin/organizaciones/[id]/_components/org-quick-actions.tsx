@@ -9,7 +9,9 @@ import {
   Power,
   Trash2,
   Loader2,
+  Eye,
 } from "lucide-react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -27,6 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import {
@@ -53,6 +56,12 @@ export function OrgQuickActions({
   const [trialDias, setTrialDias] = useState("7")
   const [trialMotivo, setTrialMotivo] = useState("")
 
+  const resetTrialDialog = () => {
+    setTrialOpen(false)
+    setTrialDias("7")
+    setTrialMotivo("")
+  }
+
   const handleExtenderTrial = async () => {
     await mutate("/api/superadmin/trial-extension", {
       method: "POST",
@@ -61,11 +70,25 @@ export function OrgQuickActions({
         dias: Number(trialDias),
         motivo: trialMotivo || undefined,
       },
-      successMessage: "Trial extendido",
+      successMessage: "Trial actualizado",
       onSuccess: () => {
-        setTrialOpen(false)
-        setTrialDias("7")
-        setTrialMotivo("")
+        resetTrialDialog()
+        onUpdated()
+      },
+    })
+  }
+
+  const handleQuitarTrial = async () => {
+    await mutate("/api/superadmin/trial-extension", {
+      method: "POST",
+      body: {
+        organizationId: organization.id,
+        remove: true,
+        motivo: trialMotivo || undefined,
+      },
+      successMessage: "Trial finalizado",
+      onSuccess: () => {
+        resetTrialDialog()
         onUpdated()
       },
     })
@@ -119,22 +142,53 @@ export function OrgQuickActions({
 
   // ── 4. Suspender / Reactivar ─────────────────────────────────────────────
   const [toggleStatusOpen, setToggleStatusOpen] = useState(false)
+  const [suspendReason, setSuspendReason] = useState("")
 
   const handleToggleStatus = async () => {
+    const nextActivo = !organization.activo
     await mutate(
       `/api/superadmin/organizations/${organization.id}/toggle-status`,
       {
         method: "POST",
-        body: { activo: !organization.activo },
+        // El motivo solo aplica al suspender; el backend lo exige en ese caso.
+        body: nextActivo
+          ? { activo: true }
+          : { activo: false, reason: suspendReason.trim() },
         successMessage: organization.activo
           ? "Organización suspendida"
           : "Organización reactivada",
         onSuccess: () => {
           setToggleStatusOpen(false)
+          setSuspendReason("")
           onUpdated()
         },
       }
     )
+  }
+
+  // ── 4b. Impersonar (solo lectura) ────────────────────────────────────────
+  const [impersonarOpen, setImpersonarOpen] = useState(false)
+  const [impersonarLoading, setImpersonarLoading] = useState(false)
+
+  const handleImpersonar = async () => {
+    setImpersonarLoading(true)
+    try {
+      const res = await fetch("/api/superadmin/impersonate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ organizationId: organization.id }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && data?.url) {
+        window.location.href = data.url
+        return
+      }
+      toast.error(data?.error || "No se pudo iniciar la impersonación")
+    } catch {
+      toast.error("No se pudo iniciar la impersonación")
+    } finally {
+      setImpersonarLoading(false)
+    }
   }
 
   // ── 5. Archivar ──────────────────────────────────────────────────────────
@@ -166,7 +220,7 @@ export function OrgQuickActions({
             onClick={() => setTrialOpen(true)}
           >
             <Calendar className="h-4 w-4 mr-1.5" />
-            Extender trial
+            Ajustar trial
           </Button>
         )}
 
@@ -207,6 +261,18 @@ export function OrgQuickActions({
           )}
         </Button>
 
+        {/* 4b. Impersonar (solo lectura) — only for active orgs */}
+        {organization.activo && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setImpersonarOpen(true)}
+          >
+            <Eye className="h-4 w-4 mr-1.5" />
+            Impersonar
+          </Button>
+        )}
+
         {/* 5. Archivar */}
         <Button
           variant="outline"
@@ -226,27 +292,29 @@ export function OrgQuickActions({
       <Dialog open={trialOpen} onOpenChange={setTrialOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Extender trial</DialogTitle>
+            <DialogTitle>Ajustar trial</DialogTitle>
             <DialogDescription>
-              Añadir días de trial para{" "}
+              Extender, acortar o quitar el trial de{" "}
               <span className="font-medium">{organization.nombre}</span>.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
-              <Label htmlFor="trial-dias">Días a extender</Label>
+              <Label htmlFor="trial-dias">Días (negativo para acortar)</Label>
               <Input
                 id="trial-dias"
                 type="number"
-                min={1}
+                min={-90}
                 max={90}
                 required
                 value={trialDias}
                 onChange={(e) => setTrialDias(e.target.value)}
                 placeholder="7"
               />
-              <p className="text-xs text-muted-foreground">Entre 1 y 90 días.</p>
+              <p className="text-xs text-muted-foreground">
+                Entre -90 y 90 días. Tope acumulado de extensión: 90 días.
+              </p>
             </div>
 
             <div className="space-y-1.5">
@@ -260,10 +328,18 @@ export function OrgQuickActions({
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="destructive"
+              className="sm:mr-auto"
+              onClick={handleQuitarTrial}
+              disabled={loading}
+            >
+              Quitar trial
+            </Button>
             <Button
               variant="outline"
-              onClick={() => setTrialOpen(false)}
+              onClick={resetTrialDialog}
               disabled={loading}
             >
               Cancelar
@@ -273,7 +349,9 @@ export function OrgQuickActions({
               disabled={
                 loading ||
                 !trialDias ||
-                Number(trialDias) < 1 ||
+                Number.isNaN(Number(trialDias)) ||
+                Number(trialDias) === 0 ||
+                Number(trialDias) < -90 ||
                 Number(trialDias) > 90
               }
             >
@@ -283,7 +361,7 @@ export function OrgQuickActions({
                   Procesando...
                 </>
               ) : (
-                "Extender"
+                "Aplicar"
               )}
             </Button>
           </DialogFooter>
@@ -436,20 +514,92 @@ export function OrgQuickActions({
         </DialogContent>
       </Dialog>
 
-      {/* ── Dialog 4: Suspender / Reactivar (ConfirmDialog warning/info) ──── */}
+      {/* ── Dialog 4: Reactivar (ConfirmDialog) — solo cuando está suspendida ── */}
+      {!organization.activo && (
+        <ConfirmDialog
+          open={toggleStatusOpen}
+          onOpenChange={setToggleStatusOpen}
+          title="Reactivar organización"
+          description={`¿Reactivar a ${organization.nombre}? Los usuarios recuperarán el acceso y se limpiará el motivo de suspensión.`}
+          confirmText="Reactivar"
+          variant="info"
+          loading={loading}
+          onConfirm={handleToggleStatus}
+        />
+      )}
+
+      {/* ── Dialog 4: Suspender (plain Dialog con motivo obligatorio) ──────── */}
+      {organization.activo && (
+        <Dialog
+          open={toggleStatusOpen}
+          onOpenChange={(open) => {
+            setToggleStatusOpen(open)
+            if (!open) setSuspendReason("")
+          }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Suspender organización</DialogTitle>
+              <DialogDescription>
+                Los usuarios de{" "}
+                <span className="font-medium">{organization.nombre}</span> no
+                podrán acceder hasta que sea reactivada. El motivo queda
+                registrado en el audit log.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-1.5 py-2">
+              <Label htmlFor="suspend-reason">Motivo de la suspensión</Label>
+              <Textarea
+                id="suspend-reason"
+                value={suspendReason}
+                onChange={(e) => setSuspendReason(e.target.value)}
+                placeholder="Ej: falta de pago, uso indebido, solicitud del cliente…"
+                rows={3}
+                maxLength={500}
+              />
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setToggleStatusOpen(false)
+                  setSuspendReason("")
+                }}
+                disabled={loading}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleToggleStatus}
+                disabled={loading || !suspendReason.trim()}
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Suspendiendo...
+                  </>
+                ) : (
+                  "Suspender"
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* ── Dialog 4b: Impersonar (ConfirmDialog) ──────────────────────────── */}
       <ConfirmDialog
-        open={toggleStatusOpen}
-        onOpenChange={setToggleStatusOpen}
-        title={organization.activo ? "Suspender organización" : "Reactivar organización"}
-        description={
-          organization.activo
-            ? `¿Suspender a ${organization.nombre}? Los usuarios no podrán acceder hasta que sea reactivada.`
-            : `¿Reactivar a ${organization.nombre}? Los usuarios recuperarán el acceso.`
-        }
-        confirmText={organization.activo ? "Suspender" : "Reactivar"}
-        variant={organization.activo ? "warning" : "info"}
-        loading={loading}
-        onConfirm={handleToggleStatus}
+        open={impersonarOpen}
+        onOpenChange={setImpersonarOpen}
+        title="Impersonar organización"
+        description={`Vas a entrar a ${organization.nombre} en modo SOLO LECTURA. Verás lo que ve el cliente, pero no podrás modificar nada. El acceso queda registrado en el audit log. Tu sesión de admin se restaura al salir.`}
+        confirmText="Impersonar"
+        variant="info"
+        loading={impersonarLoading}
+        onConfirm={handleImpersonar}
       />
 
       {/* ── Dialog 5: Archivar (plain Dialog con gate de slug) ─────────────── */}

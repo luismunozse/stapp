@@ -520,6 +520,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.sucursalId = (token.sucursalId as string | null) ?? null
         session.user.isSuperadmin = token.isSuperadmin as boolean
         session.user.avatar = token.avatar as string | null
+        // Surface impersonation state so the dashboard can render the banner
+        // and read-only affordances. These are only present on minted
+        // impersonation tokens (lib/impersonation.ts), never on real logins.
+        session.user.isImpersonating = (token.isImpersonating as boolean) || false
+        session.user.impersonatorEmail = (token.impersonatorEmail as string | null) ?? null
       }
 
       // Pasar error al cliente si existe
@@ -532,6 +537,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   events: {
     signOut: async (message) => {
+      // NUNCA invalidar nada durante una sesión de impersonación: `token.id`
+      // acá es el usuario DEL TENANT (no el superadmin). Invalidar su refresh
+      // token lo desloguearía de su PWA/sesiones reales — una escritura con
+      // efecto visible que rompería el contrato read-only + silencioso de la
+      // impersonación. El camino sancionado para terminar es /api/auth/impersonate/exit.
+      if ("token" in message && (message.token as { isImpersonating?: boolean })?.isImpersonating) {
+        return
+      }
       // Invalidar refresh token al hacer logout
       if ("token" in message && message.token?.id) {
         await invalidateRefreshToken(message.token.id as string)

@@ -12,11 +12,20 @@ export async function POST(
 
     const { id } = await params
     const body = await request.json()
-    const { activo } = body
+    const { activo, reason } = body
 
     if (typeof activo !== "boolean") {
       return NextResponse.json(
         { error: "El campo 'activo' es requerido y debe ser boolean" },
+        { status: 400 }
+      )
+    }
+
+    // Al suspender exigimos un motivo; al reactivar no aplica.
+    const suspensionReason = typeof reason === "string" ? reason.trim() : ""
+    if (!activo && !suspensionReason) {
+      return NextResponse.json(
+        { error: "Se requiere un motivo para suspender la organización" },
         { status: 400 }
       )
     }
@@ -43,10 +52,16 @@ export async function POST(
       )
     }
 
-    // Actualizar estado
+    // Actualizar estado. Al suspender guardamos motivo + quién/cuándo; al
+    // reactivar limpiamos esos campos para no dejar un motivo viejo colgado.
     const { data, error: dbError } = await supabaseAdmin
       .from("organizations")
-      .update({ activo })
+      .update({
+        activo,
+        suspension_reason: activo ? null : suspensionReason,
+        suspended_at: activo ? null : new Date().toISOString(),
+        suspended_by: activo ? null : email,
+      })
       .eq("id", id)
       .select()
       .single()
@@ -65,9 +80,10 @@ export async function POST(
         before: orgBefore.activo,
         after: activo,
         superadmin_email: email,
+        suspension_reason: activo ? null : suspensionReason,
         action_description: activo
           ? `Organización "${orgBefore.nombre}" activada`
-          : `Organización "${orgBefore.nombre}" desactivada`,
+          : `Organización "${orgBefore.nombre}" desactivada — motivo: ${suspensionReason}`,
       },
     })
 

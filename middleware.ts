@@ -440,6 +440,31 @@ export async function middleware(request: NextRequest) {
     })
   }
 
+  // Read-only impersonation enforcement. When a superadmin impersonates a
+  // tenant, the minted token carries `isImpersonating` (lib/impersonation.ts).
+  // At this point the token is confirmed to belong to THIS tenant (it passed
+  // the cross-tenant check above), so we block any state-changing request:
+  // non-safe HTTP methods AND Next.js server actions (which POST to page
+  // routes with a `next-action` header). The exit and signout endpoints are
+  // allowlisted so the superadmin can always leave.
+  if (token?.isImpersonating) {
+    const method = request.method.toUpperCase()
+    const isSafeMethod = method === "GET" || method === "HEAD" || method === "OPTIONS"
+    const isServerAction = request.headers.has("next-action")
+    // Only the sanctioned exit endpoint is allowlisted. We do NOT allowlist
+    // /api/auth/signout: a signout during impersonation would fire NextAuth's
+    // signOut event with the TENANT user's id. The signOut handler now guards
+    // against that, but blocking it here keeps the read-only surface minimal.
+    const isExit = pathname === "/api/auth/impersonate/exit"
+
+    if ((!isSafeMethod || isServerAction) && !isExit) {
+      return NextResponse.json(
+        { error: "Sesión de impersonación en solo-lectura: acción no permitida" },
+        { status: 403 }
+      )
+    }
+  }
+
   // Si es ruta pública, permitir pero pasar contexto
   if (isPublicPath(pathname)) {
     return NextResponse.next({
@@ -468,6 +493,11 @@ export async function middleware(request: NextRequest) {
   requestHeaders.set("x-organization-id", token.organizationId as string)
   requestHeaders.set("x-user-id", token.id as string)
   requestHeaders.set("x-user-role", token.role as string)
+  // Defense in depth: let server-side reads know the session is impersonated
+  // and read-only, on top of the central method-based block above.
+  if (token.isImpersonating) {
+    requestHeaders.set("x-impersonating", "true")
+  }
 
   // Protección de rutas por rol
   const userRole = token.role as string
