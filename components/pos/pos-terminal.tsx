@@ -36,8 +36,9 @@ import type {
   PosCliente,
   HeldSale,
   InventarioResult,
+  DescuentoConfig,
 } from "./pos-types"
-import { EMPTY_CLIENT, nextLineId } from "./pos-types"
+import { EMPTY_CLIENT, nextLineId, computeVentaTotals } from "./pos-types"
 
 const HELD_SALES_KEY = "pos_held_sales"
 
@@ -70,6 +71,8 @@ export function PosTerminal() {
   const [cartItems, setCartItems] = useState<PosCartItem[]>([])
   const [cliente, setCliente] = useState<PosCliente>({ ...EMPTY_CLIENT })
   const [showClienteSearch, setShowClienteSearch] = useState(false)
+  const [descuentoGlobal, setDescuentoGlobal] = useState<DescuentoConfig | null>(null)
+  const [descuentoMotivo, setDescuentoMotivo] = useState("")
 
   // UI state
   const [checkoutOpen, setCheckoutOpen] = useState(false)
@@ -150,7 +153,7 @@ export function PosTerminal() {
 
   // Computed values
   const cartCount = cartItems.reduce((sum, i) => sum + i.cantidad, 0)
-  const cartTotal = cartItems.reduce((sum, i) => sum + i.precioUnitario * i.cantidad, 0)
+  const cartTotal = computeVentaTotals(cartItems, descuentoGlobal).total
 
   // Load held sales from localStorage + sync entre tabs.
   // storage event no dispara en la tab que originó el cambio: cubre el caso
@@ -253,6 +256,21 @@ export function PosTerminal() {
     )
   }, [])
 
+  const setItemDescuento = useCallback((lineId: string, d: { tipo: import("./pos-types").TipoDescuento; valor: number }) => {
+    setCartItems((prev) =>
+      prev.map((item) =>
+        item.lineId === lineId
+          ? {
+              ...item,
+              tipoDescuento: d.tipo,
+              descuento: d.tipo === "MONTO" ? d.valor : 0,
+              porcentajeDescuento: d.tipo === "PORCENTAJE" ? d.valor : 0,
+            }
+          : item
+      )
+    )
+  }, [])
+
   const clearCart = useCallback(async () => {
     if (cartItems.length === 0) return
     const confirmed = await confirm({
@@ -266,6 +284,8 @@ export function PosTerminal() {
       setCartItems([])
       setCliente({ ...EMPTY_CLIENT })
       setShowClienteSearch(false)
+      setDescuentoGlobal(null)
+      setDescuentoMotivo("")
     }
   }, [cartItems.length, confirm])
 
@@ -285,6 +305,8 @@ export function PosTerminal() {
     setCartItems([])
     setCliente({ ...EMPTY_CLIENT })
     setShowClienteSearch(false)
+    setDescuentoGlobal(null)
+    setDescuentoMotivo("")
     setMobileTab("products")
   }, [cartItems, cliente, heldSales])
 
@@ -313,6 +335,8 @@ export function PosTerminal() {
 
       setCartItems(sale.items)
       setCliente(sale.cliente)
+      setDescuentoGlobal(null)
+      setDescuentoMotivo("")
       setMobileTab("cart")
     },
     [heldSales, cartItems, cliente]
@@ -438,6 +462,8 @@ export function PosTerminal() {
     setCartItems([])
     setCliente({ ...EMPTY_CLIENT })
     setShowClienteSearch(false)
+    setDescuentoGlobal(null)
+    setDescuentoMotivo("")
 
     // Auto-print ticket if printer connected
     if (printer.connected) {
@@ -493,6 +519,8 @@ export function PosTerminal() {
       setCartItems([])
       setCliente({ ...EMPTY_CLIENT })
       setShowClienteSearch(false)
+      setDescuentoGlobal(null)
+      setDescuentoMotivo("")
       setMobileTab("products")
       searchRef.current?.focusSearch()
     },
@@ -661,6 +689,11 @@ export function PosTerminal() {
             heldCount={heldSales.length}
             showClienteSearch={showClienteSearch}
             onToggleClienteSearch={() => setShowClienteSearch((prev) => !prev)}
+            descuentoGlobal={descuentoGlobal}
+            descuentoMotivo={descuentoMotivo}
+            onSetItemDescuento={setItemDescuento}
+            onSetDescuentoGlobal={setDescuentoGlobal}
+            onSetDescuentoMotivo={setDescuentoMotivo}
           />
         </div>
       </div>
@@ -694,6 +727,11 @@ export function PosTerminal() {
               heldCount={heldSales.length}
               showClienteSearch={showClienteSearch}
               onToggleClienteSearch={() => setShowClienteSearch((prev) => !prev)}
+              descuentoGlobal={descuentoGlobal}
+              descuentoMotivo={descuentoMotivo}
+              onSetItemDescuento={setItemDescuento}
+              onSetDescuentoGlobal={setDescuentoGlobal}
+              onSetDescuentoMotivo={setDescuentoMotivo}
             />
           </div>
         </div>
@@ -769,6 +807,8 @@ export function PosTerminal() {
         items={cartItems}
         cliente={cliente}
         onComplete={handleCheckoutComplete}
+        descuentoGlobal={descuentoGlobal}
+        descuentoMotivo={descuentoMotivo.trim() || undefined}
       />
 
       <PosHeldSales

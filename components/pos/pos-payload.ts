@@ -1,4 +1,4 @@
-import type { PosCartItem, PosCliente } from "./pos-types"
+import type { PosCartItem, PosCliente, DescuentoConfig, TipoDescuento } from "./pos-types"
 import type { PagoLineItem } from "@/components/pagos/multi-pago-input"
 
 export interface BuildVentaPayloadInput {
@@ -8,6 +8,10 @@ export interface BuildVentaPayloadInput {
   pagoParcial: boolean
   observaciones: string
   idempotencyKey: string
+  /** Descuento global sobre toda la venta (opcional). */
+  descuentoGlobal?: DescuentoConfig | null
+  /** Motivo del descuento (opcional, para auditoría). */
+  descuentoMotivo?: string
 }
 
 export interface VentaPayload {
@@ -23,14 +27,15 @@ export interface VentaPayload {
     precioUnitario: number
     diasGarantia: number
     descuento: number
-    tipoDescuento: "MONTO"
+    tipoDescuento: TipoDescuento
     porcentajeDescuento: number
     serieIds?: string[]
     costo?: number
   }[]
   descuento: number
-  tipoDescuento: "MONTO"
+  tipoDescuento: TipoDescuento
   porcentajeDescuento: number
+  descuentoMotivo?: string
   metodoPago: string
   observaciones?: string
   pagos?: {
@@ -44,8 +49,11 @@ export interface VentaPayload {
 }
 
 export function buildVentaPayload(input: BuildVentaPayloadInput): VentaPayload {
-  const { items, cliente, pagosLines, pagoParcial, observaciones, idempotencyKey } = input
+  const { items, cliente, pagosLines, pagoParcial, observaciones, idempotencyKey, descuentoGlobal = null, descuentoMotivo } = input
   const pagosConMonto = pagosLines.filter((p) => p.monto > 0)
+
+  const globalTipo: TipoDescuento = descuentoGlobal?.tipo ?? "MONTO"
+  const globalValor = descuentoGlobal?.valor ?? 0
 
   return {
     clienteId: cliente.id || null,
@@ -53,21 +61,25 @@ export function buildVentaPayload(input: BuildVentaPayloadInput): VentaPayload {
     ...(cliente.telefono ? { clienteTelefono: cliente.telefono } : {}),
     pagosParcial: pagoParcial,
     idempotencyKey,
-    items: items.map((item) => ({
-      inventarioId: item.inventarioId || null,
-      descripcion: item.nombre,
-      cantidad: item.cantidad,
-      precioUnitario: item.precioUnitario,
-      diasGarantia: item.diasGarantia,
-      descuento: 0,
-      tipoDescuento: "MONTO" as const,
-      porcentajeDescuento: 0,
-      ...(item.trackeaSeries && item.serieIds.length > 0 && { serieIds: item.serieIds }),
-      ...(item.costo != null && { costo: item.costo }),
-    })),
-    descuento: 0,
-    tipoDescuento: "MONTO" as const,
-    porcentajeDescuento: 0,
+    items: items.map((item) => {
+      const tipo: TipoDescuento = item.tipoDescuento ?? "MONTO"
+      return {
+        inventarioId: item.inventarioId || null,
+        descripcion: item.nombre,
+        cantidad: item.cantidad,
+        precioUnitario: item.precioUnitario,
+        diasGarantia: item.diasGarantia,
+        descuento: tipo === "MONTO" ? (item.descuento ?? 0) : 0,
+        tipoDescuento: tipo,
+        porcentajeDescuento: tipo === "PORCENTAJE" ? (item.porcentajeDescuento ?? 0) : 0,
+        ...(item.trackeaSeries && item.serieIds.length > 0 && { serieIds: item.serieIds }),
+        ...(item.costo != null && { costo: item.costo }),
+      }
+    }),
+    descuento: globalTipo === "MONTO" ? globalValor : 0,
+    tipoDescuento: globalTipo,
+    porcentajeDescuento: globalTipo === "PORCENTAJE" ? globalValor : 0,
+    ...(descuentoMotivo ? { descuentoMotivo } : {}),
     metodoPago: pagosConMonto.length > 0 ? pagosConMonto[0].metodo : "EFECTIVO",
     ...(observaciones ? { observaciones } : {}),
     ...(pagosConMonto.length > 0 && {
