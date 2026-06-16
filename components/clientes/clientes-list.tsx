@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { DataTable, DataTablePagination, type Column } from "@/components/ui/data-table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { Plus, Search, Phone, Mail, Edit, Trash2, User, Building2, Upload, PiggyBank, DollarSign, MoreHorizontal, Users } from "lucide-react"
+import { Plus, Search, Phone, Mail, Edit, Trash2, User, Building2, Upload, PiggyBank, DollarSign, MoreHorizontal, Users, Wrench, Receipt } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { ClienteForm } from "./cliente-form"
 import { CuentaCorrienteDialog } from "@/components/clientes/cuenta-corriente-dialog"
@@ -306,6 +306,23 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
               </Button>
             </PopoverTrigger>
             <PopoverContent align="end" className="w-48 p-1">
+              <button
+                type="button"
+                className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
+                onClick={(e) => { e.stopPropagation(); router.push(`/ordenes?clienteId=${cliente.id}`) }}
+              >
+                <Wrench className="h-4 w-4" />
+                Nueva orden
+              </button>
+              <button
+                type="button"
+                className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
+                onClick={(e) => { e.stopPropagation(); router.push(`/cotizaciones?clienteId=${cliente.id}`) }}
+              >
+                <Receipt className="h-4 w-4" />
+                Nueva cotización
+              </button>
+              <div className="h-px bg-border my-1" />
               <button
                 type="button"
                 className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"

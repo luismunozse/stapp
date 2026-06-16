@@ -1,10 +1,12 @@
 "use client"
 
 import Link from "next/link"
-import { ArrowLeft, User, Building2, Edit } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { ArrowLeft, User, Building2, Edit, Plus, Wrench, Receipt } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { useCurrency } from "@/contexts/currency-context"
 import type { Cliente } from "@/types"
 
@@ -21,6 +23,7 @@ export function ClienteDetalleHeader({
   cliente, saldo, deudaPendiente, totalOrdenes, onEdit, onWhatsApp,
 }: ClienteDetalleHeaderProps) {
   const { formatPrice } = useCurrency()
+  const router = useRouter()
   const esEmpresa = cliente.tipoCliente === "EMPRESA"
 
   return (
@@ -46,6 +49,29 @@ export function ClienteDetalleHeader({
           </p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="default" size="sm" className="gap-1.5">
+                <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Nuevo</span>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-44 p-1">
+              <button
+                type="button"
+                className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
+                onClick={() => router.push(`/ordenes?clienteId=${cliente.id}`)}
+              >
+                <Wrench className="h-4 w-4" /> Nueva orden
+              </button>
+              <button
+                type="button"
+                className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
+                onClick={() => router.push(`/cotizaciones?clienteId=${cliente.id}`)}
+              >
+                <Receipt className="h-4 w-4" /> Nueva cotización
+              </button>
+            </PopoverContent>
+          </Popover>
           <Button variant="outline" size="sm" onClick={onEdit} className="gap-1.5">
             <Edit className="h-4 w-4" /> <span className="hidden sm:inline">Editar</span>
           </Button>

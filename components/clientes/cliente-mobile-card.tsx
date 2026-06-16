@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { User, Building2, Phone, Mail, MapPin, Edit, Trash2, PiggyBank, DollarSign, MoreHorizontal } from "lucide-react"
+import { User, Building2, Phone, Mail, MapPin, Edit, Trash2, PiggyBank, DollarSign, MoreHorizontal, Wrench, Receipt } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import type { Cliente } from "@/types"
@@ -78,6 +78,23 @@ export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCue
                 </Button>
               </PopoverTrigger>
               <PopoverContent align="end" className="w-48 p-1">
+                <button
+                  type="button"
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
+                  onClick={(e) => { e.stopPropagation(); router.push(`/ordenes?clienteId=${cliente.id}`) }}
+                >
+                  <Wrench className="h-4 w-4" />
+                  Nueva orden
+                </button>
+                <button
+                  type="button"
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
+                  onClick={(e) => { e.stopPropagation(); router.push(`/cotizaciones?clienteId=${cliente.id}`) }}
+                >
+                  <Receipt className="h-4 w-4" />
+                  Nueva cotización
+                </button>
+                <div className="h-px bg-border my-1" />
                 {onWhatsApp && (
                   <button
                     type="button"
