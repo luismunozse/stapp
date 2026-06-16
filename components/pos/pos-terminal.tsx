@@ -51,6 +51,7 @@ import {
   type VentaForTemplate,
 } from "@/lib/whatsapp/plantillas-venta"
 import { generateWhatsAppUrl } from "@/lib/notifications/whatsapp-templates"
+import { useOffline } from "@/contexts/offline-context"
 
 const HELD_SALES_KEY = "pos_held_sales"
 
@@ -77,6 +78,7 @@ export function PosTerminal() {
   const router = useRouter()
   const { formatPrice, pais } = useCurrency()
   const { confirm, showSuccess, showError } = useModal()
+  const { isOnline } = useOffline()
   const searchRef = useRef<PosProductSearchRef>(null)
 
   // Cart state
@@ -613,7 +615,7 @@ export function PosTerminal() {
     onHoldSale: holdSale,
     onRecallSale: () => setHeldSalesOpen(true),
     onCheckout: () => {
-      if (cartItems.length > 0) setCheckoutOpen(true)
+      if (cartItems.length > 0 && isOnline) setCheckoutOpen(true)
     },
     onToggleClient: () => {
       setMobileTab("cart")
@@ -797,7 +799,8 @@ export function PosTerminal() {
             onSetGarantia={setGarantia}
             onSetSerieIds={setSerieIds}
             onSetCliente={setCliente}
-            onCheckout={() => cartItems.length > 0 && setCheckoutOpen(true)}
+            onCheckout={() => cartItems.length > 0 && isOnline && setCheckoutOpen(true)}
+            checkoutDisabledReason={!isOnline ? "Sin conexión — no se puede cobrar" : undefined}
             onHoldSale={holdSale}
             onRecallSale={() => setHeldSalesOpen(true)}
             onClearCart={clearCart}
@@ -837,7 +840,8 @@ export function PosTerminal() {
               onSetGarantia={setGarantia}
               onSetSerieIds={setSerieIds}
               onSetCliente={setCliente}
-              onCheckout={() => cartItems.length > 0 && setCheckoutOpen(true)}
+              onCheckout={() => cartItems.length > 0 && isOnline && setCheckoutOpen(true)}
+            checkoutDisabledReason={!isOnline ? "Sin conexión — no se puede cobrar" : undefined}
               onHoldSale={holdSale}
               onRecallSale={() => setHeldSalesOpen(true)}
               onClearCart={clearCart}

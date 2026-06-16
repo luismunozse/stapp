@@ -18,6 +18,7 @@ import {
   ChevronDown,
   ChevronUp,
   Shield,
+  WifiOff,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useCurrency } from "@/contexts/currency-context"
@@ -35,6 +36,8 @@ interface PosCartProps {
   onSetSerieIds: (lineId: string, serieIds: string[]) => void
   onSetCliente: (cliente: PosCliente) => void
   onCheckout: () => void
+  /** When set, the checkout button is disabled and shows this reason (e.g. offline). */
+  checkoutDisabledReason?: string
   onHoldSale: () => void
   onRecallSale: () => void
   onClearCart: () => void
@@ -65,6 +68,7 @@ export function PosCart({
   onSetSerieIds,
   onSetCliente,
   onCheckout,
+  checkoutDisabledReason,
   onHoldSale,
   onRecallSale,
   onClearCart,
@@ -646,12 +650,19 @@ export function PosCart({
         <div className="p-3 space-y-2">
           <Button
             className="w-full h-12 text-lg font-semibold"
-            disabled={items.length === 0}
+            disabled={items.length === 0 || !!checkoutDisabledReason}
             onClick={onCheckout}
+            title={checkoutDisabledReason}
           >
             <CreditCard className="mr-2 h-5 w-5" />
             Cobrar (F8)
           </Button>
+          {checkoutDisabledReason && (
+            <p className="flex items-center justify-center gap-1.5 text-xs font-medium text-warning-700 dark:text-warning">
+              <WifiOff className="h-3.5 w-3.5 shrink-0" />
+              {checkoutDisabledReason}
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-2">
             <Button
               variant="outline"
