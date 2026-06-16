@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { parsePagination } from "@/lib/api-utils"
+import { escapeOrIlikeTerm } from "@/lib/pg-search"
 import type { AuditLogsResponse } from "@/types/superadmin"
 
 export async function GET(request: Request) {
@@ -81,9 +82,12 @@ export async function GET(request: Request) {
     }
 
     if (search) {
-      query = query.or(
-        `action.ilike.%${search}%,entity.ilike.%${search}%,ip_address.ilike.%${search}%,changes->>'performer_email'.ilike.%${search}%,changes->>'description'.ilike.%${search}%`
-      )
+      const s = escapeOrIlikeTerm(search)
+      if (s) {
+        query = query.or(
+          `action.ilike.%${s}%,entity.ilike.%${s}%,ip_address.ilike.%${s}%,changes->>'performer_email'.ilike.%${s}%,changes->>'description'.ilike.%${s}%`
+        )
+      }
     }
 
     // Paginación

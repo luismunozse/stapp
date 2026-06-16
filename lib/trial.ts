@@ -32,6 +32,16 @@ export function exceedsTrialCap(
  * the current trial_end when it is still in the future; otherwise they build on
  * `now` (re-opening an expired/absent trial). Negative deltas shorten it.
  */
+/**
+ * Status to persist when adjusting a subscription's trial dates. Adjusting a
+ * trial must NEVER downgrade a paying (ACTIVE) sub to TRIALING, nor reactivate
+ * a CANCELED one — only a sub already in TRIALING stays TRIALING. Everything
+ * else keeps its current status (we only move trial_end).
+ */
+export function trialAdjustmentStatus(currentStatus: string): string {
+  return currentStatus === "TRIALING" ? "TRIALING" : currentStatus
+}
+
 export function computeNewTrialEnd(
   currentTrialEnd: Date | null,
   deltaDias: number,

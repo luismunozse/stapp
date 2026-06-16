@@ -89,7 +89,9 @@ describe("POST /api/superadmin/organizations/[id]/restore", () => {
   beforeEach(() => vi.clearAllMocks())
 
   it("clears the archival fields", async () => {
-    const updateChain = createChainMock(null, null)
+    // El restore ahora hace un update atómico con .select("id") que devuelve la
+    // fila restaurada (guard anti-TOCTOU), así que el mock retorna esa fila.
+    const updateChain = createChainMock([{ id: "o1" }], null)
     const orgChain = {
       ...createChainMock({ id: "o1", slug: "guru-tech", deleted_at: "2026-06-01T00:00:00Z" }),
       update: vi.fn().mockReturnValue(updateChain),

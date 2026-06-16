@@ -7,6 +7,7 @@ import { safeParseBody } from "@/lib/api-utils"
 const bulkToggleSchema = z.object({
   ids: z.array(z.string().min(1, "ID inválido")).min(1, "Debe seleccionar al menos una organización"),
   activo: z.boolean(),
+  motivo: z.string().max(500).optional(),
 })
 
 export async function POST(request: Request) {
@@ -17,7 +18,16 @@ export async function POST(request: Request) {
     const parsed = await safeParseBody(request, bulkToggleSchema)
     if ("error" in parsed) return parsed.error
 
-    const { ids, activo } = parsed.data
+    const { ids, activo, motivo } = parsed.data
+
+    // Al suspender en lote exigimos motivo, igual que el toggle individual.
+    const suspensionReason = typeof motivo === "string" ? motivo.trim() : ""
+    if (!activo && !suspensionReason) {
+      return NextResponse.json(
+        { error: "Se requiere un motivo para suspender organizaciones" },
+        { status: 400 }
+      )
+    }
 
     // Guard: filtrar la org del panel admin para no desactivarla
     const { data: protectedOrgs } = await supabaseAdmin
@@ -37,7 +47,12 @@ export async function POST(request: Request) {
 
     const { data, error: dbError } = await supabaseAdmin
       .from("organizations")
-      .update({ activo })
+      .update({
+        activo,
+        suspension_reason: activo ? null : suspensionReason,
+        suspended_at: activo ? null : new Date().toISOString(),
+        suspended_by: activo ? null : email,
+      })
       .in("id", targetIds)
       .select("id")
 

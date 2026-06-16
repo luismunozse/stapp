@@ -6,6 +6,7 @@ import { safeParseBody } from "@/lib/api-utils"
 import {
   exceedsTrialCap,
   computeNewTrialEnd,
+  trialAdjustmentStatus,
   TRIAL_NET_EXTENSION_CAP_DAYS,
 } from "@/lib/trial"
 
@@ -76,11 +77,13 @@ export async function POST(request: NextRequest) {
       ? now
       : computeNewTrialEnd(sub.trial_end ? new Date(sub.trial_end) : null, deltaDias, now)
 
-    // Actualizar suscripción
+    // Actualizar suscripción. NO degradamos a TRIALING una sub que paga
+    // (ACTIVE) ni reactivamos una CANCELED por ajustar fechas de trial.
+    const nextStatus = trialAdjustmentStatus(sub.status)
     const { error: updateError } = await supabaseAdmin
       .from("subscriptions")
       .update({
-        status: "TRIALING",
+        status: nextStatus,
         trial_end: newTrialEnd.toISOString(),
       })
       .eq("id", sub.id)
@@ -109,7 +112,7 @@ export async function POST(request: NextRequest) {
       organization_id: organizationId,
       action: "TRIAL_EXTENDED",
       previous_status: sub.status,
-      new_status: "TRIALING",
+      new_status: nextStatus,
       details: {
         dias: deltaDias,
         removed: isRemoval,

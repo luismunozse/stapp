@@ -4,6 +4,7 @@ import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { safeParseBody } from "@/lib/api-utils"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
+import { exceedsTrialCap, trialAdjustmentStatus } from "@/lib/trial"
 
 const bulkActionSchema = z.object({
   action: z.enum(["extend_trial", "activate", "cancel"]),
@@ -43,13 +44,23 @@ export async function POST(request: Request) {
 
         if (!sub) { errorCount++; continue }
 
+        // Enforce the same cumulative cap as the single endpoint.
+        const { data: exts } = await supabaseAdmin
+          .from("trial_extensions")
+          .select("dias_extendidos")
+          .eq("organization_id", orgId)
+        const existingSum = (exts ?? []).reduce((s, e) => s + (e.dias_extendidos || 0), 0)
+        if (exceedsTrialCap(existingSum, dias)) { errorCount++; continue }
+
         const baseDate = sub.trial_end ? new Date(sub.trial_end) : new Date()
         const newTrialEnd = new Date(baseDate)
         newTrialEnd.setDate(newTrialEnd.getDate() + dias)
 
+        // Never downgrade a paying/canceled sub by extending its trial.
+        const nextStatus = trialAdjustmentStatus(sub.status)
         const { error: updateError } = await supabaseAdmin
           .from("subscriptions")
-          .update({ status: "TRIALING", trial_end: newTrialEnd.toISOString() })
+          .update({ status: nextStatus, trial_end: newTrialEnd.toISOString() })
           .eq("id", sub.id)
 
         if (updateError) { errorCount++; continue }
@@ -67,7 +78,7 @@ export async function POST(request: Request) {
           organization_id: orgId,
           action: "TRIAL_EXTENDED",
           previous_status: sub.status,
-          new_status: "TRIALING",
+          new_status: nextStatus,
           details: { dias, motivo, bulk: true },
           performed_by: email,
         })

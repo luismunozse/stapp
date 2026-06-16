@@ -37,25 +37,30 @@ export async function POST(request: Request) {
 
     const now = new Date().toISOString()
 
-    if (immediate) {
-      // Cancelación inmediata
-      await supabaseAdmin
-        .from("subscriptions")
-        .update({
-          status: "CANCELED",
-          canceled_at: now,
-          cancel_at_period_end: false,
-        })
-        .eq("id", sub.id)
-    } else {
-      // Cancelar al final del período
-      await supabaseAdmin
-        .from("subscriptions")
-        .update({
-          cancel_at_period_end: true,
-          canceled_at: now,
-        })
-        .eq("id", sub.id)
+    const { error: cancelError } = immediate
+      ? // Cancelación inmediata: limpiamos trial_end para que ningún chequeo
+        // basado en fechas siga tratándola como trial activo.
+        await supabaseAdmin
+          .from("subscriptions")
+          .update({
+            status: "CANCELED",
+            canceled_at: now,
+            cancel_at_period_end: false,
+            trial_end: null,
+          })
+          .eq("id", sub.id)
+      : // Cancelar al final del período
+        await supabaseAdmin
+          .from("subscriptions")
+          .update({
+            cancel_at_period_end: true,
+            canceled_at: now,
+          })
+          .eq("id", sub.id)
+
+    if (cancelError) {
+      console.error("Error canceling subscription:", cancelError)
+      return NextResponse.json({ error: "Error al cancelar la suscripción" }, { status: 500 })
     }
 
     // Registrar en historial

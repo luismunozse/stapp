@@ -25,18 +25,31 @@ export async function POST(
     if (orgError || !org) {
       return NextResponse.json({ error: "Organización no encontrada" }, { status: 404 })
     }
+    if (org.slug === "superadmin") {
+      return NextResponse.json(
+        { error: "No se puede restaurar la organización del panel admin" },
+        { status: 403 }
+      )
+    }
     if (!org.deleted_at) {
       return NextResponse.json({ error: "La organización no está archivada" }, { status: 409 })
     }
 
-    const { error: updateError } = await supabaseAdmin
+    // Update atómico: solo restaura si sigue archivada (evita TOCTOU con otra
+    // request concurrente).
+    const { data: restoredRows, error: updateError } = await supabaseAdmin
       .from("organizations")
       .update({ deleted_at: null, deleted_by: null, archived_reason: null })
       .eq("id", id)
+      .not("deleted_at", "is", null)
+      .select("id")
 
     if (updateError) {
       console.error("Error restoring organization:", updateError)
       return NextResponse.json({ error: "Error al restaurar la organización" }, { status: 500 })
+    }
+    if (!restoredRows || restoredRows.length === 0) {
+      return NextResponse.json({ error: "La organización no está archivada" }, { status: 409 })
     }
 
     try {

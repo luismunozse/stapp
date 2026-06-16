@@ -75,11 +75,13 @@ export async function POST(request: Request) {
       query = query.in("rol", roles)
     }
 
-    // Solo usuarios de orgs activas
+    // Solo usuarios de orgs activas (excluye la org interna del panel para que
+    // los usuarios internos no reciban los broadcasts de clientes).
     const { data: activeOrgs } = await supabaseAdmin
       .from("organizations")
       .select("id")
       .eq("activo", true)
+      .neq("slug", "superadmin")
       .is("deleted_at", null)
 
     const activeOrgIds = activeOrgs?.map((o) => o.id) || []

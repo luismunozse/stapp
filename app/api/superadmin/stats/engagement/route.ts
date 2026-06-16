@@ -17,12 +17,15 @@ export async function GET() {
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
 
     const results = await Promise.allSettled([
-      // 0 - Organizaciones con info (excluye org del panel admin)
+      // 0 - Organizaciones con info (excluye org del panel admin y archivadas).
+      // Archivar setea deleted_at pero NO activo=false, así que sin este filtro
+      // las archivadas se colaban en todas las métricas de engagement.
       supabaseAdmin
         .from("organizations")
         .select("id, nombre, slug, activo, created_at")
         .eq("activo", true)
-        .neq("slug", "superadmin"),
+        .neq("slug", "superadmin")
+        .is("deleted_at", null),
 
       // 1 - Suscripciones con plan y trial_end
       supabaseAdmin

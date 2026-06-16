@@ -4,6 +4,7 @@ import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createSuperadminAuditLogger } from "@/lib/superadmin-audit"
 import { safeParseBody } from "@/lib/api-utils"
+import { escapeOrIlikeTerm } from "@/lib/pg-search"
 
 const updateLeadSchema = z.object({
   id: z.string().min(1, "ID requerido"),
@@ -67,9 +68,12 @@ export async function GET(request: NextRequest) {
     }
 
     if (search) {
-      query = query.or(
-        `nombre.ilike.%${search}%,email.ilike.%${search}%,telefono.ilike.%${search}%,empresa.ilike.%${search}%`
-      )
+      const s = escapeOrIlikeTerm(search)
+      if (s) {
+        query = query.or(
+          `nombre.ilike.%${s}%,email.ilike.%${s}%,telefono.ilike.%${s}%,empresa.ilike.%${s}%`
+        )
+      }
     }
 
     const { data, error: dbError, count } = await query

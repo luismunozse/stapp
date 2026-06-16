@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { parsePagination } from "@/lib/api-utils"
+import { escapeOrIlikeTerm } from "@/lib/pg-search"
 
 export async function GET(request: Request) {
   try {
@@ -20,11 +21,11 @@ export async function GET(request: Request) {
     // Si hay búsqueda por org, encontrar IDs primero
     let searchOrgIds: string[] | null = null
     if (search.trim().length >= 2) {
-      const searchPattern = `%${search.trim()}%`
+      const s = escapeOrIlikeTerm(search)
       const { data: matchingOrgs } = await supabaseAdmin
         .from("organizations")
         .select("id")
-        .or(`nombre.ilike.${searchPattern},slug.ilike.${searchPattern}`)
+        .or(`nombre.ilike.%${s}%,slug.ilike.%${s}%`)
         .limit(100)
       searchOrgIds = matchingOrgs?.map((o) => o.id) || []
       if (searchOrgIds.length === 0) {
@@ -89,12 +90,20 @@ export async function GET(request: Request) {
     // Paginación
     query = query.range(offset, offset + limit - 1)
 
-    // Ejecutar query de pagos y total de montos en paralelo
+    // Total de montos: debe respetar los MISMOS filtros que la lista, si no el
+    // "Total" mostrado no coincide con las filas visibles. Si el usuario no
+    // filtró por estado, default a SUCCEEDED (dinero efectivamente cobrado).
     let totalAmountQuery = supabaseAdmin
       .from("subscription_payments")
       .select("amount")
-      .eq("status", "SUCCEEDED")
+      .eq("status", status ? status.toUpperCase() : "SUCCEEDED")
 
+    if (searchOrgIds) {
+      totalAmountQuery = totalAmountQuery.in("organization_id", searchOrgIds)
+    }
+    if (provider) {
+      totalAmountQuery = totalAmountQuery.eq("payment_provider", provider.toUpperCase())
+    }
     if (dateFrom) {
       totalAmountQuery = totalAmountQuery.gte("paid_at", dateFrom)
     }

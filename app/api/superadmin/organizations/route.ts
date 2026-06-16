@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { parsePagination } from "@/lib/api-utils"
+import { escapeOrIlikeTerm } from "@/lib/pg-search"
 import type { OrganizationsListResponse, OrganizationsKpis } from "@/types/superadmin"
 
 export async function GET(request: Request) {
@@ -74,18 +75,22 @@ export async function GET(request: Request) {
     let noActivityOrgIds: string[] | null = null
     if (status === "no_activity") {
       const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-      // Orgs que SÍ tuvieron actividad en los últimos 30 días
-      const { data: activeOrgs } = await supabaseAdmin
+      // Orgs que SÍ tuvieron actividad en los últimos 30 días. Chequeamos el
+      // error: si esta query falla y la tragamos, activeOrgIds queda vacío y
+      // TODAS las orgs se clasifican como "sin actividad" (datos erróneos).
+      const { data: activeOrgs, error: activeErr } = await supabaseAdmin
         .from("audit_logs")
         .select("organization_id")
         .gte("created_at", thirtyDaysAgo)
+      if (activeErr) throw activeErr
       const activeOrgIds = [...new Set((activeOrgs || []).map((a) => a.organization_id))]
 
       // Obtener TODAS las org IDs para excluir las activas
-      const { data: allOrgs } = await supabaseAdmin
+      const { data: allOrgs, error: allErr } = await supabaseAdmin
         .from("organizations")
         .select("id")
         .is("deleted_at", null)
+      if (allErr) throw allErr
       noActivityOrgIds = (allOrgs || [])
         .map((o) => o.id)
         .filter((id) => !activeOrgIds.includes(id))
@@ -99,6 +104,10 @@ export async function GET(request: Request) {
     }
     const sortColumn = sortColumnMap[sort] || "created_at"
     const ascending = dir === "asc"
+    // Columnas calculadas (no existen en SQL): hay que ordenar sobre el set
+    // filtrado COMPLETO y paginar en memoria. Si paginamos en SQL primero, el
+    // sort solo reordena la página actual y el orden es incorrecto entre páginas.
+    const isCalculatedSort = sort === "usersCount" || sort === "subscription"
 
     // Query base para organizaciones
     let query = supabaseAdmin
@@ -126,11 +135,15 @@ export async function GET(request: Request) {
       query = query.is("deleted_at", null)
     }
 
-    // Filtro de búsqueda
+    // Filtro de búsqueda (escapado para que comas/paréntesis/% no rompan ni
+    // inyecten condiciones en el filtro .or() de PostgREST).
     if (search) {
-      query = query.or(
-        `nombre.ilike.%${search}%,slug.ilike.%${search}%,email.ilike.%${search}%`
-      )
+      const s = escapeOrIlikeTerm(search)
+      if (s) {
+        query = query.or(
+          `nombre.ilike.%${s}%,slug.ilike.%${s}%,email.ilike.%${s}%`
+        )
+      }
     }
 
     // Filtro por email de admin (org IDs ya resueltos arriba)
@@ -200,8 +213,11 @@ export async function GET(request: Request) {
       query = query.in("id", trialExpiredOrgIds)
     }
 
-    // Paginación
-    query = query.range(offset, offset + limit - 1)
+    // Paginación SQL — solo cuando el orden es por columna real. Para columnas
+    // calculadas traemos todo el set filtrado y paginamos en memoria abajo.
+    if (!isCalculatedSort) {
+      query = query.range(offset, offset + limit - 1)
+    }
 
     const { data: organizations, error: dbError, count } = await query
 
@@ -352,7 +368,8 @@ export async function GET(request: Request) {
       possibleDuplicates: dupByOrgId.get(org.id) || undefined,
     }))
 
-    // Sort en memoria para columnas calculadas (usersCount, plan)
+    // Sort en memoria para columnas calculadas (usersCount, plan) sobre el set
+    // COMPLETO, y recién después paginar en memoria.
     if (sort === "usersCount") {
       result.sort((a, b) => ascending
         ? a.usersCount - b.usersCount
@@ -365,6 +382,9 @@ export async function GET(request: Request) {
           ? planA.localeCompare(planB)
           : planB.localeCompare(planA)
       })
+    }
+    if (isCalculatedSort) {
+      result = result.slice(offset, offset + limit)
     }
 
     // Calcular KPIs solo en la primera página (sin filtros) para eficiencia
