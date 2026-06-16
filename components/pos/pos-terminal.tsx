@@ -17,6 +17,7 @@ import {
   Unplug,
   Loader2,
   AlertTriangle,
+  RotateCcw,
 } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
@@ -25,6 +26,8 @@ import { PosCart } from "./pos-cart"
 import { PosCheckoutDialog } from "./pos-checkout-dialog"
 import { PosHeldSales } from "./pos-held-sales"
 import { PosTicketShare } from "./pos-ticket-share"
+import { PosDevolucionSearch, type VentaForDevolucion } from "./pos-devolucion-search"
+import { DevolucionForm } from "@/components/ventas/devolucion-form"
 import { usePosShortcuts } from "./use-pos-shortcuts"
 import { useBarcodeScanner } from "./use-barcode-scanner"
 import { useThermalPrinter } from "./use-thermal-printer"
@@ -84,6 +87,10 @@ export function PosTerminal() {
   const [successData, setSuccessData] = useState<any>(null)
   const [plantillaCorta, setPlantillaCorta] = useState<string | undefined>(undefined)
   const [fiscal, setFiscal] = useState<FiscalConfig | null>(null)
+
+  // Devolucion (return) flow
+  const [devolucionOpen, setDevolucionOpen] = useState(false)
+  const [devolucionVenta, setDevolucionVenta] = useState<VentaForDevolucion | null>(null)
 
   // Fetch fiscal config on mount
   useEffect(() => {
@@ -536,7 +543,7 @@ export function PosTerminal() {
 
   useBarcodeScanner({
     onScan: handleBarcodeScan,
-    enabled: !checkoutOpen && !heldSalesOpen && !successData && !scannerOpen,
+    enabled: !checkoutOpen && !heldSalesOpen && !successData && !scannerOpen && !devolucionOpen && !devolucionVenta,
   })
 
   // --- Keyboard shortcuts ---
@@ -563,7 +570,7 @@ export function PosTerminal() {
       setMobileTab("cart")
       setShowClienteSearch((prev) => !prev)
     },
-    enabled: !checkoutOpen && !heldSalesOpen && !successData,
+    enabled: !checkoutOpen && !heldSalesOpen && !successData && !devolucionOpen && !devolucionVenta,
   })
 
   return (
@@ -647,6 +654,18 @@ export function PosTerminal() {
               80mm
             </button>
           </div>
+
+          {/* Devolucion button */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5 text-xs"
+            onClick={() => setDevolucionOpen(true)}
+            title="Procesar devolución"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Devolución</span>
+          </Button>
 
           {/* Shortcuts toggle - desktop only */}
           <Button
@@ -849,6 +868,26 @@ export function PosTerminal() {
         onRecall={recallSale}
         onDelete={deleteHeldSale}
       />
+
+      <PosDevolucionSearch
+        open={devolucionOpen}
+        onClose={() => setDevolucionOpen(false)}
+        onVentaFound={(v) => {
+          setDevolucionOpen(false)
+          setDevolucionVenta(v)
+        }}
+      />
+
+      {devolucionVenta && (
+        <DevolucionForm
+          open
+          onOpenChange={(o) => {
+            if (!o) setDevolucionVenta(null)
+          }}
+          venta={devolucionVenta}
+          onSuccess={() => setDevolucionVenta(null)}
+        />
+      )}
 
       <BarcodeScanner
         open={scannerOpen}
