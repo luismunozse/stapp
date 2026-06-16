@@ -23,6 +23,7 @@ interface PosProductSearchProps {
   onAddProduct: (product: InventarioResult) => void
   onAddManualProduct: (product: ManualProduct) => void
   onOpenScanner?: () => void
+  scanSuccess?: { nombre: string } | null
 }
 
 export interface PosProductSearchRef {
@@ -141,7 +142,7 @@ function StockOtrasSucursales({ inventarioId, productName }: StockOtrasSucursale
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearchProps>(
-  function PosProductSearch({ onAddProduct, onAddManualProduct, onOpenScanner }, ref) {
+  function PosProductSearch({ onAddProduct, onAddManualProduct, onOpenScanner, scanSuccess }, ref) {
     const { formatPrice } = useCurrency()
     const inputRef = useRef<HTMLInputElement>(null)
     const manualNameRef = useRef<HTMLInputElement>(null)
@@ -299,6 +300,13 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
               <span className="hidden sm:inline text-sm">Manual</span>
             </Button>
           </div>
+          {/* Item 5: scan feedback — brief green flash when barcode adds a product */}
+          {scanSuccess && (
+            <div className="flex items-center gap-1.5 px-1 py-1 rounded-md bg-success/10 border border-success/20 text-success text-xs font-medium animate-in fade-in slide-in-from-top-1 duration-150">
+              <span className="text-success">✓</span>
+              <span className="truncate">{scanSuccess.nombre}</span>
+            </div>
+          )}
           {!query.trim() && !showManualForm && (
             <p className="text-xs text-muted-foreground px-1">
               Productos disponibles en stock
