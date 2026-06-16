@@ -46,6 +46,9 @@ export interface OrganizationDetail {
   created_at: string
   updated_at: string
   logo_url: string | null
+  suspension_reason: string | null
+  suspended_at: string | null
+  suspended_by: string | null
 }
 
 export interface OrganizationUser {
