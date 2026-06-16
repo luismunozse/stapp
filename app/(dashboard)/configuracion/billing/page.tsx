@@ -11,6 +11,7 @@ import { ArrowLeft, CheckCircle, XCircle, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { useModal } from "@/contexts/modal-context"
 import type { SubscriptionInfo, UsageInfo } from "@/lib/subscriptions"
+import { getMpRejectionInfo, type MpRejectionInfo } from "@/lib/mp-status-detail"
 
 interface Plan {
   id: string
@@ -41,16 +42,37 @@ function BillingContent() {
   const [payments, setPayments] = useState<Payment[]>([])
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false)
   const [cancelLoading, setCancelLoading] = useState(false)
+  const [rejectionInfo, setRejectionInfo] = useState<MpRejectionInfo | null>(null)
 
   const success = searchParams.get("success") === "true"
   const canceled = searchParams.get("canceled") === "true"
   const mpSuccess = searchParams.get("mp_success") === "true"
   const mpFailure = searchParams.get("mp_failure") === "true"
   const lsSuccess = searchParams.get("ls_success") === "true"
+  // MP agrega payment_id al back_url, pero NO el status_detail. Lo buscamos
+  // para mostrar el motivo real del rechazo y qué puede hacer el usuario.
+  const mpPaymentId = searchParams.get("payment_id")
 
   useEffect(() => {
     loadData()
   }, [])
+
+  useEffect(() => {
+    if (!mpFailure || !mpPaymentId) return
+    let cancelled = false
+    fetch(`/api/mercadopago/payment-status?payment_id=${encodeURIComponent(mpPaymentId)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return
+        if (data.status === "rejected") {
+          setRejectionInfo(getMpRejectionInfo(data.statusDetail))
+        }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [mpFailure, mpPaymentId])
 
   const loadData = async () => {
     setLoading(true)
@@ -142,13 +164,33 @@ function BillingContent() {
       )}
 
       {(canceled || mpFailure) && (
-        <div className="bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-3 sm:px-4 py-2 sm:py-3 rounded-lg flex items-center gap-2">
-          <XCircle className="h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
-          <div>
-            <p className="font-medium text-sm">Pago cancelado</p>
-            <p className="text-xs sm:text-sm">
-              Puedes intentarlo de nuevo cuando quieras.
+        <div className="bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-3 sm:px-4 py-2 sm:py-3 rounded-lg flex items-start gap-2">
+          <XCircle className="h-4 w-4 sm:h-5 sm:w-5 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="font-medium text-sm">
+              {canceled
+                ? "Pago cancelado"
+                : rejectionInfo
+                  ? rejectionInfo.title
+                  : "No pudimos procesar el pago"}
             </p>
+            <p className="text-xs sm:text-sm">
+              {canceled
+                ? "Puedes intentarlo de nuevo cuando quieras."
+                : rejectionInfo
+                  ? rejectionInfo.message
+                  : "El pago no se completó. Intentá de nuevo o usá otro medio de pago."}
+            </p>
+            {mpFailure && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-2 h-8 border-red-300 dark:border-red-800"
+                onClick={() => setUpgradeModalOpen(true)}
+              >
+                Reintentar pago
+              </Button>
+            )}
           </div>
         </div>
       )}
