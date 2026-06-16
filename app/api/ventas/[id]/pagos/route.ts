@@ -148,6 +148,26 @@ export async function POST(
       pagosCreados.push(pago)
     }
 
+    // Reconciliar fiado: los pagos externos (no CC) acreditan la cuenta corriente.
+    if (clienteId) {
+      const totalExterno = pagosToProcess
+        .filter((p) => p.metodo !== "CUENTA_CORRIENTE")
+        .reduce((sum, p) => sum + p.monto, 0)
+      if (totalExterno > 0) {
+        const { error: pagoFiadoError } = await supabaseAdmin.rpc("pagar_fiado_cuenta_corriente", {
+          p_org_id: organizationId!,
+          p_cliente_id: clienteId,
+          p_monto: totalExterno,
+          p_referencia_tipo: "VENTA",
+          p_referencia_id: ventaId,
+          p_usuario_id: userId!,
+        })
+        if (pagoFiadoError) {
+          console.error("Error acreditando pago de fiado (venta):", pagoFiadoError)
+        }
+      }
+    }
+
     // Actualizar venta
     const nuevoMontoAbonado = parseFloat(venta.monto_abonado || "0") + totalPagos
     const nuevoEstado = calcularEstadoPago(nuevoMontoAbonado, parseFloat(venta.total))
