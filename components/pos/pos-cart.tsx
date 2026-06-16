@@ -22,7 +22,7 @@ import {
 import { cn } from "@/lib/utils"
 import { useCurrency } from "@/contexts/currency-context"
 import { autoSelectSeries, computeVentaTotals } from "./pos-types"
-import type { PosCartItem, PosCliente, SerieDisponible, DescuentoConfig, TipoDescuento } from "./pos-types"
+import type { PosCartItem, PosCliente, SerieDisponible, DescuentoConfig, TipoDescuento, FiscalConfig } from "./pos-types"
 import { EmptyState } from "@/components/ui/empty-state"
 import { TotalRow } from "@/components/pos/total-row"
 
@@ -47,6 +47,7 @@ interface PosCartProps {
   onSetDescuentoGlobal: (d: DescuentoConfig | null) => void
   onSetDescuentoMotivo: (m: string) => void
   onSetPrecio: (lineId: string, precio: number) => void
+  fiscal?: FiscalConfig | null
 }
 
 interface ClienteResult {
@@ -76,6 +77,7 @@ export function PosCart({
   onSetDescuentoGlobal,
   onSetDescuentoMotivo,
   onSetPrecio,
+  fiscal,
 }: PosCartProps) {
   const { formatPrice } = useCurrency()
   const [clienteQuery, setClienteQuery] = useState("")
@@ -563,7 +565,7 @@ export function PosCart({
         {items.length > 0 && (
           <div className="px-4 pt-2 space-y-1">
             {(() => {
-              const t = computeVentaTotals(items, descuentoGlobal)
+              const t = computeVentaTotals(items, descuentoGlobal, fiscal)
               return (
                 <>
                   <TotalRow
@@ -576,6 +578,18 @@ export function PosCart({
                       amount={`- ${formatPrice(t.descuentoTotal)}`}
                       tone="success"
                     />
+                  )}
+                  {t.iva > 0 && (
+                    <>
+                      <TotalRow
+                        label="Neto"
+                        amount={formatPrice(t.neto)}
+                      />
+                      <TotalRow
+                        label={`IVA (${fiscal?.tasa ?? 0}%)`}
+                        amount={formatPrice(t.iva)}
+                      />
+                    </>
                   )}
                   <TotalRow
                     label="TOTAL"

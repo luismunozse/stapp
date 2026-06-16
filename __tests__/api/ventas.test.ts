@@ -777,4 +777,64 @@ describe("POST /api/ventas — descuentos por línea + global", () => {
     })
     expect(args.p_total).toBe(0)
   })
+
+  it("EXENTO: total sin cambio", async () => {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ventaId: "v1" }, error: null } as any)
+    mockSupabaseFrom({
+      organizations: createChainMock({ iva_regimen: "EXENTO", iva_tasa: 21, redondeo_efectivo: 0 }),
+      ventas: createChainMock({ id: "v1", numero_venta: 1, total: 0 }),
+    })
+    const res = await POST(createPostRequest({ clienteNombre: "CF", metodoPago: "EFECTIVO", items: [{ inventarioId: "i1", descripcion: "X", cantidad: 1, precioUnitario: 100, diasGarantia: 0 }] }))
+    expect((await parseResponse(res)).status).toBe(201)
+    expect((vi.mocked(supabaseAdmin.rpc).mock.calls[0][1] as any).p_total).toBe(100)
+  })
+
+  it("ADITIVO 21%: total = base + IVA (100 → 121)", async () => {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ventaId: "v1" }, error: null } as any)
+    mockSupabaseFrom({
+      organizations: createChainMock({ iva_regimen: "ADITIVO", iva_tasa: 21, redondeo_efectivo: 0 }),
+      ventas: createChainMock({ id: "v1", numero_venta: 1, total: 0 }),
+    })
+    const res = await POST(createPostRequest({ clienteNombre: "CF", metodoPago: "EFECTIVO", items: [{ inventarioId: "i1", descripcion: "X", cantidad: 1, precioUnitario: 100, diasGarantia: 0 }] }))
+    expect((await parseResponse(res)).status).toBe(201)
+    expect((vi.mocked(supabaseAdmin.rpc).mock.calls[0][1] as any).p_total).toBe(121)
+  })
+
+  it("INCLUIDO 21%: total sin cambio (IVA ya en el precio)", async () => {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ventaId: "v1" }, error: null } as any)
+    mockSupabaseFrom({
+      organizations: createChainMock({ iva_regimen: "INCLUIDO", iva_tasa: 21, redondeo_efectivo: 0 }),
+      ventas: createChainMock({ id: "v1", numero_venta: 1, total: 0 }),
+    })
+    const res = await POST(createPostRequest({ clienteNombre: "CF", metodoPago: "EFECTIVO", items: [{ inventarioId: "i1", descripcion: "X", cantidad: 1, precioUnitario: 121, diasGarantia: 0 }] }))
+    expect((await parseResponse(res)).status).toBe(201)
+    expect((vi.mocked(supabaseAdmin.rpc).mock.calls[0][1] as any).p_total).toBe(121)
+  })
+
+  it("redondeo efectivo 50 en EFECTIVO: 121 → 100; no aplica a no-efectivo", async () => {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ventaId: "v1" }, error: null } as any)
+    mockSupabaseFrom({
+      organizations: createChainMock({ iva_regimen: "EXENTO", iva_tasa: 21, redondeo_efectivo: 50 }),
+      ventas: createChainMock({ id: "v1", numero_venta: 1, total: 0 }),
+    })
+    const efectivo = await POST(createPostRequest({ clienteNombre: "CF", metodoPago: "EFECTIVO", items: [{ inventarioId: "i1", descripcion: "X", cantidad: 1, precioUnitario: 121, diasGarantia: 0 }] }))
+    expect((await parseResponse(efectivo)).status).toBe(201)
+    expect((vi.mocked(supabaseAdmin.rpc).mock.calls[0][1] as any).p_total).toBe(100) // round(121/50)*50
+  })
+
+  it("org sin config fiscal (columnas ausentes) → EXENTO, sin cambio", async () => {
+    mockAuthSuccess()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ventaId: "v1" }, error: null } as any)
+    mockSupabaseFrom({
+      organizations: createChainMock({ nombre: "Org" }), // sin columnas iva_*
+      ventas: createChainMock({ id: "v1", numero_venta: 1, total: 0 }),
+    })
+    const res = await POST(createPostRequest({ clienteNombre: "CF", metodoPago: "EFECTIVO", items: [{ inventarioId: "i1", descripcion: "X", cantidad: 1, precioUnitario: 100, diasGarantia: 0 }] }))
+    expect((await parseResponse(res)).status).toBe(201)
+    expect((vi.mocked(supabaseAdmin.rpc).mock.calls[0][1] as any).p_total).toBe(100)
+  })
 })

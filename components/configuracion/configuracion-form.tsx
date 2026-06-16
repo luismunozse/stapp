@@ -53,6 +53,9 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
   const [politicaAbandonoDiasDefault, setPoliticaAbandonoDiasDefault] = useState("60")
   const [anticipoPorcentajeDefault, setAnticipoPorcentajeDefault] = useState("50")
   const [moduloAgenda, setModuloAgenda] = useState(false)
+  const [ivaRegimen, setIvaRegimen] = useState<"EXENTO" | "INCLUIDO" | "ADITIVO">("EXENTO")
+  const [ivaTasa, setIvaTasa] = useState("21")
+  const [redondeoEfectivo, setRedondeoEfectivo] = useState("0")
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -84,6 +87,9 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
         setPoliticaAbandonoDiasDefault(String(data.politicaAbandonoDiasDefault ?? 60))
         setAnticipoPorcentajeDefault(String(data.anticipoPorcentajeDefault ?? 50))
         setModuloAgenda(!!data.moduloAgenda)
+        setIvaRegimen(data.ivaRegimen ?? "EXENTO")
+        setIvaTasa(String(data.ivaTasa ?? 21))
+        setRedondeoEfectivo(String(data.redondeoEfectivo ?? 0))
         // Usar logoUrl si existe, o logoData para compatibilidad
         if (data.logoUrl) {
           setPreview(data.logoUrl)
@@ -168,7 +174,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
       const res = await fetch("/api/configuracion", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda }),
+        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, ivaRegimen, ivaTasa, redondeoEfectivo }),
       })
 
       if (res.ok) {
@@ -497,6 +503,74 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
               </div>
             </div>
           </label>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="text-base sm:text-lg">Facturación / IVA</CardTitle>
+          <CardDescription className="text-xs sm:text-sm">
+            Configuración fiscal para el Punto de Venta. Afecta cómo se calcula y muestra el IVA en tickets y totales.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-4 sm:p-6 pt-0 space-y-4">
+          <div>
+            <Label htmlFor="ivaRegimen" className="text-sm">Régimen de IVA</Label>
+            <Select
+              value={ivaRegimen}
+              onValueChange={(val) => setIvaRegimen(val as "EXENTO" | "INCLUIDO" | "ADITIVO")}
+              disabled={!allowEdit}
+            >
+              <SelectTrigger id="ivaRegimen">
+                <SelectValue placeholder="Seleccionar régimen" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="EXENTO">Exento</SelectItem>
+                <SelectItem value="INCLUIDO">IVA incluido en el precio</SelectItem>
+                <SelectItem value="ADITIVO">IVA se suma</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+              IVA incluido = el precio ya tiene IVA, se discrimina en el ticket. IVA se suma = se agrega al total.
+            </p>
+          </div>
+          {ivaRegimen !== "EXENTO" && (
+            <div>
+              <Label htmlFor="ivaTasa" className="text-sm">Tasa de IVA (%)</Label>
+              <Input
+                id="ivaTasa"
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                value={ivaTasa}
+                onChange={(e) => setIvaTasa(e.target.value)}
+                placeholder="21"
+                disabled={!allowEdit}
+              />
+            </div>
+          )}
+          <div>
+            <Label htmlFor="redondeoEfectivo" className="text-sm">Redondeo de efectivo</Label>
+            <Select
+              value={redondeoEfectivo}
+              onValueChange={setRedondeoEfectivo}
+              disabled={!allowEdit}
+            >
+              <SelectTrigger id="redondeoEfectivo">
+                <SelectValue placeholder="Sin redondeo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">Sin redondeo</SelectItem>
+                <SelectItem value="10">$ 10</SelectItem>
+                <SelectItem value="50">$ 50</SelectItem>
+                <SelectItem value="100">$ 100</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+              Redondea el total al múltiplo más cercano cuando el pago es en efectivo.
+            </p>
+          </div>
         </CardContent>
       </Card>
 

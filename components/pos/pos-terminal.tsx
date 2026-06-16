@@ -37,6 +37,7 @@ import type {
   HeldSale,
   InventarioResult,
   DescuentoConfig,
+  FiscalConfig,
 } from "./pos-types"
 import { EMPTY_CLIENT, nextLineId, computeVentaTotals } from "./pos-types"
 
@@ -82,6 +83,23 @@ export function PosTerminal() {
   const [showShortcuts, setShowShortcuts] = useState(false)
   const [successData, setSuccessData] = useState<any>(null)
   const [plantillaCorta, setPlantillaCorta] = useState<string | undefined>(undefined)
+  const [fiscal, setFiscal] = useState<FiscalConfig | null>(null)
+
+  // Fetch fiscal config on mount
+  useEffect(() => {
+    fetch("/api/configuracion")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data) {
+          setFiscal({
+            regimen: data.ivaRegimen ?? "EXENTO",
+            tasa: data.ivaTasa ?? 21,
+            redondeoEfectivo: data.redondeoEfectivo ?? 0,
+          })
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -153,7 +171,7 @@ export function PosTerminal() {
 
   // Computed values
   const cartCount = cartItems.reduce((sum, i) => sum + i.cantidad, 0)
-  const cartTotal = computeVentaTotals(cartItems, descuentoGlobal).total
+  const cartTotal = computeVentaTotals(cartItems, descuentoGlobal, fiscal).total
 
   // Load held sales from localStorage + sync entre tabs.
   // storage event no dispara en la tab que originó el cambio: cubre el caso
@@ -703,6 +721,7 @@ export function PosTerminal() {
             onSetDescuentoGlobal={setDescuentoGlobal}
             onSetDescuentoMotivo={setDescuentoMotivo}
             onSetPrecio={setItemPrecio}
+            fiscal={fiscal}
           />
         </div>
       </div>
@@ -742,6 +761,7 @@ export function PosTerminal() {
               onSetDescuentoGlobal={setDescuentoGlobal}
               onSetDescuentoMotivo={setDescuentoMotivo}
               onSetPrecio={setItemPrecio}
+              fiscal={fiscal}
             />
           </div>
         </div>
@@ -819,6 +839,7 @@ export function PosTerminal() {
         onComplete={handleCheckoutComplete}
         descuentoGlobal={descuentoGlobal}
         descuentoMotivo={descuentoMotivo.trim() || undefined}
+        fiscal={fiscal}
       />
 
       <PosHeldSales

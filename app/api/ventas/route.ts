@@ -207,7 +207,49 @@ export async function POST(request: Request) {
 
     const subtotal = round2(subtotalBruto)
     const descuentoMonto = round2(descuentoItems + descuentoGlobal)
-    const total = round2(Math.max(subtotalBruto - descuentoItems - descuentoGlobal, 0))
+    const base = round2(Math.max(subtotalBruto - descuentoItems - descuentoGlobal, 0))
+
+    // Config fiscal de la organización (IVA + redondeo). select("*") es defensivo:
+    // si las columnas no existen aún (migración 229 sin aplicar) quedan undefined
+    // → régimen EXENTO, sin cambio de comportamiento (sin hazard de orden de deploy).
+    const { data: orgFiscal } = await supabaseAdmin
+      .from("organizations")
+      .select("*")
+      .eq("id", organizationId!)
+      .single()
+    const ivaRegimen: string = orgFiscal?.iva_regimen ?? "EXENTO"
+    const ivaTasa = Number(orgFiscal?.iva_tasa ?? 0)
+    const redondeoUnidad = Number(orgFiscal?.redondeo_efectivo ?? 0)
+
+    // ¿Pago 100% en efectivo? (para redondeo)
+    const isCash =
+      data.pagos && data.pagos.length > 0
+        ? data.pagos.every((p) => p.metodo === "EFECTIVO")
+        : data.metodoPago === "EFECTIVO"
+
+    // IVA por régimen (espeja computeVentaTotals del front)
+    let ivaNeto = base
+    let ivaMonto = 0
+    let totalConIva = base
+    if (ivaRegimen === "INCLUIDO" && ivaTasa > 0) {
+      ivaNeto = round2(base / (1 + ivaTasa / 100))
+      ivaMonto = round2(base - ivaNeto)
+      totalConIva = base
+    } else if (ivaRegimen === "ADITIVO" && ivaTasa > 0) {
+      ivaNeto = base
+      ivaMonto = round2(base * (ivaTasa / 100))
+      totalConIva = round2(base + ivaMonto)
+    }
+
+    // Redondeo de efectivo
+    let redondeoMonto = 0
+    let total = totalConIva
+    if (isCash && redondeoUnidad > 0) {
+      const r = Math.round(totalConIva / redondeoUnidad) * redondeoUnidad
+      redondeoMonto = round2(r - totalConIva)
+      total = round2(r)
+    }
+    const fiscalActivo = ivaRegimen !== "EXENTO" || redondeoMonto !== 0
 
     // Preparar items para la función atómica
     const pItems = data.items.map(item => ({
@@ -354,6 +396,22 @@ export async function POST(request: Request) {
     }
 
     const ventaId = rpcResult?.ventaId || rpcResult
+
+    // Snapshot fiscal en la venta (solo si el régimen está activo o hubo
+    // redondeo). Las columnas existen porque fiscalActivo ⇒ la org configuró
+    // IVA/redondeo ⇒ migración 229 aplicada (sin hazard de orden de deploy).
+    if (ventaId && fiscalActivo) {
+      await supabaseAdmin
+        .from("ventas")
+        .update({
+          iva_neto: ivaNeto,
+          iva_monto: ivaMonto,
+          iva_tasa: ivaTasa,
+          iva_regimen: ivaRegimen,
+          redondeo_monto: redondeoMonto,
+        })
+        .eq("id", ventaId)
+    }
 
     // Registrar aprobación de descuento si aplica
     if (descuentoMonto > 0) {

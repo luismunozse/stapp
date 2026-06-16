@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils"
 import { useCurrency } from "@/contexts/currency-context"
 import { useModal } from "@/contexts/modal-context"
 import { MultiPagoInput, createPagoLine, type PagoLineItem } from "@/components/pagos/multi-pago-input"
-import type { PosCartItem, PosCliente, DescuentoConfig } from "./pos-types"
+import type { PosCartItem, PosCliente, DescuentoConfig, FiscalConfig } from "./pos-types"
 import { computeVentaTotals } from "./pos-types"
 import { buildVentaPayload } from "./pos-payload"
 import { TotalRow } from "@/components/pos/total-row"
@@ -36,6 +36,7 @@ interface PosCheckoutDialogProps {
   onComplete: (ventaData: any) => void
   descuentoGlobal?: DescuentoConfig | null
   descuentoMotivo?: string
+  fiscal?: FiscalConfig | null
 }
 
 export function PosCheckoutDialog({
@@ -46,6 +47,7 @@ export function PosCheckoutDialog({
   onComplete,
   descuentoGlobal = null,
   descuentoMotivo,
+  fiscal = null,
 }: PosCheckoutDialogProps) {
   const { formatPrice } = useCurrency()
   const { showError } = useModal()
@@ -59,10 +61,11 @@ export function PosCheckoutDialog({
   // Cash change calculation
   const [montoRecibido, setMontoRecibido] = useState<number | "">("")
 
-  const t = computeVentaTotals(items, descuentoGlobal)
-  const total = t.total
-
+  // roundCash = all payment lines are EFECTIVO (mirrors backend isCash logic)
   const isCashOnly = pagosLines.length === 1 && pagosLines[0].metodo === "EFECTIVO"
+  const allCash = pagosLines.length > 0 && pagosLines.every((p) => p.metodo === "EFECTIVO")
+  const t = computeVentaTotals(items, descuentoGlobal, fiscal, allCash)
+  const total = t.total
   const vuelto = useMemo(() => {
     if (!isCashOnly || montoRecibido === "") return 0
     return Math.max(0, montoRecibido - total)
@@ -261,10 +264,26 @@ export function PosCheckoutDialog({
                 </Badge>
               )}
             </div>
-            {t.descuentoTotal > 0 && (
+            {(t.descuentoTotal > 0 || t.iva > 0 || t.redondeo !== 0) && (
               <div className="space-y-1 mb-2">
-                <TotalRow label="Subtotal" amount={formatPrice(t.subtotal)} />
-                <TotalRow label="Descuento" amount={`- ${formatPrice(t.descuentoTotal)}`} tone="success" />
+                {t.descuentoTotal > 0 && (
+                  <>
+                    <TotalRow label="Subtotal" amount={formatPrice(t.subtotal)} />
+                    <TotalRow label="Descuento" amount={`- ${formatPrice(t.descuentoTotal)}`} tone="success" />
+                  </>
+                )}
+                {t.iva > 0 && (
+                  <>
+                    <TotalRow label="Neto" amount={formatPrice(t.neto)} />
+                    <TotalRow label={`IVA (${fiscal?.tasa ?? 0}%)`} amount={formatPrice(t.iva)} />
+                  </>
+                )}
+                {t.redondeo !== 0 && (
+                  <TotalRow
+                    label="Redondeo efectivo"
+                    amount={(t.redondeo >= 0 ? "+" : "") + formatPrice(t.redondeo)}
+                  />
+                )}
               </div>
             )}
             <TotalRow label="Total a cobrar" amount={formatPrice(total)} emphasis />

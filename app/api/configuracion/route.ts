@@ -40,7 +40,10 @@ export async function GET() {
         politica_abandono_dias_default,
         anticipo_porcentaje_default,
         pais,
-        modulo_agenda
+        modulo_agenda,
+        iva_regimen,
+        iva_tasa,
+        redondeo_efectivo
       `)
       .eq("id", organizationId!)
       .single()
@@ -94,6 +97,9 @@ export async function GET() {
       anticipoPorcentajeDefault: organization.anticipo_porcentaje_default ?? 50,
       pais: organization.pais || "AR",
       moduloAgenda: !!organization.modulo_agenda,
+      ivaRegimen: organization.iva_regimen ?? "EXENTO",
+      ivaTasa: organization.iva_tasa ?? 21,
+      redondeoEfectivo: organization.redondeo_efectivo ?? 0,
     })
   } catch (error) {
     console.error("Error fetching config:", error)
@@ -117,7 +123,7 @@ export async function PUT(request: Request) {
         { status: 413 }
       )
     }
-    const { logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda } = body
+    const { logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, ivaRegimen, ivaTasa, redondeoEfectivo } = body
 
     const updateData: Record<string, any> = {}
 
@@ -254,7 +260,28 @@ export async function PUT(request: Request) {
       updateData.modulo_agenda = !!moduloAgenda
     }
 
-    const selectCols = "id, logo_url, logo_path, nombre_mostrar, telefono, direccion, ciudad, provincia, codigo_postal, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, garantia_dias_default, politica_abandono_dias_default, anticipo_porcentaje_default, pais, modulo_agenda"
+    if (ivaRegimen !== undefined) {
+      const validRegimen = ["EXENTO", "INCLUIDO", "ADITIVO"]
+      if (validRegimen.includes(ivaRegimen)) {
+        updateData.iva_regimen = ivaRegimen
+      }
+    }
+
+    if (ivaTasa !== undefined) {
+      const val = parseFloat(ivaTasa)
+      if (!isNaN(val) && val >= 0 && val <= 100) {
+        updateData.iva_tasa = val
+      }
+    }
+
+    if (redondeoEfectivo !== undefined) {
+      const val = parseInt(redondeoEfectivo)
+      if (!isNaN(val) && val >= 0) {
+        updateData.redondeo_efectivo = val
+      }
+    }
+
+    const selectCols = "id, logo_url, logo_path, nombre_mostrar, telefono, direccion, ciudad, provincia, codigo_postal, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, garantia_dias_default, politica_abandono_dias_default, anticipo_porcentaje_default, pais, modulo_agenda, iva_regimen, iva_tasa, redondeo_efectivo"
     const selectColsFull = selectCols + ", recepcion_terminos, comprobante_terminos"
 
     // Solo actualizar si hay cambios
@@ -289,6 +316,9 @@ export async function PUT(request: Request) {
         anticipoPorcentajeDefault: org?.anticipo_porcentaje_default ?? 50,
         pais: org?.pais || "AR",
         moduloAgenda: !!org?.modulo_agenda,
+        ivaRegimen: org?.iva_regimen ?? "EXENTO",
+        ivaTasa: org?.iva_tasa ?? 21,
+        redondeoEfectivo: org?.redondeo_efectivo ?? 0,
       })
     }
 
@@ -304,11 +334,16 @@ export async function PUT(request: Request) {
       // recepcion_terminos column doesn't exist yet, retry without it
       delete updateData.recepcion_terminos
       hasRecepcionTerminos = false
+      // Also strip fiscal columns (migration 229) from updateData in case they don't exist
+      delete updateData.iva_regimen
+      delete updateData.iva_tasa
+      delete updateData.redondeo_efectivo
+      const selectColsNoFiscal = "id, logo_url, logo_path, nombre_mostrar, telefono, direccion, ciudad, provincia, codigo_postal, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, garantia_dias_default, politica_abandono_dias_default, anticipo_porcentaje_default, pais, modulo_agenda"
       result2 = await supabaseAdmin
         .from("organizations")
         .update(updateData)
         .eq("id", organizationId!)
-        .select(selectCols)
+        .select(selectColsNoFiscal)
         .single() as any
     }
 
@@ -344,6 +379,9 @@ export async function PUT(request: Request) {
       anticipoPorcentajeDefault: organization.anticipo_porcentaje_default ?? 50,
       pais: organization.pais || "AR",
       moduloAgenda: !!organization.modulo_agenda,
+      ivaRegimen: organization.iva_regimen ?? "EXENTO",
+      ivaTasa: organization.iva_tasa ?? 21,
+      redondeoEfectivo: organization.redondeo_efectivo ?? 0,
     })
   } catch (error: any) {
     console.error("Error updating config:", error)
