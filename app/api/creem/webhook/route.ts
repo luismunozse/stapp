@@ -7,11 +7,16 @@ import { beginWebhookEvent, finishWebhookEvent } from "@/lib/webhook-log"
  * Webhook de Creem (cobro internacional, MoR).
  *
  * Firma: HMAC-SHA256 del raw body, hex, en el header `creem-signature`.
- * Eventos manejados: checkout.completed (alta/primer pago), subscription.paid
- * (renovación), subscription.canceled / subscription.expired (baja).
  *
- * La idempotencia vive en subscription_payments (provider_payment_id +
- * payment_provider='CREEM'): si el pago ya está registrado, no se duplica.
+ * Modelo de eventos (evita doble registro del primer cobro):
+ *  - Producto ONETIME (ej. plan anual): el pago lo registra `checkout.completed`.
+ *  - Producto RECURRING (ej. plan mensual): Creem dispara checkout.completed +
+ *    subscription.active + subscription.paid para el MISMO cobro. Para no
+ *    duplicar, el PAGO lo registra SOLO `subscription.paid` (cada cobro,
+ *    incluido el primero). checkout.completed y subscription.active solo
+ *    ACTIVAN la suscripción (sin insertar pago).
+ *
+ * Idempotencia: subscription_payments (provider_payment_id + payment_provider).
  */
 
 interface HandleResult {
@@ -65,8 +70,11 @@ export async function POST(request: NextRequest) {
       case "checkout.completed":
         result = await handleCheckoutCompleted(object)
         break
-      case "subscription.paid":
       case "subscription.active":
+        // Solo activa; el pago lo registra subscription.paid.
+        result = await handleSubscriptionActivate(object)
+        break
+      case "subscription.paid":
         result = await handleSubscriptionPaid(object)
         break
       case "subscription.canceled":
@@ -94,7 +102,7 @@ export async function POST(request: NextRequest) {
 }
 
 // ============================================================
-// Resolución de plan
+// Helpers
 // ============================================================
 
 interface PlanRow {
@@ -102,46 +110,30 @@ interface PlanRow {
   slug: string | null
 }
 
-/**
- * Resuelve el plan a partir del metadata que pusimos al crear el checkout, y si
- * falta, por el product_id de Creem (mapeado en plans.creem_product_id_*).
- */
 async function resolvePlan(
   metadata: Record<string, any> | undefined,
   productId: string | null
 ): Promise<PlanRow | null> {
   if (metadata?.plan_id) {
     const { data } = await supabaseAdmin
-      .from("plans")
-      .select("id, slug")
-      .eq("id", String(metadata.plan_id))
-      .maybeSingle()
+      .from("plans").select("id, slug").eq("id", String(metadata.plan_id)).maybeSingle()
     if (data) return data
   }
   if (metadata?.plan_slug) {
     const { data } = await supabaseAdmin
-      .from("plans")
-      .select("id, slug")
-      .eq("slug", String(metadata.plan_slug))
-      .maybeSingle()
+      .from("plans").select("id, slug").eq("slug", String(metadata.plan_slug)).maybeSingle()
     if (data) return data
   }
   if (productId) {
     const { data } = await supabaseAdmin
       .from("plans")
       .select("id, slug")
-      .or(
-        `creem_product_id_monthly.eq.${productId},creem_product_id_yearly.eq.${productId}`
-      )
+      .or(`creem_product_id_monthly.eq.${productId},creem_product_id_yearly.eq.${productId}`)
       .maybeSingle()
     if (data) return data
   }
-  // Fallback: plan profesional.
   const { data } = await supabaseAdmin
-    .from("plans")
-    .select("id, slug")
-    .eq("slug", "profesional")
-    .maybeSingle()
+    .from("plans").select("id, slug").eq("slug", "profesional").maybeSingle()
   return data ?? null
 }
 
@@ -151,45 +143,54 @@ function addMonths(from: Date, months: number): Date {
   return d
 }
 
-// ============================================================
-// Handlers
-// ============================================================
-
-/**
- * Registra un pago de Creem (idempotente por provider_payment_id) y activa /
- * renueva la suscripción de la org. Reusado por checkout.completed y
- * subscription.paid.
- */
-async function registerCreemPayment(opts: {
+interface ActivationContext {
   organizationId: string
   plan: PlanRow
-  amount: number
-  currency: string
-  providerPaymentId: string
   billingPeriod: "MONTHLY" | "YEARLY"
   periodStart: Date
   periodEnd: Date
   creemCustomerId?: string | null
   creemSubscriptionId?: string | null
-}): Promise<HandleResult> {
-  const {
-    organizationId,
-    plan,
-    amount,
-    currency,
-    providerPaymentId,
-    billingPeriod,
-    periodStart,
-    periodEnd,
-    creemCustomerId,
-    creemSubscriptionId,
-  } = opts
+}
 
-  // Idempotencia.
+/** Activa/renueva la suscripción (sin insertar pago). Devuelve el subscription_id. */
+async function upsertCreemSubscription(ctx: ActivationContext): Promise<string | null> {
+  const { error } = await supabaseAdmin
+    .from("subscriptions")
+    .upsert(
+      {
+        organization_id: ctx.organizationId,
+        plan_id: ctx.plan.id,
+        status: "ACTIVE",
+        billing_period: ctx.billingPeriod,
+        payment_provider: "CREEM",
+        creem_customer_id: ctx.creemCustomerId ?? null,
+        creem_subscription_id: ctx.creemSubscriptionId ?? null,
+        current_period_start: ctx.periodStart.toISOString(),
+        current_period_end: ctx.periodEnd.toISOString(),
+        cancel_at_period_end: false,
+        canceled_at: null,
+      },
+      { onConflict: "organization_id" }
+    )
+  if (error) {
+    console.error(`[creem-webhook] Error upserting subscription ${ctx.organizationId}:`, error)
+    throw error
+  }
+  const { data } = await supabaseAdmin
+    .from("subscriptions").select("id").eq("organization_id", ctx.organizationId).maybeSingle()
+  return data?.id ?? null
+}
+
+/** Registra un pago (idempotente) y activa la suscripción. */
+async function registerCreemPayment(
+  ctx: ActivationContext,
+  payment: { amount: number; currency: string; providerPaymentId: string }
+): Promise<HandleResult> {
   const { data: existing } = await supabaseAdmin
     .from("subscription_payments")
     .select("id")
-    .eq("provider_payment_id", providerPaymentId)
+    .eq("provider_payment_id", payment.providerPaymentId)
     .eq("payment_provider", "CREEM")
     .maybeSingle()
 
@@ -197,100 +198,51 @@ async function registerCreemPayment(opts: {
     return {
       status: "SKIPPED",
       reason: "already_processed",
-      organizationId,
+      organizationId: ctx.organizationId,
       subscriptionPaymentId: existing.id,
     }
   }
 
-  // Suscripción existente (para enlazar el pago).
-  const { data: existingSub } = await supabaseAdmin
-    .from("subscriptions")
-    .select("id")
-    .eq("organization_id", organizationId)
-    .maybeSingle()
+  const subscriptionId = await upsertCreemSubscription(ctx)
 
   const { data: inserted, error: payErr } = await supabaseAdmin
     .from("subscription_payments")
     .insert({
-      subscription_id: existingSub?.id ?? null,
-      organization_id: organizationId,
-      amount,
-      currency,
+      subscription_id: subscriptionId,
+      organization_id: ctx.organizationId,
+      amount: payment.amount,
+      currency: payment.currency,
       payment_provider: "CREEM",
-      provider_payment_id: providerPaymentId,
+      provider_payment_id: payment.providerPaymentId,
       status: "SUCCEEDED",
       paid_at: new Date().toISOString(),
-      plan_name: plan.slug ?? "Premium",
-      period_start: periodStart.toISOString(),
-      period_end: periodEnd.toISOString(),
+      plan_name: ctx.plan.slug ?? "Premium",
+      period_start: ctx.periodStart.toISOString(),
+      period_end: ctx.periodEnd.toISOString(),
     })
     .select("id")
     .single()
 
   if (payErr) {
-    console.error(`[creem-webhook] Error inserting payment for org ${organizationId}:`, payErr)
+    console.error(`[creem-webhook] Error inserting payment for org ${ctx.organizationId}:`, payErr)
     throw payErr
-  }
-
-  const paymentRecordId = inserted?.id ?? null
-
-  const { error: subErr } = await supabaseAdmin
-    .from("subscriptions")
-    .upsert(
-      {
-        organization_id: organizationId,
-        plan_id: plan.id,
-        status: "ACTIVE",
-        billing_period: billingPeriod,
-        payment_provider: "CREEM",
-        creem_customer_id: creemCustomerId ?? null,
-        creem_subscription_id: creemSubscriptionId ?? null,
-        current_period_start: periodStart.toISOString(),
-        current_period_end: periodEnd.toISOString(),
-        cancel_at_period_end: false,
-        canceled_at: null,
-      },
-      { onConflict: "organization_id" }
-    )
-
-  if (subErr) {
-    console.error(`[creem-webhook] Error upserting subscription for org ${organizationId}:`, subErr)
-    // El pago ya quedó registrado; dejamos la suscripción para resolución manual.
-    return {
-      status: "PROCESSED",
-      reason: "payment_registered_subscription_activation_failed",
-      organizationId,
-      subscriptionPaymentId: paymentRecordId,
-    }
-  }
-
-  if (!existingSub?.id && paymentRecordId) {
-    const { data: newSub } = await supabaseAdmin
-      .from("subscriptions")
-      .select("id")
-      .eq("organization_id", organizationId)
-      .single()
-    if (newSub) {
-      await supabaseAdmin
-        .from("subscription_payments")
-        .update({ subscription_id: newSub.id })
-        .eq("id", paymentRecordId)
-    }
   }
 
   return {
     status: "PROCESSED",
-    organizationId,
-    subscriptionPaymentId: paymentRecordId,
+    organizationId: ctx.organizationId,
+    subscriptionPaymentId: inserted?.id ?? null,
   }
 }
+
+// ============================================================
+// Handlers de eventos
+// ============================================================
 
 async function handleCheckoutCompleted(object: any): Promise<HandleResult> {
   const metadata = object?.metadata ?? {}
   const organizationId = metadata.organization_id
-  if (!organizationId) {
-    return { status: "SKIPPED", reason: "missing_organization_id" }
-  }
+  if (!organizationId) return { status: "SKIPPED", reason: "missing_organization_id" }
 
   const order = object?.order ?? {}
   const productId = object?.product?.id ?? order?.product ?? null
@@ -302,65 +254,94 @@ async function handleCheckoutCompleted(object: any): Promise<HandleResult> {
   const now = new Date()
   const periodEnd = addMonths(now, billingPeriod === "YEARLY" ? 12 : 1)
 
-  // amount viene en centavos.
-  const amount = Number(order?.amount ?? 0) / 100
-  const currency = String(order?.currency ?? "USD")
-  // Idempotencia por el id de la orden de Creem.
-  const providerPaymentId = String(order?.id ?? object?.id ?? "")
-  if (!providerPaymentId) {
-    return { status: "SKIPPED", reason: "missing_order_id", organizationId }
-  }
-
-  return registerCreemPayment({
+  const ctx: ActivationContext = {
     organizationId,
     plan,
-    amount,
-    currency,
-    providerPaymentId,
     billingPeriod,
     periodStart: now,
     periodEnd,
     creemCustomerId: object?.customer?.id ?? null,
     creemSubscriptionId: object?.subscription?.id ?? null,
+  }
+
+  // Recurrente: solo activamos; el pago lo registra subscription.paid (evita
+  // doble registro del primer cobro). Onetime: registramos el pago acá.
+  if (object?.subscription?.id) {
+    await upsertCreemSubscription(ctx)
+    return { status: "PROCESSED", reason: "subscription_activated", organizationId }
+  }
+
+  const amount = Number(order?.amount ?? 0) / 100
+  const currency = String(order?.currency ?? "USD")
+  const providerPaymentId = String(order?.id ?? object?.id ?? "")
+  if (!providerPaymentId) {
+    return { status: "SKIPPED", reason: "missing_order_id", organizationId }
+  }
+  return registerCreemPayment(ctx, { amount, currency, providerPaymentId })
+}
+
+async function handleSubscriptionActivate(object: any): Promise<HandleResult> {
+  const metadata = object?.metadata ?? {}
+  const organizationId = metadata.organization_id
+  if (!organizationId) return { status: "SKIPPED", reason: "missing_organization_id" }
+
+  const plan = await resolvePlan(metadata, object?.product?.id ?? null)
+  if (!plan) return { status: "SKIPPED", reason: "plan_not_found", organizationId }
+
+  const billingPeriod: "MONTHLY" | "YEARLY" =
+    metadata.billing_period === "YEARLY" ? "YEARLY" : "MONTHLY"
+  const now = new Date()
+  const periodEndRaw = object?.current_period_end_date
+  const periodEnd = periodEndRaw
+    ? new Date(periodEndRaw)
+    : addMonths(now, billingPeriod === "YEARLY" ? 12 : 1)
+
+  await upsertCreemSubscription({
+    organizationId,
+    plan,
+    billingPeriod,
+    periodStart: now,
+    periodEnd,
+    creemCustomerId: object?.customer?.id ?? null,
+    creemSubscriptionId: String(object?.id ?? "") || null,
   })
+  return { status: "PROCESSED", reason: "subscription_activated", organizationId }
 }
 
 async function handleSubscriptionPaid(object: any): Promise<HandleResult> {
   const metadata = object?.metadata ?? {}
   const organizationId = metadata.organization_id
-  if (!organizationId) {
-    return { status: "SKIPPED", reason: "missing_organization_id" }
-  }
+  if (!organizationId) return { status: "SKIPPED", reason: "missing_organization_id" }
 
-  const productId = object?.product?.id ?? null
-  const plan = await resolvePlan(metadata, productId)
+  const plan = await resolvePlan(metadata, object?.product?.id ?? null)
   if (!plan) return { status: "SKIPPED", reason: "plan_not_found", organizationId }
 
   const billingPeriod: "MONTHLY" | "YEARLY" =
     metadata.billing_period === "YEARLY" ? "YEARLY" : "MONTHLY"
-
-  const periodEndRaw = object?.current_period_end_date
-  const periodEnd = periodEndRaw ? new Date(periodEndRaw) : addMonths(new Date(), billingPeriod === "YEARLY" ? 12 : 1)
   const now = new Date()
+  const periodEndRaw = object?.current_period_end_date
+  const periodEnd = periodEndRaw
+    ? new Date(periodEndRaw)
+    : addMonths(now, billingPeriod === "YEARLY" ? 12 : 1)
 
   const amount = Number(object?.product?.price ?? 0) / 100
   const currency = String(object?.product?.currency ?? "USD")
   const subId = String(object?.id ?? "")
-  // Idempotencia por suscripción + período (cada renovación es un pago distinto).
+  // Una renovación por período: clave subId:periodEnd.
   const providerPaymentId = `${subId}:${periodEnd.toISOString()}`
 
-  return registerCreemPayment({
-    organizationId,
-    plan,
-    amount,
-    currency,
-    providerPaymentId,
-    billingPeriod,
-    periodStart: now,
-    periodEnd,
-    creemCustomerId: object?.customer?.id ?? null,
-    creemSubscriptionId: subId || null,
-  })
+  return registerCreemPayment(
+    {
+      organizationId,
+      plan,
+      billingPeriod,
+      periodStart: now,
+      periodEnd,
+      creemCustomerId: object?.customer?.id ?? null,
+      creemSubscriptionId: subId || null,
+    },
+    { amount, currency, providerPaymentId }
+  )
 }
 
 async function handleSubscriptionEnded(
@@ -369,9 +350,7 @@ async function handleSubscriptionEnded(
 ): Promise<HandleResult> {
   const metadata = object?.metadata ?? {}
   const organizationId = metadata.organization_id
-  if (!organizationId) {
-    return { status: "SKIPPED", reason: "missing_organization_id" }
-  }
+  if (!organizationId) return { status: "SKIPPED", reason: "missing_organization_id" }
 
   const newStatus = eventType === "subscription.canceled" ? "CANCELED" : "PAST_DUE"
 
@@ -390,7 +369,6 @@ async function handleSubscriptionEnded(
     console.error(`[creem-webhook] Error updating subscription ${organizationId}:`, error)
     throw error
   }
-
   return { status: "PROCESSED", reason: `subscription_${newStatus.toLowerCase()}`, organizationId }
 }
 
