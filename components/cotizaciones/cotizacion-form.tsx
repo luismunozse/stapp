@@ -65,6 +65,7 @@ interface EquipoData {
 interface CotizacionFormProps {
   tipo?: "ORDEN" | "PRESUPUESTO"
   ordenId?: string
+  initialClienteId?: string
   onClose: () => void
   onSuccess: () => void
   initialData?: {
@@ -86,6 +87,7 @@ interface CotizacionFormProps {
 export function CotizacionForm({
   tipo = "ORDEN",
   ordenId,
+  initialClienteId,
   onClose,
   onSuccess,
   initialData,
@@ -110,7 +112,7 @@ export function CotizacionForm({
   const descuentoGlobalValor = parseFloat(descuentoGlobalValorStr) || 0
   const [ivaPorcentaje, setIvaPorcentaje] = useState(initialData?.ivaPorcentaje ?? 0)
   const [tipoCambio, setTipoCambio] = useState<number | null>((initialData as any)?.tipoCambio || null)
-  const [clienteId, setClienteId] = useState<string | null>(initialData?.clienteId || null)
+  const [clienteId, setClienteId] = useState<string | null>(initialData?.clienteId || initialClienteId || null)
   const [clienteObj, setClienteObj] = useState<{ tipoCliente?: string | null; razonSocial?: string | null } | null>(null)
   const [selectedSectorId, setSelectedSectorId] = useState<string>(initialData?.sectorId || "")
   const [sectoresCliente, setSectoresCliente] = useState<Array<{ id: string; nombre: string }>>([])

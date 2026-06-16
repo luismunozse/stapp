@@ -135,6 +135,7 @@ export default function CotizacionesPage() {
   const [showForm, setShowForm] = useState(false)
   const [showTipoSelector, setShowTipoSelector] = useState(false)
   const [formTipo, setFormTipo] = useState<"ORDEN" | "PRESUPUESTO">("ORDEN")
+  const [nuevoClienteId, setNuevoClienteId] = useState<string | null>(null)
   const [editingCotizacion, setEditingCotizacion] = useState<Cotizacion | null>(null)
   const [sendingId, setSendingId] = useState<string | null>(null)
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null)
@@ -192,6 +193,7 @@ export default function CotizacionesPage() {
 
   const openCreateForm = useCallback((tipo: "ORDEN" | "PRESUPUESTO") => {
     setEditingCotizacion(null)
+    setNuevoClienteId(null)
     setFormTipo(tipo)
     setShowTipoSelector(false)
     setShowForm(true)
@@ -238,6 +240,21 @@ export default function CotizacionesPage() {
         router.replace(`/cotizaciones${params.toString() ? `?${params.toString()}` : ""}`, { scroll: false })
       }
     })()
+  }, [searchParams, router])
+
+  // Auto-abrir form nuevo (Presupuesto) con cliente precargado cuando llega ?clienteId=
+  const clienteParamRef = useRef<string | null>(null)
+  useEffect(() => {
+    const clienteIdParam = searchParams?.get("clienteId")
+    if (!clienteIdParam || clienteParamRef.current === clienteIdParam) return
+    clienteParamRef.current = clienteIdParam
+    setNuevoClienteId(clienteIdParam)
+    setEditingCotizacion(null)
+    setFormTipo("PRESUPUESTO")
+    setShowForm(true)
+    const params = new URLSearchParams(searchParams?.toString() ?? "")
+    params.delete("clienteId")
+    router.replace(`/cotizaciones${params.toString() ? `?${params.toString()}` : ""}`, { scroll: false })
   }, [searchParams, router])
 
   const cotizaciones = response?.data || []
@@ -591,11 +608,13 @@ export default function CotizacionesPage() {
       <div ref={formRef}>
         {showForm && !editingCotizacion && (
           <CotizacionForm
-            key={`new-${formTipo}`}
+            key={`new-${formTipo}-${nuevoClienteId ?? ""}`}
             tipo={formTipo}
-            onClose={() => setShowForm(false)}
+            initialClienteId={nuevoClienteId || undefined}
+            onClose={() => { setShowForm(false); setNuevoClienteId(null) }}
             onSuccess={() => {
               setShowForm(false)
+              setNuevoClienteId(null)
               mutate()
             }}
           />
