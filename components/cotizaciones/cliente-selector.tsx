@@ -43,6 +43,29 @@ export function ClienteSelector({ value, onChange, disabled }: ClienteSelectorPr
     return () => document.removeEventListener("mousedown", handler)
   }, [])
 
+  // Hidratar el display cuando llega un `value` (id) seteado desde afuera
+  // (deep-link ?clienteId=, prefill de turno, edición) y todavía no hay un
+  // cliente seleccionado que coincida. Resuelve el nombre por API.
+  useEffect(() => {
+    if (!value) {
+      setSelected(null)
+      setSearch("")
+      return
+    }
+    if (selected?.id === value) return
+    let cancelled = false
+    fetch(`/api/clientes/${value}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((c) => {
+        if (cancelled || !c || c.error) return
+        setSelected(c)
+        setSearch(c.nombre)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value])
+
   const doSearch = useCallback(async (q: string) => {
     if (q.length < 2) {
       setResults([])
