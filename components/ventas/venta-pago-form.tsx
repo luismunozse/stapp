@@ -75,6 +75,11 @@ export function VentaPagoForm({
 
     setLoading(true)
     try {
+      // One stable UUID per submit attempt. It travels inside the queued body
+      // so any offline retry reuses the same key — the server barrier dedupes
+      // instead of running CC deductions and pagos_venta inserts twice.
+      const idempotencyKey = crypto.randomUUID()
+
       const payload = {
         pagos: pagosLines.map(p => ({
           monto: p.monto,
@@ -87,6 +92,7 @@ export function VentaPagoForm({
         })),
         observaciones: observaciones || undefined,
         clienteId: clienteId || undefined,
+        idempotencyKey,
       }
 
       const res = await offlineFetch(`/api/ventas/${ventaId}/pagos`, {
