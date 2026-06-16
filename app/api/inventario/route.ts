@@ -24,6 +24,7 @@ const inventarioSchema = z.object({
   puntoReorden: z.number().int().min(0).nullable().optional(),
   barcode: z.string().nullable().optional(),
   ubicacion: z.string().max(200).nullable().optional(),
+  diasGarantiaDefault: z.number().int().min(0).nullable().optional(),
 })
 
 export async function GET(request: Request) {
@@ -155,29 +156,50 @@ export async function POST(request: Request) {
     let inventario = null
     let retries = 3
 
+    // Coerce diasGarantiaDefault: empty/null/invalid → null
+    const diasGarantiaDefaultVal =
+      data.diasGarantiaDefault != null && Number.isFinite(data.diasGarantiaDefault) && data.diasGarantiaDefault >= 0
+        ? data.diasGarantiaDefault
+        : null
+
     while (retries > 0) {
-      const { data: result, error: dbError } = await supabaseAdmin
+      const insertPayload: Record<string, any> = {
+        codigo,
+        nombre: data.nombre,
+        descripcion: data.descripcion || null,
+        categoria: data.categoria,
+        tipo_dispositivo: data.tipoDispositivo,
+        stock: data.stock,
+        precio_compra: data.precioCompra,
+        precio_venta: data.precioVenta,
+        proveedor: data.proveedor || null,
+        proveedor_id: data.proveedorId ?? null,
+        stock_minimo: data.stockMinimo ?? null,
+        stock_maximo: data.stockMaximo ?? null,
+        punto_reorden: data.puntoReorden ?? null,
+        barcode: data.barcode?.trim() || null,
+        ubicacion: data.ubicacion?.trim() || null,
+        dias_garantia_default: diasGarantiaDefaultVal,
+        organization_id: organizationId!,
+      }
+
+      let { data: result, error: dbError } = await supabaseAdmin
         .from("inventario")
-        .insert({
-          codigo,
-          nombre: data.nombre,
-          descripcion: data.descripcion || null,
-          categoria: data.categoria,
-          tipo_dispositivo: data.tipoDispositivo,
-          stock: data.stock,
-          precio_compra: data.precioCompra,
-          precio_venta: data.precioVenta,
-          proveedor: data.proveedor || null,
-          proveedor_id: data.proveedorId ?? null,
-          stock_minimo: data.stockMinimo ?? null,
-          stock_maximo: data.stockMaximo ?? null,
-          punto_reorden: data.puntoReorden ?? null,
-          barcode: data.barcode?.trim() || null,
-          ubicacion: data.ubicacion?.trim() || null,
-          organization_id: organizationId!,
-        })
+        .insert(insertPayload)
         .select("*, proveedores:proveedor_id(id, nombre)")
         .single()
+
+      // Deploy-safe: if migration 231 hasn't run yet, column doesn't exist — retry without it
+      if (dbError && (dbError as any).code === "PGRST204") {
+        delete insertPayload.dias_garantia_default
+        const retry = await supabaseAdmin
+          .from("inventario")
+          .insert(insertPayload)
+          .select("*, proveedores:proveedor_id(id, nombre)")
+          .single()
+        result = retry.data
+        dbError = retry.error as any
+      }
 
       if (!dbError) {
         inventario = result

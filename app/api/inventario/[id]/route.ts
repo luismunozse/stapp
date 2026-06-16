@@ -52,6 +52,7 @@ const inventarioSchema = z.object({
   trackeaLotes: z.boolean().optional(),
   trackeaSeries: z.boolean().optional(),
   diasAlertaVencimiento: z.number().int().min(1).max(365).nullable().optional(),
+  diasGarantiaDefault: z.number().int().min(0).nullable().optional(),
   tieneVariantes: z.boolean().optional(),
   esKit: z.boolean().optional(),
   tipoKit: z.enum(["ENSAMBLADO", "VIRTUAL"]).nullable().optional(),
@@ -151,14 +152,33 @@ export async function PUT(
     if (data.tieneVariantes !== undefined) updateData.tiene_variantes = data.tieneVariantes
     if (data.esKit !== undefined) updateData.es_kit = data.esKit
     if (data.tipoKit !== undefined) updateData.tipo_kit = data.tipoKit
+    if (data.diasGarantiaDefault !== undefined) {
+      const v = data.diasGarantiaDefault
+      updateData.dias_garantia_default =
+        v != null && Number.isFinite(v) && v >= 0 ? v : null
+    }
 
-    const { data: item, error: updateError } = await supabaseAdmin
+    let { data: item, error: updateError } = await supabaseAdmin
       .from("inventario")
       .update(updateData)
       .eq("id", id)
       .eq("organization_id", organizationId!)
       .select("*, proveedores:proveedor_id(id, nombre)")
       .single()
+
+    // Deploy-safe: if migration 231 hasn't run yet, column doesn't exist — retry without it
+    if (updateError && (updateError as any).code === "PGRST204") {
+      delete updateData.dias_garantia_default
+      const retry = await supabaseAdmin
+        .from("inventario")
+        .update(updateData)
+        .eq("id", id)
+        .eq("organization_id", organizationId!)
+        .select("*, proveedores:proveedor_id(id, nombre)")
+        .single()
+      item = retry.data
+      updateError = retry.error as any
+    }
 
     if (updateError) {
       // Codigo duplicado: error amigable en vez de 500.

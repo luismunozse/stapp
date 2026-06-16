@@ -43,7 +43,7 @@ import type {
   DescuentoConfig,
   FiscalConfig,
 } from "./pos-types"
-import { EMPTY_CLIENT, nextLineId, computeVentaTotals } from "./pos-types"
+import { EMPTY_CLIENT, nextLineId, computeVentaTotals, resolveDiasGarantia } from "./pos-types"
 import { Input } from "@/components/ui/input"
 import {
   buildVentaContext,
@@ -108,12 +108,13 @@ export function PosTerminal() {
   const [scanSuccess, setScanSuccess] = useState<{ nombre: string } | null>(null)
   const scanSuccessTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [fiscal, setFiscal] = useState<FiscalConfig | null>(null)
+  const [orgGarantiaDefault, setOrgGarantiaDefault] = useState<number>(0)
 
   // Devolucion (return) flow
   const [devolucionOpen, setDevolucionOpen] = useState(false)
   const [devolucionVenta, setDevolucionVenta] = useState<VentaForDevolucion | null>(null)
 
-  // Fetch fiscal config on mount
+  // Fetch fiscal config and org warranty default on mount
   useEffect(() => {
     fetch("/api/configuracion")
       .then((r) => (r.ok ? r.json() : null))
@@ -124,6 +125,7 @@ export function PosTerminal() {
             tasa: data.ivaTasa ?? 21,
             redondeoEfectivo: data.redondeoEfectivo ?? 0,
           })
+          setOrgGarantiaDefault(Number(data.garantiaDiasDefault) || 0)
         }
       })
       .catch(() => {})
@@ -245,13 +247,13 @@ export function PosTerminal() {
           precioUnitario: product.precioVenta,
           cantidad: 1,
           stockDisponible: product.stock,
-          diasGarantia: 0,
+          diasGarantia: resolveDiasGarantia(product.diasGarantiaDefault, orgGarantiaDefault),
           trackeaSeries: product.trackeaSeries ?? false,
           serieIds: [],
         },
       ]
     })
-  }, [])
+  }, [orgGarantiaDefault])
 
   const addManualProduct = useCallback((product: { nombre: string; precioUnitario: number; costo?: number }) => {
     setCartItems((prev) => [
@@ -572,6 +574,7 @@ export function PosTerminal() {
             nombre: data.item.nombre,
             stock: data.item.stock,
             precioVenta: data.item.precioVenta,
+            diasGarantiaDefault: data.item.diasGarantiaDefault ?? null,
           })
           // Item 5: Show brief scan success indicator (~1.2s)
           if (scanSuccessTimerRef.current) clearTimeout(scanSuccessTimerRef.current)

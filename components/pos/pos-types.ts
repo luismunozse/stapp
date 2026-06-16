@@ -150,6 +150,28 @@ export interface InventarioResult {
   stock: number
   precioVenta: number
   trackeaSeries?: boolean
+  diasGarantiaDefault?: number | null
+}
+
+/**
+ * Resolves the warranty days for a cart item using a product > org > 0 cascade.
+ * - `productDefault`: the item-level override (dias_garantia_default from inventario).
+ * - `orgDefault`: the organization-level default (garantia_dias_default from organizations).
+ * Resolution: productDefault wins if it is a finite integer >= 0.
+ *             0 IS a valid explicit value (explicit "no warranty"). Negative, NaN,
+ *             null and undefined are treated as "not set" and fall through.
+ */
+export function resolveDiasGarantia(
+  productDefault?: number | null,
+  orgDefault?: number | null
+): number {
+  if (productDefault != null && Number.isFinite(productDefault) && productDefault >= 0) {
+    return productDefault
+  }
+  if (orgDefault != null && Number.isFinite(orgDefault) && orgDefault >= 0) {
+    return orgDefault
+  }
+  return 0
 }
 
 export interface SerieDisponible {

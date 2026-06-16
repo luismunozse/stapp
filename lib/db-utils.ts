@@ -212,6 +212,7 @@ export function formatInventario(item: any) {
     trackeaLotes: item.trackea_lotes ?? false,
     trackeaSeries: item.trackea_series ?? false,
     diasAlertaVencimiento: item.dias_alerta_vencimiento ?? null,
+    diasGarantiaDefault: item.dias_garantia_default ?? null,
     tieneVariantes: item.tiene_variantes ?? false,
     esKit: item.es_kit ?? false,
     tipoKit: item.tipo_kit ?? null,
