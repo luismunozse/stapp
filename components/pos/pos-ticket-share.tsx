@@ -42,6 +42,11 @@ interface TicketShareProps {
     metodoPago: string
     organizationName?: string
     garantias?: Array<{ numeroGarantia: string | number; diasValidez: number }>
+    // IVA snapshot fields from server (migration 229)
+    iva_neto?: number | null
+    iva_monto?: number | null
+    iva_tasa?: number | null
+    redondeo_monto?: number | null
   }
   plantillaCorta?: string | null
   countryCode?: string | null
@@ -55,6 +60,18 @@ export function PosTicketShare({ ventaData, plantillaCorta, countryCode }: Ticke
   const subtotal = ventaData.subtotal ?? ventaData.items.reduce((s, i) => s + i.cantidad * i.precioUnitario, 0)
   const descuento = ventaData.descuento ?? 0
   const metodo = METODO_LABELS[ventaData.metodoPago] || ventaData.metodoPago
+
+  // IVA breakdown: prefer server snapshot (iva_neto/iva_monto), fall back to derived.
+  // Using snapshot branch when iva_monto is present and > 0.
+  const hasIvaSnapshot = typeof ventaData.iva_monto === "number" && ventaData.iva_monto > 0
+  const ticketNeto = hasIvaSnapshot ? (ventaData.iva_neto ?? null) : null
+  const ticketIva = hasIvaSnapshot ? (ventaData.iva_monto ?? null) : null
+  const ticketIvaTasa = hasIvaSnapshot ? (ventaData.iva_tasa ?? null) : null
+  const ticketRedondeo = (typeof ventaData.redondeo_monto === "number" && ventaData.redondeo_monto !== 0)
+    ? ventaData.redondeo_monto
+    : null
+  // IVA source: "snapshot" if we read from server fields, "none" if no IVA applies
+  // (derived path would require fiscal config which is not passed here)
   const fecha = new Date().toLocaleString("es-AR", {
     timeZone: "America/Argentina/Buenos_Aires",
     day: "2-digit",
@@ -217,6 +234,25 @@ export function PosTicketShare({ ventaData, plantillaCorta, countryCode }: Ticke
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px", color: "#c00" }}>
               <span>Descuento:</span>
               <span>-{formatPrice(descuento)}</span>
+            </div>
+          )}
+          {/* IVA breakdown — reads from server snapshot when available */}
+          {ticketNeto !== null && (
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px", color: "#555" }}>
+              <span>Neto:</span>
+              <span>{formatPrice(ticketNeto)}</span>
+            </div>
+          )}
+          {ticketIva !== null && (
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px", color: "#555" }}>
+              <span>IVA{ticketIvaTasa ? ` (${ticketIvaTasa}%)` : ""}:</span>
+              <span>{formatPrice(ticketIva)}</span>
+            </div>
+          )}
+          {ticketRedondeo !== null && (
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px", color: "#555" }}>
+              <span>Redondeo:</span>
+              <span>{ticketRedondeo >= 0 ? "+" : ""}{formatPrice(ticketRedondeo)}</span>
             </div>
           )}
           <div
