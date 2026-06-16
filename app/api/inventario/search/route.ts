@@ -40,7 +40,7 @@ export async function GET(request: Request) {
       // ADMIN "ver todas": aggregate stock, original behavior
       let query = supabaseAdmin
         .from("inventario")
-        .select("id, codigo, nombre, stock, stock_reservado, precio_venta, precio_compra, trackea_series")
+        .select("id, codigo, nombre, stock, stock_reservado, precio_venta, precio_compra, trackea_series, dias_garantia_default")
         .eq("organization_id", organizationId!)
         .is("deleted_at", null)
 
@@ -66,6 +66,7 @@ export async function GET(request: Request) {
         precioVenta: item.precio_venta,
         precioCompra: item.precio_compra ?? 0,
         trackeaSeries: item.trackea_series ?? false,
+        diasGarantiaDefault: (item as any).dias_garantia_default ?? null,
       }))
 
       return NextResponse.json(formatted)
@@ -85,7 +86,7 @@ export async function GET(request: Request) {
     let query = supabaseAdmin
       .from("inventario")
       .select(
-        "id, codigo, nombre, precio_venta, precio_compra, trackea_series, inventario_depositos!inner(stock, stock_reservado, deposito_id)"
+        "id, codigo, nombre, precio_venta, precio_compra, trackea_series, dias_garantia_default, inventario_depositos!inner(stock, stock_reservado, deposito_id)"
       )
       .eq("organization_id", organizationId!)
       .is("deleted_at", null)
@@ -120,6 +121,7 @@ export async function GET(request: Request) {
         precioVenta: item.precio_venta,
         precioCompra: item.precio_compra ?? 0,
         trackeaSeries: item.trackea_series ?? false,
+        diasGarantiaDefault: item.dias_garantia_default ?? null,
       }
     })
 

@@ -61,6 +61,7 @@ const inventarioSchema = z.object({
   // estricto deben poder guardarse igual; bloquearlos fue causa de "no se
   // registran EAN-13" en codes genéricos no-GS1.
   barcode: z.string().nullable().optional(),
+  diasGarantiaDefault: z.number().int().min(0).nullable().optional(),
   trackeaLotes: z.boolean().optional(),
   trackeaSeries: z.boolean().optional(),
   tieneVariantes: z.boolean().optional(),
@@ -161,6 +162,7 @@ export function InventarioForm({
           stockMaximo: item.stockMaximo ?? null,
           puntoReorden: item.puntoReorden ?? null,
           barcode: item.barcode ?? null,
+          diasGarantiaDefault: (item as any).diasGarantiaDefault ?? null,
           ubicacion: item.ubicacion ?? null,
           trackeaLotes: item.trackeaLotes ?? false,
           trackeaSeries: item.trackeaSeries ?? false,
@@ -180,6 +182,7 @@ export function InventarioForm({
           stockMaximo: null,
           puntoReorden: null,
           barcode: initialBarcode ?? null,
+          diasGarantiaDefault: null,
           ubicacion: null,
           trackeaLotes: false,
           trackeaSeries: false,
@@ -255,6 +258,7 @@ export function InventarioForm({
         stockMaximo: item.stockMaximo ?? null,
         puntoReorden: item.puntoReorden ?? null,
         barcode: item.barcode ?? null,
+        diasGarantiaDefault: (item as any).diasGarantiaDefault ?? null,
         ubicacion: item.ubicacion ?? null,
         trackeaLotes: item.trackeaLotes ?? false,
         trackeaSeries: item.trackeaSeries ?? false,
@@ -1063,6 +1067,28 @@ export function InventarioForm({
               }
               return null
             })()}
+          </div>
+
+          {/* Warranty default */}
+          <div>
+            <Label htmlFor="diasGarantiaDefault">Días de garantía por defecto</Label>
+            <Input
+              id="diasGarantiaDefault"
+              type="text"
+              inputMode="numeric"
+              {...register("diasGarantiaDefault", {
+                setValueAs: (v: string) => {
+                  if (v === "" || v === null || v === undefined) return null
+                  const n = parseInt(v, 10)
+                  return isNaN(n) ? null : n
+                },
+              })}
+              min={0}
+              placeholder="Usa el default de la organización"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Días de garantía pre-cargados al agregar este producto en el POS. Dejalo vacío para usar el valor de la organización.
+            </p>
           </div>
 
           {/* Tracking avanzado — opt-in por item */}
