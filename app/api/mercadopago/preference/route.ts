@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     // Obtener datos de la organización
     const { data: org, error: orgError } = await supabaseAdmin
       .from("organizations")
-      .select("id, nombre, email, activo")
+      .select("id, nombre, email, activo, telefono, direccion, codigo_postal")
       .eq("id", organizationId)
       .single()
 
@@ -43,6 +43,10 @@ export async function POST(request: NextRequest) {
       failureUrl: `${baseUrl}/configuracion/billing?mp_failure=true`,
       pendingUrl: `${baseUrl}/configuracion/billing?mp_pending=true`,
       planSlug,
+      // Datos del pagador para mejorar el scoring antifraude de MP.
+      phone: org.telefono,
+      address: org.direccion,
+      zipCode: org.codigo_postal,
     })
 
     return NextResponse.json({

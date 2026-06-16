@@ -52,6 +52,9 @@ export async function createPaymentPreference({
   failureUrl,
   pendingUrl,
   planSlug,
+  phone,
+  address,
+  zipCode,
 }: {
   organizationId: string
   organizationName: string
@@ -61,6 +64,13 @@ export async function createPaymentPreference({
   failureUrl: string
   pendingUrl: string
   planSlug?: string
+  /**
+   * Datos opcionales del pagador. Mientras más completos, mejor puntúa el
+   * antifraude de MercadoPago y menos pagos caen en cc_rejected_high_risk.
+   */
+  phone?: string | null
+  address?: string | null
+  zipCode?: string | null
 }) {
   const plan = await resolvePlan(planSlug)
   const unitPrice =
@@ -71,20 +81,33 @@ export async function createPaymentPreference({
       ? `Plan ${plan.nombre} Anual - Servicio Técnico`
       : `Plan ${plan.nombre} Mensual - Servicio Técnico`
 
+  // Construimos el payer con todos los datos disponibles. MP usa el perfil del
+  // pagador para el scoring antifraude: con solo email muchas tarjetas caen en
+  // cc_rejected_high_risk. Solo incluimos los campos que tienen valor (no
+  // mandamos strings vacíos, que MP puede rechazar).
+  const payer: Record<string, unknown> = { email, name: organizationName }
+  if (phone) payer.phone = { number: phone }
+  if (address || zipCode) {
+    payer.address = {
+      ...(zipCode ? { zip_code: zipCode } : {}),
+      ...(address ? { street_name: address } : {}),
+    }
+  }
+
   const preference = await getPreferenceApi().create({
     body: {
       items: [
         {
           id: `${plan.slug}-${billingPeriod.toLowerCase()}`,
           title,
+          description: title,
+          category_id: "services",
           quantity: 1,
           unit_price: unitPrice,
           currency_id: "ARS",
         },
       ],
-      payer: {
-        email,
-      },
+      payer,
       back_urls: {
         success: successUrl,
         failure: failureUrl,
