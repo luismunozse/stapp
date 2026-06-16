@@ -116,6 +116,10 @@ export async function GET(request: Request) {
         { count: "exact" }
       )
       .order(sortColumn, { ascending })
+      // Excluir la org interna del panel (no es un taller real). Sin esto el
+      // total de la lista quedaba 1 por encima del dashboard, que sí la excluye
+      // (ver /api/superadmin/stats/dashboard).
+      .neq("slug", "superadmin")
 
     // Por defecto ocultar organizaciones archivadas (soft-delete)
     if (!includeArchived) {
@@ -370,11 +374,12 @@ export async function GET(request: Request) {
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
 
       const [totalRes, trialRes, premiumRes, newRes] = await Promise.all([
-        // Total de orgs activas (excluye archivadas)
+        // Total de orgs activas (excluye archivadas y la org interna del panel)
         supabaseAdmin
           .from("organizations")
           .select("id", { count: "exact", head: true })
           .eq("activo", true)
+          .neq("slug", "superadmin")
           .is("deleted_at", null),
         // Activas en trial: plan FREE y activa (sin suscripción premium activa)
         // Son las orgs activas que NO están en premiumOrgIds (excluye archivadas)
@@ -382,6 +387,7 @@ export async function GET(request: Request) {
           .from("organizations")
           .select("id", { count: "exact", head: true })
           .eq("activo", true)
+          .neq("slug", "superadmin")
           .is("deleted_at", null),
         // Premium: ya tenemos premiumOrgIds si lo calculamos antes, sino recalculamos
         premiumOrgIds
@@ -392,11 +398,12 @@ export async function GET(request: Request) {
               .eq("status", "ACTIVE")
               .not("payment_provider", "is", null)
               .eq("plans.tipo", "PREMIUM"),
-        // Nuevas este mes (excluye archivadas)
+        // Nuevas este mes (excluye archivadas y la org interna del panel)
         supabaseAdmin
           .from("organizations")
           .select("id", { count: "exact", head: true })
           .gte("created_at", startOfMonth)
+          .neq("slug", "superadmin")
           .is("deleted_at", null),
       ])
 
