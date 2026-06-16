@@ -18,6 +18,7 @@ import {
   Loader2,
   AlertTriangle,
   RotateCcw,
+  Phone,
 } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
@@ -43,6 +44,13 @@ import type {
   FiscalConfig,
 } from "./pos-types"
 import { EMPTY_CLIENT, nextLineId, computeVentaTotals } from "./pos-types"
+import { Input } from "@/components/ui/input"
+import {
+  buildVentaContext,
+  renderVentaMessageCorto,
+  type VentaForTemplate,
+} from "@/lib/whatsapp/plantillas-venta"
+import { generateWhatsAppUrl } from "@/lib/notifications/whatsapp-templates"
 
 const HELD_SALES_KEY = "pos_held_sales"
 
@@ -85,7 +93,20 @@ export function PosTerminal() {
   const [heldSales, setHeldSales] = useState<HeldSale[]>([])
   const [showShortcuts, setShowShortcuts] = useState(false)
   const [successData, setSuccessData] = useState<any>(null)
+  // Item 3: last sale persists after overlay is dismissed so "Reimprimir" stays available
+  const [lastSaleData, setLastSaleData] = useState<any>(null)
   const [plantillaCorta, setPlantillaCorta] = useState<string | undefined>(undefined)
+
+  // Item 1: hold-sale note dialog
+  const [holdNoteOpen, setHoldNoteOpen] = useState(false)
+  const [holdNote, setHoldNote] = useState("")
+
+  // Item 2: manual WhatsApp phone on success overlay
+  const [manualPhone, setManualPhone] = useState("")
+
+  // Item 5: scan feedback
+  const [scanSuccess, setScanSuccess] = useState<{ nombre: string } | null>(null)
+  const scanSuccessTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [fiscal, setFiscal] = useState<FiscalConfig | null>(null)
 
   // Devolucion (return) flow
@@ -323,14 +344,21 @@ export function PosTerminal() {
   }, [cartItems.length, confirm])
 
   // --- Hold/Recall ---
+  // Item 1: holdSale shows a note dialog before parking
   const holdSale = useCallback(async () => {
     if (cartItems.length === 0) return
+    setHoldNote("")
+    setHoldNoteOpen(true)
+  }, [cartItems.length])
+
+  const confirmHoldSale = useCallback((nota: string) => {
+    setHoldNoteOpen(false)
     const held: HeldSale = {
       id: `held_${Date.now()}`,
       timestamp: Date.now(),
       cliente: { ...cliente },
       items: [...cartItems],
-      nota: "",
+      nota,
     }
     const updated = [...heldSales, held]
     setHeldSales(updated)
@@ -366,7 +394,11 @@ export function PosTerminal() {
         saveHeldSales(updated)
       }
 
-      setCartItems(sale.items)
+      // Clear stale serieIds on serialized items so cashier picks fresh available series
+      const restoredItems = sale.items.map((item) =>
+        item.trackeaSeries ? { ...item, serieIds: [] } : item
+      )
+      setCartItems(restoredItems)
       setCliente(sale.cliente)
       setDescuentoGlobal(null)
       setDescuentoMotivo("")
@@ -492,6 +524,9 @@ export function PosTerminal() {
   const handleCheckoutComplete = useCallback(async (ventaData: any) => {
     setCheckoutOpen(false)
     setSuccessData(ventaData)
+    // Item 3: persist last sale for reprint after overlay closes
+    setLastSaleData(ventaData)
+    setManualPhone("")
     setCartItems([])
     setCliente({ ...EMPTY_CLIENT })
     setShowClienteSearch(false)
@@ -509,6 +544,13 @@ export function PosTerminal() {
     setMobileTab("products")
     searchRef.current?.focusSearch()
   }, [])
+
+  // Item 2: build WhatsApp URL for manual phone share
+  const buildManualWhatsAppUrl = useCallback((phone: string, ventaData: any) => {
+    const ctx = buildVentaContext(ventaData as VentaForTemplate, formatPrice)
+    const msg = renderVentaMessageCorto(plantillaCorta, ctx)
+    return generateWhatsAppUrl(phone, msg, pais)
+  }, [formatPrice, plantillaCorta, pais])
 
   // --- Barcode scanner ---
   const handleBarcodeScan = useCallback(
@@ -531,6 +573,10 @@ export function PosTerminal() {
             stock: data.item.stock,
             precioVenta: data.item.precioVenta,
           })
+          // Item 5: Show brief scan success indicator (~1.2s)
+          if (scanSuccessTimerRef.current) clearTimeout(scanSuccessTimerRef.current)
+          setScanSuccess({ nombre: data.item.nombre })
+          scanSuccessTimerRef.current = setTimeout(() => setScanSuccess(null), 1200)
         } else {
           await showError(`Código "${code}" no encontrado en inventario`)
         }
@@ -543,7 +589,7 @@ export function PosTerminal() {
 
   useBarcodeScanner({
     onScan: handleBarcodeScan,
-    enabled: !checkoutOpen && !heldSalesOpen && !successData && !scannerOpen && !devolucionOpen && !devolucionVenta,
+    enabled: !checkoutOpen && !heldSalesOpen && !successData && !scannerOpen && !devolucionOpen && !devolucionVenta && !holdNoteOpen,
   })
 
   // --- Keyboard shortcuts ---
@@ -570,7 +616,7 @@ export function PosTerminal() {
       setMobileTab("cart")
       setShowClienteSearch((prev) => !prev)
     },
-    enabled: !checkoutOpen && !heldSalesOpen && !successData && !devolucionOpen && !devolucionVenta,
+    enabled: !checkoutOpen && !heldSalesOpen && !successData && !devolucionOpen && !devolucionVenta && !holdNoteOpen,
   })
 
   return (
@@ -655,6 +701,27 @@ export function PosTerminal() {
             </button>
           </div>
 
+          {/* Item 3: Reprint last ticket button — only shown when a sale was made */}
+          {lastSaleData && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 text-xs"
+              onClick={() => {
+                if (printer.connected) {
+                  printTicket(lastSaleData)
+                } else {
+                  printTicketHTML(lastSaleData)
+                }
+              }}
+              disabled={printing}
+              title={`Reimprimir venta #${lastSaleData.numeroVenta}`}
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Reimprimir</span>
+            </Button>
+          )}
+
           {/* Devolucion button */}
           <Button
             variant="outline"
@@ -715,7 +782,7 @@ export function PosTerminal() {
       <div className="hidden lg:flex flex-1 overflow-hidden">
         {/* Left: Product search */}
         <div className="w-[60%] border-r overflow-hidden flex flex-col">
-          <PosProductSearch ref={searchRef} onAddProduct={addProduct} onAddManualProduct={addManualProduct} onOpenScanner={() => setScannerOpen(true)} />
+          <PosProductSearch ref={searchRef} onAddProduct={addProduct} onAddManualProduct={addManualProduct} onOpenScanner={() => setScannerOpen(true)} scanSuccess={scanSuccess} />
         </div>
         {/* Right: Cart */}
         <div className="w-[40%] overflow-hidden flex flex-col">
@@ -753,7 +820,7 @@ export function PosTerminal() {
             style={{ display: mobileTab === "products" ? "block" : "none" }}
             className="absolute inset-0 overflow-hidden"
           >
-            <PosProductSearch ref={searchRef} onAddProduct={addProduct} onAddManualProduct={addManualProduct} onOpenScanner={() => setScannerOpen(true)} />
+            <PosProductSearch ref={searchRef} onAddProduct={addProduct} onAddManualProduct={addManualProduct} onOpenScanner={() => setScannerOpen(true)} scanSuccess={scanSuccess} />
           </div>
           <div
             style={{ display: mobileTab === "cart" ? "block" : "none" }}
@@ -912,6 +979,40 @@ export function PosTerminal() {
         }}
       />
 
+      {/* ===== Item 1: Hold-sale note dialog ===== */}
+      {holdNoteOpen && (
+        <div className="fixed inset-0 z-[60] bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-background border rounded-xl shadow-lg p-5 w-full max-w-sm space-y-4">
+            <h3 className="font-semibold text-base">Apartar venta</h3>
+            <div className="space-y-1.5">
+              <label className="text-sm text-muted-foreground">Nota (opcional)</label>
+              <Input
+                value={holdNote}
+                onChange={(e) => setHoldNote(e.target.value)}
+                placeholder="Ej: Cliente vuelve en 20 min..."
+                className="h-10"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") confirmHoldSale(holdNote)
+                  if (e.key === "Escape") setHoldNoteOpen(false)
+                }}
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => setHoldNoteOpen(false)}>
+                Cancelar
+              </Button>
+              <Button variant="outline" className="flex-1" onClick={() => confirmHoldSale("")}>
+                Sin nota
+              </Button>
+              <Button className="flex-1" onClick={() => confirmHoldSale(holdNote)}>
+                Apartar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ===== Success overlay ===== */}
       {successData && (
         <div className="fixed inset-0 z-[60] bg-background/95 flex items-center justify-center p-4">
@@ -971,6 +1072,35 @@ export function PosTerminal() {
 
               {/* WhatsApp share as image + download image */}
               <PosTicketShare ventaData={successData} plantillaCorta={plantillaCorta} countryCode={pais} />
+
+              {/* Item 2: Manual WhatsApp share when no phone on record */}
+              {!successData.clienteTelefono && (
+                <div className="flex gap-2 items-center">
+                  <div className="relative flex-1">
+                    <Phone className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      type="tel"
+                      value={manualPhone}
+                      onChange={(e) => setManualPhone(e.target.value)}
+                      placeholder="Teléfono para WhatsApp"
+                      className="pl-8 h-10 text-sm"
+                    />
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-10 shrink-0 text-green-600 border-green-300 px-3"
+                    disabled={!manualPhone.trim()}
+                    onClick={() => {
+                      if (!manualPhone.trim()) return
+                      const url = buildManualWhatsAppUrl(manualPhone.trim(), successData)
+                      window.open(url, "_blank")
+                    }}
+                  >
+                    <span className="text-xs font-medium">WhatsApp</span>
+                  </Button>
+                </div>
+              )}
 
               <Button onClick={handleSuccessClose} className="h-12 text-lg font-semibold">
                 Nueva Venta

@@ -18,6 +18,8 @@ import {
   Banknote,
   ArrowDownUp,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useCurrency } from "@/contexts/currency-context"
@@ -57,6 +59,9 @@ export function PosCheckoutDialog({
   const [saldoCuenta, setSaldoCuenta] = useState(0)
   const [pagoParcial, setPagoParcial] = useState(false)
   const [idempotencyKey, setIdempotencyKey] = useState<string>("")
+
+  // Item 7: line items breakdown toggle
+  const [showItems, setShowItems] = useState(false)
 
   // Cash change calculation
   const [montoRecibido, setMontoRecibido] = useState<number | "">("")
@@ -262,6 +267,35 @@ export function PosCheckoutDialog({
                 <Badge variant="outline" className="text-xs">
                   {cliente.nombre}
                 </Badge>
+              )}
+            </div>
+            {/* Item 7: Collapsible line items breakdown */}
+            <div className="mt-2 mb-1">
+              <button
+                type="button"
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                onClick={() => setShowItems((v) => !v)}
+              >
+                {showItems ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                {showItems ? "Ocultar" : "Ver"} productos
+              </button>
+              {showItems && (
+                <div className="mt-1.5 max-h-48 overflow-y-auto space-y-1 rounded border bg-background/60 p-2">
+                  {items.map((item) => {
+                    const gross = item.precioUnitario * item.cantidad
+                    const lineDesc =
+                      item.tipoDescuento === "PORCENTAJE"
+                        ? gross * ((item.porcentajeDescuento || 0) / 100)
+                        : Math.min(item.descuento || 0, gross)
+                    const lineNet = gross - lineDesc
+                    return (
+                      <div key={item.lineId} className="flex items-center justify-between text-xs gap-2">
+                        <span className="truncate text-muted-foreground flex-1">{item.nombre} × {item.cantidad}</span>
+                        <span className="font-medium shrink-0">{formatPrice(lineNet)}</span>
+                      </div>
+                    )
+                  })}
+                </div>
               )}
             </div>
             {(t.descuentoTotal > 0 || t.iva > 0 || t.redondeo !== 0) && (

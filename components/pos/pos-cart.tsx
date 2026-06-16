@@ -83,6 +83,8 @@ export function PosCart({
   const [clienteQuery, setClienteQuery] = useState("")
   const [clienteResults, setClienteResults] = useState<ClienteResult[]>([])
   const [clienteLoading, setClienteLoading] = useState(false)
+  const [editingQtyId, setEditingQtyId] = useState<string | null>(null)
+  const [editingQtyValue, setEditingQtyValue] = useState("")
   const [expandedItem, setExpandedItem] = useState<string | null>(null)
   const [garantiaDraft, setGarantiaDraft] = useState<string>("")
   const [precioDraft, setPrecioDraft] = useState<string>("")
@@ -318,7 +320,7 @@ export function PosCart({
                       </div>
                     </button>
 
-                    {/* Quantity controls - larger touch targets on mobile */}
+                    {/* Quantity controls - tap span to edit, +/- for increments */}
                     <div className="flex items-center gap-1 shrink-0">
                       <Button
                         variant="outline"
@@ -328,9 +330,44 @@ export function PosCart({
                       >
                         <Minus className="h-3.5 w-3.5 sm:h-3 sm:w-3" />
                       </Button>
-                      <span className="w-8 text-center text-sm font-semibold tabular-nums">
-                        {item.cantidad}
-                      </span>
+                      {editingQtyId === item.lineId ? (
+                        <input
+                          type="number"
+                          className="w-10 text-center text-sm font-semibold tabular-nums border rounded h-7 focus:outline-none focus:ring-1 focus:ring-primary bg-background"
+                          value={editingQtyValue}
+                          autoFocus
+                          onFocus={(e) => e.target.select()}
+                          onChange={(e) => setEditingQtyValue(e.target.value)}
+                          onBlur={() => {
+                            const parsed = parseInt(editingQtyValue, 10)
+                            if (!isNaN(parsed) && parsed > 0) {
+                              const maxQty = item.inventarioId ? item.stockDisponible : 9999
+                              const clamped = Math.min(parsed, maxQty)
+                              const delta = clamped - item.cantidad
+                              if (delta !== 0) onUpdateQuantity(item.lineId, delta)
+                            }
+                            setEditingQtyId(null)
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") (e.target as HTMLInputElement).blur()
+                            if (e.key === "Escape") setEditingQtyId(null)
+                          }}
+                          min={1}
+                          max={item.inventarioId ? item.stockDisponible : 9999}
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          className="w-8 text-center text-sm font-semibold tabular-nums cursor-pointer hover:bg-muted rounded transition-colors h-7 flex items-center justify-center"
+                          onClick={() => {
+                            setEditingQtyId(item.lineId)
+                            setEditingQtyValue(String(item.cantidad))
+                          }}
+                          title="Tap to edit quantity"
+                        >
+                          {item.cantidad}
+                        </button>
+                      )}
                       <Button
                         variant="outline"
                         size="icon"
@@ -468,14 +505,17 @@ export function PosCart({
                           {seriesLoading === item.lineId ? (
                             <span className="text-muted-foreground">Cargando series…</span>
                           ) : (
-                            <div className="max-h-32 overflow-y-auto grid grid-cols-2 gap-1">
+                            <div className="max-h-40 overflow-y-auto grid grid-cols-2 gap-1">
                               {(seriesDisp[item.lineId] ?? []).map((s) => {
                                 const checked = item.serieIds.includes(s.id)
                                 return (
-                                  <label key={s.id} className="flex items-center gap-1.5 cursor-pointer">
+                                  <label
+                                    key={s.id}
+                                    className="flex items-center gap-2 cursor-pointer min-h-[40px] px-2 rounded hover:bg-muted/50 transition-colors"
+                                  >
                                     <input
                                       type="checkbox"
-                                      className="h-3.5 w-3.5 rounded"
+                                      className="h-4 w-4 rounded shrink-0"
                                       checked={checked}
                                       onChange={() => {
                                         if (checked) {
@@ -485,12 +525,12 @@ export function PosCart({
                                         }
                                       }}
                                     />
-                                    <span className="font-mono truncate">{s.numeroSerie}</span>
+                                    <span className="font-mono text-xs truncate">{s.numeroSerie}</span>
                                   </label>
                                 )
                               })}
                               {(seriesDisp[item.lineId] ?? []).length === 0 && (
-                                <span className="text-destructive col-span-2">Sin series disponibles</span>
+                                <span className="text-destructive col-span-2 text-xs px-2 py-2">Sin series disponibles</span>
                               )}
                             </div>
                           )}
