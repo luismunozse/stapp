@@ -8,6 +8,7 @@ import {
   extractPublicCatalogoSlug,
 } from "@/lib/rate-limit"
 import { getTenantStatusBySlug } from "@/lib/tenant-status-edge"
+import { isImpersonationWriteBlocked } from "@/lib/impersonation"
 
 // Hashea un string con SHA-256 usando Web Crypto (compatible con Edge Runtime,
 // donde `node:crypto` no está disponible). Devuelve los primeros 16 hex chars,
@@ -443,26 +444,21 @@ export async function middleware(request: NextRequest) {
   // Read-only impersonation enforcement. When a superadmin impersonates a
   // tenant, the minted token carries `isImpersonating` (lib/impersonation.ts).
   // At this point the token is confirmed to belong to THIS tenant (it passed
-  // the cross-tenant check above), so we block any state-changing request:
-  // non-safe HTTP methods AND Next.js server actions (which POST to page
-  // routes with a `next-action` header). The exit and signout endpoints are
-  // allowlisted so the superadmin can always leave.
-  if (token?.isImpersonating) {
-    const method = request.method.toUpperCase()
-    const isSafeMethod = method === "GET" || method === "HEAD" || method === "OPTIONS"
-    const isServerAction = request.headers.has("next-action")
-    // Only the sanctioned exit endpoint is allowlisted. We do NOT allowlist
-    // /api/auth/signout: a signout during impersonation would fire NextAuth's
-    // signOut event with the TENANT user's id. The signOut handler now guards
-    // against that, but blocking it here keeps the read-only surface minimal.
-    const isExit = pathname === "/api/auth/impersonate/exit"
-
-    if ((!isSafeMethod || isServerAction) && !isExit) {
-      return NextResponse.json(
-        { error: "Sesión de impersonación en solo-lectura: acción no permitida" },
-        { status: 403 }
-      )
-    }
+  // the cross-tenant check above). The decision (block state-changing requests,
+  // allow only the exit endpoint) lives in `isImpersonationWriteBlocked` so it
+  // can be unit-tested in isolation.
+  if (
+    isImpersonationWriteBlocked({
+      isImpersonating: token?.isImpersonating as boolean | undefined,
+      method: request.method,
+      pathname,
+      isServerAction: request.headers.has("next-action"),
+    })
+  ) {
+    return NextResponse.json(
+      { error: "Sesión de impersonación en solo-lectura: acción no permitida" },
+      { status: 403 }
+    )
   }
 
   // Si es ruta pública, permitir pero pasar contexto

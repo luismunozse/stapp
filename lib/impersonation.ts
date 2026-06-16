@@ -17,6 +17,38 @@ export const IMPERSONATION_MAX_AGE = 30 * 60 // 30 minutes (seconds)
  */
 export const IMPERSONATION_BACKUP_COOKIE = "stapp-sa-backup"
 
+/** The only state-changing path allowed during impersonation: ending it. */
+export const IMPERSONATION_EXIT_PATH = "/api/auth/impersonate/exit"
+
+/**
+ * Central read-only decision for impersonation. Returns true when a request
+ * must be blocked (HTTP 403) because the session is impersonating and the
+ * request would mutate state. Pure so the security rule can be tested in
+ * isolation; the middleware calls this with values pulled from the request.
+ *
+ * Rules:
+ *  - Non-impersonating sessions are never blocked here.
+ *  - Safe methods (GET/HEAD/OPTIONS) are allowed.
+ *  - Next.js server actions (detected via the `next-action` header) are blocked
+ *    regardless of method — they mutate.
+ *  - The sanctioned exit endpoint is always allowed so the superadmin can leave.
+ *  - signout is intentionally NOT allowlisted: a signout would fire NextAuth's
+ *    signOut event against the impersonated tenant user.
+ */
+export function isImpersonationWriteBlocked(opts: {
+  isImpersonating: boolean | undefined
+  method: string
+  pathname: string
+  isServerAction: boolean
+}): boolean {
+  if (!opts.isImpersonating) return false
+  if (opts.pathname === IMPERSONATION_EXIT_PATH) return false
+  const method = opts.method.toUpperCase()
+  const isSafeMethod =
+    method === "GET" || method === "HEAD" || method === "OPTIONS"
+  return !isSafeMethod || opts.isServerAction
+}
+
 /**
  * Claims carried by an impersonation token. This is a real NextAuth JWT (so the
  * existing middleware/`auth()` accept it transparently) with extra flags:
