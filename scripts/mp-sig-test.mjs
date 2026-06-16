@@ -35,6 +35,11 @@ const manifests = {
   "SIN id":               `request-id:${xRequestId};ts:${ts};`,
   "id sin request-id":    `id:${idLower};ts:${ts};`,
   "solo ts":              `ts:${ts};`,
+  "id vacio+reqid":       `id:;request-id:${xRequestId};ts:${ts};`,
+  "id vacio sin reqid":   `id:;ts:${ts};`,
+  "id+reqid SIN ts semis":`id:${idLower};request-id:${xRequestId};ts:${ts}`,
+  "reqid+id (orden inv)": `request-id:${xRequestId};id:${idLower};ts:${ts};`,
+  "id+ts+reqid (orden)":  `id:${idLower};ts:${ts};request-id:${xRequestId};`,
 }
 
 console.log("v1 esperado:", v1, "\n")

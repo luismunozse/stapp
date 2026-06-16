@@ -58,24 +58,33 @@ export async function POST(request: NextRequest) {
     signatureValid: sigCheck.valid,
   })
 
-  // En producción exigimos firma válida. En dev (sin secret) se acepta.
-  if (!sigCheck.valid) {
-    // DEBUG TEMPORAL: capturamos en error_message (NO pasa por sanitizeHeaders)
-    // todo lo necesario para re-verificar la firma offline con el v1 COMPLETO:
-    // la URL real (trae el data.id del query que MP firmó), el manifest armado,
-    // el hmac calculado y el v1 recibido en vivo. Quitar tras resolver.
-    const debugInfo = JSON.stringify({
-      url: request.url,
-      xsigRawLen: (xSignature ?? "").length,
-      ...sigCheck.debug,
-    })
+  // Estrategia de verificación según el formato de la notificación:
+  //
+  //  - Webhooks v2 (`{ type, data: { id } }`): traen x-signature HMAC que SÍ
+  //    podemos reproducir con el manifest documentado. La exigimos: un v2 mal
+  //    firmado es sospechoso y se rechaza.
+  //
+  //  - IPN legacy (`{ topic, resource }`, que MP manda al notification_url de la
+  //    preferencia): su x-signature NO se reproduce con el manifest v2 (probado
+  //    contra el v1 real con el mismo secret que valida los v2 — ninguna variante
+  //    matchea). No se pueden HMAC-verificar. En vez de descartarlos —y perder los
+  //    pagos por preferencia, que SOLO llegan por este canal— confiamos en el
+  //    re-fetch autenticado a la API de MP dentro del handler: el recurso debe
+  //    existir y estar approved bajo NUESTRO access token, y el organization_id
+  //    sale del external_reference del propio MP. Una notificación falsa no puede
+  //    inyectar un pago inexistente ni redirigir fondos.
+  const isV2 = typeof body?.type === "string"
+  const ipnTopic =
+    typeof body?.topic === "string" ? (body.topic as string) : null
+
+  if (isV2 && !sigCheck.valid) {
     console.error(
-      `[mp-webhook] Firma inválida (${sigCheck.reason}) para data.id=${dataIdForSig} | ${debugInfo}`
+      `[mp-webhook] Firma v2 inválida (${sigCheck.reason}) para data.id=${dataIdForSig}`
     )
     await finishWebhookEvent(log, {
       status: "INVALID_SIGNATURE",
       httpStatus: 401,
-      errorMessage: `signature_${sigCheck.reason} | ${debugInfo}`,
+      errorMessage: `signature_${sigCheck.reason}`,
     })
     return NextResponse.json(
       { error: "Invalid signature", reason: sigCheck.reason },
@@ -84,26 +93,45 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { type, data } = body
+    let result: HandleResult = { status: "SKIPPED", reason: "unknown_event_shape" }
 
-    let result: HandleResult = { status: "SKIPPED", reason: "unknown_event_type" }
+    if (isV2) {
+      const { type, data } = body
+      switch (type) {
+        case "payment":
+          result = await handlePaymentNotification(String(data?.id || ""))
+          break
 
-    switch (type) {
-      case "payment":
-        result = await handlePaymentNotification(String(data?.id || ""))
-        break
+        case "subscription_preapproval":
+          result = await handlePreApprovalNotification(String(data?.id || ""))
+          break
 
-      case "subscription_preapproval":
-        result = await handlePreApprovalNotification(String(data?.id || ""))
-        break
+        case "subscription_authorized_payment":
+          result = await handleAuthorizedPaymentNotification(String(data?.id || ""))
+          break
 
-      case "subscription_authorized_payment":
-        result = await handleAuthorizedPaymentNotification(String(data?.id || ""))
-        break
+        default:
+          console.log(`[mp-webhook] Unhandled v2 event type: ${type}`)
+          result = { status: "SKIPPED", reason: `unhandled_event_${type}` }
+      }
+    } else if (ipnTopic) {
+      // En IPN el id del recurso viaja en el query (`?id=...&topic=...`),
+      // capturado en dataIdForSig. El body.resource de merchant_order es una
+      // URL completa, así que usamos dataIdForSig (id pelado) en ambos casos.
+      const resourceId = dataIdForSig || ""
+      switch (ipnTopic) {
+        case "payment":
+          result = await handlePaymentNotification(resourceId)
+          break
 
-      default:
-        console.log(`[mp-webhook] Unhandled event type: ${type}`)
-        result = { status: "SKIPPED", reason: `unhandled_event_${type}` }
+        case "merchant_order":
+          result = await handleMerchantOrderNotification(resourceId)
+          break
+
+        default:
+          console.log(`[mp-webhook] Unhandled IPN topic: ${ipnTopic}`)
+          result = { status: "SKIPPED", reason: `unhandled_ipn_topic_${ipnTopic}` }
+      }
     }
 
     await finishWebhookEvent(log, {
@@ -731,6 +759,67 @@ export async function handleAuthorizedPaymentNotification(
   // del preapproval. Idempotencia se mantiene: registra por provider_payment_id
   // y si ya existe, salta.
   return await handlePaymentNotification(String(realPaymentId), externalRef)
+}
+
+/**
+ * Procesa una notificación IPN `merchant_order`.
+ *
+ * La merchant_order agrupa los pagos de una preferencia. Es redundante con el
+ * topic=payment (que trae el paymentId directo), pero la procesamos por si
+ * llega antes o si el topic=payment no llegara: buscamos la orden y delegamos
+ * cada pago a handlePaymentNotification, que es idempotente y valida `approved`.
+ *
+ * Como en el resto del flujo IPN, la confianza viene del fetch autenticado a la
+ * API de MP (con nuestro access token), no de la firma.
+ */
+export async function handleMerchantOrderNotification(
+  merchantOrderId: string
+): Promise<HandleResult> {
+  if (!merchantOrderId) {
+    return { status: "SKIPPED", reason: "missing_merchant_order_id" }
+  }
+
+  const response = await fetch(
+    `https://api.mercadopago.com/merchant_orders/${merchantOrderId}`,
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.MERCADOPAGO_ACCESS_TOKEN}`,
+      },
+    }
+  )
+
+  if (!response.ok) {
+    const errText = await response.text()
+    console.error(
+      `[MP webhook] Error fetching merchant_order ${merchantOrderId}:`,
+      errText
+    )
+    throw new Error(
+      `MP API error fetching merchant_order ${merchantOrderId}: ${errText}`
+    )
+  }
+
+  const order = await response.json()
+  const payments: Array<{ id: string | number }> = Array.isArray(order?.payments)
+    ? order.payments
+    : []
+
+  if (payments.length === 0) {
+    return { status: "SKIPPED", reason: "merchant_order_no_payments" }
+  }
+
+  // Delegamos cada pago al handler de pagos (idempotente + valida approved).
+  // Devolvemos el último PROCESSED si lo hubo, si no el último resultado.
+  let result: HandleResult = {
+    status: "SKIPPED",
+    reason: "merchant_order_no_processable_payments",
+  }
+  for (const p of payments) {
+    const r = await handlePaymentNotification(String(p.id))
+    if (r.status === "PROCESSED") result = r
+    else if (result.status !== "PROCESSED") result = r
+  }
+  return result
 }
 
 // GET para verificación de webhook (algunos proveedores lo requieren)
