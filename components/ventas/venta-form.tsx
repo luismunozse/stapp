@@ -377,8 +377,15 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
       // Set primary metodo_pago from first payment line
       data.metodoPago = pagosLines[0].metodo as any
 
+      // Idempotency key: one stable UUID per submit attempt. It travels inside the
+      // queued payload, so any offline retry / replay reuses the SAME key and the
+      // server (unique index on organization_id + idempotency_key) dedupes instead
+      // of charging the sale twice. Without this, sync retries create duplicate ventas.
+      const idempotencyKey = crypto.randomUUID()
+
       const payload = {
         ...data,
+        idempotencyKey,
         pagos: pagosLines.map(p => ({
           metodo: p.metodo,
           monto: p.monto, // monto base = ingreso real del negocio
