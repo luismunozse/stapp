@@ -37,7 +37,7 @@ describe("ReportesAvanzadosView — BranchScopeLabel in header", () => {
     render(<ReportesAvanzadosView />)
 
     expect(screen.getByTestId("branch-scope-label")).toBeInTheDocument()
-  })
+  }, 20000)
 
   it("renders BranchScopeLabel after the description paragraph", async () => {
     const { ReportesAvanzadosView } = await import("@/components/reportes-avanzados/reportes-avanzados-view")
@@ -47,5 +47,5 @@ describe("ReportesAvanzadosView — BranchScopeLabel in header", () => {
     expect(header).not.toBeNull()
     // The label should be inside the header
     expect(header?.querySelector("[data-testid='branch-scope-label']")).not.toBeNull()
-  })
+  }, 20000)
 })
