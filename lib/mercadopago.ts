@@ -179,6 +179,17 @@ export interface WebhookSignatureResult {
   reason: string
   /** True si no había secret configurado y se aceptó el webhook por defecto */
   bypassedNoSecret?: boolean
+  /** Datos de diagnóstico (temporal) para entender por qué falla la firma en prod. */
+  debug?: {
+    manifest: string
+    computedHmac: string
+    receivedV1: string
+    v1Len: number
+    tsLen: number
+    tsValue: string
+    secretLen: number
+    dataIdUsed: string
+  }
 }
 
 /**
@@ -244,7 +255,18 @@ export function verifyWebhookSignature(
   const manifest = `id:${normalizedId};request-id:${xRequestId};ts:${ts};`
   const hmac = crypto.createHmac("sha256", secret).update(manifest).digest("hex")
 
-  if (hmac === v1) return { valid: true, reason: "ok" }
+  const debug = {
+    manifest,
+    computedHmac: hmac,
+    receivedV1: v1,
+    v1Len: v1.length,
+    tsLen: ts.length,
+    tsValue: ts,
+    secretLen: secret.length,
+    dataIdUsed: normalizedId,
+  }
 
-  return { valid: false, reason: "hmac_mismatch" }
+  if (hmac === v1) return { valid: true, reason: "ok", debug }
+
+  return { valid: false, reason: "hmac_mismatch", debug }
 }

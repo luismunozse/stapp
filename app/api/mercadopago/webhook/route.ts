@@ -60,13 +60,22 @@ export async function POST(request: NextRequest) {
 
   // En producción exigimos firma válida. En dev (sin secret) se acepta.
   if (!sigCheck.valid) {
+    // DEBUG TEMPORAL: capturamos en error_message (NO pasa por sanitizeHeaders)
+    // todo lo necesario para re-verificar la firma offline con el v1 COMPLETO:
+    // la URL real (trae el data.id del query que MP firmó), el manifest armado,
+    // el hmac calculado y el v1 recibido en vivo. Quitar tras resolver.
+    const debugInfo = JSON.stringify({
+      url: request.url,
+      xsigRawLen: (xSignature ?? "").length,
+      ...sigCheck.debug,
+    })
     console.error(
-      `[mp-webhook] Firma inválida (${sigCheck.reason}) para data.id=${dataIdForSig}`
+      `[mp-webhook] Firma inválida (${sigCheck.reason}) para data.id=${dataIdForSig} | ${debugInfo}`
     )
     await finishWebhookEvent(log, {
       status: "INVALID_SIGNATURE",
       httpStatus: 401,
-      errorMessage: `signature_${sigCheck.reason}`,
+      errorMessage: `signature_${sigCheck.reason} | ${debugInfo}`,
     })
     return NextResponse.json(
       { error: "Invalid signature", reason: sigCheck.reason },

@@ -78,9 +78,12 @@ function sanitizeHeaders(
     if (typeof v !== "string") continue
     const key = k.toLowerCase()
     if (allowed.has(key)) {
-      // Para x-signature solo guardamos los primeros 80 chars (suficiente para
-      // saber que vino sin exponer todo el HMAC en claro).
-      out[key] = key === "x-signature" ? v.slice(0, 80) : v
+      // x-signature: guardamos hasta 256 chars. El truncado anterior a 80
+      // cortaba el último carácter del v1 (la cadena real es
+      // `ts=<10>,v1=<64>` = 81 chars), corrompiendo cualquier intento de
+      // re-verificar la firma offline desde la DB. No es secreto: el HMAC es
+      // público (viaja en cada request), el secreto es la clave, no la firma.
+      out[key] = key === "x-signature" ? v.slice(0, 256) : v
     }
   }
   return out
