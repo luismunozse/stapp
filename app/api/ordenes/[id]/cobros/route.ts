@@ -89,7 +89,7 @@ export async function POST(
     // Obtener orden
     const { data: orden, error: ordenError } = await supabaseAdmin
       .from("ordenes_servicio")
-      .select("id, costo_final, total_cobrado, estado_cobro, descuento_cobro, cliente_id, organization_id")
+      .select("id, costo_final, total_cobrado, estado_cobro, descuento_cobro, cliente_id, organization_id, estado")
       .eq("id", ordenId)
       .eq("organization_id", organizationId!)
       .single()
@@ -159,6 +159,28 @@ export async function POST(
         costo_financiero_porcentaje: cfPorcentaje,
         usuario_id: userId!,
       })
+    }
+
+    // Reconciliar fiado: si la orden ya fue entregada, los pagos externos
+    // (no CC) acreditan la cuenta corriente y bajan el fiado.
+    const entregada = orden.estado === "ENTREGADO" || orden.estado === "ENTREGADO_SIN_REPARACION"
+    if (entregada && orden.cliente_id) {
+      const totalExterno = data.pagos
+        .filter((p) => p.metodo !== "CUENTA_CORRIENTE")
+        .reduce((sum, p) => sum + p.monto, 0)
+      if (totalExterno > 0) {
+        const { error: pagoFiadoError } = await supabaseAdmin.rpc("pagar_fiado_cuenta_corriente", {
+          p_org_id: organizationId!,
+          p_cliente_id: orden.cliente_id,
+          p_monto: totalExterno,
+          p_referencia_tipo: "ORDEN",
+          p_referencia_id: ordenId,
+          p_usuario_id: userId!,
+        })
+        if (pagoFiadoError) {
+          console.error("Error acreditando pago de fiado:", pagoFiadoError)
+        }
+      }
     }
 
     // Recalcular estado

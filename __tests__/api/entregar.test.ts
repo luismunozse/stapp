@@ -19,6 +19,7 @@ vi.mock("@/lib/notifications/queue", () => ({
   queueNotification: vi.fn().mockResolvedValue(undefined),
 }))
 
+import { supabaseAdmin } from "@/lib/supabase"
 import { POST } from "@/app/api/ordenes/[id]/entregar/route"
 
 function createParams(id: string) {
@@ -28,6 +29,7 @@ function createParams(id: string) {
 describe("POST /api/ordenes/[id]/entregar", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: {}, error: null } as any)
   })
 
   it("returns 401 when not authenticated", async () => {
@@ -222,5 +224,79 @@ describe("POST /api/ordenes/[id]/entregar", () => {
     expect(status).toBe(200)
     expect(body.estado).toBe("ENTREGADO")
     expect(body.notasEntrega).toBe("Entregado sin problemas")
+  })
+
+  it("carga fiado a cuenta corriente al entregar con saldo pendiente", async () => {
+    mockAuthSuccess({ userId: "user-1" })
+
+    const mockOrden = {
+      id: "o1", estado: "REPARADO", numero_orden: 7, tecnico_id: "t1",
+      cliente_id: "c1",
+      clientes: { id: "c1", nombre: "Juan", email: null, telefono: "123" },
+    }
+    const mockUpdated = {
+      id: "o1", numero_orden: 7, codigo_orden: "CEL-007", estado: "ENTREGADO",
+      fecha_entrega: new Date().toISOString(), notas_entrega: null,
+      costo_final: "100", descuento_cobro: "0", total_cobrado: "30",
+      users: { id: "user-1", nombre: "Admin" },
+      clientes: mockOrden.clientes,
+    }
+
+    let callCount = 0
+    const chain = createChainMock(null)
+    chain.single = vi.fn().mockImplementation(() => {
+      callCount++
+      if (callCount === 1) return Promise.resolve({ data: mockOrden, error: null })
+      if (callCount === 2) return Promise.resolve({ data: mockUpdated, error: null })
+      return Promise.resolve({ data: { nombre: "Mi Taller" }, error: null })
+    })
+    mockSupabaseFrom({
+      ordenes_servicio: chain,
+      organizations: createChainMock({ nombre: "Mi Taller", moneda: "ARS", zona_horaria: "America/Argentina/Buenos_Aires" }),
+    })
+
+    await POST(createPostRequest({ notasEntrega: null }), createParams("o1"))
+
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
+      "cargar_deuda_cuenta_corriente",
+      expect.objectContaining({
+        p_cliente_id: "c1", p_monto: 70, p_referencia_tipo: "ORDEN", p_referencia_id: "o1",
+      })
+    )
+  })
+
+  it("NO carga fiado cuando la orden se entrega sin saldo pendiente", async () => {
+    mockAuthSuccess({ userId: "user-1" })
+
+    const mockOrden = {
+      id: "o1", estado: "REPARADO", numero_orden: 8, tecnico_id: "t1",
+      cliente_id: "c1",
+      clientes: { id: "c1", nombre: "Juan", email: null, telefono: "123" },
+    }
+    const mockUpdated = {
+      id: "o1", numero_orden: 8, codigo_orden: "CEL-008", estado: "ENTREGADO",
+      fecha_entrega: new Date().toISOString(), notas_entrega: null,
+      costo_final: "100", descuento_cobro: "0", total_cobrado: "100",
+      users: { id: "user-1", nombre: "Admin" },
+      clientes: mockOrden.clientes,
+    }
+
+    let callCount = 0
+    const chain = createChainMock(null)
+    chain.single = vi.fn().mockImplementation(() => {
+      callCount++
+      if (callCount === 1) return Promise.resolve({ data: mockOrden, error: null })
+      if (callCount === 2) return Promise.resolve({ data: mockUpdated, error: null })
+      return Promise.resolve({ data: { nombre: "Mi Taller" }, error: null })
+    })
+    mockSupabaseFrom({
+      ordenes_servicio: chain,
+      organizations: createChainMock({ nombre: "Mi Taller", moneda: "ARS", zona_horaria: "America/Argentina/Buenos_Aires" }),
+    })
+
+    await POST(createPostRequest({ notasEntrega: null }), createParams("o1"))
+
+    const calls = vi.mocked(supabaseAdmin.rpc).mock.calls.map((c) => c[0])
+    expect(calls).not.toContain("cargar_deuda_cuenta_corriente")
   })
 })

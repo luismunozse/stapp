@@ -109,6 +109,30 @@ export async function POST(
 
     if (updateError) throw updateError
 
+    // Fiado: si se entrega con saldo pendiente (y no es entrega sin cobro),
+    // debitar la cuenta corriente del cliente.
+    if (!sinCobro && orden.cliente_id) {
+      const costoFinal = parseFloat(updatedOrden.costo_final || "0")
+      const descuento = parseFloat(updatedOrden.descuento_cobro || "0")
+      const cobrado = parseFloat(updatedOrden.total_cobrado || "0")
+      const pendiente = Math.round((costoFinal - descuento - cobrado) * 100) / 100
+      if (pendiente > 0) {
+        const { error: fiadoError } = await supabaseAdmin.rpc("cargar_deuda_cuenta_corriente", {
+          p_org_id: organizationId!,
+          p_cliente_id: orden.cliente_id,
+          p_monto: pendiente,
+          p_referencia_tipo: "ORDEN",
+          p_referencia_id: id,
+          p_usuario_id: userId!,
+        })
+        if (fiadoError) {
+          // No abortar la entrega por un error de CC; registrar y seguir
+          // (mismo criterio que consumir_reservas más abajo).
+          console.error("Error cargando fiado a cuenta corriente:", fiadoError)
+        }
+      }
+    }
+
     // Obtener datos de organización (zona horaria necesaria para calcular el
     // vencimiento de garantía como día calendario en la tz del taller)
     const { data: org } = await supabaseAdmin
