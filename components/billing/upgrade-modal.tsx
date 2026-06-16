@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button"
 import { Check, Loader2, Crown, Shield, Zap, Globe } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-type PaymentMethod = "mercadopago" | "rebill"
+type PaymentMethod = "mercadopago" | "creem"
 
 interface UpgradeModalProps {
   open: boolean
@@ -107,7 +107,7 @@ export function UpgradeModal({ open, onClose, planSlug = "profesional" }: Upgrad
           throw new Error("No se pudo iniciar el pago")
         }
       } else {
-        const response = await fetch("/api/rebill/checkout", {
+        const response = await fetch("/api/creem/checkout", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ billingPeriod, planSlug }),
@@ -115,10 +115,10 @@ export function UpgradeModal({ open, onClose, planSlug = "profesional" }: Upgrad
 
         const data = await response.json()
 
-        if (data.url) {
-          await openPaymentUrl(data.url)
+        if (data.checkoutUrl) {
+          await openPaymentUrl(data.checkoutUrl)
         } else {
-          throw new Error("No se pudo iniciar el pago")
+          throw new Error(data.error || "No se pudo iniciar el pago")
         }
       }
     } catch (error) {
@@ -195,15 +195,15 @@ export function UpgradeModal({ open, onClose, planSlug = "profesional" }: Upgrad
               </button>
               <button
                 type="button"
-                onClick={() => setPaymentMethod("rebill")}
+                onClick={() => setPaymentMethod("creem")}
                 className={cn(
                   "relative p-4 rounded-xl border-2 text-center transition-all duration-200",
-                  paymentMethod === "rebill"
+                  paymentMethod === "creem"
                     ? "border-primary bg-primary/5 shadow-sm shadow-primary/10"
                     : "border-border hover:border-muted-foreground/30 hover:bg-muted/50"
                 )}
               >
-                {paymentMethod === "rebill" && (
+                {paymentMethod === "creem" && (
                   <div className="absolute top-2 right-2">
                     <div className="h-2 w-2 rounded-full bg-primary" />
                   </div>

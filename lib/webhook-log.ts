@@ -33,7 +33,7 @@
 
 import { supabaseAdmin } from "@/lib/supabase"
 
-export type WebhookProvider = "MERCADOPAGO" | "REBILL"
+export type WebhookProvider = "MERCADOPAGO" | "REBILL" | "CREEM"
 
 export type WebhookEventStatus =
   | "RECEIVED"
@@ -73,6 +73,7 @@ function sanitizeHeaders(
     "content-type",
     "user-agent",
     "x-rebill-signature",
+    "creem-signature",
   ])
   for (const [k, v] of Object.entries(headers)) {
     if (typeof v !== "string") continue

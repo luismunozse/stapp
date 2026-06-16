@@ -79,6 +79,7 @@ function isPublicPath(pathname: string): boolean {
     "/api/cron",
     "/api/mercadopago/webhook",
     "/api/rebill/webhook",
+    "/api/creem/webhook",
     "/_next",
     "/favicon.ico",
     "/manifest.json",

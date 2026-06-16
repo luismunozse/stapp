@@ -49,6 +49,7 @@ function BillingContent() {
   const mpSuccess = searchParams.get("mp_success") === "true"
   const mpFailure = searchParams.get("mp_failure") === "true"
   const lsSuccess = searchParams.get("ls_success") === "true"
+  const creemSuccess = searchParams.get("creem_success") === "true"
   // MP agrega payment_id al back_url, pero NO el status_detail. Lo buscamos
   // para mostrar el motivo real del rechazo y qué puede hacer el usuario.
   const mpPaymentId = searchParams.get("payment_id")
@@ -151,7 +152,7 @@ function BillingContent() {
       </div>
 
       {/* Success/Error messages */}
-      {(success || mpSuccess || lsSuccess) && (
+      {(success || mpSuccess || lsSuccess || creemSuccess) && (
         <div className="bg-green-50 dark:bg-green-950/50 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 px-3 sm:px-4 py-2 sm:py-3 rounded-lg flex items-center gap-2">
           <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
           <div>
