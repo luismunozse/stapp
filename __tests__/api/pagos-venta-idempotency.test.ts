@@ -28,37 +28,31 @@ const VALID_PAYLOAD = {
   idempotencyKey: "test-uuid-1234",
 }
 
-// Stored response that would be written after a successful first call
 const STORED_RESPONSE = {
-  pagos: [{ id: "pago-1", monto: 500, metodoPago: "EFECTIVO", referencia: null, fecha: "2024-01-01", cuotas: null, recargoPorcentaje: null, montoOriginal: null, costoFinancieroPorcentaje: null, costoFinancieroMonto: null }],
+  pagos: [{
+    id: "pago-1", monto: 500, metodoPago: "EFECTIVO", referencia: null,
+    fecha: "2024-01-01", cuotas: null, recargoPorcentaje: null,
+    montoOriginal: null, costoFinancieroPorcentaje: null, costoFinancieroMonto: null,
+  }],
   venta: { montoAbonado: 500, estadoPago: "PAGADO_PARCIAL", pendiente: 500 },
 }
 
-describe("POST /api/ventas/[id]/pagos — idempotency barrier", () => {
+describe("POST /api/ventas/[id]/pagos — atomic RPC + idempotency", () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it("processes normally and claims barrier row on first call", async () => {
+  // ── RPC path ──────────────────────────────────────────────────────────────
+
+  it("calls RPC and returns 201 on fresh request", async () => {
     mockAuthSuccess()
 
-    const ventaChain = createChainMock(BASE_VENTA, null)
-    const idemInsertChain = createChainMock(null, null)  // insert succeeds (claimed)
-    const pagoChain = createChainMock(
-      { id: "pago-1", monto: 500, metodo_pago: "EFECTIVO", numero_referencia: null, fecha: "2024-01-01", cuotas: null, recargo_porcentaje: null, monto_original: null, costo_financiero_porcentaje: null, costo_financiero_monto: null, observaciones: null },
-      null
-    )
-    const ventaUpdateChain = createChainMock(null, null)
-    const idemUpdateChain = createChainMock(null, null)  // update response succeeds
-
     vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
-      if (table === "ventas") return ventaChain as any
-      if (table === "pago_idempotency") {
-        // First call is insert (claim), second call is update (store response)
-        const callCount = vi.mocked(supabaseAdmin.from).mock.calls.filter(c => c[0] === "pago_idempotency").length
-        return callCount <= 1 ? idemInsertChain as any : idemUpdateChain as any
-      }
-      if (table === "pagos_venta") return pagoChain as any
-      return createChainMock(null, null) as any
+      if (table === "ventas") return createChainMock(BASE_VENTA, null) as any
+      return createChainMock(null, { message: `Unexpected table: ${table}` }) as any
     })
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValueOnce({
+      data: { replayed: false, response: STORED_RESPONSE },
+      error: null,
+    } as any)
 
     const req = createPostRequest(VALID_PAYLOAD, "http://localhost:3000/api/ventas/v1/pagos")
     const res = await POST(req, createParams("v1"))
@@ -67,107 +61,91 @@ describe("POST /api/ventas/[id]/pagos — idempotency barrier", () => {
     expect(status).toBe(201)
     expect(body.pagos).toHaveLength(1)
     expect(body.venta.montoAbonado).toBe(500)
+
+    // RPC was called with the right function name
+    expect(vi.mocked(supabaseAdmin.rpc)).toHaveBeenCalledWith(
+      "registrar_pagos_venta_atomica",
+      expect.objectContaining({ p_idempotency_key: "test-uuid-1234" })
+    )
   })
 
-  it("replays stored response on duplicate key (already processed)", async () => {
+  it("returns 200 on replayed request (RPC returns replayed: true)", async () => {
     mockAuthSuccess()
 
-    const ventaChain = createChainMock(BASE_VENTA, null)
-    // Insert fails with 23505 (duplicate PK)
-    const idemInsertChain = createChainMock(null, { code: "23505", message: "duplicate key value" })
-    // SELECT returns non-null stored response
-    const idemSelectChain = createChainMock({ response: STORED_RESPONSE }, null)
-
     vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
-      if (table === "ventas") return ventaChain as any
-      if (table === "pago_idempotency") {
-        const callCount = vi.mocked(supabaseAdmin.from).mock.calls.filter(c => c[0] === "pago_idempotency").length
-        // First call: insert (23505), second call: select to read stored response
-        return callCount <= 1 ? idemInsertChain as any : idemSelectChain as any
-      }
-      // pagos_venta should NOT be called (replay path)
-      return createChainMock(null, { message: "Should not be called" }) as any
+      if (table === "ventas") return createChainMock(BASE_VENTA, null) as any
+      return createChainMock(null, { message: `Unexpected table: ${table}` }) as any
     })
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValueOnce({
+      data: { replayed: true, response: STORED_RESPONSE },
+      error: null,
+    } as any)
 
     const req = createPostRequest(VALID_PAYLOAD, "http://localhost:3000/api/ventas/v1/pagos")
     const res = await POST(req, createParams("v1"))
     const { status, body } = await parseResponse(res)
 
-    // Replay must return 200 (not 201) with the original response body
     expect(status).toBe(200)
-    expect(body.pagos).toHaveLength(1)
     expect(body.pagos[0].id).toBe("pago-1")
-    // Verify pagos_venta was never inserted (replay, no re-processing)
+    // No pagos_venta table access on replay
     const pagosVentaCalls = vi.mocked(supabaseAdmin.from).mock.calls.filter(c => c[0] === "pagos_venta")
     expect(pagosVentaCalls).toHaveLength(0)
   })
 
-  it("returns 409 when barrier row exists with null response (in-flight)", async () => {
+  it("maps Saldo insuficiente RPC error to 400", async () => {
     mockAuthSuccess()
 
-    const ventaChain = createChainMock(BASE_VENTA, null)
-    const idemInsertChain = createChainMock(null, { code: "23505", message: "duplicate key value" })
-    // SELECT returns row with null response = in-flight
-    const idemSelectChain = createChainMock({ response: null }, null)
-
     vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
-      if (table === "ventas") return ventaChain as any
-      if (table === "pago_idempotency") {
-        const callCount = vi.mocked(supabaseAdmin.from).mock.calls.filter(c => c[0] === "pago_idempotency").length
-        return callCount <= 1 ? idemInsertChain as any : idemSelectChain as any
-      }
+      if (table === "ventas") return createChainMock(BASE_VENTA, null) as any
       return createChainMock(null, null) as any
     })
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValueOnce({
+      data: null,
+      error: { code: "P0001", message: "Saldo insuficiente. Disponible: 100" },
+    } as any)
+
+    const req = createPostRequest(
+      { pagos: [{ monto: 500, metodo: "CUENTA_CORRIENTE" }], idempotencyKey: "key-1" },
+      "http://localhost:3000/api/ventas/v1/pagos"
+    )
+    const res = await POST(req, createParams("v1"))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(400)
+    expect(body.error).toMatch(/saldo insuficiente/i)
+  })
+
+  it("maps venta anulada RPC error to 400", async () => {
+    mockAuthSuccess()
+
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "ventas") return createChainMock(BASE_VENTA, null) as any
+      return createChainMock(null, null) as any
+    })
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValueOnce({
+      data: null,
+      error: { code: "P0001", message: "No se pueden registrar pagos en una venta anulada" },
+    } as any)
 
     const req = createPostRequest(VALID_PAYLOAD, "http://localhost:3000/api/ventas/v1/pagos")
     const res = await POST(req, createParams("v1"))
     const { status, body } = await parseResponse(res)
 
-    expect(status).toBe(409)
-    expect(body.error).toMatch(/proceso/i)
+    expect(status).toBe(400)
+    expect(body.error).toMatch(/anulada/i)
   })
 
-  it("skips barrier and processes normally when table does not exist (pre-migration)", async () => {
+  it("works without idempotencyKey — RPC called without key", async () => {
     mockAuthSuccess()
 
-    const ventaChain = createChainMock(BASE_VENTA, null)
-    // Insert fails with 42P01 (table does not exist)
-    const idemInsertChain = createChainMock(null, { code: "42P01", message: "relation does not exist" })
-    const pagoChain = createChainMock(
-      { id: "pago-1", monto: 500, metodo_pago: "EFECTIVO", numero_referencia: null, fecha: "2024-01-01", cuotas: null, recargo_porcentaje: null, monto_original: null, costo_financiero_porcentaje: null, costo_financiero_monto: null, observaciones: null },
-      null
-    )
-
     vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
-      if (table === "ventas") return ventaChain as any
-      if (table === "pago_idempotency") return idemInsertChain as any
-      if (table === "pagos_venta") return pagoChain as any
+      if (table === "ventas") return createChainMock(BASE_VENTA, null) as any
       return createChainMock(null, null) as any
     })
-
-    const req = createPostRequest(VALID_PAYLOAD, "http://localhost:3000/api/ventas/v1/pagos")
-    const res = await POST(req, createParams("v1"))
-    const { status, body } = await parseResponse(res)
-
-    // Must succeed despite missing table — deploy-safe fallback
-    expect(status).toBe(201)
-    expect(body.pagos).toHaveLength(1)
-  })
-
-  it("works without idempotencyKey (no barrier attempt)", async () => {
-    mockAuthSuccess()
-
-    const ventaChain = createChainMock(BASE_VENTA, null)
-    const pagoChain = createChainMock(
-      { id: "pago-1", monto: 500, metodo_pago: "EFECTIVO", numero_referencia: null, fecha: "2024-01-01", cuotas: null, recargo_porcentaje: null, monto_original: null, costo_financiero_porcentaje: null, costo_financiero_monto: null, observaciones: null },
-      null
-    )
-
-    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
-      if (table === "ventas") return ventaChain as any
-      if (table === "pagos_venta") return pagoChain as any
-      return createChainMock(null, null) as any
-    })
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValueOnce({
+      data: { replayed: false, response: STORED_RESPONSE },
+      error: null,
+    } as any)
 
     const payload = { pagos: [{ monto: 500, metodo: "EFECTIVO" }] }
     const req = createPostRequest(payload, "http://localhost:3000/api/ventas/v1/pagos")
@@ -175,8 +153,107 @@ describe("POST /api/ventas/[id]/pagos — idempotency barrier", () => {
     const { status } = await parseResponse(res)
 
     expect(status).toBe(201)
-    // pago_idempotency was never touched
-    const idemCalls = vi.mocked(supabaseAdmin.from).mock.calls.filter(c => c[0] === "pago_idempotency")
-    expect(idemCalls).toHaveLength(0)
+    const rpcArgs = vi.mocked(supabaseAdmin.rpc).mock.calls[0][1] as any
+    expect(rpcArgs.p_idempotency_key).toBeNull()
+  })
+
+  // ── JS fallback path (migration 237 not yet applied) ─────────────────────
+
+  it("falls back to JS path when RPC function does not exist (PGRST202)", async () => {
+    mockAuthSuccess()
+
+    const pagoCreado = {
+      id: "pago-1", monto: 500, metodo_pago: "EFECTIVO", numero_referencia: null,
+      fecha: "2024-01-01", cuotas: null, recargo_porcentaje: null, monto_original: null,
+      costo_financiero_porcentaje: null, costo_financiero_monto: null,
+    }
+
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "ventas") return createChainMock(BASE_VENTA, null) as any
+      if (table === "pago_idempotency") return createChainMock(null, null) as any  // insert succeeds
+      if (table === "pagos_venta") return createChainMock(pagoCreado, null) as any
+      return createChainMock(null, null) as any
+    })
+
+    // First rpc call = registrar_pagos_venta_atomica → function missing
+    vi.mocked(supabaseAdmin.rpc)
+      .mockResolvedValueOnce({
+        data: null,
+        error: { code: "PGRST202", message: "Could not find the function" },
+      } as any)
+      // subsequent rpc calls in JS fallback (pagar_fiado_cuenta_corriente) → success
+      .mockResolvedValue({ data: {}, error: null } as any)
+
+    const req = createPostRequest(VALID_PAYLOAD, "http://localhost:3000/api/ventas/v1/pagos")
+    const res = await POST(req, createParams("v1"))
+    const { status, body } = await parseResponse(res)
+
+    // Fallback must succeed
+    expect(status).toBe(201)
+    expect(body.pagos).toHaveLength(1)
+  })
+
+  it("falls back to JS path when RPC function does not exist (42883)", async () => {
+    mockAuthSuccess()
+
+    const pagoCreado = {
+      id: "pago-1", monto: 300, metodo_pago: "TRANSFERENCIA", numero_referencia: null,
+      fecha: "2024-01-01", cuotas: null, recargo_porcentaje: null, monto_original: null,
+      costo_financiero_porcentaje: null, costo_financiero_monto: null,
+    }
+
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "ventas") return createChainMock(BASE_VENTA, null) as any
+      if (table === "pago_idempotency") return createChainMock(null, null) as any
+      if (table === "pagos_venta") return createChainMock(pagoCreado, null) as any
+      return createChainMock(null, null) as any
+    })
+
+    vi.mocked(supabaseAdmin.rpc)
+      .mockResolvedValueOnce({
+        data: null,
+        error: { code: "42883", message: "function registrar_pagos_venta_atomica does not exist" },
+      } as any)
+      .mockResolvedValue({ data: {}, error: null } as any)
+
+    const payload = { pagos: [{ monto: 300, metodo: "TRANSFERENCIA" }], idempotencyKey: "key-42883" }
+    const req = createPostRequest(payload, "http://localhost:3000/api/ventas/v1/pagos")
+    const res = await POST(req, createParams("v1"))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(201)
+    expect(body.pagos).toHaveLength(1)
+  })
+
+  it("JS fallback: replays on duplicate idempotency key (23505)", async () => {
+    mockAuthSuccess()
+
+    const idemInsertChain = createChainMock(null, { code: "23505", message: "duplicate key value" })
+    const idemSelectChain = createChainMock({ response: STORED_RESPONSE }, null)
+
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "ventas") return createChainMock(BASE_VENTA, null) as any
+      if (table === "pago_idempotency") {
+        const callCount = vi.mocked(supabaseAdmin.from).mock.calls.filter(c => c[0] === "pago_idempotency").length
+        return callCount <= 1 ? idemInsertChain as any : idemSelectChain as any
+      }
+      return createChainMock(null, { message: "Should not be called" }) as any
+    })
+
+    // First rpc = registrar_pagos_venta_atomica → function missing → JS fallback
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValueOnce({
+      data: null,
+      error: { code: "PGRST202", message: "Could not find the function" },
+    } as any)
+
+    const req = createPostRequest(VALID_PAYLOAD, "http://localhost:3000/api/ventas/v1/pagos")
+    const res = await POST(req, createParams("v1"))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    expect(body.pagos[0].id).toBe("pago-1")
+    // pagos_venta never called (replay)
+    const pagosVentaCalls = vi.mocked(supabaseAdmin.from).mock.calls.filter(c => c[0] === "pagos_venta")
+    expect(pagosVentaCalls).toHaveLength(0)
   })
 })
