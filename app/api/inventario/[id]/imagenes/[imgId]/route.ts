@@ -88,6 +88,7 @@ export async function DELETE(
       .from("inventario_imagenes")
       .delete()
       .eq("id", imgId)
+      .eq("organization_id", organizationId!)
 
     if (delErr) throw delErr
 
