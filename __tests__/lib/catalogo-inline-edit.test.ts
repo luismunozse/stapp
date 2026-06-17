@@ -21,6 +21,12 @@ describe("parseStock", () => {
   it("rejects non-numeric", () => {
     expect(parseStock("abc")).toEqual({ ok: false })
   })
+  it("accepts leading zeros (007 -> 7)", () => {
+    expect(parseStock("007")).toEqual({ ok: true, value: 7 })
+  })
+  it("rejects explicit plus sign", () => {
+    expect(parseStock("+5")).toEqual({ ok: false })
+  })
 })
 
 describe("parsePrecio", () => {
@@ -48,5 +54,11 @@ describe("parsePrecio", () => {
   })
   it("rejects non-numeric", () => {
     expect(parsePrecio("10x")).toEqual({ ok: false })
+  })
+  it("rejects trailing dot", () => {
+    expect(parsePrecio("1.")).toEqual({ ok: false })
+  })
+  it("rejects explicit plus sign", () => {
+    expect(parsePrecio("+5")).toEqual({ ok: false })
   })
 })

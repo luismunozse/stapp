@@ -14,7 +14,7 @@ export function parseStock(raw: string): ParseResult {
 export function parsePrecio(raw: string): ParseResult {
   const t = raw.trim()
   if (t === "") return { ok: true, value: null }
-  const normalized = t.replace(",", ".")
+  const normalized = t.replaceAll(",", ".")
   if (!/^\d+(\.\d{1,2})?$/.test(normalized)) return { ok: false }
   return { ok: true, value: Number(normalized) }
 }
