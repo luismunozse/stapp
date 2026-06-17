@@ -71,9 +71,23 @@ describe("cobros orden — reconciliación de fiado", () => {
 })
 
 describe("pagos venta — reconciliación de fiado", () => {
+  // The fiado/CC reconciliation for venta pagos now lives inside the atomic
+  // plpgsql RPC (registrar_pagos_venta_atomica), which vitest can't execute.
+  // To keep asserting the reconciliation calls (usar_cuenta_corriente /
+  // pagar_fiado_cuenta_corriente), we force the JS fallback path by making the
+  // atomic RPC report "function missing" (PGRST202); the route then runs the
+  // legacy JS implementation that issues those calls directly.
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: {}, error: null } as any)
+    vi.mocked(supabaseAdmin.rpc).mockImplementation(((fn: string) => {
+      if (fn === "registrar_pagos_venta_atomica") {
+        return Promise.resolve({
+          data: null,
+          error: { code: "PGRST202", message: "Could not find the function" },
+        })
+      }
+      return Promise.resolve({ data: {}, error: null })
+    }) as any)
   })
 
   it("acredita PAGO al pagar en efectivo una venta a fiado", async () => {
