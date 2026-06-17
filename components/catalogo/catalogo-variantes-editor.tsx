@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Loader2, Plus, Trash2, Pencil, Layers, Upload, X, ImageOff } from "lucide-react"
 import { toast } from "sonner"
 
@@ -28,6 +29,8 @@ export function CatalogoVariantesEditor({ itemId }: Props) {
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<Variante | null>(null)
   const [creating, setCreating] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -45,14 +48,20 @@ export function CatalogoVariantesEditor({ itemId }: Props) {
 
   useEffect(() => { load() }, [itemId])
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("¿Eliminar variante?")) return
-    const res = await fetch(`/api/catalogo/items/${itemId}/variantes/${id}`, { method: "DELETE" })
-    if (res.ok) {
-      setVariantes((prev) => prev.filter((v) => v.id !== id))
-      toast.success("Variante eliminada")
-    } else {
-      toast.error("Error al eliminar")
+  const handleDelete = async () => {
+    if (!deletingId || deleting) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/catalogo/items/${itemId}/variantes/${deletingId}`, { method: "DELETE" })
+      if (res.ok) {
+        setVariantes((prev) => prev.filter((v) => v.id !== deletingId))
+        toast.success("Variante eliminada")
+      } else {
+        toast.error("Error al eliminar")
+      }
+    } finally {
+      setDeleting(false)
+      setDeletingId(null)
     }
   }
 
@@ -130,7 +139,8 @@ export function CatalogoVariantesEditor({ itemId }: Props) {
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7"
-                onClick={() => handleDelete(v.id)}
+                aria-label="Eliminar variante"
+                onClick={() => setDeletingId(v.id)}
               >
                 <Trash2 className="h-3 w-3 text-destructive" />
               </Button>
@@ -147,6 +157,17 @@ export function CatalogoVariantesEditor({ itemId }: Props) {
           onSaved={() => { load(); setCreating(false); setEditing(null) }}
         />
       )}
+
+      <ConfirmDialog
+        open={!!deletingId}
+        onOpenChange={(open) => !open && setDeletingId(null)}
+        title="Eliminar variante"
+        description="Esta acción no se puede deshacer."
+        confirmText="Eliminar"
+        variant="danger"
+        loading={deleting}
+        onConfirm={handleDelete}
+      />
     </div>
   )
 }
