@@ -1,8 +1,9 @@
 "use client"
 
 import { useState } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Button, buttonVariants } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import { Smartphone, Monitor, RotateCw, ExternalLink } from "lucide-react"
 
 interface CatalogoPreviewDialogProps {
@@ -48,14 +49,21 @@ export function CatalogoPreviewDialog({ open, onOpenChange, slug, activo }: Cata
                 <Button variant="ghost" size="icon" aria-label="Refrescar" onClick={() => setReloadKey((k) => k + 1)}>
                   <RotateCw className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" aria-label="Abrir en pestaña" asChild>
-                  <a href={url} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink className="h-4 w-4" />
-                  </a>
-                </Button>
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Abrir en pestaña"
+                  className={cn(buttonVariants({ variant: "ghost", size: "icon" }))}
+                >
+                  <ExternalLink className="h-4 w-4" />
+                </a>
               </div>
             )}
           </div>
+          <DialogDescription className="sr-only">
+            Vista previa del catálogo público.
+          </DialogDescription>
         </DialogHeader>
 
         {activo ? (
