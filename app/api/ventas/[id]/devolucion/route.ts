@@ -18,7 +18,7 @@ const devolucionSchema = z.object({
   motivo: z.string().min(1, "El motivo es requerido"),
   observaciones: z.string().optional(),
   items: z.array(itemDevolucionSchema).min(1, "Debe incluir al menos un item"),
-  metodoReembolso: z.enum(["EFECTIVO", "TRANSFERENCIA", "TARJETA", "CREDITO_TIENDA", "OTRO"]).optional(),
+  metodoReembolso: z.enum(["EFECTIVO", "TRANSFERENCIA", "TARJETA", "CREDITO_TIENDA", "CUENTA_CORRIENTE", "OTRO"]).optional(),
   reembolsoReferencia: z.string().optional(),
 })
 
@@ -278,6 +278,22 @@ export async function POST(
             })
             .in("id", seriesToReset.map((s: { id: string }) => s.id))
         }
+      }
+    }
+
+    // 8b. Reembolso a cuenta corriente
+    if (data.metodoReembolso === "CUENTA_CORRIENTE" && venta.cliente_id) {
+      const { error: devError } = await supabaseAdmin.rpc("devolver_cuenta_corriente", {
+        p_org_id: organizationId!,
+        p_cliente_id: venta.cliente_id,
+        p_monto: montoDevolucion,
+        p_referencia_tipo: "VENTA",
+        p_referencia_id: id,
+        p_usuario_id: userId!,
+        p_observaciones: `Devolucion ${numeroDevolucion}`,
+      })
+      if (devError) {
+        console.error("Error reembolsando a cuenta corriente:", devError)
       }
     }
 

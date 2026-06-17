@@ -272,7 +272,7 @@ export async function DELETE(
     // Verificar que la orden no esté entregada
     const { data: ordenCheck } = await supabaseAdmin
       .from("ordenes_servicio")
-      .select("estado")
+      .select("estado, cliente_id")
       .eq("id", ordenId)
       .eq("organization_id", organizationId!)
       .single()
@@ -287,7 +287,7 @@ export async function DELETE(
     // Verificar que el cobro existe y pertenece a la orden
     const { data: cobro, error: cobroError } = await supabaseAdmin
       .from("cobros_orden")
-      .select("id, monto, anulado")
+      .select("id, monto, anulado, metodo_pago")
       .eq("id", cobroId)
       .eq("orden_id", ordenId)
       .eq("organization_id", organizationId!)
@@ -311,6 +311,22 @@ export async function DELETE(
         anulado_motivo: motivo,
       })
       .eq("id", cobroId)
+
+    // Reacreditar cuenta corriente si el cobro era con CC
+    if (cobro.metodo_pago === "CUENTA_CORRIENTE" && ordenCheck?.cliente_id) {
+      const { error: devError } = await supabaseAdmin.rpc("devolver_cuenta_corriente", {
+        p_org_id: organizationId!,
+        p_cliente_id: ordenCheck.cliente_id,
+        p_monto: parseFloat(cobro.monto as any),
+        p_referencia_tipo: "ORDEN",
+        p_referencia_id: ordenId,
+        p_usuario_id: userId!,
+        p_observaciones: "Anulacion de cobro con cuenta corriente",
+      })
+      if (devError) {
+        console.error("Error reacreditando cuenta corriente al anular cobro:", devError)
+      }
+    }
 
     // Recalcular estado de cobro (ignorará cobros anulados)
     await supabaseAdmin.rpc("recalcular_estado_cobro", { p_orden_id: ordenId })

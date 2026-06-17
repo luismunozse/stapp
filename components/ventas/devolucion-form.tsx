@@ -67,6 +67,7 @@ export function DevolucionForm({
   const { showError, showSuccess } = useModal()
   const { formatPrice } = useCurrency()
   const [loading, setLoading] = useState(false)
+  const [metodoReembolso, setMetodoReembolso] = useState<string>("")
 
   // Track selection state for each item by its id
   const [itemStates, setItemStates] = useState<Record<string, ItemSelectionState>>(() =>
@@ -91,6 +92,7 @@ export function DevolucionForm({
     if (value) {
       setItemStates(buildInitialItemStates(venta.items))
       reset({ motivo: "", observaciones: "" })
+      setMetodoReembolso("")
     }
     onOpenChange(value)
   }
@@ -154,6 +156,7 @@ export function DevolucionForm({
       const body = {
         motivo: data.motivo,
         observaciones: data.observaciones || undefined,
+        metodoReembolso: metodoReembolso || undefined,
         items: selectedItems.map((item) => {
           const state = itemStates[item.id]
           return {
@@ -320,6 +323,24 @@ export function DevolucionForm({
                 placeholder="Notas adicionales..."
                 rows={3}
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="metodoReembolso">Método de reembolso</Label>
+              <select
+                id="metodoReembolso"
+                value={metodoReembolso}
+                onChange={(e) => setMetodoReembolso(e.target.value)}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="">Sin reembolso</option>
+                <option value="EFECTIVO">Efectivo</option>
+                <option value="TRANSFERENCIA">Transferencia</option>
+                <option value="TARJETA">Tarjeta</option>
+                <option value="CREDITO_TIENDA">Crédito en tienda</option>
+                <option value="CUENTA_CORRIENTE">Cuenta corriente</option>
+                <option value="OTRO">Otro</option>
+              </select>
             </div>
           </div>
 
