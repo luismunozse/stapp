@@ -62,6 +62,25 @@ export async function POST(request: Request) {
 
     const { title, message, target, organizationIds, roles, actionUrl } = parsed.data
 
+    // Idempotencia por contenido + ventana: rechaza un broadcast idéntico
+    // (mismo título/cuerpo/target) enviado hace menos de 60s. Cubre el
+    // doble-click y los retries de red sin necesidad de una idempotency key.
+    const sixtySecAgo = new Date(Date.now() - 60_000).toISOString()
+    const { data: recentDup } = await supabaseAdmin
+      .from("broadcasts")
+      .select("id")
+      .eq("title", title)
+      .eq("body", message)
+      .eq("target", target)
+      .gte("created_at", sixtySecAgo)
+      .limit(1)
+    if (recentDup && recentDup.length > 0) {
+      return NextResponse.json(
+        { error: "Ya enviaste un broadcast idéntico hace instantes. Esperá un momento antes de reintentar." },
+        { status: 409 }
+      )
+    }
+
     // Construir query de usuarios destino
     let query = supabaseAdmin.from("users").select("id, organization_id, rol")
 

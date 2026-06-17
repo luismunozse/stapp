@@ -232,7 +232,11 @@ export async function GET(request: Request) {
 
     if (orgIds.length > 0) {
       // Obtener suscripciones, conteo de usuarios y última actividad en paralelo
-      const [{ data: subscriptions }, { data: usersCounts }, { data: lastActivities }] = await Promise.all([
+      const [
+        { data: subscriptions, error: subsErr },
+        { data: usersCounts, error: usersErr },
+        { data: lastActivities, error: actErr },
+      ] = await Promise.all([
         supabaseAdmin
           .from("subscriptions")
           .select(
@@ -269,6 +273,13 @@ export async function GET(request: Request) {
           .in("organization_id", orgIds)
           .order("created_at", { ascending: false }),
       ])
+
+      // Enriquecimiento no crítico: si una de estas falla la lista igual sirve
+      // (con datos degradados), pero logueamos en vez de tragar el error en
+      // silencio para que sea visible en observabilidad.
+      if (subsErr) console.error("orgs list: subscriptions enrichment failed:", subsErr)
+      if (usersErr) console.error("orgs list: users-count enrichment failed:", usersErr)
+      if (actErr) console.error("orgs list: last-activity enrichment failed:", actErr)
 
       subscriptionsMap = (subscriptions || []).reduce(
         (acc, sub) => {
