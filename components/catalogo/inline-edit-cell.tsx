@@ -27,6 +27,7 @@ export function InlineEditCell({
   const [raw, setRaw] = useState("")
   const [saving, setSaving] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const editingRef = useRef(false)
 
   useEffect(() => {
     if (editing) {
@@ -37,16 +38,18 @@ export function InlineEditCell({
 
   const open = () => {
     setRaw(value == null ? "" : String(value))
+    editingRef.current = true
     setEditing(true)
   }
 
   const cancel = () => {
+    editingRef.current = false
     setEditing(false)
     setRaw("")
   }
 
   const commit = async () => {
-    if (saving) return
+    if (saving || !editingRef.current) return
     const parsed = parse(raw)
     if (!parsed.ok) {
       cancel()
@@ -56,6 +59,7 @@ export function InlineEditCell({
       cancel()
       return
     }
+    editingRef.current = false
     setSaving(true)
     try {
       await onSave(parsed.value)

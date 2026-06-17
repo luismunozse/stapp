@@ -67,4 +67,16 @@ describe("InlineEditCell", () => {
     expect(screen.getByRole("button", { name: "Editar stock" })).toHaveTextContent("5")
     expect(onSave).not.toHaveBeenCalled()
   })
+
+  it("calls onSave exactly once on a single Enter commit (no blur double-fire)", async () => {
+    const { onSave } = setup(vi.fn().mockResolvedValue(undefined), 5)
+    fireEvent.click(screen.getByRole("button", { name: "Editar stock" }))
+    const input = screen.getByRole("spinbutton")
+    fireEvent.change(input, { target: { value: "8" } })
+    fireEvent.keyDown(input, { key: "Enter" })
+    // Simulate the blur that fires when the input unmounts after commit
+    fireEvent.blur(input)
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith(8))
+    expect(onSave).toHaveBeenCalledTimes(1)
+  })
 })
