@@ -35,6 +35,26 @@ export async function POST(request: Request) {
     const body = await request.json()
     const data = schema.parse(body)
 
+    // Validar que TODOS los inventarioId del body pertenezcan a la org del
+    // caller antes de referenciarlos en las OCs (anti-IDOR cross-tenant).
+    const allInvIds = [
+      ...new Set(data.grupos.flatMap((g) => g.items.map((i) => i.inventarioId))),
+    ]
+    const { data: validInv, error: invErr } = await supabaseAdmin
+      .from("inventario")
+      .select("id")
+      .eq("organization_id", organizationId!)
+      .in("id", allInvIds)
+    if (invErr) throw invErr
+    const validIds = new Set((validInv || []).map((r) => r.id))
+    const invalidIds = allInvIds.filter((id) => !validIds.has(id))
+    if (invalidIds.length > 0) {
+      return NextResponse.json(
+        { error: "Uno o más productos no pertenecen a tu organización" },
+        { status: 400 }
+      )
+    }
+
     const ocsCreadas: Array<{ id: string; numeroOC: string; proveedorId: string | null; totalItems: number; total: number }> = []
     const errores: Array<{ proveedorId: string | null; error: string }> = []
 

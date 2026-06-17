@@ -167,11 +167,13 @@ export async function POST(
     )
     const tipo = allFullyReturned ? "TOTAL" : "PARCIAL"
 
-    // 4. Calculate monto_devolucion
-    const montoDevolucion = data.items.reduce(
-      (sum, item) => sum + item.cantidad * item.precioUnitario,
-      0
-    )
+    // 4. Calculate monto_devolucion usando el precio ORIGINAL de la DB, no el
+    // del body: confiar en `item.precioUnitario` del request permitía reembolsar
+    // cualquier monto arbitrario.
+    const montoDevolucion = data.items.reduce((sum, item) => {
+      const original = originalItemsMap[item.itemVentaId]
+      return sum + item.cantidad * Number(original?.precio_unitario ?? 0)
+    }, 0)
 
     // 5. Get next return number
     const numeroDevolucion = await getNextReturnNumber(organizationId!)
@@ -201,16 +203,19 @@ export async function POST(
       throw devError
     }
 
-    // 7. Insert items_devolucion
-    const itemsToInsert = data.items.map((item) => ({
-      devolucion_id: devolucion.id,
-      item_venta_id: item.itemVentaId,
-      inventario_id: item.inventarioId || null,
-      cantidad: item.cantidad,
-      precio_unitario: item.precioUnitario,
-      subtotal: item.cantidad * item.precioUnitario,
-      restaurar_stock: item.restaurarStock,
-    }))
+    // 7. Insert items_devolucion — precio del ORIGINAL en DB, no del body.
+    const itemsToInsert = data.items.map((item) => {
+      const precio = Number(originalItemsMap[item.itemVentaId]?.precio_unitario ?? 0)
+      return {
+        devolucion_id: devolucion.id,
+        item_venta_id: item.itemVentaId,
+        inventario_id: item.inventarioId || null,
+        cantidad: item.cantidad,
+        precio_unitario: precio,
+        subtotal: item.cantidad * precio,
+        restaurar_stock: item.restaurarStock,
+      }
+    })
 
     const { error: itemsError } = await supabaseAdmin
       .from("items_devolucion")

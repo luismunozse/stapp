@@ -161,7 +161,10 @@ export async function GET(
       })),
     }, {
       headers: {
-        "Cache-Control": "public, max-age=60, stale-while-revalidate=120",
+        // private + no-store: la cotización lleva datos del cliente (y posible
+        // firma). Un CDN/proxy compartido con "public" podría servirla a otra
+        // request distinta.
+        "Cache-Control": "private, no-store",
       },
     })
   } catch (error) {
