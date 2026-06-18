@@ -1,16 +1,17 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { EmptyState } from "@/components/ui/empty-state"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import { Plus, FolderTree, Pencil, Trash2, Loader2, GripVertical } from "lucide-react"
+import { Plus, FolderTree, Pencil, Trash2, Loader2, GripVertical, Upload, ImageOff, X } from "lucide-react"
 import { toast } from "sonner"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Switch } from "@/components/ui/switch"
 import type { CatalogoCategoria } from "@/types/database"
 import { useDragReorder } from "./use-drag-reorder"
 
@@ -102,8 +103,19 @@ export function CatalogoCategoriasTab() {
             >
               <CardContent className="p-3 flex items-center justify-between gap-3">
                 <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+                {cat.imagen_url && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={cat.imagen_url} alt="" className="h-9 w-9 rounded object-cover border shrink-0" />
+                )}
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-medium">{cat.nombre}</h3>
+                  <h3 className="font-medium">
+                    {cat.nombre}
+                    {!cat.activo && (
+                      <span className="ml-2 inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground align-middle">
+                        Inactiva
+                      </span>
+                    )}
+                  </h3>
                   {cat.slug && (
                     <p className="text-xs text-muted-foreground font-mono">/c/{cat.slug}</p>
                   )}
@@ -162,6 +174,26 @@ function CategoriaDialog({
   const [slug, setSlug] = useState(categoria?.slug ?? "")
   const [descripcion, setDescripcion] = useState(categoria?.descripcion ?? "")
   const [saving, setSaving] = useState(false)
+  const [imagenUrl, setImagenUrl] = useState<string | null>(categoria?.imagen_url ?? null)
+  const [activo, setActivo] = useState<boolean>(categoria?.activo ?? true)
+  const [uploading, setUploading] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const handleUpload = async (file: File) => {
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append("file", file)
+      const res = await fetch("/api/catalogo/upload", { method: "POST", body: fd })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Error al subir imagen")
+      setImagenUrl(data.url)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al subir imagen")
+    } finally {
+      setUploading(false)
+    }
+  }
 
   const handleSave = async () => {
     if (!nombre.trim()) return toast.error("Nombre requerido")
@@ -174,6 +206,8 @@ function CategoriaDialog({
         descripcion: descripcion.trim() || null,
       }
       if (slug.trim()) payload.slug = slug.trim()
+      payload.imagen_url = imagenUrl
+      payload.activo = activo
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
@@ -198,6 +232,43 @@ function CategoriaDialog({
         </DialogHeader>
         <div className="space-y-3">
           <div>
+            <Label>Imagen (opcional)</Label>
+            <div className="mt-1.5 flex items-center gap-3">
+              <div className="w-20 h-20 bg-muted rounded-md overflow-hidden flex items-center justify-center border shrink-0">
+                {imagenUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={imagenUrl} alt="Imagen de la categoría" className="w-full h-full object-cover" />
+                ) : (
+                  <ImageOff className="h-5 w-5 text-muted-foreground" />
+                )}
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  ref={fileRef}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    if (f) handleUpload(f)
+                    e.target.value = ""
+                  }}
+                />
+                <Button type="button" variant="outline" size="sm" disabled={uploading} className="gap-1.5"
+                  onClick={() => fileRef.current?.click()}>
+                  {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                  {imagenUrl ? "Cambiar" : "Subir"}
+                </Button>
+                {imagenUrl && (
+                  <Button type="button" variant="ghost" size="sm" className="gap-1.5 text-destructive"
+                    onClick={() => setImagenUrl(null)}>
+                    <X className="h-4 w-4" /> Quitar
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+          <div>
             <Label htmlFor="cat-nombre">Nombre *</Label>
             <Input id="cat-nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} maxLength={80} />
           </div>
@@ -221,6 +292,13 @@ function CategoriaDialog({
           <div>
             <Label htmlFor="cat-desc">Descripción</Label>
             <Textarea id="cat-desc" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} rows={2} maxLength={500} />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <Label htmlFor="cat-activo">Activa</Label>
+              <p className="text-xs text-muted-foreground">Si la desactivás, no se muestra en el catálogo público.</p>
+            </div>
+            <Switch id="cat-activo" checked={activo} onCheckedChange={setActivo} />
           </div>
         </div>
         <div className="flex justify-end gap-2 pt-3 border-t">

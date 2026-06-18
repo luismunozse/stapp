@@ -1,16 +1,19 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { Upload, Loader2, ImageOff, X, Star } from "lucide-react"
+import { Loader2, Star } from "lucide-react"
 import { toast } from "sonner"
 import type { CatalogoItem, CatalogoCategoria } from "@/types/database"
 import { CatalogoVariantesEditor } from "./catalogo-variantes-editor"
+import { TagsInput } from "./tags-input"
+import { ImageGalleryInput } from "./image-gallery-input"
+import type { Gallery } from "@/lib/catalogo/gallery"
 
 interface Props {
   item: CatalogoItem | null
@@ -18,10 +21,10 @@ interface Props {
   open: boolean
   onClose: () => void
   onSaved: () => void
+  tagSuggestions?: string[]
 }
 
-export function CatalogoItemDialog({ item, categorias, open, onClose, onSaved }: Props) {
-  const fileInputRef = useRef<HTMLInputElement>(null)
+export function CatalogoItemDialog({ item, categorias, open, onClose, onSaved, tagSuggestions = [] }: Props) {
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
 
@@ -36,6 +39,8 @@ export function CatalogoItemDialog({ item, categorias, open, onClose, onSaved }:
   const [imagenUrl, setImagenUrl] = useState<string | null>(null)
   const [activo, setActivo] = useState(true)
   const [destacado, setDestacado] = useState(false)
+  const [etiquetas, setEtiquetas] = useState<string[]>([])
+  const [imagenes, setImagenes] = useState<string[]>([])
 
   useEffect(() => {
     if (item) {
@@ -50,6 +55,8 @@ export function CatalogoItemDialog({ item, categorias, open, onClose, onSaved }:
       setImagenUrl(item.imagen_url ?? null)
       setActivo(item.activo)
       setDestacado(item.destacado ?? false)
+      setEtiquetas(item.etiquetas ?? [])
+      setImagenes((item.imagenes ?? []).filter((u) => u !== item.imagen_url))
     } else {
       setTipo("PRODUCTO")
       setNombre("")
@@ -62,10 +69,12 @@ export function CatalogoItemDialog({ item, categorias, open, onClose, onSaved }:
       setImagenUrl(null)
       setActivo(true)
       setDestacado(false)
+      setEtiquetas([])
+      setImagenes([])
     }
   }, [item, open])
 
-  const handleUpload = async (file: File) => {
+  const uploadFile = async (file: File): Promise<string> => {
     setUploading(true)
     try {
       const fd = new FormData()
@@ -73,9 +82,10 @@ export function CatalogoItemDialog({ item, categorias, open, onClose, onSaved }:
       const res = await fetch("/api/catalogo/upload", { method: "POST", body: fd })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Error al subir imagen")
-      setImagenUrl(data.url)
+      return data.url as string
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error al subir imagen")
+      throw err
     } finally {
       setUploading(false)
     }
@@ -98,6 +108,8 @@ export function CatalogoItemDialog({ item, categorias, open, onClose, onSaved }:
       imagen_url: imagenUrl,
       activo,
       destacado,
+      etiquetas,
+      imagenes,
     }
 
     if (tipo === "PRODUCTO") {
@@ -155,52 +167,18 @@ export function CatalogoItemDialog({ item, categorias, open, onClose, onSaved }:
           </div>
 
           <div>
-            <Label>Imagen</Label>
-            <div className="mt-1.5 flex items-center gap-3">
-              <div className="w-32 aspect-video bg-muted rounded-md overflow-hidden flex items-center justify-center border">
-                {imagenUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={imagenUrl} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  <ImageOff className="h-6 w-6 text-muted-foreground" />
-                )}
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
-                  className="gap-1.5"
-                >
-                  {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                  {imagenUrl ? "Cambiar" : "Subir imagen"}
-                </Button>
-                {imagenUrl && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setImagenUrl(null)}
-                    className="gap-1.5 text-destructive"
-                  >
-                    <X className="h-4 w-4" />
-                    Quitar
-                  </Button>
-                )}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0]
-                    if (f) handleUpload(f)
-                    e.target.value = ""
-                  }}
-                />
-              </div>
+            <Label>Imágenes</Label>
+            <div className="mt-1.5">
+              <ImageGalleryInput
+                cover={imagenUrl}
+                gallery={imagenes}
+                uploading={uploading}
+                onUpload={uploadFile}
+                onChange={(next: Gallery) => {
+                  setImagenUrl(next.cover)
+                  setImagenes(next.gallery)
+                }}
+              />
             </div>
           </div>
 
@@ -218,6 +196,16 @@ export function CatalogoItemDialog({ item, categorias, open, onClose, onSaved }:
               rows={3}
               maxLength={2000}
             />
+          </div>
+
+          <div>
+            <Label>Etiquetas</Label>
+            <div className="mt-1.5">
+              <TagsInput value={etiquetas} onChange={setEtiquetas} suggestions={tagSuggestions} />
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Ayudan a los clientes a filtrar y buscar. Enter o coma para agregar.
+            </p>
           </div>
 
           <div>
@@ -311,7 +299,7 @@ export function CatalogoItemDialog({ item, categorias, open, onClose, onSaved }:
               <Star className="h-4 w-4 text-yellow-500 mt-0.5" />
               <div>
                 <Label htmlFor="destacado">Destacar item</Label>
-                <p className="text-xs text-muted-foreground">Aparece primero con badge "Destacado".</p>
+                <p className="text-xs text-muted-foreground">Aparece primero con badge &quot;Destacado&quot;.</p>
               </div>
             </div>
             <Switch id="destacado" checked={destacado} onCheckedChange={setDestacado} />
