@@ -13,10 +13,10 @@ const chatRequestSchema = z.object({
   conversacionId: z.string().nullable().optional(),
 })
 
-if (!process.env.ANTHROPIC_API_KEY) {
-  console.error("[Chatbot] ANTHROPIC_API_KEY no está configurada en .env")
+if (!process.env.STAPP_CHATBOT_API_KEY) {
+  console.error("[Chatbot] STAPP_CHATBOT_API_KEY no está configurada en .env")
 }
-const anthropic = new Anthropic()
+const anthropic = new Anthropic({ apiKey: process.env.STAPP_CHATBOT_API_KEY })
 
 const CHATBOT_MODEL = "claude-haiku-4-5"
 

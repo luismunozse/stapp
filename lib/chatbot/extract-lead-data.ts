@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk"
 
-const anthropic = new Anthropic()
+const anthropic = new Anthropic({ apiKey: process.env.STAPP_CHATBOT_API_KEY })
 
 const EXTRACT_MODEL = "claude-haiku-4-5"
 
@@ -77,7 +77,7 @@ resumen: 1-2 frases de contexto para comercial. Máximo 200 caracteres. Null si 
 NUNCA INVENTES DATOS. Si no aparece explícito, devolvé null. Score siempre numérico.`
 
 export async function extractLeadData(messages: ChatTurn[]): Promise<ExtractedLeadData | null> {
-  if (!process.env.ANTHROPIC_API_KEY) return null
+  if (!process.env.STAPP_CHATBOT_API_KEY) return null
   if (messages.length === 0) return null
 
   const conversation = messages
