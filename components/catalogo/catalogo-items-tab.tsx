@@ -201,6 +201,10 @@ export function CatalogoItemsTab() {
 
   const allVisibleSelected = filtered.length > 0 && filtered.every((i) => selected.has(i.id))
 
+  const tagSuggestions = Array.from(
+    new Set(items.flatMap((i) => i.etiquetas ?? [])),
+  ).sort((a, b) => a.localeCompare(b))
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row gap-2">
@@ -664,6 +668,7 @@ export function CatalogoItemsTab() {
           open={creating || !!editing}
           onClose={() => { setCreating(false); setEditing(null) }}
           onSaved={() => { load(); setCreating(false); setEditing(null) }}
+          tagSuggestions={tagSuggestions}
         />
       )}
 
