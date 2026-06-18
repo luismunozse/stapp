@@ -85,9 +85,14 @@ export function CatalogoItemsTab() {
       })
       const res = await fetch(`/api/catalogo/items${qs ? `?${qs}` : ""}`)
       const data = await res.json()
-      setItems(data.items ?? [])
+      const items = data.items ?? []
+      const tp = data.totalPages ?? 1
+      setItems(items)
       setTotal(data.total ?? 0)
-      setTotalPages(data.totalPages ?? 1)
+      setTotalPages(tp)
+      if (items.length === 0 && page > 1 && tp < page) {
+        setPage(tp || 1)
+      }
     } catch {
       toast.error("Error cargando catálogo")
     } finally {
@@ -105,6 +110,10 @@ export function CatalogoItemsTab() {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearch, filterTipo, filterCategoria, filterEstado, onlyMissingImage, page])
+
+  useEffect(() => {
+    clearSelection()
+  }, [page])
 
   const hasFilters = !!search || !!filterTipo || !!filterCategoria || !!filterEstado || onlyMissingImage
   const canReorder = !hasFilters && selected.size === 0 && viewMode === "grid" && totalPages === 1
