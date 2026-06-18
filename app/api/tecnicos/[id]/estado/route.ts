@@ -46,6 +46,7 @@ export async function PATCH(
       .from("users")
       .update({ activo })
       .eq("id", id)
+      .eq("organization_id", organizationId!)
 
     if (updateError) throw updateError
 

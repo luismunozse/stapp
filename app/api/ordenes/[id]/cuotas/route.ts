@@ -85,6 +85,7 @@ export async function PUT(
         fecha_pago: new Date().toISOString(),
       })
       .eq("id", cuotaId)
+      .eq("organization_id", organizationId!)
 
     return NextResponse.json({ message: "Cuota marcada como pagada" })
   } catch (err) {

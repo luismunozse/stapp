@@ -129,6 +129,7 @@ export async function PUT(
       .from("proveedores")
       .update(updateData)
       .eq("id", id)
+      .eq("organization_id", organizationId!)
       .select()
       .single()
 
@@ -213,6 +214,7 @@ export async function DELETE(
       .from("proveedores")
       .delete()
       .eq("id", id)
+      .eq("organization_id", organizationId!)
 
     if (deleteError) {
       throw deleteError

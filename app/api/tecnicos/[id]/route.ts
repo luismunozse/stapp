@@ -175,6 +175,7 @@ export async function PUT(
       .from("users")
       .update(updateData)
       .eq("id", id)
+      .eq("organization_id", organizationId!)
       .select("id, nombre, email, porcentaje_comision, costo_hora, telefono, especialidades, fecha_ingreso_tecnico, activo, horario_laboral")
       .single()
 
@@ -236,6 +237,7 @@ export async function DELETE(
       .from("users")
       .delete()
       .eq("id", id)
+      .eq("organization_id", organizationId!)
 
     if (deleteError) {
       throw deleteError

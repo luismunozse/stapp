@@ -74,6 +74,7 @@ export async function POST(
       .from("proveedores")
       .update({ logo_url: pub.publicUrl, logo_path: path })
       .eq("id", id)
+      .eq("organization_id", organizationId!)
       .select()
       .single()
 
@@ -114,6 +115,7 @@ export async function DELETE(
       .from("proveedores")
       .update({ logo_url: null, logo_path: null })
       .eq("id", id)
+      .eq("organization_id", organizationId!)
       .select()
       .single()
 

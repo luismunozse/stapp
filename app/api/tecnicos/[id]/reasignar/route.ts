@@ -84,6 +84,7 @@ export async function POST(
       .from("ordenes_servicio")
       .update({ tecnico_id: tecnicoDestinoId })
       .in("id", targetIds)
+      .eq("organization_id", organizationId!)
 
     if (updateError) throw updateError
 
@@ -92,6 +93,7 @@ export async function POST(
         .from("ordenes_servicio")
         .update({ porcentaje_comision: porcentajeDestino })
         .in("id", noPagadas)
+        .eq("organization_id", organizationId!)
 
       if (pctError) throw pctError
     }

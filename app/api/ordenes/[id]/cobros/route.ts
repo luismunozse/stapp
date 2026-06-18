@@ -311,6 +311,7 @@ export async function DELETE(
         anulado_motivo: motivo,
       })
       .eq("id", cobroId)
+      .eq("organization_id", organizationId!)
 
     // Reacreditar cuenta corriente si el cobro era con CC
     if (cobro.metodo_pago === "CUENTA_CORRIENTE" && ordenCheck?.cliente_id) {

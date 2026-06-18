@@ -104,6 +104,7 @@ export async function POST(
         motivo_sin_cobro: motivoSinCobro,
       })
       .eq("id", id)
+      .eq("organization_id", organizationId!)
       .select(`*, clientes(*), users:entregado_por_user_id(id, nombre, email)`)
       .single()
 

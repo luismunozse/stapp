@@ -288,6 +288,7 @@ export async function PUT(
       .from("ordenes_servicio")
       .update(updateData)
       .eq("id", id)
+      .eq("organization_id", organizationId!)
       .select(`
         *,
         clientes (*),
@@ -505,6 +506,7 @@ export async function DELETE(
       .from("ordenes_servicio")
       .delete()
       .eq("id", id)
+      .eq("organization_id", organizationId!)
 
     if (deleteError) {
       throw deleteError

@@ -143,6 +143,7 @@ export async function DELETE(
       .from("ordenes_compra")
       .delete()
       .eq("id", id)
+      .eq("organization_id", organizationId!)
 
     if (deleteError) throw deleteError
 
