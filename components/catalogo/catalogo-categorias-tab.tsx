@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
@@ -177,6 +177,7 @@ function CategoriaDialog({
   const [imagenUrl, setImagenUrl] = useState<string | null>(categoria?.imagen_url ?? null)
   const [activo, setActivo] = useState<boolean>(categoria?.activo ?? true)
   const [uploading, setUploading] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const handleUpload = async (file: File) => {
     setUploading(true)
@@ -246,7 +247,7 @@ function CategoriaDialog({
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
                   className="hidden"
-                  id="cat-img"
+                  ref={fileRef}
                   onChange={(e) => {
                     const f = e.target.files?.[0]
                     if (f) handleUpload(f)
@@ -254,7 +255,7 @@ function CategoriaDialog({
                   }}
                 />
                 <Button type="button" variant="outline" size="sm" disabled={uploading} className="gap-1.5"
-                  onClick={() => document.getElementById("cat-img")?.click()}>
+                  onClick={() => fileRef.current?.click()}>
                   {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                   {imagenUrl ? "Cambiar" : "Subir"}
                 </Button>

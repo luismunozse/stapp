@@ -56,7 +56,7 @@ export function CatalogoItemDialog({ item, categorias, open, onClose, onSaved, t
       setActivo(item.activo)
       setDestacado(item.destacado ?? false)
       setEtiquetas(item.etiquetas ?? [])
-      setImagenes(item.imagenes ?? [])
+      setImagenes((item.imagenes ?? []).filter((u) => u !== item.imagen_url))
     } else {
       setTipo("PRODUCTO")
       setNombre("")
