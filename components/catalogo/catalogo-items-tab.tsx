@@ -9,7 +9,7 @@ import { EmptyState } from "@/components/ui/empty-state"
 import {
   Plus, Search, Pencil, Trash2, ImageOff, Package, Wrench, GripVertical,
   CheckSquare, Square, X, Eye, EyeOff, Star, FolderInput, Loader2, Copy, MoreVertical,
-  Download, LayoutGrid, Rows3, AlertTriangle,
+  Download, LayoutGrid, Rows3, AlertTriangle, ChevronLeft, ChevronRight,
 } from "lucide-react"
 import { toast } from "sonner"
 import type { CatalogoItem, CatalogoCategoria } from "@/types/database"
@@ -22,9 +22,13 @@ import {
 import { useDragReorder } from "./use-drag-reorder"
 import { InlineEditCell } from "./inline-edit-cell"
 import { parseStock, parsePrecio } from "@/lib/catalogo/inline-edit"
+import { buildItemsQuery } from "@/lib/catalogo/items-query"
+import { useDebouncedValue } from "./use-debounced-value"
 
 type ItemConCategoria = CatalogoItem & { categoria?: { id: string; nombre: string } | null }
 type BulkAction = "activar" | "desactivar" | "destacar" | "quitar_destacado" | "borrar" | "cambiar_categoria"
+
+const PAGE_SIZE = 20
 
 export function CatalogoItemsTab() {
   const [items, setItems] = useState<ItemConCategoria[]>([])
@@ -43,18 +47,47 @@ export function CatalogoItemsTab() {
   const [importOpen, setImportOpen] = useState(false)
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const [onlyMissingImage, setOnlyMissingImage] = useState(false)
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
+  const [totalPages, setTotalPages] = useState(1)
+  const [tagSuggestions, setTagSuggestions] = useState<string[]>([])
+  const [sinImagenCount, setSinImagenCount] = useState(0)
+  const debouncedSearch = useDebouncedValue(search, 300)
+
+  const loadCategorias = async () => {
+    try {
+      const res = await fetch("/api/catalogo/categorias")
+      const data = await res.json()
+      setCategorias(data.categorias ?? [])
+    } catch { /* noop */ }
+  }
+
+  const loadMeta = async () => {
+    try {
+      const res = await fetch("/api/catalogo/items/meta")
+      const data = await res.json()
+      setTagSuggestions(data.tags ?? [])
+      setSinImagenCount(data.sinImagenCount ?? 0)
+    } catch { /* noop */ }
+  }
 
   const load = async () => {
     setLoading(true)
     try {
-      const [itemsRes, catsRes] = await Promise.all([
-        fetch("/api/catalogo/items"),
-        fetch("/api/catalogo/categorias"),
-      ])
-      const itemsData = await itemsRes.json()
-      const catsData = await catsRes.json()
-      setItems(itemsData.items ?? [])
-      setCategorias(catsData.categorias ?? [])
+      const qs = buildItemsQuery({
+        q: debouncedSearch,
+        tipo: filterTipo,
+        categoriaId: filterCategoria,
+        estado: filterEstado,
+        sinImagen: onlyMissingImage,
+        page,
+        limit: PAGE_SIZE,
+      })
+      const res = await fetch(`/api/catalogo/items${qs ? `?${qs}` : ""}`)
+      const data = await res.json()
+      setItems(data.items ?? [])
+      setTotal(data.total ?? 0)
+      setTotalPages(data.totalPages ?? 1)
     } catch {
       toast.error("Error cargando catálogo")
     } finally {
@@ -62,21 +95,19 @@ export function CatalogoItemsTab() {
     }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { loadCategorias(); loadMeta() }, [])
 
-  const filtered = items.filter((it) => {
-    if (filterTipo && it.tipo !== filterTipo) return false
-    if (filterCategoria && it.categoria_id !== filterCategoria) return false
-    if (filterEstado === "activo" && !it.activo) return false
-    if (filterEstado === "inactivo" && it.activo) return false
-    if (onlyMissingImage && !!it.imagen_url) return false
-    if (search && !it.nombre.toLowerCase().includes(search.toLowerCase())) return false
-    return true
-  })
+  useEffect(() => {
+    setPage(1)
+  }, [debouncedSearch, filterTipo, filterCategoria, filterEstado, onlyMissingImage])
 
-  const sinImagenCount = items.filter((i) => !i.imagen_url && i.activo).length
+  useEffect(() => {
+    load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch, filterTipo, filterCategoria, filterEstado, onlyMissingImage, page])
+
   const hasFilters = !!search || !!filterTipo || !!filterCategoria || !!filterEstado || onlyMissingImage
-  const canReorder = !hasFilters && selected.size === 0 && viewMode === "grid"
+  const canReorder = !hasFilters && selected.size === 0 && viewMode === "grid" && totalPages === 1
 
   const handleReorder = async (next: ItemConCategoria[]) => {
     setItems(next)
@@ -94,7 +125,7 @@ export function CatalogoItemsTab() {
     }
   }
 
-  const dnd = useDragReorder(filtered, handleReorder)
+  const dnd = useDragReorder(items, handleReorder)
 
   const [deleting, setDeleting] = useState(false)
 
@@ -105,7 +136,8 @@ export function CatalogoItemsTab() {
       const res = await fetch(`/api/catalogo/items/${deleteId}`, { method: "DELETE" })
       if (res.ok) {
         toast.success("Item eliminado")
-        setItems((prev) => prev.filter((i) => i.id !== deleteId))
+        await load()
+        await loadMeta()
       } else {
         toast.error("Error al eliminar")
       }
@@ -142,6 +174,7 @@ export function CatalogoItemsTab() {
       if (!res.ok) throw new Error(data.error || "Error al duplicar")
       toast.success("Item duplicado (inactivo)", { id: t })
       await load()
+      await loadMeta()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error al duplicar", { id: t })
     }
@@ -160,7 +193,7 @@ export function CatalogoItemsTab() {
   const selectAllVisible = () => {
     setSelected((prev) => {
       const next = new Set(prev)
-      const visibleIds = filtered.map((i) => i.id)
+      const visibleIds = items.map((i) => i.id)
       const allSelected = visibleIds.every((id) => next.has(id))
       if (allSelected) visibleIds.forEach((id) => next.delete(id))
       else visibleIds.forEach((id) => next.add(id))
@@ -191,6 +224,7 @@ export function CatalogoItemsTab() {
       toast.success(`${data.affected ?? ids.length} item${ids.length > 1 ? "s" : ""} procesado${ids.length > 1 ? "s" : ""}`)
       clearSelection()
       await load()
+      await loadMeta()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error en operación bulk")
     } finally {
@@ -199,11 +233,7 @@ export function CatalogoItemsTab() {
     }
   }
 
-  const allVisibleSelected = filtered.length > 0 && filtered.every((i) => selected.has(i.id))
-
-  const tagSuggestions = Array.from(
-    new Set(items.flatMap((i) => i.etiquetas ?? [])),
-  ).sort((a, b) => a.localeCompare(b))
+  const allVisibleSelected = items.length > 0 && items.every((i) => selected.has(i.id))
 
   return (
     <div className="space-y-4">
@@ -277,14 +307,14 @@ export function CatalogoItemsTab() {
         </div>
       )}
 
-      {filtered.length > 0 && (
+      {items.length > 0 && (
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <button
             onClick={selectAllVisible}
             className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors"
           >
             {allVisibleSelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
-            {allVisibleSelected ? "Deseleccionar todo" : `Seleccionar ${filtered.length} visible${filtered.length > 1 ? "s" : ""}`}
+            {allVisibleSelected ? "Deseleccionar todo" : `Seleccionar ${items.length} visible${items.length > 1 ? "s" : ""}`}
           </button>
           <div className="flex items-center gap-3">
             {onlyMissingImage && (
@@ -296,7 +326,7 @@ export function CatalogoItemsTab() {
                 Filtro &ldquo;sin foto&rdquo;
               </button>
             )}
-            <span>{filtered.length} de {items.length} items</span>
+            <span>{total} items</span>
             <div className="inline-flex rounded-md border bg-background p-0.5">
               <button
                 onClick={() => setViewMode("grid")}
@@ -335,12 +365,12 @@ export function CatalogoItemsTab() {
             </Card>
           ))}
         </div>
-      ) : filtered.length === 0 ? (
+      ) : items.length === 0 ? (
         <EmptyState
           icon={Package}
-          title={items.length === 0 ? "Sin items todavía" : "Sin resultados"}
-          description={items.length === 0 ? "Creá tu primer producto o servicio." : "Probá ajustar los filtros."}
-          action={items.length === 0 ? { label: "Crear item", onClick: () => setCreating(true) } : undefined}
+          title={hasFilters ? "Sin resultados" : "Sin items todavía"}
+          description={hasFilters ? "Probá ajustar los filtros" : "Creá tu primer producto o servicio."}
+          action={hasFilters ? undefined : { label: "Crear item", onClick: () => setCreating(true) }}
         />
       ) : viewMode === "list" ? (
         <div className="rounded-md border overflow-hidden">
@@ -358,7 +388,7 @@ export function CatalogoItemsTab() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((item) => {
+              {items.map((item) => {
                 const isSelected = selected.has(item.id)
                 return (
                   <tr
@@ -473,7 +503,7 @@ export function CatalogoItemsTab() {
         </div>
       ) : (
         <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((item, idx) => {
+          {items.map((item, idx) => {
             const isSelected = selected.has(item.id)
             return (
               <Card
@@ -579,6 +609,24 @@ export function CatalogoItemsTab() {
         </div>
       )}
 
+      {!loading && total > 0 && (
+        <div className="flex items-center justify-between pt-2 text-sm">
+          <span className="text-muted-foreground">
+            {total} item{total === 1 ? "" : "s"} · página {page} de {totalPages}
+          </span>
+          <div className="flex items-center gap-1">
+            <Button variant="outline" size="sm" className="gap-1" disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}>
+              <ChevronLeft className="h-4 w-4" /> Anterior
+            </Button>
+            <Button variant="outline" size="sm" className="gap-1" disabled={page >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+              Siguiente <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
       {selected.size > 0 && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 max-w-[calc(100vw-2rem)]">
           <div className="flex items-center gap-2 rounded-full border bg-background shadow-2xl pl-4 pr-2 py-2">
@@ -667,7 +715,7 @@ export function CatalogoItemsTab() {
           categorias={categorias}
           open={creating || !!editing}
           onClose={() => { setCreating(false); setEditing(null) }}
-          onSaved={() => { load(); setCreating(false); setEditing(null) }}
+          onSaved={() => { load(); loadMeta(); setCreating(false); setEditing(null) }}
           tagSuggestions={tagSuggestions}
         />
       )}
