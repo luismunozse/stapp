@@ -34,7 +34,7 @@ export async function GET(req: Request) {
   const estado = url.searchParams.get("estado")
   const sinImagen = url.searchParams.get("sin_imagen") === "1"
   const rawQ = url.searchParams.get("q")?.trim() ?? ""
-  const q = rawQ.replace(/[,()%_*\\]/g, " ").replace(/\s+/g, " ").trim()
+  const q = rawQ.replace(/[,()%_*\\:]/g, " ").replace(/\s+/g, " ").trim()
   const { page, limit, offset } = parsePagination(url.searchParams)
 
   let varItemIds: string[] = []
