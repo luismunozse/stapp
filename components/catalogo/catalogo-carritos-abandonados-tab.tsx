@@ -13,6 +13,7 @@ import { toast } from "sonner"
 import { resolvePlantilla } from "@/lib/whatsapp/plantillas-catalog"
 import { useCurrency } from "@/contexts/currency-context"
 import { formatPhoneForWhatsApp } from "@/lib/notifications/whatsapp-templates"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 
 interface CarritoItem {
   itemId: string
@@ -66,6 +67,7 @@ export function CatalogoCarritosAbandonadosTab() {
   const [loading, setLoading] = useState(true)
   const [includeRecovered, setIncludeRecovered] = useState(false)
   const [actingId, setActingId] = useState<number | null>(null)
+  const [discardId, setDiscardId] = useState<number | null>(null)
   const [plantillas, setPlantillas] = useState<Record<string, string> | null>(null)
 
   useEffect(() => {
@@ -124,11 +126,11 @@ export function CatalogoCarritosAbandonadosTab() {
     }
   }
 
-  const handleDiscard = async (id: number) => {
-    if (!confirm("¿Descartar este carrito? No se podrá recuperar.")) return
-    setActingId(id)
+  const handleDiscard = async () => {
+    if (discardId == null || actingId != null) return
+    setActingId(discardId)
     try {
-      const res = await fetch(`/api/catalogo/carritos-abandonados/${id}`, {
+      const res = await fetch(`/api/catalogo/carritos-abandonados/${discardId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "discard" }),
@@ -137,12 +139,13 @@ export function CatalogoCarritosAbandonadosTab() {
         const data = await res.json().catch(() => ({}))
         throw new Error(data.error || "Error")
       }
-      setCarritos((prev) => prev.filter((c) => c.id !== id))
+      setCarritos((prev) => prev.filter((c) => c.id !== discardId))
       toast.success("Descartado")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error")
     } finally {
       setActingId(null)
+      setDiscardId(null)
     }
   }
 
@@ -328,7 +331,7 @@ export function CatalogoCarritosAbandonadosTab() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleDiscard(c.id)}
+                          onClick={() => setDiscardId(c.id)}
                           disabled={actingId === c.id}
                           className="gap-1.5 text-destructive ml-auto"
                         >
@@ -344,6 +347,16 @@ export function CatalogoCarritosAbandonadosTab() {
           )}
         </CardContent>
       </Card>
+      <ConfirmDialog
+        open={discardId != null}
+        onOpenChange={(open) => !open && setDiscardId(null)}
+        title="Descartar carrito"
+        description="Se pierde este lead y no se podrá recuperar."
+        confirmText="Descartar"
+        variant="danger"
+        loading={actingId != null && actingId === discardId}
+        onConfirm={handleDiscard}
+      />
     </div>
   )
 }

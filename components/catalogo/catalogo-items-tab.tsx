@@ -20,6 +20,8 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
 } from "@/components/ui/dropdown-menu"
 import { useDragReorder } from "./use-drag-reorder"
+import { InlineEditCell } from "./inline-edit-cell"
+import { parseStock, parsePrecio } from "@/lib/catalogo/inline-edit"
 
 type ItemConCategoria = CatalogoItem & { categoria?: { id: string; nombre: string } | null }
 type BulkAction = "activar" | "desactivar" | "destacar" | "quitar_destacado" | "borrar" | "cambiar_categoria"
@@ -94,16 +96,42 @@ export function CatalogoItemsTab() {
 
   const dnd = useDragReorder(filtered, handleReorder)
 
+  const [deleting, setDeleting] = useState(false)
+
   const handleDelete = async () => {
-    if (!deleteId) return
-    const res = await fetch(`/api/catalogo/items/${deleteId}`, { method: "DELETE" })
-    if (res.ok) {
-      toast.success("Item eliminado")
-      setItems((prev) => prev.filter((i) => i.id !== deleteId))
-    } else {
-      toast.error("Error al eliminar")
+    if (!deleteId || deleting) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/catalogo/items/${deleteId}`, { method: "DELETE" })
+      if (res.ok) {
+        toast.success("Item eliminado")
+        setItems((prev) => prev.filter((i) => i.id !== deleteId))
+      } else {
+        toast.error("Error al eliminar")
+      }
+    } finally {
+      setDeleting(false)
+      setDeleteId(null)
     }
-    setDeleteId(null)
+  }
+
+  const saveField = async (id: string, field: "stock" | "precio", value: number | null) => {
+    const prev = items
+    setItems((cur) => cur.map((i) => (i.id === id ? { ...i, [field]: value } : i)))
+    try {
+      const res = await fetch(`/api/catalogo/items/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [field]: value }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || "Error al guardar")
+      }
+    } catch (err) {
+      setItems(prev)
+      toast.error(err instanceof Error ? err.message : "Error al guardar")
+    }
   }
 
   const handleDuplicate = async (id: string) => {
@@ -261,7 +289,7 @@ export function CatalogoItemsTab() {
                 className="inline-flex items-center gap-1 text-orange-700 hover:text-orange-900 dark:text-orange-300"
               >
                 <X className="h-3 w-3" />
-                Filtro "sin foto"
+                Filtro &ldquo;sin foto&rdquo;
               </button>
             )}
             <span>{filtered.length} de {items.length} items</span>
@@ -370,19 +398,37 @@ export function CatalogoItemsTab() {
                     <td className="px-2 py-1.5 hidden md:table-cell text-muted-foreground truncate max-w-[140px]">
                       {item.categoria?.nombre ?? "—"}
                     </td>
-                    <td className="px-2 py-1.5 text-right tabular-nums">
-                      {item.precio == null
-                        ? <span className="text-muted-foreground italic text-xs">Consultar</span>
-                        : `$${Number(item.precio).toLocaleString("es-AR")}`}
+                    <td className="px-2 py-1.5 text-right">
+                      <InlineEditCell
+                        value={item.precio == null ? null : Number(item.precio)}
+                        parse={parsePrecio}
+                        onSave={(v) => saveField(item.id, "precio", v)}
+                        format={(v) => (v == null ? "" : `$${v.toLocaleString("es-AR")}`)}
+                        placeholder={<span className="text-muted-foreground italic text-xs">Consultar</span>}
+                        ariaLabel={`Editar precio de ${item.nombre}`}
+                      />
                     </td>
-                    <td className="px-2 py-1.5 hidden sm:table-cell text-right tabular-nums">
-                      {item.tipo === "SERVICIO"
-                        ? <span className="text-muted-foreground text-xs">—</span>
-                        : item.stock == null
-                          ? <span className="text-muted-foreground text-xs">—</span>
-                          : item.stock === 0
-                            ? <span className="text-destructive">0</span>
-                            : item.stock}
+                    <td className="px-2 py-1.5 hidden sm:table-cell text-right">
+                      {item.tipo === "SERVICIO" ? (
+                        <span className="text-muted-foreground text-xs">—</span>
+                      ) : (
+                        <InlineEditCell
+                          value={item.stock == null ? null : Number(item.stock)}
+                          parse={parseStock}
+                          onSave={(v) => saveField(item.id, "stock", v)}
+                          format={(v) =>
+                            v == null ? (
+                              "—"
+                            ) : v === 0 ? (
+                              <span className="text-destructive">0</span>
+                            ) : (
+                              v
+                            )
+                          }
+                          placeholder={<span className="text-muted-foreground text-xs">—</span>}
+                          ariaLabel={`Editar stock de ${item.nombre}`}
+                        />
+                      )}
                     </td>
                     <td className="px-2 py-1.5 hidden sm:table-cell text-center">
                       {item.activo ? (
@@ -635,6 +681,7 @@ export function CatalogoItemsTab() {
         description="Esta acción no se puede deshacer."
         confirmText="Eliminar"
         variant="danger"
+        loading={deleting}
         onConfirm={handleDelete}
       />
 
