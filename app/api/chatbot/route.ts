@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
-import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai"
+import Anthropic from "@anthropic-ai/sdk"
 import { headers } from "next/headers"
 import { getPremiumPrices } from "@/lib/pricing"
 import { extractLeadData, shouldExtract, type ChatTurn } from "@/lib/chatbot/extract-lead-data"
@@ -13,10 +13,12 @@ const chatRequestSchema = z.object({
   conversacionId: z.string().nullable().optional(),
 })
 
-if (!process.env.GOOGLE_GEMINI_API_KEY) {
-  console.error("[Chatbot] GOOGLE_GEMINI_API_KEY no está configurada en .env")
+if (!process.env.ANTHROPIC_API_KEY) {
+  console.error("[Chatbot] ANTHROPIC_API_KEY no está configurada en .env")
 }
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API_KEY || "")
+const anthropic = new Anthropic()
+
+const CHATBOT_MODEL = "claude-haiku-4-5"
 
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>()
 
@@ -101,20 +103,7 @@ export async function POST(request: Request) {
       .map((m) => `${m.tipo === "USER" ? "Usuario" : "Santi"}: ${m.contenido}`)
       .join("\n")
 
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash",
-      safetySettings: [
-        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-      ],
-    })
-
-    const fullPrompt = `${contextPrompt}
-
-${conversationHistory ? `Historial de la conversación:\n${conversationHistory}\n` : ""}
-Usuario: ${message}
+    const systemPrompt = `${contextPrompt}
 
 Instrucciones:
 - Respondé como Santi de forma natural, útil y concisa (máximo 3 párrafos)
@@ -123,31 +112,38 @@ Instrucciones:
 - Usá español argentino informal pero profesional (vos, "querés", "tenés", etc.)
 - Si ya tenés suficiente información del usuario, agradecer y confirmar que alguien lo contactará pronto`
 
+    const userContent = `${conversationHistory ? `Historial de la conversación:\n${conversationHistory}\n\n` : ""}Usuario: ${message}`
+
     const runExtract = shouldExtract(message, orderedHistory.length > 1)
 
-    console.log("[Chatbot] Sending prompt to Gemini...", { runExtract })
+    console.log("[Chatbot] Sending prompt to Claude...", { runExtract })
 
     const [mainResult, extractResult] = await Promise.allSettled([
-      model.generateContent(fullPrompt),
+      anthropic.messages.create({
+        model: CHATBOT_MODEL,
+        max_tokens: 1024,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userContent }],
+      }),
       runExtract ? extractLeadData(orderedHistory) : Promise.resolve(null),
     ])
 
     let assistantMessage: string
     if (mainResult.status === "fulfilled") {
       try {
-        const response = mainResult.value.response
-        if (!response?.candidates?.[0]?.content?.parts?.[0]?.text) {
-          console.error("[Chatbot] Gemini response blocked or empty")
-          throw new Error("Respuesta bloqueada o vacía")
+        const textBlock = mainResult.value.content.find((b) => b.type === "text")
+        if (!textBlock || textBlock.type !== "text" || !textBlock.text) {
+          console.error("[Chatbot] Claude response empty")
+          throw new Error("Respuesta vacía")
         }
-        assistantMessage = response.text()
+        assistantMessage = textBlock.text
       } catch (err) {
         console.error("[Chatbot] response parse error:", err)
         assistantMessage = fallbackMessage(null)
       }
     } else {
       const reason = mainResult.reason as { status?: number; message?: string } | undefined
-      console.error("[Chatbot] Gemini API error:", reason?.message || reason)
+      console.error("[Chatbot] Claude API error:", reason?.message || reason)
       assistantMessage = fallbackMessage(reason ?? null)
     }
 
@@ -158,7 +154,7 @@ Instrucciones:
       conversacion_id: conversacion.id,
       tipo: "ASSISTANT",
       contenido: assistantMessage,
-      modelo: "gemini-2.0-flash",
+      modelo: CHATBOT_MODEL,
       tiempo_respuesta_ms: timeElapsed,
       intencion_detectada: intencion.tipo,
       confianza: intencion.confianza,
