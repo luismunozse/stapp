@@ -1,14 +1,173 @@
 import { auth } from "@/lib/auth"
 import { redirect } from "next/navigation"
 import { ConfiguracionForm } from "@/components/configuracion/configuracion-form"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { CookieSettings } from "@/components/cookie-settings"
 import Link from "next/link"
-import { ClipboardCheck, ChevronRight, CreditCard, FileSpreadsheet, Smartphone, Monitor, MessageCircle, Shield, Tag, Repeat, Warehouse, Webhook, Printer, MessageSquare, KeyRound, Store } from "lucide-react"
+import {
+  ClipboardCheck,
+  ChevronRight,
+  CreditCard,
+  FileSpreadsheet,
+  Smartphone,
+  Monitor,
+  MessageCircle,
+  Tag,
+  Repeat,
+  Warehouse,
+  Printer,
+  MessageSquare,
+  Store,
+  type LucideIcon,
+} from "lucide-react"
 import { canEditConfiguration } from "@/lib/auth-utils"
 import { SecuritySettings } from "@/components/configuracion/security-settings"
 import { supabaseAdmin } from "@/lib/supabase"
 import { PageShell } from "@/components/ui/page-shell"
+
+type SettingCard = {
+  href: string
+  icon: LucideIcon
+  label: string
+  labelShort?: string
+  desc: string
+  descShort?: string
+}
+
+type SettingSection = {
+  title: string
+  /** Full Tailwind classes (kept literal so the JIT compiler can detect them). */
+  accent: string
+  cards: SettingCard[]
+}
+
+// Agrupado por modelo mental del dueño del taller. Webhooks y API Keys quedan
+// fuera (features de integración para devs, sin clientes activos); sus rutas
+// siguen vivas en /configuracion/webhooks y /configuracion/api-keys.
+const SECTIONS: SettingSection[] = [
+  {
+    title: "Operación",
+    accent: "bg-sky-500/10 text-sky-600 dark:text-sky-400",
+    cards: [
+      {
+        href: "/configuracion/checklist",
+        icon: ClipboardCheck,
+        label: "Checklist",
+        desc: "Items del checklist de ingreso",
+        descShort: "Checklist de ingreso",
+      },
+      {
+        href: "/configuracion/tipos-dispositivo",
+        icon: Smartphone,
+        label: "Tipos de Dispositivo",
+        labelShort: "Dispositivos",
+        desc: "Gestioná los tipos de dispositivo",
+        descShort: "Tipos disponibles",
+      },
+      {
+        href: "/configuracion/label-templates",
+        icon: Printer,
+        label: "Etiquetas térmicas",
+        labelShort: "Etiquetas",
+        desc: "Plantillas ZPL/EPL para Zebra",
+        descShort: "ZPL / EPL",
+      },
+      {
+        href: "/configuracion/kiosco",
+        icon: Monitor,
+        label: "Modo Kiosco",
+        labelShort: "Kiosco",
+        desc: "Pantallas de estado para tu local",
+        descShort: "Pantallas",
+      },
+    ],
+  },
+  {
+    title: "Finanzas",
+    accent: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+    cards: [
+      {
+        href: "/configuracion/billing",
+        icon: CreditCard,
+        label: "Facturación y Plan",
+        labelShort: "Facturación",
+        desc: "Gestioná tu suscripción y pagos",
+        descShort: "Plan y pagos",
+      },
+      {
+        href: "/configuracion/categorias-gasto",
+        icon: Tag,
+        label: "Categorías de Gasto",
+        labelShort: "Categorías",
+        desc: "Clasificá tus gastos para el cálculo de ganancia",
+        descShort: "Clasificación de gastos",
+      },
+      {
+        href: "/configuracion/gastos-recurrentes",
+        icon: Repeat,
+        label: "Gastos Recurrentes",
+        labelShort: "Recurrentes",
+        desc: "Alquiler, sueldos y otros gastos fijos",
+        descShort: "Alquiler, sueldos, etc",
+      },
+    ],
+  },
+  {
+    title: "Comunicación",
+    accent: "bg-green-500/10 text-green-600 dark:text-green-400",
+    cards: [
+      {
+        href: "/configuracion/whatsapp",
+        icon: MessageCircle,
+        label: "WhatsApp Business",
+        labelShort: "WhatsApp",
+        desc: "Notificaciones vía WhatsApp API",
+        descShort: "API WhatsApp",
+      },
+      {
+        href: "/configuracion/plantillas-whatsapp",
+        icon: MessageSquare,
+        label: "Plantillas WhatsApp",
+        labelShort: "Plantillas",
+        desc: "Personalizá los mensajes por tipo",
+        descShort: "Mensajes predeterminados",
+      },
+    ],
+  },
+  {
+    title: "Sucursales y stock",
+    accent: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
+    cards: [
+      {
+        href: "/configuracion/sucursales",
+        icon: Store,
+        label: "Sucursales",
+        desc: "Locales físicos: órdenes, ventas y caja por sucursal",
+        descShort: "Locales / personal",
+      },
+      {
+        href: "/configuracion/depositos",
+        icon: Warehouse,
+        label: "Depósitos",
+        desc: "Sucursales y transferencias de stock",
+        descShort: "Sucursales / stock",
+      },
+    ],
+  },
+  {
+    title: "Datos",
+    accent: "bg-slate-500/10 text-slate-600 dark:text-slate-400",
+    cards: [
+      {
+        href: "/configuracion/importaciones",
+        icon: FileSpreadsheet,
+        label: "Importaciones",
+        desc: "Historial de importaciones CSV/Excel",
+        descShort: "Historial CSV",
+      },
+    ],
+  },
+]
 
 export default async function ConfiguracionPage() {
   const session = await auth()
@@ -33,269 +192,53 @@ export default async function ConfiguracionPage() {
   const totpEnabled = userData?.totp_enabled || false
 
   return (
-    <PageShell title="Configuracion" description="Personaliza la apariencia de tu aplicacion">
-
-      {/* Links a configuraciones adicionales */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-        <Link href="/configuracion/checklist">
-          <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium">
-                Checklist
-              </CardTitle>
-              <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent className="p-3 sm:p-6 pt-0">
-              <CardDescription className="text-[10px] sm:text-sm flex items-center justify-between">
-                <span className="hidden sm:inline">Items del checklist de ingreso</span>
-                <span className="sm:hidden">Checklist de ingreso</span>
-                <ChevronRight className="h-4 w-4 shrink-0" />
-              </CardDescription>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/configuracion/billing">
-          <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium">
-                <span className="hidden sm:inline">Facturacion y Plan</span>
-                <span className="sm:hidden">Facturacion</span>
-              </CardTitle>
-              <CreditCard className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent className="p-3 sm:p-6 pt-0">
-              <CardDescription className="text-[10px] sm:text-sm flex items-center justify-between">
-                <span className="hidden sm:inline">Gestiona tu suscripcion y pagos</span>
-                <span className="sm:hidden">Plan y pagos</span>
-                <ChevronRight className="h-4 w-4 shrink-0" />
-              </CardDescription>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/configuracion/importaciones">
-          <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium">
-                Importaciones
-              </CardTitle>
-              <FileSpreadsheet className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent className="p-3 sm:p-6 pt-0">
-              <CardDescription className="text-[10px] sm:text-sm flex items-center justify-between">
-                <span className="hidden sm:inline">Historial de importaciones CSV/Excel</span>
-                <span className="sm:hidden">Historial CSV</span>
-                <ChevronRight className="h-4 w-4 shrink-0" />
-              </CardDescription>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/configuracion/tipos-dispositivo">
-          <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium">
-                <span className="hidden sm:inline">Tipos de Dispositivo</span>
-                <span className="sm:hidden">Dispositivos</span>
-              </CardTitle>
-              <Smartphone className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent className="p-3 sm:p-6 pt-0">
-              <CardDescription className="text-[10px] sm:text-sm flex items-center justify-between">
-                <span className="hidden sm:inline">Gestiona los tipos de dispositivo</span>
-                <span className="sm:hidden">Tipos disponibles</span>
-                <ChevronRight className="h-4 w-4 shrink-0" />
-              </CardDescription>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/configuracion/whatsapp">
-          <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium">
-                <span className="hidden sm:inline">WhatsApp Business</span>
-                <span className="sm:hidden">WhatsApp</span>
-              </CardTitle>
-              <MessageCircle className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent className="p-3 sm:p-6 pt-0">
-              <CardDescription className="text-[10px] sm:text-sm flex items-center justify-between">
-                <span className="hidden sm:inline">Notificaciones via WhatsApp API</span>
-                <span className="sm:hidden">API WhatsApp</span>
-                <ChevronRight className="h-4 w-4 shrink-0" />
-              </CardDescription>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/configuracion/plantillas-whatsapp">
-          <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium">
-                <span className="hidden sm:inline">Plantillas WhatsApp</span>
-                <span className="sm:hidden">Plantillas</span>
-              </CardTitle>
-              <MessageSquare className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent className="p-3 sm:p-6 pt-0">
-              <CardDescription className="text-[10px] sm:text-sm flex items-center justify-between">
-                <span className="hidden sm:inline">Personaliza los mensajes por tipo</span>
-                <span className="sm:hidden">Mensajes predeterminados</span>
-                <ChevronRight className="h-4 w-4 shrink-0" />
-              </CardDescription>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/configuracion/categorias-gasto">
-          <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium">
-                <span className="hidden sm:inline">Categorías de Gasto</span>
-                <span className="sm:hidden">Categorías</span>
-              </CardTitle>
-              <Tag className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent className="p-3 sm:p-6 pt-0">
-              <CardDescription className="text-[10px] sm:text-sm flex items-center justify-between">
-                <span className="hidden sm:inline">Clasificá tus gastos para el cálculo de ganancia</span>
-                <span className="sm:hidden">Clasificación de gastos</span>
-                <ChevronRight className="h-4 w-4 shrink-0" />
-              </CardDescription>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/configuracion/gastos-recurrentes">
-          <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium">
-                <span className="hidden sm:inline">Gastos Recurrentes</span>
-                <span className="sm:hidden">Recurrentes</span>
-              </CardTitle>
-              <Repeat className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent className="p-3 sm:p-6 pt-0">
-              <CardDescription className="text-[10px] sm:text-sm flex items-center justify-between">
-                <span className="hidden sm:inline">Alquiler, sueldos y otros gastos fijos</span>
-                <span className="sm:hidden">Alquiler, sueldos, etc</span>
-                <ChevronRight className="h-4 w-4 shrink-0" />
-              </CardDescription>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/configuracion/sucursales">
-          <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium">
-                Sucursales
-              </CardTitle>
-              <Store className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent className="p-3 sm:p-6 pt-0">
-              <CardDescription className="text-[10px] sm:text-sm flex items-center justify-between">
-                <span className="hidden sm:inline">Locales físicos: órdenes, ventas y caja por sucursal</span>
-                <span className="sm:hidden">Locales / personal</span>
-                <ChevronRight className="h-4 w-4 shrink-0" />
-              </CardDescription>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/configuracion/depositos">
-          <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium">
-                Depósitos
-              </CardTitle>
-              <Warehouse className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent className="p-3 sm:p-6 pt-0">
-              <CardDescription className="text-[10px] sm:text-sm flex items-center justify-between">
-                <span className="hidden sm:inline">Sucursales y transferencias de stock</span>
-                <span className="sm:hidden">Sucursales / stock</span>
-                <ChevronRight className="h-4 w-4 shrink-0" />
-              </CardDescription>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/configuracion/webhooks">
-          <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium">
-                Webhooks
-              </CardTitle>
-              <Webhook className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent className="p-3 sm:p-6 pt-0">
-              <CardDescription className="text-[10px] sm:text-sm flex items-center justify-between">
-                <span className="hidden sm:inline">Integraciones outbound por eventos</span>
-                <span className="sm:hidden">Integraciones</span>
-                <ChevronRight className="h-4 w-4 shrink-0" />
-              </CardDescription>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/configuracion/api-keys">
-          <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium">
-                API Keys
-              </CardTitle>
-              <KeyRound className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent className="p-3 sm:p-6 pt-0">
-              <CardDescription className="text-[10px] sm:text-sm flex items-center justify-between">
-                <span className="hidden sm:inline">Credenciales de acceso programático</span>
-                <span className="sm:hidden">Acceso API</span>
-                <ChevronRight className="h-4 w-4 shrink-0" />
-              </CardDescription>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/configuracion/kiosco">
-          <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium">
-                <span className="hidden sm:inline">Modo Kiosco</span>
-                <span className="sm:hidden">Kiosco</span>
-              </CardTitle>
-              <Monitor className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent className="p-3 sm:p-6 pt-0">
-              <CardDescription className="text-[10px] sm:text-sm flex items-center justify-between">
-                <span className="hidden sm:inline">Pantallas de estado para tu local</span>
-                <span className="sm:hidden">Pantallas</span>
-                <ChevronRight className="h-4 w-4 shrink-0" />
-              </CardDescription>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/configuracion/label-templates">
-          <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-6 pb-1 sm:pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium">
-                <span className="hidden sm:inline">Etiquetas térmicas</span>
-                <span className="sm:hidden">Etiquetas</span>
-              </CardTitle>
-              <Printer className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent className="p-3 sm:p-6 pt-0">
-              <CardDescription className="text-[10px] sm:text-sm flex items-center justify-between">
-                <span className="hidden sm:inline">Plantillas ZPL/EPL para Zebra</span>
-                <span className="sm:hidden">ZPL / EPL</span>
-                <ChevronRight className="h-4 w-4 shrink-0" />
-              </CardDescription>
-            </CardContent>
-          </Card>
-        </Link>
+    <PageShell
+      title="Configuración"
+      description="Ajustes de tu taller: operación, finanzas, comunicación y sucursales"
+    >
+      <div className="space-y-8">
+        {SECTIONS.map((section) => (
+          <section key={section.title} className="space-y-3">
+            <h2 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              {section.title}
+            </h2>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+              {section.cards.map((card) => {
+                const Icon = card.icon
+                return (
+                  <Link key={card.href} href={card.href} className="group block">
+                    <Card className="h-full transition-[transform,border-color,box-shadow] duration-200 ease-out hover:border-foreground/20 hover:shadow-sm active:scale-[0.98]">
+                      <CardContent className="flex items-start gap-3 p-3 sm:p-4">
+                        <span
+                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${section.accent}`}
+                        >
+                          <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center justify-between gap-1">
+                            <span className="truncate text-xs font-medium sm:text-sm">
+                              <span className="hidden sm:inline">{card.label}</span>
+                              <span className="sm:hidden">
+                                {card.labelShort ?? card.label}
+                              </span>
+                            </span>
+                            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 ease-out group-hover:translate-x-0.5" />
+                          </span>
+                          <span className="mt-0.5 block text-[10px] leading-snug text-muted-foreground sm:text-xs">
+                            <span className="hidden sm:inline">{card.desc}</span>
+                            <span className="sm:hidden">
+                              {card.descShort ?? card.desc}
+                            </span>
+                          </span>
+                        </span>
+                      </CardContent>
+                    </Card>
+                  </Link>
+                )
+              })}
+            </div>
+          </section>
+        ))}
       </div>
 
       {/* Seguridad - 2FA */}

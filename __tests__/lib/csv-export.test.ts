@@ -10,7 +10,10 @@ const COLUMNS: CSVColumn<any>[] = [
 
 async function loadWorkbook(buf: Buffer): Promise<ExcelJS.Worksheet> {
   const wb = new ExcelJS.Workbook()
-  await wb.xlsx.load(buf)
+  // ExcelJS declares its own module-local `Buffer extends ArrayBuffer`, which no
+  // longer matches @types/node's generic `Buffer<ArrayBufferLike>`. Cast to the
+  // exact param type that `.load` expects to bridge the two definitions.
+  await wb.xlsx.load(buf as unknown as Parameters<typeof wb.xlsx.load>[0])
   return wb.worksheets[0]
 }
 
