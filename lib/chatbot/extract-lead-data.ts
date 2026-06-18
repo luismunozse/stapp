@@ -1,6 +1,8 @@
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai"
+import Anthropic from "@anthropic-ai/sdk"
 
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API_KEY || "")
+const anthropic = new Anthropic()
+
+const EXTRACT_MODEL = "claude-haiku-4-5"
 
 export interface ExtractedLeadData {
   nombre: string | null
@@ -20,21 +22,27 @@ export interface ChatTurn {
   contenido: string
 }
 
+// JSON Schema para structured outputs de Claude. Nulos via union de tipos.
+// Todas las propiedades en `required` (strict): los datos ausentes se devuelven null.
 const extractionSchema = {
-  type: SchemaType.OBJECT,
+  type: "object",
+  additionalProperties: false,
   properties: {
-    nombre: { type: SchemaType.STRING, nullable: true, description: "Nombre propio del usuario, capitalizado. Null si no es claro." },
-    email: { type: SchemaType.STRING, nullable: true, description: "Email válido o null." },
-    telefono: { type: SchemaType.STRING, nullable: true, description: "Solo dígitos, 8-15 chars, formato AR si aplica. Null si no es teléfono." },
-    empresa: { type: SchemaType.STRING, nullable: true, description: "Nombre del taller/service/local que el usuario mencionó." },
-    cantidad_tecnicos: { type: SchemaType.NUMBER, nullable: true, description: "Cantidad de técnicos del taller, entero." },
-    ciudad: { type: SchemaType.STRING, nullable: true },
-    sistema_actual: { type: SchemaType.STRING, nullable: true, description: "Cómo gestiona hoy: excel, papel, software X, ninguno." },
-    urgencia: { type: SchemaType.STRING, nullable: true, enum: ["alta", "media", "baja"], format: "enum" },
-    score: { type: SchemaType.NUMBER, description: "0-100, qué tan calificado está el lead." },
-    resumen: { type: SchemaType.STRING, nullable: true, description: "Contexto útil para comercial, máx 200 chars." },
+    nombre: { type: ["string", "null"], description: "Nombre propio del usuario, capitalizado. Null si no es claro." },
+    email: { type: ["string", "null"], description: "Email válido o null." },
+    telefono: { type: ["string", "null"], description: "Solo dígitos, 8-15 chars. Null si no es teléfono." },
+    empresa: { type: ["string", "null"], description: "Nombre del taller/service/local que el usuario mencionó." },
+    cantidad_tecnicos: { type: ["number", "null"], description: "Cantidad de técnicos del taller, entero." },
+    ciudad: { type: ["string", "null"] },
+    sistema_actual: { type: ["string", "null"], description: "Cómo gestiona hoy: excel, papel, software X, ninguno." },
+    urgencia: { type: ["string", "null"], enum: ["alta", "media", "baja", null] },
+    score: { type: "number", description: "0-100, qué tan calificado está el lead." },
+    resumen: { type: ["string", "null"], description: "Contexto útil para comercial, máx 200 chars." },
   },
-  required: ["score"],
+  required: [
+    "nombre", "email", "telefono", "empresa", "cantidad_tecnicos",
+    "ciudad", "sistema_actual", "urgencia", "score", "resumen",
+  ],
 } as const
 
 const SHORT_REPLY = /^(hola|buenas|buen[oa]s? d[ií]as?|buen[oa]s? tardes?|buen[oa]s? noches?|gracias|ok|okay|si|s[ií]|no|listo|dale|perfecto|genial|chau|adios|adi[oó]s)\.?\!?$/i
@@ -46,25 +54,7 @@ export function shouldExtract(message: string, hasHistory: boolean): boolean {
   return true
 }
 
-export async function extractLeadData(messages: ChatTurn[]): Promise<ExtractedLeadData | null> {
-  if (!process.env.GOOGLE_GEMINI_API_KEY) return null
-  if (messages.length === 0) return null
-
-  const conversation = messages
-    .map((m) => `${m.tipo === "USER" ? "Usuario" : "Santi"}: ${m.contenido}`)
-    .join("\n")
-
-  const model = genAI.getGenerativeModel({
-    model: "gemini-2.0-flash",
-    generationConfig: {
-      responseMimeType: "application/json",
-      responseSchema: extractionSchema as never,
-      temperature: 0,
-      maxOutputTokens: 500,
-    },
-  })
-
-  const prompt = `Sos un extractor de datos. Analizá la conversación entre un usuario y Santi (asistente comercial de STApp, software de gestión para talleres de reparación). Extraé SOLO los datos que el usuario haya mencionado EXPLÍCITAMENTE.
+const EXTRACTION_SYSTEM = `Sos un extractor de datos. Analizá la conversación entre un usuario y Santi (asistente comercial de STApp, software de gestión para talleres de reparación). Extraé SOLO los datos que el usuario haya mencionado EXPLÍCITAMENTE.
 
 REGLAS DE EXTRACCIÓN:
 - nombre: solo si user dijo "me llamo X", "soy X" (X es nombre propio, no profesión como "técnico/electricista/dueño") o respondió con un nombre cuando Santi se lo pidió. Capitalizá correctamente.
@@ -84,15 +74,29 @@ SCORE (0-100), guía:
 
 resumen: 1-2 frases de contexto para comercial. Máximo 200 caracteres. Null si no hay nada útil.
 
-NUNCA INVENTES DATOS. Si no aparece explícito, devolvé null. Score siempre numérico.
+NUNCA INVENTES DATOS. Si no aparece explícito, devolvé null. Score siempre numérico.`
 
-Conversación:
-${conversation}`
+export async function extractLeadData(messages: ChatTurn[]): Promise<ExtractedLeadData | null> {
+  if (!process.env.ANTHROPIC_API_KEY) return null
+  if (messages.length === 0) return null
+
+  const conversation = messages
+    .map((m) => `${m.tipo === "USER" ? "Usuario" : "Santi"}: ${m.contenido}`)
+    .join("\n")
 
   try {
-    const result = await model.generateContent(prompt)
-    const text = result.response.text()
-    const parsed = JSON.parse(text) as Partial<ExtractedLeadData>
+    const response = await anthropic.messages.create({
+      model: EXTRACT_MODEL,
+      max_tokens: 500,
+      temperature: 0,
+      system: EXTRACTION_SYSTEM,
+      messages: [{ role: "user", content: `Conversación:\n${conversation}` }],
+      output_config: { format: { type: "json_schema", schema: extractionSchema } },
+    } as Anthropic.MessageCreateParamsNonStreaming)
+
+    const textBlock = response.content.find((b) => b.type === "text")
+    if (!textBlock || textBlock.type !== "text") return null
+    const parsed = JSON.parse(textBlock.text) as Partial<ExtractedLeadData>
 
     return {
       nombre: parsed.nombre ?? null,
