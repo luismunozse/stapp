@@ -39,7 +39,7 @@ export function ImageGalleryInput({ cover, gallery, onChange, onUpload, uploadin
         {items.map(({ url, isCover }) => (
           <div key={url} className="relative aspect-square rounded-md overflow-hidden border bg-muted group">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={url} alt={url} className="w-full h-full object-cover" />
+            <img src={url} alt="Imagen del producto" className="w-full h-full object-cover" />
             {isCover && (
               <span className="absolute top-1 left-1 inline-flex items-center gap-0.5 rounded bg-background/90 px-1 py-0.5 text-[10px] font-medium">
                 <Star className="h-2.5 w-2.5 fill-current text-amber-500" />
