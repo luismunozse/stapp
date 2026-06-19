@@ -80,7 +80,7 @@ const faqData = [
   {
     question: "\u00bfNecesito instalar algo en mi computadora?",
     answer:
-      "No, STApp es una aplicaci\u00f3n web que funciona directamente en tu navegador desde cualquier dispositivo. Solo necesitas conexi\u00f3n a internet. Adem\u00e1s, pod\u00e9s descargar la app nativa para Android (APK), instalarla como PWA en cualquier dispositivo, y pr\u00f3ximamente estar\u00e1 disponible tambi\u00e9n en iOS.",
+      "No, STApp es una aplicaci\u00f3n web que funciona directamente en tu navegador desde cualquier dispositivo. Solo necesit\u00e1s conexi\u00f3n a internet. Tambi\u00e9n pod\u00e9s instalarla como PWA en tu celular y usar la app para Android; la versi\u00f3n para iOS est\u00e1 en camino.",
   },
   {
     question: "\u00bfPuedo probar antes de pagar?",
@@ -151,6 +151,16 @@ const faqData = [
     question: "\u00bfPuedo captar leads y darles seguimiento?",
     answer:
       "S\u00ed. STApp incluye un m\u00f3dulo de captaci\u00f3n de leads donde pod\u00e9s registrar consultas y potenciales clientes. Hac\u00e9 seguimiento de cada lead hasta convertirlo en una orden de trabajo real, sin que se te escape ninguna oportunidad.",
+  },
+  {
+    question: "\u00bfPuedo manejar varias sucursales?",
+    answer:
+      "S\u00ed. STApp es multi-sucursal: gestion\u00e1s \u00f3rdenes, ventas, caja, dep\u00f3sitos y usuarios por sucursal. La cantidad de sucursales depende de tu plan (el plan Free incluye 1 y el Profesional hasta 3). Adem\u00e1s soporta m\u00faltiples monedas.",
+  },
+  {
+    question: "\u00bfSTApp tiene API o integraciones?",
+    answer:
+      "S\u00ed. STApp ofrece una API REST (v1) para clientes, inventario y \u00f3rdenes con API keys, adem\u00e1s de webhooks salientes configurables para conectar STApp con tus otras herramientas y notificarte de eventos al instante.",
   },
 ]
 
