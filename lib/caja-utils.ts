@@ -20,6 +20,31 @@ interface FetchMovimientosOptions {
 }
 
 /**
+ * Identifica el egreso automático de COGS que `crear_venta_atomica` inserta en
+ * `movimientos_caja` por cada venta (concepto "Costo de mercadería - Venta #N",
+ * EGRESO/EFECTIVO, afecta_rentabilidad=false).
+ *
+ * Ese registro es contable (lo consume rentabilidad vía snapshots, no esta tabla)
+ * y NO representa efectivo que salió del cajón. Debe excluirse del arqueo de caja
+ * para no generar un "sobrante" fantasma igual al COGS del día.
+ *
+ * La firma es específica a propósito: un "Retiro de socio" también tiene
+ * afecta_rentabilidad=false pero SÍ es efectivo real, por lo que no debe matchear.
+ */
+export function esMovimientoCogsAutomatico(row: {
+  tipo?: string | null
+  afecta_rentabilidad?: boolean | null
+  concepto?: string | null
+}): boolean {
+  return (
+    row.tipo === "EGRESO" &&
+    row.afecta_rentabilidad === false &&
+    typeof row.concepto === "string" &&
+    /^costo de mercader/i.test(row.concepto.trim())
+  )
+}
+
+/**
  * Obtiene todos los movimientos de caja de un día, unificando las 5 fuentes:
  * cobros_orden, pagos_parciales, pagos_venta, cuenta_corriente, movimientos_caja
  */
@@ -100,7 +125,7 @@ export async function fetchMovimientosDia(
   // 5. Movimientos manuales de caja
   let movimientosQuery = supabaseAdmin
     .from("movimientos_caja")
-    .select("id, tipo, monto, metodo_pago, concepto, observaciones, fecha")
+    .select("id, tipo, monto, metodo_pago, concepto, observaciones, fecha, afecta_rentabilidad")
     .eq("organization_id", organizationId)
     .gte("fecha", fechaDesde)
     .lte("fecha", fechaHasta)
@@ -174,6 +199,8 @@ export async function fetchMovimientosDia(
   }
 
   for (const m of movimientosManuales || []) {
+    // El egreso automático de COGS no es efectivo real: se excluye del arqueo.
+    if (esMovimientoCogsAutomatico(m)) continue
     movimientos.push({
       tipo: m.tipo === "INGRESO" ? "INGRESO_MANUAL" : "EGRESO_MANUAL",
       monto: parseFloat(m.monto),
