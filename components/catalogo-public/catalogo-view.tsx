@@ -1,7 +1,9 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, type CSSProperties } from "react"
 import dynamic from "next/dynamic"
+import { brandCssVars } from "@/lib/catalogo/brand"
+import { CatalogoImagePlaceholder } from "./catalogo-image-placeholder"
 import { motion, AnimatePresence } from "framer-motion"
 import { ShoppingCart } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
@@ -257,7 +259,7 @@ export function CatalogoView({
   return (
     <div
       className="min-h-dvh bg-background"
-      style={{ ["--brand" as any]: data.config.color_primary }}
+      style={brandCssVars(data.config.color_primary) as CSSProperties}
     >
       <CatalogoHero
         bannerUrl={data.config.banner_url}
@@ -345,9 +347,7 @@ export function CatalogoView({
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                             />
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center text-2xl text-muted-foreground">
-                              {it.tipo === "PRODUCTO" ? "📦" : "🛠️"}
-                            </div>
+                            <CatalogoImagePlaceholder name={it.nombre} className="w-full h-full" />
                           )}
                         </div>
                         <div className="p-2">

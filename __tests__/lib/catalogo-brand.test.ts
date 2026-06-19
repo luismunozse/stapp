@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { getBrandTheme } from "@/lib/catalogo/brand"
+import { getBrandTheme, brandCssVars } from "@/lib/catalogo/brand"
 
 describe("getBrandTheme", () => {
   it("dark brand gets white foreground", () => {
@@ -22,5 +22,16 @@ describe("getBrandTheme", () => {
     const t = getBrandTheme("#1d4ed8")
     expect(t.tint).toBe("#1d4ed814")
     expect(t.tintStrong).toBe("#1d4ed826")
+  })
+})
+
+describe("brandCssVars", () => {
+  it("returns the four catalog CSS custom properties", () => {
+    expect(brandCssVars("#1d4ed8")).toEqual({
+      "--brand": "#1d4ed8",
+      "--brand-foreground": "#ffffff",
+      "--brand-tint": "#1d4ed814",
+      "--brand-tint-strong": "#1d4ed826",
+    })
   })
 })

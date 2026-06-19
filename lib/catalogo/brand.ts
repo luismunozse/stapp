@@ -60,3 +60,14 @@ export function getBrandTheme(hex: string): BrandTheme {
     tintStrong: `${brand}26`,
   }
 }
+
+/** CSS custom properties for the catalog root, derived from the brand color. */
+export function brandCssVars(hex: string): Record<string, string> {
+  const t = getBrandTheme(hex)
+  return {
+    "--brand": t.brand,
+    "--brand-foreground": t.brandForeground,
+    "--brand-tint": t.tint,
+    "--brand-tint-strong": t.tintStrong,
+  }
+}
