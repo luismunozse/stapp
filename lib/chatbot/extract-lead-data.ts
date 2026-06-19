@@ -92,7 +92,7 @@ export async function extractLeadData(messages: ChatTurn[]): Promise<ExtractedLe
       system: EXTRACTION_SYSTEM,
       messages: [{ role: "user", content: `Conversación:\n${conversation}` }],
       output_config: { format: { type: "json_schema", schema: extractionSchema } },
-    } as Anthropic.MessageCreateParamsNonStreaming)
+    })
 
     const textBlock = response.content.find((b) => b.type === "text")
     if (!textBlock || textBlock.type !== "text") return null
