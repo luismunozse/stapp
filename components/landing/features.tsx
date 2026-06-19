@@ -186,7 +186,7 @@ const categories = [
       {
         name: "Dashboard Analítico",
         description:
-          "Panel centralizado con KPIs en tiempo real: ingresos, reparaciones, rendimiento del equipo y tendencias. Todo de un vistazo para tomar mejores decisiones.",
+          "Panel centralizado con KPIs actualizados: ingresos, reparaciones, rendimiento del equipo y tendencias. Todo de un vistazo para tomar mejores decisiones.",
         icon: LayoutDashboard,
         color: "bg-violet-600",
       },

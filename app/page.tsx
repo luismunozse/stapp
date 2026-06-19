@@ -115,12 +115,12 @@ const faqData = [
   {
     question: "\u00bfPuedo gestionar varios t\u00e9cnicos y vendedores?",
     answer:
-      "S\u00ed, pod\u00e9s agregar t\u00e9cnicos y vendedores ilimitados con roles diferenciados (admin, t\u00e9cnico, vendedor). Asign\u00e1 reparaciones, visualiz\u00e1 la carga de trabajo de cada uno y segu\u00ed el rendimiento del equipo con m\u00e9tricas en tiempo real.",
+      "S\u00ed, pod\u00e9s agregar t\u00e9cnicos y vendedores ilimitados con roles diferenciados (admin, t\u00e9cnico, vendedor). Asign\u00e1 reparaciones, visualiz\u00e1 la carga de trabajo de cada uno y segu\u00ed el rendimiento del equipo con m\u00e9tricas individuales.",
   },
   {
     question: "\u00bfMi cliente puede ver el estado de su reparaci\u00f3n?",
     answer:
-      "S\u00ed. Cada orden genera un link \u00fanico que pod\u00e9s compartir por WhatsApp. Tu cliente ve el estado en tiempo real, las fotos, la informaci\u00f3n de garant\u00eda y puede descargar el comprobante en PDF. No necesita crear cuenta ni instalar nada.",
+      "S\u00ed. Cada orden genera un link \u00fanico que pod\u00e9s compartir por WhatsApp. Tu cliente ve el estado actualizado, las fotos, la informaci\u00f3n de garant\u00eda y puede descargar el comprobante en PDF. No necesita crear cuenta ni instalar nada.",
   },
   {
     question: "\u00bfPuedo vender accesorios y repuestos adem\u00e1s de reparar?",
@@ -140,7 +140,7 @@ const faqData = [
   {
     question: "\u00bfSTApp tiene control de caja y finanzas?",
     answer:
-      "S\u00ed. STApp incluye caja diaria con apertura y cierre, control de movimientos de efectivo, gesti\u00f3n de gastos por categor\u00eda, gastos recurrentes (alquiler, servicios, sueldos) y un dashboard anal\u00edtico con los KPIs de tu taller en tiempo real. Tambi\u00e9n pod\u00e9s gestionar \u00f3rdenes de compra a proveedores vinculadas directamente al inventario.",
+      "S\u00ed. STApp incluye caja diaria con apertura y cierre, control de movimientos de efectivo, gesti\u00f3n de gastos por categor\u00eda, gastos recurrentes (alquiler, servicios, sueldos) y un dashboard anal\u00edtico con los KPIs de tu taller actualizados. Tambi\u00e9n pod\u00e9s gestionar \u00f3rdenes de compra a proveedores vinculadas directamente al inventario.",
   },
   {
     question: "\u00bfQu\u00e9 es Santi, el asistente de IA?",
