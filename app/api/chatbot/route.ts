@@ -270,8 +270,7 @@ Todo incluido en el plan:
 - Cotizaciones con aprobación/rechazo online y firma digital
 - Portal de seguimiento para clientes (link público)
 - Modo kiosco para mostrar estado de reparaciones en el local
-- Modo kiosco de autoservicio para que el cliente ingrese su equipo
-- 17 reportes avanzados con analytics predictivos
+- Reportes avanzados (rentabilidad, performance de técnicos y vendedores, predicción de repuestos por consumo, fallas comunes y más)
 - Cuenta corriente de clientes
 - Gestión de proveedores
 - Facturación con numeración automática e IVA
@@ -284,40 +283,40 @@ Todo incluido en el plan:
 - Tu logo personalizado en presupuestos, órdenes y facturas
 - App móvil para Android + PWA para cualquier dispositivo
 - Modo offline con sincronización automática
-- Actualización en tiempo real en todos los dispositivos
+- Sincronización en la nube: tus datos disponibles en todos tus dispositivos
 - Reingresos por garantía vinculados a la orden original
 
 CARACTERÍSTICAS PRINCIPALES:
 
 1. SERVICIO TÉCNICO:
-- Órdenes de Servicio: gestión de cada reparación de principio a fin con 12 estados (recibido, en diagnóstico, presupuestado, aprobado, en reparación, esperando repuesto, reparado, entregado, sin reparación, entregado sin reparación, cancelado). Checklists personalizados por tipo de dispositivo (celular, computadora, tablet, consola, smartwatch, accesorios). Asignación de técnicos, seguimiento completo y numeración automática por organización. Actualización en tiempo real: los cambios en las órdenes se reflejan instantáneamente en todos los dispositivos conectados (Supabase Realtime). Problema reportado editable desde el detalle de la orden
+- Órdenes de Servicio: gestión de cada reparación de principio a fin con 12 estados (recibido, en diagnóstico, presupuestado, aprobado, en reparación, esperando repuesto, reparado, entregado, sin reparación, entregado sin reparación, cancelado). Checklists personalizados por tipo de dispositivo (celular, computadora, tablet, consola, smartwatch, accesorios). Asignación de técnicos, seguimiento completo y numeración automática por organización. Los cambios en las órdenes quedan guardados al instante y disponibles al recargar desde cualquier dispositivo. Problema reportado editable desde el detalle de la orden
 - Orden de Retiro (Sin Reparación): cuando un equipo no se puede reparar, se genera una orden de retiro especial. El cliente firma la recepción del equipo sin reparar y se genera un comprobante PDF de retiro. El estado pasa de "sin reparación" a "entregado sin reparación"
 - Impresión de Etiquetas: generación de etiquetas para identificar equipos con código de orden, cliente, dispositivo, problema reportado, fecha de ingreso y código QR que lleva al portal de seguimiento público. Compatibles con impresoras térmicas de 58mm (etiquetas de 60x40mm y 70x40mm)
 - Impresión de Órdenes: botón para generar e imprimir el PDF de la orden directamente desde el detalle
-- Cotizaciones y Presupuestos: sistema independiente de presupuestos con ítems detallados, descuentos (fijos o porcentuales), impuestos configurables (IVA), condiciones, términos y fecha de vencimiento. El cliente los aprueba o rechaza online con firma digital desde un link único, sin necesidad de crear cuenta. Si rechaza, puede indicar el motivo y la orden vuelve a diagnóstico automáticamente. Estados: borrador, enviada, aceptada, rechazada. Exportación a PDF y envío por WhatsApp
+- Cotizaciones y Presupuestos: sistema independiente de presupuestos con ítems detallados, descuentos (fijos o porcentuales), impuestos configurables (IVA), condiciones, términos y fecha de vencimiento. El cliente los aprueba o rechaza online desde un link único, sin necesidad de crear cuenta. Si rechaza, puede indicar el motivo y la orden vuelve a diagnóstico automáticamente. Estados: borrador, enviada, aceptada, rechazada. Exportación a PDF y envío por WhatsApp
 - Fotos por Etapa: documentación visual en 5 etapas (ingreso, diagnóstico, componentes, reparación y entrega). Protección ante reclamos con evidencia fotográfica almacenada en la nube. Cámara integrada en la app móvil
 - Portal de Seguimiento Público: cada orden genera un link único que se comparte por WhatsApp. El cliente ve el estado en tiempo real, timeline visual, fotos, garantía, puede aprobar o rechazar presupuestos y descargar el comprobante en PDF. No necesita cuenta ni instalar nada. El link expira automáticamente 30 días después de la entrega
-- Firma Digital: captura de firma del cliente en la entrega, en la aprobación de presupuestos y en la orden de retiro. Respaldo legal ante cualquier reclamo
+- Firma Digital: captura de firma del cliente en la recepción del equipo, en la entrega y en la orden de retiro. Respaldo legal ante cualquier reclamo
 
 2. ADMINISTRACIÓN:
 - Gestión de Clientes: historial completo y automático de reparaciones, ventas, pagos y cuenta corriente (crédito/débito). Soporte para clientes individuales y empresas con sectores. Búsqueda por nombre, teléfono o DNI. Detección de duplicados por email. Importación masiva desde Excel/CSV
-- Control de Inventario: alertas automáticas de stock bajo, historial de precios, control de costos y márgenes en tiempo real. Código automático, categorización por tipo de dispositivo. Movimientos de stock con trazabilidad. Importación masiva desde Excel/CSV con plantillas descargables
+- Control de Inventario: alertas automáticas de stock bajo, historial de precios, control de costos y márgenes. Código automático, categorización por tipo de dispositivo. Multi-depósito con transferencias, variantes de producto, kits/combos, lotes con fecha de vencimiento, números de serie/IMEI, análisis ABC, reposición automática con orden de compra sugerida y conteos físicos. Movimientos de stock con trazabilidad. Importación masiva desde Excel/CSV con plantillas descargables
 - Cobros y Facturación: desde la orden al cobro en un click. Pagos parciales, cuotas con recargo configurable, múltiples medios de pago (efectivo, transferencia, tarjeta de débito/crédito, MercadoPago, cuenta corriente). Facturación automática con numeración secuencial (XXXX-XXXXXXXX) e IVA. Tres métodos de cálculo: costo final, suma de repuestos o presupuesto estimado. Estados de factura: pendiente, pagado parcial, pagado, anulada. Exportación a PDF
 - Sistema de Garantías: generación automática al entregar una orden. Garantías con estados (activa, vencida, reclamada), vencimientos con alertas automáticas (7 días antes), sistema completo de reclamos con estados (pendiente, en revisión, aceptado, rechazado, resuelto), resolución documentada y reingresos vinculados a la orden original. Exportación de garantías y reclamos a PDF
 - Reingresos por Garantía: si un equipo vuelve con problemas, se crea un reingreso vinculado a la orden original con toda la trazabilidad. Seguimiento completo del reclamo de principio a fin
 - Cuenta Corriente: sistema de crédito/débito por cliente, historial de pagos, saldo pendiente y seguimiento de deudas
-- Caja: módulo de caja para registrar y controlar todos los movimientos de dinero del taller (ingresos por reparaciones, ventas, pagos parciales, etc.)
+- Caja y Finanzas: módulo de caja para registrar y controlar todos los movimientos de dinero del taller (ingresos por reparaciones, ventas, pagos parciales, etc.), con gastos por categoría, gastos recurrentes (alquiler, servicios, sueldos) y estado de resultados (P&L) mensual
 
 3. VENTAS:
-- Punto de Venta: módulo completo para vender accesorios y repuestos. Ventas con garantía por producto, múltiples medios de pago, gestión de devoluciones, numeración automática y estados (completada, anulada). Exportación a PDF. Soporte para impresoras térmicas (58mm/80mm) vía WebUSB: imprimí tickets de venta directamente desde el navegador sin instalar drivers. Compatible con las marcas más populares (Epson, Star Micronics, Bixolon, Citizen, Gprinter y más)
+- Punto de Venta: módulo completo para vender accesorios y repuestos. Ventas con garantía por producto, múltiples medios de pago, gestión de devoluciones con nota de crédito, numeración automática y estados (completada, anulada). Exportación a PDF. Soporte para impresoras térmicas (58mm/80mm) vía WebUSB: imprimí tickets de venta directamente desde el navegador sin instalar drivers. Compatible con las marcas más populares (Epson, Star Micronics, Bixolon, Citizen, Gprinter y más)
 - Proveedores: gestión de proveedores con datos de contacto, WhatsApp, dirección, sitio web y notas. Estado activo/inactivo
-- Equipo de Trabajo: técnicos, vendedores y administradores con roles diferenciados y permisos específicos. Métricas de rendimiento individuales por técnico (órdenes completadas, tiempos) y por vendedor (ventas realizadas). Cada técnico solo ve sus órdenes asignadas
+- Equipo de Trabajo: técnicos, vendedores y administradores con roles diferenciados y permisos específicos. Métricas de rendimiento individuales por técnico (órdenes completadas, tiempos) y por vendedor (ventas realizadas). Comisiones por vendedor con liquidación. Cada técnico solo ve sus órdenes asignadas
 
 4. MODO KIOSCO (2 modos):
 - Pantalla de Estado: pantalla pública personalizable para mostrar el estado de las reparaciones en tu local. Columnas configurables, auto-refresh, filtros, tamaño de fuente y branding. Acceso por token sin login
 - Autoservicio: portal público donde el cliente puede ingresar su equipo directamente. Carga datos del cliente, tipo de dispositivo, descripción del problema y fotos. Sin necesidad de registro
 
-5. REPORTES Y ANALYTICS (17 reportes):
+5. REPORTES Y ANALYTICS:
 - Ingresos por período
 - Ingresos unificados (órdenes + ventas + facturas)
 - Comparativa de ingresos entre períodos
@@ -334,12 +333,12 @@ CARACTERÍSTICAS PRINCIPALES:
 - Tiempos de reparación promedio
 - Top clientes
 - Rentabilidad y márgenes
-- Predicción de repuestos (análisis predictivo con IA)
+- Predicción de repuestos (estimación por consumo promedio histórico)
 - Todos exportables a CSV/Excel con filtros por fecha
 
 6. COMUNICACIONES:
-- WhatsApp Business API (integración oficial con Meta): envío de notificaciones automáticas al cliente por WhatsApp. Plantillas listas: equipo listo para retirar, presupuesto disponible, seguimiento de reparación, confirmación de entrega. Historial completo de notificaciones por cliente
-- Campañas de Email: sistema de email marketing con plantillas prediseñadas (20+ plantillas). Emails automáticos de ciclo de vida: bienvenida, engagement, recordatorios, recuperación de clientes inactivos. Seguimiento de envíos
+- WhatsApp Business API: integración oficial con Meta (Cloud API) o servidor propio (Evolution), según la configuración de cada taller. Más de 50 plantillas configurables: equipo listo para retirar, presupuesto disponible, seguimiento de reparación, confirmación de entrega, cobranza y más. Historial completo de notificaciones por cliente
+- Campañas de Email: sistema de email marketing con plantillas prediseñadas. Emails automáticos de ciclo de vida: bienvenida, tips de uso, recordatorios de vencimiento de prueba y recuperación de clientes inactivos. Seguimiento de envíos
 - Notificaciones en la App: sistema de notificaciones internas con conteo de no leídas y marcado individual/masivo
 - Sistema de Soporte: tickets de soporte integrados para contactar al equipo de STApp
 
@@ -380,18 +379,17 @@ VENTAJAS COMPETITIVAS vs Excel/Papel/Competencia:
 - Tu cliente puede seguir su reparación online con un link (nadie más ofrece esto gratis)
 - Aprobación Y rechazo de presupuestos online con firma digital
 - Pantalla kiosco en tu local para que el cliente vea el estado sin preguntar
-- Kiosco de autoservicio para que el cliente ingrese su equipo solo
 - Multi-usuario con roles y permisos diferenciados
 - WhatsApp Business API oficial (no WhatsApp web, sino la API real de Meta)
 - Facturación integrada con IVA y numeración automática
-- 17 reportes avanzados con analytics predictivos
+- Reportes avanzados (rentabilidad, performance de técnicos/vendedores, predicción de repuestos y más)
 - Campañas de email automatizadas
 - App nativa para Android + PWA para cualquier dispositivo
 - Modo offline real con sincronización automática
 - Actualizaciones automáticas sin costo adicional
 - Soporte en español argentino con asistente virtual (yo!) y sistema de tickets
 - Multi-moneda: soporte para pesos argentinos (ARS) y dólares (USD)
-- Actualización en tiempo real: todos los cambios se reflejan al instante en todos los dispositivos
+- Sincronización en la nube: tus datos disponibles en todos tus dispositivos
 - Impresión de etiquetas con QR para identificar equipos en el taller
 - Soporte para impresoras térmicas: imprimí tickets y etiquetas directo desde el navegador sin drivers
 - Orden de retiro para equipos sin reparación con comprobante firmado
@@ -403,6 +401,21 @@ CASOS DE USO TÍPICOS:
 - Service de tablets, consolas y smartwatches
 - Tiendas de reparación que también venden accesorios y repuestos
 - Talleres con múltiples técnicos y sucursales
+
+SUCURSALES Y MULTI-MONEDA:
+- Multi-sucursal: gestioná varias sucursales con órdenes, ventas, caja, depósitos y usuarios por sucursal. La cantidad de sucursales depende del plan (Free 1, Profesional hasta 3, planes superiores ilimitado).
+- Multi-moneda: soporta 11 monedas (ARS, USD, MXN, CLP, COP, PEN, UYU, BRL, BOB, PYG, EUR). Cotización del dólar actualizada automáticamente.
+
+CATÁLOGO ONLINE Y E-COMMERCE:
+- Catálogo público por organización con link propio, cupones de descuento, recuperación de carritos abandonados y cotización online desde el catálogo. Checkout con MercadoPago.
+
+AGENDA Y TURNOS:
+- Gestión de turnos con disponibilidad y recordatorios automáticos al cliente.
+
+INTEGRACIONES Y API:
+- Webhooks salientes configurables con reintentos.
+- API REST v1 (clientes, inventario, órdenes) con API keys.
+- Notificaciones push web y nativas.
 
 CONTACTO:
 - WhatsApp: +54 9 11 6962-5733
