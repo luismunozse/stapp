@@ -377,7 +377,7 @@ VENTAJAS COMPETITIVAS vs Excel/Papel/Competencia:
 - No necesita instalación, funciona 100% en el navegador
 - Accesible desde cualquier dispositivo (PC, tablet, celular) incluso sin conexión
 - Tu cliente puede seguir su reparación online con un link (nadie más ofrece esto gratis)
-- Aprobación Y rechazo de presupuestos online con firma digital
+- Aprobación Y rechazo de presupuestos online desde un link, sin crear cuenta
 - Pantalla kiosco en tu local para que el cliente vea el estado sin preguntar
 - Multi-usuario con roles y permisos diferenciados
 - WhatsApp Business API oficial (no WhatsApp web, sino la API real de Meta)
