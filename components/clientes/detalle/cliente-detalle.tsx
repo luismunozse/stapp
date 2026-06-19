@@ -29,7 +29,7 @@ export function ClienteDetalle({ clienteId }: { clienteId: string }) {
     `/api/clientes/${clienteId}`, fetcher, { revalidateOnFocus: false }
   )
   const { data: ccData, mutate: mutateCC } = useSWR(
-    `/api/clientes/${clienteId}/cuenta-corriente?limit=1`, fetcher, { revalidateOnFocus: false }
+    `/api/clientes/${clienteId}/cuenta-corriente?limit=50`, fetcher, { revalidateOnFocus: false }
   )
   const { data: pendientes } = useSWR<OrdenPendiente[]>(
     `/api/clientes/${clienteId}/ordenes-pendientes`, fetcher, { revalidateOnFocus: false }

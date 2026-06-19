@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import useSWR from "swr"
 import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -61,9 +62,6 @@ export function CuentaCorrientePanel({ cliente, onDeposito }: CuentaCorrientePan
   const { data: session } = useSession()
   const esAdmin = session?.user?.role === "ADMIN"
 
-  const [saldo, setSaldo] = useState(0)
-  const [movimientos, setMovimientos] = useState<Movimiento[]>([])
-  const [loading, setLoading] = useState(true)
   const [showDeposito, setShowDeposito] = useState(false)
   const [depositoLoading, setDepositoLoading] = useState(false)
   const [depositoMonto, setDepositoMonto] = useState<string>("")
@@ -71,30 +69,20 @@ export function CuentaCorrientePanel({ cliente, onDeposito }: CuentaCorrientePan
   const [depositoReferencia, setDepositoReferencia] = useState("")
   const [depositoObservaciones, setDepositoObservaciones] = useState("")
 
-  const fetchData = async () => {
-    setLoading(true)
-    try {
-      const res = await fetch(`/api/clientes/${cliente.id}/cuenta-corriente?limit=50`)
-      if (res.ok) {
-        const data = await res.json()
-        setSaldo(data.saldo || 0)
-        setMovimientos(data.movimientos || [])
-      }
-    } catch (err) {
-      console.error("Error fetching cuenta corriente:", err)
-    } finally {
-      setLoading(false)
-    }
-  }
+  const { data, isLoading: loading, mutate } = useSWR<{ saldo: number; movimientos: Movimiento[] }>(
+    `/api/clientes/${cliente.id}/cuenta-corriente?limit=50`,
+    (url: string) => fetch(url).then((r) => r.json()),
+    { revalidateOnFocus: false }
+  )
+  const saldo = data?.saldo ?? 0
+  const movimientos = data?.movimientos ?? []
 
   useEffect(() => {
-    fetchData()
     setShowDeposito(false)
     setDepositoMonto("")
     setDepositoMetodo("EFECTIVO")
     setDepositoReferencia("")
     setDepositoObservaciones("")
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cliente.id])
 
   const handleDeposito = async () => {
@@ -125,7 +113,7 @@ export function CuentaCorrientePanel({ cliente, onDeposito }: CuentaCorrientePan
       setDepositoReferencia("")
       setDepositoObservaciones("")
       setShowDeposito(false)
-      fetchData()
+      mutate()
       onDeposito?.()
     } catch (err) {
       console.error("Error creating deposito:", err)
