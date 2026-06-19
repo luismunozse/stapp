@@ -5,6 +5,7 @@ import { motion } from "framer-motion"
 import { Plus, Star, Check, Heart, Eye, Flame } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { useState } from "react"
+import { CatalogoImagePlaceholder } from "./catalogo-image-placeholder"
 
 interface Item {
   id: string
@@ -95,9 +96,7 @@ export function ItemCard({ item, onClick, onQuickAdd, formatPrecio, brandColor, 
               className="object-cover transition-transform duration-300 group-hover:scale-[1.04]"
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-4xl text-muted-foreground">
-              {item.tipo === "PRODUCTO" ? "📦" : "🛠️"}
-            </div>
+            <CatalogoImagePlaceholder name={item.nombre} className="w-full h-full" />
           )}
 
           {/* Badges esquina superior izquierda — máx 1 visible para no saturar */}

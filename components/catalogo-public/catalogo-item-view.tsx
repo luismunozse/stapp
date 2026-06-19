@@ -2,7 +2,9 @@
 
 import Link from "next/link"
 import Image from "next/image"
-import { useState, useRef } from "react"
+import { useState, useRef, type CSSProperties } from "react"
+import { brandCssVars } from "@/lib/catalogo/brand"
+import { CatalogoImagePlaceholder } from "./catalogo-image-placeholder"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -123,7 +125,7 @@ export function CatalogoItemView({ data }: { data: Data }) {
   return (
     <div
       className="min-h-dvh bg-background"
-      style={{ ["--brand" as any]: config.color_primary }}
+      style={brandCssVars(config.color_primary) as CSSProperties}
     >
       {/* Compact header */}
       <header className="border-b sticky top-0 z-30 bg-background/95 backdrop-blur">
@@ -165,9 +167,7 @@ export function CatalogoItemView({ data }: { data: Data }) {
                   className="object-cover"
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-7xl text-muted-foreground">
-                  {item.tipo === "PRODUCTO" ? "📦" : "🛠️"}
-                </div>
+                <CatalogoImagePlaceholder name={item.nombre} className="w-full h-full" />
               )}
               {galeria.length > 1 && (
                 <>

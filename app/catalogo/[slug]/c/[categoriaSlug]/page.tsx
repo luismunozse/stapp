@@ -176,10 +176,10 @@ export default async function CatalogoCategoriaPage({ params }: PageProps) {
             </div>
           ) : (
             <div
-              className="h-12 w-12 sm:h-20 sm:w-20 rounded-xl flex items-center justify-center text-xl sm:text-2xl shrink-0"
+              className="h-12 w-12 sm:h-20 sm:w-20 rounded-xl flex items-center justify-center text-2xl sm:text-4xl font-bold shrink-0"
               style={{ backgroundColor: `${data.config.color_primary}15`, color: data.config.color_primary }}
             >
-              📁
+              {data.categoria.nombre.match(/[a-z0-9]/i)?.[0]?.toUpperCase() ?? "•"}
             </div>
           )}
           <div className="flex-1 min-w-0">

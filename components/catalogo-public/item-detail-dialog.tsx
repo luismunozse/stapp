@@ -12,6 +12,7 @@ import { toast } from "sonner"
 import type { CartItem } from "./use-cart"
 import { useViewTracking } from "./use-view-tracking"
 import { useItemBundle } from "./use-item-bundle"
+import { CatalogoImagePlaceholder } from "./catalogo-image-placeholder"
 
 interface Variante {
   id: string
@@ -253,9 +254,7 @@ export function ItemDetailDialog({
               className="object-cover"
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-6xl text-muted-foreground">
-              {item.tipo === "PRODUCTO" ? "📦" : "🛠️"}
-            </div>
+            <CatalogoImagePlaceholder name={item.nombre} className="w-full h-full" />
           )}
 
           {galeria.length > 1 && (

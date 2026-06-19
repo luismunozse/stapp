@@ -9,6 +9,7 @@ import {
 import { useState } from "react"
 import { toast } from "sonner"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
+import { CatalogoImagePlaceholder } from "./catalogo-image-placeholder"
 
 interface TrustBadgeData {
   icon: string
@@ -106,7 +107,7 @@ export function CatalogoHero({ bannerUrl, logoUrl, titulo, descripcion, whatsapp
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-end">
             {logoUrl && (
               <div className="relative h-20 w-20 sm:h-24 sm:w-24 rounded-2xl overflow-hidden bg-white border-4 border-background shadow-lg shrink-0">
-                <Image src={logoUrl} alt={titulo} fill sizes="96px" className="object-cover" priority />
+                <Image src={logoUrl} alt={titulo} fill sizes="96px" className="object-contain p-1" priority />
               </div>
             )}
             <div className="flex-1 min-w-0 text-white sm:pb-2">
@@ -125,8 +126,8 @@ export function CatalogoHero({ bannerUrl, logoUrl, titulo, descripcion, whatsapp
               {whatsappLink && (
                 <Button
                   asChild
-                  className="gap-2 h-11 px-4 text-white shadow-md hover:shadow-lg transition-shadow"
-                  style={{ backgroundColor: brandColor }}
+                  className="gap-2 h-11 px-4 shadow-md hover:shadow-lg transition-shadow"
+                  style={{ backgroundColor: "var(--brand)", color: "var(--brand-foreground)" }}
                   aria-label="Contactar por WhatsApp"
                 >
                   <a href={whatsappLink} target="_blank" rel="noreferrer">
@@ -146,31 +147,29 @@ export function CatalogoHero({ bannerUrl, logoUrl, titulo, descripcion, whatsapp
 
   return (
     <>
-    <header
-      className="relative border-b overflow-hidden"
-      style={{
-        background: `radial-gradient(80% 60% at 50% 0%, ${brandColor}22 0%, ${brandColor}08 45%, transparent 80%)`,
-      }}
-    >
-      {/* Subtle dot pattern decoration */}
+    <header className="relative border-b overflow-hidden">
+      {/* Mesh de marca: gradientes radiales en el brand color (vía CSS vars) */}
       <div
-        className="absolute inset-0 opacity-[0.04] pointer-events-none"
+        className="absolute inset-0 pointer-events-none"
         style={{
-          backgroundImage: `radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)`,
-          backgroundSize: "20px 20px",
+          background:
+            "radial-gradient(75% 65% at 0% -20%, var(--brand-tint-strong, #0f172a14), transparent 60%)," +
+            "radial-gradient(65% 60% at 100% 0%, var(--brand-tint, #0f172a0a), transparent 55%)",
         }}
       />
-      <div className={`container mx-auto max-w-5xl px-4 relative ${descripcion ? "py-8 sm:py-10" : "py-6 sm:py-7"}`}>
-        <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 items-start sm:items-center">
-          {logoUrl && (
-            <div className="relative h-16 w-16 sm:h-20 sm:w-20 rounded-2xl overflow-hidden bg-white border-2 shadow-md shrink-0" style={{ borderColor: `${brandColor}30` }}>
-              <Image src={logoUrl} alt={titulo} fill sizes="80px" className="object-cover" priority />
-            </div>
-          )}
+      <div className={`container mx-auto max-w-5xl px-4 relative ${descripcion ? "py-12 sm:py-16" : "py-10 sm:py-12"}`}>
+        <div className="flex flex-col sm:flex-row gap-5 sm:gap-6 items-start sm:items-center">
+          <div className="relative h-16 w-16 sm:h-20 sm:w-20 rounded-2xl overflow-hidden border bg-background shadow-sm shrink-0">
+            {logoUrl ? (
+              <Image src={logoUrl} alt={titulo} fill sizes="80px" className="object-contain p-1.5" priority />
+            ) : (
+              <CatalogoImagePlaceholder name={titulo} className="h-full w-full" />
+            )}
+          </div>
           <div className="flex-1 min-w-0">
-            <h1 className="text-2xl sm:text-4xl font-bold tracking-tight leading-tight">{titulo}</h1>
+            <h1 className="text-3xl sm:text-5xl font-bold tracking-tight leading-[1.05]">{titulo}</h1>
             {descripcion && (
-              <p className="text-muted-foreground mt-1.5 sm:text-base leading-relaxed line-clamp-3">{descripcion}</p>
+              <p className="text-muted-foreground mt-2 text-base sm:text-lg leading-relaxed line-clamp-3 max-w-2xl">{descripcion}</p>
             )}
           </div>
           <div className="flex gap-2 w-full sm:w-auto sm:shrink-0">
@@ -185,8 +184,8 @@ export function CatalogoHero({ bannerUrl, logoUrl, titulo, descripcion, whatsapp
             {whatsappLink && (
               <Button
                 asChild
-                className="gap-2 flex-1 sm:flex-none h-11 px-4 text-white shadow-md hover:shadow-lg transition-shadow"
-                style={{ backgroundColor: brandColor }}
+                className="gap-2 flex-1 sm:flex-none h-11 px-4 shadow-md hover:shadow-lg transition-shadow"
+                style={{ backgroundColor: "var(--brand)", color: "var(--brand-foreground)" }}
                 aria-label="Contactar por WhatsApp"
               >
                 <a href={whatsappLink} target="_blank" rel="noreferrer">
