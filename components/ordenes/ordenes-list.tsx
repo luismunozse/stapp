@@ -175,6 +175,8 @@ export function OrdenesList() {
   const [conSenaFilter, setConSenaFilter] = useState("")
   const [fechaPrometidaDesde, setFechaPrometidaDesde] = useState("")
   const [fechaPrometidaHasta, setFechaPrometidaHasta] = useState("")
+  const [fechaEntregaDesde, setFechaEntregaDesde] = useState("")
+  const [fechaEntregaHasta, setFechaEntregaHasta] = useState("")
   const [showFilters, setShowFilters] = useState(false)
 
   // Quick filter for vencimiento (separate from estado quick filters)
@@ -249,6 +251,8 @@ export function OrdenesList() {
     if (conSenaFilter) params.append("conSena", conSenaFilter)
     if (fechaPrometidaDesde) params.append("fechaPrometidaDesde", fechaPrometidaDesde)
     if (fechaPrometidaHasta) params.append("fechaPrometidaHasta", fechaPrometidaHasta)
+    if (fechaEntregaDesde) params.append("fechaEntregaDesde", fechaEntregaDesde)
+    if (fechaEntregaHasta) params.append("fechaEntregaHasta", fechaEntregaHasta)
     // Quick filters that map to backend params
     if (quickFilterActive === "vencidas") params.append("vencimiento", "vencidas")
     if (quickFilterActive === "venceHoy") params.append("vencimiento", "venceHoy")
@@ -259,7 +263,7 @@ export function OrdenesList() {
     params.append("sortBy", sortKey)
     params.append("sortOrder", sortDirection)
     return `/api/ordenes?${params.toString()}`
-  }, [debouncedSearch, estado, fechaDesde, fechaHasta, tecnicoIdFilter, tipoDispositivoFilter, marcaFilter, estadoCobroFilter, conPresupuestoFilter, conSenaFilter, fechaPrometidaDesde, fechaPrometidaHasta, quickFilterActive, page, pageSize, sortKey, sortDirection])
+  }, [debouncedSearch, estado, fechaDesde, fechaHasta, tecnicoIdFilter, tipoDispositivoFilter, marcaFilter, estadoCobroFilter, conPresupuestoFilter, conSenaFilter, fechaPrometidaDesde, fechaPrometidaHasta, fechaEntregaDesde, fechaEntregaHasta, quickFilterActive, page, pageSize, sortKey, sortDirection])
 
   // SWR para fetching con caché
   const { data, error, isLoading, mutate } = useSWR(apiUrl, fetcher, {
@@ -347,6 +351,8 @@ export function OrdenesList() {
     setConSenaFilter("")
     setFechaPrometidaDesde("")
     setFechaPrometidaHasta("")
+    setFechaEntregaDesde("")
+    setFechaEntregaHasta("")
     setQuickFilterActive("")
     setPage(1)
   }
@@ -361,7 +367,7 @@ export function OrdenesList() {
     setPage(1)
   }
 
-  const hasActiveFilters = search || estado || fechaDesde || fechaHasta || tecnicoIdFilter || tipoDispositivoFilter || marcaFilter || estadoCobroFilter || conPresupuestoFilter || conSenaFilter || fechaPrometidaDesde || fechaPrometidaHasta || quickFilterActive
+  const hasActiveFilters = search || estado || fechaDesde || fechaHasta || tecnicoIdFilter || tipoDispositivoFilter || marcaFilter || estadoCobroFilter || conPresupuestoFilter || conSenaFilter || fechaPrometidaDesde || fechaPrometidaHasta || fechaEntregaDesde || fechaEntregaHasta || quickFilterActive
 
   const columns: Column<OrdenServicio>[] = [
     {
@@ -770,6 +776,24 @@ export function OrdenesList() {
               value={fechaPrometidaHasta}
               onChange={(value) => {
                 setFechaPrometidaHasta(value)
+                setPage(1)
+              }}
+            />
+
+            <DatePicker
+              placeholder="Entrega desde"
+              value={fechaEntregaDesde}
+              onChange={(value) => {
+                setFechaEntregaDesde(value)
+                setPage(1)
+              }}
+            />
+
+            <DatePicker
+              placeholder="Entrega hasta"
+              value={fechaEntregaHasta}
+              onChange={(value) => {
+                setFechaEntregaHasta(value)
                 setPage(1)
               }}
             />
