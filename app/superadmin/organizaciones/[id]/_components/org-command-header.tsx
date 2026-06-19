@@ -1,4 +1,5 @@
 import type { ReactNode } from "react"
+import { Ban } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import type { OrganizationDetail, SubscriptionWithPlan } from "@/types/superadmin"
@@ -83,6 +84,26 @@ export function OrgCommandHeader({ organization, subscription }: OrgCommandHeade
             </Badge>
           </div>
         </div>
+
+        {/* Suspension detail — only when the org is suspended */}
+        {!organization.activo && organization.suspension_reason && (
+          <div className="mt-4 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2">
+            <Ban className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+            <div className="text-sm">
+              <p className="font-medium text-destructive">
+                Motivo de la suspensión
+              </p>
+              <p className="text-foreground/80">{organization.suspension_reason}</p>
+              {(organization.suspended_at || organization.suspended_by) && (
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {organization.suspended_at &&
+                    `Suspendida el ${new Date(organization.suspended_at).toLocaleDateString("es-AR")}`}
+                  {organization.suspended_by && ` · por ${organization.suspended_by}`}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   )
