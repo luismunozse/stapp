@@ -52,7 +52,7 @@ export async function GET(request: Request) {
       let query = q.eq("organization_id", organizationId!)
       if (search) {
         query = query.or(
-          `nombre.ilike.%${search}%,telefono.ilike.%${search}%,dni.ilike.%${search}%,email.ilike.%${search}%`
+          `nombre.ilike.%${search}%,telefono.ilike.%${search}%,dni.ilike.%${search}%,email.ilike.%${search}%,sectores_texto.ilike.%${search}%`
         )
       }
       if (tipoCliente) query = query.eq("tipo_cliente", tipoCliente)
