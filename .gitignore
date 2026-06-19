@@ -50,3 +50,6 @@ nul
 # Claude Code worktrees (separate git repos, not submodules)
 .claude/worktrees/
 shots/
+
+# Local agent tooling (brainstorm scratch, etc.)
+.superpowers/
