@@ -123,6 +123,16 @@ export async function PUT(
       return NextResponse.json({ error: "Reclamo no encontrado" }, { status: 404 })
     }
 
+    // Guard de tenant: garantias/reclamos_garantia no tienen columna
+    // organization_id propia, así que validamos por la org de la orden de la
+    // garantía. Sin esto, un admin de otra org podía editar reclamos/garantías
+    // ajenas pasando el reclamoId. También exigimos que el reclamo pertenezca a
+    // la garantía de la URL.
+    const reclamoOrgId = reclamo.garantias?.ordenes_servicio?.organization_id
+    if (reclamoOrgId !== organizationId || reclamo.garantia_id !== garantiaId) {
+      return NextResponse.json({ error: "Reclamo no encontrado" }, { status: 404 })
+    }
+
     let ordenReparacionId = reclamo.orden_reparacion_id
 
     // Si se acepta el reclamo y se solicita crear orden

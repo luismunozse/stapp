@@ -23,6 +23,13 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "type es requerido" }, { status: 400 })
     }
 
+    // Validar `type` para evitar SSRF/path-traversal: se interpola en la URL
+    // interna que se fetchea con la cookie del usuario. Sin esto, `type=../cron/x`
+    // alcanzaría otros endpoints internos. Solo permitimos slugs simples.
+    if (!/^[a-z0-9-]+$/i.test(type)) {
+      return NextResponse.json({ error: "type inválido" }, { status: 400 })
+    }
+
     // Fetch the report data from the corresponding endpoint
     const baseUrl = new URL(request.url).origin
     const reportUrl = `${baseUrl}/api/reportes/${type}`
@@ -74,9 +81,11 @@ function jsonToCsv(data: unknown): string {
       headers.map((h) => {
         const val = (row as Record<string, unknown>)[h]
         const str = val === null || val === undefined ? "" : String(val)
-        return str.includes(",") || str.includes('"') || str.includes("\n")
-          ? `"${str.replace(/"/g, '""')}"`
-          : str
+        // Mitiga formula injection antes de escapar para CSV.
+        const safe = /^[=+\-@\t\r]/.test(str) ? "'" + str : str
+        return safe.includes(",") || safe.includes('"') || safe.includes("\n")
+          ? `"${safe.replace(/"/g, '""')}"`
+          : safe
       }).join(",")
     )
     return [headers.join(","), ...rows].join("\n")

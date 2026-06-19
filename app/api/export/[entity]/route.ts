@@ -232,7 +232,7 @@ async function exportGarantias(
     .select(
       `
       *,
-      orden:ordenes_servicio(
+      orden:ordenes_servicio!inner(
         numero_orden,
         dispositivo,
         cliente:clientes(nombre, telefono)

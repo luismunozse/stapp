@@ -51,10 +51,16 @@ export function arrayToCSV<T extends Record<string, any>>(
  * Escapa un campo para CSV (maneja comas, comillas, saltos de línea)
  */
 function escapeCSVField(field: string): string {
-  if (field.includes(",") || field.includes('"') || field.includes("\n")) {
-    return `"${field.replace(/"/g, '""')}"`
+  // Mitiga CSV/formula injection: un valor que arranca con =,+,-,@ (o tab/CR)
+  // es ejecutado como fórmula por Excel/Sheets. Lo prefijamos con comilla simple.
+  let safe = field
+  if (/^[=+\-@\t\r]/.test(safe)) {
+    safe = "'" + safe
   }
-  return field
+  if (safe.includes(",") || safe.includes('"') || safe.includes("\n")) {
+    return `"${safe.replace(/"/g, '""')}"`
+  }
+  return safe
 }
 
 /**
