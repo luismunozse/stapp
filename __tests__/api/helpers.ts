@@ -48,7 +48,7 @@ export function createChainMock(finalData: any = null, finalError: any = null, c
   const methods = [
     "select", "insert", "update", "upsert", "delete",
     "eq", "neq", "not", "gte", "lte", "gt", "lt",
-    "or", "in", "is", "textSearch",
+    "or", "in", "is", "ilike", "textSearch",
     "order", "limit", "range",
     "maybeSingle",
   ]

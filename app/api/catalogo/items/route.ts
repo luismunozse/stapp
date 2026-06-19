@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth, requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { revalidateCatalogo } from "@/lib/catalogo/revalidate"
+import { parsePagination } from "@/lib/api-utils"
 import { z } from "zod"
 
 const itemSchema = z.object({
@@ -25,26 +26,56 @@ const itemSchema = z.object({
 export async function GET(req: Request) {
   const auth = await requireAuth()
   if (auth.error) return auth.error
+  const org = auth.organizationId!
 
   const url = new URL(req.url)
   const categoriaId = url.searchParams.get("categoria_id")
   const tipo = url.searchParams.get("tipo")
-  const search = url.searchParams.get("q")?.trim()
+  const estado = url.searchParams.get("estado")
+  const sinImagen = url.searchParams.get("sin_imagen") === "1"
+  const rawQ = url.searchParams.get("q")?.trim() ?? ""
+  const q = rawQ.replace(/[,()%_*\\:]/g, " ").replace(/\s+/g, " ").trim()
+  const { page, limit, offset } = parsePagination(url.searchParams)
+
+  let varItemIds: string[] = []
+  let invIds: string[] = []
+  if (q) {
+    const [varsRes, invsRes] = await Promise.all([
+      supabaseAdmin.from("catalogo_variantes").select("item_id").eq("organization_id", org).ilike("sku", `%${q}%`),
+      supabaseAdmin.from("inventario").select("id").eq("organization_id", org).ilike("codigo", `%${q}%`),
+    ])
+    varItemIds = Array.from(new Set((varsRes.data ?? []).map((v: { item_id: string }) => v.item_id)))
+    invIds = Array.from(new Set((invsRes.data ?? []).map((i: { id: string }) => i.id)))
+  }
 
   let query = supabaseAdmin
     .from("catalogo_items")
-    .select("*, categoria:catalogo_categorias(id,nombre), inventario:inventario(id,stock,nombre)")
-    .eq("organization_id", auth.organizationId!)
-    .order("orden", { ascending: true })
-    .order("created_at", { ascending: false })
+    .select("*, categoria:catalogo_categorias(id,nombre), inventario:inventario(id,stock,nombre)", { count: "exact" })
+    .eq("organization_id", org)
 
   if (categoriaId) query = query.eq("categoria_id", categoriaId)
   if (tipo === "PRODUCTO" || tipo === "SERVICIO") query = query.eq("tipo", tipo)
-  if (search) query = query.ilike("nombre", `%${search}%`)
+  if (estado === "activo") query = query.eq("activo", true)
+  else if (estado === "inactivo") query = query.eq("activo", false)
+  if (sinImagen) query = query.is("imagen_url", null)
 
-  const { data, error } = await query
+  if (q) {
+    const orParts = [`nombre.ilike.%${q}%`]
+    if (varItemIds.length > 0) orParts.push(`id.in.(${varItemIds.join(",")})`)
+    if (invIds.length > 0) orParts.push(`inventario_id.in.(${invIds.join(",")})`)
+    if (orParts.length === 1) query = query.ilike("nombre", `%${q}%`)
+    else query = query.or(orParts.join(","))
+  }
+
+  query = query
+    .order("orden", { ascending: true })
+    .order("created_at", { ascending: false })
+    .range(offset, offset + limit - 1)
+
+  const { data, error, count } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ items: data ?? [] })
+  const total = count ?? 0
+  return NextResponse.json({ items: data ?? [], total, page, limit, totalPages: Math.ceil(total / limit) })
 }
 
 export async function POST(req: Request) {
