@@ -8,7 +8,7 @@ import { revealHeader, revealPanel, revealStaggerFast, revealRow } from "./revea
 const rows = [
   {
     feature: "Órdenes de trabajo",
-    stapp: "Digitales con estados en tiempo real",
+    stapp: "Digitales con estados y seguimiento",
     excel: "Planilla manual",
     papel: "Anotaciones sueltas",
     stappLevel: "full",
@@ -44,7 +44,7 @@ const rows = [
   },
   {
     feature: "Seguimiento para clientes",
-    stapp: "Link público en tiempo real",
+    stapp: "Link público con estado actualizado",
     excel: "No disponible",
     papel: "No disponible",
     stappLevel: "full",
@@ -53,7 +53,7 @@ const rows = [
   },
   {
     feature: "Cotizaciones online",
-    stapp: "Aprobación con firma digital",
+    stapp: "Aprobación/rechazo online",
     excel: "PDF manual",
     papel: "No disponible",
     stappLevel: "full",
@@ -71,7 +71,7 @@ const rows = [
   },
   {
     feature: "Reportes",
-    stapp: "15+ reportes avanzados",
+    stapp: "Reportes avanzados",
     excel: "Gráficos básicos",
     papel: "No existen",
     stappLevel: "full",
@@ -143,7 +143,7 @@ const rows = [
   },
   {
     feature: "Dashboard analítico",
-    stapp: "KPIs en tiempo real",
+    stapp: "KPIs actualizados",
     excel: "Gráficos manuales",
     papel: "No disponible",
     stappLevel: "full",
@@ -162,6 +162,33 @@ const rows = [
   {
     feature: "Asistente IA integrado",
     stapp: "Santi, disponible 24/7",
+    excel: "No disponible",
+    papel: "No disponible",
+    stappLevel: "full",
+    excelLevel: "none",
+    papelLevel: "none",
+  },
+  {
+    feature: "Multi-sucursal",
+    stapp: "Varias sucursales y monedas",
+    excel: "No disponible",
+    papel: "No disponible",
+    stappLevel: "full",
+    excelLevel: "none",
+    papelLevel: "none",
+  },
+  {
+    feature: "Catálogo online",
+    stapp: "Tienda con MercadoPago",
+    excel: "No disponible",
+    papel: "No disponible",
+    stappLevel: "full",
+    excelLevel: "none",
+    papelLevel: "none",
+  },
+  {
+    feature: "Integraciones / API",
+    stapp: "Webhooks y API REST",
     excel: "No disponible",
     papel: "No disponible",
     stappLevel: "full",

@@ -22,7 +22,7 @@ export function Footer() {
       { name: "Centro de ayuda", href: "/ayuda" },
       { name: "Manual de uso", href: "/ayuda/manual" },
       { name: "Descargar app Android", href: "/descargar/android" },
-      { name: "WhatsApp", href: "https://wa.me/5491100000000" },
+      { name: "WhatsApp", href: "https://wa.me/5491169625733" },
     ],
     comunidad: [
       { name: "Instagram", href: "https://instagram.com/stapp.ar" },

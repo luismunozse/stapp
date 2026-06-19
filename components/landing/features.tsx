@@ -43,14 +43,14 @@ const categories = [
       {
         name: "Órdenes de Servicio",
         description:
-          "El corazón de tu taller. Creá una orden en menos de 1 minuto con estados en tiempo real, checklists personalizados y seguimiento completo.",
+          "El corazón de tu taller. Creá una orden en menos de 1 minuto con estados claros, checklists personalizados y seguimiento completo.",
         icon: ClipboardList,
         color: "bg-blue-500",
       },
       {
         name: "Cotizaciones y Presupuestos",
         description:
-          "Creá presupuestos profesionales con descuentos, impuestos y condiciones. Tu cliente los aprueba online con firma digital desde un link, sin necesidad de cuenta.",
+          "Creá presupuestos profesionales con descuentos, impuestos y condiciones. Tu cliente los aprueba o rechaza online desde un link, sin necesidad de cuenta.",
         icon: Calculator,
         color: "bg-indigo-500",
       },
@@ -64,7 +64,7 @@ const categories = [
       {
         name: "Portal de Seguimiento",
         description:
-          "Tu cliente sigue su reparación en tiempo real desde un link, sin crear cuenta. Ve el estado, fotos, garantía y descarga el comprobante en PDF.",
+          "Tu cliente sigue su reparación desde un link, sin crear cuenta. Ve el estado actualizado, fotos, garantía y descarga el comprobante en PDF.",
         icon: Link2,
         color: "bg-emerald-500",
       },
@@ -86,7 +86,7 @@ const categories = [
       {
         name: "Control de Inventario",
         description:
-          "Alertas de stock bajo, historial de precios, costos y márgenes en tiempo real. Importá tu inventario desde Excel o CSV en minutos.",
+          "Multi-depósito, variantes, series/IMEI, lotes con vencimiento y análisis ABC. Alertas de stock bajo, historial de precios y reposición sugerida. Importá tu inventario desde Excel o CSV en minutos.",
         icon: Package,
         color: "bg-green-500",
       },
@@ -103,6 +103,13 @@ const categories = [
           "Garantías vigentes, vencimientos, reclamos pendientes y reingresos vinculados a la orden original. Todo trazable, sin perder nada.",
         icon: ShieldCheck,
         color: "bg-red-500",
+      },
+      {
+        name: "Multi-sucursal y Multi-moneda",
+        description:
+          "Gestioná varias sucursales con órdenes, ventas, caja y stock por local. Trabajá en cualquiera de las 11 monedas soportadas (ARS, USD y más).",
+        icon: Settings,
+        color: "bg-cyan-600",
       },
     ],
   },
@@ -140,6 +147,13 @@ const categories = [
         icon: Monitor,
         color: "bg-sky-500",
       },
+      {
+        name: "Catálogo Online",
+        description:
+          "Publicá tu catálogo con link propio, cupones de descuento y checkout con MercadoPago. Recuperá carritos abandonados automáticamente.",
+        icon: Link2,
+        color: "bg-fuchsia-500",
+      },
     ],
   },
   {
@@ -172,7 +186,7 @@ const categories = [
       {
         name: "Dashboard Analítico",
         description:
-          "Panel centralizado con KPIs en tiempo real: ingresos, reparaciones, rendimiento del equipo y tendencias. Todo de un vistazo para tomar mejores decisiones.",
+          "Panel centralizado con KPIs actualizados: ingresos, reparaciones, rendimiento del equipo y tendencias. Todo de un vistazo para tomar mejores decisiones.",
         icon: LayoutDashboard,
         color: "bg-violet-600",
       },
@@ -185,7 +199,7 @@ const categories = [
     description: "Herramientas inteligentes para trabajar mejor, no más",
     features: [
       {
-        name: "15+ Reportes Avanzados",
+        name: "Reportes Avanzados",
         description:
           "Rentabilidad, predicción de repuestos, fallas comunes, tiempos de reparación, tasa de retorno, rendimiento por técnico y mucho más.",
         icon: BarChart3,
@@ -212,6 +226,13 @@ const categories = [
         icon: Smartphone,
         color: "bg-pink-500",
       },
+      {
+        name: "Integraciones y API",
+        description:
+          "Webhooks salientes, API REST v1 y API keys para conectar STApp con tus otras herramientas.",
+        icon: Zap,
+        color: "bg-slate-500",
+      },
     ],
   },
   {
@@ -230,7 +251,7 @@ const categories = [
       {
         name: "Firma Digital",
         description:
-          "Capturá la firma del cliente en la entrega y en la aprobación de presupuestos. Ante cualquier reclamo, tenés el respaldo legal.",
+          "Capturá la firma del cliente en la recepción y en la entrega del equipo. Ante cualquier reclamo, tenés el respaldo legal.",
         icon: PenLine,
         color: "bg-amber-600",
       },

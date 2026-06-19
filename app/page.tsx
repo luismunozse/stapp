@@ -80,7 +80,7 @@ const faqData = [
   {
     question: "\u00bfNecesito instalar algo en mi computadora?",
     answer:
-      "No, STApp es una aplicaci\u00f3n web que funciona directamente en tu navegador desde cualquier dispositivo. Solo necesitas conexi\u00f3n a internet. Adem\u00e1s, pod\u00e9s descargar la app nativa para Android (APK), instalarla como PWA en cualquier dispositivo, y pr\u00f3ximamente estar\u00e1 disponible tambi\u00e9n en iOS.",
+      "No, STApp es una aplicaci\u00f3n web que funciona directamente en tu navegador desde cualquier dispositivo. Solo necesit\u00e1s conexi\u00f3n a internet. Tambi\u00e9n pod\u00e9s instalarla como PWA en tu celular y usar la app para Android; la versi\u00f3n para iOS est\u00e1 en camino.",
   },
   {
     question: "\u00bfPuedo probar antes de pagar?",
@@ -115,12 +115,12 @@ const faqData = [
   {
     question: "\u00bfPuedo gestionar varios t\u00e9cnicos y vendedores?",
     answer:
-      "S\u00ed, pod\u00e9s agregar t\u00e9cnicos y vendedores ilimitados con roles diferenciados (admin, t\u00e9cnico, vendedor). Asign\u00e1 reparaciones, visualiz\u00e1 la carga de trabajo de cada uno y segu\u00ed el rendimiento del equipo con m\u00e9tricas en tiempo real.",
+      "S\u00ed, pod\u00e9s agregar t\u00e9cnicos y vendedores ilimitados con roles diferenciados (admin, t\u00e9cnico, vendedor). Asign\u00e1 reparaciones, visualiz\u00e1 la carga de trabajo de cada uno y segu\u00ed el rendimiento del equipo con m\u00e9tricas individuales.",
   },
   {
     question: "\u00bfMi cliente puede ver el estado de su reparaci\u00f3n?",
     answer:
-      "S\u00ed. Cada orden genera un link \u00fanico que pod\u00e9s compartir por WhatsApp. Tu cliente ve el estado en tiempo real, las fotos, la informaci\u00f3n de garant\u00eda y puede descargar el comprobante en PDF. No necesita crear cuenta ni instalar nada.",
+      "S\u00ed. Cada orden genera un link \u00fanico que pod\u00e9s compartir por WhatsApp. Tu cliente ve el estado actualizado, las fotos, la informaci\u00f3n de garant\u00eda y puede descargar el comprobante en PDF. No necesita crear cuenta ni instalar nada.",
   },
   {
     question: "\u00bfPuedo vender accesorios y repuestos adem\u00e1s de reparar?",
@@ -140,7 +140,7 @@ const faqData = [
   {
     question: "\u00bfSTApp tiene control de caja y finanzas?",
     answer:
-      "S\u00ed. STApp incluye caja diaria con apertura y cierre, control de movimientos de efectivo, gesti\u00f3n de gastos por categor\u00eda, gastos recurrentes (alquiler, servicios, sueldos) y un dashboard anal\u00edtico con los KPIs de tu taller en tiempo real. Tambi\u00e9n pod\u00e9s gestionar \u00f3rdenes de compra a proveedores vinculadas directamente al inventario.",
+      "S\u00ed. STApp incluye caja diaria con apertura y cierre, control de movimientos de efectivo, gesti\u00f3n de gastos por categor\u00eda, gastos recurrentes (alquiler, servicios, sueldos) y un dashboard anal\u00edtico con los KPIs de tu taller actualizados. Tambi\u00e9n pod\u00e9s gestionar \u00f3rdenes de compra a proveedores vinculadas directamente al inventario.",
   },
   {
     question: "\u00bfQu\u00e9 es Santi, el asistente de IA?",
@@ -151,6 +151,16 @@ const faqData = [
     question: "\u00bfPuedo captar leads y darles seguimiento?",
     answer:
       "S\u00ed. STApp incluye un m\u00f3dulo de captaci\u00f3n de leads donde pod\u00e9s registrar consultas y potenciales clientes. Hac\u00e9 seguimiento de cada lead hasta convertirlo en una orden de trabajo real, sin que se te escape ninguna oportunidad.",
+  },
+  {
+    question: "\u00bfPuedo manejar varias sucursales?",
+    answer:
+      "S\u00ed. STApp es multi-sucursal: gestion\u00e1s \u00f3rdenes, ventas, caja, dep\u00f3sitos y usuarios por sucursal. La cantidad de sucursales depende de tu plan (el plan Free incluye 1 y el Profesional hasta 3). Adem\u00e1s soporta m\u00faltiples monedas.",
+  },
+  {
+    question: "\u00bfSTApp tiene API o integraciones?",
+    answer:
+      "S\u00ed. STApp ofrece una API REST (v1) para clientes, inventario y \u00f3rdenes con API keys, adem\u00e1s de webhooks salientes configurables para conectar STApp con tus otras herramientas y notificarte de eventos al instante.",
   },
 ]
 
