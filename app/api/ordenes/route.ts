@@ -83,6 +83,8 @@ export async function GET(request: Request) {
     const fechaHasta = searchParams.get("fechaHasta") || ""
     const fechaPrometidaDesde = searchParams.get("fechaPrometidaDesde") || ""
     const fechaPrometidaHasta = searchParams.get("fechaPrometidaHasta") || ""
+    const fechaEntregaDesde = searchParams.get("fechaEntregaDesde") || ""
+    const fechaEntregaHasta = searchParams.get("fechaEntregaHasta") || ""
 
     // Sorting (whitelist de columnas permitidas)
     const allowedSortColumns: Record<string, string> = {
@@ -150,6 +152,14 @@ export async function GET(request: Request) {
 
     if (fechaPrometidaHasta) {
       query = query.lte("fecha_prometida", `${fechaPrometidaHasta}T23:59:59`)
+    }
+
+    if (fechaEntregaDesde) {
+      query = query.gte("fecha_entrega", `${fechaEntregaDesde}T00:00:00`)
+    }
+
+    if (fechaEntregaHasta) {
+      query = query.lte("fecha_entrega", `${fechaEntregaHasta}T23:59:59`)
     }
 
     if (tipoDispositivo) {
