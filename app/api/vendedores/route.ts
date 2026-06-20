@@ -133,6 +133,13 @@ export async function POST(request: Request) {
       sucursalId = data.sucursalId
     }
 
+    if (!sucursalId) {
+      return NextResponse.json(
+        { error: "La organización no tiene sucursal principal" },
+        { status: 400 }
+      )
+    }
+
     // Verificar si el email ya existe
     const { data: existingUser } = await supabaseAdmin
       .from("users")
