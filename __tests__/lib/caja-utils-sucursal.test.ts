@@ -55,21 +55,19 @@ describe("fetchMovimientosDia — sucursal filtering", () => {
     expect(hasSucursalFilter).toBe(false)
   })
 
-  it("with sucursalId — adds sucursal_id filter to movimientos_caja and omits cuenta_corriente", async () => {
+  it("with sucursalId — adds sucursal_id filter to movimientos_caja", async () => {
     const cobrosChain = makeQueryChain([])
     const facturaChain = makeQueryChain([])
     const ventaChain = makeQueryChain([])
+    const ccChain = makeQueryChain([])
     const movChain = makeQueryChain([])
 
     vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
       if (table === "cobros_orden") return cobrosChain
       if (table === "pagos_parciales") return facturaChain
       if (table === "pagos_venta") return ventaChain
+      if (table === "cuenta_corriente") return ccChain
       if (table === "movimientos_caja") return movChain
-      // cuenta_corriente should NOT be called when sucursalId is provided
-      if (table === "cuenta_corriente") {
-        throw new Error("cuenta_corriente should not be queried when sucursalId is set")
-      }
       return makeQueryChain([])
     })
 
@@ -78,6 +76,32 @@ describe("fetchMovimientosDia — sucursal filtering", () => {
     // sucursal_id eq filter SHOULD be applied to movimientos_caja
     const movEqCalls = movChain._eqCalls as [string, string][]
     const sucursalFilter = movEqCalls.find(([col]) => col === "sucursal_id")
+    expect(sucursalFilter).toBeDefined()
+    expect(sucursalFilter![1]).toBe("suc-A")
+  })
+
+  it("with sucursalId — queries cuenta_corriente filtered by sucursal_id (mig 238)", async () => {
+    const cobrosChain = makeQueryChain([])
+    const facturaChain = makeQueryChain([])
+    const ventaChain = makeQueryChain([])
+    const ccChain = makeQueryChain([])
+    const movChain = makeQueryChain([])
+
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "cobros_orden") return cobrosChain
+      if (table === "pagos_parciales") return facturaChain
+      if (table === "pagos_venta") return ventaChain
+      if (table === "cuenta_corriente") return ccChain
+      if (table === "movimientos_caja") return movChain
+      return makeQueryChain([])
+    })
+
+    await fetchMovimientosDia(ORG_ID, FECHA_DESDE, FECHA_HASTA, undefined, "suc-A")
+
+    // cuenta_corriente SHOULD be queried, now scoped to the branch
+    expect(supabaseAdmin.from).toHaveBeenCalledWith("cuenta_corriente")
+    const ccEqCalls = ccChain._eqCalls as [string, string][]
+    const sucursalFilter = ccEqCalls.find(([col]) => col === "sucursal_id")
     expect(sucursalFilter).toBeDefined()
     expect(sucursalFilter![1]).toBe("suc-A")
   })

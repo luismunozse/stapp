@@ -106,21 +106,21 @@ export async function fetchMovimientosDia(
   const { data: pagosVentas } = await pagosVentasQuery
 
   // 4. Depósitos cuenta corriente
-  // NOTE: cuenta_corriente has no branch column today — when sucursalId is provided,
-  // this source is omitted from per-branch arqueo (Fase 2 gap: add branch attribution
-  // to cuenta_corriente). Without scoping, all deposits are included as before.
-  let depositosData: any[] | null = null
-  if (!sucursalId) {
-    const { data } = await supabaseAdmin
-      .from("cuenta_corriente")
-      .select("monto, metodo_pago, created_at, observaciones, cliente_id")
-      .eq("organization_id", organizationId)
-      .eq("tipo", "DEPOSITO")
-      .gte("created_at", fechaDesde)
-      .lte("created_at", fechaHasta)
-      .order("created_at", { ascending: false })
-    depositosData = data
+  // cuenta_corriente.sucursal_id (mig 238) permite el arqueo por sucursal: cada
+  // depósito queda atribuido a la sucursal donde se registró. Sin sucursalId se
+  // incluyen todos los depósitos de la org, como antes.
+  let depositosQuery = supabaseAdmin
+    .from("cuenta_corriente")
+    .select("monto, metodo_pago, created_at, observaciones, cliente_id")
+    .eq("organization_id", organizationId)
+    .eq("tipo", "DEPOSITO")
+    .gte("created_at", fechaDesde)
+    .lte("created_at", fechaHasta)
+    .order("created_at", { ascending: false })
+  if (sucursalId) {
+    depositosQuery = depositosQuery.eq("sucursal_id", sucursalId)
   }
+  const { data: depositosData } = await depositosQuery
 
   // 5. Movimientos manuales de caja
   let movimientosQuery = supabaseAdmin
