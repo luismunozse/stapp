@@ -4,6 +4,13 @@ import { supabaseAdmin } from "@/lib/supabase"
 export const SUCURSAL_COOKIE = "stapp-sucursal-activa"
 const TODAS = "todas"
 
+/**
+ * Sentinel UUID used when a non-admin user has no assigned branch.
+ * Applying .eq("sucursal_id", SUCURSAL_NINGUNA) matches zero real rows,
+ * so the query returns empty rather than leaking all branches (fail-closed).
+ */
+export const SUCURSAL_NINGUNA = "00000000-0000-0000-0000-000000000000"
+
 export interface ResultadoLectura {
   sucursalId: string | null // null => sin filtro de sucursal (ver todas)
   verTodas: boolean
@@ -20,8 +27,11 @@ export function resolveSucursalLectura(input: InputResolucion): ResultadoLectura
   const esAdmin = input.role === "ADMIN"
 
   if (!esAdmin) {
-    // TECNICO/VENDEDOR: su sucursal fija, ignora cookie.
-    return { sucursalId: input.userSucursalId, verTodas: false }
+    // TECNICO/VENDEDOR must always be branch-scoped. If their sucursal_id is null
+    // (invalid state, e.g. role changed from ADMIN without assigning a branch),
+    // return the sentinel so the .eq filter matches zero rows instead of leaking
+    // all branches (fail-closed rather than fail-open).
+    return { sucursalId: input.userSucursalId ?? SUCURSAL_NINGUNA, verTodas: false }
   }
 
   // ADMIN: cookie manda. Sin cookie o 'todas' => ver todas.

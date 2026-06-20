@@ -107,6 +107,13 @@ export async function POST(request: Request) {
       sucursalId = bodySucursalId
     }
 
+    if (!sucursalId) {
+      return NextResponse.json(
+        { error: "La organización no tiene sucursal principal" },
+        { status: 400 }
+      )
+    }
+
     if (!nombre || !email || !password) {
       return NextResponse.json(
         { error: "Nombre, email y contraseña son requeridos" },
