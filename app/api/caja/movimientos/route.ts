@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaEscritura, sucursalParaLectura } from "@/lib/sucursal"
+import { esMovimientoCogsAutomatico } from "@/lib/caja-utils"
 import { z } from "zod"
 
 const movimientoSchema = z.object({
@@ -43,7 +44,10 @@ export async function GET(request: Request) {
     const { data: movimientos } = await movimientosQuery
 
     return NextResponse.json({
-      movimientos: (movimientos || []).map((m) => ({
+      movimientos: (movimientos || [])
+        // El egreso automático de COGS es contable, no un movimiento de caja real.
+        .filter((m) => !esMovimientoCogsAutomatico(m))
+        .map((m) => ({
         id: m.id,
         tipo: m.tipo,
         monto: parseFloat(m.monto),
