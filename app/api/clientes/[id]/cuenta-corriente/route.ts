@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaEscritura } from "@/lib/sucursal"
 import { z } from "zod"
 
 // GET - Obtener saldo y movimientos de cuenta corriente del cliente
@@ -80,7 +81,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role } = await requireAuth()
+    const { error, session, organizationId, userId, role } = await requireAuth()
     if (error) return error
 
     if (role !== "ADMIN") {
@@ -94,6 +95,14 @@ export async function POST(
     const body = await request.json()
     const data = depositoSchema.parse(body)
 
+    // Atribuir el depósito a la sucursal activa para que entre al arqueo de esa
+    // sucursal (mig 238: cuenta_corriente.sucursal_id).
+    const sucursalId = await sucursalParaEscritura({
+      role,
+      organizationId: organizationId!,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
+
     const { data: result, error: rpcError } = await supabaseAdmin.rpc(
       "depositar_cuenta_corriente",
       {
@@ -104,6 +113,7 @@ export async function POST(
         p_numero_referencia: data.numeroReferencia || null,
         p_observaciones: data.observaciones || null,
         p_usuario_id: userId!,
+        p_sucursal_id: sucursalId,
       }
     )
 
