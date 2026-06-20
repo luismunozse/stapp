@@ -1,3 +1,4 @@
+import type { ComponentType } from "react"
 import { auth } from "@/lib/auth"
 import { redirect } from "next/navigation"
 import { ConfiguracionForm } from "@/components/configuracion/configuracion-form"
@@ -11,23 +12,22 @@ import {
   FileSpreadsheet,
   Smartphone,
   Monitor,
-  MessageCircle,
   Tag,
   Repeat,
   Warehouse,
   Printer,
-  MessageSquare,
   Store,
   type LucideIcon,
 } from "lucide-react"
 import { canEditConfiguration } from "@/lib/auth-utils"
+import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { SecuritySettings } from "@/components/configuracion/security-settings"
 import { supabaseAdmin } from "@/lib/supabase"
 import { PageShell } from "@/components/ui/page-shell"
 
 type SettingCard = {
   href: string
-  icon: LucideIcon
+  icon: LucideIcon | ComponentType<{ className?: string }>
   label: string
   labelShort?: string
   desc: string
@@ -118,7 +118,7 @@ const SECTIONS: SettingSection[] = [
     cards: [
       {
         href: "/configuracion/whatsapp",
-        icon: MessageCircle,
+        icon: WhatsAppIcon,
         label: "WhatsApp Business",
         labelShort: "WhatsApp",
         desc: "Notificaciones vía WhatsApp API",
@@ -126,7 +126,7 @@ const SECTIONS: SettingSection[] = [
       },
       {
         href: "/configuracion/plantillas-whatsapp",
-        icon: MessageSquare,
+        icon: WhatsAppIcon,
         label: "Plantillas WhatsApp",
         labelShort: "Plantillas",
         desc: "Personalizá los mensajes por tipo",
