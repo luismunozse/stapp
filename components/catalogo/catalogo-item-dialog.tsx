@@ -112,9 +112,10 @@ export function CatalogoItemDialog({ item, categorias, open, onClose, onSaved, t
       imagenes,
     }
 
-    if (tipo === "PRODUCTO") {
+    if (tipo === "PRODUCTO" && !item?.inventario_id) {
       payload.stock = stock ? Number(stock) : null
     } else {
+      // Servicio, o item linkeado a inventario: inventario es la fuente de verdad.
       payload.stock = null
     }
 
@@ -272,19 +273,30 @@ export function CatalogoItemDialog({ item, categorias, open, onClose, onSaved, t
           {tipo === "PRODUCTO" && (
             <div>
               <Label htmlFor="stock">Stock disponible</Label>
-              <Input
-                id="stock"
-                type="text"
-                inputMode="numeric"
-                min="0"
-                step="1"
-                value={stock}
-                onChange={(e) => setStock(e.target.value)}
-                placeholder="Vacío = sin tracking"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Si lo dejás vacío, no se trackea stock. 0 = agotado.
-              </p>
+              {item?.inventario_id ? (
+                <>
+                  <Input id="stock" type="text" value="Gestionado por Inventario" disabled readOnly />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Este ítem está linkeado a Inventario. El stock se administra desde ahí.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <Input
+                    id="stock"
+                    type="text"
+                    inputMode="numeric"
+                    min="0"
+                    step="1"
+                    value={stock}
+                    onChange={(e) => setStock(e.target.value)}
+                    placeholder="Vacío = sin tracking"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Si lo dejás vacío, no se trackea stock. 0 = agotado.
+                  </p>
+                </>
+              )}
             </div>
           )}
 

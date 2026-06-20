@@ -5,11 +5,19 @@ import { randomBytes } from "crypto"
 import { z } from "zod"
 import { resolvePlantilla } from "@/lib/whatsapp/plantillas-catalog"
 
-async function revertirCupon(cuponId: string) {
+async function revertirCupon(cuponId: string, codigo: string | null): Promise<boolean> {
   try {
-    await supabaseAdmin.rpc("revertir_uso_cupon_catalogo", { p_cupon_id: cuponId })
+    const { error } = await supabaseAdmin.rpc("revertir_uso_cupon_catalogo", { p_cupon_id: cuponId })
+    if (error) throw error
+    return true
   } catch (err) {
-    console.error("Error revirtiendo uso de cupón:", err)
+    // Cupón consumido sin cotización asociada: requiere reconciliación manual.
+    // Logueamos id + código para poder rastrearlo y revertirlo a mano.
+    console.error(
+      `[catalogo][cupon-huerfano] No se pudo revertir el cupón consumido. cuponId=${cuponId} codigo=${codigo ?? "?"}`,
+      err,
+    )
+    return false
   }
 }
 
@@ -292,13 +300,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
 
   if (rpcErr || !rpcResult?.ok) {
     console.error("Error en crear_cotizacion_publica_atomica:", rpcErr)
+    let cuponRevertido = true
     if (cuponId) {
-      await revertirCupon(cuponId)
+      cuponRevertido = await revertirCupon(cuponId, cuponCodigoAplicado)
     }
     // P0003 = stock insuficiente (raise de reservar_stock_catalogo)
     const status = rpcErr?.code === "P0003" ? 409 : 500
     const msg = rpcErr?.code === "P0003" ? rpcErr.message : "Error al crear cotización"
-    return NextResponse.json({ error: msg }, { status })
+    // Si el cupón quedó consumido sin cotización, avisamos al cliente para que
+    // sepa que su cupón puede haber quedado usado (reconciliación manual).
+    return NextResponse.json(
+      cuponRevertido ? { error: msg } : { error: msg, cuponNoRevertido: true },
+      { status },
+    )
   }
 
   const cotizacion = {

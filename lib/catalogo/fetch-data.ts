@@ -67,6 +67,12 @@ export async function fetchCatalogoBaseData(slug: string): Promise<CatalogoPubli
       .limit(10000),
   ])
 
+  // El limit() puede truncar en silencio para orgs con mucho tráfico → vistas
+  // sesgadas hacia abajo. Lo dejamos visible en logs para detectar el techo.
+  if ((viewsRaw?.length ?? 0) >= 10000) {
+    console.warn(`[catalogo] views truncadas en 10000 para org ${config.organization_id}; vistas_semana puede estar subestimado`)
+  }
+
   const viewsPorItem = new Map<string, Set<string>>()
   const viewsPorItemRaw = new Map<string, number>()
   for (const v of viewsRaw ?? []) {
@@ -90,6 +96,9 @@ export async function fetchCatalogoBaseData(slug: string): Promise<CatalogoPubli
       .in("catalogo_item_id", itemIdsConVariantes)
       .not("variante_id", "is", null)
       .limit(20000)
+    if ((vRows?.length ?? 0) >= 20000) {
+      console.warn(`[catalogo] items_cotizacion truncado en 20000 para org ${config.organization_id}; top_variante_id puede estar sesgado`)
+    }
     const counts = new Map<string, Map<string, number>>()
     for (const r of vRows ?? []) {
       if (!r.catalogo_item_id || !r.variante_id) continue
@@ -155,7 +164,9 @@ export async function fetchCatalogoBaseData(slug: string): Promise<CatalogoPubli
       etiquetas: it.etiquetas ?? [],
       stock_disponible: stockReal,
       destacado: it.destacado,
-      vistas_semana: Math.max(vistasUnicas, vistasTotal),
+      // Visitantes únicos (dedup por visitor_hash). Fallback a total solo si no
+      // hay hashes registrados, para no romper el conteo en datos legacy.
+      vistas_semana: vistasUnicas || vistasTotal,
       top_variante_id: topVarId,
       variantes,
     }

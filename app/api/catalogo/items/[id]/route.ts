@@ -35,7 +35,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
   const { data: existing } = await supabaseAdmin
     .from("catalogo_items")
-    .select("tipo, precio, precio_hasta")
+    .select("tipo, precio, precio_hasta, inventario_id")
     .eq("id", id)
     .eq("organization_id", auth.organizationId!)
     .maybeSingle()
@@ -45,6 +45,15 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   const tipoFinal = parsed.data.tipo ?? existing.tipo
   if (tipoFinal === "SERVICIO" && parsed.data.stock != null) {
     return NextResponse.json({ error: "Servicios no tienen stock" }, { status: 400 })
+  }
+
+  // Stock single-source: si el item queda linkeado a inventario, esa es la
+  // fuente de verdad y catalogo_items.stock NO se trackea. Forzamos null para
+  // que ni un tab viejo ni una llamada directa puedan re-contaminar el dato.
+  const inventarioFinal =
+    parsed.data.inventario_id !== undefined ? parsed.data.inventario_id : existing.inventario_id
+  if (inventarioFinal) {
+    parsed.data.stock = null
   }
 
   const precioFinal = parsed.data.precio !== undefined ? parsed.data.precio : existing.precio

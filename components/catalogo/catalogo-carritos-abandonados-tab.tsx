@@ -41,14 +41,6 @@ interface Carrito {
   cotizacion_id: string | null
 }
 
-function formatPrecio(n: number) {
-  return new Intl.NumberFormat("es-AR", {
-    style: "currency",
-    currency: "ARS",
-    maximumFractionDigits: 0,
-  }).format(n)
-}
-
 function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime()
   const min = Math.floor(diff / 60000)
@@ -61,7 +53,7 @@ function timeAgo(iso: string) {
 }
 
 export function CatalogoCarritosAbandonadosTab() {
-  const { organizationName, pais } = useCurrency()
+  const { organizationName, pais, formatPrice } = useCurrency()
   const [carritos, setCarritos] = useState<Carrito[]>([])
   const [pendientes, setPendientes] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -185,7 +177,7 @@ export function CatalogoCarritosAbandonadosTab() {
           </div>
           {!includeRecovered && totalRecuperable > 0 && (
             <p className="text-sm pt-2">
-              Valor estimado recuperable: <span className="font-semibold text-foreground">{formatPrecio(totalRecuperable)}</span>
+              Valor estimado recuperable: <span className="font-semibold text-foreground">{formatPrice(totalRecuperable)}</span>
             </p>
           )}
         </CardHeader>
@@ -220,7 +212,7 @@ export function CatalogoCarritosAbandonadosTab() {
                   {
                     cliente: c.cliente_nombre,
                     items: `${lista}${restantes}`,
-                    total: formatPrecio(Number(c.total_estimado)),
+                    total: formatPrice(Number(c.total_estimado)),
                     link_catalogo: linkCatalogo,
                     empresa: organizationName,
                   },
@@ -269,7 +261,7 @@ export function CatalogoCarritosAbandonadosTab() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="font-semibold">{formatPrecio(Number(c.total_estimado))}</div>
+                        <div className="font-semibold">{formatPrice(Number(c.total_estimado))}</div>
                         <div className="text-xs text-muted-foreground">
                           {cantidadTotal} item{cantidadTotal !== 1 ? "s" : ""}
                         </div>
@@ -284,7 +276,7 @@ export function CatalogoCarritosAbandonadosTab() {
                             {i.varianteEtiqueta ? ` (${i.varianteEtiqueta})` : ""}
                           </span>
                           <span className="text-muted-foreground tabular-nums">
-                            {formatPrecio(i.precioUnitario * i.cantidad)}
+                            {formatPrice(i.precioUnitario * i.cantidad)}
                           </span>
                         </li>
                       ))}
