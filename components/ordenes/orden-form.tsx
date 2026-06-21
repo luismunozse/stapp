@@ -387,7 +387,6 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId }:
 
     const processFile = async (file: File): Promise<FotoPreview | null> => {
       if (!file.type.startsWith("image/")) {
-        void showError("Por favor selecciona imagenes validas")
         return null
       }
 
@@ -409,7 +408,6 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId }:
         })
       } catch (error) {
         console.error("Error procesando imagen:", error)
-        void showError("Error al procesar una imagen")
         return null
       }
     }
@@ -420,6 +418,16 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId }:
 
       if (validPhotos.length > 0) {
         setFotos((prev) => [...prev, ...validPhotos])
+      }
+
+      // Un solo aviso agregado (evita apilar modales si fallan varias).
+      const fallidas = fileArray.length - validPhotos.length
+      if (fallidas > 0) {
+        await showError(
+          fallidas === fileArray.length
+            ? "No se pudo procesar ninguna imagen. Verificá que sean archivos de imagen válidos."
+            : `${fallidas} de ${fileArray.length} imágenes no se pudieron procesar.`
+        )
       }
     } finally {
       setComprimiendo(false)

@@ -172,7 +172,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
 
       if (!res.ok) {
         const error = await res.json()
-        void showError(error.error || "Error al actualizar estado")
+        await showError(error.error || "Error al actualizar estado")
         return
       }
 
