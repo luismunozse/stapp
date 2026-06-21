@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { revalidateTag } from "next/cache"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
-import { sucursalParaEscritura } from "@/lib/sucursal"
+import { sucursalParaEscritura, getDepositoDeSucursal } from "@/lib/sucursal"
 import { z } from "zod"
 
 const ajusteSchema = z.object({
@@ -93,6 +93,9 @@ export async function POST(request: Request) {
       organizationId: organizationId!,
       userSucursalId: null,
     })
+    // Resolve the sucursal's principal deposit so the RPC deducts from the
+    // correct inventario_depositos row (not blindly the principal deposit).
+    const depositoId = sucursalId ? await getDepositoDeSucursal(organizationId!, sucursalId) : null
 
     const { data: result, error: rpcError } = await supabaseAdmin.rpc("aplicar_ajuste_inventario", {
       p_inventario_id: data.inventarioId,
@@ -104,6 +107,7 @@ export async function POST(request: Request) {
       p_afecta_rentabilidad: data.afectaRentabilidad,
       p_user_id: userId!,
       p_sucursal_id: sucursalId,
+      p_deposito_id: depositoId,
     })
 
     if (rpcError) throw rpcError

@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { formatInventario } from "@/lib/db-utils"
 import { createAuditLogger, diffObjects } from "@/lib/audit"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
+import { sucursalParaEscritura, getDepositoDeSucursal } from "@/lib/sucursal"
 import { z } from "zod"
 
 // Campos auditados (excluye stock — ya cubierto por movimientos_inventario).
@@ -98,7 +99,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId } = await requireAdmin()
+    const { error, session, organizationId, userId, role } = await requireAdmin()
     if (error) return error
 
     const { id } = await params
@@ -130,7 +131,7 @@ export async function PUT(
     if (data.tipoDispositivo !== undefined) {
       updateData.tipo_dispositivo = data.tipoDispositivo
     }
-    if (data.stock !== undefined) updateData.stock = data.stock
+    // stock is intentionally excluded here — changes are routed through adjust_stock_atomic RPC below
     if (data.precioCompra !== undefined) updateData.precio_compra = data.precioCompra
     if (data.precioVenta !== undefined) updateData.precio_venta = data.precioVenta
     if (data.proveedor !== undefined) updateData.proveedor = data.proveedor
@@ -216,31 +217,38 @@ export async function PUT(
     }
 
     if (data.stock !== undefined && data.stock !== existingItem.stock) {
-      const { error: movError } = await supabaseAdmin.from('movimientos_inventario').insert({
-        inventario_id: id,
-        tipo: 'AJUSTE',
-        cantidad: data.stock - existingItem.stock,
-        stock_anterior: existingItem.stock,
-        stock_posterior: data.stock,
-        referencia_tipo: 'AJUSTE_MANUAL',
-        usuario_id: userId,
-        organization_id: organizationId,
+      // Route the stock change through the atomic RPC so inventario_depositos
+      // is kept in sync and the movement is logged under the correct deposit.
+      const sucursalId = await sucursalParaEscritura({
+        role: role ?? "ADMIN",
+        organizationId: organizationId!,
+        userSucursalId: session!.user.sucursalId ?? null,
       })
-      // Stock ya quedó actualizado; log explícito si falla auditoría para
-      // no perder el evento en silencio.
-      if (movError) {
-        console.error("Error registrando movimiento de stock (item actualizado igual):", {
-          inventarioId: id,
-          stockAnterior: existingItem.stock,
-          stockPosterior: data.stock,
-          error: movError,
-        })
-      }
-    }
+      const depositoId = sucursalId ? await getDepositoDeSucursal(organizationId!, sucursalId) : null
 
-    // Si cambió stock, invalidar caché del catálogo público (items linkean
-    // a este inventario via inventario_id).
-    if (data.stock !== undefined && data.stock !== existingItem.stock) {
+      const { data: adj, error: adjError } = await supabaseAdmin.rpc("adjust_stock_atomic", {
+        p_inventario_id: id,
+        p_organization_id: organizationId!,
+        p_user_id: userId!,
+        p_mode: "absolute",
+        p_value: data.stock,
+        p_motivo: "Ajuste manual desde edición de producto",
+        p_tipo: "AJUSTE",
+        p_referencia_tipo: "AJUSTE_MANUAL",
+        p_deposito_id: depositoId,
+      })
+
+      if (adjError) {
+        console.error("Error applying stock adjustment via RPC:", { inventarioId: id, adjError })
+        return NextResponse.json({ error: "Error al actualizar stock" }, { status: 500 })
+      }
+
+      // The raw update no longer writes stock, so patch the in-memory item so the
+      // response reflects the new value confirmed by the RPC.
+      if (item) {
+        item.stock = (adj as any)?.stockPosterior ?? data.stock
+      }
+
       revalidateTag("catalogo", "max")
     }
 

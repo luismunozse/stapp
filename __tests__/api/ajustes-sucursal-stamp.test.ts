@@ -23,9 +23,10 @@ vi.mock("next/cache", () => ({
 
 vi.mock("@/lib/sucursal", () => ({
   sucursalParaEscritura: vi.fn(),
+  getDepositoDeSucursal: vi.fn(),
 }))
 
-import { sucursalParaEscritura } from "@/lib/sucursal"
+import { sucursalParaEscritura, getDepositoDeSucursal } from "@/lib/sucursal"
 import { supabaseAdmin } from "@/lib/supabase"
 import { POST } from "@/app/api/inventario/ajustes/route"
 
@@ -76,6 +77,7 @@ describe("POST /api/inventario/ajustes — sucursal_id stamping (PR3a)", () => {
   it("passes p_sucursal_id from sucursalParaEscritura to the RPC — branch A", async () => {
     mockAuthSuccess()
     vi.mocked(sucursalParaEscritura).mockResolvedValue("suc-A")
+    vi.mocked(getDepositoDeSucursal).mockResolvedValue("dep-A")
 
     vi.mocked(supabaseAdmin.from).mockImplementation((_table: string) =>
       createChainMock({ id: "inv-1" }) as any
@@ -102,6 +104,7 @@ describe("POST /api/inventario/ajustes — sucursal_id stamping (PR3a)", () => {
   it("passes p_sucursal_id from sucursalParaEscritura to the RPC — branch B", async () => {
     mockAuthSuccess()
     vi.mocked(sucursalParaEscritura).mockResolvedValue("suc-B")
+    vi.mocked(getDepositoDeSucursal).mockResolvedValue("dep-B")
 
     vi.mocked(supabaseAdmin.from).mockImplementation((_table: string) =>
       createChainMock({ id: "inv-1" }) as any
@@ -125,6 +128,7 @@ describe("POST /api/inventario/ajustes — sucursal_id stamping (PR3a)", () => {
   it("returns 400 when RPC returns an error object", async () => {
     mockAuthSuccess()
     vi.mocked(sucursalParaEscritura).mockResolvedValue("suc-A")
+    vi.mocked(getDepositoDeSucursal).mockResolvedValue("dep-A")
 
     vi.mocked(supabaseAdmin.from).mockImplementation((_table: string) =>
       createChainMock({ id: "inv-1" }) as any
@@ -144,6 +148,7 @@ describe("POST /api/inventario/ajustes — sucursal_id stamping (PR3a)", () => {
   it("returns 404 when inventory item does not belong to org", async () => {
     mockAuthSuccess()
     vi.mocked(sucursalParaEscritura).mockResolvedValue("suc-A")
+    vi.mocked(getDepositoDeSucursal).mockResolvedValue("dep-A")
 
     vi.mocked(supabaseAdmin.from).mockImplementation((_table: string) =>
       createChainMock(null) as any  // null data => item not found
