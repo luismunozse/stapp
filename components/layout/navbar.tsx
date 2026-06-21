@@ -537,9 +537,11 @@ export function Navbar() {
           <Link href="/dashboard" className="hover:opacity-80 transition-opacity min-w-0 flex-shrink overflow-hidden">
             <BusinessLogo size="sm" showText={true} textClassName="text-base truncate" />
           </Link>
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-1 flex-shrink-0">
             <GlobalSearch />
             <NotificationBell />
+            <DeadlineCalendar />
+            <ThemeToggle variant="icon" />
             <button
               data-touch-icon=""
               className="inline-flex items-center justify-center h-11 w-11 rounded-full active:bg-accent/60 focus:outline-none focus:ring-2 focus:ring-primary"
@@ -621,11 +623,6 @@ export function Navbar() {
             ))}
           </nav>
           <div className="border-t border-border safe-bottom p-3 space-y-1">
-            {/* Utilidades rápidas: vencimientos + tema */}
-            <div className="flex items-center justify-end gap-1 pb-1">
-              <DeadlineCalendar />
-              <ThemeToggle variant="icon" />
-            </div>
             <Link
               href="/ayuda/manual"
               onClick={() => setMobileMenuOpen(false)}
