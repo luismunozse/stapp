@@ -92,13 +92,15 @@ export async function POST(request: Request) {
       userSucursalId: session!.user.sucursalId ?? null,
     })
 
-    // Buscar sesión abierta (opcional)
-    const { data: sesionAbierta } = await supabaseAdmin
+    // Buscar sesión abierta (opcional), scoped a la misma sucursal del movimiento
+    // para no enlazarlo a la sesión de otra sucursal cuando hay varias abiertas.
+    let sesionQuery = supabaseAdmin
       .from("sesiones_caja")
       .select("id")
       .eq("organization_id", organizationId!)
       .eq("estado", "ABIERTA")
-      .maybeSingle()
+    if (sucursalId) sesionQuery = sesionQuery.eq("sucursal_id", sucursalId)
+    const { data: sesionAbierta } = await sesionQuery.maybeSingle()
 
     // Si vino categoriaGastoId pero no afectaRentabilidad explícito, heredar de la categoría
     let afectaRentabilidad = parsed.afectaRentabilidad
