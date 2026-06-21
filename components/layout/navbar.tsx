@@ -584,31 +584,42 @@ export function Navbar() {
             </div>
             <div className="mt-3"><PlanBadge /></div>
           </div>
-          <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
-            {allNavItems.map((item) => {
-              const Icon = item.icon
-              const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={cn(
-                    "relative flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors touch-target",
-                    "active:scale-[0.98] active:bg-accent/80",
-                    isActive
-                      ? "bg-primary/10 text-primary font-semibold before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-1 before:rounded-r-full before:bg-primary"
-                      : "text-foreground/85 hover:bg-accent hover:text-accent-foreground"
-                  )}
-                >
-                  <Icon className={cn(
-                    "mr-3 h-5 w-5 flex-shrink-0",
-                    isActive ? "text-primary" : "text-foreground/65"
-                  )} />
-                  {item.label}
-                </Link>
-              )
-            })}
+          <nav className="flex-1 px-3 py-3 overflow-y-auto">
+            {filteredSections.map((section) => (
+              <div key={section.label || "_top"} className={section.label ? "mt-5 first:mt-0" : ""}>
+                {section.label && (
+                  <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/60">
+                    {section.label}
+                  </p>
+                )}
+                <div className="space-y-0.5">
+                  {section.items.map((item) => {
+                    const Icon = item.icon
+                    const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
+                    return (
+                      <Link
+                        key={`${item.href}-${item.label}`}
+                        href={item.href}
+                        onClick={() => setMobileMenuOpen(false)}
+                        className={cn(
+                          "relative flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors touch-target",
+                          "active:scale-[0.98] active:bg-accent/80",
+                          isActive
+                            ? "bg-primary/10 text-primary font-semibold before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-1 before:rounded-r-full before:bg-primary"
+                            : "text-foreground/85 hover:bg-accent hover:text-accent-foreground"
+                        )}
+                      >
+                        <Icon className={cn(
+                          "mr-3 h-5 w-5 flex-shrink-0",
+                          isActive ? "text-primary" : "text-foreground/65"
+                        )} />
+                        {item.label}
+                      </Link>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
           </nav>
           <div className="p-4 border-t border-border safe-bottom space-y-1">
             <div className="flex items-center justify-between px-3 py-2">
