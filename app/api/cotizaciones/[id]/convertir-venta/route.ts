@@ -17,6 +17,22 @@ const convertSchema = z.object({
   })).min(1),
 })
 
+// Returns true when the RPC error indicates the function does not exist yet
+// (migration 246 not applied). Falls back to two-step JS path.
+function isFunctionMissingError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false
+  const e = err as Record<string, unknown>
+  const code = String(e.code ?? "")
+  const msg = String(e.message ?? "").toLowerCase()
+  return (
+    code === "PGRST202" ||
+    code === "42883" ||
+    msg.includes("could not find the function") ||
+    msg.includes("does not exist") ||
+    msg.includes("schema cache")
+  )
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -192,7 +208,7 @@ export async function POST(
       ? `${obsPrefix}. ${data.observaciones}`
       : obsPrefix
 
-    // Call crear_venta_atomica RPC
+    // Shared RPC params (mirrors crear_venta_atomica signature exactly)
     const rpcParams: Record<string, any> = {
       p_org_id: organizationId!,
       p_vendedor_id: userId!,
@@ -214,19 +230,58 @@ export async function POST(
       p_sucursal_id: ventaSucursalId,
     }
 
-    const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc("crear_venta_atomica", rpcParams)
+    // --- Atomic RPC path (migration 246) ---
+    const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc(
+      "convertir_cotizacion_venta_atomica",
+      { ...rpcParams, p_cotizacion_id: id }
+    )
 
-    if (rpcError) {
-      console.error("Error en crear_venta_atomica:", rpcError)
+    if (!rpcError) {
+      const ventaId = rpcResult?.ventaId || rpcResult
+
+      const { data: venta } = await supabaseAdmin
+        .from("ventas")
+        .select("numero_venta")
+        .eq("id", ventaId)
+        .single()
+
+      return NextResponse.json(
+        { ventaId, numeroVenta: venta?.numero_venta },
+        { status: 201 }
+      )
+    }
+
+    // Not a function-missing error → propagate
+    if (!isFunctionMissingError(rpcError)) {
+      console.error("Error en convertir_cotizacion_venta_atomica:", rpcError)
       return NextResponse.json(
         { error: rpcError.message || "Error al crear venta" },
         { status: 400 }
       )
     }
 
-    const ventaId = rpcResult?.ventaId || rpcResult
+    // --- Two-step JS fallback (pre-migration 246) ---
+    // Best-effort: sale + non-fatal liberar (cannot be atomic pre-migration)
+    console.warn(
+      "[convertir-venta] convertir_cotizacion_venta_atomica not found; falling back to two-step path"
+    )
 
-    // Release reservations since stock was already deducted by crear_venta_atomica
+    const { data: fallbackResult, error: fallbackError } = await supabaseAdmin.rpc(
+      "crear_venta_atomica",
+      rpcParams
+    )
+
+    if (fallbackError) {
+      console.error("Error en crear_venta_atomica:", fallbackError)
+      return NextResponse.json(
+        { error: fallbackError.message || "Error al crear venta" },
+        { status: 400 }
+      )
+    }
+
+    const ventaId = fallbackResult?.ventaId || fallbackResult
+
+    // Release reservations (best-effort in fallback — cannot be atomic here)
     try {
       await supabaseAdmin.rpc("liberar_items_cotizacion", {
         p_cotizacion_id: id,
@@ -237,17 +292,17 @@ export async function POST(
       console.error("Error releasing cotizacion reservations after sale:", releaseErr)
     }
 
-    // Get venta number for response
     const { data: venta } = await supabaseAdmin
       .from("ventas")
       .select("numero_venta")
       .eq("id", ventaId)
       .single()
 
-    return NextResponse.json({
-      ventaId,
-      numeroVenta: venta?.numero_venta,
-    }, { status: 201 })
+    return NextResponse.json(
+      { ventaId, numeroVenta: venta?.numero_venta },
+      { status: 201 }
+    )
+
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
