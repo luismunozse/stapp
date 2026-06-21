@@ -333,18 +333,6 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId }:
 
   const esClienteEmpresa = clienteSeleccionadoObj?.tipoCliente === "EMPRESA" || !!clienteSeleccionadoObj?.razonSocial
 
-  // DEBUG: remover después
-  useEffect(() => {
-    if (clienteSeleccionadoObj) {
-      console.log("Cliente seleccionado:", {
-        id: clienteSeleccionadoObj.id,
-        nombre: clienteSeleccionadoObj.nombre,
-        tipoCliente: clienteSeleccionadoObj.tipoCliente,
-        razonSocial: clienteSeleccionadoObj.razonSocial,
-        esClienteEmpresa,
-      })
-    }
-  }, [clienteSeleccionadoObj, esClienteEmpresa])
 
   // Fetch técnicos disponibles (solo para ADMIN / no-TECNICO)
   useEffect(() => {
@@ -659,7 +647,6 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId }:
       const nuevaOrden = await res.json()
 
       // Guardar checklist si hay template y valores completados
-      console.log("[CHECKLIST SAVE] template:", !!checklistTemplate, "templateId:", checklistTemplate?.id, "valores count:", Object.keys(checklistValores).length)
       if (checklistTemplate && Object.keys(checklistValores).length > 0) {
         try {
           const checklistBody = {
@@ -669,7 +656,6 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId }:
             firmaCliente: checklistFirma || undefined,
             firmaMime: checklistFirmaMime || undefined,
           }
-          console.log("[CHECKLIST SAVE] Enviando POST a /api/ordenes/" + nuevaOrden.id + "/checklist", JSON.stringify(checklistBody))
           const checklistRes = await offlineFetch(`/api/ordenes/${nuevaOrden.id}/checklist`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -678,14 +664,10 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId }:
           if (!checklistRes.ok) {
             const checklistErr = await checklistRes.json().catch(() => ({}))
             console.error("[CHECKLIST SAVE] Error:", checklistRes.status, JSON.stringify(checklistErr))
-          } else {
-            console.log("[CHECKLIST SAVE] Checklist guardado exitosamente")
           }
         } catch (checklistError) {
           console.error("[CHECKLIST SAVE] Exception:", checklistError)
         }
-      } else {
-        console.warn("[CHECKLIST SAVE] SKIPPED - template:", !!checklistTemplate, "valores:", Object.keys(checklistValores).length)
       }
 
       setOrdenCreada({
