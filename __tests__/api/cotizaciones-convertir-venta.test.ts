@@ -90,12 +90,9 @@ describe("POST /api/cotizaciones/[id]/convertir-venta", () => {
     })
 
     vi.mocked(supabaseAdmin.rpc).mockImplementation((fn: string, params?: any) => {
-      if (fn === "crear_venta_atomica") {
+      if (fn === "convertir_cotizacion_venta_atomica") {
         capturedRpcParams = params
-        return Promise.resolve({ data: "venta-1", error: null }) as any
-      }
-      if (fn === "liberar_items_cotizacion") {
-        return Promise.resolve({ data: null, error: null }) as any
+        return Promise.resolve({ data: { ventaId: "venta-1", numeroVenta: 1, garantias: [], items: [] }, error: null }) as any
       }
       return Promise.resolve({ data: null, error: null }) as any
     })
@@ -129,9 +126,9 @@ describe("POST /api/cotizaciones/[id]/convertir-venta", () => {
     })
 
     vi.mocked(supabaseAdmin.rpc).mockImplementation((fn: string, params?: any) => {
-      if (fn === "crear_venta_atomica") {
+      if (fn === "convertir_cotizacion_venta_atomica") {
         capturedRpcParams = params
-        return Promise.resolve({ data: "venta-1", error: null }) as any
+        return Promise.resolve({ data: { ventaId: "venta-1", numeroVenta: 1, garantias: [], items: [] }, error: null }) as any
       }
       return Promise.resolve({ data: null, error: null }) as any
     })

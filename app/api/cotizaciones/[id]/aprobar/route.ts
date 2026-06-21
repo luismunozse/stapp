@@ -9,6 +9,61 @@ const aprobarSchema = z.object({
   firmaMime: z.string().optional().nullable(),
 })
 
+// Returns true when the RPC error indicates the function does not exist yet
+// (migration 246 not applied). Falls back to hardened JS path.
+function isFunctionMissingError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false
+  const e = err as Record<string, unknown>
+  const code = String(e.code ?? "")
+  const msg = String(e.message ?? "").toLowerCase()
+  return (
+    code === "PGRST202" ||
+    code === "42883" ||
+    msg.includes("could not find the function") ||
+    msg.includes("does not exist") ||
+    msg.includes("schema cache")
+  )
+}
+
+// Joined SELECT used both in the fallback and for re-fetching after the RPC.
+const COTIZACION_SELECT = `
+  *,
+  ordenes_servicio!cotizaciones_orden_id_fkey (id, numero_orden, dispositivo, clientes(*)),
+  clientes (*),
+  items_cotizacion (*)
+`
+
+function buildResponse(cotizacion: any): NextResponse {
+  const orden = cotizacion.ordenes_servicio as any
+  return NextResponse.json({
+    id: cotizacion.id,
+    ordenId: cotizacion.orden_id,
+    numeroCotizacion: cotizacion.numero_cotizacion,
+    estado: cotizacion.estado,
+    subtotal: cotizacion.subtotal,
+    iva: cotizacion.iva,
+    total: cotizacion.total,
+    firmaAprobacion: cotizacion.firma_aprobacion,
+    fechaAprobacion: cotizacion.fecha_aprobacion,
+    orden: orden
+      ? {
+          id: orden.id,
+          numeroOrden: orden.numero_orden,
+          dispositivo: orden.dispositivo,
+          cliente: orden.clientes,
+        }
+      : null,
+    cliente: cotizacion.clientes || orden?.clientes || null,
+    items: cotizacion.items_cotizacion?.map((i: any) => ({
+      id: i.id,
+      descripcion: i.descripcion,
+      cantidad: i.cantidad,
+      precioUnitario: i.precio_unitario,
+      subtotal: i.subtotal,
+    })),
+  })
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -21,7 +76,9 @@ export async function POST(
     const body = await request.json()
     const data = aprobarSchema.parse(body)
 
-    // Verificar cotización via organization_id (soporta standalone y con orden)
+    // --- JS pre-validations (remain in every path) ---
+
+    // 404: cotizacion must exist and belong to the org
     const { data: cotizacion, error: fetchError } = await supabaseAdmin
       .from("cotizaciones")
       .select("*")
@@ -34,23 +91,79 @@ export async function POST(
       return NextResponse.json({ error: "Cotización no encontrada" }, { status: 404 })
     }
 
-    // TECNICO sólo puede aprobar cotizaciones creadas por él mismo
+    // TECNICO ownership check
     if (role === "TECNICO" && cotizacion.created_by !== userId) {
       return NextResponse.json({ error: "No autorizado" }, { status: 403 })
     }
 
-    // Solo ENVIADA pueden aprobarse
+    // Estado guard (fast-path JS check before hitting DB)
     if (cotizacion.estado !== "ENVIADA") {
-      return NextResponse.json({ error: "Solo se pueden aprobar cotizaciones enviadas" }, { status: 400 })
+      return NextResponse.json(
+        { error: "Solo se pueden aprobar cotizaciones enviadas" },
+        { status: 400 }
+      )
     }
 
-    // Cotizaciones tipo ORDEN (ligadas a un arreglo real) requieren firma.
-    // PRESUPUESTO plano no — es sólo un documento que el cliente acepta internamente.
+    // Firma required for non-PRESUPUESTO
     const esPresupuesto = cotizacion.tipo === "PRESUPUESTO"
     if (!esPresupuesto && (!data.firmaAprobacion || !data.firmaMime)) {
       return NextResponse.json({ error: "La firma es requerida para aprobar" }, { status: 400 })
     }
 
+    // --- Atomic RPC path (migration 246) ---
+    const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc(
+      "aprobar_cotizacion_atomica",
+      {
+        p_org_id: organizationId!,
+        p_cotizacion_id: id,
+        p_user_id: userId!,
+        p_firma: data.firmaAprobacion ?? null,
+        p_firma_mime: data.firmaMime ?? null,
+      }
+    )
+
+    if (!rpcError) {
+      // RPC succeeded — re-fetch with joins to build the same response shape
+      const { data: updatedCotizacion, error: refetchError } = await supabaseAdmin
+        .from("cotizaciones")
+        .select(COTIZACION_SELECT)
+        .eq("id", id)
+        .single()
+
+      if (refetchError || !updatedCotizacion) throw refetchError ?? new Error("Re-fetch failed")
+
+      emitWebhookEvent(organizationId!, "cotizacion.aceptada", {
+        id: updatedCotizacion.id,
+        numeroCotizacion: updatedCotizacion.numero_cotizacion ?? null,
+        tipo: updatedCotizacion.tipo,
+        total: updatedCotizacion.total,
+        clienteId: (updatedCotizacion.clientes as any)?.id ?? null,
+        ordenId: updatedCotizacion.orden_id ?? null,
+      }).catch(() => {})
+
+      return buildResponse(updatedCotizacion)
+    }
+
+    // Map RPC-level business errors before checking function-missing
+    const rpcMsg = rpcError.message ?? ""
+    if (!isFunctionMissingError(rpcError)) {
+      if (rpcMsg.toLowerCase().includes("no encontrada")) {
+        return NextResponse.json({ error: "Cotización no encontrada" }, { status: 404 })
+      }
+      if (rpcMsg.toLowerCase().includes("enviadas")) {
+        return NextResponse.json(
+          { error: "Solo se pueden aprobar cotizaciones enviadas" },
+          { status: 400 }
+        )
+      }
+      console.error("[aprobar] Unexpected RPC error:", rpcError)
+      return NextResponse.json({ error: "Error al aprobar cotizacion" }, { status: 500 })
+    }
+
+    // --- Hardened JS fallback (pre-migration 246) ---
+    console.warn("[aprobar] aprobar_cotizacion_atomica not found; falling back to JS path")
+
+    // Optimistic lock: update only if still ENVIADA (prevents double-approve)
     const { data: updatedCotizacion, error: updateError } = await supabaseAdmin
       .from("cotizaciones")
       .update({
@@ -60,29 +173,39 @@ export async function POST(
         fecha_aprobacion: new Date().toISOString(),
       })
       .eq("id", id)
-      .select(`
-        *,
-        ordenes_servicio!cotizaciones_orden_id_fkey (id, numero_orden, dispositivo, clientes(*)),
-        clientes (*),
-        items_cotizacion (*)
-      `)
+      .eq("estado", "ENVIADA")
+      .select(COTIZACION_SELECT)
       .single()
 
-    if (updateError) throw updateError
+    if (updateError || !updatedCotizacion) {
+      // No row matched the .eq("estado","ENVIADA") filter → already approved concurrently
+      return NextResponse.json(
+        { error: "Solo se pueden aprobar cotizaciones enviadas" },
+        { status: 400 }
+      )
+    }
 
-    // Reservar stock sólo si es tipo ORDEN (el PRESUPUESTO no inmoviliza inventario).
+    // Attempt stock reservation; on failure revert estado (compensating update)
     if (!esPresupuesto) {
-      try {
-        await supabaseAdmin.rpc("reservar_items_cotizacion", {
-          p_cotizacion_id: id,
-          p_user_id: userId || "system",
-        })
-      } catch (reserveErr) {
-        console.error("Error reserving stock for cotizacion:", reserveErr)
+      const { error: reserveErr } = await supabaseAdmin.rpc("reservar_items_cotizacion", {
+        p_cotizacion_id: id,
+        p_user_id: userId || "system",
+      })
+
+      if (reserveErr) {
+        // Compensating revert: put the cotizacion back to ENVIADA
+        await supabaseAdmin
+          .from("cotizaciones")
+          .update({ estado: "ENVIADA", firma_aprobacion: null, firma_mime: null, fecha_aprobacion: null })
+          .eq("id", id)
+
+        return NextResponse.json(
+          { error: reserveErr.message || "Error al reservar stock" },
+          { status: 400 }
+        )
       }
     }
 
-    // Webhook outbound: cotizacion.aceptada (fire-and-forget)
     emitWebhookEvent(organizationId!, "cotizacion.aceptada", {
       id: updatedCotizacion.id,
       numeroCotizacion: updatedCotizacion.numero_cotizacion ?? null,
@@ -92,32 +215,8 @@ export async function POST(
       ordenId: updatedCotizacion.orden_id ?? null,
     }).catch(() => {})
 
-    const orden = updatedCotizacion.ordenes_servicio as any
-    return NextResponse.json({
-      id: updatedCotizacion.id,
-      ordenId: updatedCotizacion.orden_id,
-      numeroCotizacion: updatedCotizacion.numero_cotizacion,
-      estado: updatedCotizacion.estado,
-      subtotal: updatedCotizacion.subtotal,
-      iva: updatedCotizacion.iva,
-      total: updatedCotizacion.total,
-      firmaAprobacion: updatedCotizacion.firma_aprobacion,
-      fechaAprobacion: updatedCotizacion.fecha_aprobacion,
-      orden: orden ? {
-        id: orden.id,
-        numeroOrden: orden.numero_orden,
-        dispositivo: orden.dispositivo,
-        cliente: orden.clientes,
-      } : null,
-      cliente: updatedCotizacion.clientes || orden?.clientes || null,
-      items: updatedCotizacion.items_cotizacion?.map((i: any) => ({
-        id: i.id,
-        descripcion: i.descripcion,
-        cantidad: i.cantidad,
-        precioUnitario: i.precio_unitario,
-        subtotal: i.subtotal,
-      })),
-    })
+    return buildResponse(updatedCotizacion)
+
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.errors[0].message }, { status: 400 })
