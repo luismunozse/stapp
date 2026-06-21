@@ -573,64 +573,74 @@ export function Navbar() {
           mobileMenuOpen ? "translate-x-0" : "translate-x-full"
         )}
       >
-        <div className="flex flex-col h-full pt-20 safe-area-inset">
+        <div className="flex flex-col h-full pt-[calc(3.5rem+env(safe-area-inset-top,0px))] safe-area-inset">
           <div className="px-4 pt-4 pb-3 border-b border-border">
-            <div className="flex items-center gap-3">
-              <UserAvatar src={displayAvatar} nombre={displayName} size="md" />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium truncate">{displayName}</p>
-                <p className="text-xs text-muted-foreground truncate">{session?.user?.role}</p>
-              </div>
+            <p className="text-sm font-semibold truncate">{displayName}</p>
+            <div className="mt-1.5 flex items-center gap-2">
+              <span className="text-xs text-muted-foreground capitalize truncate">
+                {session?.user?.role?.toLowerCase()}
+              </span>
+              <PlanBadge />
             </div>
-            <div className="mt-3"><PlanBadge /></div>
           </div>
-          <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
-            {allNavItems.map((item) => {
-              const Icon = item.icon
-              const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={cn(
-                    "relative flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors touch-target",
-                    "active:scale-[0.98] active:bg-accent/80",
-                    isActive
-                      ? "bg-primary/10 text-primary font-semibold before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-1 before:rounded-r-full before:bg-primary"
-                      : "text-foreground/85 hover:bg-accent hover:text-accent-foreground"
-                  )}
-                >
-                  <Icon className={cn(
-                    "mr-3 h-5 w-5 flex-shrink-0",
-                    isActive ? "text-primary" : "text-foreground/65"
-                  )} />
-                  {item.label}
-                </Link>
-              )
-            })}
+          <nav className="flex-1 px-3 py-3 overflow-y-auto">
+            {filteredSections.map((section) => (
+              <div key={section.label || "_top"} className={section.label ? "mt-5 first:mt-0" : ""}>
+                {section.label && (
+                  <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/60">
+                    {section.label}
+                  </p>
+                )}
+                <div className="space-y-0.5">
+                  {section.items.map((item) => {
+                    const Icon = item.icon
+                    const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
+                    return (
+                      <Link
+                        key={`${item.href}-${item.label}`}
+                        href={item.href}
+                        onClick={() => setMobileMenuOpen(false)}
+                        className={cn(
+                          "relative flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors touch-target",
+                          "active:scale-[0.98] active:bg-accent/80",
+                          isActive
+                            ? "bg-primary/10 text-primary font-semibold before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-1 before:rounded-r-full before:bg-primary"
+                            : "text-foreground/85 hover:bg-accent hover:text-accent-foreground"
+                        )}
+                      >
+                        <Icon className={cn(
+                          "mr-3 h-5 w-5 flex-shrink-0",
+                          isActive ? "text-primary" : "text-foreground/65"
+                        )} />
+                        {item.label}
+                      </Link>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
           </nav>
-          <div className="p-4 border-t border-border safe-bottom space-y-1">
-            <div className="flex items-center justify-between px-3 py-2">
-              <span className="text-sm text-muted-foreground">Tema</span>
+          <div className="border-t border-border safe-bottom p-3 space-y-1">
+            {/* Utilidades rápidas: vencimientos + tema */}
+            <div className="flex items-center justify-end gap-1 pb-1">
+              <DeadlineCalendar />
               <ThemeToggle variant="icon" />
             </div>
-            <div className="px-3 py-2"><DeadlineCalendar /></div>
             <Link
               href="/ayuda/manual"
               onClick={() => setMobileMenuOpen(false)}
-              className="flex items-center px-3 py-3 text-sm font-medium rounded-lg text-foreground hover:bg-accent hover:text-accent-foreground transition-colors touch-target active:scale-[0.98]"
+              className="flex items-center px-3 py-2.5 text-sm font-medium rounded-lg text-foreground hover:bg-accent hover:text-accent-foreground transition-colors touch-target active:scale-[0.98]"
             >
               <BookOpen className="mr-3 h-5 w-5 flex-shrink-0" />
               Manual de uso
             </Link>
             <Button
               variant="ghost"
-              className="w-full justify-start py-3 touch-target active:scale-[0.98]"
+              className="w-full justify-start py-2.5 text-destructive hover:text-destructive hover:bg-destructive/10 touch-target active:scale-[0.98]"
               onClick={handleLogout}
             >
               <LogOut className="mr-3 h-5 w-5" />
-              Cerrar Sesión
+              Cerrar sesión
             </Button>
           </div>
         </div>
