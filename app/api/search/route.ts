@@ -1,11 +1,18 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaLectura } from "@/lib/sucursal"
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, session, role } = await requireAuth()
     if (error) return error
+
+    const filtro = await sucursalParaLectura({
+      role,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
+    const sid = filtro.verTodas ? null : filtro.sucursalId
 
     const { searchParams } = new URL(request.url)
     const q = searchParams.get("q")?.trim()
@@ -22,6 +29,7 @@ export async function GET(request: Request) {
       search_query: q,
       search_type: type,
       max_results: limit,
+      p_sucursal_id: sid,
     })
 
     if (dbError) {
@@ -40,12 +48,16 @@ export async function GET(request: Request) {
       }
 
       if (type === "all" || type === "ordenes") {
-        const { data: ordenes } = await supabaseAdmin
+        let ordenesQuery = supabaseAdmin
           .from("ordenes_servicio")
           .select("id, numero_orden, dispositivo, estado, problema_reportado, marca, imei, clientes(nombre)")
           .eq("organization_id", organizationId!)
           .or(`dispositivo.ilike.%${q}%,problema_reportado.ilike.%${q}%,marca.ilike.%${q}%,imei.ilike.%${q}%`)
           .limit(limit)
+
+        if (sid) ordenesQuery = ordenesQuery.eq("sucursal_id", sid)
+
+        const { data: ordenes } = await ordenesQuery
 
         results.ordenes = (ordenes || []).map((o: Record<string, unknown>) => ({
           ...o,

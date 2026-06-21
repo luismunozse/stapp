@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaLectura } from "@/lib/sucursal"
 
 // GET - Obtener órdenes con cobro pendiente de un cliente
 export async function GET(
@@ -8,12 +9,18 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, session, role } = await requireAuth()
     if (error) return error
 
     const { id: clienteId } = await params
 
-    const { data: ordenes, error: dbError } = await supabaseAdmin
+    const filtro = await sucursalParaLectura({
+      role,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
+    const sid = filtro.verTodas ? null : filtro.sucursalId
+
+    let query = supabaseAdmin
       .from("ordenes_servicio")
       .select("id, numero_orden, codigo_orden, dispositivo, costo_final, total_cobrado, estado_cobro, descuento_cobro, estado")
       .eq("organization_id", organizationId!)
@@ -22,6 +29,10 @@ export async function GET(
       .not("costo_final", "is", null)
       .gt("costo_final", 0)
       .order("fecha_ingreso", { ascending: false })
+
+    if (sid) query = query.eq("sucursal_id", sid)
+
+    const { data: ordenes, error: dbError } = await query
 
     if (dbError) throw dbError
 

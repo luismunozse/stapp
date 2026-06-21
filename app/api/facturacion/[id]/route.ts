@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaLectura } from "@/lib/sucursal"
 import { z } from "zod"
 
 const updateFacturaSchema = z.object({
@@ -12,12 +13,18 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAdmin()
+    const { error, organizationId, session, role } = await requireAdmin()
     if (error) return error
+
+    const filtro = await sucursalParaLectura({
+      role,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
+    const sid = filtro.verTodas ? null : filtro.sucursalId
 
     const { id } = await params
 
-    const { data: factura, error: dbError } = await supabaseAdmin
+    let query = supabaseAdmin
       .from("facturas")
       .select(`
         *,
@@ -32,7 +39,10 @@ export async function GET(
       `)
       .eq("id", id)
       .eq("ordenes_servicio.organization_id", organizationId!)
-      .single()
+
+    if (sid) query = query.eq("ordenes_servicio.sucursal_id", sid)
+
+    const { data: factura, error: dbError } = await query.single()
 
     if (dbError || !factura) {
       return NextResponse.json(
