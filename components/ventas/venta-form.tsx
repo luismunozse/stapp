@@ -113,7 +113,7 @@ interface VentaFormProps {
 }
 
 export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
-  const { showError } = useModal()
+  const { showError, showInfo } = useModal()
   const { formatPrice } = useCurrency()
   const { offlineFetch } = useOffline()
   const [loading, setLoading] = useState(false)
@@ -405,7 +405,7 @@ export function VentaForm({ open, onOpenChange, onSuccess }: VentaFormProps) {
 
       if (res.status === 202) {
         // Queued offline
-        alert("Venta guardada offline. Se sincronizará automáticamente cuando vuelva la conexión.")
+        await showInfo("Venta guardada offline. Se sincronizará automáticamente cuando vuelva la conexión.")
         reset()
         setPagosLines([createPagoLine(0)])
         onSuccess({ id: "offline", numeroVenta: "PENDIENTE" } as any)

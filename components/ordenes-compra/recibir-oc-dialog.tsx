@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { PackageCheck, Search, Link2, X } from "lucide-react"
+import { useModal } from "@/contexts/modal-context"
 
 interface Props {
   open: boolean
@@ -30,6 +31,7 @@ interface OCItem {
 }
 
 export function RecibirOCDialog({ open, onOpenChange, ordenCompraId, numeroOC, onReceived }: Props) {
+  const { showError } = useModal()
   const [items, setItems] = useState<OCItem[]>([])
   const [quantities, setQuantities] = useState<Record<string, number>>({})
   const [inventarioLinks, setInventarioLinks] = useState<Record<string, { id: string; codigo: string; nombre: string } | null>>({})
@@ -101,7 +103,7 @@ export function RecibirOCDialog({ open, onOpenChange, ordenCompraId, numeroOC, o
       }))
 
     if (itemsToReceive.length === 0) {
-      alert("Ingresá al menos una cantidad")
+      await showError("Ingresá al menos una cantidad")
       return
     }
 
@@ -123,12 +125,12 @@ export function RecibirOCDialog({ open, onOpenChange, ordenCompraId, numeroOC, o
       })
       if (!res.ok) {
         const err = await res.json()
-        alert(err.error || "Error al recibir")
+        await showError(err.error || "Error al recibir")
         return
       }
       onReceived()
     } catch {
-      alert("Error al procesar recepción")
+      await showError("Error al procesar recepción")
     } finally {
       setSubmitting(false)
     }

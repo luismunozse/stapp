@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ArrowLeft, Plus, Trash2 } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
+import { useModal } from "@/contexts/modal-context"
 
 interface OCItem {
   tempId: string
@@ -33,6 +34,7 @@ function nextTempId() {
 }
 
 export function OrdenCompraForm({ onClose, onCreated, initialItems, initialProveedorId }: Props) {
+  const { showError } = useModal()
   const [proveedorId, setProveedorId] = useState<string>(initialProveedorId || "")
   const [proveedores, setProveedores] = useState<any[]>([])
   const [fechaEsperada, setFechaEsperada] = useState("")
@@ -92,9 +94,9 @@ export function OrdenCompraForm({ onClose, onCreated, initialItems, initialProve
   const total = items.reduce((sum, i) => sum + i.cantidadPedida * i.precioUnitario, 0)
 
   const handleSubmit = async () => {
-    if (items.length === 0) { alert("Agregá al menos un item"); return }
+    if (items.length === 0) { await showError("Agregá al menos un item"); return }
     const emptyDesc = items.some(i => !i.descripcion.trim())
-    if (emptyDesc) { alert("Completá la descripción de todos los ítems"); return }
+    if (emptyDesc) { await showError("Completá la descripción de todos los ítems"); return }
 
     setLoading(true)
     try {
@@ -115,12 +117,12 @@ export function OrdenCompraForm({ onClose, onCreated, initialItems, initialProve
       })
       if (!res.ok) {
         const err = await res.json()
-        alert(err.error || "Error al crear OC")
+        await showError(err.error || "Error al crear OC")
         return
       }
       onCreated()
     } catch {
-      alert("Error al crear orden de compra")
+      await showError("Error al crear orden de compra")
     } finally {
       setLoading(false)
     }

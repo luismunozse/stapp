@@ -16,6 +16,7 @@ import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
 import { compressImage } from "@/lib/image-compression"
 import { validateBarcode, computeEAN13CheckDigit } from "@/lib/barcode-validation"
 import useSWR from "swr"
+import { useModal } from "@/contexts/modal-context"
 
 interface ProveedorLite {
   id: string
@@ -109,6 +110,7 @@ export function InventarioForm({
   onSuccess,
   onEditExisting,
 }: InventarioFormProps) {
+  const { showError, showWarning } = useModal()
   const { tipos: tiposDispositivo, loading: tiposLoading, error: tiposError, refetch: refetchTipos } = useTiposDispositivo({ incluirTodos: true })
   const [loading, setLoading] = useState(false)
   const [generatedCode, setGeneratedCode] = useState<string>("")
@@ -319,7 +321,7 @@ export function InventarioForm({
     const values = watch()
     const stockToAdd = Number(values.stock) || 0
     if (stockToAdd <= 0) {
-      alert("Ingresá una cantidad de stock mayor a 0 para sumar al existente.")
+      await showError("Ingresá una cantidad de stock mayor a 0 para sumar al existente.")
       return
     }
     setConsolidating(match.id)
@@ -342,7 +344,7 @@ export function InventarioForm({
       onSuccess()
     } catch (err) {
       console.error("Error consolidando stock:", err)
-      alert(err instanceof Error ? err.message : "Error al sumar stock")
+      await showError(err instanceof Error ? err.message : "Error al sumar stock")
     } finally {
       setConsolidating(null)
     }
@@ -392,7 +394,7 @@ export function InventarioForm({
       setNewTipo("")
     } catch (error) {
       console.error("Error adding device type:", error)
-      alert(error instanceof Error ? error.message : "Error al agregar tipo")
+      await showError(error instanceof Error ? error.message : "Error al agregar tipo")
     } finally {
       setSavingTipo(false)
     }
@@ -433,7 +435,7 @@ export function InventarioForm({
       setNewCategoria("")
     } catch (error) {
       console.error("Error adding category:", error)
-      alert("Error al agregar categoría")
+      await showError("Error al agregar categoría")
     } finally {
       setSavingCategoria(false)
     }
@@ -441,7 +443,7 @@ export function InventarioForm({
 
   const handleImagePick = async (file: File) => {
     if (!file.type.startsWith("image/")) {
-      alert("Seleccioná una imagen válida (JPG, PNG o WebP)")
+      await showError("Seleccioná una imagen válida (JPG, PNG o WebP)")
       return
     }
     try {
@@ -453,7 +455,7 @@ export function InventarioForm({
       reader.readAsDataURL(compressed)
     } catch (err) {
       console.error("Error comprimiendo imagen:", err)
-      alert("Error al procesar la imagen")
+      await showError("Error al procesar la imagen")
     }
   }
 
@@ -517,10 +519,10 @@ export function InventarioForm({
         // Si es error de código duplicado en item nuevo, regenerar código y reintentar
         if (!item && res.status === 400 && errorData.error?.includes("código")) {
           await fetchCode(data.categoria, data.tipoDispositivo)
-          alert("El código generado ya existía. Se generó uno nuevo, intentá guardar de nuevo.")
+          await showWarning("El código generado ya existía. Se generó uno nuevo, intentá guardar de nuevo.")
           return
         }
-        alert(errorData.error || "Error al guardar item")
+        await showError(errorData.error || "Error al guardar item")
         return
       }
 
@@ -541,14 +543,14 @@ export function InventarioForm({
           await uploadPendingImage(savedId)
         } catch (err) {
           console.error("Error subiendo imagen:", err)
-          alert("El item se guardó pero hubo un error al subir la imagen")
+          await showWarning("El item se guardó pero hubo un error al subir la imagen")
         }
       }
 
       onSuccess()
     } catch (error) {
       console.error("Error saving item:", error)
-      alert("Error al guardar item")
+      await showError("Error al guardar item")
     } finally {
       setLoading(false)
     }

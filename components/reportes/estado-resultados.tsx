@@ -22,6 +22,7 @@ import type { StatChange } from "@/components/dashboard/stat-card"
 import { useCurrency } from "@/contexts/currency-context"
 import { EmptyState } from "@/components/ui/empty-state"
 import { StatusBanner } from "@/components/ui/status-banner"
+import { useModal } from "@/contexts/modal-context"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -87,6 +88,7 @@ function previousRange(desde: string, hasta: string) {
 
 export function EstadoResultados() {
   const { formatPrice } = useCurrency()
+  const { showError } = useModal()
   const [{ desde, hasta }, setRango] = useState(defaultRange)
   const [exporting, setExporting] = useState(false)
 
@@ -230,7 +232,7 @@ export function EstadoResultados() {
       doc.save(`estado-resultados-${desde}_${hasta}.pdf`)
     } catch (err) {
       console.error("Error exportando PDF:", err)
-      alert("Error al generar el PDF")
+      await showError("Error al generar el PDF")
     } finally {
       setExporting(false)
     }

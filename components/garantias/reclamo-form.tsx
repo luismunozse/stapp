@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
+import { useModal } from "@/contexts/modal-context"
 
 interface ReclamoFormProps {
   garantiaId: string
@@ -12,6 +13,7 @@ interface ReclamoFormProps {
 }
 
 export function ReclamoForm({ garantiaId, onClose, onSuccess }: ReclamoFormProps) {
+  const { showError } = useModal()
   const [descripcion, setDescripcion] = useState("")
   const [loading, setLoading] = useState(false)
 
@@ -19,7 +21,7 @@ export function ReclamoForm({ garantiaId, onClose, onSuccess }: ReclamoFormProps
     e.preventDefault()
 
     if (!descripcion.trim()) {
-      alert("La descripción es requerida")
+      await showError("La descripción es requerida")
       return
     }
 
@@ -33,14 +35,14 @@ export function ReclamoForm({ garantiaId, onClose, onSuccess }: ReclamoFormProps
 
       if (!res.ok) {
         const error = await res.json()
-        alert(error.error || "Error al crear reclamo")
+        await showError(error.error || "Error al crear reclamo")
         return
       }
 
       onSuccess()
     } catch (error) {
       console.error("Error:", error)
-      alert("Error al crear reclamo")
+      await showError("Error al crear reclamo")
     } finally {
       setLoading(false)
     }

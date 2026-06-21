@@ -121,7 +121,7 @@ interface InventarioListProps {
 
 export function InventarioList({ allowImport = true }: InventarioListProps) {
   const router = useRouter()
-  const { confirm } = useModal()
+  const { confirm, showError } = useModal()
   const { formatPrice } = useCurrency()
   const { tipos: tiposDispositivo, loading: tiposLoading } = useTiposDispositivo()
   const { data: proveedores = [] } = useSWR<ProveedorLite[]>(
@@ -344,16 +344,16 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
           if (!archiveConfirmed) return
           const archRes = await fetch(`/api/inventario/${id}?archive=true`, { method: "DELETE" })
           if (archRes.ok) setRefreshKey(k => k + 1)
-          else alert("No se pudo archivar el item")
+          else await showError("No se pudo archivar el item")
           return
         }
       }
 
       const err = await res.json().catch(() => ({}))
-      alert(err.error || "No se pudo eliminar el item")
+      await showError(err.error || "No se pudo eliminar el item")
     } catch (error) {
       console.error("Error deleting item:", error)
-      alert("Error al eliminar el item")
+      await showError("Error al eliminar el item")
     }
   }
 
@@ -920,7 +920,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
               setEditingItem(existing)
             } catch (err) {
               console.error("Error cargando item existente:", err)
-              alert("No se pudo abrir el item existente")
+              await showError("No se pudo abrir el item existente")
             }
           }}
         />

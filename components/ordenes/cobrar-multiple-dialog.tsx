@@ -15,6 +15,7 @@ import { useCurrency } from "@/contexts/currency-context"
 import { useOffline } from "@/contexts/offline-context"
 import { STORES } from "@/lib/offline/constants"
 import { MultiPagoInput, createPagoLine, type PagoLineItem } from "@/components/pagos/multi-pago-input"
+import { useModal } from "@/contexts/modal-context"
 
 interface OrdenPendiente {
   id: string
@@ -48,6 +49,7 @@ export function CobrarMultipleDialog({
 }: CobrarMultipleDialogProps) {
   const { formatPrice } = useCurrency()
   const { offlineFetch } = useOffline()
+  const { showError } = useModal()
   const modoPreseleccion = !!ordenesPreseleccionadas
   const [loading, setLoading] = useState(!modoPreseleccion)
   const [submitting, setSubmitting] = useState(false)
@@ -118,17 +120,17 @@ export function CobrarMultipleDialog({
   const handleCobrar = async () => {
     const ordenesACobrar = ordenes.filter(o => seleccionadas.has(o.id))
     if (ordenesACobrar.length === 0) {
-      alert("Seleccione al menos una orden")
+      await showError("Seleccione al menos una orden")
       return
     }
 
     const totalPagos = pagosLines.reduce((sum, p) => sum + (p.monto || 0), 0)
     if (totalPagos <= 0) {
-      alert("Debe registrar al menos un pago")
+      await showError("Debe registrar al menos un pago")
       return
     }
     if (totalPagos > totalSeleccionado + 0.01) {
-      alert("El total de pagos excede el pendiente total")
+      await showError("El total de pagos excede el pendiente total")
       return
     }
 
@@ -180,7 +182,7 @@ export function CobrarMultipleDialog({
 
         if (!res.ok) {
           const error = await res.json()
-          alert(`Error en orden #${orden.numeroOrden}: ${error.error}`)
+          await showError(`Error en orden #${orden.numeroOrden}: ${error.error}`)
           break
         }
       }
@@ -189,7 +191,7 @@ export function CobrarMultipleDialog({
       onOpenChange(false)
     } catch (err) {
       console.error("Error:", err)
-      alert("Error al registrar cobros")
+      await showError("Error al registrar cobros")
     } finally {
       setSubmitting(false)
     }

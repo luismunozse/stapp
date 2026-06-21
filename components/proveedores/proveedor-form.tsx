@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge"
 import { FormActionBar } from "@/components/ui/form-action-bar"
 import { Star, X, Upload, ImageIcon, Trash2, Loader2 } from "lucide-react"
 import { toast } from "sonner"
+import { useModal } from "@/contexts/modal-context"
 
 const CONDICION_IVA_OPTIONS = [
   { value: "RESPONSABLE_INSCRIPTO", label: "Responsable Inscripto" },
@@ -112,6 +113,7 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 export function ProveedorForm({ proveedor, onClose, onSuccess }: ProveedorFormProps) {
+  const { showError } = useModal()
   const [loading, setLoading] = useState(false)
   const [tags, setTags] = useState<string[]>(proveedor?.tags || [])
   const [tagInput, setTagInput] = useState("")
@@ -221,14 +223,14 @@ export function ProveedorForm({ proveedor, onClose, onSuccess }: ProveedorFormPr
 
       if (!res.ok) {
         const error = await res.json()
-        alert(error.error || "Error al guardar proveedor")
+        await showError(error.error || "Error al guardar proveedor")
         return
       }
 
       onSuccess()
     } catch (error) {
       console.error("Error saving proveedor:", error)
-      alert("Error al guardar proveedor")
+      await showError("Error al guardar proveedor")
     } finally {
       setLoading(false)
     }

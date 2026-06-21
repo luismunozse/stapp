@@ -54,7 +54,7 @@ const tipoOptions = [
 ]
 
 export function TemplateEditor() {
-  const { confirm } = useModal()
+  const { confirm, showError } = useModal()
   const { tipos: tiposDispositivo } = useTiposDispositivo()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -107,7 +107,7 @@ export function TemplateEditor() {
 
       if (!res.ok) {
         const error = await res.json()
-        alert(error.error || "Error al crear template")
+        await showError(error.error || "Error al crear template")
         return
       }
 
@@ -130,7 +130,7 @@ export function TemplateEditor() {
       setNewTemplateDeviceType("")
     } catch (error) {
       console.error("Error:", error)
-      alert("Error al crear template")
+      await showError("Error al crear template")
     } finally {
       setCreatingTemplate(false)
     }
@@ -166,7 +166,7 @@ export function TemplateEditor() {
 
       if (!res.ok) {
         const error = await res.json()
-        alert(error.error || "Error al agregar item")
+        await showError(error.error || "Error al agregar item")
         return
       }
 
@@ -187,7 +187,7 @@ export function TemplateEditor() {
       setNewItemRequerido(false)
     } catch (error) {
       console.error("Error:", error)
-      alert("Error al agregar item")
+      await showError("Error al agregar item")
     } finally {
       setSaving(false)
     }
