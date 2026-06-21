@@ -138,6 +138,12 @@ describe("POST /api/ordenes/[id]/cobros", () => {
     const chain = createChainMock(mockOrden)
     mockSupabaseFrom({ ordenes_servicio: chain })
 
+    // RPC returns a business-rule error so the route returns 400
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
+      data: null,
+      error: { code: "P0001", message: "El monto total (2000.00) excede el pendiente (1000.00)" },
+    } as any)
+
     const response = await POST(
       createPostRequest({ pagos: [{ monto: 2000, metodo: "EFECTIVO" }] }),
       createParams("o1")
@@ -162,26 +168,19 @@ describe("POST /api/ordenes/[id]/cobros", () => {
     }
 
     const ordenChain = createChainMock(mockOrden)
-    const cobrosChain = createChainMock(null)
-    cobrosChain.then = (resolve: any) => resolve({ data: null, error: null })
+    mockSupabaseFrom({ ordenes_servicio: ordenChain })
 
-    // Mock rpc
-    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: null, error: null } as any)
-
-    // For the final state query
-    const updatedOrdenChain = createChainMock({
-      total_cobrado: "5000",
-      estado_cobro: "COBRADO",
-      descuento_cobro: "0",
-    })
-
-    let fromCallCount = 0
-    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
-      if (table === "cobros_orden") return cobrosChain as any
-      fromCallCount++
-      if (fromCallCount <= 1) return ordenChain as any
-      return updatedOrdenChain as any
-    })
+    // RPC returns atomic result — route reads response.orden directly
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
+      data: {
+        replayed: false,
+        response: {
+          cobros: [{ id: "cob1", monto: 5000, metodo: "EFECTIVO", cuotas: null }],
+          orden: { totalCobrado: 5000, estadoCobro: "COBRADO", descuento: 0 },
+        },
+      },
+      error: null,
+    } as any)
 
     const response = await POST(
       createPostRequest({ pagos: [{ monto: 5000, metodo: "EFECTIVO" }] }),
