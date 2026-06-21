@@ -294,7 +294,7 @@ export function ComisionesVendedoresView() {
       )}
 
       <Card>
-        <CardContent className="p-0 overflow-x-auto">
+        <CardContent className="p-0">
           {isLoading ? (
             <div className="py-10 text-center text-muted-foreground">Cargando…</div>
           ) : items.length === 0 ? (
@@ -305,6 +305,9 @@ export function ComisionesVendedoresView() {
               variant="search"
             />
           ) : (
+            <>
+            {/* Desktop: tabla */}
+            <div className="hidden sm:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-muted/50 text-xs uppercase">
                 <tr>
@@ -380,6 +383,57 @@ export function ComisionesVendedoresView() {
                 ))}
               </tbody>
             </table>
+            </div>
+
+            {/* Mobile: cards */}
+            <div className="sm:hidden divide-y">
+              {items.map((i) => (
+                <div key={i.ventaId} className="p-3 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {!i.comisionPagada && (
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-primary shrink-0"
+                          checked={selected.has(i.ventaId)}
+                          onChange={() => toggleOne(i.ventaId)}
+                        />
+                      )}
+                      <Link href={`/ventas/${i.ventaId}`} className="text-primary hover:underline font-medium truncate">
+                        #{i.numeroVenta}
+                      </Link>
+                    </div>
+                    {i.comisionPagada ? (
+                      <button
+                        onClick={() => handleRevertir(i.ventaId)}
+                        className="inline-flex items-center gap-1 text-xs text-success-700 dark:text-success-500 hover:underline shrink-0"
+                      >
+                        <CheckCircle2 className="h-3 w-3" />
+                        Pagada
+                      </button>
+                    ) : (
+                      <Badge variant="warning" className="text-xs shrink-0">Pendiente</Badge>
+                    )}
+                  </div>
+                  <div className="text-sm text-muted-foreground truncate">
+                    {i.vendedorNombre} · {i.clienteNombre}
+                  </div>
+                  <div className="flex items-end justify-between gap-2">
+                    <div className="text-xs text-muted-foreground">
+                      Total {formatPrice(i.total)} · {formatDate(i.fecha)}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <Badge variant="outline" className="text-[10px] mb-1">
+                        <Percent className="h-3 w-3 mr-0.5" />
+                        {i.porcentajeComision.toFixed(2)}
+                      </Badge>
+                      <div className="font-semibold">{formatPrice(i.montoComision)}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            </>
           )}
         </CardContent>
       </Card>

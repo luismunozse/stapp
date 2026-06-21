@@ -308,7 +308,7 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
 
       {/* Tabla */}
       <Card>
-        <CardContent className="p-0 overflow-x-auto">
+        <CardContent className="p-0">
           {isLoading ? (
             <div className="py-10 text-center text-muted-foreground">Cargando…</div>
           ) : items.length === 0 ? (
@@ -319,6 +319,9 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
               variant="search"
             />
           ) : (
+            <>
+            {/* Desktop: tabla */}
+            <div className="hidden sm:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-muted/50 text-xs uppercase">
                 <tr>
@@ -395,6 +398,58 @@ export function ComisionesView({ tecnicoIdFijo }: ComisionesViewProps = {}) {
                 ))}
               </tbody>
             </table>
+            </div>
+
+            {/* Mobile: cards */}
+            <div className="sm:hidden divide-y">
+              {items.map((i) => (
+                <div key={i.ordenId} className="p-3 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {!i.comisionPagada && (
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-primary shrink-0"
+                          checked={selected.has(i.ordenId)}
+                          onChange={() => toggleOne(i.ordenId)}
+                        />
+                      )}
+                      <Link href={`/ordenes/${i.ordenId}`} className="text-primary hover:underline font-medium truncate">
+                        {i.codigoOrden || `#${i.numeroOrden}`}
+                      </Link>
+                    </div>
+                    {i.comisionPagada ? (
+                      <button
+                        onClick={() => handleRevertir(i.ordenId)}
+                        className="inline-flex items-center gap-1 text-xs text-success-700 dark:text-success-500 hover:underline shrink-0"
+                      >
+                        <CheckCircle2 className="h-3 w-3" />
+                        Pagada
+                      </button>
+                    ) : (
+                      <Badge variant="warning" className="text-xs shrink-0">Pendiente</Badge>
+                    )}
+                  </div>
+                  <div className="text-sm text-muted-foreground truncate">
+                    {i.tecnicoNombre} · {i.dispositivo}
+                  </div>
+                  <div className="flex items-end justify-between gap-2">
+                    <div className="text-xs text-muted-foreground space-y-0.5">
+                      <div>Costo {formatPrice(i.costoFinal)} · Rep. {formatPrice(i.costoRepuestos)}</div>
+                      <div>Ganancia {formatPrice(i.ganancia)}{i.fechaCompletado ? ` · ${formatDate(i.fechaCompletado)}` : ""}</div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <Badge variant="outline" className="text-[10px] mb-1">
+                        <Percent className="h-3 w-3 mr-0.5" />
+                        {i.porcentajeComision.toFixed(2)}
+                      </Badge>
+                      <div className="font-semibold">{formatPrice(i.montoComision)}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            </>
           )}
         </CardContent>
       </Card>
