@@ -18,6 +18,8 @@
     "cap:sync": "npx cap sync",
     "cap:open:android": "npx cap open android",
     "cap:build:apk": "cd android && gradlew assembleDebug",
+    "cap:build:aab": "npx cap sync && cd android && gradlew bundleRelease",
+    "cap:build:apk:release": "npx cap sync && cd android && gradlew assembleRelease",
     "cap:upload:apk": "node scripts/upload-apk.mjs",
     "cap:publish:apk": "npx cap sync && cd android && gradlew assembleDebug && cd .. && node scripts/upload-apk.mjs"
   },

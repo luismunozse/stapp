@@ -39,7 +39,8 @@ yarn-error.log*
 next-env.d.ts
 
 # capacitor
-/android/
+# android/ se versiona para persistir config de release (firma, permisos, ícono).
+# Su propio android/.gitignore excluye build artifacts, keystores y secretos.
 /ios/
 
 nul

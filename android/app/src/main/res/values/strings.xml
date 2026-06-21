@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">STApp</string>
+    <string name="title_activity_main">STApp</string>
+    <string name="package_name">ar.com.stapp.app</string>
+    <string name="custom_url_scheme">ar.com.stapp.app</string>
+</resources>
