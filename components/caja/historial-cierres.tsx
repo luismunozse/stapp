@@ -90,7 +90,7 @@ export function HistorialCierres() {
         </Card>
       ) : (
         <Card>
-          <div className="overflow-x-auto">
+          <div className="hidden sm:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/50">
@@ -141,6 +141,46 @@ export function HistorialCierres() {
                 ))}
               </tbody>
             </table>
+          </div>
+
+          {/* Mobile: cards */}
+          <div className="sm:hidden divide-y">
+            {sesiones.map((s: any) => (
+              <div key={s.id} className="p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium">{formatDate(s.fecha)}</span>
+                  {s.diferencia != null && (
+                    <DiferenciaBadge diferencia={s.diferencia} formatPrice={formatPrice} />
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
+                  <div>
+                    <span className="text-muted-foreground">Saldo inicial</span>
+                    <div className="font-medium">{formatPrice(s.saldoInicial)}</div>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Conteo</span>
+                    <div className="font-medium">{s.conteoFisico != null ? formatPrice(s.conteoFisico) : "-"}</div>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Ingresos</span>
+                    <div className="text-success-600">{s.totalIngresos != null ? formatPrice(s.totalIngresos) : "-"}</div>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Egresos</span>
+                    <div className="text-destructive">{s.totalEgresos != null ? formatPrice(s.totalEgresos) : "-"}</div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-2 pt-0.5">
+                  <span className="text-xs text-muted-foreground truncate">
+                    Apertura: {s.usuarioApertura?.nombre || "-"}
+                  </span>
+                  <Button variant="ghost" size="sm" onClick={() => setDetailId(s.id)}>
+                    Ver
+                  </Button>
+                </div>
+              </div>
+            ))}
           </div>
         </Card>
       )}
