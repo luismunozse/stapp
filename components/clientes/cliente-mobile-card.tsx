@@ -59,7 +59,7 @@ export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCue
             <Button
               variant="ghost"
               size="icon"
-              className="no-touch-min h-8 w-8"
+              className="h-8 w-8"
               onClick={(e) => onEdit(e, cliente)}
               title="Editar"
             >
@@ -70,7 +70,7 @@ export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCue
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="no-touch-min h-8 w-8 text-muted-foreground"
+                  className="h-8 w-8 text-muted-foreground"
                   onClick={(e) => e.stopPropagation()}
                   title="Más acciones"
                 >

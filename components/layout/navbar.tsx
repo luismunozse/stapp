@@ -569,7 +569,7 @@ export function Navbar() {
         id="mobile-menu-drawer"
         ref={menuRef}
         className={cn(
-          "lg:hidden fixed top-0 right-0 bottom-0 z-40 w-72 bg-background shadow-xl transition-transform duration-200 ease-out",
+          "lg:hidden fixed top-0 right-0 bottom-0 z-40 w-[min(18rem,85vw)] bg-background shadow-xl transition-transform duration-200 ease-out",
           mobileMenuOpen ? "translate-x-0" : "translate-x-full"
         )}
       >
@@ -647,7 +647,7 @@ export function Navbar() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors",
+                  "flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors",
                   "active:bg-accent/50 active:scale-95",
                   isActive
                     ? "text-primary"
@@ -665,7 +665,7 @@ export function Navbar() {
           <button
             onClick={() => setMobileMenuOpen(true)}
             className={cn(
-              "flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors",
+              "flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors",
               "active:bg-accent/50 active:scale-95",
               isMoreActive
                 ? "text-primary"
