@@ -25,7 +25,10 @@ import { parseStock, parsePrecio } from "@/lib/catalogo/inline-edit"
 import { buildItemsQuery } from "@/lib/catalogo/items-query"
 import { useDebouncedValue } from "./use-debounced-value"
 
-type ItemConCategoria = CatalogoItem & { categoria?: { id: string; nombre: string } | null }
+type ItemConCategoria = CatalogoItem & {
+  categoria?: { id: string; nombre: string } | null
+  inventario?: { id: string; stock: number | null; nombre: string } | null
+}
 type BulkAction = "activar" | "desactivar" | "destacar" | "quitar_destacado" | "borrar" | "cambiar_categoria"
 
 const PAGE_SIZE = 20
@@ -454,6 +457,21 @@ export function CatalogoItemsTab() {
                     <td className="px-2 py-1.5 hidden sm:table-cell text-right">
                       {item.tipo === "SERVICIO" ? (
                         <span className="text-muted-foreground text-xs">—</span>
+                      ) : item.inventario_id ? (
+                        // Stock gestionado por inventario: solo lectura para no descuadrar la fuente de verdad.
+                        <span
+                          className="text-xs text-muted-foreground"
+                          title="Stock gestionado desde Inventario"
+                        >
+                          {item.inventario?.stock == null ? (
+                            "—"
+                          ) : item.inventario.stock === 0 ? (
+                            <span className="text-destructive">0</span>
+                          ) : (
+                            item.inventario.stock
+                          )}
+                          <span className="ml-1 opacity-60">(inv.)</span>
+                        </span>
                       ) : (
                         <InlineEditCell
                           value={item.stock == null ? null : Number(item.stock)}
@@ -582,11 +600,16 @@ export function CatalogoItemsTab() {
                           ? `Desde $${Number(item.precio).toLocaleString("es-AR")}`
                           : `$${Number(item.precio).toLocaleString("es-AR")}`}
                     </div>
-                    {item.tipo === "PRODUCTO" && item.stock != null && (
-                      <Badge variant={item.stock === 0 ? "destructive" : "outline"} className="text-xs">
-                        Stock: {item.stock}
-                      </Badge>
-                    )}
+                    {item.tipo === "PRODUCTO" && (() => {
+                      // Fuente de verdad: inventario si está linkeado, si no catalogo_items.stock.
+                      const stockReal = item.inventario_id ? item.inventario?.stock ?? null : item.stock
+                      if (stockReal == null) return null
+                      return (
+                        <Badge variant={stockReal === 0 ? "destructive" : "outline"} className="text-xs">
+                          Stock: {stockReal}{item.inventario_id ? " (inv.)" : ""}
+                        </Badge>
+                      )
+                    })()}
                   </div>
                   <div className="flex gap-1 pt-1">
                     <Button variant="outline" size="sm" className="flex-1 gap-1" onClick={() => setEditing(item)}>

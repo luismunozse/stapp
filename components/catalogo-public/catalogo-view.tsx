@@ -81,6 +81,8 @@ interface CatalogoData {
   }>
 }
 
+const ITEMS_PER_PAGE = 24
+
 export function CatalogoView({
   data,
   initialCategoriaId = null,
@@ -99,6 +101,10 @@ export function CatalogoView({
   const [soloFavoritos, setSoloFavoritos] = useState(false)
   const [cartOpen, setCartOpen] = useState(false)
   const [detalleId, setDetalleId] = useState<string | null>(null)
+  // Paginación de render: todos los items viven en memoria (búsqueda/filtros
+  // client-side intactos), pero solo montamos de a tandas para no renderizar
+  // cientos de cards de golpe en catálogos grandes.
+  const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE)
 
   const openDetalle = (id: string) => {
     setDetalleId(id)
@@ -118,6 +124,13 @@ export function CatalogoView({
   }, [data.items])
 
   const [precioRange, setPrecioRange] = useState<[number, number]>([precioMin, precioMax])
+
+  // Al cambiar cualquier filtro/orden/búsqueda, volvemos a la primera tanda.
+  // favoritos.ids es un Set estable (solo cambia en toggle) → incluirlo cubre
+  // el caso "Solo favoritos" activo + toggle.
+  useEffect(() => {
+    setVisibleCount(ITEMS_PER_PAGE)
+  }, [search, categoriaActiva, sort, tagsActivos, soloDisponibles, soloFavoritos, precioRange, favoritos.ids])
 
   useEffect(() => {
     // Tracking de vista del catálogo (una vez por carga). Fire & forget.
@@ -429,7 +442,7 @@ export function CatalogoView({
                 }}
               >
                 <AnimatePresence>
-                  {itemsFiltrados.map((item, idx) => (
+                  {itemsFiltrados.slice(0, visibleCount).map((item, idx) => (
                     <ItemCard
                       key={item.id}
                       item={item}
@@ -439,11 +452,22 @@ export function CatalogoView({
                       brandColor={data.config.color_primary}
                       isFav={favoritos.has(item.id)}
                       onToggleFav={() => favoritos.toggle(item.id)}
-                      priority={idx < 4}
+                      priority={idx < 4 && visibleCount === ITEMS_PER_PAGE}
                     />
                   ))}
                 </AnimatePresence>
               </motion.div>
+            )}
+
+            {itemsFiltrados.length > visibleCount && (
+              <div className="flex justify-center mt-8">
+                <Button
+                  variant="outline"
+                  onClick={() => setVisibleCount((c) => c + ITEMS_PER_PAGE)}
+                >
+                  Cargar más ({itemsFiltrados.length - visibleCount} restantes)
+                </Button>
+              </div>
             )}
 
             <p className="text-center text-xs text-muted-foreground mt-12">

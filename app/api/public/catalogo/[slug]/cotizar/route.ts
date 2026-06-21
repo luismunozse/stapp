@@ -5,14 +5,6 @@ import { randomBytes } from "crypto"
 import { z } from "zod"
 import { resolvePlantilla } from "@/lib/whatsapp/plantillas-catalog"
 
-async function revertirCupon(cuponId: string) {
-  try {
-    await supabaseAdmin.rpc("revertir_uso_cupon_catalogo", { p_cupon_id: cuponId })
-  } catch (err) {
-    console.error("Error revirtiendo uso de cupón:", err)
-  }
-}
-
 const cotizarSchema = z.object({
   cliente: z.object({
     nombre: z.string().min(1).max(120),
@@ -223,36 +215,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   const subtotal = itemsCalculados.reduce((s, i) => s + i.subtotal, 0)
   const iva = 0
 
-  // 6.5 Cupón: aplicar atómicamente (incrementa usos_actuales)
-  let cuponDescuento = 0
-  let cuponId: string | null = null
-  let cuponCodigoAplicado: string | null = null
-  if (data.cuponCodigo) {
-    const { data: cuponResult, error: cuponErr } = await supabaseAdmin.rpc("aplicar_cupon_catalogo", {
-      p_organization_id: organizationId,
-      p_codigo: data.cuponCodigo.toUpperCase(),
-      p_subtotal: subtotal,
-    })
-    if (cuponErr) {
-      console.error("Error aplicando cupón:", cuponErr)
-      return NextResponse.json({ error: "Error al aplicar cupón" }, { status: 500 })
-    }
-    const cr: any = cuponResult
-    if (!cr?.ok) {
-      return NextResponse.json({ error: cr?.error || "Cupón inválido" }, { status: 400 })
-    }
-    cuponId = cr.cupon_id
-    cuponCodigoAplicado = cr.codigo
-    cuponDescuento = Number(cr.descuento_aplicado) || 0
-  }
-
-  const total = Math.max(0, subtotal - cuponDescuento)
-
-  // 7. Crear cotización + items + reservar stock + marcar abandono en una
-  // sola transacción (RPC plpgsql). Si cualquier paso falla, ROLLBACK total
-  // — no quedan cotizaciones huérfanas, stock no se decrementa, abandono
-  // no se marca. El cupón ya fue aplicado arriba; si esta RPC falla hay
-  // que revertirlo manualmente.
+  // 7. Crear cotización + reservar stock + CONSUMIR cupón + items + abandono
+  // en una sola transacción (RPC plpgsql). El cupón se consume DENTRO de la RPC
+  // (fix ERR-02): si cualquier paso falla, el incremento de usos_actuales
+  // rollbackea solo — nunca queda un cupón consumido sin cotización. La RPC
+  // valida el cupón, calcula descuento + total y los devuelve.
   const numeroCotizacion = await getNextQuoteNumber(organizationId)
   const publicToken = randomBytes(16).toString("hex")
 
@@ -265,10 +232,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       notas: data.notas?.trim() || "Solicitud desde catálogo público",
       subtotal,
       iva,
-      total,
-      cupon_id: cuponId,
-      cupon_codigo: cuponCodigoAplicado,
-      cupon_descuento: cuponDescuento > 0 ? cuponDescuento : null,
+      cupon_codigo: data.cuponCodigo ? data.cuponCodigo.toUpperCase() : null,
     },
     p_items: itemsCalculados.map((i) => ({
       descripcion: i.descripcion,
@@ -292,14 +256,24 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
 
   if (rpcErr || !rpcResult?.ok) {
     console.error("Error en crear_cotizacion_publica_atomica:", rpcErr)
-    if (cuponId) {
-      await revertirCupon(cuponId)
+    // Toda la transacción (stock + cupón + cotización) rollbackeó. No hay nada
+    // que revertir a mano. P0003 = stock insuficiente, P0004 = cupón inválido.
+    let status = 500
+    let msg = "Error al crear cotización"
+    if (rpcErr?.code === "P0003") {
+      status = 409
+      msg = rpcErr.message
+    } else if (rpcErr?.code === "P0004") {
+      status = 400
+      msg = rpcErr.message
     }
-    // P0003 = stock insuficiente (raise de reservar_stock_catalogo)
-    const status = rpcErr?.code === "P0003" ? 409 : 500
-    const msg = rpcErr?.code === "P0003" ? rpcErr.message : "Error al crear cotización"
     return NextResponse.json({ error: msg }, { status })
   }
+
+  // La RPC ya consumió el cupón y calculó descuento + total atómicamente.
+  const total = Number(rpcResult.total) || 0
+  const cuponCodigoAplicado = (rpcResult.cupon_codigo as string | null) ?? null
+  const cuponDescuento = Number(rpcResult.cupon_descuento) || 0
 
   const cotizacion = {
     id: rpcResult.cotizacion_id as string,

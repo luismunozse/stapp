@@ -143,7 +143,8 @@ export async function POST(req: Request) {
       imagen_url: d.imagen_url ?? null,
       imagenes: d.imagenes ?? [],
       etiquetas: d.etiquetas ?? [],
-      stock: d.stock ?? null,
+      // Stock single-source: linkeado a inventario => no se trackea acá.
+      stock: d.inventario_id ? null : d.stock ?? null,
       destacado: d.destacado ?? false,
       activo: d.activo ?? true,
       orden: nextOrden,
