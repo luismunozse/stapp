@@ -54,7 +54,7 @@ export async function POST(
       .select(`
         *,
         clientes (*),
-        ordenes_servicio!cotizaciones_orden_id_fkey (clientes (*)),
+        ordenes_servicio!cotizaciones_orden_id_fkey (sucursal_id, clientes (*)),
         items_cotizacion (*)
       `)
       .eq("id", id)
@@ -103,6 +103,11 @@ export async function POST(
     const clienteNombre = cliente?.nombre || "Sin nombre"
     const clienteTelefono = cliente?.telefono || null
     const clienteId = cliente?.id || null
+
+    // La venta hereda la sucursal de la orden vinculada para mantener la
+    // atribución por sucursal consistente (la cotización es org-wide). Si la
+    // cotización no proviene de una orden, usa la sucursal activa resuelta arriba.
+    const ventaSucursalId = (cotizacion.ordenes_servicio as any)?.sucursal_id ?? sucursalId
 
     // Phantom-stock guard: en ACEPTAR, reservar_items_cotizacion (migration 108)
     // reserva stock para TODO item con inventario_id. Tras la venta liberamos las
@@ -206,7 +211,7 @@ export async function POST(
       p_recargo_porcentaje: null,
       p_monto_original: null,
       p_items: pItems,
-      p_sucursal_id: sucursalId,
+      p_sucursal_id: ventaSucursalId,
     }
 
     const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc("crear_venta_atomica", rpcParams)

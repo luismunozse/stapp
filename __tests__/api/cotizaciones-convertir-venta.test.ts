@@ -108,6 +108,42 @@ describe("POST /api/cotizaciones/[id]/convertir-venta", () => {
     expect(capturedRpcParams.p_sucursal_id).toBe("suc-A")
   })
 
+  it("hereda la sucursal de la orden vinculada (ignora la sucursal activa)", async () => {
+    mockAuthSuccess()
+    // Admin operando con la sucursal activa en suc-B...
+    vi.mocked(sucursalParaEscritura).mockResolvedValue("suc-B")
+
+    // ...pero la cotización está vinculada a una orden de suc-A.
+    const cotizacionConOrden = {
+      ...mockCotizacion,
+      ordenes_servicio: { sucursal_id: "suc-A", clientes: { id: "c1", nombre: "Juan" } },
+    }
+    const cotizacionChain = createChainMock(cotizacionConOrden)
+    const ventaChain = createChainMock({ numero_venta: 1 })
+    let capturedRpcParams: any = null
+
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "cotizaciones") return cotizacionChain as any
+      if (table === "ventas") return ventaChain as any
+      return createChainMock(null) as any
+    })
+
+    vi.mocked(supabaseAdmin.rpc).mockImplementation((fn: string, params?: any) => {
+      if (fn === "crear_venta_atomica") {
+        capturedRpcParams = params
+        return Promise.resolve({ data: "venta-1", error: null }) as any
+      }
+      return Promise.resolve({ data: null, error: null }) as any
+    })
+
+    const response = await POST(createPostRequest(validBody), createParams("cot-1"))
+    const { status } = await parseResponse(response)
+
+    expect(status).toBe(201)
+    // La venta debe quedar atribuida a la sucursal de la orden (suc-A), no a la activa (suc-B).
+    expect(capturedRpcParams.p_sucursal_id).toBe("suc-A")
+  })
+
   it("calls sucursalParaEscritura with correct args", async () => {
     mockAuthSuccess({ organizationId: "org-99", role: "ADMIN" })
     vi.mocked(sucursalParaEscritura).mockResolvedValue("suc-X")
