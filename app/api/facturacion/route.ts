@@ -1,11 +1,18 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaLectura } from "@/lib/sucursal"
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAdmin()
+    const { error, organizationId, session, role } = await requireAdmin()
     if (error) return error
+
+    const filtro = await sucursalParaLectura({
+      role,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
+    const sid = filtro.verTodas ? null : filtro.sucursalId
 
     const { searchParams } = new URL(request.url)
     const estadoPago = searchParams.get("estadoPago")
@@ -26,6 +33,8 @@ export async function GET(request: Request) {
       `)
       .eq("ordenes_servicio.organization_id", organizationId!)
       .order("fecha", { ascending: false })
+
+    if (sid) query = query.eq("ordenes_servicio.sucursal_id", sid)
 
     if (estadoPago) {
       query = query.eq("estado_pago", estadoPago)
