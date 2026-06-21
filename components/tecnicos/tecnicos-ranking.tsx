@@ -309,7 +309,9 @@ export function TecnicosRanking() {
               Sin técnicos para mostrar en este período.
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            {/* Desktop: tabla */}
+            <div className="hidden sm:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="border-b bg-muted/30">
                   <tr className="text-left">
@@ -467,6 +469,73 @@ export function TecnicosRanking() {
                 </tbody>
               </table>
             </div>
+
+            {/* Mobile: cards */}
+            <div className="sm:hidden divide-y">
+              {sorted.map((r, i) => {
+                const pos = i + 1
+                const slaBajo = r.tasaSla != null && r.tasaSla < 0.8
+                const muchosReingresos = r.completadas >= 3 && r.tasaReingresos > 0.1
+                return (
+                  <div key={r.id} className={cn("p-3 space-y-2.5", !r.activo && "opacity-60")}>
+                    <div className="flex items-center gap-2">
+                      <Medalist pos={pos} />
+                      <Link href={`/tecnicos/${r.id}`} className="flex-1 min-w-0 hover:underline">
+                        <span className="font-medium text-sm truncate flex flex-wrap items-center gap-1.5">
+                          {r.nombre}
+                          {!r.activo && (
+                            <Badge variant="outline" className="text-[9px] font-normal bg-muted">Inactivo</Badge>
+                          )}
+                          {bestBy.ingresos === r.id && r.ingresos > 0 && (
+                            <Badge className="text-[9px] font-normal bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300">Top ingresos</Badge>
+                          )}
+                          {bestBy.sla === r.id && r.tasaSla != null && (
+                            <Badge className="text-[9px] font-normal bg-green-100 text-green-800 border-green-200 dark:bg-green-950/40 dark:text-green-300">Mejor SLA</Badge>
+                          )}
+                          {bestBy.tat === r.id && r.tat > 0 && (
+                            <Badge className="text-[9px] font-normal bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300">TAT más rápido</Badge>
+                          )}
+                        </span>
+                        <span className="block text-[11px] text-muted-foreground truncate">{r.email}</span>
+                      </Link>
+                      <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0" />
+                    </div>
+                    <div className="grid grid-cols-3 gap-x-2 gap-y-1.5 text-xs">
+                      <div>
+                        <span className="text-muted-foreground">Activas</span>
+                        <div className="font-medium tabular-nums">{r.ordenesActivas}</div>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Ingresos</span>
+                        <div className="font-medium tabular-nums">{formatPrice(r.ingresos)}</div>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Completadas</span>
+                        <div className="font-medium tabular-nums">{r.completadas}</div>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">TAT</span>
+                        <div className="tabular-nums text-muted-foreground">{formatHoras(r.tat)}</div>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">SLA</span>
+                        <div className={cn("font-medium tabular-nums", slaBajo && "text-red-600 dark:text-red-400")}>
+                          {formatPct(r.tasaSla)}
+                          {r.vencidas > 0 && <span className="text-[10px] text-red-600 ml-1">({r.vencidas} venc.)</span>}
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Reingresos</span>
+                        <div className={cn("tabular-nums", muchosReingresos && "text-amber-700 dark:text-amber-400 font-medium")}>
+                          {r.completadas > 0 ? formatPct(r.tasaReingresos) : "—"}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            </>
           )}
         </CardContent>
       </Card>
