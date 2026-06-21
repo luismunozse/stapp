@@ -815,21 +815,28 @@ export function OrdenesList() {
         </div>
       )}
 
-      {/* Form Modal */}
+      {/* Form como overlay full-screen (mobile) / modal centrado (desktop) con
+          scroll propio: no empuja ni se mezcla con el listado. z-[60] tapa
+          navbar y bottom-nav. */}
       {showForm && (
-        <OrdenForm
-          fromTurnoId={fromTurnoId || undefined}
-          initialClienteId={clienteIdParam || undefined}
-          onClose={() => {
-            setShowForm(false)
-            if (fromTurnoId || clienteIdParam) router.replace(pathname)
-          }}
-          onSuccess={() => {
-            setShowForm(false)
-            if (fromTurnoId || clienteIdParam) router.replace(pathname)
-            mutate()
-          }}
-        />
+        <div className="fixed inset-0 z-[60] overflow-y-auto overscroll-contain bg-background sm:bg-black/60 sm:py-6">
+          <div className="min-h-full sm:mx-auto sm:min-h-0 sm:max-w-3xl">
+            <OrdenForm
+              inSheet
+              fromTurnoId={fromTurnoId || undefined}
+              initialClienteId={clienteIdParam || undefined}
+              onClose={() => {
+                setShowForm(false)
+                if (fromTurnoId || clienteIdParam) router.replace(pathname)
+              }}
+              onSuccess={() => {
+                setShowForm(false)
+                if (fromTurnoId || clienteIdParam) router.replace(pathname)
+                mutate()
+              }}
+            />
+          </div>
+        </div>
       )}
 
       {/* Cobro múltiple de órdenes seleccionadas */}
