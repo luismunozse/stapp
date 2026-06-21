@@ -12,10 +12,10 @@ import { sucursalParaLectura } from "@/lib/sucursal"
  */
 export async function GET() {
   try {
-    const { error, organizationId, role } = await requireAdminOrVendedor()
+    const { error, organizationId, role, session } = await requireAdminOrVendedor()
     if (error) return error
 
-    const filtro = await sucursalParaLectura({ role, userSucursalId: null })
+    const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
 
     const now = new Date()
     const inicioActual = new Date(now.getFullYear(), now.getMonth(), 1)

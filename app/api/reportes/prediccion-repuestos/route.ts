@@ -6,10 +6,10 @@ import { hasPlanFeature } from "@/lib/subscriptions"
 
 export async function GET() {
   try {
-    const { error, organizationId, role } = await requireAdminOrVendedor()
+    const { error, organizationId, role, session } = await requireAdminOrVendedor()
     if (error) return error
 
-    const filtro = await sucursalParaLectura({ role, userSucursalId: null })
+    const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
 
     const hasFeature = await hasPlanFeature(organizationId!, "advanced_reports")
     if (!hasFeature) {

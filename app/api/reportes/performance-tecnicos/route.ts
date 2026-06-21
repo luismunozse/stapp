@@ -19,7 +19,7 @@ interface TecnicoPerformance {
  */
 export async function GET() {
   try {
-    const { error, organizationId, role } = await requireAdminOrVendedor()
+    const { error, organizationId, role, session } = await requireAdminOrVendedor()
     if (error) return error
 
     // Obtener técnicos de la organización
@@ -36,7 +36,7 @@ export async function GET() {
     primerDiaMes.setDate(1)
     primerDiaMes.setHours(0, 0, 0, 0)
 
-    const filtro = await sucursalParaLectura({ role, userSucursalId: null })
+    const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
 
     let ordenesQuery = supabaseAdmin
       .from("ordenes_servicio")

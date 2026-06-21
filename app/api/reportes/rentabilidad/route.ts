@@ -6,7 +6,7 @@ import { sucursalParaLectura } from "@/lib/sucursal"
 
 export async function GET() {
   try {
-    const { error, organizationId, role } = await requireAdminOrVendedor()
+    const { error, organizationId, role, session } = await requireAdminOrVendedor()
     if (error) return error
 
     const hasFeature = await hasPlanFeature(organizationId!, "advanced_reports")
@@ -17,7 +17,7 @@ export async function GET() {
       )
     }
 
-    const filtro = await sucursalParaLectura({ role, userSucursalId: null })
+    const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
 
     // Obtener órdenes completadas con costo final y repuestos
     let ordenesQuery = supabaseAdmin

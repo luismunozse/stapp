@@ -6,7 +6,7 @@ import { sucursalParaLectura } from "@/lib/sucursal"
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId, role } = await requireAdminOrVendedor()
+    const { error, organizationId, role, session } = await requireAdminOrVendedor()
     if (error) return error
 
     const hasFeature = await hasPlanFeature(organizationId!, "advanced_reports")
@@ -34,7 +34,7 @@ export async function GET(request: Request) {
         fechaInicio = new Date(now.getFullYear(), now.getMonth() - 1, 1)
     }
 
-    const filtro = await sucursalParaLectura({ role, userSucursalId: null })
+    const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
 
     // Obtener órdenes completadas con fechas
     let ordenesQuery = supabaseAdmin

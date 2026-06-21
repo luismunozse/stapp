@@ -4,10 +4,10 @@ import { sucursalParaLectura } from "@/lib/sucursal"
 import { NextResponse } from "next/server"
 
 export async function GET() {
-  const { error, organizationId, role } = await requireAdminOrVendedor()
+  const { error, organizationId, role, session } = await requireAdminOrVendedor()
   if (error) return error
 
-  const filtro = await sucursalParaLectura({ role, userSucursalId: null })
+  const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
 
   const now = new Date()
   const en30Dias = new Date(now)

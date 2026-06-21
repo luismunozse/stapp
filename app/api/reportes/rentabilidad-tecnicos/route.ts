@@ -25,7 +25,7 @@ interface TecnicoRentabilidad {
  */
 export async function GET(request: Request) {
   try {
-    const { error, organizationId, role } = await requireAdminOrVendedor()
+    const { error, organizationId, role, session } = await requireAdminOrVendedor()
     if (error) return error
 
     const hasFeature = await hasPlanFeature(organizationId!, "advanced_reports")
@@ -65,7 +65,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "'desde' no puede ser posterior a 'hasta'" }, { status: 400 })
     }
 
-    const filtro = await sucursalParaLectura({ role, userSucursalId: null })
+    const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
 
     let ordenesQuery = supabaseAdmin
       .from("ordenes_servicio")
