@@ -12,6 +12,7 @@ import { Plus, Package, Send, PackageCheck, X, Truck } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { OrdenCompraForm } from "./orden-compra-form"
 import { RecibirOCDialog } from "./recibir-oc-dialog"
+import { useModal } from "@/contexts/modal-context"
 
 const fetcher = (url: string) => fetch(url, { cache: "no-store" }).then(res => res.json())
 
@@ -48,6 +49,7 @@ export function OrdenesCompraList() {
   const [recibirOC, setRecibirOC] = useState<OrdenCompra | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const { formatPrice, formatDate } = useCurrency()
+  const { showError } = useModal()
 
   // Check for draft from inventario "Generar OC" button
   useEffect(() => {
@@ -93,12 +95,12 @@ export function OrdenesCompraList() {
       })
       if (!res.ok) {
         const err = await res.json()
-        alert(err.error || "Error al cambiar estado")
+        await showError(err.error || "Error al cambiar estado")
         return
       }
       refresh()
     } catch {
-      alert("Error al cambiar estado")
+      await showError("Error al cambiar estado")
     }
   }
 
@@ -108,12 +110,12 @@ export function OrdenesCompraList() {
       const res = await fetch(`/api/ordenes-compra/${id}`, { method: "DELETE" })
       if (!res.ok) {
         const err = await res.json()
-        alert(err.error || "Error al eliminar")
+        await showError(err.error || "Error al eliminar")
         return
       }
       refresh()
     } catch {
-      alert("Error al eliminar")
+      await showError("Error al eliminar")
     }
   }
 

@@ -172,7 +172,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
 
       if (!res.ok) {
         const error = await res.json()
-        alert(error.error || "Error al actualizar estado")
+        await showError(error.error || "Error al actualizar estado")
         return
       }
 
@@ -253,7 +253,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
     try {
       const res = await fetch(`/api/cotizaciones/${cotizacion.id}/pdf`)
       if (!res.ok) {
-        alert("Error al abrir PDF")
+        await showError("Error al abrir PDF")
         return
       }
       const blob = await res.blob()
@@ -261,7 +261,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
       window.open(url, "_blank")
     } catch (error) {
       console.error("Error opening PDF:", error)
-      alert("Error al abrir PDF")
+      await showError("Error al abrir PDF")
     }
   }
 

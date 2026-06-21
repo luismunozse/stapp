@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ClipboardCheck, Loader2, Save } from "lucide-react"
 import { SignaturePad } from "@/components/firma/signature-pad"
+import { useModal } from "@/contexts/modal-context"
 
 interface TemplateItem {
   id: string
@@ -57,6 +58,7 @@ export function ChecklistForm({
   onSuccess,
   onCancel,
 }: ChecklistFormProps) {
+  const { showError } = useModal()
   const [loading, setLoading] = useState(false)
   const [valores, setValores] = useState<Record<string, boolean | string | null>>(initialValues)
   const [notas, setNotas] = useState(initialNotas)
@@ -95,7 +97,7 @@ export function ChecklistForm({
     })
 
     if (missingRequired.length > 0) {
-      alert(`Completá los campos requeridos: ${missingRequired.map((i) => i.label).join(", ")}`)
+      await showError(`Completá los campos requeridos: ${missingRequired.map((i) => i.label).join(", ")}`)
       return
     }
 
@@ -115,14 +117,14 @@ export function ChecklistForm({
 
       if (!res.ok) {
         const error = await res.json()
-        alert(error.error || "Error al guardar checklist")
+        await showError(error.error || "Error al guardar checklist")
         return
       }
 
       onSuccess()
     } catch (error) {
       console.error("Error:", error)
-      alert("Error al guardar checklist")
+      await showError("Error al guardar checklist")
     } finally {
       setLoading(false)
     }

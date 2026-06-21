@@ -27,6 +27,7 @@ import { generateWhatsAppUrl, formatPhoneForWhatsApp } from "@/lib/notifications
 import { resolvePlantilla } from "@/lib/whatsapp/plantillas-catalog"
 import { useCurrency } from "@/contexts/currency-context"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
+import { useModal } from "@/contexts/modal-context"
 import type { OrdenServicio } from "@/types"
 
 interface OrdenCreadaData {
@@ -110,6 +111,7 @@ function buildThermalOrden(orden: OrdenCreadaData) {
 }
 
 export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps) {
+  const { showError } = useModal()
   const [copied, setCopied] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [printing, setPrinting] = useState(false)
@@ -189,7 +191,7 @@ export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps
       window.open(url, "_blank")
     } catch (error) {
       console.error("Error opening PDF:", error)
-      alert("Error al abrir el PDF")
+      await showError("Error al abrir el PDF")
     } finally {
       setDownloading(false)
     }
@@ -213,7 +215,7 @@ export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps
       }
     } catch (error) {
       console.error("Error printing PDF:", error)
-      alert("Error al imprimir la orden")
+      await showError("Error al imprimir la orden")
     } finally {
       setPrinting(false)
     }

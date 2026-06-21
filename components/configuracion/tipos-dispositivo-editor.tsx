@@ -22,7 +22,7 @@ import { TipoConfigEditor } from "@/components/configuracion/tipo-config-editor"
 import type { TipoDispositivoCustom, TipoDispositivoConfig } from "@/types"
 
 export function TiposDispositivoEditor() {
-  const { confirm } = useModal()
+  const { confirm, showError } = useModal()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [tipos, setTipos] = useState<TipoDispositivoCustom[]>([])
@@ -69,7 +69,7 @@ export function TiposDispositivoEditor() {
 
       if (!res.ok) {
         const error = await res.json()
-        alert(error.error || "Error al crear tipo")
+        await showError(error.error || "Error al crear tipo")
         return
       }
 
@@ -81,7 +81,7 @@ export function TiposDispositivoEditor() {
       setShowForm(false)
     } catch (error) {
       console.error("Error:", error)
-      alert("Error al crear tipo")
+      await showError("Error al crear tipo")
     } finally {
       setSaving(false)
     }
@@ -97,7 +97,7 @@ export function TiposDispositivoEditor() {
 
       if (!res.ok) {
         const error = await res.json()
-        alert(error.error || "Error al actualizar tipo")
+        await showError(error.error || "Error al actualizar tipo")
         return
       }
 
@@ -129,7 +129,7 @@ export function TiposDispositivoEditor() {
 
       if (!res.ok) {
         const error = await res.json()
-        alert(error.error || "Error al eliminar tipo")
+        await showError(error.error || "Error al eliminar tipo")
         return
       }
 
@@ -188,7 +188,7 @@ export function TiposDispositivoEditor() {
 
     if (!res.ok) {
       const error = await res.json()
-      alert(error.error || "Error al guardar configuracion")
+      await showError(error.error || "Error al guardar configuracion")
       throw new Error("Save failed")
     }
 

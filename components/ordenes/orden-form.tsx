@@ -23,6 +23,7 @@ import { compressImage } from "@/lib/image-compression"
 import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
 import { SignaturePad } from "@/components/firma/signature-pad"
 import { useOffline } from "@/contexts/offline-context"
+import { useModal } from "@/contexts/modal-context"
 import { STORES } from "@/lib/offline/constants"
 import type { Cliente, TipoDispositivoConfig, CampoExtra } from "@/types"
 import { isValidImei, sanitizeImei } from "@/lib/imei"
@@ -119,6 +120,7 @@ interface OrdenCreadaData {
 
 export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId }: OrdenFormProps) {
   const { offlineFetch } = useOffline()
+  const { showError, showInfo } = useModal()
   const { data: session } = useSession()
   const isTecnicoRole = session?.user?.role === "TECNICO"
   const [loading, setLoading] = useState(false)
@@ -220,7 +222,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId }:
         }
       })
       .catch((err) => {
-        alert(err.message || "Error al cargar datos del turno")
+        void showError(err.message || "Error al cargar datos del turno")
       })
     return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -331,18 +333,6 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId }:
 
   const esClienteEmpresa = clienteSeleccionadoObj?.tipoCliente === "EMPRESA" || !!clienteSeleccionadoObj?.razonSocial
 
-  // DEBUG: remover después
-  useEffect(() => {
-    if (clienteSeleccionadoObj) {
-      console.log("Cliente seleccionado:", {
-        id: clienteSeleccionadoObj.id,
-        nombre: clienteSeleccionadoObj.nombre,
-        tipoCliente: clienteSeleccionadoObj.tipoCliente,
-        razonSocial: clienteSeleccionadoObj.razonSocial,
-        esClienteEmpresa,
-      })
-    }
-  }, [clienteSeleccionadoObj, esClienteEmpresa])
 
   // Fetch técnicos disponibles (solo para ADMIN / no-TECNICO)
   useEffect(() => {
@@ -397,7 +387,6 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId }:
 
     const processFile = async (file: File): Promise<FotoPreview | null> => {
       if (!file.type.startsWith("image/")) {
-        alert("Por favor selecciona imagenes validas")
         return null
       }
 
@@ -419,7 +408,6 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId }:
         })
       } catch (error) {
         console.error("Error procesando imagen:", error)
-        alert("Error al procesar una imagen")
         return null
       }
     }
@@ -430,6 +418,16 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId }:
 
       if (validPhotos.length > 0) {
         setFotos((prev) => [...prev, ...validPhotos])
+      }
+
+      // Un solo aviso agregado (evita apilar modales si fallan varias).
+      const fallidas = fileArray.length - validPhotos.length
+      if (fallidas > 0) {
+        await showError(
+          fallidas === fileArray.length
+            ? "No se pudo procesar ninguna imagen. Verificá que sean archivos de imagen válidos."
+            : `${fallidas} de ${fileArray.length} imágenes no se pudieron procesar.`
+        )
       }
     } finally {
       setComprimiendo(false)
@@ -567,7 +565,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId }:
         setNuevoSectorNombre("")
       } else {
         const err = await res.json()
-        alert(err.error || "Error al crear sector")
+        await showError(err.error || "Error al crear sector")
       }
     } catch (e) {
       console.error("Error creating sector:", e)
@@ -635,7 +633,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId }:
 
       if (res.status === 202) {
         // Queued offline
-        alert("Orden guardada offline. Se sincronizará automáticamente cuando vuelva la conexión.")
+        await showInfo("Orden guardada offline. Se sincronizará automáticamente cuando vuelva la conexión.")
         onSuccess?.()
         onClose()
         return
@@ -650,14 +648,13 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId }:
           return
         }
         const error = await res.json().catch(() => ({}))
-        alert(error.error || "Error al crear orden")
+        await showError(error.error || "Error al crear orden")
         return
       }
 
       const nuevaOrden = await res.json()
 
       // Guardar checklist si hay template y valores completados
-      console.log("[CHECKLIST SAVE] template:", !!checklistTemplate, "templateId:", checklistTemplate?.id, "valores count:", Object.keys(checklistValores).length)
       if (checklistTemplate && Object.keys(checklistValores).length > 0) {
         try {
           const checklistBody = {
@@ -667,7 +664,6 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId }:
             firmaCliente: checklistFirma || undefined,
             firmaMime: checklistFirmaMime || undefined,
           }
-          console.log("[CHECKLIST SAVE] Enviando POST a /api/ordenes/" + nuevaOrden.id + "/checklist", JSON.stringify(checklistBody))
           const checklistRes = await offlineFetch(`/api/ordenes/${nuevaOrden.id}/checklist`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -676,14 +672,10 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId }:
           if (!checklistRes.ok) {
             const checklistErr = await checklistRes.json().catch(() => ({}))
             console.error("[CHECKLIST SAVE] Error:", checklistRes.status, JSON.stringify(checklistErr))
-          } else {
-            console.log("[CHECKLIST SAVE] Checklist guardado exitosamente")
           }
         } catch (checklistError) {
           console.error("[CHECKLIST SAVE] Exception:", checklistError)
         }
-      } else {
-        console.warn("[CHECKLIST SAVE] SKIPPED - template:", !!checklistTemplate, "valores:", Object.keys(checklistValores).length)
       }
 
       setOrdenCreada({
@@ -720,7 +712,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId }:
       setShowOrdenCreadaModal(true)
     } catch (error) {
       console.error("Error creating orden:", error)
-      alert("Error al crear orden")
+      await showError("Error al crear orden")
     } finally {
       setLoading(false)
     }

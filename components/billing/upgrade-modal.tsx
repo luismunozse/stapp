@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Check, Loader2, Crown, Shield, Zap, Globe } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useModal } from "@/contexts/modal-context"
 
 type PaymentMethod = "mercadopago" | "creem"
 
@@ -23,6 +24,7 @@ interface UpgradeModalProps {
 }
 
 export function UpgradeModal({ open, onClose, planSlug = "profesional" }: UpgradeModalProps) {
+  const { showError } = useModal()
   const [billingPeriod, setBillingPeriod] = useState<"MONTHLY" | "YEARLY">("MONTHLY")
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("mercadopago")
   const [loading, setLoading] = useState(false)
@@ -123,7 +125,7 @@ export function UpgradeModal({ open, onClose, planSlug = "profesional" }: Upgrad
       }
     } catch (error) {
       console.error("Error starting checkout:", error)
-      alert("Error al iniciar el proceso de pago. Intenta de nuevo.")
+      await showError("Error al iniciar el proceso de pago. Intenta de nuevo.")
     } finally {
       setLoading(false)
     }

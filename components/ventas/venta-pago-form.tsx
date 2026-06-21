@@ -10,6 +10,7 @@ import { useCurrency } from "@/contexts/currency-context"
 import { useOffline } from "@/contexts/offline-context"
 import { STORES } from "@/lib/offline/constants"
 import { MultiPagoInput, createPagoLine, type PagoLineItem } from "@/components/pagos/multi-pago-input"
+import { useModal } from "@/contexts/modal-context"
 
 interface VentaPagoFormProps {
   ventaId: string
@@ -30,6 +31,7 @@ export function VentaPagoForm({
 }: VentaPagoFormProps) {
   const { formatPrice } = useCurrency()
   const { offlineFetch } = useOffline()
+  const { showError, showInfo } = useModal()
   const [loading, setLoading] = useState(false)
   const pendiente = total - montoAbonado
   const [pagosLines, setPagosLines] = useState<PagoLineItem[]>([createPagoLine(pendiente)])
@@ -58,18 +60,18 @@ export function VentaPagoForm({
 
     const totalPagos = pagosLines.reduce((sum, p) => sum + (p.monto || 0), 0)
     if (totalPagos <= 0) {
-      alert("Debe registrar al menos un pago")
+      await showError("Debe registrar al menos un pago")
       return
     }
     if (totalPagos > pendiente + 0.01) {
-      alert(`El total de pagos (${formatPrice(totalPagos)}) excede el pendiente (${formatPrice(pendiente)})`)
+      await showError(`El total de pagos (${formatPrice(totalPagos)}) excede el pendiente (${formatPrice(pendiente)})`)
       return
     }
 
     // Validar cuenta corriente
     const pagoCC = pagosLines.find(p => p.metodo === "CUENTA_CORRIENTE")
     if (pagoCC && pagoCC.monto > saldoCuenta) {
-      alert(`El monto de cuenta corriente excede el saldo disponible (${formatPrice(saldoCuenta)})`)
+      await showError(`El monto de cuenta corriente excede el saldo disponible (${formatPrice(saldoCuenta)})`)
       return
     }
 
@@ -102,21 +104,21 @@ export function VentaPagoForm({
       }, { store: STORES.PAYMENTS, description: `Pago venta` })
 
       if (res.status === 202) {
-        alert("Pago guardado offline. Se sincronizará automáticamente.")
+        await showInfo("Pago guardado offline. Se sincronizará automáticamente.")
         onSuccess()
         return
       }
 
       if (!res.ok) {
         const error = await res.json()
-        alert(error.error || "Error al registrar pago")
+        await showError(error.error || "Error al registrar pago")
         return
       }
 
       onSuccess()
     } catch (error) {
       console.error("Error:", error)
-      alert("Error al registrar pago")
+      await showError("Error al registrar pago")
     } finally {
       setLoading(false)
     }

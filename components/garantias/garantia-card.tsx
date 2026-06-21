@@ -67,7 +67,7 @@ const estadoReclamoConfig: Record<string, { label: string; color: string }> = {
 }
 
 export function GarantiaCard({ ordenId, ordenEstado, garantiaDiasDefault = 30 }: GarantiaCardProps) {
-  const { confirm } = useModal()
+  const { confirm, showError } = useModal()
   const { formatDate } = useCurrency()
   const [garantia, setGarantia] = useState<Garantia | null>(null)
   const [loading, setLoading] = useState(true)
@@ -120,7 +120,7 @@ export function GarantiaCard({ ordenId, ordenEstado, garantiaDiasDefault = 30 }:
 
       if (!res.ok) {
         const error = await res.json()
-        alert(error.error || "Error al crear garantía")
+        await showError(error.error || "Error al crear garantía")
         return
       }
 
@@ -128,7 +128,7 @@ export function GarantiaCard({ ordenId, ordenEstado, garantiaDiasDefault = 30 }:
       fetchGarantia()
     } catch (error) {
       console.error("Error:", error)
-      alert("Error al crear garantía")
+      await showError("Error al crear garantía")
     } finally {
       setCreating(false)
     }
@@ -157,7 +157,7 @@ export function GarantiaCard({ ordenId, ordenEstado, garantiaDiasDefault = 30 }:
 
       if (!res.ok) {
         const error = await res.json()
-        alert(error.error || "Error al actualizar garantía")
+        await showError(error.error || "Error al actualizar garantía")
         return
       }
 
@@ -165,7 +165,7 @@ export function GarantiaCard({ ordenId, ordenEstado, garantiaDiasDefault = 30 }:
       fetchGarantia()
     } catch (error) {
       console.error("Error:", error)
-      alert("Error al actualizar garantía")
+      await showError("Error al actualizar garantía")
     } finally {
       setSaving(false)
     }
@@ -196,7 +196,7 @@ export function GarantiaCard({ ordenId, ordenEstado, garantiaDiasDefault = 30 }:
 
       if (!res.ok) {
         const error = await res.json()
-        alert(error.error || "Error al actualizar reclamo")
+        await showError(error.error || "Error al actualizar reclamo")
         return
       }
 

@@ -20,6 +20,7 @@ import {
 } from "lucide-react"
 import type { VentaCreadaData } from "./venta-form"
 import { useCurrency } from "@/contexts/currency-context"
+import { useModal } from "@/contexts/modal-context"
 import { StatusBanner } from "@/components/ui/status-banner"
 import { PosTicketShare } from "@/components/pos/pos-ticket-share"
 import {
@@ -46,6 +47,7 @@ function generateVentaMessage(
 
 export function VentaCreadaModal({ open, onClose, venta }: VentaCreadaModalProps) {
   const { formatPrice, pais } = useCurrency()
+  const { showError } = useModal()
   const [copied, setCopied] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [mensaje, setMensaje] = useState("")
@@ -92,7 +94,7 @@ export function VentaCreadaModal({ open, onClose, venta }: VentaCreadaModalProps
       window.open(url, "_blank")
     } catch (error) {
       console.error("Error opening PDF:", error)
-      alert("Error al abrir el PDF")
+      await showError("Error al abrir el PDF")
     } finally {
       setDownloading(false)
     }

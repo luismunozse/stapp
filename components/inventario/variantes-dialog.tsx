@@ -474,7 +474,7 @@ export function VariantesDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-5xl max-h-[90dvh] overflow-hidden flex flex-col">
           <DialogHeader>
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1 min-w-0">

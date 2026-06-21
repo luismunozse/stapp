@@ -9,6 +9,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Trash2, TrendingUp, TrendingDown, Loader2, Paperclip, Repeat } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
+import { useModal } from "@/contexts/modal-context"
 
 const METODO_LABELS: Record<string, string> = {
   EFECTIVO: "Efectivo",
@@ -28,6 +29,7 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 export function MovimientosManualesList({ fecha, refreshKey }: MovimientosManualesListProps) {
   const { formatPrice } = useCurrency()
+  const { showError } = useModal()
   const { data, isLoading, mutate } = useSWR(
     `/api/caja/movimientos?fecha=${fecha}&_=${refreshKey || 0}`,
     fetcher,
@@ -47,7 +49,7 @@ export function MovimientosManualesList({ fecha, refreshKey }: MovimientosManual
       setDeleteId(null)
       mutate()
     } catch {
-      alert("Error al eliminar movimiento")
+      await showError("Error al eliminar movimiento")
     } finally {
       setDeleteLoading(false)
     }

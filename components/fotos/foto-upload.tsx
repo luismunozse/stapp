@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Camera, Upload, X, Loader2 } from "lucide-react"
 import { compressImage } from "@/lib/image-compression"
 import { isNativePlatform } from "@/lib/capacitor"
+import { useModal } from "@/contexts/modal-context"
 
 interface FotoUploadProps {
   ordenId: string
@@ -25,6 +26,7 @@ const tipoFotoOptions = [
 ]
 
 export function FotoUpload({ ordenId, onSuccess, onClose }: FotoUploadProps) {
+  const { showError } = useModal()
   const [loading, setLoading] = useState(false)
   const [comprimiendo, setComprimiendo] = useState(false)
   const [preview, setPreview] = useState<string | null>(null)
@@ -73,7 +75,7 @@ export function FotoUpload({ ordenId, onSuccess, onClose }: FotoUploadProps) {
 
     // Validar tipo de archivo
     if (!file.type.startsWith("image/")) {
-      alert("Por favor selecciona una imagen válida")
+      await showError("Por favor selecciona una imagen válida")
       return
     }
 
@@ -91,13 +93,13 @@ export function FotoUpload({ ordenId, onSuccess, onClose }: FotoUploadProps) {
     } catch (error) {
       console.error("Error comprimiendo:", error)
       setComprimiendo(false)
-      alert("Error al procesar la imagen")
+      await showError("Error al procesar la imagen")
     }
   }
 
   const handleUpload = async () => {
     if (!preview) {
-      alert("Selecciona una imagen primero")
+      await showError("Selecciona una imagen primero")
       return
     }
 
@@ -106,7 +108,7 @@ export function FotoUpload({ ordenId, onSuccess, onClose }: FotoUploadProps) {
       // Extraer el base64 sin el prefijo data:image/...;base64,
       const base64Match = preview.match(/^data:(image\/[a-z]+);base64,(.+)$/)
       if (!base64Match) {
-        alert("Formato de imagen inválido")
+        await showError("Formato de imagen inválido")
         return
       }
 
@@ -126,14 +128,14 @@ export function FotoUpload({ ordenId, onSuccess, onClose }: FotoUploadProps) {
 
       if (!res.ok) {
         const error = await res.json()
-        alert(error.error || "Error al subir la foto")
+        await showError(error.error || "Error al subir la foto")
         return
       }
 
       onSuccess()
     } catch (error) {
       console.error("Error:", error)
-      alert("Error al subir la foto")
+      await showError("Error al subir la foto")
     } finally {
       setLoading(false)
     }
