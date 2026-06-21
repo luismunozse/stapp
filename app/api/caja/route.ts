@@ -2,11 +2,18 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { fetchMovimientosDia, computeTotales } from "@/lib/caja-utils"
+import { sucursalParaLectura } from "@/lib/sucursal"
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, session, role, organizationId } = await requireAuth()
     if (error) return error
+
+    const filtro = await sucursalParaLectura({
+      role: role ?? null,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
+    const sid = filtro.verTodas ? null : filtro.sucursalId
 
     const { searchParams } = new URL(request.url)
     const fecha = searchParams.get("fecha") || new Date().toISOString().split("T")[0]
@@ -20,13 +27,14 @@ export async function GET(request: Request) {
       organizationId!,
       fechaDesde,
       fechaHasta,
-      { metodoPago, tipo }
+      { metodoPago, tipo },
+      sid
     )
 
     const totales = computeTotales(movimientos)
 
     // Órdenes reparadas sin cobrar
-    const { data: sinCobrar, count: sinCobrarCount } = await supabaseAdmin
+    let sinCobrarQuery = supabaseAdmin
       .from("ordenes_servicio")
       .select("id, numero_orden, costo_final, total_cobrado, estado_cobro", { count: "exact" })
       .eq("organization_id", organizationId!)
@@ -36,14 +44,17 @@ export async function GET(request: Request) {
       .gt("costo_final", 0)
       .order("created_at", { ascending: false })
       .limit(10)
+    if (sid) sinCobrarQuery = sinCobrarQuery.eq("sucursal_id", sid)
+    const { data: sinCobrar, count: sinCobrarCount } = await sinCobrarQuery
 
     // Sesión actual
-    const { data: sesionActual } = await supabaseAdmin
+    let sesionQuery = supabaseAdmin
       .from("sesiones_caja")
       .select("id, saldo_inicial, opened_at, estado, usuario_apertura_id")
       .eq("organization_id", organizationId!)
       .eq("estado", "ABIERTA")
-      .maybeSingle()
+    if (sid) sesionQuery = sesionQuery.eq("sucursal_id", sid)
+    const { data: sesionActual } = await sesionQuery.maybeSingle()
 
     let sesionConUsuario = null
     if (sesionActual) {
