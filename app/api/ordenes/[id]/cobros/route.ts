@@ -155,7 +155,7 @@ export async function POST(
 
       // Replayed: return stored response without re-generating cuotas
       if (result.replayed) {
-        revalidateTag("dashboard")
+        revalidateTag("dashboard", "max")
         return NextResponse.json(result.response, { status: 201 })
       }
 
@@ -186,7 +186,7 @@ export async function POST(
         }
       }
 
-      revalidateTag("dashboard")
+      revalidateTag("dashboard", "max")
       return NextResponse.json(
         {
           totalCobrado: result.response?.orden?.totalCobrado ?? 0,
@@ -377,7 +377,7 @@ async function runJsFallback(opts: {
     .eq("id", ordenId)
     .single()
 
-  revalidateTag("dashboard")
+  revalidateTag("dashboard", "max")
 
   return NextResponse.json({
     totalCobrado: parseFloat(ordenActualizada?.total_cobrado || "0"),
@@ -453,7 +453,7 @@ export async function DELETE(
     )
 
     if (!rpcError) {
-      revalidateTag("dashboard")
+      revalidateTag("dashboard", "max")
       return NextResponse.json({ message: "Cobro anulado correctamente" })
     }
 
@@ -540,7 +540,7 @@ async function runAnularJsFallback(opts: {
   // Recalcular estado de cobro
   await supabaseAdmin.rpc("recalcular_estado_cobro", { p_orden_id: ordenId })
 
-  revalidateTag("dashboard")
+  revalidateTag("dashboard", "max")
 
   return NextResponse.json({ message: "Cobro anulado correctamente" })
 }
