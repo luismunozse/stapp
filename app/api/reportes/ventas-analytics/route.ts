@@ -4,7 +4,7 @@ import { NextResponse } from "next/server"
 import { sucursalParaLectura } from "@/lib/sucursal"
 
 export async function GET() {
-  const { error, organizationId, role } = await requireAdminOrVendedor()
+  const { error, organizationId, role, session } = await requireAdminOrVendedor()
   if (error) return error
 
   const now = new Date()
@@ -16,7 +16,7 @@ export async function GET() {
   hace30Dias.setDate(now.getDate() - 30)
 
   try {
-    const filtro = await sucursalParaLectura({ role, userSucursalId: null })
+    const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
 
     // Base ventas query for this month, with optional branch filter
     let ventasMesBaseQuery = supabaseAdmin

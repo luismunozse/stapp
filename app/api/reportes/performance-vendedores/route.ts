@@ -20,11 +20,11 @@ interface VendedorPerformance {
  */
 export async function GET(request: Request) {
   try {
-    const { error, organizationId, role } = await requireAdmin()
+    const { error, organizationId, role, session } = await requireAdmin()
     if (error) return error
 
     // Resolve branch filter and pass to RPC
-    const filtro = await sucursalParaLectura({ role, userSucursalId: null })
+    const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
 
     const { searchParams } = new URL(request.url)
     const desdeParam = searchParams.get("desde")

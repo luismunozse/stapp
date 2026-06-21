@@ -6,7 +6,7 @@ import { sucursalParaLectura } from "@/lib/sucursal"
 
 export async function GET() {
   try {
-    const { error, organizationId, role } = await requireAdminOrVendedor()
+    const { error, organizationId, role, session } = await requireAdminOrVendedor()
     if (error) return error
 
     const hasFeature = await hasPlanFeature(organizationId!, "advanced_reports")
@@ -20,7 +20,7 @@ export async function GET() {
     const seisAtras = new Date()
     seisAtras.setMonth(seisAtras.getMonth() - 6)
 
-    const filtro = await sucursalParaLectura({ role, userSucursalId: null })
+    const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
 
     // Obtener clientes con cantidad de órdenes
     const { data: clientes } = await supabaseAdmin

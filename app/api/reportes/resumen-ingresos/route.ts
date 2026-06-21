@@ -6,10 +6,10 @@ import { getDeviceTypeLabel } from "@/lib/device-types"
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId, role } = await requireAdminOrVendedor()
+    const { error, organizationId, role, session } = await requireAdminOrVendedor()
     if (error) return error
 
-    const filtro = await sucursalParaLectura({ role, userSucursalId: null })
+    const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
 
     const { searchParams } = new URL(request.url)
     const meses = parseInt(searchParams.get("meses") || "6")

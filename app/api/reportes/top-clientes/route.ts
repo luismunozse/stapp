@@ -20,10 +20,10 @@ interface ClienteTop {
  */
 export async function GET(request: NextRequest) {
   try {
-    const { error, organizationId, role } = await requireAdminOrVendedor()
+    const { error, organizationId, role, session } = await requireAdminOrVendedor()
     if (error) return error
 
-    const filtro = await sucursalParaLectura({ role, userSucursalId: null })
+    const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
 
     const searchParams = request.nextUrl.searchParams
     const tipo = searchParams.get("tipo") || "ordenes" // 'ordenes' | 'monto'

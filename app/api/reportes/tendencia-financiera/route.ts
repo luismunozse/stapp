@@ -17,11 +17,11 @@ import { sucursalParaLectura } from "@/lib/sucursal"
  */
 export async function GET(request: Request) {
   try {
-    const { error, organizationId, role } = await requireAdmin()
+    const { error, organizationId, role, session } = await requireAdmin()
     if (error) return error
 
     // Resolve branch filter — applied to every P&L sub-source
-    const filtro = await sucursalParaLectura({ role, userSucursalId: null })
+    const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
     const sid = !filtro.verTodas && filtro.sucursalId ? filtro.sucursalId : null
 
     const { searchParams } = new URL(request.url)
