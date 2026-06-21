@@ -274,6 +274,10 @@ async function runJsFallback(opts: {
   const clienteId = data.clienteId || venta.cliente_id
   const pagosCreados: any[] = []
 
+  // success flag: set to true immediately before the success return so the
+  // finally block knows whether to clean up the idempotency poison row.
+  let success = false
+
   try {
     for (const pagoLine of pagosToProcess) {
       if (pagoLine.metodo === "CUENTA_CORRIENTE" && clienteId) {
@@ -286,6 +290,7 @@ async function runJsFallback(opts: {
           p_usuario_id: userId,
         })
         if (ccError) {
+          // CC error: early return — success stays false → finally deletes poison row
           return NextResponse.json(
             { error: ccError.message || "Error al usar cuenta corriente" },
             { status: 400 }
@@ -378,8 +383,18 @@ async function runJsFallback(opts: {
         .eq("idempotency_key", key!)
     }
 
+    // Mark success BEFORE the return so the finally block skips cleanup
+    success = true
     return NextResponse.json(responseBody, { status: 201 })
-  } catch (mutationError) {
-    throw mutationError
+  } finally {
+    // Poison-row cleanup: if we claimed a row but the mutations didn't complete
+    // successfully, delete it so retries can re-claim instead of 409 forever.
+    if (!success && claimed && barrierAvailable && key) {
+      await supabaseAdmin
+        .from("pago_idempotency")
+        .delete()
+        .eq("organization_id", organizationId)
+        .eq("idempotency_key", key)
+    }
   }
 }
