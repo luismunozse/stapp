@@ -84,6 +84,9 @@ interface OrdenFormProps {
   onSuccess: () => void
   fromTurnoId?: string
   initialClienteId?: string
+  /** Cuando se renderiza dentro de un overlay/sheet con scroll propio: la barra
+   *  de acciones se ancla al fondo del sheet en vez de despejar el bottom-nav. */
+  inSheet?: boolean
 }
 
 interface OrdenCreadaData {
@@ -118,7 +121,7 @@ interface OrdenCreadaData {
   organizationComprobanteTerminos?: string | null
 }
 
-export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId }: OrdenFormProps) {
+export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, inSheet = false }: OrdenFormProps) {
   const { offlineFetch } = useOffline()
   const { showError, showInfo } = useModal()
   const { data: session } = useSession()
@@ -1627,7 +1630,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId }:
           )}
           </>)}
 
-          <FormActionBar className="flex-wrap justify-between">
+          <FormActionBar className="flex-wrap justify-between" inDialog={inSheet} alwaysSticky={inSheet}>
             <div>
               {currentStep > 1 && (
                 <Button type="button" variant="outline" onClick={handlePrevStep} className="text-sm">
