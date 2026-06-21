@@ -34,9 +34,13 @@ export function usePullToRefresh({
   const distanceRef = useRef(0)
   const refreshingRef = useRef(false)
   // onRefresh puede ser una función inline (nueva referencia por render): la
-  // guardamos en un ref para no re-suscribir los listeners.
+  // guardamos en un ref para no re-suscribir los listeners. Se sincroniza en un
+  // effect (no durante el render) — el ref solo se lee en handlers táctiles, que
+  // ocurren después del commit.
   const onRefreshRef = useRef(onRefresh)
-  onRefreshRef.current = onRefresh
+  useEffect(() => {
+    onRefreshRef.current = onRefresh
+  }, [onRefresh])
 
   useEffect(() => {
     if (disabled || typeof window === "undefined") return
