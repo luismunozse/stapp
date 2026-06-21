@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import useSWR from "swr"
+import { PullToRefresh } from "@/components/ui/pull-to-refresh"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -272,7 +273,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   }, [debouncedSearch, categoria, tipoDispositivo, proveedorId, bajoStock, includeArchived, page, pageSize, sortBy, sortOrder, refreshKey])
 
   // SWR for fetching with cache
-  const { data, isLoading } = useSWR(apiUrl, fetcher, {
+  const { data, isLoading, mutate } = useSWR(apiUrl, fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 2000,
     keepPreviousData: true,
@@ -621,6 +622,7 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
   ], [tiposDispositivo, umbralStockBajo, formatPrice, duplicateIds, duplicateGroupByItemId])
 
   return (
+    <PullToRefresh onRefresh={() => mutate()}>
     <div className="space-y-4">
       <InventarioStats
         refreshKey={refreshKey}
@@ -1408,5 +1410,6 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
         </>
       )}
     </div>
+    </PullToRefresh>
   )
 }

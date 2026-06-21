@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useMemo, useRef, useEffect } from "react"
 import useSWR from "swr"
+import { PullToRefresh } from "@/components/ui/pull-to-refresh"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -513,6 +514,7 @@ export function OrdenesList() {
   const visibleColumns = isTecnico ? columns.filter(c => c.key !== "tecnico") : columns
 
   return (
+    <PullToRefresh onRefresh={() => mutate()} disabled={showForm}>
     <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
@@ -1009,5 +1011,6 @@ export function OrdenesList() {
         )}
       </div>
     </div>
+    </PullToRefresh>
   )
 }

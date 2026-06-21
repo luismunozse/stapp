@@ -3,6 +3,7 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import useSWR from "swr"
+import { PullToRefresh } from "@/components/ui/pull-to-refresh"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DataTable, DataTablePagination, type Column } from "@/components/ui/data-table"
@@ -365,6 +366,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
   ]
 
   return (
+    <PullToRefresh onRefresh={() => mutate()}>
     <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
@@ -608,5 +610,6 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
         )}
       </div>
     </div>
+    </PullToRefresh>
   )
 }
