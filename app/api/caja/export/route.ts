@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { fetchMovimientosDia, computeTotales } from "@/lib/caja-utils"
+import { sucursalParaLectura } from "@/lib/sucursal"
 
 const METODO_LABELS: Record<string, string> = {
   EFECTIVO: "Efectivo",
@@ -33,15 +34,21 @@ function escapeCsv(value: string | null | undefined): string {
 // GET - Exportar movimientos del día a CSV
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAdmin()
+    const { error, session, role, organizationId } = await requireAdmin()
     if (error) return error
+
+    const filtro = await sucursalParaLectura({
+      role: role ?? null,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
+    const sid = filtro.verTodas ? null : filtro.sucursalId
 
     const { searchParams } = new URL(request.url)
     const fecha = searchParams.get("fecha") || new Date().toISOString().split("T")[0]
     const fechaDesde = `${fecha}T00:00:00`
     const fechaHasta = `${fecha}T23:59:59`
 
-    const movimientos = await fetchMovimientosDia(organizationId!, fechaDesde, fechaHasta)
+    const movimientos = await fetchMovimientosDia(organizationId!, fechaDesde, fechaHasta, undefined, sid)
     const totales = computeTotales(movimientos)
 
     const headers = ["Hora", "Tipo", "Método de Pago", "Monto", "Referencia", "Observaciones"]
