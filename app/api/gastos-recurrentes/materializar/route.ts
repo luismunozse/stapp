@@ -46,13 +46,15 @@ export async function POST() {
       return NextResponse.json({ generados: 0, movimientos: [] })
     }
 
-    // Buscar sesión abierta (opcional)
-    const { data: sesionAbierta } = await supabaseAdmin
+    // Buscar sesión abierta (opcional), scoped a la misma sucursal de los
+    // movimientos para no enlazarlos a la sesión de otra sucursal.
+    let sesionQuery = supabaseAdmin
       .from("sesiones_caja")
       .select("id")
       .eq("organization_id", organizationId!)
       .eq("estado", "ABIERTA")
-      .maybeSingle()
+    if (sucursalId) sesionQuery = sesionQuery.eq("sucursal_id", sucursalId)
+    const { data: sesionAbierta } = await sesionQuery.maybeSingle()
 
     // Buscar afecta_rentabilidad de cada categoría
     const categoriaIds = Array.from(
