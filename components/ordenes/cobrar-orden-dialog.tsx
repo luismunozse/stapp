@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from "react"
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from "@/components/ui/responsive-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { DollarSign, Loader2, ChevronDown, ChevronUp } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
+import { useModal } from "@/contexts/modal-context"
 import { useOffline } from "@/contexts/offline-context"
 import { STORES } from "@/lib/offline/constants"
 import { MultiPagoInput, createPagoLine, type PagoLineItem } from "@/components/pagos/multi-pago-input"
@@ -43,6 +44,7 @@ export function CobrarOrdenDialog({
   onSuccess,
 }: CobrarOrdenDialogProps) {
   const { formatPrice } = useCurrency()
+  const { showError, showInfo } = useModal()
   const { offlineFetch } = useOffline()
   const [loading, setLoading] = useState(false)
   const [observaciones, setObservaciones] = useState("")
@@ -120,17 +122,17 @@ export function CobrarOrdenDialog({
   const handleCobrar = async () => {
     const totalPagos = pagosLines.reduce((sum, p) => sum + (p.monto || 0), 0)
     if (totalPagos <= 0) {
-      alert("Debe registrar al menos un pago")
+      await showError("Debe registrar al menos un pago")
       return
     }
     if (totalPagos > pendiente + 0.01) {
-      alert(`El total de pagos excede el pendiente (${formatPrice(pendiente)})`)
+      await showError(`El total de pagos excede el pendiente (${formatPrice(pendiente)})`)
       return
     }
 
     const pagoCC = pagosLines.find(p => p.metodo === "CUENTA_CORRIENTE")
     if (pagoCC && pagoCC.monto > saldoCuenta) {
-      alert(`Saldo insuficiente en cuenta corriente (${formatPrice(saldoCuenta)})`)
+      await showError(`Saldo insuficiente en cuenta corriente (${formatPrice(saldoCuenta)})`)
       return
     }
 
@@ -157,7 +159,7 @@ export function CobrarOrdenDialog({
       }, { store: STORES.COBROS, description: `Cobro orden #${orden.numeroOrden}` })
 
       if (res.status === 202) {
-        alert("Cobro guardado offline. Se sincronizará automáticamente.")
+        await showInfo("Cobro guardado offline. Se sincronizará automáticamente.")
         onSuccess()
         onOpenChange(false)
         return
@@ -165,7 +167,7 @@ export function CobrarOrdenDialog({
 
       if (!res.ok) {
         const error = await res.json()
-        alert(error.error || "Error al registrar cobro")
+        await showError(error.error || "Error al registrar cobro")
         return
       }
 
@@ -173,7 +175,7 @@ export function CobrarOrdenDialog({
       onOpenChange(false)
     } catch (err) {
       console.error("Error:", err)
-      alert("Error al registrar cobro")
+      await showError("Error al registrar cobro")
     } finally {
       setLoading(false)
     }
@@ -182,10 +184,10 @@ export function CobrarOrdenDialog({
   const ordenLabel = orden.codigoOrden || `#${String(orden.numeroOrden).padStart(4, "0")}`
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+      <ResponsiveDialogContent className="sm:max-w-lg">
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle className="flex items-center gap-2">
             <DollarSign className="h-5 w-5" />
             Cobrar Orden {ordenLabel}
             {orden.clienteNombre && (
@@ -193,8 +195,8 @@ export function CobrarOrdenDialog({
                 - {orden.clienteNombre}
               </span>
             )}
-          </DialogTitle>
-        </DialogHeader>
+          </ResponsiveDialogTitle>
+        </ResponsiveDialogHeader>
 
         {/* Resumen financiero */}
         <div className="p-3 bg-muted rounded-lg space-y-2">
@@ -259,10 +261,8 @@ export function CobrarOrdenDialog({
               <div>
                 <Label className="text-xs">Descuento al cobrar (opcional)</Label>
                 <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max={orden.costoFinal - orden.descuentoCobro - orden.totalCobrado}
+                  type="text"
+                  inputMode="decimal"
                   value={descuento}
                   onChange={(e) => setDescuento(e.target.value)}
                   placeholder="0.00"
@@ -286,22 +286,6 @@ export function CobrarOrdenDialog({
                 rows={2}
               />
             </div>
-
-            {/* Botón cobrar */}
-            <Button
-              className="w-full"
-              onClick={handleCobrar}
-              disabled={loading || pendiente <= 0}
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Registrando...
-                </>
-              ) : (
-                `Cobrar ${formatPrice(pagosLines.reduce((s, p) => s + (p.monto || 0), 0))}`
-              )}
-            </Button>
           </div>
         )}
 
@@ -362,7 +346,27 @@ export function CobrarOrdenDialog({
             )}
           </div>
         )}
-      </DialogContent>
-    </Dialog>
+        {/* CTA sticky: siempre alcanzable con el pulgar, sin tener que scrollear
+            por encima de cuotas/historial */}
+        {!yaCobradoTotal && (
+          <div className="sticky bottom-0 -mx-5 border-t bg-card px-5 py-3 sm:-mx-6 sm:px-6">
+            <Button
+              className="w-full"
+              onClick={handleCobrar}
+              disabled={loading || pendiente <= 0}
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Registrando...
+                </>
+              ) : (
+                `Cobrar ${formatPrice(pagosLines.reduce((s, p) => s + (p.monto || 0), 0))}`
+              )}
+            </Button>
+          </div>
+        )}
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   )
 }
