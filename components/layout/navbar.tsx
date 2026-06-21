@@ -573,16 +573,15 @@ export function Navbar() {
           mobileMenuOpen ? "translate-x-0" : "translate-x-full"
         )}
       >
-        <div className="flex flex-col h-full pt-20 safe-area-inset">
+        <div className="flex flex-col h-full pt-[calc(3.5rem+env(safe-area-inset-top,0px))] safe-area-inset">
           <div className="px-4 pt-4 pb-3 border-b border-border">
-            <div className="flex items-center gap-3">
-              <UserAvatar src={displayAvatar} nombre={displayName} size="md" />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium truncate">{displayName}</p>
-                <p className="text-xs text-muted-foreground truncate">{session?.user?.role}</p>
-              </div>
+            <p className="text-sm font-semibold truncate">{displayName}</p>
+            <div className="mt-1.5 flex items-center gap-2">
+              <span className="text-xs text-muted-foreground capitalize truncate">
+                {session?.user?.role?.toLowerCase()}
+              </span>
+              <PlanBadge />
             </div>
-            <div className="mt-3"><PlanBadge /></div>
           </div>
           <nav className="flex-1 px-3 py-3 overflow-y-auto">
             {filteredSections.map((section) => (
@@ -621,27 +620,27 @@ export function Navbar() {
               </div>
             ))}
           </nav>
-          <div className="p-4 border-t border-border safe-bottom space-y-1">
-            <div className="flex items-center justify-between px-3 py-2">
-              <span className="text-sm text-muted-foreground">Tema</span>
+          <div className="border-t border-border safe-bottom p-3 space-y-1">
+            {/* Utilidades rápidas: vencimientos + tema */}
+            <div className="flex items-center justify-end gap-1 pb-1">
+              <DeadlineCalendar />
               <ThemeToggle variant="icon" />
             </div>
-            <div className="px-3 py-2"><DeadlineCalendar /></div>
             <Link
               href="/ayuda/manual"
               onClick={() => setMobileMenuOpen(false)}
-              className="flex items-center px-3 py-3 text-sm font-medium rounded-lg text-foreground hover:bg-accent hover:text-accent-foreground transition-colors touch-target active:scale-[0.98]"
+              className="flex items-center px-3 py-2.5 text-sm font-medium rounded-lg text-foreground hover:bg-accent hover:text-accent-foreground transition-colors touch-target active:scale-[0.98]"
             >
               <BookOpen className="mr-3 h-5 w-5 flex-shrink-0" />
               Manual de uso
             </Link>
             <Button
               variant="ghost"
-              className="w-full justify-start py-3 touch-target active:scale-[0.98]"
+              className="w-full justify-start py-2.5 text-destructive hover:text-destructive hover:bg-destructive/10 touch-target active:scale-[0.98]"
               onClick={handleLogout}
             >
               <LogOut className="mr-3 h-5 w-5" />
-              Cerrar Sesión
+              Cerrar sesión
             </Button>
           </div>
         </div>
