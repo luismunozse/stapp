@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { X, Plus, FileText, Calculator, Percent, DollarSign, Loader2, BookOpen, Smartphone, Wrench } from "lucide-react"
+import { CollapsibleSection } from "@/components/ui/collapsible-section"
 import { useCurrency } from "@/contexts/currency-context"
 import { useModal } from "@/contexts/modal-context"
 import { ItemRow, calcItemNeto } from "./item-row"
@@ -555,444 +556,444 @@ export function CotizacionForm({
             </>
           )}
 
-          {/* Datos del equipo (solo PRESUPUESTO) */}
+          {/* Datos del equipo + Checklist + Condiciones técnicas (solo PRESUPUESTO) */}
           {isPresupuesto && (
-            <div className="space-y-3 p-3 border rounded-lg bg-muted/20">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <Smartphone className="h-4 w-4" /> Datos del equipo
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <Label>Tipo de dispositivo *</Label>
-                  <Select
-                    value={equipo.tipoDispositivoId || ""}
-                    onValueChange={(id) => {
-                      const td = tiposDispositivo.find((t) => t.id === id)
-                      setEquipo((prev) => ({
-                        ...prev,
-                        tipoDispositivoId: id,
-                        tipoDispositivo: td?.codigo || null,
-                      }))
-                      // Reset checklist si cambia el tipo
-                      setChecklistValue(null)
-                    }}
-                    disabled={loading}
-                  >
-                    <SelectTrigger className="mt-1">
-                      <SelectValue placeholder="Seleccionar..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {tiposDispositivo.map((t) => (
-                        <SelectItem key={t.id} value={t.id}>
-                          {t.nombre}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Marca *</Label>
-                  <Input
-                    value={equipo.marca || ""}
-                    onChange={(e) => setEquipo((p) => ({ ...p, marca: e.target.value || null }))}
-                    placeholder="Ej: Apple, Samsung, Dell"
-                    disabled={loading}
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label>Modelo *</Label>
-                  <Input
-                    value={equipo.modelo || ""}
-                    onChange={(e) => setEquipo((p) => ({ ...p, modelo: e.target.value || null }))}
-                    placeholder="Ej: iPhone 13 Pro, Latitude 5520"
-                    disabled={loading}
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label>Color</Label>
-                  <Input
-                    value={equipo.color || ""}
-                    onChange={(e) => setEquipo((p) => ({ ...p, color: e.target.value || null }))}
-                    disabled={loading}
-                    className="mt-1"
-                  />
-                </div>
-                {equipo.tipoDispositivo === "CELULAR" && (
+            <CollapsibleSection title="Datos del equipo" icon={Smartphone} defaultOpen>
+              <div className="space-y-3 p-3 border rounded-lg bg-muted/20">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <Label>IMEI</Label>
+                    <Label>Tipo de dispositivo *</Label>
+                    <Select
+                      value={equipo.tipoDispositivoId || ""}
+                      onValueChange={(id) => {
+                        const td = tiposDispositivo.find((t) => t.id === id)
+                        setEquipo((prev) => ({
+                          ...prev,
+                          tipoDispositivoId: id,
+                          tipoDispositivo: td?.codigo || null,
+                        }))
+                        // Reset checklist si cambia el tipo
+                        setChecklistValue(null)
+                      }}
+                      disabled={loading}
+                    >
+                      <SelectTrigger className="mt-1">
+                        <SelectValue placeholder="Seleccionar..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {tiposDispositivo.map((t) => (
+                          <SelectItem key={t.id} value={t.id}>
+                            {t.nombre}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Marca *</Label>
                     <Input
-                      value={equipo.imei || ""}
-                      onChange={(e) => setEquipo((p) => ({ ...p, imei: e.target.value || null }))}
+                      value={equipo.marca || ""}
+                      onChange={(e) => setEquipo((p) => ({ ...p, marca: e.target.value || null }))}
+                      placeholder="Ej: Apple, Samsung, Dell"
                       disabled={loading}
                       className="mt-1"
                     />
                   </div>
-                )}
-                <div>
-                  <Label>N° de serie</Label>
-                  <Input
-                    value={equipo.numeroSerie || ""}
-                    onChange={(e) => setEquipo((p) => ({ ...p, numeroSerie: e.target.value || null }))}
-                    disabled={loading}
-                    className="mt-1"
-                  />
-                </div>
-              </div>
-              <div>
-                <Label>Problema reportado *</Label>
-                <Textarea
-                  value={equipo.problemaReportado}
-                  onChange={(e) => setEquipo((p) => ({ ...p, problemaReportado: e.target.value }))}
-                  placeholder="Descripción del problema del equipo..."
-                  rows={2}
-                  disabled={loading}
-                  className="mt-1"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Checklist (solo PRESUPUESTO) */}
-          {isPresupuesto && (
-            <ChecklistPicker
-              tipoDispositivoId={equipo.tipoDispositivoId || null}
-              value={checklistValue}
-              onChange={setChecklistValue}
-              disabled={loading}
-            />
-          )}
-
-          {/* Condiciones técnicas (solo PRESUPUESTO) */}
-          {isPresupuesto && (
-            <div className="space-y-3 p-3 border rounded-lg bg-muted/20">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <Wrench className="h-4 w-4" /> Condiciones técnicas
-              </div>
-              <div>
-                <Label>Diagnóstico técnico</Label>
-                <Textarea
-                  value={condiciones.diagnostico || ""}
-                  onChange={(e) => setCondiciones((p) => ({ ...p, diagnostico: e.target.value || null }))}
-                  placeholder="Qué encontró el técnico al revisar el equipo (distinto del problema reportado por el cliente)"
-                  rows={2}
-                  disabled={loading}
-                  className="mt-1"
-                />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <Label>Plazo estimado (días)</Label>
-                  <Input
-                    type="text"
-                    inputMode="numeric"
-                    min="0"
-                    value={condiciones.plazoEstimadoDias ?? ""}
-                    onChange={(e) => setCondiciones((p) => ({ ...p, plazoEstimadoDias: e.target.value ? parseInt(e.target.value) : null }))}
-                    placeholder="Ej: 5"
-                    disabled={loading}
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label>Anticipo</Label>
-                  <div className="flex items-center gap-2 mt-1">
+                  <div>
+                    <Label>Modelo *</Label>
                     <Input
-                      type="text"
-                      inputMode="decimal"
-                      min="0"
-                      step="0.01"
-                      value={anticipoValorStr}
-                      onChange={(e) => setAnticipoValorStr(e.target.value)}
-                      placeholder="0"
+                      value={equipo.modelo || ""}
+                      onChange={(e) => setEquipo((p) => ({ ...p, modelo: e.target.value || null }))}
+                      placeholder="Ej: iPhone 13 Pro, Latitude 5520"
                       disabled={loading}
-                      className="flex-1"
+                      className="mt-1"
                     />
-                    <Button
-                      type="button"
-                      variant={condiciones.anticipoTipo === "fijo" ? "default" : "outline"}
-                      size="icon"
-                      className="h-10 w-10 shrink-0"
-                      onClick={() => setCondiciones((p) => ({ ...p, anticipoTipo: p.anticipoTipo === "fijo" ? "porcentaje" : "fijo" }))}
+                  </div>
+                  <div>
+                    <Label>Color</Label>
+                    <Input
+                      value={equipo.color || ""}
+                      onChange={(e) => setEquipo((p) => ({ ...p, color: e.target.value || null }))}
                       disabled={loading}
-                    >
-                      {condiciones.anticipoTipo === "fijo" ? <DollarSign className="h-4 w-4" /> : <Percent className="h-4 w-4" />}
-                    </Button>
+                      className="mt-1"
+                    />
+                  </div>
+                  {equipo.tipoDispositivo === "CELULAR" && (
+                    <div>
+                      <Label>IMEI</Label>
+                      <Input
+                        value={equipo.imei || ""}
+                        onChange={(e) => setEquipo((p) => ({ ...p, imei: e.target.value || null }))}
+                        disabled={loading}
+                        className="mt-1"
+                      />
+                    </div>
+                  )}
+                  <div>
+                    <Label>N° de serie</Label>
+                    <Input
+                      value={equipo.numeroSerie || ""}
+                      onChange={(e) => setEquipo((p) => ({ ...p, numeroSerie: e.target.value || null }))}
+                      disabled={loading}
+                      className="mt-1"
+                    />
                   </div>
                 </div>
                 <div>
-                  <Label>Plazo de retiro (días)</Label>
-                  <Input
-                    type="text"
-                    inputMode="numeric"
-                    min="0"
-                    value={condiciones.politicaAbandonoDias ?? ""}
-                    onChange={(e) => setCondiciones((p) => ({ ...p, politicaAbandonoDias: e.target.value ? parseInt(e.target.value) : null }))}
-                    placeholder="Ej: 60"
+                  <Label>Problema reportado *</Label>
+                  <Textarea
+                    value={equipo.problemaReportado}
+                    onChange={(e) => setEquipo((p) => ({ ...p, problemaReportado: e.target.value }))}
+                    placeholder="Descripción del problema del equipo..."
+                    rows={2}
                     disabled={loading}
                     className="mt-1"
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+              <ChecklistPicker
+                tipoDispositivoId={equipo.tipoDispositivoId || null}
+                value={checklistValue}
+                onChange={setChecklistValue}
+                disabled={loading}
+              />
+
+              <div className="space-y-3 p-3 border rounded-lg bg-muted/20">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Wrench className="h-4 w-4" /> Condiciones técnicas
+                </div>
                 <div>
-                  <Label>Garantía (días)</Label>
-                  <Input
-                    type="text"
-                    inputMode="numeric"
-                    min="0"
-                    value={garantiaDiasStr}
-                    onChange={(e) => setGarantiaDiasStr(e.target.value)}
-                    placeholder="30"
-                    disabled={loading || condiciones.garantiaAlcance === "NINGUNA"}
+                  <Label>Diagnóstico técnico</Label>
+                  <Textarea
+                    value={condiciones.diagnostico || ""}
+                    onChange={(e) => setCondiciones((p) => ({ ...p, diagnostico: e.target.value || null }))}
+                    placeholder="Qué encontró el técnico al revisar el equipo (distinto del problema reportado por el cliente)"
+                    rows={2}
+                    disabled={loading}
                     className="mt-1"
                   />
                 </div>
-                <div>
-                  <Label>Alcance de garantía</Label>
-                  <Select
-                    value={condiciones.garantiaAlcance}
-                    onValueChange={(v) => setCondiciones((p) => ({ ...p, garantiaAlcance: v as CondicionesTecnicas["garantiaAlcance"] }))}
-                    disabled={loading}
-                  >
-                    <SelectTrigger className="mt-1">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="AMBOS">Repuesto y mano de obra</SelectItem>
-                      <SelectItem value="REPUESTO">Solo repuesto</SelectItem>
-                      <SelectItem value="MANO_OBRA">Solo mano de obra</SelectItem>
-                      <SelectItem value="NINGUNA">Sin garantía</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <Label>Plazo estimado (días)</Label>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      min="0"
+                      value={condiciones.plazoEstimadoDias ?? ""}
+                      onChange={(e) => setCondiciones((p) => ({ ...p, plazoEstimadoDias: e.target.value ? parseInt(e.target.value) : null }))}
+                      placeholder="Ej: 5"
+                      disabled={loading}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label>Anticipo</Label>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Input
+                        type="text"
+                        inputMode="decimal"
+                        min="0"
+                        step="0.01"
+                        value={anticipoValorStr}
+                        onChange={(e) => setAnticipoValorStr(e.target.value)}
+                        placeholder="0"
+                        disabled={loading}
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        variant={condiciones.anticipoTipo === "fijo" ? "default" : "outline"}
+                        size="icon"
+                        className="h-10 w-10 shrink-0"
+                        onClick={() => setCondiciones((p) => ({ ...p, anticipoTipo: p.anticipoTipo === "fijo" ? "porcentaje" : "fijo" }))}
+                        disabled={loading}
+                      >
+                        {condiciones.anticipoTipo === "fijo" ? <DollarSign className="h-4 w-4" /> : <Percent className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Plazo de retiro (días)</Label>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      min="0"
+                      value={condiciones.politicaAbandonoDias ?? ""}
+                      onChange={(e) => setCondiciones((p) => ({ ...p, politicaAbandonoDias: e.target.value ? parseInt(e.target.value) : null }))}
+                      placeholder="Ej: 60"
+                      disabled={loading}
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <Label>Garantía (días)</Label>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      min="0"
+                      value={garantiaDiasStr}
+                      onChange={(e) => setGarantiaDiasStr(e.target.value)}
+                      placeholder="30"
+                      disabled={loading || condiciones.garantiaAlcance === "NINGUNA"}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label>Alcance de garantía</Label>
+                    <Select
+                      value={condiciones.garantiaAlcance}
+                      onValueChange={(v) => setCondiciones((p) => ({ ...p, garantiaAlcance: v as CondicionesTecnicas["garantiaAlcance"] }))}
+                      disabled={loading}
+                    >
+                      <SelectTrigger className="mt-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="AMBOS">Repuesto y mano de obra</SelectItem>
+                        <SelectItem value="REPUESTO">Solo repuesto</SelectItem>
+                        <SelectItem value="MANO_OBRA">Solo mano de obra</SelectItem>
+                        <SelectItem value="NINGUNA">Sin garantía</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </div>
-            </div>
+            </CollapsibleSection>
           )}
 
-          {/* Items Header - Hidden on mobile */}
-          <div className="hidden sm:grid gap-2 text-sm font-medium text-muted-foreground border-b pb-2" style={{ gridTemplateColumns: "4fr 1fr 1.5fr 1.5fr 1.5fr 2fr 0.5fr" }}>
-            <div>Descripción</div>
-            <div>Unidad</div>
-            <div className="text-center">Cantidad</div>
-            <div className="text-center">Precio Unit.</div>
-            <div className="text-center">Descuento</div>
-            <div className="text-right">Subtotal</div>
-            <div></div>
-          </div>
+          {/* Ítems */}
+          <CollapsibleSection title="Ítems" icon={FileText} defaultOpen>
+            {/* Items Header - Hidden on mobile */}
+            <div className="hidden sm:grid gap-2 text-sm font-medium text-muted-foreground border-b pb-2" style={{ gridTemplateColumns: "4fr 1fr 1.5fr 1.5fr 1.5fr 2fr 0.5fr" }}>
+              <div>Descripción</div>
+              <div>Unidad</div>
+              <div className="text-center">Cantidad</div>
+              <div className="text-center">Precio Unit.</div>
+              <div className="text-center">Descuento</div>
+              <div className="text-right">Subtotal</div>
+              <div></div>
+            </div>
 
-          {/* Items */}
-          {items.map((item, index) => (
-            <ItemRow
-              key={`item-${index}`}
-              item={item}
-              index={index}
-              onUpdate={updateItem}
-              onRemove={removeItem}
-              disabled={loading}
-              showTipoRepuesto={isPresupuesto}
-            />
-          ))}
+            {items.map((item, index) => (
+              <ItemRow
+                key={`item-${index}`}
+                item={item}
+                index={index}
+                onUpdate={updateItem}
+                onRemove={removeItem}
+                disabled={loading}
+                showTipoRepuesto={isPresupuesto}
+              />
+            ))}
 
-          <div className="flex gap-2 flex-wrap">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={addItem}
-              disabled={loading}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Agregar Item
-            </Button>
-            {!isEditing && (
+            <div className="flex gap-2 flex-wrap">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={handleLoadTemplates}
+                onClick={addItem}
                 disabled={loading}
               >
-                <BookOpen className="mr-2 h-4 w-4" />
-                Cargar Plantilla
+                <Plus className="mr-2 h-4 w-4" />
+                Agregar Item
               </Button>
-            )}
-          </div>
-
-          {/* Template selector */}
-          {showTemplates && (
-            <div className="border rounded-lg p-3 bg-muted/30 space-y-2">
-              <p className="text-sm font-medium">Seleccionar plantilla:</p>
-              {templates.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No hay plantillas guardadas</p>
-              ) : (
-                templates.map((t: any) => (
-                  <Button
-                    key={t.id}
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="w-full justify-start"
-                    onClick={() => applyTemplate(t)}
-                  >
-                    {t.nombre}
-                    <span className="ml-auto text-xs text-muted-foreground">{t.items.length} items</span>
-                  </Button>
-                ))
+              {!isEditing && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleLoadTemplates}
+                  disabled={loading}
+                >
+                  <BookOpen className="mr-2 h-4 w-4" />
+                  Cargar Plantilla
+                </Button>
               )}
             </div>
-          )}
 
-          {/* Descuento Global + IVA */}
-          <div className="flex flex-col sm:flex-row sm:items-end gap-3 p-3 bg-muted/50 rounded-lg">
-            <div className="flex-1">
-              <Label className="text-sm">Descuento Global</Label>
-              <div className="flex items-center gap-2 mt-1">
+            {/* Template selector */}
+            {showTemplates && (
+              <div className="border rounded-lg p-3 bg-muted/30 space-y-2">
+                <p className="text-sm font-medium">Seleccionar plantilla:</p>
+                {templates.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No hay plantillas guardadas</p>
+                ) : (
+                  templates.map((t: any) => (
+                    <Button
+                      key={t.id}
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-start"
+                      onClick={() => applyTemplate(t)}
+                    >
+                      {t.nombre}
+                      <span className="ml-auto text-xs text-muted-foreground">{t.items.length} items</span>
+                    </Button>
+                  ))
+                )}
+              </div>
+            )}
+          </CollapsibleSection>
+
+          {/* Descuentos y totales */}
+          <CollapsibleSection title="Descuentos y totales" icon={Calculator} defaultOpen>
+            {/* Descuento Global + IVA */}
+            <div className="flex flex-col sm:flex-row sm:items-end gap-3 p-3 bg-muted/50 rounded-lg">
+              <div className="flex-1">
+                <Label className="text-sm">Descuento Global</Label>
+                <div className="flex items-center gap-2 mt-1">
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.01"
+                    placeholder="0"
+                    value={descuentoGlobalValorStr}
+                    onChange={(e) => setDescuentoGlobalValorStr(e.target.value)}
+                    disabled={loading}
+                    className="w-32"
+                  />
+                  <Button
+                    type="button"
+                    variant={descuentoGlobalTipo === "fijo" ? "default" : "outline"}
+                    size="icon"
+                    className="h-10 w-10 shrink-0"
+                    onClick={() => setDescuentoGlobalTipo(descuentoGlobalTipo === "fijo" ? "porcentaje" : "fijo")}
+                    disabled={loading}
+                  >
+                    {descuentoGlobalTipo === "fijo" ? <DollarSign className="h-4 w-4" /> : <Percent className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+              <div>
+                <Label className="text-sm">IVA</Label>
+                <Select
+                  value={String(ivaPorcentaje)}
+                  onValueChange={(v) => setIvaPorcentaje(parseFloat(v))}
+                  disabled={loading}
+                >
+                  <SelectTrigger className="w-32 mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">0%</SelectItem>
+                    <SelectItem value="10.5">10.5%</SelectItem>
+                    <SelectItem value="21">21%</SelectItem>
+                    <SelectItem value="27">27%</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-sm">Tipo cambio USD (opcional)</Label>
                 <Input
                   type="text"
                   inputMode="decimal"
-                  min="0"
+                  min={0}
                   step="0.01"
-                  placeholder="0"
-                  value={descuentoGlobalValorStr}
-                  onChange={(e) => setDescuentoGlobalValorStr(e.target.value)}
+                  placeholder="Ej: 1250"
+                  value={tipoCambio ?? ""}
+                  onChange={(e) => setTipoCambio(e.target.value ? parseFloat(e.target.value) : null)}
                   disabled={loading}
-                  className="w-32"
+                  className="w-36 mt-1"
                 />
-                <Button
-                  type="button"
-                  variant={descuentoGlobalTipo === "fijo" ? "default" : "outline"}
-                  size="icon"
-                  className="h-10 w-10 shrink-0"
-                  onClick={() => setDescuentoGlobalTipo(descuentoGlobalTipo === "fijo" ? "porcentaje" : "fijo")}
+              </div>
+            </div>
+
+            {/* Totales Desglose */}
+            <div className="flex justify-end">
+              <div className="w-72 p-4 bg-muted rounded-lg space-y-1.5">
+                <div className="flex justify-between text-sm">
+                  <span>Subtotal:</span>
+                  <span>{formatPrice(subtotalBruto)}</span>
+                </div>
+                {descuentoItems > 0 && (
+                  <div className="flex justify-between text-sm text-success-600">
+                    <span>Desc. items:</span>
+                    <span>-{formatPrice(descuentoItems)}</span>
+                  </div>
+                )}
+                {descuentoGlobal > 0 && (
+                  <div className="flex justify-between text-sm text-success-600">
+                    <span>Desc. global:</span>
+                    <span>-{formatPrice(descuentoGlobal)}</span>
+                  </div>
+                )}
+                {ivaPorcentaje > 0 && (
+                  <>
+                    <div className="flex justify-between text-sm text-muted-foreground">
+                      <span>Subtotal gravable:</span>
+                      <span>{formatPrice(subtotalGravable)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>IVA ({ivaPorcentaje}%):</span>
+                      <span>{formatPrice(ivaAmount)}</span>
+                    </div>
+                  </>
+                )}
+                <div className="flex justify-between font-bold text-lg pt-1 border-t">
+                  <span>Total:</span>
+                  <span>{formatPrice(total)}</span>
+                </div>
+                {tieneCostos && (
+                  <div className="pt-2 mt-1 border-t space-y-1">
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Costo repuestos:</span>
+                      <span>{formatPrice(costoRepuestos)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm font-medium text-success-600">
+                      <span>Ganancia bruta:</span>
+                      <span>{formatPrice(Math.max(0, subtotalGravable - costoRepuestos))}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </CollapsibleSection>
+
+          {/* Detalles y notas */}
+          <CollapsibleSection title="Detalles y notas" icon={FileText} defaultOpen={false}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <DatePicker
+                  id="fechaVencimiento"
+                  label="Válida hasta"
+                  value={fechaVencimiento}
+                  onChange={setFechaVencimiento}
+                  min={new Date().toISOString().split("T")[0]}
                   disabled={loading}
-                >
-                  {descuentoGlobalTipo === "fijo" ? <DollarSign className="h-4 w-4" /> : <Percent className="h-4 w-4" />}
-                </Button>
+                />
               </div>
             </div>
-            <div>
-              <Label className="text-sm">IVA</Label>
-              <Select
-                value={String(ivaPorcentaje)}
-                onValueChange={(v) => setIvaPorcentaje(parseFloat(v))}
-                disabled={loading}
-              >
-                <SelectTrigger className="w-32 mt-1">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="0">0%</SelectItem>
-                  <SelectItem value="10.5">10.5%</SelectItem>
-                  <SelectItem value="21">21%</SelectItem>
-                  <SelectItem value="27">27%</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-sm">Tipo cambio USD (opcional)</Label>
-              <Input
-                type="text"
-                inputMode="decimal"
-                min={0}
-                step="0.01"
-                placeholder="Ej: 1250"
-                value={tipoCambio ?? ""}
-                onChange={(e) => setTipoCambio(e.target.value ? parseFloat(e.target.value) : null)}
-                disabled={loading}
-                className="w-36 mt-1"
-              />
-            </div>
-          </div>
 
-          {/* Totales Desglose */}
-          <div className="flex justify-end">
-            <div className="w-72 p-4 bg-muted rounded-lg space-y-1.5">
-              <div className="flex justify-between text-sm">
-                <span>Subtotal:</span>
-                <span>{formatPrice(subtotalBruto)}</span>
-              </div>
-              {descuentoItems > 0 && (
-                <div className="flex justify-between text-sm text-success-600">
-                  <span>Desc. items:</span>
-                  <span>-{formatPrice(descuentoItems)}</span>
-                </div>
-              )}
-              {descuentoGlobal > 0 && (
-                <div className="flex justify-between text-sm text-success-600">
-                  <span>Desc. global:</span>
-                  <span>-{formatPrice(descuentoGlobal)}</span>
-                </div>
-              )}
-              {ivaPorcentaje > 0 && (
-                <>
-                  <div className="flex justify-between text-sm text-muted-foreground">
-                    <span>Subtotal gravable:</span>
-                    <span>{formatPrice(subtotalGravable)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>IVA ({ivaPorcentaje}%):</span>
-                    <span>{formatPrice(ivaAmount)}</span>
-                  </div>
-                </>
-              )}
-              <div className="flex justify-between font-bold text-lg pt-1 border-t">
-                <span>Total:</span>
-                <span>{formatPrice(total)}</span>
-              </div>
-              {tieneCostos && (
-                <div className="pt-2 mt-1 border-t space-y-1">
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>Costo repuestos:</span>
-                    <span>{formatPrice(costoRepuestos)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm font-medium text-success-600">
-                    <span>Ganancia bruta:</span>
-                    <span>{formatPrice(Math.max(0, subtotalGravable - costoRepuestos))}</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Additional Fields */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <DatePicker
-                id="fechaVencimiento"
-                label="Válida hasta"
-                value={fechaVencimiento}
-                onChange={setFechaVencimiento}
-                min={new Date().toISOString().split("T")[0]}
+              <Label htmlFor="notas">Notas</Label>
+              <Textarea
+                id="notas"
+                value={notas}
+                onChange={(e) => setNotas(e.target.value)}
+                placeholder="Notas adicionales para el cliente..."
+                rows={3}
                 disabled={loading}
               />
             </div>
-          </div>
 
-          <div>
-            <Label htmlFor="notas">Notas</Label>
-            <Textarea
-              id="notas"
-              value={notas}
-              onChange={(e) => setNotas(e.target.value)}
-              placeholder="Notas adicionales para el cliente..."
-              rows={3}
-              disabled={loading}
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="terminos">Términos y Condiciones</Label>
-            <Textarea
-              id="terminos"
-              value={terminos}
-              onChange={(e) => setTerminos(e.target.value)}
-              placeholder="Términos y condiciones de la cotización..."
-              rows={4}
-              disabled={loading}
-            />
-          </div>
+            <div>
+              <Label htmlFor="terminos">Términos y Condiciones</Label>
+              <Textarea
+                id="terminos"
+                value={terminos}
+                onChange={(e) => setTerminos(e.target.value)}
+                placeholder="Términos y condiciones de la cotización..."
+                rows={4}
+                disabled={loading}
+              />
+            </div>
+          </CollapsibleSection>
 
           {/* Actions */}
           <FormActionBar>
