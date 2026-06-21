@@ -15,7 +15,18 @@ function ordenRow(over: Partial<any> = {}) {
 describe("cobros orden — reconciliación de fiado", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: {}, error: null } as any)
+    // Force the JS fallback path by making registrar_cobros_orden_atomica report "not found".
+    // The JS fallback issues individual RPC calls (usar_cuenta_corriente,
+    // pagar_fiado_cuenta_corriente) so we can assert on them directly.
+    vi.mocked(supabaseAdmin.rpc).mockImplementation(((fn: string) => {
+      if (fn === "registrar_cobros_orden_atomica") {
+        return Promise.resolve({
+          data: null,
+          error: { code: "42883", message: "function registrar_cobros_orden_atomica does not exist" },
+        })
+      }
+      return Promise.resolve({ data: {}, error: null })
+    }) as any)
   })
 
   it("acredita PAGO al cobrar en efectivo una orden ENTREGADA", async () => {

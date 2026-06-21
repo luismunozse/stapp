@@ -18,7 +18,17 @@ import { POST as devolucionPOST } from "@/app/api/ventas/[id]/devolucion/route"
 describe("anular cobro orden — reacredita USO", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: {}, error: null } as any)
+    // Force the JS fallback path by making anular_cobro_orden_atomica report "not found".
+    // The JS fallback calls devolver_cuenta_corriente directly so we can assert on it.
+    vi.mocked(supabaseAdmin.rpc).mockImplementation(((fn: string) => {
+      if (fn === "anular_cobro_orden_atomica") {
+        return Promise.resolve({
+          data: null,
+          error: { code: "42883", message: "function anular_cobro_orden_atomica does not exist" },
+        })
+      }
+      return Promise.resolve({ data: {}, error: null })
+    }) as any)
   })
 
   it("reacredita (devolver) al anular un cobro con CUENTA_CORRIENTE", async () => {
