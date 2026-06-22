@@ -55,11 +55,12 @@ export async function fetchMovimientosDia(
   filters?: FetchMovimientosOptions,
   sucursalId?: string | null,
 ) {
-  // 1. Cobros de órdenes
+  // 1. Cobros de órdenes (excluir anulados — no representan ingreso real)
   let cobrosQuery = supabaseAdmin
     .from("cobros_orden")
     .select("monto, metodo_pago, created_at, orden_id, observaciones, ordenes_servicio:orden_id!inner(numero_orden, sucursal_id)")
     .eq("organization_id", organizationId)
+    .eq("anulado", false)
     .gte("created_at", fechaDesde)
     .lte("created_at", fechaHasta)
     .order("created_at", { ascending: false })

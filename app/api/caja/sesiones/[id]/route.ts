@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { fetchMovimientosDia, computeTotales } from "@/lib/caja-utils"
+import { sucursalParaLectura } from "@/lib/sucursal"
 
 // GET - Detalle completo de una sesión
 export async function GET(
@@ -9,12 +10,17 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role, session } = await requireAuth()
     if (error) return error
 
     const { id } = await params
 
-    const { data: sesion } = await supabaseAdmin
+    const filtro = await sucursalParaLectura({
+      role,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
+
+    let sesionQuery = supabaseAdmin
       .from("sesiones_caja")
       .select(`
         *,
@@ -23,17 +29,28 @@ export async function GET(
       `)
       .eq("id", id)
       .eq("organization_id", organizationId!)
-      .single()
+
+    if (!filtro.verTodas && filtro.sucursalId) {
+      sesionQuery = sesionQuery.eq("sucursal_id", filtro.sucursalId)
+    }
+
+    const { data: sesion } = await sesionQuery.single()
 
     if (!sesion) {
       return NextResponse.json({ error: "Sesión no encontrada" }, { status: 404 })
     }
 
-    // Obtener movimientos del período de la sesión
+    // Obtener movimientos del período de la sesión, scoped a la sucursal de la sesión
     const fechaDesde = sesion.opened_at
     const fechaHasta = sesion.closed_at || new Date().toISOString()
 
-    const movimientos = await fetchMovimientosDia(organizationId!, fechaDesde, fechaHasta)
+    const movimientos = await fetchMovimientosDia(
+      organizationId!,
+      fechaDesde,
+      fechaHasta,
+      undefined,
+      sesion.sucursal_id ?? null,
+    )
     const totales = computeTotales(movimientos)
 
     return NextResponse.json({
