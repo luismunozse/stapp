@@ -76,7 +76,7 @@ export async function GET(
       total: factura.total,
       montoAbonado: factura.monto_abonado,
       estadoPago: factura.estado_pago,
-      createdAt: factura.created_at,
+      createdAt: factura.fecha,
       orden: {
         id: factura.ordenes_servicio.id,
         numeroOrden: factura.ordenes_servicio.numero_orden,
