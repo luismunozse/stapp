@@ -50,8 +50,8 @@ export async function POST(
     const esperado = saldoInicial + totales.totalIngresosEfectivo - totales.totalEgresosEfectivo
     const diferencia = parsed.conteoFisico - esperado
 
-    // Actualizar sesión
-    const { data: updated, error: updateError } = await supabaseAdmin
+    // Actualizar sesión con optimistic lock en estado='ABIERTA' para evitar doble cierre
+    const { data: updatedRows, error: updateError } = await supabaseAdmin
       .from("sesiones_caja")
       .update({
         estado: "CERRADA",
@@ -66,13 +66,23 @@ export async function POST(
         closed_at: new Date().toISOString(),
       })
       .eq("id", id)
-      .select("*")
-      .single()
+      .eq("organization_id", organizationId!)
+      .eq("estado", "ABIERTA")
+      .select()
 
     if (updateError) {
       console.error("Error closing sesion:", updateError)
       return NextResponse.json({ error: "Error al cerrar caja" }, { status: 500 })
     }
+
+    if (!updatedRows || updatedRows.length === 0) {
+      return NextResponse.json(
+        { error: "La sesión ya está cerrada o no está abierta" },
+        { status: 400 }
+      )
+    }
+
+    const updated = updatedRows[0]
 
     return NextResponse.json({
       sesion: updated,

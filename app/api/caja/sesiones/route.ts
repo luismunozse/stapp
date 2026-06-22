@@ -115,12 +115,13 @@ export async function POST(request: Request) {
       userSucursalId: session!.user.sucursalId ?? null,
     })
 
-    // Verificar que no hay sesión abierta
+    // Verificar que no hay sesión abierta para esta sucursal
     const { data: existente } = await supabaseAdmin
       .from("sesiones_caja")
       .select("id")
       .eq("organization_id", organizationId!)
       .eq("estado", "ABIERTA")
+      .eq("sucursal_id", sucursalId!)
       .maybeSingle()
 
     if (existente) {

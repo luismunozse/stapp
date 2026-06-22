@@ -63,13 +63,10 @@ describe("POST /api/caja/sesiones/[id]/cerrar — sucursal_id wiring", () => {
     vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
       if (table === "sesiones_caja") {
         const chain = createChainMock(null)
-        let callCount = 0
-        chain.single = vi.fn().mockImplementation(() => {
-          callCount++
-          if (callCount === 1) return Promise.resolve({ data: mockSesion, error: null })
-          return Promise.resolve({ data: mockUpdatedSesion, error: null })
-        })
-        chain.update = vi.fn().mockReturnValue(chain)
+        chain.single = vi.fn().mockResolvedValue({ data: mockSesion, error: null })
+        // F3: UPDATE now uses .select() (array) instead of .single()
+        const updateChain = createChainMock([mockUpdatedSesion], null)
+        chain.update = vi.fn().mockReturnValue(updateChain)
         return chain as any
       }
       return createChainMock(null) as any
@@ -92,13 +89,10 @@ describe("POST /api/caja/sesiones/[id]/cerrar — sucursal_id wiring", () => {
     vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
       if (table === "sesiones_caja") {
         const chain = createChainMock(null)
-        let callCount = 0
-        chain.single = vi.fn().mockImplementation(() => {
-          callCount++
-          if (callCount === 1) return Promise.resolve({ data: mockSesion, error: null })
-          return Promise.resolve({ data: mockUpdatedSesion, error: null })
-        })
-        chain.update = vi.fn().mockReturnValue(chain)
+        chain.single = vi.fn().mockResolvedValue({ data: mockSesion, error: null })
+        // F3: UPDATE now uses .select() (array) instead of .single()
+        const updateChain = createChainMock([mockUpdatedSesion], null)
+        chain.update = vi.fn().mockReturnValue(updateChain)
         return chain as any
       }
       return createChainMock(null) as any
