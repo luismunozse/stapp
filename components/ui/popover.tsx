@@ -21,7 +21,7 @@ const PopoverContent = React.forwardRef<
       align={align}
       sideOffset={sideOffset}
       className={cn(
-        "z-50 w-[min(18rem,calc(100vw-2rem))] rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-none",
+        "z-[70] w-[min(18rem,calc(100vw-2rem))] rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-none",
         // Origin-aware: el popover escala desde su trigger, no desde el centro.
         "origin-[var(--radix-popover-content-transform-origin)]",
         "ease-snappy data-[state=open]:animate-in data-[state=closed]:animate-out",
