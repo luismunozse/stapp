@@ -50,6 +50,9 @@ interface VentaItem {
   precioUnitario: number
   subtotal: number
   diasGarantia: number
+  descuento: number
+  tipoDescuento: "MONTO" | "PORCENTAJE"
+  porcentajeDescuento: number
 }
 
 interface Garantia {
@@ -358,6 +361,9 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
               cantidad: item.cantidad,
               precioUnitario: item.precioUnitario,
               diasGarantia: item.diasGarantia,
+              descuento: item.descuento,
+              tipoDescuento: item.tipoDescuento,
+              porcentajeDescuento: item.porcentajeDescuento,
             })),
             descuento: venta.descuento,
             metodoPago: venta.metodoPago,
