@@ -165,17 +165,71 @@ export async function PUT(
         return NextResponse.json({ error: "depositoId inválido" }, { status: 400 })
       }
 
-      // Calcular nuevos totales
-      const subtotal = items.reduce(
-        (sum: number, item: any) => sum + item.cantidad * item.precioUnitario,
-        0
-      )
+        // Compute totals mirroring POST logic:
+      // 1) accumulate per-item net after line discounts
+      // 2) apply global discount clamped to [0, subtotalNeto]
+      // 3) compute IVA from org fiscal config (fetched below)
+      const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100
 
-      let descuentoMonto = descuento || 0
-      if (tipoDescuento === "PORCENTAJE") {
-        descuentoMonto = subtotal * ((porcentajeDescuento || 0) / 100)
+      let subtotalBruto = 0
+      let descuentoItems = 0
+      for (const item of items) {
+        const lineaBruto = (item as any).cantidad * (item as any).precioUnitario
+        subtotalBruto += lineaBruto
+        const tipoDesc = (item as any).tipoDescuento || "MONTO"
+        const lineaDesc =
+          tipoDesc === "PORCENTAJE"
+            ? lineaBruto * ((item as any).porcentajeDescuento || 0) / 100
+            : Math.min((item as any).descuento || 0, lineaBruto)
+        descuentoItems += lineaDesc
       }
-      const total = subtotal - descuentoMonto
+      const subtotalNeto = subtotalBruto - descuentoItems
+
+      let descuentoGlobal = descuento || 0
+      if (tipoDescuento === "PORCENTAJE") {
+        descuentoGlobal = subtotalNeto * ((porcentajeDescuento || 0) / 100)
+      }
+      // Clamp: global discount cannot exceed net subtotal (total never negative)
+      descuentoGlobal = Math.min(Math.max(descuentoGlobal, 0), subtotalNeto)
+
+      const subtotal = round2(subtotalBruto)
+      const descuentoMonto = round2(descuentoItems + descuentoGlobal)
+      const base = round2(Math.max(subtotalBruto - descuentoItems - descuentoGlobal, 0))
+
+      // Fetch org fiscal config (IVA + redondeo) — same as POST
+      const { data: orgFiscal } = await supabaseAdmin
+        .from("organizations")
+        .select("*")
+        .eq("id", organizationId!)
+        .single()
+      const ivaRegimen: string = orgFiscal?.iva_regimen ?? "EXENTO"
+      const ivaTasa = Number(orgFiscal?.iva_tasa ?? 0)
+      const redondeoUnidad = Number(orgFiscal?.redondeo_efectivo ?? 0)
+
+      // IVA by regime (mirrors POST)
+      let ivaNeto = base
+      let ivaMonto = 0
+      let totalConIva = base
+      if (ivaRegimen === "INCLUIDO" && ivaTasa > 0) {
+        ivaNeto = round2(base / (1 + ivaTasa / 100))
+        ivaMonto = round2(base - ivaNeto)
+        totalConIva = base
+      } else if (ivaRegimen === "ADITIVO" && ivaTasa > 0) {
+        ivaNeto = base
+        ivaMonto = round2(base * (ivaTasa / 100))
+        totalConIva = round2(base + ivaMonto)
+      }
+
+      // Cash rounding
+      const isCash = metodoPago === "EFECTIVO"
+      let redondeoMonto = 0
+      let total = totalConIva
+      if (isCash && redondeoUnidad > 0) {
+        const r = Math.round(totalConIva / redondeoUnidad) * redondeoUnidad
+        redondeoMonto = round2(r - totalConIva)
+        total = round2(r)
+      }
+      const fiscalActivo = ivaRegimen !== "EXENTO" || redondeoMonto !== 0
 
       // Preparar items para la función atómica
       const pItems = items.map((item: any) => ({
@@ -226,6 +280,29 @@ export async function PUT(
           { error: rpcError.message || "Error al editar venta" },
           { status: 400 }
         )
+      }
+
+      // Bug 2 fix: recompute IVA snapshot after edit, mirroring POST behavior.
+      // fiscalActivo guards the write exactly like POST does.
+      if (fiscalActivo) {
+        const { error: ivaError } = await supabaseAdmin
+          .from("ventas")
+          .update({
+            iva_neto: ivaNeto,
+            iva_monto: ivaMonto,
+            iva_tasa: ivaTasa,
+            iva_regimen: ivaRegimen,
+            redondeo_monto: redondeoMonto,
+          })
+          .eq("id", id)
+
+        if (ivaError) {
+          console.error("Error actualizando snapshot IVA en edición:", ivaError)
+          return NextResponse.json(
+            { error: "Error al actualizar datos fiscales de la venta" },
+            { status: 500 }
+          )
+        }
       }
 
       // Registrar en auditoría

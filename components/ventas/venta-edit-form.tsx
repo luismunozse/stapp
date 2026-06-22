@@ -26,6 +26,10 @@ const itemSchema = z.object({
   cantidad: z.number().min(1, "Mínimo 1"),
   precioUnitario: z.number().min(0, "Precio inválido"),
   diasGarantia: z.number().min(0).default(0),
+  // Per-item discount fields (mirrors venta-form.tsx)
+  descuento: z.number().min(0).default(0),
+  tipoDescuento: z.enum(["MONTO", "PORCENTAJE"]).default("MONTO"),
+  porcentajeDescuento: z.number().min(0).max(100).default(0),
 })
 
 const ventaEditSchema = z.object({
@@ -61,6 +65,9 @@ interface VentaItem {
   cantidad: number
   precioUnitario: number
   diasGarantia: number
+  descuento: number
+  tipoDescuento: "MONTO" | "PORCENTAJE"
+  porcentajeDescuento: number
 }
 
 interface VentaData {
@@ -113,6 +120,9 @@ export function VentaEditForm({ open, onOpenChange, venta, onSuccess }: VentaEdi
         cantidad: item.cantidad,
         precioUnitario: item.precioUnitario,
         diasGarantia: item.diasGarantia,
+        descuento: item.descuento,
+        tipoDescuento: item.tipoDescuento,
+        porcentajeDescuento: item.porcentajeDescuento,
       })),
       descuento: venta.descuento,
       metodoPago: venta.metodoPago as VentaEditFormData["metodoPago"],
@@ -132,7 +142,16 @@ export function VentaEditForm({ open, onOpenChange, venta, onSuccess }: VentaEdi
     (sum, item) => sum + (item.cantidad || 0) * (item.precioUnitario || 0),
     0
   )
-  const total = subtotal - watchDescuento
+  // Net subtotal after per-item discounts (mirrors route computation)
+  const subtotalNeto = watchItems.reduce((sum, item) => {
+    const bruto = (item.cantidad || 0) * (item.precioUnitario || 0)
+    const desc =
+      item.tipoDescuento === "PORCENTAJE"
+        ? bruto * ((item.porcentajeDescuento || 0) / 100)
+        : Math.min(item.descuento || 0, bruto)
+    return sum + bruto - desc
+  }, 0)
+  const total = Math.max(subtotalNeto - watchDescuento, 0)
 
   useEffect(() => {
     if (open) {
@@ -150,6 +169,9 @@ export function VentaEditForm({ open, onOpenChange, venta, onSuccess }: VentaEdi
           cantidad: item.cantidad,
           precioUnitario: item.precioUnitario,
           diasGarantia: item.diasGarantia,
+          descuento: item.descuento,
+          tipoDescuento: item.tipoDescuento,
+          porcentajeDescuento: item.porcentajeDescuento,
         })),
         descuento: venta.descuento,
         metodoPago: venta.metodoPago as VentaEditFormData["metodoPago"],
@@ -321,6 +343,9 @@ export function VentaEditForm({ open, onOpenChange, venta, onSuccess }: VentaEdi
                     cantidad: 1,
                     precioUnitario: 0,
                     diasGarantia: 0,
+                    descuento: 0,
+                    tipoDescuento: "MONTO",
+                    porcentajeDescuento: 0,
                   })
                 }
               >
