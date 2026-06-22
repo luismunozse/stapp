@@ -174,9 +174,38 @@ export async function POST(request: Request) {
       })
     }
 
-    // Sin IVA - precio final directo
-    const iva = 0
-    const total = subtotal
+    // Config fiscal de la organización (IVA). select("*") es defensivo:
+    // si las columnas no existen aún (migración 229 sin aplicar) quedan undefined
+    // → régimen EXENTO, sin cambio de comportamiento.
+    const { data: orgFiscal } = await supabaseAdmin
+      .from("organizations")
+      .select("*")
+      .eq("id", organizationId!)
+      .single()
+    const ivaRegimen: string = orgFiscal?.iva_regimen ?? "EXENTO"
+    const ivaTasa = Number(orgFiscal?.iva_tasa ?? 0)
+
+    const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100
+
+    // IVA por régimen (espeja la lógica de ventas/route.ts)
+    const base = subtotal
+    let ivaNeto = base
+    let ivaMonto = 0
+    let totalConIva = base
+    if (ivaRegimen === "INCLUIDO" && ivaTasa > 0) {
+      ivaNeto = round2(base / (1 + ivaTasa / 100))
+      ivaMonto = round2(base - ivaNeto)
+      totalConIva = base
+    } else if (ivaRegimen === "ADITIVO" && ivaTasa > 0) {
+      ivaNeto = base
+      ivaMonto = round2(base * (ivaTasa / 100))
+      totalConIva = round2(base + ivaMonto)
+    }
+
+    const iva = ivaMonto
+    const total = totalConIva
+    // Remap subtotal to the fiscal neto (items stay gross; factura footer = neto+iva+total)
+    subtotal = ivaNeto
 
     // F-C4: when total <= 0, estado must be PENDIENTE (0 >= 0 must not yield PAGADO)
     const sena = typeof orden.sena === "number" ? orden.sena : 0
