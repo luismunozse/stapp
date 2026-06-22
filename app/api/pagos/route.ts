@@ -205,7 +205,24 @@ async function runJsFallback(opts: {
 }): Promise<NextResponse> {
   const { organizationId, userId, factura, data, pagosToProcess } = opts
 
+  // Guard: cannot pay an already-voided invoice
+  if (factura.estado_pago === 'ANULADA') {
+    return NextResponse.json(
+      { error: "No se pueden registrar pagos en una factura anulada" },
+      { status: 400 }
+    )
+  }
+
+  // Guard: overpayment check (mirrors the RPC guard for the fallback path)
   const totalPagos = pagosToProcess.reduce((sum, p) => sum + p.monto, 0)
+  const pendiente = factura.total - (factura.monto_abonado || 0)
+  if (totalPagos > pendiente + 0.01) {
+    return NextResponse.json(
+      { error: `El monto total (${totalPagos.toFixed(2)}) excede el pendiente (${pendiente.toFixed(2)})` },
+      { status: 400 }
+    )
+  }
+
   const clienteId = data.clienteId || (factura.ordenes_servicio as any)?.cliente_id
   const pagosCreados: any[] = []
 
