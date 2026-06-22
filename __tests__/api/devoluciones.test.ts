@@ -8,6 +8,7 @@ import {
   createPostRequest,
   parseResponse,
 } from "./helpers"
+import { supabaseAdmin } from "@/lib/supabase"
 
 vi.mock("@/lib/counters", () => ({
   getNextReturnNumber: vi.fn().mockResolvedValue("DEV-000001"),
@@ -108,6 +109,18 @@ describe("GET /api/ventas/[id]/devolucion", () => {
 describe("POST /api/ventas/[id]/devolucion", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Force the JS fallback path: the auth/validation tests all return before the RPC
+    // is called, so this mock is harmless for them but documents intent — these tests
+    // cover the fallback path, not the RPC path (see devolucion-atomica.test.ts).
+    vi.mocked(supabaseAdmin.rpc).mockImplementation(((fn: string) => {
+      if (fn === "registrar_devolucion_atomica") {
+        return Promise.resolve({
+          data: null,
+          error: { code: "42883", message: "function registrar_devolucion_atomica does not exist" },
+        })
+      }
+      return Promise.resolve({ data: {}, error: null })
+    }) as any)
   })
 
   it("returns 401 when not authenticated", async () => {

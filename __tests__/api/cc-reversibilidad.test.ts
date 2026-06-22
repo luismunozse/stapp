@@ -70,7 +70,18 @@ describe("anular cobro orden — reacredita USO", () => {
 describe("devolucion venta — reembolso a CC", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: {}, error: null } as any)
+    // Force JS fallback path: registrar_devolucion_atomica reports "not found".
+    // The JS fallback calls devolver_cuenta_corriente directly so we can assert on it.
+    // Other RPC calls (e.g. devolver_cuenta_corriente) succeed normally.
+    vi.mocked(supabaseAdmin.rpc).mockImplementation(((fn: string) => {
+      if (fn === "registrar_devolucion_atomica") {
+        return Promise.resolve({
+          data: null,
+          error: { code: "42883", message: "function registrar_devolucion_atomica does not exist" },
+        })
+      }
+      return Promise.resolve({ data: {}, error: null })
+    }) as any)
   })
 
   const VENTA_DATA = {
