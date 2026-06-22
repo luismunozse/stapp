@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaLectura } from "@/lib/sucursal"
 import { generateFacturaPDF } from "@/lib/pdf"
 
 export async function GET(
@@ -8,13 +9,20 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAdmin()
+    const { error, organizationId, session, role } = await requireAdmin()
     if (error) return error
+
+    const filtro = await sucursalParaLectura({
+      role,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
+    const verTodas = filtro.verTodas
+    const sid = verTodas ? null : filtro.sucursalId
 
     const { id } = await params
 
     // Obtener factura con relaciones
-    const { data: factura, error: dbError } = await supabaseAdmin
+    let query = supabaseAdmin
       .from("facturas")
       .select(`
         *,
@@ -24,6 +32,7 @@ export async function GET(
           codigo_orden,
           dispositivo,
           organization_id,
+          sucursal_id,
           clientes (nombre, telefono, email, direccion),
           organizations (
             nombre,
@@ -39,7 +48,12 @@ export async function GET(
       `)
       .eq("id", id)
       .eq("ordenes_servicio.organization_id", organizationId!)
-      .single()
+
+    if (!verTodas && sid) {
+      query = query.eq("ordenes_servicio.sucursal_id", sid)
+    }
+
+    const { data: factura, error: dbError } = await query.single()
 
     if (dbError || !factura) {
       if (dbError?.code === "PGRST116") {

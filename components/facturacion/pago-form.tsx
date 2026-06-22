@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -37,6 +37,10 @@ export function PagoForm({
   const [pagosLines, setPagosLines] = useState<PagoLineItem[]>([createPagoLine(pendiente)])
   const [observaciones, setObservaciones] = useState("")
   const [saldoCuenta, setSaldoCuenta] = useState(0)
+
+  // Stable idempotency key per payment attempt — created once when the form opens.
+  // Must NOT be regenerated on retry of the same attempt; reset after a successful submit.
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
 
   // Fetch saldo cuenta corriente si hay cliente
   useEffect(() => {
@@ -90,6 +94,9 @@ export function PagoForm({
         })),
         observaciones: observaciones || undefined,
         clienteId: clienteId || undefined,
+        // Stable per-attempt key — the offline layer and migration 243 barrier
+        // deduplicate retries using this key.
+        idempotencyKey: idempotencyKeyRef.current,
       }
 
       const res = await offlineFetch("/api/pagos", {
@@ -110,6 +117,8 @@ export function PagoForm({
         return
       }
 
+      // Reset key so that a subsequent different payment gets a fresh idempotency key
+      idempotencyKeyRef.current = crypto.randomUUID()
       onSuccess()
     } catch (error) {
       console.error("Error:", error)

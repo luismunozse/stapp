@@ -7,12 +7,28 @@ import {
   createPostRequest,
   parseResponse,
 } from "./helpers"
+import { supabaseAdmin } from "@/lib/supabase"
 
 vi.mock("@/lib/counters", () => ({
   getNextInvoiceNumber: vi.fn().mockResolvedValue(1),
 }))
 
 import { POST } from "@/app/api/facturacion/generar/route"
+
+// Helper: make crear_factura_atomica appear missing so the fallback runs
+const CREAR_FUNCTION_MISSING_ERROR = {
+  code: "42883",
+  message: "function crear_factura_atomica does not exist",
+}
+
+function mockRpcFunctionMissing() {
+  vi.mocked(supabaseAdmin.rpc).mockImplementation(((fn: string) => {
+    if (fn === "crear_factura_atomica") {
+      return Promise.resolve({ data: null, error: CREAR_FUNCTION_MISSING_ERROR })
+    }
+    return Promise.resolve({ data: null, error: null })
+  }) as any)
+}
 
 describe("POST /api/facturacion/generar", () => {
   beforeEach(() => {
@@ -116,6 +132,8 @@ describe("POST /api/facturacion/generar", () => {
 
   it("creates factura successfully with seña consideration", async () => {
     mockAuthSuccess()
+    // Route now tries RPC first; make it appear missing so the JS fallback runs
+    mockRpcFunctionMissing()
 
     const mockOrden = {
       id: "o1",
@@ -129,6 +147,7 @@ describe("POST /api/facturacion/generar", () => {
       clientes: { nombre: "Juan" },
       repuestos_orden: [],
       facturas: [],
+      cotizaciones: [],
     }
 
     const mockFactura = {
@@ -151,6 +170,7 @@ describe("POST /api/facturacion/generar", () => {
     mockSupabaseFrom({
       ordenes_servicio: ordenesChain,
       facturas: facturasChain,
+      items_factura: createChainMock([]),
       pagos_parciales: pagosChain,
     })
 
@@ -164,6 +184,7 @@ describe("POST /api/facturacion/generar", () => {
 
   it("creates factura with PAGADO status when seña covers total", async () => {
     mockAuthSuccess()
+    mockRpcFunctionMissing()
 
     const mockOrden = {
       id: "o1",
@@ -177,6 +198,7 @@ describe("POST /api/facturacion/generar", () => {
       clientes: { nombre: "Maria" },
       repuestos_orden: [],
       facturas: [],
+      cotizaciones: [],
     }
 
     const mockFactura = {
@@ -199,6 +221,7 @@ describe("POST /api/facturacion/generar", () => {
     mockSupabaseFrom({
       ordenes_servicio: ordenesChain,
       facturas: facturasChain,
+      items_factura: createChainMock([]),
       pagos_parciales: pagosChain,
     })
 
@@ -210,6 +233,7 @@ describe("POST /api/facturacion/generar", () => {
 
   it("calculates subtotal from repuestos when costo_final is 0", async () => {
     mockAuthSuccess()
+    mockRpcFunctionMissing()
 
     const mockOrden = {
       id: "o1",
@@ -226,6 +250,7 @@ describe("POST /api/facturacion/generar", () => {
         { cantidad: 1, precio_unitario: 3000 },
       ],
       facturas: [],
+      cotizaciones: [],
     }
 
     const mockFactura = {
@@ -246,6 +271,7 @@ describe("POST /api/facturacion/generar", () => {
     mockSupabaseFrom({
       ordenes_servicio: ordenesChain,
       facturas: facturasChain,
+      items_factura: createChainMock([]),
     })
 
     const response = await POST(createPostRequest({ ordenId: "o1" }))

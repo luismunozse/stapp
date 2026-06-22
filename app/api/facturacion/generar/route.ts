@@ -8,6 +8,21 @@ const generarFacturaSchema = z.object({
   ordenId: z.string().min(1, "La orden es requerida"),
 })
 
+// Returns true when the RPC error indicates the function does not exist yet.
+function isFunctionMissingError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false
+  const e = err as Record<string, unknown>
+  const code = String(e.code ?? "")
+  const msg = String(e.message ?? "").toLowerCase()
+  return (
+    code === "PGRST202" ||
+    code === "42883" ||
+    msg.includes("could not find the function") ||
+    msg.includes("does not exist") ||
+    msg.includes("schema cache")
+  )
+}
+
 export async function POST(request: Request) {
   try {
     const { error, organizationId, role } = await requireAdmin()
@@ -163,74 +178,238 @@ export async function POST(request: Request) {
     const iva = 0
     const total = subtotal
 
-    // Considerar seña como monto ya abonado
+    // F-C4: when total <= 0, estado must be PENDIENTE (0 >= 0 must not yield PAGADO)
     const sena = typeof orden.sena === "number" ? orden.sena : 0
     const montoAbonado = sena
-    const estadoPago = montoAbonado >= total ? "PAGADO" : montoAbonado > 0 ? "PAGADO_PARCIAL" : "PENDIENTE"
+    const estadoPago =
+      total > 0 && montoAbonado >= total
+        ? "PAGADO"
+        : montoAbonado > 0
+        ? "PAGADO_PARCIAL"
+        : "PENDIENTE"
 
     // Obtener número de factura atómico
     const numeroFactura = await getNextInvoiceNumber(organizationId!)
 
-    // Crear factura con vinculación a cotización
-    const { data: factura, error: createError } = await supabaseAdmin
-      .from("facturas")
-      .insert({
-        orden_id: ordenId,
-        numero_factura: numeroFactura,
+    // Build items JSONB for RPC
+    const itemsJsonb = itemsParaFactura.map((item) => ({
+      cotizacion_item_id: item.cotizacionItemId || null,
+      descripcion: item.descripcion,
+      cantidad: item.cantidad,
+      precio_unitario: item.precioUnitario,
+      subtotal: item.subtotal,
+      tipo: item.tipo,
+    }))
+
+    // --- Atomic RPC path (migration 249) ---
+    const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc(
+      "crear_factura_atomica",
+      {
+        p_orden_id: ordenId,
+        p_numero_factura: numeroFactura,
+        p_subtotal: subtotal,
+        p_iva: iva,
+        p_total: total,
+        p_monto_abonado: montoAbonado,
+        p_estado_pago: estadoPago,
+        p_cotizacion_id: cotizacionAprobada?.id || "",
+        p_items: itemsJsonb,
+        p_sena_monto: sena,
+        p_sena_metodo: orden.metodo_pago_sena || "EFECTIVO",
+      }
+    )
+
+    if (!rpcError) {
+      const facturaId = (rpcResult as { id: string }).id
+
+      // Fetch items to build the response
+      const { data: itemsFactura } = await supabaseAdmin
+        .from("items_factura")
+        .select("*")
+        .eq("factura_id", facturaId)
+
+      return NextResponse.json(
+        {
+          id: facturaId,
+          ordenId: ordenId,
+          numeroFactura: numeroFactura,
+          fecha: null, // DB default; fetching full row not needed for creation response
+          subtotal,
+          iva,
+          total,
+          estadoPago,
+          cotizacionId: cotizacionAprobada?.id || null,
+          items: (itemsFactura || []).map((i: any) => ({
+            id: i.id,
+            descripcion: i.descripcion,
+            cantidad: i.cantidad,
+            precioUnitario: i.precio_unitario,
+            subtotal: i.subtotal,
+            tipo: i.tipo,
+          })),
+          orden: {
+            id: orden.id,
+            numeroOrden: orden.numero_orden,
+            dispositivo: orden.dispositivo,
+            cliente: orden.clientes,
+          },
+        },
+        { status: 201 }
+      )
+    }
+
+    if (isFunctionMissingError(rpcError)) {
+      console.warn("[facturacion] crear_factura_atomica not found; falling back to JS path")
+      return await crearFacturaJsFallback({
+        ordenId,
+        orden,
+        numeroFactura,
         subtotal,
         iva,
         total,
-        monto_abonado: montoAbonado,
-        estado_pago: estadoPago,
-        cotizacion_id: cotizacionAprobada?.id || null,
+        montoAbonado,
+        estadoPago,
+        cotizacionAprobada,
+        itemsParaFactura,
+        sena,
       })
-      .select()
-      .single()
-
-    if (createError) {
-      throw createError
     }
 
-    // Crear items de factura si hay desglose
-    if (itemsParaFactura.length > 0) {
-      const { error: itemsError } = await supabaseAdmin
-        .from("items_factura")
-        .insert(
-          itemsParaFactura.map((item) => ({
-            factura_id: factura.id,
-            cotizacion_item_id: item.cotizacionItemId || null,
-            descripcion: item.descripcion,
-            cantidad: item.cantidad,
-            precio_unitario: item.precioUnitario,
-            subtotal: item.subtotal,
-            tipo: item.tipo,
-          }))
-        )
-
-      if (itemsError) {
-        console.error("Error creating items_factura:", itemsError)
-      }
+    console.error("[facturacion] Unexpected RPC error (crear):", rpcError)
+    return NextResponse.json(
+      { error: "Error al generar factura" },
+      { status: 500 }
+    )
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: error.errors[0].message },
+        { status: 400 }
+      )
     }
+    console.error("Error generating factura:", error)
+    return NextResponse.json(
+      { error: "Error al generar factura" },
+      { status: 500 }
+    )
+  }
+}
 
-    // Si hay seña, registrarla como pago parcial en el historial
-    if (sena > 0) {
-      await supabaseAdmin
-        .from("pagos_parciales")
-        .insert({
-          factura_id: factura.id,
-          monto: sena,
-          metodo_pago: orden.metodo_pago_sena || "EFECTIVO",
-          observaciones: "Seña abonada al momento del ingreso",
-        })
-    }
+// ---------------------------------------------------------------------------
+// JS fallback — used when migration 249 is not yet applied.
+// Hardened: items insert error deletes the orphaned factura and returns 500.
+// ---------------------------------------------------------------------------
+async function crearFacturaJsFallback(opts: {
+  ordenId: string
+  orden: any
+  numeroFactura: string | number
+  subtotal: number
+  iva: number
+  total: number
+  montoAbonado: number
+  estadoPago: string
+  cotizacionAprobada: any
+  itemsParaFactura: Array<{
+    cotizacionItemId?: string
+    descripcion: string
+    cantidad: number
+    precioUnitario: number
+    subtotal: number
+    tipo: string
+  }>
+  sena: number
+}): Promise<NextResponse> {
+  const {
+    ordenId,
+    orden,
+    numeroFactura,
+    subtotal,
+    iva,
+    total,
+    montoAbonado,
+    estadoPago,
+    cotizacionAprobada,
+    itemsParaFactura,
+    sena,
+  } = opts
 
-    // Obtener items creados
-    const { data: itemsFactura } = await supabaseAdmin
+  // Insert factura
+  const { data: factura, error: createError } = await supabaseAdmin
+    .from("facturas")
+    .insert({
+      orden_id: ordenId,
+      numero_factura: numeroFactura,
+      subtotal,
+      iva,
+      total,
+      monto_abonado: montoAbonado,
+      estado_pago: estadoPago,
+      cotizacion_id: cotizacionAprobada?.id || null,
+    })
+    .select()
+    .single()
+
+  if (createError) {
+    throw createError
+  }
+
+  // Insert items — on failure, delete the orphaned factura and return 500
+  if (itemsParaFactura.length > 0) {
+    const { error: itemsError } = await supabaseAdmin
       .from("items_factura")
-      .select("*")
-      .eq("factura_id", factura.id)
+      .insert(
+        itemsParaFactura.map((item) => ({
+          factura_id: factura.id,
+          cotizacion_item_id: item.cotizacionItemId || null,
+          descripcion: item.descripcion,
+          cantidad: item.cantidad,
+          precio_unitario: item.precioUnitario,
+          subtotal: item.subtotal,
+          tipo: item.tipo,
+        }))
+      )
 
-    return NextResponse.json({
+    if (itemsError) {
+      console.error("[facturacion] items_factura insert failed; rolling back factura:", itemsError)
+      await supabaseAdmin.from("facturas").delete().eq("id", factura.id)
+      return NextResponse.json(
+        { error: "Error al crear items de factura" },
+        { status: 500 }
+      )
+    }
+  }
+
+  // Insert seña as pagos_parciales — on failure, log but do not leave partial state
+  // (the factura exists with correct monto_abonado; we surface the error)
+  if (sena > 0) {
+    const { error: senaError } = await supabaseAdmin
+      .from("pagos_parciales")
+      .insert({
+        factura_id: factura.id,
+        monto: sena,
+        metodo_pago: orden.metodo_pago_sena || "EFECTIVO",
+        observaciones: "Seña abonada al momento del ingreso",
+      })
+
+    if (senaError) {
+      console.error("[facturacion] pagos_parciales seña insert failed:", senaError)
+      // Do not delete the factura — the amount is correct; only the log entry is missing.
+      // Surface the error so the caller can retry the seña registration.
+      return NextResponse.json(
+        { error: "Error al registrar seña como pago parcial" },
+        { status: 500 }
+      )
+    }
+  }
+
+  // Fetch items to return in response
+  const { data: itemsFactura } = await supabaseAdmin
+    .from("items_factura")
+    .select("*")
+    .eq("factura_id", factura.id)
+
+  return NextResponse.json(
+    {
       id: factura.id,
       ordenId: factura.orden_id,
       numeroFactura: factura.numero_factura,
@@ -254,18 +433,7 @@ export async function POST(request: Request) {
         dispositivo: orden.dispositivo,
         cliente: orden.clientes,
       },
-    }, { status: 201 })
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: error.errors[0].message },
-        { status: 400 }
-      )
-    }
-    console.error("Error generating factura:", error)
-    return NextResponse.json(
-      { error: "Error al generar factura" },
-      { status: 500 }
-    )
-  }
+    },
+    { status: 201 }
+  )
 }
