@@ -292,6 +292,7 @@ export async function POST(request: Request) {
       return await crearFacturaJsFallback({
         ordenId,
         orden,
+        organizationId: organizationId!,
         numeroFactura,
         subtotal,
         iva,
@@ -331,6 +332,7 @@ export async function POST(request: Request) {
 async function crearFacturaJsFallback(opts: {
   ordenId: string
   orden: any
+  organizationId: string
   numeroFactura: string | number
   subtotal: number
   iva: number
@@ -351,6 +353,7 @@ async function crearFacturaJsFallback(opts: {
   const {
     ordenId,
     orden,
+    organizationId,
     numeroFactura,
     subtotal,
     iva,
@@ -367,6 +370,7 @@ async function crearFacturaJsFallback(opts: {
     .from("facturas")
     .insert({
       orden_id: ordenId,
+      organization_id: organizationId,
       numero_factura: numeroFactura,
       subtotal,
       iva,
