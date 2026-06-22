@@ -23,6 +23,7 @@ export async function POST(request: Request) {
       })
       .in("id", ordenIds)
       .eq("organization_id", organizationId!)
+      .eq("comision_pagada", false)
       .select("id")
 
     if (updErr) throw updErr
@@ -55,6 +56,7 @@ export async function DELETE(request: Request) {
       })
       .in("id", ordenIds)
       .eq("organization_id", organizationId!)
+      .eq("comision_pagada", true)
       .select("id")
 
     if (updErr) throw updErr
