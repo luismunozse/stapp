@@ -66,6 +66,7 @@ export async function DELETE(request: Request) {
       })
       .in("id", ventaIds)
       .eq("organization_id", organizationId!)
+      .eq("comision_pagada", true)
       .select("id")
 
     if (updErr) throw updErr

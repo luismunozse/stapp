@@ -321,10 +321,12 @@ export async function POST(request: Request) {
 
     // Resolver técnico asignado: TECNICO → siempre él mismo; otros roles → optativo desde el form
     let tecnicoAsignadoId: string | null = role === "TECNICO" ? userId! : null
+    let tecnicoPorcentajeComision: number | null = null
+    let tecnicoCostoHora: number | null = null
     if (role !== "TECNICO" && data.tecnicoId) {
       const { data: tecnicoCheck } = await supabaseAdmin
         .from("users")
-        .select("id")
+        .select("id, porcentaje_comision, costo_hora")
         .eq("id", data.tecnicoId)
         .eq("organization_id", organizationId!)
         .eq("rol", "TECNICO")
@@ -333,6 +335,20 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Técnico inválido" }, { status: 400 })
       }
       tecnicoAsignadoId = data.tecnicoId
+      tecnicoPorcentajeComision = Number(tecnicoCheck.porcentaje_comision ?? 0)
+      tecnicoCostoHora = Number(tecnicoCheck.costo_hora ?? 0)
+    } else if (role === "TECNICO") {
+      // For TECNICO creating their own order, fetch their own snapshot values
+      const { data: selfTecnico } = await supabaseAdmin
+        .from("users")
+        .select("porcentaje_comision, costo_hora")
+        .eq("id", userId!)
+        .eq("organization_id", organizationId!)
+        .maybeSingle()
+      if (selfTecnico) {
+        tecnicoPorcentajeComision = Number(selfTecnico.porcentaje_comision ?? 0)
+        tecnicoCostoHora = Number(selfTecnico.costo_hora ?? 0)
+      }
     }
 
     // Determinar estado inicial y costo final
@@ -378,6 +394,12 @@ export async function POST(request: Request) {
         sector_id: data.sectorId || null,
         tecnico_id: tecnicoAsignadoId,
         telefono_contacto: data.telefonoContacto || null,
+        ...(tecnicoAsignadoId !== null
+          ? {
+              porcentaje_comision: tecnicoPorcentajeComision,
+              costo_hora_snapshot: tecnicoCostoHora,
+            }
+          : {}),
       })
       .select(`
         *,

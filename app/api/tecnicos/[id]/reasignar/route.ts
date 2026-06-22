@@ -34,7 +34,7 @@ export async function POST(
 
     const { data: destino, error: destinoError } = await supabaseAdmin
       .from("users")
-      .select("id, rol, activo, porcentaje_comision")
+      .select("id, rol, activo, porcentaje_comision, costo_hora")
       .eq("id", tecnicoDestinoId)
       .eq("organization_id", organizationId!)
       .single()
@@ -79,6 +79,7 @@ export async function POST(
       .map((o: any) => o.id)
 
     const porcentajeDestino = Number(destino.porcentaje_comision ?? 0)
+    const costoHoraDestino = Number((destino as any).costo_hora ?? 0)
 
     const { error: updateError } = await supabaseAdmin
       .from("ordenes_servicio")
@@ -91,7 +92,7 @@ export async function POST(
     if (noPagadas.length > 0) {
       const { error: pctError } = await supabaseAdmin
         .from("ordenes_servicio")
-        .update({ porcentaje_comision: porcentajeDestino })
+        .update({ porcentaje_comision: porcentajeDestino, costo_hora_snapshot: costoHoraDestino })
         .in("id", noPagadas)
         .eq("organization_id", organizationId!)
 
