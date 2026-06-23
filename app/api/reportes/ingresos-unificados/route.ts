@@ -31,7 +31,7 @@ export async function GET(request: Request) {
     if (!tipo || tipo === "VENTA") {
       let ventasQuery = supabaseAdmin
         .from("ventas")
-        .select("id, numero_venta, cliente_nombre, total, descuento, metodo_pago, estado, created_at")
+        .select("id, numero_venta, cliente_nombre, total, iva_neto, iva_monto, descuento, metodo_pago, estado, created_at")
         .eq("organization_id", organizationId!)
         .eq("estado", "COMPLETADA")
         .gte("created_at", fechaDesde.toISOString())
@@ -51,7 +51,9 @@ export async function GET(request: Request) {
         tipoIngreso: "VENTA" as const,
         numero: String(v.numero_venta),
         clienteNombre: v.cliente_nombre,
-        monto: parseFloat(v.total),
+        // NET: COALESCE(iva_neto, total) — iva_neto is NULL for EXENTO/legacy (no-op)
+        monto: v.iva_neto != null ? parseFloat(v.iva_neto) : parseFloat(v.total),
+        montoIva: parseFloat(v.iva_monto || "0"),
         descuento: parseFloat(v.descuento),
         metodoPago: v.metodo_pago,
         estado: v.estado,
@@ -67,7 +69,7 @@ export async function GET(request: Request) {
       let facturasQuery = supabaseAdmin
         .from("facturas")
         .select(`
-          id, numero_factura, total, estado_pago, fecha, orden_id,
+          id, numero_factura, total, subtotal, iva, estado_pago, fecha, orden_id,
           ordenes_servicio!inner (
             id, organization_id, sucursal_id,
             clientes (nombre)
@@ -123,7 +125,9 @@ export async function GET(request: Request) {
           tipoIngreso: "SERVICIO" as const,
           numero: f.numero_factura,
           clienteNombre: f.ordenes_servicio?.clientes?.nombre || "Sin cliente",
-          monto: parseFloat(f.total),
+          // NET income: subtotal (== total when no IVA — EXENTO no-op)
+          monto: parseFloat(f.subtotal || f.total),
+          montoIva: Number(f.iva || 0),
           descuento: 0,
           metodoPago: "PENDIENTE",
           estado: f.estado_pago,
@@ -135,7 +139,9 @@ export async function GET(request: Request) {
         tipoIngreso: "SERVICIO" as const,
         numero: c.ordenes_servicio?.codigo_orden || String(c.ordenes_servicio?.numero_orden || ""),
         clienteNombre: c.ordenes_servicio?.clientes?.nombre || "Sin cliente",
+        // Direct order payments have no IVA breakdown — kept at gross (face value)
         monto: parseFloat(c.monto),
+        montoIva: 0,
         descuento: 0,
         metodoPago: c.metodo_pago || "EFECTIVO",
         estado: "COBRADO",
@@ -148,12 +154,16 @@ export async function GET(request: Request) {
       (a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
     )
 
-    // Calcular resumen bruto
+    // NET income aggregation (IVA collected is a fiscal liability, not income)
     const totalVentas = ventasData.reduce((sum, v) => sum + v.monto, 0)
     const totalServiciosFacturas = facturasData.reduce((sum, f) => sum + f.monto, 0)
     const totalServiciosCobros = cobrosData.reduce((sum, c) => sum + c.monto, 0)
     const totalServicios = totalServiciosFacturas + totalServiciosCobros
     const totalDescuentos = ventasData.reduce((sum, v) => sum + v.descuento, 0)
+    // IVA breakdown: ventas iva_monto + facturas iva; cobros_orden have no breakdown (0)
+    const totalIvaVentas = ventasData.reduce((sum, v) => sum + (v.montoIva || 0), 0)
+    const totalIvaFacturas = facturasData.reduce((sum, f) => sum + (f.montoIva || 0), 0)
+    const totalIva = totalIvaVentas + totalIvaFacturas
 
     // Notas de crédito — restan ingresos (mismo período + org + sucursal)
     let notasCreditoQuery = supabaseAdmin
@@ -179,9 +189,11 @@ export async function GET(request: Request) {
     return NextResponse.json({
       data: ingresos,
       resumen: {
+        // NET income (base imponible) after notas de crédito
         totalGeneral: totalVentas + totalServicios - totalNotasCredito,
         totalVentas,
         totalServicios,
+        totalIva,
         totalDescuentos,
         totalNotasCredito,
         cantidadVentas: ventasData.length,

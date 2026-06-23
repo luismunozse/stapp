@@ -164,8 +164,9 @@ describe("F1/5 — ingresos: notas_credito deducted from resumen.total", () => {
     const { status, body } = await parseResponse(res)
 
     expect(status).toBe(200)
-    // total net of NC: 944 - 200 = 744
-    expect(body.resumen.total).toBe(744)
+    // NET income = subtotal(800) − NC(200) = 600 (not gross 944 − NC 200 = 744)
+    // headline "total" is now NET (base imponible) after notas de crédito
+    expect(body.resumen.total).toBe(600)
     expect(body.resumen.totalNotasCredito).toBe(200)
   })
 })
