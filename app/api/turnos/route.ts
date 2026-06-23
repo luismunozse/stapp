@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger } from "@/lib/audit"
 import { notifyTurno } from "@/lib/turnos/notifications"
 import { sucursalParaLectura, sucursalParaEscritura } from "@/lib/sucursal"
+import { zonedTimeToUtc, DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 const clienteSnapshotSchema = z.object({
   nombre: z.string().min(1),
@@ -127,10 +128,19 @@ export async function GET(request: Request) {
     const estado = searchParams.get("estado") || ""
     const conOrden = searchParams.get("conOrden") || ""
 
-    const lectura = await sucursalParaLectura({
-      role,
-      userSucursalId: session!.user.sucursalId ?? null,
-    })
+    const [lectura, { data: orgRow }] = await Promise.all([
+      sucursalParaLectura({
+        role,
+        userSucursalId: session!.user.sucursalId ?? null,
+      }),
+      supabaseAdmin
+        .from("organizations")
+        .select("zona_horaria")
+        .eq("id", organizationId!)
+        .maybeSingle(),
+    ])
+
+    const timeZone: string = (orgRow as any)?.zona_horaria || DEFAULT_TIMEZONE
 
     let query = supabaseAdmin
       .from("turnos")
@@ -156,8 +166,18 @@ export async function GET(request: Request) {
     if (estado) query = query.eq("estado", estado)
     if (conOrden === "sin") query = query.is("orden_id", null)
     if (conOrden === "con") query = query.not("orden_id", "is", null)
-    if (desde) query = query.gte("inicio", `${desde}T00:00:00`)
-    if (hasta) query = query.lte("inicio", `${hasta}T23:59:59`)
+
+    // Date-range filter using org timezone — converts wall-clock bounds to UTC instants
+    if (desde) {
+      const [dy, dm, dd] = desde.split("-").map(Number)
+      const desdeUtc = zonedTimeToUtc(dy, dm, dd, 0, 0, 0, timeZone).toISOString()
+      query = query.gte("inicio", desdeUtc)
+    }
+    if (hasta) {
+      const [hy, hm, hd] = hasta.split("-").map(Number)
+      const hastaUtc = zonedTimeToUtc(hy, hm, hd, 23, 59, 59, timeZone).toISOString()
+      query = query.lte("inicio", hastaUtc)
+    }
 
     const { data, error: dbError } = await query
     if (dbError) throw dbError

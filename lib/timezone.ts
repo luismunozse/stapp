@@ -66,6 +66,70 @@ export const TIMEZONE_OPTIONS: TimezoneOption[] = [
   { value: "Europe/Lisbon", label: "Portugal (Lisboa)", offset: "UTC+0" },
 ]
 
+/**
+ * Returns calendar and time parts for a UTC instant evaluated in `timeZone`.
+ * DST-safe: uses Intl.DateTimeFormat with hour12:false.
+ * weekday: 0=Sunday … 6=Saturday.
+ * hour: 0–23 (handles the Intl '24' quirk by mapping it to 0).
+ */
+export function getZonedParts(
+  date: Date,
+  timeZone: string
+): { year: number; month: number; day: number; hour: number; minute: number; weekday: number } {
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    hour12: false,
+    weekday: "short",
+    timeZone,
+  })
+
+  const parts = fmt.formatToParts(date)
+  const lookup = (type: string) => parts.find((p) => p.type === type)?.value ?? ""
+
+  const year = Number(lookup("year"))
+  const month = Number(lookup("month"))
+  const day = Number(lookup("day"))
+  const rawHour = Number(lookup("hour"))
+  // Intl may emit 24 for midnight instead of 0
+  const hour = rawHour === 24 ? 0 : rawHour
+  const minute = Number(lookup("minute"))
+
+  // Derive weekday from the y/m/d we just computed — reliable and avoids locale issues.
+  // Date.UTC(y, m-1, d) gives a midnight-UTC instant for that calendar date.
+  // getUTCDay() on that instant gives the ISO weekday for the date (0=Sun..6=Sat).
+  const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay()
+
+  return { year, month, day, hour, minute, weekday }
+}
+
+/**
+ * Returns the UTC instant that corresponds to the given wall-clock time in
+ * `timeZone`. Uses the standard offset-correction algorithm — DST-safe.
+ */
+export function zonedTimeToUtc(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+  second: number,
+  timeZone: string
+): Date {
+  // Step 1: treat the wall-clock components as if they were UTC (naive guess)
+  const guess = Date.UTC(year, month - 1, day, hour, minute, second)
+  // Step 2: find out what wall-clock time that UTC instant shows in the tz
+  const p = getZonedParts(new Date(guess), timeZone)
+  // Step 3: rebuild the "as shown" UTC from those wall-clock parts
+  const asShown = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, second)
+  // Step 4: the offset is asShown - guess; subtract it to correct
+  const offset = asShown - guess
+  return new Date(guess - offset)
+}
+
 export function formatDateValue(
   date: Date | string | null | undefined,
   timezone: string = DEFAULT_TIMEZONE,
