@@ -53,6 +53,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
   const [politicaAbandonoDiasDefault, setPoliticaAbandonoDiasDefault] = useState("60")
   const [anticipoPorcentajeDefault, setAnticipoPorcentajeDefault] = useState("50")
   const [moduloAgenda, setModuloAgenda] = useState(false)
+  const [comisionAplicaSinReparacion, setComisionAplicaSinReparacion] = useState(false)
   const [ivaRegimen, setIvaRegimen] = useState<"EXENTO" | "INCLUIDO" | "ADITIVO">("EXENTO")
   const [ivaTasa, setIvaTasa] = useState("21")
   const [redondeoEfectivo, setRedondeoEfectivo] = useState("0")
@@ -87,6 +88,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
         setPoliticaAbandonoDiasDefault(String(data.politicaAbandonoDiasDefault ?? 60))
         setAnticipoPorcentajeDefault(String(data.anticipoPorcentajeDefault ?? 50))
         setModuloAgenda(!!data.moduloAgenda)
+        setComisionAplicaSinReparacion(!!data.comisionAplicaSinReparacion)
         setIvaRegimen(data.ivaRegimen ?? "EXENTO")
         setIvaTasa(String(data.ivaTasa ?? 21))
         setRedondeoEfectivo(String(data.redondeoEfectivo ?? 0))
@@ -174,7 +176,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
       const res = await fetch("/api/configuracion", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, ivaRegimen, ivaTasa, redondeoEfectivo }),
+        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, comisionAplicaSinReparacion, ivaRegimen, ivaTasa, redondeoEfectivo }),
       })
 
       if (res.ok) {
@@ -500,6 +502,21 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
                 Para servicios on-site (gastronomía, refrigeración, heladería, fabricadoras de helado).
                 Permite agendar visitas, retiros y entregas antes de crear la orden.
                 Al activarse, aparece la sección <strong>Agenda</strong> en el menú.
+              </div>
+            </div>
+          </label>
+          <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-accent/40 transition-colors mt-2">
+            <input
+              type="checkbox"
+              checked={comisionAplicaSinReparacion}
+              onChange={(e) => setComisionAplicaSinReparacion(e.target.checked)}
+              disabled={!allowEdit}
+              className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+            />
+            <div className="flex-1">
+              <div className="text-sm font-medium">Pagar comisión en órdenes sin reparación</div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                Si está activo, las órdenes ENTREGADO_SIN_REPARACION generan comisión para el técnico y se deducen en el P&L.
               </div>
             </div>
           </label>
