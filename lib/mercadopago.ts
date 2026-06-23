@@ -223,7 +223,16 @@ export function verifyWebhookSignature(
   xRequestId: string | null,
   dataId: string | null
 ): WebhookSignatureResult {
+  // Defensa: algunos loaders de entorno en producción (docker `env_file`,
+  // systemd `EnvironmentFile`, export en shell) NO quitan las comillas
+  // envolventes ni el whitespace, a diferencia de dotenv/Next.js. Si el secret
+  // quedó guardado como `"abc"` el HMAC se calcula con las comillas literales y
+  // nunca matchea, dando signature_hmac_mismatch en prod aunque el valor "se vea
+  // correcto" en el panel. Normalizamos SIEMPRE antes de usarlo.
   const secret = process.env.MERCADOPAGO_WEBHOOK_SECRET
+    ?.trim()
+    .replace(/^['"]|['"]$/g, "")
+    .trim()
 
   if (!secret) {
     // Fail-closed en producción: si por error de deploy falta el secret,
