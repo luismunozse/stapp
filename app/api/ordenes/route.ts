@@ -416,15 +416,32 @@ export async function POST(request: Request) {
       throw dbError
     }
 
-    // Vincular turno origen (trigger SQL sincroniza estado a 'orden_generada')
+    // Atomic claim: update turno.orden_id only if it is still null (TOCTOU-safe)
     if (turnoOrigen) {
-      const { error: linkError } = await supabaseAdmin
+      const { data: claimed, error: linkError } = await supabaseAdmin
         .from("turnos")
         .update({ orden_id: orden.id })
         .eq("id", turnoOrigen.id)
         .eq("organization_id", organizationId!)
+        .is("orden_id", null)
+        .select("id")
+
       if (linkError) {
-        console.error("Error linking turno to orden:", linkError)
+        // Real DB error — compensate by deleting the orden (children cascade)
+        await supabaseAdmin.from("ordenes_servicio").delete().eq("id", orden.id)
+        return NextResponse.json(
+          { error: "Error al vincular turno con la orden" },
+          { status: 500 },
+        )
+      }
+
+      if (!claimed || claimed.length === 0) {
+        // Concurrent request already claimed this turno — compensate
+        await supabaseAdmin.from("ordenes_servicio").delete().eq("id", orden.id)
+        return NextResponse.json(
+          { error: "El turno ya fue convertido a una orden" },
+          { status: 409 },
+        )
       }
     }
 
