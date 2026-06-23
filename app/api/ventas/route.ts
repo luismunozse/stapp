@@ -401,7 +401,7 @@ export async function POST(request: Request) {
     // redondeo). Las columnas existen porque fiscalActivo ⇒ la org configuró
     // IVA/redondeo ⇒ migración 229 aplicada (sin hazard de orden de deploy).
     if (ventaId && fiscalActivo) {
-      await supabaseAdmin
+      const { error: ivaError } = await supabaseAdmin
         .from("ventas")
         .update({
           iva_neto: ivaNeto,
@@ -411,17 +411,28 @@ export async function POST(request: Request) {
           redondeo_monto: redondeoMonto,
         })
         .eq("id", ventaId)
+      if (ivaError) {
+        console.error("Error al guardar snapshot IVA:", ivaError)
+        return NextResponse.json(
+          { error: "Error al guardar datos fiscales de la venta" },
+          { status: 500 }
+        )
+      }
     }
 
     // Registrar aprobación de descuento si aplica
     if (descuentoMonto > 0) {
-      await supabaseAdmin
+      const { error: descuentoError } = await supabaseAdmin
         .from("ventas")
         .update({
           descuento_aprobado_por: userId!,
           descuento_motivo: data.descuentoMotivo || null,
         })
         .eq("id", ventaId)
+      if (descuentoError) {
+        console.error("Error al guardar atribución de descuento:", descuentoError)
+        // Non-fatal: log but continue
+      }
     }
 
     // Obtener venta completa con relaciones

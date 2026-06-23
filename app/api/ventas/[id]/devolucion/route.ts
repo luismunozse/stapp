@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { formatDevolucion } from "@/lib/db-utils"
 import { getNextReturnNumber } from "@/lib/counters"
 import { createAuditLogger } from "@/lib/audit"
+import { sucursalParaLectura } from "@/lib/sucursal"
 import { z } from "zod"
 
 const itemDevolucionSchema = z.object({
@@ -44,18 +45,19 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAdminOrVendedor()
+    const { error, organizationId, role, session } = await requireAdminOrVendedor()
     if (error) return error
 
     const { id } = await params
 
+    const filtro = await sucursalParaLectura({ role, userSucursalId: (session!.user as any).sucursalId ?? null })
+
     // Verify the sale belongs to the organization
-    const { data: venta, error: ventaError } = await supabaseAdmin
-      .from("ventas")
-      .select("id")
-      .eq("id", id)
-      .eq("organization_id", organizationId!)
-      .single()
+    let ventaQuery = supabaseAdmin.from("ventas").select("id").eq("id", id).eq("organization_id", organizationId!)
+    if (!filtro.verTodas && filtro.sucursalId) {
+      ventaQuery = ventaQuery.eq("sucursal_id", filtro.sucursalId)
+    }
+    const { data: venta, error: ventaError } = await ventaQuery.single()
 
     if (ventaError || !venta) {
       return NextResponse.json(
@@ -93,7 +95,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role } = await requireAdminOrVendedor()
+    const { error, organizationId, userId, role, session } = await requireAdminOrVendedor()
     if (error) return error
 
     // Only ADMIN can create returns
@@ -105,6 +107,17 @@ export async function POST(
     }
 
     const { id } = await params
+
+    const filtroP = await sucursalParaLectura({ role, userSucursalId: (session!.user as any).sucursalId ?? null })
+    let ventaCheckQuery = supabaseAdmin.from("ventas").select("id").eq("id", id).eq("organization_id", organizationId!)
+    if (!filtroP.verTodas && filtroP.sucursalId) {
+      ventaCheckQuery = ventaCheckQuery.eq("sucursal_id", filtroP.sucursalId)
+    }
+    const { data: ventaCheck, error: ventaCheckError } = await ventaCheckQuery.single()
+    if (ventaCheckError || !ventaCheck) {
+      return NextResponse.json({ error: "Venta no encontrada" }, { status: 404 })
+    }
+
     const body = await request.json()
     const data = devolucionSchema.parse(body)
 
