@@ -46,7 +46,7 @@ const turnoCreateSchema = z.object({
   { message: "Debe indicar clienteId o clienteSnapshot" },
 )
 
-function generarFechasRecurrencia(
+export function generarFechasRecurrencia(
   inicio: Date,
   fin: Date | null,
   rec: { frecuencia: "diaria" | "semanal" | "mensual"; intervalo: number; total: number } | undefined,
@@ -61,7 +61,13 @@ function generarFechasRecurrencia(
     } else if (rec.frecuencia === "semanal") {
       next.setDate(next.getDate() + i * 7 * rec.intervalo)
     } else if (rec.frecuencia === "mensual") {
+      const originalDay = inicio.getDate()
+      next.setDate(1)                          // avoid overflow while setting month
       next.setMonth(next.getMonth() + i * rec.intervalo)
+      const lastDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate()
+      next.setDate(Math.min(originalDay, lastDay))
+      // Restore time-of-day (safety belt)
+      next.setHours(inicio.getHours(), inicio.getMinutes(), inicio.getSeconds(), inicio.getMilliseconds())
     }
     out.push({
       inicio: next,
