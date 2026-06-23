@@ -53,9 +53,10 @@ export async function GET() {
     }
 
     // Margin: items with inventory link for cost calculation, branch-filtered via parent
+    // Select costo_unitario_snapshot (cost at sale time) and fallback to inventario.precio_compra
     let margenQuery = supabaseAdmin
       .from("items_venta")
-      .select("cantidad, precio_unitario, subtotal, inventario_id, inventario!inner(precio_compra), ventas!inner(organization_id, estado, created_at, sucursal_id)")
+      .select("cantidad, precio_unitario, subtotal, inventario_id, costo_unitario_snapshot, inventario!inner(precio_compra), ventas!inner(organization_id, estado, created_at, sucursal_id)")
       .eq("ventas.organization_id", organizationId!)
       .eq("ventas.estado", "COMPLETADA")
       .gte("ventas.created_at", inicioMes.toISOString())
@@ -180,7 +181,12 @@ export async function GET() {
     let totalCosto = 0
     margenItems.forEach((item: any) => {
       totalVentas += item.subtotal || 0
-      totalCosto += (item.cantidad || 0) * ((item.inventario as any)?.precio_compra || 0)
+      // Prefer costo_unitario_snapshot (cost captured at sale time) over live precio_compra
+      const costoUnitario =
+        item.costo_unitario_snapshot != null
+          ? item.costo_unitario_snapshot
+          : (item.inventario as any)?.precio_compra || 0
+      totalCosto += (item.cantidad || 0) * costoUnitario
     })
     const margenBruto = {
       totalVentas,
