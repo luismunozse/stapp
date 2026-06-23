@@ -3,16 +3,19 @@ import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger } from "@/lib/audit"
 import { formatVenta } from "@/lib/db-utils"
+import { sucursalParaLectura } from "@/lib/sucursal"
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role } = await requireAdminOrVendedor()
+    const { error, organizationId, userId, role, session } = await requireAdminOrVendedor()
     if (error) return error
 
     const { id } = await params
+
+    const filtro = await sucursalParaLectura({ role, userSucursalId: (session!.user as any).sucursalId ?? null })
 
     let query = supabaseAdmin
       .from("ventas")
@@ -31,6 +34,10 @@ export async function GET(
     // Vendedores solo pueden ver sus propias ventas
     if (role === "VENDEDOR") {
       query = query.eq("vendedor_id", userId!)
+    }
+
+    if (!filtro.verTodas && filtro.sucursalId) {
+      query = query.eq("sucursal_id", filtro.sucursalId)
     }
 
     const { data: venta, error: dbError } = await query.single()
@@ -61,19 +68,23 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role } = await requireAdminOrVendedor()
+    const { error, organizationId, userId, role, session } = await requireAdminOrVendedor()
     if (error) return error
 
     const { id } = await params
+    const filtroW = await sucursalParaLectura({ role, userSucursalId: (session!.user as any).sucursalId ?? null })
     const body = await request.json()
 
     // Verificar que la venta existe y pertenece a la organización
-    const { data: venta, error: fetchError } = await supabaseAdmin
+    let ventaQuery = supabaseAdmin
       .from("ventas")
       .select("*, items_venta(*)")
       .eq("id", id)
       .eq("organization_id", organizationId!)
-      .single()
+    if (!filtroW.verTodas && filtroW.sucursalId) {
+      ventaQuery = ventaQuery.eq("sucursal_id", filtroW.sucursalId)
+    }
+    const { data: venta, error: fetchError } = await ventaQuery.single()
 
     if (fetchError || !venta) {
       return NextResponse.json(
@@ -354,7 +365,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role } = await requireAdminOrVendedor()
+    const { error, organizationId, userId, role, session } = await requireAdminOrVendedor()
     if (error) return error
 
     if (role !== "ADMIN") {
@@ -366,13 +377,18 @@ export async function DELETE(
 
     const { id } = await params
 
+    const filtroD = await sucursalParaLectura({ role, userSucursalId: (session!.user as any).sucursalId ?? null })
+
     // Verificar que la venta existe y está anulada
-    const { data: venta, error: fetchError } = await supabaseAdmin
+    let ventaDelQuery = supabaseAdmin
       .from("ventas")
       .select("*")
       .eq("id", id)
       .eq("organization_id", organizationId!)
-      .single()
+    if (!filtroD.verTodas && filtroD.sucursalId) {
+      ventaDelQuery = ventaDelQuery.eq("sucursal_id", filtroD.sucursalId)
+    }
+    const { data: venta, error: fetchError } = await ventaDelQuery.single()
 
     if (fetchError || !venta) {
       return NextResponse.json(

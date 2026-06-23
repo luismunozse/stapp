@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaLectura } from "@/lib/sucursal"
 import { z } from "zod"
 
 const pagoLineSchema = z.object({
@@ -82,7 +83,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId, role } = await requireAdminOrVendedor()
+    const { error, organizationId, userId, role, session } = await requireAdminOrVendedor()
     if (error) return error
 
     if (role !== "ADMIN") {
@@ -114,12 +115,12 @@ export async function POST(
     }
 
     // Obtener venta y verificar org
-    const { data: venta, error: fetchError } = await supabaseAdmin
-      .from("ventas")
-      .select("*")
-      .eq("id", ventaId)
-      .eq("organization_id", organizationId!)
-      .single()
+    const filtro = await sucursalParaLectura({ role, userSucursalId: (session!.user as any).sucursalId ?? null })
+    let ventaQuery = supabaseAdmin.from("ventas").select("*").eq("id", ventaId).eq("organization_id", organizationId!)
+    if (!filtro.verTodas && filtro.sucursalId) {
+      ventaQuery = ventaQuery.eq("sucursal_id", filtro.sucursalId)
+    }
+    const { data: venta, error: fetchError } = await ventaQuery.single()
 
     if (fetchError || !venta) {
       return NextResponse.json({ error: "Venta no encontrada" }, { status: 404 })
