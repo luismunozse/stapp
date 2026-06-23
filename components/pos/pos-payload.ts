@@ -89,7 +89,9 @@ export function buildVentaPayload(input: BuildVentaPayloadInput): VentaPayload {
         ...(p.referencia && { referencia: p.referencia }),
         ...(p.cuotas && { cuotas: p.cuotas }),
         ...(p.recargo && p.recargo > 0 && { recargo: p.recargo }),
-        ...(p.recargo && p.recargo > 0 && { montoOriginal: p.monto + p.monto * (p.recargo / 100) }),
+        // monto_original queda deprecado: `monto` es la base y `recargo` el %;
+        // el total con recargo se deriva (monto + monto*recargo/100). No se escribe
+        // el valor invertido que tenia antes (guardaba el total con recargo).
       })),
     }),
   }
