@@ -95,6 +95,14 @@ export async function GET(request: Request) {
       }
     }
 
+    // Fetch org flag for ENTREGADO_SIN_REPARACION commission behavior
+    const { data: orgFlagData } = await supabaseAdmin
+      .from("organizations")
+      .select("comision_aplica_sin_reparacion")
+      .eq("id", organizationId!)
+      .single()
+    const comisionAplicaSinReparacion = orgFlagData?.comision_aplica_sin_reparacion ?? false
+
     // ========================================
     // 2. SERVICIOS (órdenes) — modelo HÍBRIDO devengado + cobros adelantados
     // ========================================
@@ -166,7 +174,8 @@ export async function GET(request: Request) {
 
       // Comisión técnico sobre ganancia devengada (costo_final completo, no neto).
       // El % es contractual y se devenga con el trabajo, no con el cobro.
-      if (o.tecnico_id && costoFinal > 0 && o.estado !== "ENTREGADO_SIN_COBRO") {
+      // ENTREGADO_SIN_REPARACION only generates commission when the org flag is enabled.
+      if (o.tecnico_id && costoFinal > 0 && o.estado !== "ENTREGADO_SIN_COBRO" && (o.estado !== "ENTREGADO_SIN_REPARACION" || comisionAplicaSinReparacion)) {
         const pct = parseFloat(o.porcentaje_comision || "0")
         if (pct > 0) {
           const ganancia = Math.max(0, costoFinal - costoRepO)

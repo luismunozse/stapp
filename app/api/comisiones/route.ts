@@ -21,6 +21,18 @@ export async function GET(request: Request) {
       tecnicoId = userId
     }
 
+    // Fetch org flag before building the query
+    const { data: orgData } = await supabaseAdmin
+      .from("organizations")
+      .select("comision_aplica_sin_reparacion")
+      .eq("id", organizationId!)
+      .single()
+    const comisionAplicaSinReparacion = orgData?.comision_aplica_sin_reparacion ?? false
+
+    const estadosComision = comisionAplicaSinReparacion
+      ? ["REPARADO", "ENTREGADO", "ENTREGADO_SIN_REPARACION"]
+      : ["REPARADO", "ENTREGADO"]
+
     let query = supabaseAdmin
       .from("v_comisiones_ordenes")
       .select(`
@@ -41,7 +53,7 @@ export async function GET(request: Request) {
         fecha_pago_comision
       `)
       .eq("organization_id", organizationId!)
-      .in("estado", ["REPARADO", "ENTREGADO"])
+      .in("estado", estadosComision)
       .eq("estado_cobro", "COBRADO")
       .order("fecha_completado", { ascending: false })
 
