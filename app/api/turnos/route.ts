@@ -260,6 +260,41 @@ export async function POST(request: Request) {
       recurrencia: idx === 0 && data.recurrencia ? data.recurrencia : null,
     }))
 
+    // ── Overlap pre-check (app-layer) ────────────────────────────────────────
+    // Before inserting, verify the técnico has no active turnos overlapping
+    // any of the new rows. We check the widest window: min(inicio) to max(fin).
+    // This avoids N queries for recurrence series.
+    if (tecnicoAsignadoId) {
+      const ESTADOS_TERMINALES = ["cancelado", "no_show"]
+      const rangeInicio = rows[0].inicio
+      const rangeFin = rows[rows.length - 1].fin ?? rows[rows.length - 1].inicio
+
+      const { data: conflictos } = await supabaseAdmin
+        .from("turnos")
+        .select("id, inicio, fin, estado")
+        .eq("organization_id", organizationId!)
+        .eq("tecnico_id", tecnicoAsignadoId)
+        .not("estado", "in", `(${ESTADOS_TERMINALES.join(",")})`)
+        .lt("inicio", rangeFin)
+        .gt("fin", rangeInicio)
+
+      if (conflictos && conflictos.length > 0) {
+        const c = conflictos[0]
+        const fechaConflicto = new Date(c.inicio).toLocaleString("es-AR", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+        return NextResponse.json(
+          { error: `El técnico ya tiene un turno en ese horario (${fechaConflicto})` },
+          { status: 409 },
+        )
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     const { data: insertados, error: dbError } = await supabaseAdmin
       .from("turnos")
       .insert(rows)
@@ -270,6 +305,13 @@ export async function POST(request: Request) {
         ordenes_servicio:orden_id (id, numero_orden, codigo_orden)
       `)
 
+    // Catch Postgres exclusion_violation (DB-layer safety net)
+    if (dbError && (dbError as any).code === "23P01") {
+      return NextResponse.json(
+        { error: "El técnico ya tiene un turno en ese horario" },
+        { status: 409 },
+      )
+    }
     if (dbError) throw dbError
     if (!insertados || insertados.length === 0) {
       throw new Error("No se pudo crear el turno")

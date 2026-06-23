@@ -98,10 +98,22 @@ describe("POST /api/turnos — sucursal_id stamp", () => {
       ordenes_servicio: null,
     }]
 
-    const turnosChain = createChainMock(fakeInserted)
-    // Route does: supabaseAdmin.from("turnos").insert(rows).select(...)
-    // The chain: insert() → returns chain, select() → returns chain, await chain → .then resolves
-    // createChainMock already sets .then to resolve with { data: fakeInserted, error: null }
+    // Route now does two operations on "turnos":
+    //   1) SELECT (overlap pre-check) → must return [] (no conflicts)
+    //   2) INSERT → must return fakeInserted
+    // We split the chain so select() and insert() return independent sub-chains.
+    const selectChain = createChainMock([])
+    selectChain.then = (resolve: any, reject?: any) =>
+      Promise.resolve({ data: [], error: null }).then(resolve, reject)
+
+    const insertChain = createChainMock(fakeInserted)
+    insertChain.then = (resolve: any, reject?: any) =>
+      Promise.resolve({ data: fakeInserted, error: null }).then(resolve, reject)
+
+    const turnosChain: any = {
+      select: vi.fn().mockReturnValue(selectChain),
+      insert: vi.fn().mockReturnValue(insertChain),
+    }
 
     mockSupabaseFrom({
       organizations: createChainMock({ modulo_agenda: true }),
