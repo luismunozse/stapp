@@ -59,11 +59,28 @@ export async function GET() {
       }
       if (hastaISO) cobrosQuery = cobrosQuery.lte("created_at", hastaISO)
 
-      const [ventasR, facturasR, cobrosR] = await Promise.all([ventasQuery, facturasQuery, cobrosQuery])
+      let notasCreditoQuery = supabaseAdmin
+        .from("notas_credito")
+        .select("monto")
+        .eq("organization_id", organizationId!)
+        .eq("anulada", false)
+        .gte("fecha", desdeISO)
+      if (!filtro.verTodas && filtro.sucursalId) {
+        notasCreditoQuery = notasCreditoQuery.eq("sucursal_id", filtro.sucursalId)
+      }
+      if (hastaISO) notasCreditoQuery = notasCreditoQuery.lte("fecha", hastaISO)
+
+      const [ventasR, facturasR, cobrosR, notasCreditoR] = await Promise.all([
+        ventasQuery,
+        facturasQuery,
+        cobrosQuery,
+        notasCreditoQuery,
+      ])
 
       const ventas = (ventasR.data || []) as { id: string; total: number }[]
       const facturas = (facturasR.data || []) as { id: string; total: number; orden_id: string }[]
       const cobros = (cobrosR.data || []) as { id: string; monto: number; orden_id: string }[]
+      const notasCredito = (notasCreditoR.data || []) as { monto: number }[]
 
       const ordenesConCobro = new Set(cobros.map((c) => c.orden_id))
       const totalVentas = ventas.reduce((s, v) => s + Number(v.total || 0), 0)
@@ -71,11 +88,12 @@ export async function GET() {
         .filter((f) => !ordenesConCobro.has(f.orden_id))
         .reduce((s, f) => s + Number(f.total || 0), 0)
       const totalCobros = cobros.reduce((s, c) => s + Number(c.monto || 0), 0)
+      const totalNotasCredito = notasCredito.reduce((s, n) => s + Number(n.monto || 0), 0)
 
-      const total = totalVentas + totalFacturas + totalCobros
+      const total = totalVentas + totalFacturas + totalCobros - totalNotasCredito
       const cantidad = ventas.length + facturas.length + cobros.length
 
-      return { total, cantidad }
+      return { total, cantidad, totalNotasCredito }
     }
 
     const [actual, anterior] = await Promise.all([
@@ -102,12 +120,14 @@ export async function GET() {
         total: actual.total,
         cantidad: actual.cantidad,
         promedio: promedioActual,
+        totalNotasCredito: actual.totalNotasCredito,
       },
       mesAnterior: {
         nombre: obtenerNombreMes(new Date(now.getFullYear(), now.getMonth() - 1)),
         total: anterior.total,
         cantidad: anterior.cantidad,
         promedio: promedioAnterior,
+        totalNotasCredito: anterior.totalNotasCredito,
       },
       cambio: {
         porcentaje: Math.round(porcentajeCambio * 10) / 10,

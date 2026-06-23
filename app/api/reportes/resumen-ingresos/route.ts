@@ -158,11 +158,28 @@ export async function GET(request: Request) {
     const totalVentas = (ventas || []).reduce((sum, v) => sum + (v.total || 0), 0)
     const cantidadFacturasNetas = (facturas || []).filter((f) => !ordenesConCobro.has(f.orden_id)).length
 
+    // Notas de crédito — restan del total del período (no por mes, muy complejo)
+    let notasCreditoQuery = supabaseAdmin
+      .from("notas_credito")
+      .select("monto")
+      .eq("organization_id", organizationId!)
+      .eq("anulada", false)
+      .gte("fecha", desdeISO)
+    if (!filtro.verTodas && filtro.sucursalId) {
+      notasCreditoQuery = notasCreditoQuery.eq("sucursal_id", filtro.sucursalId)
+    }
+    const { data: notasCredito } = await notasCreditoQuery
+    const totalNotasCredito = (notasCredito || []).reduce(
+      (sum: number, n: any) => sum + Number(n.monto || 0),
+      0
+    )
+
     return NextResponse.json({
       resumen: {
-        totalIngresos: totalServicios + totalVentas,
+        totalIngresos: totalServicios + totalVentas - totalNotasCredito,
         totalServicios,
         totalVentas,
+        totalNotasCredito,
         cantidadServicios: cantidadFacturasNetas + (cobros?.length || 0),
         cantidadVentas: ventas?.length || 0,
       },

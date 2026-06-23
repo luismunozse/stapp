@@ -74,6 +74,7 @@ export async function GET(request: Request) {
           )
         `)
         .eq("ordenes_servicio.organization_id", organizationId!)
+        .eq("estado_pago", "PAGADO")
         .gte("fecha", fechaDesde.toISOString())
         .order("fecha", { ascending: false })
 
@@ -147,20 +148,42 @@ export async function GET(request: Request) {
       (a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
     )
 
-    // Calcular resumen
+    // Calcular resumen bruto
     const totalVentas = ventasData.reduce((sum, v) => sum + v.monto, 0)
     const totalServiciosFacturas = facturasData.reduce((sum, f) => sum + f.monto, 0)
     const totalServiciosCobros = cobrosData.reduce((sum, c) => sum + c.monto, 0)
     const totalServicios = totalServiciosFacturas + totalServiciosCobros
     const totalDescuentos = ventasData.reduce((sum, v) => sum + v.descuento, 0)
 
+    // Notas de crédito — restan ingresos (mismo período + org + sucursal)
+    let notasCreditoQuery = supabaseAdmin
+      .from("notas_credito")
+      .select("monto")
+      .eq("organization_id", organizationId!)
+      .eq("anulada", false)
+      .gte("fecha", fechaDesde.toISOString())
+
+    if (!filtro.verTodas && filtro.sucursalId) {
+      notasCreditoQuery = notasCreditoQuery.eq("sucursal_id", filtro.sucursalId)
+    }
+    if (fechaHasta) {
+      notasCreditoQuery = notasCreditoQuery.lte("fecha", fechaHasta.toISOString())
+    }
+
+    const { data: notasCredito } = await notasCreditoQuery
+    const totalNotasCredito = (notasCredito || []).reduce(
+      (sum: number, n: any) => sum + parseFloat(n.monto || "0"),
+      0
+    )
+
     return NextResponse.json({
       data: ingresos,
       resumen: {
-        totalGeneral: totalVentas + totalServicios,
+        totalGeneral: totalVentas + totalServicios - totalNotasCredito,
         totalVentas,
         totalServicios,
         totalDescuentos,
+        totalNotasCredito,
         cantidadVentas: ventasData.length,
         cantidadServicios: facturasData.length + cobrosData.length,
         cantidadTotal: ingresos.length,

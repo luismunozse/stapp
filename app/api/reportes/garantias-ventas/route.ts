@@ -123,7 +123,7 @@ export async function GET() {
     // --- Distribución por Días ---
     const diasMap: Record<number, number> = {}
     todasGarantias.forEach((g: any) => {
-      const dias = g.items_venta?.dias_validez || 0
+      const dias = g.dias_validez || 0
       // Bucket into common ranges
       let bucket = dias
       if (dias <= 0) bucket = 0
