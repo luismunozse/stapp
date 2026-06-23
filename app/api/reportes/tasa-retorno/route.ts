@@ -33,11 +33,13 @@ export async function GET() {
     }
 
     // Obtener órdenes de los últimos 6 meses agrupadas por cliente
+    // Exclude CANCELADO: cancelled orders should not count toward return-rate calculation
     let ordenesQuery = supabaseAdmin
       .from("ordenes_servicio")
       .select("cliente_id")
       .eq("organization_id", organizationId!)
       .gte("fecha_ingreso", seisAtras.toISOString())
+      .neq("estado", "CANCELADO")
 
     if (!filtro.verTodas && filtro.sucursalId) {
       ordenesQuery = ordenesQuery.eq("sucursal_id", filtro.sucursalId)

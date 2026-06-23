@@ -59,8 +59,11 @@ export async function GET() {
         (o) => o.tecnico_id === tecnico.id
       )
 
+      // Numerator: REPARADO | ENTREGADO (classic success) + ENTREGADO_SIN_REPARACION
+      // (tech diagnosed and returned device — work done, not a failure)
+      const ESTADOS_COMPLETADOS_TECNICO = [...ESTADOS_COMPLETADOS, "ENTREGADO_SIN_REPARACION"] as string[]
       const completadas = ordenesTecnico.filter((o) =>
-        ESTADOS_COMPLETADOS.includes(o.estado)
+        ESTADOS_COMPLETADOS_TECNICO.includes(o.estado)
       )
       const enProceso = ordenesTecnico.filter((o) =>
         ESTADOS_ACTIVOS.includes(o.estado)
@@ -80,8 +83,9 @@ export async function GET() {
           ? tiemposReparacion.reduce((a, b) => a + b, 0) / tiemposReparacion.length
           : null
 
-      // Tasa de completado
-      const totalOrdenes = ordenesTecnico.length
+      // Tasa de completado:
+      // Denominator excludes CANCELADO (cancellation is not the tech's failure to complete)
+      const totalOrdenes = ordenesTecnico.filter((o) => o.estado !== "CANCELADO").length
       const tasaCompletado =
         totalOrdenes > 0 ? (completadas.length / totalOrdenes) * 100 : 0
 
