@@ -63,9 +63,10 @@ export async function POST(request: Request) {
     const { title, message, target, organizationIds, roles, actionUrl } = parsed.data
 
     // Idempotencia por contenido + ventana: rechaza un broadcast idéntico
-    // (mismo título/cuerpo/target) enviado hace menos de 60s. Cubre el
-    // doble-click y los retries de red sin necesidad de una idempotency key.
-    const sixtySecAgo = new Date(Date.now() - 60_000).toISOString()
+    // (mismo título/cuerpo/target) enviado hace menos de 5 minutos. Cubre el
+    // doble-click y los retries de red / backoff lento sin necesidad de una
+    // idempotency key.
+    const sixtySecAgo = new Date(Date.now() - 300_000).toISOString()
     const { data: recentDup } = await supabaseAdmin
       .from("broadcasts")
       .select("id")
