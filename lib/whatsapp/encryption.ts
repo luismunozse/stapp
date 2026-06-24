@@ -4,10 +4,22 @@ const ALGORITHM = "aes-256-gcm"
 const IV_LENGTH = 16
 const TAG_LENGTH = 16
 
+let warnedWeakKey = false
+
 function getEncryptionKey(): Buffer {
   const key = process.env.WHATSAPP_ENCRYPTION_KEY
   if (!key) {
     throw new Error("WHATSAPP_ENCRYPTION_KEY no configurada")
+  }
+  // Aviso (una vez) si la passphrase es debil: SHA-256 de una clave corta produce
+  // 32 bytes pero con baja entropia, recuperable por fuerza bruta si la DB se
+  // compromete. No rompemos el deploy (fail-open) para no sacar de servicio a
+  // instancias existentes; se recomienda >= 32 caracteres aleatorios.
+  if (key.length < 32 && !warnedWeakKey) {
+    warnedWeakKey = true
+    console.warn(
+      `[whatsapp/encryption] WHATSAPP_ENCRYPTION_KEY es debil (${key.length} chars). Usar >= 32 chars aleatorios.`
+    )
   }
   // Usar SHA-256 del key para garantizar 32 bytes
   return crypto.createHash("sha256").update(key).digest()
