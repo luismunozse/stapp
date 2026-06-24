@@ -158,6 +158,16 @@ export async function middleware(request: NextRequest) {
   // Headers para pasar contexto
   const requestHeaders = new Headers(request.headers)
 
+  // SEGURIDAD: borrar los headers internos que SOLO este middleware tiene derecho
+  // a setear (tras validar JWT/subdominio). Si no se borran aca, un cliente puede
+  // inyectarlos desde afuera y, en los paths que no los reescriben (p. ej. el
+  // dominio principal sin subdominio), requireSuperadmin() los confiaria -> bypass.
+  // Se borran ANTES de cualquier branch; los paths legitimos los vuelven a setear.
+  requestHeaders.delete("x-superadmin-panel")
+  requestHeaders.delete("x-superadmin-email")
+  requestHeaders.delete("x-user-id")
+  requestHeaders.delete("x-tenant-slug")
+
   // Rate limiting para rutas API
   if (pathname.startsWith("/api/") && !isExemptFromRateLimit(pathname)) {
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown"
