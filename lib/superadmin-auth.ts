@@ -80,8 +80,15 @@ export async function requireSuperadmin() {
     }
   }
 
-  // Verificar IP whitelist
-  const clientIp = headersList.get("x-forwarded-for")?.split(",")[0]?.trim() || null
+  // Verificar IP whitelist.
+  // x-vercel-forwarded-for lo setea el CDN de Vercel y no es spoofable por el
+  // cliente. El PRIMER valor de x-forwarded-for SÍ es inyectable, asi que como
+  // fallback usamos el ULTIMO valor de la cadena (el que agrega el proxy mas
+  // cercano), nunca el primero.
+  const xff = headersList.get("x-forwarded-for")
+  const clientIp =
+    headersList.get("x-vercel-forwarded-for")?.trim() ||
+    (xff ? xff.split(",").map((s) => s.trim()).filter(Boolean).pop() ?? null : null)
   if (!isIpWhitelisted(clientIp)) {
     return {
       error: NextResponse.json({ error: "IP no autorizada" }, { status: 403 }),
