@@ -1,5 +1,6 @@
 import NextAuth, { CredentialsSignin } from "next-auth"
 import Credentials from "next-auth/providers/credentials"
+import { sanitizeName, sanitizeAvatarUrl } from "@/lib/sanitize-profile"
 
 // NextAuth v5: cuando authorize() tira `throw new Error("CODE")`, el mensaje
 // queda atrapado dentro de CallbackRouteError y el cliente nunca lo ve — recibe
@@ -459,10 +460,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const sessionData = session as { name?: string; avatar?: string | null } | undefined
 
         if (sessionData?.name) {
-          token.name = sessionData.name
+          const safeName = sanitizeName(sessionData.name)
+          if (safeName) token.name = safeName
         }
         if (sessionData && "avatar" in sessionData) {
-          token.avatar = sessionData.avatar ?? null
+          // sanitizeAvatarUrl returns null for javascript:, data:, etc.
+          token.avatar = sanitizeAvatarUrl(sessionData.avatar) ?? null
         }
 
         // Si no vino data explícita (o vino incompleta), refetch desde BD
