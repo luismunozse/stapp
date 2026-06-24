@@ -198,11 +198,15 @@ export async function GET() {
     // --- Descuentos Otorgados ---
     const ventasConDescuento = ventasMesCompletadas.filter(v => (v.descuento || 0) > 0)
     const totalDescuentos = ventasMesCompletadas.reduce((s, v) => s + (v.descuento || 0), 0)
+    // BUG-8 fix: promedioDescuento is the average discount AMOUNT per sale
+    // (totalDescuentos / ventasCount), not "discounts as % of total revenue".
+    // The old formula (totalDescuentos / ventasMesData.total) * 100 was a revenue-ratio,
+    // not a per-sale average, which contradicts the "promedio" label.
     const descuentosOtorgados = {
       totalDescuentos,
       cantidadConDescuento: ventasConDescuento.length,
       promedioDescuento: ventasMesCompletadas.length > 0
-        ? (totalDescuentos / ventasMesData.total) * 100
+        ? totalDescuentos / ventasMesCompletadas.length
         : 0,
     }
 
