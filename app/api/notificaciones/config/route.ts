@@ -1,11 +1,18 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { PLANTILLAS_CATALOG } from "@/lib/whatsapp/plantillas-catalog"
 import { z } from "zod"
 
-// Acepta cualquier key del catálogo de plantillas. La validación de keys
-// válidas se hace en el front (el catálogo es source of truth).
-const plantillasSchema = z.record(z.string(), z.string().max(4000)).optional()
+// Las keys deben existir en el catálogo de plantillas (validación server-side, no
+// solo en el front): evita persistir keys arbitrarias en plantillas_whatsapp JSONB.
+const VALID_PLANTILLA_KEYS = new Set(PLANTILLAS_CATALOG.map((p) => p.key))
+const plantillasSchema = z
+  .record(z.string(), z.string().max(4000))
+  .refine((obj) => Object.keys(obj).every((k) => VALID_PLANTILLA_KEYS.has(k)), {
+    message: "Clave de plantilla no válida",
+  })
+  .optional()
 
 const configSchema = z.object({
   notificacionesEmail: z.boolean().optional(),
