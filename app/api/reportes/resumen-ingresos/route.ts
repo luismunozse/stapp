@@ -24,7 +24,7 @@ export async function GET(request: Request) {
     let facturasQuery = supabaseAdmin
       .from("facturas")
       .select(`
-        id, total, fecha, orden_id,
+        id, total, subtotal, iva, fecha, orden_id,
         ordenes_servicio!inner (
           id, organization_id, sucursal_id, tipo_dispositivo, dispositivo,
           tipos_dispositivo:tipo_dispositivo_id(nombre)
@@ -43,7 +43,7 @@ export async function GET(request: Request) {
     // Ventas completadas (branch-filtered directly)
     let ventasQuery = supabaseAdmin
       .from("ventas")
-      .select("id, total, created_at")
+      .select("id, total, iva_neto, iva_monto, created_at")
       .eq("organization_id", organizationId!)
       .eq("estado", "COMPLETADA")
       .gte("created_at", desdeISO)
@@ -90,19 +90,22 @@ export async function GET(request: Request) {
       if (ordenesConCobro.has(f.orden_id)) continue
       const fecha = new Date(f.fecha)
       const key = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}`
-      if (ingresosPorMes[key]) ingresosPorMes[key].servicios += f.total || 0
+      // NET: subtotal (== total when no IVA — EXENTO no-op)
+      if (ingresosPorMes[key]) ingresosPorMes[key].servicios += Number((f as any).subtotal || f.total || 0)
     }
 
     for (const c of (cobros || []) as any[]) {
       const fecha = new Date(c.created_at)
       const key = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}`
+      // Direct order payments: no IVA breakdown — kept at gross (face value)
       if (ingresosPorMes[key]) ingresosPorMes[key].servicios += Number(c.monto || 0)
     }
 
     for (const v of ventas || []) {
       const fecha = new Date(v.created_at)
       const key = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}`
-      if (ingresosPorMes[key]) ingresosPorMes[key].ventas += v.total || 0
+      // NET: COALESCE(iva_neto, total) — iva_neto is NULL for EXENTO/legacy (no-op)
+      if (ingresosPorMes[key]) ingresosPorMes[key].ventas += Number((v as any).iva_neto ?? v.total ?? 0)
     }
 
     const porMes = Object.entries(ingresosPorMes)
@@ -129,7 +132,8 @@ export async function GET(request: Request) {
       const tipoDisp = orden?.tipos_dispositivo as any
       const label = getDeviceTypeLabel(tipo, tipoDisp?.nombre)
       const existing = dispositivoMap.get(label) || { total: 0, cantidad: 0 }
-      existing.total += f.total || 0
+      // NET: subtotal (== total when no IVA — EXENTO no-op)
+      existing.total += Number((f as any).subtotal || f.total || 0)
       existing.cantidad++
       dispositivoMap.set(label, existing)
     }
@@ -149,14 +153,20 @@ export async function GET(request: Request) {
       .map(([tipo, data]) => ({ tipo, total: data.total, cantidad: data.cantidad }))
       .sort((a, b) => b.total - a.total)
 
-    // Totals
-    const totalFacturas = (facturas || [])
-      .filter((f) => !ordenesConCobro.has(f.orden_id))
-      .reduce((sum, f) => sum + (f.total || 0), 0)
+    // NET totals (IVA collected is a fiscal liability, not income)
+    const facturasNetas = (facturas || []).filter((f) => !ordenesConCobro.has(f.orden_id))
+    const totalFacturas = facturasNetas.reduce((sum, f) => sum + Number((f as any).subtotal || f.total || 0), 0)
     const totalCobros = (cobros || []).reduce((sum: number, c: any) => sum + Number(c.monto || 0), 0)
     const totalServicios = totalFacturas + totalCobros
-    const totalVentas = (ventas || []).reduce((sum, v) => sum + (v.total || 0), 0)
-    const cantidadFacturasNetas = (facturas || []).filter((f) => !ordenesConCobro.has(f.orden_id)).length
+    const totalVentas = (ventas || []).reduce(
+      (sum, v) => sum + Number((v as any).iva_neto ?? v.total ?? 0),
+      0
+    )
+    const cantidadFacturasNetas = facturasNetas.length
+    // IVA breakdown: facturas iva + ventas iva_monto; cobros_orden have no breakdown
+    const totalIvaFacturas = facturasNetas.reduce((sum, f) => sum + Number((f as any).iva || 0), 0)
+    const totalIvaVentas = (ventas || []).reduce((sum, v) => sum + Number((v as any).iva_monto || 0), 0)
+    const totalIva = totalIvaFacturas + totalIvaVentas
 
     // Notas de crédito — restan del total del período (no por mes, muy complejo)
     let notasCreditoQuery = supabaseAdmin
@@ -176,9 +186,11 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       resumen: {
+        // NET income (base imponible) after notas de crédito
         totalIngresos: totalServicios + totalVentas - totalNotasCredito,
         totalServicios,
         totalVentas,
+        totalIva,
         totalNotasCredito,
         cantidadServicios: cantidadFacturasNetas + (cobros?.length || 0),
         cantidadVentas: ventas?.length || 0,
