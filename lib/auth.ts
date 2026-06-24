@@ -379,6 +379,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           }
           const totpResult = await verifyUserTotpCode(user.id, providedCode)
           if (!totpResult.valid) {
+            // Incrementar intentos fallidos para account lockout: un 2FA inválido
+            // es un intento de login fallido. Sin esto, con la password correcta se
+            // podían rociar los 10^6 códigos TOTP sin que la cuenta se bloqueara.
+            Promise.resolve(supabaseAdmin.rpc("handle_failed_login", { p_email: user.email })).catch(() => {})
             // Loguear como intento fallido (cuenta correcta, segundo factor inválido)
             logLoginEvent({
               userId: user.id,
