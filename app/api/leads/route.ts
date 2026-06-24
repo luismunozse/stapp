@@ -5,7 +5,7 @@ import { z } from "zod"
 
 export async function GET(request: Request) {
   try {
-    const { error } = await requireAuth()
+    const { error, organizationId } = await requireAuth()
     if (error) return error
 
     const { searchParams } = new URL(request.url)
@@ -19,11 +19,12 @@ export async function GET(request: Request) {
       .select(
         `
         *,
-        organization:organizations(*),
-        assigned_user:users(*)
+        organization:organizations(id, nombre),
+        assigned_user:users(id, nombre, email, rol)
       `,
         { count: "exact" }
       )
+      .eq("organization_id", organizationId!)
       .order("created_at", { ascending: false })
       .range(offset, offset + limit - 1)
 
@@ -54,12 +55,11 @@ const updateLeadSchema = z.object({
   estado: z.enum(["NUEVO", "CONTACTADO", "CALIFICADO", "CONVERTIDO", "DESCARTADO"]).optional(),
   notas: z.string().optional(),
   assigned_to: z.string().optional().nullable(),
-  organization_id: z.string().optional().nullable(),
 })
 
 export async function PATCH(request: Request) {
   try {
-    const { error } = await requireAuth()
+    const { error, organizationId } = await requireAuth()
     if (error) return error
 
     const { searchParams } = new URL(request.url)
@@ -76,6 +76,7 @@ export async function PATCH(request: Request) {
       .from("leads")
       .update(data)
       .eq("id", leadId)
+      .eq("organization_id", organizationId!)
       .select()
       .single()
 

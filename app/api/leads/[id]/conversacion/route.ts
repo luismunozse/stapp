@@ -4,10 +4,22 @@ import { supabaseAdmin } from "@/lib/supabase"
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { error } = await requireAuth()
+    const { error, organizationId } = await requireAuth()
     if (error) return error
 
     const { id: leadId } = await params
+
+    // Verificar que el lead pertenece a la organización del usuario (evita IDOR cross-tenant)
+    const { data: lead } = await supabaseAdmin
+      .from("leads")
+      .select("id")
+      .eq("id", leadId)
+      .eq("organization_id", organizationId!)
+      .single()
+
+    if (!lead) {
+      return NextResponse.json({ error: "Conversación no encontrada" }, { status: 404 })
+    }
 
     // Obtener conversación del lead
     const { data: conversacion, error: convError } = await supabaseAdmin
