@@ -83,7 +83,7 @@ describe("POST /api/whatsapp/send", () => {
     mockAuthSuccess()
     vi.mocked(sendWhatsAppText).mockResolvedValueOnce({ success: false, error: "Invalid phone", provider: "meta" })
 
-    const response = await POST(createPostRequest({ phoneNumber: "invalid", message: "test" }))
+    const response = await POST(createPostRequest({ phoneNumber: "+5491155554444", message: "test" }))
     const { status, body } = await parseResponse(response)
     expect(status).toBe(400)
     expect(body.success).toBe(false)
