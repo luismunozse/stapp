@@ -23,10 +23,13 @@ export async function GET(request: Request) {
     const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
 
     // Obtener problemas reportados y diagnósticos
+    // BUG-9 fix: exclude CANCELADO so the denominator (ordenes.length) only counts
+    // real orders — consistent with top-clientes/tasa-retorno fixes (PR #143).
     let query = supabaseAdmin
       .from("ordenes_servicio")
       .select("problema_reportado, diagnostico, tipo_dispositivo")
       .eq("organization_id", organizationId!)
+      .neq("estado", "CANCELADO")
 
     if (!filtro.verTodas && filtro.sucursalId) {
       query = query.eq("sucursal_id", filtro.sucursalId)
