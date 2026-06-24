@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { createHmac, timingSafeEqual } from "crypto"
 import { supabaseAdmin } from "@/lib/supabase"
 
 // GET: Verificación del webhook por Meta
@@ -30,10 +31,45 @@ export async function GET(request: Request) {
   })
 }
 
+/**
+ * Verify Meta's X-Hub-Signature-256 HMAC signature.
+ * Returns true only when the signature matches.
+ * Exported for unit-testing.
+ */
+export function verifyMetaSignature(rawBody: string, signatureHeader: string, appSecret: string): boolean {
+  const expected = createHmac("sha256", appSecret).update(rawBody).digest("hex")
+  const received = signatureHeader.startsWith("sha256=") ? signatureHeader.slice(7) : signatureHeader
+
+  // Guard equal length before timingSafeEqual (it throws on length mismatch)
+  if (expected.length !== received.length) return false
+
+  return timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(received, "hex"))
+}
+
 // POST: Recibir eventos de WhatsApp (status updates, mensajes entrantes)
 export async function POST(request: Request) {
+  // ── Fix 1: HMAC signature verification ──────────────────────────────────
+  const appSecret = process.env.WHATSAPP_APP_SECRET
+  if (!appSecret) {
+    console.error("[whatsapp/webhook] WHATSAPP_APP_SECRET is not configured — refusing to process")
+    return NextResponse.json({ error: "Webhook not configured" }, { status: 503 })
+  }
+
+  const signatureHeader = request.headers.get("x-hub-signature-256")
+  if (!signatureHeader) {
+    return NextResponse.json({ error: "Missing signature" }, { status: 401 })
+  }
+
+  // Read raw body ONCE — needed for both HMAC verification and JSON parsing
+  const rawBody = await request.text()
+
+  if (!verifyMetaSignature(rawBody, signatureHeader, appSecret)) {
+    return NextResponse.json({ error: "Invalid signature" }, { status: 401 })
+  }
+  // ────────────────────────────────────────────────────────────────────────
+
   try {
-    const body = await request.json()
+    const body = JSON.parse(rawBody)
 
     // Procesar cada entry
     const entries = body.entry || []
@@ -87,12 +123,36 @@ async function processIncomingMessage(
   from: string,
   text: string
 ) {
-  const normalizedText = text.trim().toLowerCase()
-  const affirmativeWords = ["si", "sí", "dale", "ok", "aprobado", "acepto", "aprobar", "confirmo"]
+  // ── Fix 2: word-boundary affirmative matching ──────────────────────────
+  // Normalize: lowercase, strip diacritics, then tokenize on non-letter chars.
+  // A word is affirmative only when it is an EXACT token match, not a substring.
+  const normalized = text
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "") // strip combining diacritics (e.g. í → i)
 
-  if (!affirmativeWords.some((w) => normalizedText.includes(w))) {
-    return // No es una respuesta afirmativa
+  const tokens = normalized.split(/[^a-z]+/).filter(Boolean)
+
+  // "sí" normalizes to "si" via NFD accent stripping above — no need to list both
+  const affirmativeWords = ["si", "dale", "ok", "aprobado", "acepto", "aprobar", "confirmo"]
+
+  // A token is affirmative only when it is an exact match AND neither of the
+  // two preceding tokens is a negation/hedging word.
+  // "casi" (= almost) is treated as a hedge. Checking a 2-token window handles
+  // "casi lo confirmo" (casi is 2 positions before confirmo).
+  const negationWords = ["no", "nunca", "jamas", "tampoco", "casi"]
+  const hasAffirmative = tokens.some((token, idx) => {
+    if (!affirmativeWords.includes(token)) return false
+    const window = tokens.slice(Math.max(0, idx - 2), idx)
+    if (window.some((t) => negationWords.includes(t))) return false
+    return true
+  })
+
+  if (!hasAffirmative) {
+    return // Not an affirmative response
   }
+  // ────────────────────────────────────────────────────────────────────────
 
   // Buscar la organización por phone_number_id
   const { data: config } = await supabaseAdmin
@@ -106,13 +166,18 @@ async function processIncomingMessage(
   // Limpiar número para buscar cliente
   const cleanPhone = from.replace(/^54/, "").replace(/^15/, "")
 
-  // Buscar cliente por teléfono
+  // ── Fix 3: ends-with phone match to reduce false collisions ─────────────
+  // Using ends-with (%cleanPhone) instead of contains (%cleanPhone%) so that
+  // "1100000000" doesn't match a number like "2211000000009". This is
+  // minimal and safe: stored phones are normalized without country prefix,
+  // so the subscriber's digits always appear at the END of the stored value.
   const { data: clientes } = await supabaseAdmin
     .from("clientes")
     .select("id")
     .eq("organization_id", config.organization_id)
-    .or(`telefono.ilike.%${cleanPhone}%`)
+    .or(`telefono.ilike.%${cleanPhone}`)
     .limit(1)
+  // ────────────────────────────────────────────────────────────────────────
 
   if (!clientes || clientes.length === 0) return
 
