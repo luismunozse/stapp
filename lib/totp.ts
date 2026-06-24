@@ -146,6 +146,30 @@ export async function verifyUserTotpCode(
   // 1) Intentar TOTP (6 dígitos)
   if (/^\d{6}$/.test(trimmed)) {
     if (verifyTOTP(secret, trimmed)) {
+      // Best-effort purge of expired used-code records (older than 2 minutes)
+      const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString()
+      await supabaseAdmin
+        .from("totp_used_codes")
+        .delete()
+        .eq("user_id", userId)
+        .lt("used_at", twoMinutesAgo)
+
+      // Atomic claim: insert the used code to prevent replay within validity window
+      const { error: claimErr } = await supabaseAdmin
+        .from("totp_used_codes")
+        .insert({ user_id: userId, code: trimmed })
+
+      if (claimErr) {
+        if (claimErr.code === "23505") {
+          // Unique violation: code was already used — replay rejected
+          return { valid: false }
+        }
+        // Transient DB error: log and fail open (defense-in-depth; TOTP itself was valid).
+        // We prioritize not locking out legitimate users over strict replay prevention
+        // on transient infrastructure errors.
+        console.error("[totp] replay-table insert error (non-fatal):", claimErr)
+      }
+
       return { valid: true }
     }
   }
