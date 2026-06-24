@@ -239,7 +239,7 @@ async function exportGarantias(
       )
     `
     )
-    .eq("orden.organization_id", organizationId)
+    .eq("ordenes_servicio.organization_id", organizationId)
     .order("fecha_vencimiento", { ascending: true })
     .limit(10000)
 
