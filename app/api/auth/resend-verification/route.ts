@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import crypto from "crypto"
 import { sendVerificationEmail } from "@/lib/email"
+import { persistentRateLimit } from "@/lib/rate-limit"
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,6 +12,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Email requerido" },
         { status: 400 }
+      )
+    }
+
+    // Rate limit per target email: 3 requests per hour.
+    // Keyed by email (not IP) to protect the victim's inbox regardless of
+    // the attacker's IP, and to prevent account-existence probing at scale.
+    const normalizedEmail = email.toLowerCase().trim()
+    const rl = await persistentRateLimit(
+      normalizedEmail,
+      "auth:resend-verification",
+      3,
+      3600
+    )
+    if (!rl.success) {
+      return NextResponse.json(
+        { error: "Demasiadas solicitudes. Intentá de nuevo más tarde." },
+        { status: 429 }
       )
     }
 

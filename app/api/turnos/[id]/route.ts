@@ -135,11 +135,39 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       }
     }
 
-    if (actual.orden_id && data.estado && data.estado !== "realizado") {
-      return NextResponse.json(
-        { error: "Turno ya tiene orden generada; no se puede cambiar estado" },
-        { status: 400 },
-      )
+    // Estado state machine
+    const TERMINAL_ESTADOS = new Set(["cancelado", "no_show"])
+    const ALLOWED_TRANSITIONS: Record<string, Set<string>> = {
+      agendado:       new Set(["confirmado", "en_camino", "realizado", "cancelado", "no_show"]),
+      confirmado:     new Set(["en_camino", "realizado", "cancelado", "no_show"]),
+      en_camino:      new Set(["realizado", "cancelado", "no_show"]),
+      realizado:      new Set(["cancelado"]),
+      cancelado:      new Set(),
+      no_show:        new Set(),
+      orden_generada: new Set(),
+    }
+
+    if (data.estado) {
+      const currentEstado = actual.estado as string
+      const allowed = ALLOWED_TRANSITIONS[currentEstado] ?? new Set()
+      if (!allowed.has(data.estado)) {
+        if (TERMINAL_ESTADOS.has(currentEstado)) {
+          return NextResponse.json(
+            { error: `El turno está en estado '${currentEstado}' y no puede cambiar de estado` },
+            { status: 400 },
+          )
+        }
+        if (currentEstado === "orden_generada") {
+          return NextResponse.json(
+            { error: "Turno ya tiene orden generada; no se puede cambiar estado" },
+            { status: 400 },
+          )
+        }
+        return NextResponse.json(
+          { error: `Transición de estado inválida: ${currentEstado} → ${data.estado}` },
+          { status: 400 },
+        )
+      }
     }
 
     if (data.tecnicoId !== undefined && data.tecnicoId !== null) {

@@ -28,7 +28,7 @@ export async function GET() {
 
       let ventasQuery = supabaseAdmin
         .from("ventas")
-        .select("id, total")
+        .select("id, total, iva_neto, iva_monto")
         .eq("organization_id", organizationId!)
         .eq("estado", "COMPLETADA")
         .gte("created_at", desdeISO)
@@ -39,7 +39,7 @@ export async function GET() {
 
       let facturasQuery = supabaseAdmin
         .from("facturas")
-        .select("id, total, orden_id, ordenes_servicio!inner(organization_id, sucursal_id)")
+        .select("id, total, subtotal, iva, orden_id, ordenes_servicio!inner(organization_id, sucursal_id)")
         .eq("ordenes_servicio.organization_id", organizationId!)
         .eq("estado_pago", "PAGADO")
         .gte("fecha", desdeISO)
@@ -59,23 +59,50 @@ export async function GET() {
       }
       if (hastaISO) cobrosQuery = cobrosQuery.lte("created_at", hastaISO)
 
-      const [ventasR, facturasR, cobrosR] = await Promise.all([ventasQuery, facturasQuery, cobrosQuery])
+      let notasCreditoQuery = supabaseAdmin
+        .from("notas_credito")
+        .select("monto")
+        .eq("organization_id", organizationId!)
+        .eq("anulada", false)
+        .gte("fecha", desdeISO)
+      if (!filtro.verTodas && filtro.sucursalId) {
+        notasCreditoQuery = notasCreditoQuery.eq("sucursal_id", filtro.sucursalId)
+      }
+      if (hastaISO) notasCreditoQuery = notasCreditoQuery.lte("fecha", hastaISO)
 
-      const ventas = (ventasR.data || []) as { id: string; total: number }[]
-      const facturas = (facturasR.data || []) as { id: string; total: number; orden_id: string }[]
+      const [ventasR, facturasR, cobrosR, notasCreditoR] = await Promise.all([
+        ventasQuery,
+        facturasQuery,
+        cobrosQuery,
+        notasCreditoQuery,
+      ])
+
+      const ventas = (ventasR.data || []) as { id: string; total: number; iva_neto?: number | null; iva_monto?: number | null }[]
+      const facturas = (facturasR.data || []) as { id: string; total: number; subtotal?: number; iva?: number | null; orden_id: string }[]
       const cobros = (cobrosR.data || []) as { id: string; monto: number; orden_id: string }[]
+      const notasCredito = (notasCreditoR.data || []) as { monto: number }[]
 
       const ordenesConCobro = new Set(cobros.map((c) => c.orden_id))
-      const totalVentas = ventas.reduce((s, v) => s + Number(v.total || 0), 0)
+      // NET: COALESCE(iva_neto, total) — iva_neto is NULL for EXENTO/legacy (no-op)
+      const totalVentas = ventas.reduce((s, v) => s + Number(v.iva_neto ?? v.total ?? 0), 0)
+      // NET: subtotal (== total when no IVA — EXENTO no-op)
       const totalFacturas = facturas
         .filter((f) => !ordenesConCobro.has(f.orden_id))
-        .reduce((s, f) => s + Number(f.total || 0), 0)
+        .reduce((s, f) => s + Number(f.subtotal || f.total || 0), 0)
+      // Direct order payments: no IVA breakdown — kept at gross (face value)
       const totalCobros = cobros.reduce((s, c) => s + Number(c.monto || 0), 0)
+      const totalNotasCredito = notasCredito.reduce((s, n) => s + Number(n.monto || 0), 0)
+      // IVA breakdown: ventas iva_monto + facturas iva; cobros_orden have no breakdown
+      const totalIvaVentas = ventas.reduce((s, v) => s + Number(v.iva_monto || 0), 0)
+      const totalIvaFacturas = facturas
+        .filter((f) => !ordenesConCobro.has(f.orden_id))
+        .reduce((s, f) => s + Number(f.iva || 0), 0)
+      const totalIva = totalIvaVentas + totalIvaFacturas
 
-      const total = totalVentas + totalFacturas + totalCobros
+      const total = totalVentas + totalFacturas + totalCobros - totalNotasCredito
       const cantidad = ventas.length + facturas.length + cobros.length
 
-      return { total, cantidad }
+      return { total, cantidad, totalNotasCredito, totalIva }
     }
 
     const [actual, anterior] = await Promise.all([
@@ -99,15 +126,21 @@ export async function GET() {
     return NextResponse.json({
       mesActual: {
         nombre: obtenerNombreMes(now),
+        // NET income (base imponible) after notas de crédito
         total: actual.total,
+        totalIva: actual.totalIva,
         cantidad: actual.cantidad,
         promedio: promedioActual,
+        totalNotasCredito: actual.totalNotasCredito,
       },
       mesAnterior: {
         nombre: obtenerNombreMes(new Date(now.getFullYear(), now.getMonth() - 1)),
+        // NET income (base imponible) after notas de crédito
         total: anterior.total,
+        totalIva: anterior.totalIva,
         cantidad: anterior.cantidad,
         promedio: promedioAnterior,
+        totalNotasCredito: anterior.totalNotasCredito,
       },
       cambio: {
         porcentaje: Math.round(porcentajeCambio * 10) / 10,

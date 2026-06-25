@@ -43,7 +43,8 @@ export async function GET() {
         modulo_agenda,
         iva_regimen,
         iva_tasa,
-        redondeo_efectivo
+        redondeo_efectivo,
+        comision_aplica_sin_reparacion
       `)
       .eq("id", organizationId!)
       .single()
@@ -100,6 +101,7 @@ export async function GET() {
       ivaRegimen: organization.iva_regimen ?? "EXENTO",
       ivaTasa: organization.iva_tasa ?? 21,
       redondeoEfectivo: organization.redondeo_efectivo ?? 0,
+      comisionAplicaSinReparacion: organization.comision_aplica_sin_reparacion ?? false,
     })
   } catch (error) {
     console.error("Error fetching config:", error)
@@ -123,7 +125,7 @@ export async function PUT(request: Request) {
         { status: 413 }
       )
     }
-    const { logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, ivaRegimen, ivaTasa, redondeoEfectivo } = body
+    const { logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, ivaRegimen, ivaTasa, redondeoEfectivo, comisionAplicaSinReparacion } = body
 
     const updateData: Record<string, any> = {}
 
@@ -281,7 +283,11 @@ export async function PUT(request: Request) {
       }
     }
 
-    const selectCols = "id, logo_url, logo_path, nombre_mostrar, telefono, direccion, ciudad, provincia, codigo_postal, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, garantia_dias_default, politica_abandono_dias_default, anticipo_porcentaje_default, pais, modulo_agenda, iva_regimen, iva_tasa, redondeo_efectivo"
+    if (comisionAplicaSinReparacion !== undefined) {
+      updateData.comision_aplica_sin_reparacion = !!comisionAplicaSinReparacion
+    }
+
+    const selectCols = "id, logo_url, logo_path, nombre_mostrar, telefono, direccion, ciudad, provincia, codigo_postal, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, garantia_dias_default, politica_abandono_dias_default, anticipo_porcentaje_default, pais, modulo_agenda, iva_regimen, iva_tasa, redondeo_efectivo, comision_aplica_sin_reparacion"
     const selectColsFull = selectCols + ", recepcion_terminos, comprobante_terminos"
 
     // Solo actualizar si hay cambios
@@ -319,6 +325,7 @@ export async function PUT(request: Request) {
         ivaRegimen: org?.iva_regimen ?? "EXENTO",
         ivaTasa: org?.iva_tasa ?? 21,
         redondeoEfectivo: org?.redondeo_efectivo ?? 0,
+        comisionAplicaSinReparacion: org?.comision_aplica_sin_reparacion ?? false,
       })
     }
 
@@ -338,6 +345,8 @@ export async function PUT(request: Request) {
       delete updateData.iva_regimen
       delete updateData.iva_tasa
       delete updateData.redondeo_efectivo
+      // Strip commission flag (migration 257) in case it doesn't exist yet
+      delete updateData.comision_aplica_sin_reparacion
       const selectColsNoFiscal = "id, logo_url, logo_path, nombre_mostrar, telefono, direccion, ciudad, provincia, codigo_postal, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, garantia_dias_default, politica_abandono_dias_default, anticipo_porcentaje_default, pais, modulo_agenda"
       result2 = await supabaseAdmin
         .from("organizations")
@@ -382,6 +391,7 @@ export async function PUT(request: Request) {
       ivaRegimen: organization.iva_regimen ?? "EXENTO",
       ivaTasa: organization.iva_tasa ?? 21,
       redondeoEfectivo: organization.redondeo_efectivo ?? 0,
+      comisionAplicaSinReparacion: organization.comision_aplica_sin_reparacion ?? false,
     })
   } catch (error: any) {
     console.error("Error updating config:", error)

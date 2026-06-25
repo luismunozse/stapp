@@ -31,7 +31,8 @@ export async function POST(request: Request) {
     // Hashear nueva contraseña
     const hashedPassword = await bcrypt.hash(password, 10)
 
-    // Actualizar contraseña y limpiar token
+    // Actualizar contraseña y limpiar token.
+    // refresh_token: null invalida cualquier sesión PWA activa del atacante.
     await supabaseAdmin
       .from("users")
       .update({
@@ -44,6 +45,9 @@ export async function POST(request: Request) {
         failed_login_attempts: 0,
         locked_until: null,
         last_failed_login: null,
+        // Revoke the PWA refresh token so existing attacker sessions are
+        // immediately invalidated. The column is read by lib/auth.ts ~L137-192.
+        refresh_token: null,
       })
       .eq("id", user.id)
 

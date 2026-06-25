@@ -67,10 +67,18 @@ export async function GET(request: Request) {
 
     const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
 
+    // Fetch org flag for ENTREGADO_SIN_REPARACION commission behavior
+    const { data: orgFlagData } = await supabaseAdmin
+      .from("organizations")
+      .select("comision_aplica_sin_reparacion")
+      .eq("id", organizationId!)
+      .single()
+    const comisionAplicaSinReparacion = orgFlagData?.comision_aplica_sin_reparacion ?? false
+
     let ordenesQuery = supabaseAdmin
       .from("ordenes_servicio")
       .select(`
-        id, tecnico_id, costo_final, porcentaje_comision,
+        id, tecnico_id, costo_final, porcentaje_comision, estado,
         horas_trabajadas, costo_mano_obra,
         tecnico:users!tecnico_id(nombre),
         repuestos_orden (cantidad, precio_unitario),
@@ -127,7 +135,8 @@ export async function GET(request: Request) {
 
       let comision = 0
       const pct = parseFloat(orden.porcentaje_comision || "0")
-      if (ingreso > 0 && pct > 0) {
+      const sinReparacionBloqueado = orden.estado === "ENTREGADO_SIN_REPARACION" && !comisionAplicaSinReparacion
+      if (ingreso > 0 && pct > 0 && !sinReparacionBloqueado) {
         comision = (Math.max(0, ingreso - costoRepuestos) * pct) / 100
       }
 

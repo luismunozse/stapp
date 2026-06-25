@@ -52,9 +52,31 @@ export async function GET(request: Request) {
 
     if (dbError) throw dbError
 
-    const total = facturas?.reduce((sum, f) => sum + f.total, 0) || 0
-    const totalIva = facturas?.reduce((sum, f) => sum + f.iva, 0) || 0
-    const totalSubtotal = facturas?.reduce((sum, f) => sum + f.subtotal, 0) || 0
+    const totalBruto = facturas?.reduce((sum, f) => sum + (f.total || 0), 0) || 0
+    // IVA collected is a fiscal liability — income is NET (base imponible = subtotal)
+    const totalIva = facturas?.reduce((sum, f) => sum + (Number(f.iva) || 0), 0) || 0
+    const totalSubtotal = facturas?.reduce((sum, f) => sum + (Number(f.subtotal) || 0), 0) || 0
+
+    // Notas de crédito — restan ingresos (mismo período + org + sucursal)
+    let notasCreditoQuery = supabaseAdmin
+      .from("notas_credito")
+      .select("monto")
+      .eq("organization_id", organizationId!)
+      .eq("anulada", false)
+      .gte("fecha", fechaDesde.toISOString())
+
+    if (!filtro.verTodas && filtro.sucursalId) {
+      notasCreditoQuery = notasCreditoQuery.eq("sucursal_id", filtro.sucursalId)
+    }
+    if (fechaHasta) {
+      notasCreditoQuery = notasCreditoQuery.lte("fecha", fechaHasta.toISOString())
+    }
+
+    const { data: notasCredito } = await notasCreditoQuery
+    const totalNotasCredito = (notasCredito || []).reduce(
+      (sum: number, n: any) => sum + parseFloat(n.monto || "0"),
+      0
+    )
 
     const facturasFormatted = facturas?.map(f => ({
       id: f.id,
@@ -75,9 +97,12 @@ export async function GET(request: Request) {
     return NextResponse.json({
       facturas: facturasFormatted,
       resumen: {
-        total,
+        // NET income (base imponible) = subtotal sum minus notas de crédito
+        total: totalSubtotal - totalNotasCredito,
+        totalBruto,
         totalIva,
         totalSubtotal,
+        totalNotasCredito,
         cantidad: facturas?.length || 0,
       },
     })

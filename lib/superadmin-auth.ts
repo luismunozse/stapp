@@ -52,9 +52,10 @@ export function isIpWhitelisted(ip: string | null): boolean {
  * Middleware para APIs de superadmin.
  * Valida que la request venga del panel superadmin y que el email sea válido.
  *
- * Seguridad: los headers x-superadmin-* los setea exclusivamente el middleware
- * de Next.js después de validar JWT + email. No se pueden inyectar externamente
- * porque el middleware corre antes que cualquier API route y los sobreescribe.
+ * Seguridad: el middleware de Next.js BORRA los headers x-superadmin-* / x-user-id
+ * entrantes al inicio (antes de cualquier branch) y solo los vuelve a setear en el
+ * path del subdominio admin tras validar JWT + email. Por eso un cliente no puede
+ * inyectarlos desde afuera ni siquiera en rutas que no los reescriben.
  */
 export async function requireSuperadmin() {
   const headersList = await headers()
@@ -79,8 +80,15 @@ export async function requireSuperadmin() {
     }
   }
 
-  // Verificar IP whitelist
-  const clientIp = headersList.get("x-forwarded-for")?.split(",")[0]?.trim() || null
+  // Verificar IP whitelist.
+  // x-vercel-forwarded-for lo setea el CDN de Vercel y no es spoofable por el
+  // cliente. El PRIMER valor de x-forwarded-for SÍ es inyectable, asi que como
+  // fallback usamos el ULTIMO valor de la cadena (el que agrega el proxy mas
+  // cercano), nunca el primero.
+  const xff = headersList.get("x-forwarded-for")
+  const clientIp =
+    headersList.get("x-vercel-forwarded-for")?.trim() ||
+    (xff ? xff.split(",").map((s) => s.trim()).filter(Boolean).pop() ?? null : null)
   if (!isIpWhitelisted(clientIp)) {
     return {
       error: NextResponse.json({ error: "IP no autorizada" }, { status: 403 }),

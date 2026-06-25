@@ -3,6 +3,7 @@ import { Resend } from "resend"
 import { formatDateValue } from "@/lib/timezone"
 import { sendPushToUsers } from "@/lib/push/send"
 import { generateWhatsAppMessage, formatEstado, resolvePlantillaForTipo } from "@/lib/notifications/whatsapp-message"
+import { escapeHtml } from "@/lib/escape-html"
 
 let _resend: Resend | null = null
 function getResend(): Resend {
@@ -319,7 +320,7 @@ function generateInAppContent(
   }
 }
 
-function generateEmailContent(
+export function generateEmailContent(
   tipo: string,
   context: NotificationParams["context"]
 ): { subject: string; html: string } {
@@ -330,19 +331,30 @@ function generateEmailContent(
     padding: 20px;
   `
 
+  // Escape all client-controlled string fields before interpolating into HTML.
+  // Numeric fields (numeroOrden, presupuesto, diasValidez) are left as-is —
+  // they are safe but the escapeHtml wrapper is harmless for strings.
+  const nombre = escapeHtml(context.cliente.nombre)
+  const orgName = escapeHtml(context.organizationName)
+  const dispositivo = escapeHtml(context.orden?.dispositivo)
+  const estado = escapeHtml(formatEstado(context.orden?.estado || ""))
+  const fechaVencimiento = escapeHtml(
+    formatDateValue(context.garantia?.fechaVencimiento ?? "", context.zonaHoraria)
+  )
+
   switch (tipo) {
     case "CAMBIO_ESTADO":
       return {
         subject: `Orden #${context.orden?.numeroOrden} - Estado actualizado`,
         html: `
           <div style="${baseStyle}">
-            <h2>Hola ${context.cliente.nombre}</h2>
+            <h2>Hola ${nombre}</h2>
             <p>Tu orden <strong>#${context.orden?.numeroOrden}</strong> ha cambiado de estado.</p>
             <p>
-              <strong>Dispositivo:</strong> ${context.orden?.dispositivo}<br>
-              <strong>Nuevo estado:</strong> ${formatEstado(context.orden?.estado || "")}
+              <strong>Dispositivo:</strong> ${dispositivo}<br>
+              <strong>Nuevo estado:</strong> ${estado}
             </p>
-            <p>Gracias por confiar en ${context.organizationName}.</p>
+            <p>Gracias por confiar en ${orgName}.</p>
           </div>
         `,
       }
@@ -351,14 +363,14 @@ function generateEmailContent(
         subject: `Orden #${context.orden?.numeroOrden} - Presupuesto definido`,
         html: `
           <div style="${baseStyle}">
-            <h2>Hola ${context.cliente.nombre}</h2>
+            <h2>Hola ${nombre}</h2>
             <p>Se ha definido el presupuesto para tu orden <strong>#${context.orden?.numeroOrden}</strong>.</p>
             <p>
-              <strong>Dispositivo:</strong> ${context.orden?.dispositivo}<br>
+              <strong>Dispositivo:</strong> ${dispositivo}<br>
               <strong>Presupuesto:</strong> $${context.orden?.presupuesto?.toLocaleString()}
             </p>
             <p>Por favor confirma si deseas proceder con la reparación.</p>
-            <p>Gracias por confiar en ${context.organizationName}.</p>
+            <p>Gracias por confiar en ${orgName}.</p>
           </div>
         `,
       }
@@ -367,16 +379,16 @@ function generateEmailContent(
         subject: `Orden #${context.orden?.numeroOrden} - Garantía activa`,
         html: `
           <div style="${baseStyle}">
-            <h2>Hola ${context.cliente.nombre}</h2>
+            <h2>Hola ${nombre}</h2>
             <p>Tu reparación ha sido completada y se ha creado una garantía.</p>
             <p>
               <strong>Orden:</strong> #${context.orden?.numeroOrden}<br>
-              <strong>Dispositivo:</strong> ${context.orden?.dispositivo}<br>
+              <strong>Dispositivo:</strong> ${dispositivo}<br>
               <strong>Días de garantía:</strong> ${context.garantia?.diasValidez}<br>
-              <strong>Vencimiento:</strong> ${formatDateValue(context.garantia?.fechaVencimiento, context.zonaHoraria)}
+              <strong>Vencimiento:</strong> ${fechaVencimiento}
             </p>
             <p>Guarda este correo como comprobante de tu garantía.</p>
-            <p>Gracias por confiar en ${context.organizationName}.</p>
+            <p>Gracias por confiar en ${orgName}.</p>
           </div>
         `,
       }
@@ -385,19 +397,19 @@ function generateEmailContent(
         subject: `Recordatorio: Tu dispositivo está listo para retirar`,
         html: `
           <div style="${baseStyle}">
-            <h2>Hola ${context.cliente.nombre}</h2>
+            <h2>Hola ${nombre}</h2>
             <p>Te recordamos que tu dispositivo ya está listo para ser retirado.</p>
             <p>
               <strong>Orden:</strong> #${context.orden?.numeroOrden}<br>
-              <strong>Dispositivo:</strong> ${context.orden?.dispositivo}
+              <strong>Dispositivo:</strong> ${dispositivo}
             </p>
-            <p>Te esperamos en ${context.organizationName}.</p>
+            <p>Te esperamos en ${orgName}.</p>
           </div>
         `,
       }
     default:
       return {
-        subject: `Notificación de ${context.organizationName}`,
+        subject: `Notificación de ${orgName}`,
         html: `<div style="${baseStyle}"><p>Tienes una nueva notificación.</p></div>`,
       }
   }

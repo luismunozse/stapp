@@ -65,6 +65,11 @@ export async function GET(request: Request) {
         (changes?.action_description as string) ||
         ""
 
+      // Neutralize CSV formula injection in description before quoting
+      const safeDescription = /^[=+\-@\t\r]/.test(description)
+        ? "'" + description
+        : description
+
       csvRows.push(
         [
           log.created_at,
@@ -74,7 +79,7 @@ export async function GET(request: Request) {
           user?.nombre || (changes?.performer_email as string) || "-",
           user?.email || (changes?.performer_email as string) || "-",
           log.ip_address || "-",
-          `"${description.replace(/"/g, '""')}"`,
+          `"${safeDescription.replace(/"/g, '""')}"`,
           log.entity_id || "-",
         ].join(",")
       )

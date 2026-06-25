@@ -38,10 +38,12 @@ export async function GET(request: NextRequest) {
     if (clientesError) throw clientesError
 
     // Query 2: Get ordenes with facturas, branch-filtered directly on ordenes_servicio
+    // Exclude CANCELADO: cancelled orders are not real work and inflate client ranking
     let ordenesQuery = supabaseAdmin
       .from("ordenes_servicio")
       .select("id, cliente_id, fecha_ingreso, facturas(total, estado_pago)")
       .eq("organization_id", organizationId!)
+      .neq("estado", "CANCELADO")
 
     if (!filtro.verTodas && filtro.sucursalId) {
       ordenesQuery = ordenesQuery.eq("sucursal_id", filtro.sucursalId)

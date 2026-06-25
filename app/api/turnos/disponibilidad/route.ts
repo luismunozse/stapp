@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { dentroDeHorarioLaboral, type HorarioLaboral } from "@/lib/turnos/disponibilidad"
+import { DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 // GET ?tecnicoId=&inicio=ISO&fin=ISO&excludeTurnoId=
 // Devuelve: { disponible, conflictos: [...], fueraDeHorario, razon? }
@@ -30,16 +31,24 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "inicio inválido" }, { status: 400 })
     }
 
-    // Cargar horario laboral
-    const { data: tecnico } = await supabaseAdmin
-      .from("users")
-      .select("horario_laboral")
-      .eq("id", tecnicoId)
-      .eq("organization_id", organizationId!)
-      .maybeSingle()
+    // Cargar horario laboral del técnico y zona horaria de la org
+    const [{ data: tecnico }, { data: orgRow }] = await Promise.all([
+      supabaseAdmin
+        .from("users")
+        .select("horario_laboral")
+        .eq("id", tecnicoId)
+        .eq("organization_id", organizationId!)
+        .maybeSingle(),
+      supabaseAdmin
+        .from("organizations")
+        .select("zona_horaria")
+        .eq("id", organizationId!)
+        .maybeSingle(),
+    ])
 
     const horario = (tecnico?.horario_laboral || null) as HorarioLaboral | null
-    const horarioCheck = dentroDeHorarioLaboral(inicio, fin, horario)
+    const timeZone: string = (orgRow as any)?.zona_horaria || DEFAULT_TIMEZONE
+    const horarioCheck = dentroDeHorarioLaboral(inicio, fin, horario, timeZone)
 
     // Buscar conflictos: overlap con otros turnos del mismo técnico, no cancelados
     const finReal = fin || new Date(inicio.getTime() + 30 * 60 * 1000)
