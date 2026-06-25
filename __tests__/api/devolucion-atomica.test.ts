@@ -35,6 +35,9 @@ describe("POST /api/ventas/[id]/devolucion — atomic RPC path", () => {
   it("happy path: calls registrar_devolucion_atomica with correct params, returns 201", async () => {
     mockAuthSuccess({ role: "ADMIN" })
     mockSupabaseFrom({
+      // El route valida la existencia de la venta (scopeada por sucursal) antes
+      // de llamar la RPC; sin este mock devuelve 404 "Venta no encontrada".
+      ventas: createChainMock({ id: "v1" }),
       devoluciones_venta: createChainMock(DEV_COMPLETA),
     })
 
@@ -59,6 +62,7 @@ describe("POST /api/ventas/[id]/devolucion — atomic RPC path", () => {
 
   it("rpc 'excede lo permitido' error → 400", async () => {
     mockAuthSuccess({ role: "ADMIN" })
+    mockSupabaseFrom({ ventas: createChainMock({ id: "v1" }) })
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
       data: null,
       error: { code: "P0001", message: 'La cantidad a devolver excede lo permitido para "Widget". Maximo: 3' },
@@ -78,6 +82,8 @@ describe("POST /api/ventas/[id]/devolucion — atomic RPC path", () => {
 
   it("rpc 'Venta no encontrada' error → 404", async () => {
     mockAuthSuccess({ role: "ADMIN" })
+    // Venta existe (pasa el chequeo previo); la RPC es la que reporta el 404.
+    mockSupabaseFrom({ ventas: createChainMock({ id: "v1" }) })
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
       data: null,
       error: { code: "P0001", message: "Venta no encontrada" },
@@ -97,6 +103,7 @@ describe("POST /api/ventas/[id]/devolucion — atomic RPC path", () => {
 
   it("rpc 'completadas' error → 400", async () => {
     mockAuthSuccess({ role: "ADMIN" })
+    mockSupabaseFrom({ ventas: createChainMock({ id: "v1" }) })
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
       data: null,
       error: { code: "P0001", message: "Solo se pueden crear devoluciones para ventas completadas" },
