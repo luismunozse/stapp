@@ -28,6 +28,7 @@ export type EstadoOrden =
   | "ENTREGADO_SIN_COBRO"
   | "CANCELADO"
   | "SIN_REPARACION"
+  | "SIN_FALLA_DETECTADA"
 
 export type TipoDispositivoBase =
   | "CELULAR"

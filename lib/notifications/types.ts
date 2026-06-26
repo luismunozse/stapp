@@ -40,6 +40,7 @@ export type EstadoOrden =
   | "ENTREGADO_SIN_COBRO"
   | "CANCELADO"
   | "SIN_REPARACION"
+  | "SIN_FALLA_DETECTADA"
 
 export type EstadoVenta = "COMPLETADA" | "ANULADA"
 export type MetodoPagoVenta = "EFECTIVO" | "TRANSFERENCIA" | "TARJETA" | "TARJETA_DEBITO" | "TARJETA_CREDITO" | "MERCADOPAGO" | "CUENTA_CORRIENTE" | "OTRO"

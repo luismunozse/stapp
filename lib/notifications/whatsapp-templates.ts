@@ -155,6 +155,7 @@ const estadoLabels: Record<EstadoOrden, string> = {
   ENTREGADO_SIN_COBRO: "entregado sin cobro",
   CANCELADO: "cancelado",
   SIN_REPARACION: "sin posibilidad de reparacion",
+  SIN_FALLA_DETECTADA: "sin falla detectada",
 }
 
 export function getWhatsAppTemplates(
@@ -410,6 +411,9 @@ function generateEstadoMessage(ctx: NotificationContext): string {
       break
     case "SIN_REPARACION":
       mensaje += "\n\nNo fue posible reparar su equipo. Puede pasar a retirarlo en horario de atencion. Quedamos a disposicion."
+      break
+    case "SIN_FALLA_DETECTADA":
+      mensaje += "\n\nRevisamos su equipo y no detectamos la falla reportada. Puede pasar a retirarlo en horario de atencion. Quedamos a disposicion."
       break
   }
 

@@ -69,6 +69,7 @@ export type EstadoOrden =
   | "ENTREGADO_SIN_COBRO"     // Equipo entregado sin cobrar (no se encontró falla o cortesía)
   | "CANCELADO"          // Orden cancelada
   | "SIN_REPARACION"     // No se puede reparar o rechazado
+  | "SIN_FALLA_DETECTADA" // Revisado: no se reproduce la falla reportada (equipo OK)
 export type EstadoPago = "PENDIENTE" | "PAGADO_PARCIAL" | "PAGADO" | "ANULADA"
 
 export interface User {

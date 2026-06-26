@@ -33,7 +33,7 @@ import { useCurrency } from "@/contexts/currency-context"
 import type { OrdenServicio, EstadoOrden } from "@/types"
 import { useSession } from "next-auth/react"
 
-const ESTADOS_FINALES = ["ENTREGADO", "ENTREGADO_SIN_REPARACION", "ENTREGADO_SIN_COBRO", "CANCELADO", "SIN_REPARACION"]
+const ESTADOS_FINALES = ["ENTREGADO", "ENTREGADO_SIN_REPARACION", "ENTREGADO_SIN_COBRO", "CANCELADO", "SIN_REPARACION", "SIN_FALLA_DETECTADA"]
 
 function isUrgente(orden: OrdenServicio): boolean {
   if (!orden.fechaPrometida || ESTADOS_FINALES.includes(orden.estado)) return false
@@ -61,6 +61,7 @@ const ESTADO_LABELS_MAP: Record<string, string> = {
   ENTREGADO: "Entregado",
   CANCELADO: "Cancelado",
   SIN_REPARACION: "Sin Reparación",
+  SIN_FALLA_DETECTADA: "Sin Falla Detectada",
   ENTREGADO_SIN_REPARACION: "Retirado sin Reparación",
   ENTREGADO_SIN_COBRO: "Entregado sin Cobro",
 }
@@ -76,6 +77,7 @@ const estadoOptions = [
   { value: "ENTREGADO", label: "Entregado" },
   { value: "CANCELADO", label: "Cancelado" },
   { value: "SIN_REPARACION", label: "Sin Reparación" },
+  { value: "SIN_FALLA_DETECTADA", label: "Sin Falla Detectada" },
   { value: "ENTREGADO_SIN_REPARACION", label: "Retirado sin Reparación" },
   { value: "ENTREGADO_SIN_COBRO", label: "Entregado sin Cobro" },
 ]

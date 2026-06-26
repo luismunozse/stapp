@@ -56,6 +56,7 @@ const estadoLabels: Record<EstadoOrden, string> = {
   ENTREGADO_SIN_COBRO: "Entregado sin cobro",
   CANCELADO: "Cancelado",
   SIN_REPARACION: "Sin reparación posible",
+  SIN_FALLA_DETECTADA: "Sin falla detectada",
 }
 
 const estadoColors: Record<EstadoOrden, string> = {
@@ -71,6 +72,7 @@ const estadoColors: Record<EstadoOrden, string> = {
   ENTREGADO_SIN_COBRO: "#0ea5e9",
   CANCELADO: "#6b7280",
   SIN_REPARACION: "#ef4444",
+  SIN_FALLA_DETECTADA: "#14b8a6",
 }
 
 export function generateCambioEstadoEmail(ctx: NotificationContext): {
