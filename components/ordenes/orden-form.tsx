@@ -145,6 +145,8 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
   const [sectoresCliente, setSectoresCliente] = useState<Array<{ id: string; nombre: string }>>([])
   const [tecnicosDisponibles, setTecnicosDisponibles] = useState<Array<{ id: string; nombre: string; activo: boolean }>>([])
   const [selectedTecnicoId, setSelectedTecnicoId] = useState<string>("")
+  const [operadoresDisponibles, setOperadoresDisponibles] = useState<Array<{ id: string; nombre: string }>>([])
+  const [selectedRecibidoPorId, setSelectedRecibidoPorId] = useState<string>("")
   const [nuevoSectorNombre, setNuevoSectorNombre] = useState("")
   const [crearSectorLoading, setCrearSectorLoading] = useState(false)
   const [checklistTemplate, setChecklistTemplate] = useState<any>(null)
@@ -356,6 +358,23 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     }
     fetchTecnicos()
   }, [isTecnicoRole])
+
+  // Fetch operadores disponibles para "Recibido por"
+  useEffect(() => {
+    fetch("/api/operadores")
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) setOperadoresDisponibles(data)
+      })
+      .catch(() => {})
+  }, [])
+
+  // Pre-seleccionar el usuario actual como "Recibido por"
+  useEffect(() => {
+    if (session?.user?.id && !selectedRecibidoPorId) {
+      setSelectedRecibidoPorId(session.user.id)
+    }
+  }, [session?.user?.id])
 
   useEffect(() => {
     setSelectedSectorId("")
@@ -625,6 +644,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
         metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
         sectorId: selectedSectorId || undefined,
         tecnicoId: !isTecnicoRole && selectedTecnicoId ? selectedTecnicoId : undefined,
+        recibidoPorId: selectedRecibidoPorId || undefined,
         fromTurnoId: fromTurnoId || undefined,
       }
 
@@ -1139,6 +1159,26 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                   <SelectItem value="NONE">Sin asignar</SelectItem>
                   {tecnicosDisponibles.map((t) => (
                     <SelectItem key={t.id} value={t.id}>{t.nombre}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {operadoresDisponibles.length > 0 && (
+            <div>
+              <Label htmlFor="recibidoPorId">Recibido por</Label>
+              <Select
+                value={selectedRecibidoPorId || "NONE"}
+                onValueChange={(v) => setSelectedRecibidoPorId(v === "NONE" ? "" : v)}
+              >
+                <SelectTrigger id="recibidoPorId">
+                  <SelectValue placeholder="Sin asignar" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="NONE">Sin asignar</SelectItem>
+                  {operadoresDisponibles.map((o) => (
+                    <SelectItem key={o.id} value={o.id}>{o.nombre}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
