@@ -113,6 +113,21 @@ export function PosCheckoutDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, total])
 
+  // Re-seed the single payment line's monto when the effective total changes due to
+  // a method switch — only for the common non-partial single-line case.
+  // Avoids a "no coincide" error when the cashier changes method mid-checkout.
+  useEffect(() => {
+    if (!pagoParcial && pagosLines.length === 1 && totalEfectivo > 0) {
+      setPagosLines((prev) => {
+        if (prev.length !== 1) return prev
+        const line = prev[0]
+        if (line.monto === totalEfectivo) return prev
+        return [{ ...line, monto: totalEfectivo }]
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalEfectivo])
+
   // Fetch account balance when client changes
   useEffect(() => {
     if (!cliente.id) {
