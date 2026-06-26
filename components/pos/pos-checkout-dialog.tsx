@@ -59,6 +59,7 @@ export function PosCheckoutDialog({
   const [saldoCuenta, setSaldoCuenta] = useState(0)
   const [pagoParcial, setPagoParcial] = useState(false)
   const [idempotencyKey, setIdempotencyKey] = useState<string>("")
+  const [recargosMetodo, setRecargosMetodo] = useState<Record<string, number>>({})
 
   // Item 7: line items breakdown toggle
   const [showItems, setShowItems] = useState(false)
@@ -66,25 +67,50 @@ export function PosCheckoutDialog({
   // Cash change calculation
   const [montoRecibido, setMontoRecibido] = useState<number | "">("")
 
+  // Método que fija el precio: el pago de mayor monto (empate => primero).
+  // Replicado aquí para no importar @/lib/recargos (usa supabaseAdmin, server-only).
+  function resolveMetodoCondicion(
+    pagos: Array<{ metodo: string; monto: number }>,
+    fallback: string
+  ): string {
+    if (!pagos || pagos.length === 0) return fallback
+    let elegido = pagos[0]
+    for (const p of pagos) {
+      if (p.monto > elegido.monto) elegido = p
+    }
+    return elegido.metodo
+  }
+
   // roundCash = all payment lines are EFECTIVO (mirrors backend isCash logic)
   const isCashOnly = pagosLines.length === 1 && pagosLines[0].metodo === "EFECTIVO"
   const allCash = pagosLines.length > 0 && pagosLines.every((p) => p.metodo === "EFECTIVO")
   const t = computeVentaTotals(items, descuentoGlobal, fiscal, allCash)
   const total = t.total
+
+  // Total efectivo: precio base × factor del método-condición
+  const metodoCondicionActual = resolveMetodoCondicion(
+    pagosLines.map((p) => ({ metodo: p.metodo, monto: p.monto })),
+    pagosLines[0]?.metodo ?? "EFECTIVO"
+  )
+  const porcentajeRecargo = recargosMetodo[metodoCondicionActual] ?? 0
+  const factorEfectivo = 1 + porcentajeRecargo / 100
+  const totalEfectivo = Math.round(total * factorEfectivo * 100) / 100
+
   const vuelto = useMemo(() => {
     if (!isCashOnly || montoRecibido === "") return 0
-    return Math.max(0, montoRecibido - total)
-  }, [isCashOnly, montoRecibido, total])
+    return Math.max(0, montoRecibido - totalEfectivo)
+  }, [isCashOnly, montoRecibido, totalEfectivo])
 
-  // Update pagos amount when total changes
+  // Update pagos amount when total or effective total changes
   useEffect(() => {
     if (open && total > 0) {
-      setPagosLines([createPagoLine(total)])
+      setPagosLines([createPagoLine(totalEfectivo)])
       setMontoRecibido("")
       setObservaciones("")
       setPagoParcial(false)
       setIdempotencyKey(crypto.randomUUID())
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, total])
 
   // Fetch account balance when client changes
@@ -107,25 +133,41 @@ export function PosCheckoutDialog({
     fetchSaldo()
   }, [cliente.id])
 
+  // Cargar mapa de recargos por método al abrir el diálogo
+  useEffect(() => {
+    if (!open) return
+    fetch("/api/configuracion/recargos-metodo")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (!data?.recargos) return
+        const map: Record<string, number> = {}
+        for (const { metodo, porcentaje } of data.recargos) {
+          if (porcentaje > 0) map[metodo] = porcentaje
+        }
+        setRecargosMetodo(map)
+      })
+      .catch(() => setRecargosMetodo({}))
+  }, [open])
+
   const handleSubmit = async () => {
-    // Validate against base amounts (recargo is bank interest, not store income)
+    // Validar contra el total efectivo (precio base × factor del método)
     const totalPagosBase = pagosLines.reduce((sum, p) => sum + (p.monto || 0), 0)
 
-    // Without partial payment, base pagos must match total exactly
-    if (!pagoParcial && Math.abs(totalPagosBase - total) > 0.01) {
+    // Sin pago parcial, los pagos deben coincidir con el total efectivo
+    if (!pagoParcial && Math.abs(totalPagosBase - totalEfectivo) > 0.01) {
       await showError(
-        `El total de pagos (${formatPrice(totalPagosBase)}) no coincide con el total (${formatPrice(total)}). Active "Pago parcial" para dejar saldo pendiente.`
+        `El total de pagos (${formatPrice(totalPagosBase)}) no coincide con el total a cobrar (${formatPrice(totalEfectivo)}). Active "Pago parcial" para dejar saldo pendiente.`
       )
       return
     }
-    // With partial payment, base pagos can be 0 but not exceed total
-    if (pagoParcial && totalPagosBase > total + 0.01) {
+    // Con pago parcial, los pagos no pueden exceder el total efectivo
+    if (pagoParcial && totalPagosBase > totalEfectivo + 0.01) {
       await showError("El total de pagos no puede exceder el total de la venta")
       return
     }
 
-    // A sale with pending balance requires a registered client (cuenta corriente)
-    const saldoPendiente = total - totalPagosBase
+    // Una venta con saldo pendiente requiere un cliente registrado
+    const saldoPendiente = totalEfectivo - totalPagosBase
     if (pagoParcial && saldoPendiente > 0.01 && !cliente.id) {
       await showError("Seleccioná un cliente para dejar saldo pendiente / fiar")
       return
@@ -231,20 +273,20 @@ export function PosCheckoutDialog({
   // Whether the confirm button should be blocked due to missing client for pending balance
   const pendienteRequiereCliente = useMemo(() => {
     const totalPagosBase = pagosLines.reduce((sum, p) => sum + (p.monto || 0), 0)
-    const saldoPendiente = total - totalPagosBase
+    const saldoPendiente = totalEfectivo - totalPagosBase
     return pagoParcial && saldoPendiente > 0.01 && !cliente.id
-  }, [pagoParcial, pagosLines, total, cliente.id])
+  }, [pagoParcial, pagosLines, totalEfectivo, cliente.id])
 
   // Quick cash amounts
   const quickAmounts = useMemo(() => {
     if (!isCashOnly) return []
-    const rounded = Math.ceil(total / 100) * 100
-    const amounts = [total]
-    if (rounded !== total) amounts.push(rounded)
-    if (rounded + 500 <= total * 3) amounts.push(rounded + 500)
-    if (rounded + 1000 <= total * 3) amounts.push(rounded + 1000)
+    const rounded = Math.ceil(totalEfectivo / 100) * 100
+    const amounts = [totalEfectivo]
+    if (rounded !== totalEfectivo) amounts.push(rounded)
+    if (rounded + 500 <= totalEfectivo * 3) amounts.push(rounded + 500)
+    if (rounded + 1000 <= totalEfectivo * 3) amounts.push(rounded + 1000)
     return [...new Set(amounts)]
-  }, [total, isCashOnly])
+  }, [totalEfectivo, isCashOnly])
 
   return (
     <ResponsiveDialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
@@ -320,7 +362,14 @@ export function PosCheckoutDialog({
                 )}
               </div>
             )}
-            <TotalRow label="Total a cobrar" amount={formatPrice(total)} emphasis />
+            <TotalRow label="Total contado" amount={formatPrice(total)} emphasis />
+            {porcentajeRecargo > 0 && (
+              <TotalRow
+                label={`Total ${metodoCondicionActual.toLowerCase().replace("_", " ")} (+${porcentajeRecargo}%)`}
+                amount={formatPrice(totalEfectivo)}
+                emphasis
+              />
+            )}
           </div>
 
           {/* Quick action: Paga despues */}
@@ -353,7 +402,7 @@ export function PosCheckoutDialog({
                   setPagosLines([createPagoLine(0)])
                 }}
               >
-                Paga después ($0)
+                Paga después ({formatPrice(0)})
               </Button>
             )}
           </div>
@@ -363,7 +412,7 @@ export function PosCheckoutDialog({
           <div className="space-y-3">
             <Label className="text-sm font-medium">Método de pago</Label>
             <MultiPagoInput
-              montoPendiente={total}
+              montoPendiente={totalEfectivo}
               pagos={pagosLines}
               onChange={setPagosLines}
               saldoCuenta={saldoCuenta}
@@ -375,7 +424,7 @@ export function PosCheckoutDialog({
               <p className="text-sm font-medium text-warning">
                 Venta sin pago — el total queda pendiente
               </p>
-              <p className="text-2xl font-bold text-destructive">{formatPrice(total)}</p>
+              <p className="text-2xl font-bold text-destructive">{formatPrice(totalEfectivo)}</p>
               <p className="text-xs text-muted-foreground">
                 El cobro se registra después desde el detalle de la venta
               </p>
@@ -385,7 +434,7 @@ export function PosCheckoutDialog({
                 size="sm"
                 className="text-xs"
                 onClick={() => {
-                  setPagosLines([createPagoLine(total)])
+                  setPagosLines([createPagoLine(totalEfectivo)])
                 }}
               >
                 Quiero registrar un pago parcial
@@ -396,7 +445,7 @@ export function PosCheckoutDialog({
           {/* Partial payment summary */}
           {pagoParcial && (() => {
             const totalPagosBase = pagosLines.reduce((sum, p) => sum + (p.monto || 0), 0)
-            const pendiente = total - totalPagosBase
+            const pendiente = totalEfectivo - totalPagosBase
             return (pendiente > 0.01 && totalPagosBase > 0) ? (
               <div className="rounded-lg bg-warning-50 border border-warning/30 p-3 space-y-1">
                 <TotalRow label="Total pagos:" amount={formatPrice(totalPagosBase)} tone="success" />
@@ -455,9 +504,9 @@ export function PosCheckoutDialog({
                 </div>
               </div>
 
-              {montoRecibido !== "" && montoRecibido < total && (
+              {montoRecibido !== "" && montoRecibido < totalEfectivo && (
                 <p className="text-xs text-destructive">
-                  Faltan {formatPrice(total - montoRecibido)}
+                  Faltan {formatPrice(totalEfectivo - montoRecibido)}
                 </p>
               )}
             </div>

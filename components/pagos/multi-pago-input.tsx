@@ -108,18 +108,6 @@ export function MultiPagoInput({
       }
     }
 
-    // Recalcular monto total cuando cambia recargo o monto base
-    // monto = precio original, montoOriginal = precio original (se guarda para referencia)
-    // El monto final que se paga = monto + (monto * recargo / 100)
-    if (updates.recargo !== undefined || updates.monto !== undefined) {
-      const pago = newPagos[index]
-      if (pago.recargo && pago.recargo > 0) {
-        pago.montoOriginal = pago.monto // guardar monto base original
-      } else {
-        pago.montoOriginal = null
-      }
-    }
-
     onChange(newPagos)
   }
 
@@ -223,59 +211,21 @@ export function MultiPagoInput({
               />
             </div>
 
-            {/* Cuotas + Recargo para tarjeta crédito */}
+            {/* Cuotas para tarjeta crédito */}
             {showCuotas && (
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">Cuotas</Label>
-                  <Input
-                    type="text"
-                    inputMode="numeric"
-                    min={1}
-                    max={48}
-                    value={displayValue(`${pago.id}:cuotas`, pago.cuotas)}
-                    onChange={(e) => {
-                      setRaw(`${pago.id}:cuotas`, e.target.value)
-                      updatePago(index, { cuotas: parseInt(e.target.value) || null })
-                    }}
-                    placeholder="1"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Recargo al cliente %</Label>
-                  <Input
-                    type="text"
-                    inputMode="decimal"
-                    step="0.01"
-                    min={0}
-                    max={100}
-                    value={displayValue(`${pago.id}:recargo`, pago.recargo)}
-                    onChange={(e) => {
-                      setRaw(`${pago.id}:recargo`, e.target.value)
-                      updatePago(index, { recargo: parseFloat(e.target.value) || null })
-                    }}
-                    placeholder="0"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Recargo solo débito */}
-            {pago.metodo === "TARJETA_DEBITO" && (
               <div>
-                <Label className="text-xs">Recargo al cliente % (si aplica)</Label>
+                <Label className="text-xs">Cuotas</Label>
                 <Input
                   type="text"
-                  inputMode="decimal"
-                  step="0.01"
-                  min={0}
-                  max={100}
-                  value={displayValue(`${pago.id}:recargo`, pago.recargo)}
+                  inputMode="numeric"
+                  min={1}
+                  max={48}
+                  value={displayValue(`${pago.id}:cuotas`, pago.cuotas)}
                   onChange={(e) => {
-                    setRaw(`${pago.id}:recargo`, e.target.value)
-                    updatePago(index, { recargo: parseFloat(e.target.value) || null })
+                    setRaw(`${pago.id}:cuotas`, e.target.value)
+                    updatePago(index, { cuotas: parseInt(e.target.value) || null })
                   }}
-                  placeholder="0"
+                  placeholder="1"
                 />
               </div>
             )}
@@ -299,34 +249,6 @@ export function MultiPagoInput({
                 />
               </div>
             )}
-
-            {/* Preview de recargo */}
-            {showRecargo && pago.recargo && pago.recargo > 0 && pago.monto > 0 && (() => {
-              const montoRecargo = pago.monto * (pago.recargo / 100)
-              const totalConRecargo = pago.monto + montoRecargo
-              return (
-                <div className="p-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded text-xs space-y-0.5">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Monto base:</span>
-                    <span>{formatPrice(pago.monto)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Recargo ({pago.recargo}%):</span>
-                    <span className="text-amber-600">+{formatPrice(montoRecargo)}</span>
-                  </div>
-                  <div className="flex justify-between font-medium border-t border-amber-300 dark:border-amber-700 pt-0.5">
-                    <span>Total a cobrar:</span>
-                    <span>{formatPrice(totalConRecargo)}</span>
-                  </div>
-                  {showCuotas && pago.cuotas && pago.cuotas > 1 && (
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>{pago.cuotas} cuotas de:</span>
-                      <span>{formatPrice(totalConRecargo / pago.cuotas)}</span>
-                    </div>
-                  )}
-                </div>
-              )
-            })()}
 
             {/* Preview de costo financiero (lo que pierde el comercio) */}
             {showRecargo && pago.costoFinanciero && pago.costoFinanciero > 0 && pago.monto > 0 && (() => {
@@ -384,8 +306,7 @@ export function MultiPagoInput({
             return (
               <div key={pago.id} className="flex justify-between">
                 <span className="text-muted-foreground">
-                  {metodoDef?.label || pago.metodo}
-                  {pago.recargo && pago.recargo > 0 ? ` (+${pago.recargo}% interés)` : ""}:
+                  {metodoDef?.label || pago.metodo}:
                 </span>
                 <span className="font-medium">{formatPrice(pago.monto || 0)}</span>
               </div>
