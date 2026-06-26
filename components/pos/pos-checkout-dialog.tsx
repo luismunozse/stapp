@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
+import { useSession } from "next-auth/react"
 import {
   ResponsiveDialog,
   ResponsiveDialogContent,
@@ -12,6 +13,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   CreditCard,
   Loader2,
@@ -53,6 +61,7 @@ export function PosCheckoutDialog({
 }: PosCheckoutDialogProps) {
   const { formatPrice } = useCurrency()
   const { showError } = useModal()
+  const { data: session } = useSession()
   const [loading, setLoading] = useState(false)
   const [pagosLines, setPagosLines] = useState<PagoLineItem[]>([createPagoLine(0)])
   const [observaciones, setObservaciones] = useState("")
@@ -60,6 +69,8 @@ export function PosCheckoutDialog({
   const [pagoParcial, setPagoParcial] = useState(false)
   const [idempotencyKey, setIdempotencyKey] = useState<string>("")
   const [recargosMetodo, setRecargosMetodo] = useState<Record<string, number>>({})
+  const [vendedores, setVendedores] = useState<Array<{ id: string; nombre: string }>>([])
+  const [vendedorId, setVendedorId] = useState<string>("")
 
   // Item 7: line items breakdown toggle
   const [showItems, setShowItems] = useState(false)
@@ -164,6 +175,16 @@ export function PosCheckoutDialog({
       .catch(() => setRecargosMetodo({}))
   }, [open])
 
+  // Cargar lista de vendedores y preseleccionar el usuario de sesión al abrir
+  useEffect(() => {
+    if (!open) return
+    setVendedorId(session?.user?.id ?? "")
+    fetch("/api/operadores?rol=VENDEDOR")
+      .then((r) => r.ok ? r.json() : [])
+      .then((data: Array<{ id: string; nombre: string }>) => setVendedores(data))
+      .catch(() => setVendedores([]))
+  }, [open, session?.user?.id])
+
   const handleSubmit = async () => {
     // Validar contra el total efectivo (precio base × factor del método)
     const totalPagosBase = pagosLines.reduce((sum, p) => sum + (p.monto || 0), 0)
@@ -261,6 +282,7 @@ export function PosCheckoutDialog({
         idempotencyKey,
         descuentoGlobal,
         ...(descuentoMotivo ? { descuentoMotivo } : {}),
+        ...(vendedorId ? { vendedorId } : {}),
       })
 
       const res = await fetch("/api/ventas", {
@@ -524,6 +546,27 @@ export function PosCheckoutDialog({
                   Faltan {formatPrice(totalEfectivo - montoRecibido)}
                 </p>
               )}
+            </div>
+          )}
+
+          {/* Vendedor */}
+          {vendedores.length > 0 && (
+            <div>
+              <Label htmlFor="vendedorId" className="text-xs">Vendedor</Label>
+              <Select
+                value={vendedorId || "NONE"}
+                onValueChange={(v) => setVendedorId(v === "NONE" ? "" : v)}
+              >
+                <SelectTrigger id="vendedorId" className="mt-1">
+                  <SelectValue placeholder="Seleccionar vendedor" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="NONE">Sin asignar</SelectItem>
+                  {vendedores.map((v) => (
+                    <SelectItem key={v.id} value={v.id}>{v.nombre}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           )}
 

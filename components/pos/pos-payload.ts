@@ -12,6 +12,8 @@ export interface BuildVentaPayloadInput {
   descuentoGlobal?: DescuentoConfig | null
   /** Motivo del descuento (opcional, para auditoría). */
   descuentoMotivo?: string
+  /** Vendedor que realiza la venta (opcional; default = usuario de sesión en el servidor). */
+  vendedorId?: string | null
 }
 
 export interface VentaPayload {
@@ -37,6 +39,7 @@ export interface VentaPayload {
   porcentajeDescuento: number
   descuentoMotivo?: string
   metodoPago: string
+  vendedorId?: string
   observaciones?: string
   pagos?: {
     metodo: string
@@ -49,7 +52,7 @@ export interface VentaPayload {
 }
 
 export function buildVentaPayload(input: BuildVentaPayloadInput): VentaPayload {
-  const { items, cliente, pagosLines, pagoParcial, observaciones, idempotencyKey, descuentoGlobal = null, descuentoMotivo } = input
+  const { items, cliente, pagosLines, pagoParcial, observaciones, idempotencyKey, descuentoGlobal = null, descuentoMotivo, vendedorId } = input
   const pagosConMonto = pagosLines.filter((p) => p.monto > 0)
 
   const globalTipo: TipoDescuento = descuentoGlobal?.tipo ?? "MONTO"
@@ -80,6 +83,7 @@ export function buildVentaPayload(input: BuildVentaPayloadInput): VentaPayload {
     tipoDescuento: globalTipo,
     porcentajeDescuento: globalTipo === "PORCENTAJE" ? globalValor : 0,
     ...(descuentoMotivo ? { descuentoMotivo } : {}),
+    ...(vendedorId ? { vendedorId } : {}),
     metodoPago: pagosConMonto.length > 0 ? pagosConMonto[0].metodo : "EFECTIVO",
     ...(observaciones ? { observaciones } : {}),
     ...(pagosConMonto.length > 0 && {
