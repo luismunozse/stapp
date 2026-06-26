@@ -194,6 +194,22 @@ export function addDaysInTimeZone(
   return new Date(Date.UTC(year, month - 1, day + days, 12, 0, 0)).toISOString()
 }
 
+export function formatTimeValue(
+  date: Date | string | null | undefined,
+  timezone: string = DEFAULT_TIMEZONE,
+  locale: string = "es-AR"
+): string {
+  if (!date) return ""
+  const d = typeof date === "string" ? new Date(date) : date
+  if (Number.isNaN(d.getTime())) return ""
+
+  return new Intl.DateTimeFormat(locale, {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: timezone,
+  }).format(d)
+}
+
 export function formatDateTimeValue(
   date: Date | string | null | undefined,
   timezone: string = DEFAULT_TIMEZONE,

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { LockOpen, Lock, Loader2 } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
+import { formatTimeValue } from "@/lib/timezone"
 
 interface SesionInfo {
   id: string
@@ -20,7 +21,7 @@ interface CajaSessionBannerProps {
 }
 
 export function CajaSessionBanner({ sesion, loading, onAbrir, onCerrar }: CajaSessionBannerProps) {
-  const { formatPrice } = useCurrency()
+  const { formatPrice, timezone } = useCurrency()
 
   if (loading) {
     return (
@@ -51,10 +52,9 @@ export function CajaSessionBanner({ sesion, loading, onAbrir, onCerrar }: CajaSe
     )
   }
 
-  const horaApertura = new Date(sesion.openedAt).toLocaleTimeString("es-AR", {
-    hour: "2-digit",
-    minute: "2-digit",
-  })
+  // Formatear en la zona horaria de la organización (no la del entorno, que en
+  // SSR/Vercel es UTC y mostraba la hora +3h). Ver lib/timezone.ts.
+  const horaApertura = formatTimeValue(sesion.openedAt, timezone)
 
   return (
     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-lg border-2 border-success/30 bg-success-50 dark:bg-success/15 dark:border-success/20">
