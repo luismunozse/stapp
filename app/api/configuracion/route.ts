@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { uploadLogo, deleteLogo, dataUrlToBuffer } from "@/lib/storage"
 import { COUNTRIES } from "@/lib/countries"
+import { resolveTerminologia, sanitizeTerminologia } from "@/lib/terminologia"
 
 // GET - Obtener configuración (solo ADMIN)
 export async function GET() {
@@ -44,7 +45,8 @@ export async function GET() {
         iva_regimen,
         iva_tasa,
         redondeo_efectivo,
-        comision_aplica_sin_reparacion
+        comision_aplica_sin_reparacion,
+        terminologia
       `)
       .eq("id", organizationId!)
       .single()
@@ -102,6 +104,7 @@ export async function GET() {
       ivaTasa: organization.iva_tasa ?? 21,
       redondeoEfectivo: organization.redondeo_efectivo ?? 0,
       comisionAplicaSinReparacion: organization.comision_aplica_sin_reparacion ?? false,
+      terminologia: resolveTerminologia(organization.terminologia),
     })
   } catch (error) {
     console.error("Error fetching config:", error)
@@ -125,7 +128,7 @@ export async function PUT(request: Request) {
         { status: 413 }
       )
     }
-    const { logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, ivaRegimen, ivaTasa, redondeoEfectivo, comisionAplicaSinReparacion } = body
+    const { logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, umbralStockBajo, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, ivaRegimen, ivaTasa, redondeoEfectivo, comisionAplicaSinReparacion, terminologia } = body
 
     const updateData: Record<string, any> = {}
 
@@ -287,7 +290,11 @@ export async function PUT(request: Request) {
       updateData.comision_aplica_sin_reparacion = !!comisionAplicaSinReparacion
     }
 
-    const selectCols = "id, logo_url, logo_path, nombre_mostrar, telefono, direccion, ciudad, provincia, codigo_postal, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, garantia_dias_default, politica_abandono_dias_default, anticipo_porcentaje_default, pais, modulo_agenda, iva_regimen, iva_tasa, redondeo_efectivo, comision_aplica_sin_reparacion"
+    if (terminologia !== undefined && terminologia !== null && typeof terminologia === "object") {
+      updateData.terminologia = sanitizeTerminologia(terminologia as Record<string, unknown>)
+    }
+
+    const selectCols = "id, logo_url, logo_path, nombre_mostrar, telefono, direccion, ciudad, provincia, codigo_postal, moneda, zona_horaria, umbral_stock_bajo, iva_porcentaje, cotizacion_validez_dias, cotizacion_terminos, garantia_dias_default, politica_abandono_dias_default, anticipo_porcentaje_default, pais, modulo_agenda, iva_regimen, iva_tasa, redondeo_efectivo, comision_aplica_sin_reparacion, terminologia"
     const selectColsFull = selectCols + ", recepcion_terminos, comprobante_terminos"
 
     // Solo actualizar si hay cambios
@@ -326,6 +333,7 @@ export async function PUT(request: Request) {
         ivaTasa: org?.iva_tasa ?? 21,
         redondeoEfectivo: org?.redondeo_efectivo ?? 0,
         comisionAplicaSinReparacion: org?.comision_aplica_sin_reparacion ?? false,
+        terminologia: resolveTerminologia(org?.terminologia),
       })
     }
 
@@ -392,6 +400,7 @@ export async function PUT(request: Request) {
       ivaTasa: organization.iva_tasa ?? 21,
       redondeoEfectivo: organization.redondeo_efectivo ?? 0,
       comisionAplicaSinReparacion: organization.comision_aplica_sin_reparacion ?? false,
+      terminologia: resolveTerminologia(organization.terminologia),
     })
   } catch (error: any) {
     console.error("Error updating config:", error)

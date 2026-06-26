@@ -32,3 +32,21 @@ export function resolveTerminologia(overrides?: Terminologia | null): Terminolog
 export function t(map: Terminologia, key: string): string {
   return map[key] ?? key
 }
+
+/**
+ * Sanitize raw terminologia input: keep only known catalog keys with
+ * non-empty trimmed string values. Safe to call from API PUT handlers.
+ */
+export function sanitizeTerminologia(
+  input: Record<string, unknown> | null | undefined
+): Terminologia {
+  if (!input || typeof input !== "object") return {}
+  const known = new Set(TERMINOS.map((d) => d.key))
+  const clean: Terminologia = {}
+  for (const [k, v] of Object.entries(input)) {
+    if (known.has(k) && typeof v === "string" && v.trim() !== "") {
+      clean[k] = v.trim()
+    }
+  }
+  return clean
+}
