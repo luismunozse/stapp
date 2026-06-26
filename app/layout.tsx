@@ -5,6 +5,7 @@ import Script from "next/script"
 import "./globals.css"
 import { PWAInstaller } from "@/components/pwa/pwa-installer"
 import { PWARecovery } from "@/components/pwa/pwa-recovery"
+import { PWAUpdater } from "@/components/pwa/pwa-updater"
 import { Providers } from "@/components/providers"
 import { CookieConsent } from "@/components/cookie-consent"
 import {
@@ -230,6 +231,7 @@ export default async function RootLayout({
         <Providers>
           {children}
           {/* PWA solo en subdominios de tenant */}
+          {isTenant && <PWAUpdater />}
           {isTenant && <PWAInstaller />}
           {isTenant && <PWARecovery />}
           <CookieConsent />

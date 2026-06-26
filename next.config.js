@@ -1,6 +1,18 @@
+// Identificador único por build/deploy. En Vercel usa el SHA del commit;
+// en local cae a un timestamp. Se inyecta en cliente y servidor para detectar
+// cuándo hay una versión nueva desplegada (ver PWAUpdater + /api/version).
+const BUILD_ID =
+  process.env.VERCEL_GIT_COMMIT_SHA ||
+  process.env.VERCEL_DEPLOYMENT_ID ||
+  String(Date.now())
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  env: {
+    NEXT_PUBLIC_BUILD_ID: BUILD_ID,
+  },
+  generateBuildId: () => BUILD_ID,
   serverExternalPackages: [],
   outputFileTracingIncludes: {
     '/api/**': ['./lib/fonts/**/*'],
