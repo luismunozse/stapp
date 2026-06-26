@@ -5,6 +5,7 @@ import { createAuditLogger } from "@/lib/audit"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { formatVenta } from "@/lib/db-utils"
 import { sucursalParaEscritura, sucursalParaLectura, getDepositoDeSucursal } from "@/lib/sucursal"
+import { getRecargosMetodo, factorRecargo, metodoCondicion } from "@/lib/recargos"
 import { z } from "zod"
 
 const itemSchema = z.object({
@@ -179,6 +180,12 @@ export async function POST(request: Request) {
     const body = await request.json()
     const data = ventaSchema.parse(body)
 
+    // Precio efectivo por método de pago: el método-condición (pago de mayor monto)
+    // fija un factor que sube el precio de venta (ingreso real, no recargo bancario).
+    const recargosMetodo = await getRecargosMetodo(organizationId!)
+    const condicion = metodoCondicion(data.pagos, data.metodoPago)
+    const factor = factorRecargo(recargosMetodo, condicion)
+
     // Calcular totales. Convención: venta.subtotal = bruto (Σ cantidad×precio);
     // venta.descuento = descuento total (por línea + global); venta.total =
     // bruto − descuento. Los descuentos por línea se restan del neto sobre el
@@ -188,7 +195,8 @@ export async function POST(request: Request) {
     let subtotalBruto = 0
     let descuentoItems = 0
     for (const item of data.items) {
-      const lineaBruto = item.cantidad * item.precioUnitario
+      const precioEfectivo = round2(item.precioUnitario * factor)
+      const lineaBruto = item.cantidad * precioEfectivo
       subtotalBruto += lineaBruto
       const lineaDesc =
         item.tipoDescuento === "PORCENTAJE"
@@ -251,12 +259,13 @@ export async function POST(request: Request) {
     }
     const fiscalActivo = ivaRegimen !== "EXENTO" || redondeoMonto !== 0
 
-    // Preparar items para la función atómica
+    // Preparar items para la función atómica. El precioUnitario se persiste con
+    // el factor del método aplicado (precio efectivo = ingreso real).
     const pItems = data.items.map(item => ({
       inventarioId: item.inventarioId || null,
       descripcion: item.descripcion,
       cantidad: item.cantidad,
-      precioUnitario: item.precioUnitario,
+      precioUnitario: round2(item.precioUnitario * factor),
       diasGarantia: item.diasGarantia,
       descuento: item.descuento,
       tipoDescuento: item.tipoDescuento,
