@@ -14,6 +14,7 @@ import {
   Plus, Loader2, Pencil, Trash2, Copy, Ticket, Percent, DollarSign, Calendar, Users,
 } from "lucide-react"
 import { toast } from "sonner"
+import { useCurrency } from "@/contexts/currency-context"
 
 interface Cupon {
   id: string
@@ -31,6 +32,7 @@ interface Cupon {
 }
 
 export function CatalogoCuponesTab() {
+  const { timezone } = useCurrency()
   const [cupones, setCupones] = useState<Cupon[]>([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<Cupon | null>(null)
@@ -173,9 +175,9 @@ export function CatalogoCuponesTab() {
                     {(c.fecha_inicio || c.fecha_fin) && (
                       <div className="flex items-center gap-1 col-span-2">
                         <Calendar className="h-3 w-3" />
-                        {c.fecha_inicio ? new Date(c.fecha_inicio).toLocaleDateString("es-AR") : "—"}
+                        {c.fecha_inicio ? new Date(c.fecha_inicio).toLocaleDateString("es-AR", { timeZone: timezone }) : "—"}
                         {" → "}
-                        {c.fecha_fin ? new Date(c.fecha_fin).toLocaleDateString("es-AR") : "sin fin"}
+                        {c.fecha_fin ? new Date(c.fecha_fin).toLocaleDateString("es-AR", { timeZone: timezone }) : "sin fin"}
                       </div>
                     )}
                   </div>

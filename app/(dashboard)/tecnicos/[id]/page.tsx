@@ -30,6 +30,7 @@ import { TecnicoHistorial } from "@/components/tecnicos/tecnico-historial"
 import { ReasignarOrdenesDialog } from "@/components/tecnicos/reasignar-ordenes-dialog"
 import { HorarioLaboralEditor } from "@/components/tecnicos/horario-laboral-editor"
 import { useModal } from "@/contexts/modal-context"
+import { useCurrency } from "@/contexts/currency-context"
 
 interface TecnicoDetalle {
   id: string
@@ -48,11 +49,12 @@ interface TecnicoDetalle {
   horarioLaboral?: Record<string, Array<{ de: string; a: string }>> | null
 }
 
-const formatDate = (dateStr: string) => {
+const formatDate = (dateStr: string, timezone: string) => {
   return new Date(dateStr).toLocaleDateString("es-AR", {
     day: "2-digit",
     month: "short",
     year: "numeric",
+    timeZone: timezone,
   })
 }
 
@@ -65,6 +67,7 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
   const isSelf = role === "TECNICO" && session?.user?.id === id
   const canView = isAdmin || isSelf
   const { confirm, showError } = useModal()
+  const { timezone } = useCurrency()
   const [tecnico, setTecnico] = useState<TecnicoDetalle | null>(null)
   const [loading, setLoading] = useState(true)
   const [editOpen, setEditOpen] = useState(false)
@@ -289,8 +292,8 @@ export default function TecnicoDetallePage({ params }: { params: Promise<{ id: s
               <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground shrink-0" />
               <span className="text-xs sm:text-sm">
                 {tecnico.fechaIngresoTecnico
-                  ? `Ingreso ${formatDate(tecnico.fechaIngresoTecnico)}`
-                  : `Desde ${formatDate(tecnico.createdAt)}`}
+                  ? `Ingreso ${formatDate(tecnico.fechaIngresoTecnico, timezone)}`
+                  : `Desde ${formatDate(tecnico.createdAt, timezone)}`}
               </span>
             </div>
             {tecnico.especialidades && tecnico.especialidades.length > 0 && (

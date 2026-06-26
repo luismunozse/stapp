@@ -30,6 +30,7 @@ import {
   AlertTriangle,
   RotateCw,
 } from "lucide-react"
+import { useCurrency } from "@/contexts/currency-context"
 
 // Lista de eventos disponibles. Mantener en sync con EVENT_TYPES del dispatcher.
 const EVENT_TYPES = [
@@ -69,6 +70,7 @@ interface Delivery {
 }
 
 export default function WebhooksPage() {
+  const { timezone } = useCurrency()
   const [webhooks, setWebhooks] = useState<Webhook[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -358,7 +360,7 @@ export default function WebhooksPage() {
                     </div>
                     {w.lastSuccessAt && (
                       <div className="text-[11px] text-muted-foreground">
-                        Último éxito: {new Date(w.lastSuccessAt).toLocaleString()}
+                        Último éxito: {new Date(w.lastSuccessAt).toLocaleString("es-AR", { timeZone: timezone })}
                       </div>
                     )}
                   </div>
@@ -655,6 +657,7 @@ export default function WebhooksPage() {
                   delivery={d}
                   onRetry={handleRetry}
                   retrying={retryingId === d.id}
+                  timezone={timezone}
                 />
               ))}
             </div>
@@ -681,10 +684,12 @@ function DeliveryRow({
   delivery,
   onRetry,
   retrying,
+  timezone,
 }: {
   delivery: Delivery
   onRetry: (id: string) => void
   retrying: boolean
+  timezone: string
 }) {
   const [expanded, setExpanded] = useState(false)
   const variant: "success" | "destructive" | "warning" =
@@ -712,7 +717,7 @@ function DeliveryRow({
         </div>
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground">
-            {new Date(delivery.createdAt).toLocaleString()}
+            {new Date(delivery.createdAt).toLocaleString("es-AR", { timeZone: timezone })}
           </span>
           {delivery.status === "FAILED" && (
             <Button

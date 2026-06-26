@@ -38,6 +38,7 @@ import {
 } from "@/lib/whatsapp/plantillas-catalog"
 import { StatusBanner } from "@/components/ui/status-banner"
 import { cn } from "@/lib/utils"
+import { useCurrency } from "@/contexts/currency-context"
 
 type PlantillasMap = Record<string, string>
 
@@ -89,7 +90,7 @@ function extractVariables(text: string): string[] {
 // WhatsApp-style preview bubble
 // =====================================================================
 
-function WhatsAppPreview({ text }: { text: string }) {
+function WhatsAppPreview({ text, timezone }: { text: string; timezone: string }) {
   const renderMarkdown = (line: string) => {
     const parts: React.ReactNode[] = []
     const regex = /\*([^*]+)\*/g
@@ -105,7 +106,7 @@ function WhatsAppPreview({ text }: { text: string }) {
   }
 
   const lines = text.split("\n")
-  const time = new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })
+  const time = new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", timeZone: timezone })
 
   return (
     <div className="rounded-lg p-3 bg-[#e5ddd5] dark:bg-[#0b141a]">
@@ -185,6 +186,7 @@ interface PlantillaEditorProps {
   onBack?: () => void
   disabled: boolean
   organizationName?: string
+  timezone: string
 }
 
 function PlantillaEditor({
@@ -195,6 +197,7 @@ function PlantillaEditor({
   onBack,
   disabled,
   organizationName,
+  timezone,
 }: PlantillaEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [lastInserted, setLastInserted] = useState<string | null>(null)
@@ -389,7 +392,7 @@ function PlantillaEditor({
             <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Vista previa
             </label>
-            <WhatsAppPreview text={previewText} />
+            <WhatsAppPreview text={previewText} timezone={timezone} />
             <p className="text-[10px] text-muted-foreground italic">
               Los valores son de ejemplo. En envíos reales se reemplazan con datos del cliente.
             </p>
@@ -452,6 +455,7 @@ function SidebarItem({
 // =====================================================================
 
 export function PlantillasWhatsappEditor() {
+  const { timezone } = useCurrency()
   const [plantillas, setPlantillas] = useState<PlantillasMap>({})
   const [originalPlantillas, setOriginalPlantillas] = useState<PlantillasMap>({})
   const [organizationName, setOrganizationName] = useState<string>("")
@@ -841,6 +845,7 @@ export function PlantillasWhatsappEditor() {
                 onBack={() => setShowEditorMobile(false)}
                 disabled={saving}
                 organizationName={organizationName}
+                timezone={timezone}
               />
             ) : (
               <div className="flex-1 flex items-center justify-center text-muted-foreground p-6 text-sm text-center">

@@ -1,6 +1,7 @@
 "use client"
 
 import { cn } from "@/lib/utils"
+import { useCurrency } from "@/contexts/currency-context"
 
 interface Message {
   id: string
@@ -14,6 +15,7 @@ interface ChatMessageProps {
 }
 
 export function ChatMessage({ message }: ChatMessageProps) {
+  const { timezone } = useCurrency()
   const isUser = message.tipo === "USER"
   const isSystem = message.tipo === "SYSTEM"
 
@@ -55,6 +57,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
           {message.timestamp.toLocaleTimeString("es-AR", {
             hour: "2-digit",
             minute: "2-digit",
+            timeZone: timezone,
           })}
         </span>
       </div>

@@ -24,6 +24,7 @@ import {
   KeyRound,
 } from "lucide-react"
 import { toast } from "sonner"
+import { useCurrency } from "@/contexts/currency-context"
 
 interface ApiKey {
   id: string
@@ -36,6 +37,7 @@ interface ApiKey {
 }
 
 export function ApiKeysManager() {
+  const { timezone } = useCurrency()
   const [keys, setKeys] = useState<ApiKey[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -174,17 +176,17 @@ export function ApiKeysManager() {
                         {k.prefix}••••••••••••••••
                       </div>
                       <div className="text-[11px] text-muted-foreground">
-                        Creada: {new Date(k.created_at).toLocaleString()}
+                        Creada: {new Date(k.created_at).toLocaleString("es-AR", { timeZone: timezone })}
                       </div>
                       <div className="text-[11px] text-muted-foreground">
                         Último uso:{" "}
                         {k.last_used_at
-                          ? new Date(k.last_used_at).toLocaleString()
+                          ? new Date(k.last_used_at).toLocaleString("es-AR", { timeZone: timezone })
                           : "Nunca"}
                       </div>
                       {k.revoked_at && (
                         <div className="text-[11px] text-muted-foreground">
-                          Revocada: {new Date(k.revoked_at).toLocaleString()}
+                          Revocada: {new Date(k.revoked_at).toLocaleString("es-AR", { timeZone: timezone })}
                         </div>
                       )}
                     </div>

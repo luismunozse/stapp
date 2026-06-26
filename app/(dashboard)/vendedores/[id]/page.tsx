@@ -23,6 +23,7 @@ import {
 import { VendedorForm } from "@/components/vendedores/vendedor-form"
 import { LiquidarComisionesDialog } from "@/components/vendedores/liquidar-comisiones-dialog"
 import { useModal } from "@/contexts/modal-context"
+import { useCurrency } from "@/contexts/currency-context"
 
 interface Venta {
   id: string
@@ -58,11 +59,12 @@ const estadoVentaLabels: Record<string, string> = {
   ANULADA: "Anulada",
 }
 
-const formatDate = (dateStr: string) => {
+const formatDate = (dateStr: string, timezone: string) => {
   return new Date(dateStr).toLocaleDateString("es-AR", {
     day: "2-digit",
     month: "short",
     year: "numeric",
+    timeZone: timezone,
   })
 }
 
@@ -72,6 +74,7 @@ export default function VendedorDetallePage({ params }: { params: Promise<{ id: 
   const { data: session } = useSession()
   const isAdmin = session?.user?.role === "ADMIN"
   const { confirm, showError } = useModal()
+  const { timezone } = useCurrency()
   const [vendedor, setVendedor] = useState<VendedorDetalle | null>(null)
   const [loading, setLoading] = useState(true)
   const [editOpen, setEditOpen] = useState(false)
@@ -206,7 +209,7 @@ export default function VendedorDetallePage({ params }: { params: Promise<{ id: 
             </div>
             <div className="flex items-center gap-2">
               <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground shrink-0" />
-              <span className="text-xs sm:text-sm">Desde {formatDate(vendedor.createdAt)}</span>
+              <span className="text-xs sm:text-sm">Desde {formatDate(vendedor.createdAt, timezone)}</span>
             </div>
           </CardContent>
         </Card>
@@ -352,7 +355,7 @@ export default function VendedorDetallePage({ params }: { params: Promise<{ id: 
                         {formatCurrency(parseFloat(venta.total || "0"))}
                       </div>
                       <div className="text-xs sm:text-sm text-muted-foreground">
-                        {formatDate(venta.fecha)}
+                        {formatDate(venta.fecha, timezone)}
                       </div>
                     </div>
                   </div>

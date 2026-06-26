@@ -54,7 +54,7 @@ const FRECUENCIAS = [
 ]
 
 export default function GastosRecurrentesPage() {
-  const { formatPrice } = useCurrency()
+  const { formatPrice, timezone } = useCurrency()
   const [gastos, setGastos] = useState<Gasto[]>([])
   const [categorias, setCategorias] = useState<Categoria[]>([])
   const [loading, setLoading] = useState(true)
@@ -308,7 +308,7 @@ export default function GastosRecurrentesPage() {
                         {formatPrice(g.monto)} · {g.frecuencia.toLowerCase()}
                         {g.diaDelMes && g.frecuencia === "MENSUAL" && ` (día ${g.diaDelMes})`}
                         {" · próximo: "}
-                        {new Date(g.proximoVencimiento + "T00:00:00").toLocaleDateString("es-AR")}
+                        {new Date(g.proximoVencimiento + "T00:00:00").toLocaleDateString("es-AR", { timeZone: timezone })}
                       </div>
                     </div>
                     <div className="flex items-center gap-1">

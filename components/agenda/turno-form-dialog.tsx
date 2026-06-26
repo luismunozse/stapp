@@ -24,6 +24,7 @@ import { ClienteSelector } from "@/components/cotizaciones/cliente-selector"
 import { Loader2, AlertTriangle, AlertCircle } from "lucide-react"
 import type { TipoTurno, TurnoConRelaciones } from "@/types"
 import { StatusBanner } from "@/components/ui/status-banner"
+import { useCurrency } from "@/contexts/currency-context"
 
 const fetcher = (u: string) => fetch(u).then(r => r.json())
 
@@ -62,6 +63,7 @@ export function TurnoFormDialog({
   turno,
   defaultInicio,
 }: TurnoFormDialogProps) {
+  const { timezone } = useCurrency()
   const isEdit = !!turno
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -475,7 +477,7 @@ export function TurnoFormDialog({
                     <ul className="list-disc list-inside text-xs mt-1">
                       {dispCheck.conflictos.slice(0, 3).map((c) => (
                         <li key={c.id}>
-                          {new Date(c.inicio).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })}
+                          {new Date(c.inicio).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short", timeZone: timezone })}
                           {c.clienteNombre ? ` — ${c.clienteNombre}` : ""}
                         </li>
                       ))}
