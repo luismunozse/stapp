@@ -200,11 +200,12 @@ Seguimiento: {link_seguimiento}
     label: "Aviso: Recibido",
     category: "ordenes",
     description: "Aviso al cliente cuando la orden entra al estado RECIBIDO.",
-    variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
+    variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_PDF, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
     defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra recibido.
 
 Recibimos su equipo y ya está en cola de diagnóstico. Le avisaremos apenas tengamos novedades.
 
+Comprobante: {link_pdf}
 Seguimiento: {link_seguimiento}
 
 {empresa}`,
