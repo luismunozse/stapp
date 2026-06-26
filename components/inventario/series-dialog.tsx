@@ -28,6 +28,7 @@ import {
   Star,
   ShieldCheck,
 } from "lucide-react"
+import { useCurrency } from "@/contexts/currency-context"
 
 interface Serie {
   id: string
@@ -82,6 +83,7 @@ export function SeriesDialog({
   inventarioNombre,
   onSuccess,
 }: Props) {
+  const { timezone } = useCurrency()
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [series, setSeries] = useState<Serie[]>([])
@@ -438,13 +440,13 @@ export function SeriesDialog({
                       <div className="text-[11px] text-muted-foreground flex items-center gap-3">
                         {s.fecha_venta && (
                           <span>
-                            Vendida: {new Date(s.fecha_venta).toLocaleDateString("es-AR")}
+                            Vendida: {new Date(s.fecha_venta).toLocaleDateString("es-AR", { timeZone: timezone })}
                           </span>
                         )}
                         {s.fecha_garantia_vence && (
                           <span className="flex items-center gap-1">
                             <ShieldCheck className="h-3 w-3" />
-                            {new Date(s.fecha_garantia_vence).toLocaleDateString("es-AR")}
+                            {new Date(s.fecha_garantia_vence).toLocaleDateString("es-AR", { timeZone: timezone })}
                           </span>
                         )}
                       </div>

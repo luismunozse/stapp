@@ -22,6 +22,7 @@ import {
   PlayCircle,
 } from "lucide-react"
 import { PageShell } from "@/components/ui/page-shell"
+import { useCurrency } from "@/contexts/currency-context"
 
 interface Conteo {
   id: string
@@ -73,6 +74,7 @@ function estadoBadge(estado: Conteo["estado"]) {
 
 export default function ConteosPage() {
   const router = useRouter()
+  const { timezone } = useCurrency()
   const { data: conteosRes, isLoading, mutate } = useSWR<{ data: Conteo[] }>("/api/conteos", fetcher)
   const { data: depositosRes } = useSWR<{ data: Deposito[] }>("/api/depositos", fetcher)
   const conteos = conteosRes?.data || []
@@ -93,7 +95,7 @@ export default function ConteosPage() {
   const [notas, setNotas] = useState("")
 
   const resetForm = useCallback(() => {
-    const today = new Date().toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit" })
+    const today = new Date().toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", timeZone: timezone })
     setNombre(`Conteo ${today}`)
     setDepositoId("__all__")
     setTipo("PARCIAL")
@@ -197,6 +199,7 @@ export default function ConteosPage() {
                             month: "2-digit",
                             hour: "2-digit",
                             minute: "2-digit",
+                            timeZone: timezone,
                           })}
                         </span>
                         <span>

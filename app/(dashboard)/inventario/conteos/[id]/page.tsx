@@ -22,6 +22,7 @@ import {
   Save,
 } from "lucide-react"
 import { BarcodeScanner } from "@/components/inventario/barcode-scanner"
+import { useCurrency } from "@/contexts/currency-context"
 
 interface Conteo {
   id: string
@@ -62,6 +63,7 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 export default function ConteoDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
+  const { timezone } = useCurrency()
   const router = useRouter()
 
   const { data: conteo, mutate: refetchConteo, isLoading: loadingConteo } = useSWR<Conteo>(
@@ -238,8 +240,8 @@ export default function ConteoDetailPage({ params }: { params: Promise<{ id: str
             )}
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            Iniciado {new Date(conteo.iniciadoAt).toLocaleString("es-AR")}
-            {conteo.finalizadoAt && ` · Finalizado ${new Date(conteo.finalizadoAt).toLocaleString("es-AR")}`}
+            Iniciado {new Date(conteo.iniciadoAt).toLocaleString("es-AR", { timeZone: timezone })}
+            {conteo.finalizadoAt && ` · Finalizado ${new Date(conteo.finalizadoAt).toLocaleString("es-AR", { timeZone: timezone })}`}
           </p>
         </div>
       </div>

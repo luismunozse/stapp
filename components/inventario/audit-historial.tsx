@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, Plus, Pencil, Trash2, User, Clock } from "lucide-react"
+import { useCurrency } from "@/contexts/currency-context"
 
 interface AuditLog {
   id: string
@@ -58,6 +59,7 @@ function actionBadge(a: AuditLog["action"]) {
 }
 
 export function AuditHistorial({ open, onOpenChange, inventarioId, inventarioNombre }: Props) {
+  const { timezone } = useCurrency()
   const [logs, setLogs] = useState<AuditLog[]>([])
   const [loading, setLoading] = useState(false)
 
@@ -112,6 +114,7 @@ export function AuditHistorial({ open, onOpenChange, inventarioId, inventarioNom
                           year: "numeric",
                           hour: "2-digit",
                           minute: "2-digit",
+                          timeZone: timezone,
                         })}
                       </div>
                       <div className="flex items-center gap-1 justify-end mt-0.5">
