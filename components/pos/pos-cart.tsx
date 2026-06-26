@@ -19,6 +19,7 @@ import {
   ChevronUp,
   Shield,
   WifiOff,
+  Pencil,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useCurrency } from "@/contexts/currency-context"
@@ -402,6 +403,25 @@ export function PosCart({
                         )
                       })()}
                     </div>
+
+                    {/* Edit price / warranty / discount */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 sm:h-7 px-2 gap-1 text-xs text-muted-foreground shrink-0"
+                      onClick={() => {
+                        if (isExpanded) {
+                          setExpandedItem(null)
+                        } else {
+                          setExpandedItem(item.lineId)
+                          setGarantiaDraft(String(item.diasGarantia))
+                          setPrecioDraft(String(item.precioUnitario))
+                        }
+                      }}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">Editar</span>
+                    </Button>
 
                     {/* Remove */}
                     <Button
