@@ -105,6 +105,10 @@ export function formatOrden(orden: any) {
       id: orden.users.id,
       nombre: orden.users.nombre,
     } : undefined,
+    recibidoPor: orden.recibido ? {
+      id: orden.recibido.id,
+      nombre: orden.recibido.nombre,
+    } : null,
     fotos: orden.fotos_orden?.map(formatFoto),
     repuestos: orden.repuestos_orden?.map(formatRepuesto),
     facturas: orden.facturas,

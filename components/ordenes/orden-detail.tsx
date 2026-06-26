@@ -773,6 +773,16 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           onAsignarTecnico={handleAsignarTecnico}
           readOnly={userRole === "TECNICO"}
         />
+        {(orden as any).recibidoPor && (
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">
+                Recibido por
+              </div>
+              <p className="text-sm font-medium">{(orden as any).recibidoPor.nombre}</p>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Main Content - 2 columns */}
@@ -1019,6 +1029,16 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             updating={updating}
             onAsignarTecnico={handleAsignarTecnico}
           />
+          {(orden as any).recibidoPor && (
+            <Card>
+              <CardContent className="p-4">
+                <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">
+                  Recibido por
+                </div>
+                <p className="text-sm font-medium">{(orden as any).recibidoPor.nombre}</p>
+              </CardContent>
+            </Card>
+          )}
 
           <OrdenCostosCard
             ordenId={orden.id}

@@ -146,6 +146,7 @@ export interface OrdenServicio {
   sector?: SectorCliente | null
   cliente?: Cliente
   tecnico?: User | null
+  recibidoPor?: { id: string; nombre: string } | null
   // Campos de entrega
   fechaEntrega?: Date | null
   firmaClienteEntrega?: string | null

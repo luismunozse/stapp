@@ -58,6 +58,10 @@ export async function GET(
           nombre,
           email
         ),
+        recibido:recibido_por (
+          id,
+          nombre
+        ),
         repuestos_orden (
           *,
           inventario (*)
