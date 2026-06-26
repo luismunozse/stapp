@@ -43,17 +43,9 @@ export function PWAInstaller() {
       }
     }
 
-    // Registrar service worker (solo en subdominio de tenant)
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker
-        .register("/sw.js")
-        .then((registration) => {
-          console.log("Service Worker registrado:", registration)
-        })
-        .catch((error) => {
-          console.log("Error al registrar Service Worker:", error)
-        })
-    }
+    // El registro del Service Worker y el flujo de actualización viven en
+    // PWAUpdater (dueño único del ciclo de vida del SW). Acá solo manejamos
+    // el banner de instalación.
 
     // Detect iOS
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream
