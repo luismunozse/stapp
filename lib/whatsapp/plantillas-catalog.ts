@@ -365,6 +365,20 @@ Seguimiento: {link_seguimiento}
 {empresa}`,
   },
   {
+    key: "orden_estado_sin_falla_detectada",
+    label: "Aviso: Sin falla detectada",
+    category: "ordenes",
+    description: "Aviso al cliente cuando se revisa el equipo y no se reproduce la falla reportada.",
+    variables: [VAR_CLIENTE, VAR_NUMERO_ORDEN, VAR_DISPOSITIVO, VAR_LINK_SEGUIMIENTO, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, le informamos que su {dispositivo} (Orden #{numero_orden}) se encuentra sin falla detectada.
+
+Revisamos su equipo y no detectamos la falla reportada. Puede pasar a retirarlo en horario de atención. Quedamos a disposición.
+
+Seguimiento: {link_seguimiento}
+
+{empresa}`,
+  },
+  {
     key: "orden_solicitud_info",
     label: "Solicitar información",
     category: "operativo",

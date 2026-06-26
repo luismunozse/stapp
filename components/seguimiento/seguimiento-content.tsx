@@ -110,6 +110,7 @@ const estadoLabels: Record<string, string> = {
   ENTREGADO_SIN_COBRO: "Retirado sin cobro",
   CANCELADO: "Cancelado",
   SIN_REPARACION: "Sin reparación",
+  SIN_FALLA_DETECTADA: "Sin falla detectada",
 }
 
 const estadoDescriptions: Record<string, string> = {
@@ -125,6 +126,7 @@ const estadoDescriptions: Record<string, string> = {
   ENTREGADO_SIN_COBRO: "El equipo fue retirado sin cobro.",
   CANCELADO: "La orden fue cancelada. Contactanos si tenés consultas.",
   SIN_REPARACION: "Lamentablemente no fue posible reparar el equipo.",
+  SIN_FALLA_DETECTADA: "Revisamos tu equipo y no detectamos la falla reportada. Ya podés pasar a retirarlo.",
 }
 
 const estadoColors: Record<string, { text: string; bg: string; border: string }> = {
@@ -140,6 +142,7 @@ const estadoColors: Record<string, { text: string; bg: string; border: string }>
   ENTREGADO_SIN_COBRO: { text: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-950/40", border: "border-amber-200 dark:border-amber-800" },
   CANCELADO: { text: "text-red-600 dark:text-red-400", bg: "bg-red-50 dark:bg-red-950/40", border: "border-red-200 dark:border-red-800" },
   SIN_REPARACION: { text: "text-red-600 dark:text-red-400", bg: "bg-red-50 dark:bg-red-950/40", border: "border-red-200 dark:border-red-800" },
+  SIN_FALLA_DETECTADA: { text: "text-teal-600 dark:text-teal-400", bg: "bg-teal-50 dark:bg-teal-950/40", border: "border-teal-200 dark:border-teal-800" },
 }
 
 const estadoIcons: Record<string, typeof Smartphone> = {

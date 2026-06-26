@@ -68,6 +68,8 @@ const badgeVariants = cva(
           "border-transparent bg-muted text-muted-foreground",
         sin_reparacion:
           "border-transparent bg-destructive text-destructive-foreground",
+        sin_falla_detectada:
+          "border-transparent bg-teal-500 text-white",
       },
     },
     defaultVariants: {
@@ -98,6 +100,7 @@ const variantIcons: Record<string, React.ComponentType<{ className?: string }>> 
   entregado_sin_cobro: HandCoins,
   cancelado: Ban,
   sin_reparacion: XCircle,
+  sin_falla_detectada: Info,
 }
 
 export interface BadgeProps
@@ -148,6 +151,7 @@ function getOrderStatusVariant(status: string): BadgeProps["variant"] {
     ENTREGADO_SIN_COBRO: "entregado_sin_cobro",
     CANCELADO: "cancelado",
     SIN_REPARACION: "sin_reparacion",
+    SIN_FALLA_DETECTADA: "sin_falla_detectada",
   }
   return statusMap[status] || "default"
 }
@@ -167,6 +171,7 @@ function getOrderStatusLabel(status: string): string {
     ENTREGADO_SIN_COBRO: "Entregado sin Cobro",
     CANCELADO: "Cancelado",
     SIN_REPARACION: "Sin Reparación",
+    SIN_FALLA_DETECTADA: "Sin Falla Detectada",
   }
   return labelMap[status] || status
 }

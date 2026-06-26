@@ -57,8 +57,8 @@ export async function POST(
 
     const sinCobro = data.sinCobro === true
     const estadosPermitidos = sinCobro
-      ? ["REPARADO", "SIN_REPARACION", "EN_DIAGNOSTICO", "RECIBIDO", "EN_REPARACION", "ESPERANDO_REPUESTO"]
-      : ["REPARADO", "SIN_REPARACION"]
+      ? ["REPARADO", "SIN_REPARACION", "SIN_FALLA_DETECTADA", "EN_DIAGNOSTICO", "RECIBIDO", "EN_REPARACION", "ESPERANDO_REPUESTO"]
+      : ["REPARADO", "SIN_REPARACION", "SIN_FALLA_DETECTADA"]
 
     if (!estadosPermitidos.includes(orden.estado)) {
       return NextResponse.json(
@@ -67,7 +67,7 @@ export async function POST(
       )
     }
 
-    const esRetiro = orden.estado === "SIN_REPARACION" && !sinCobro
+    const esRetiro = (orden.estado === "SIN_REPARACION" || orden.estado === "SIN_FALLA_DETECTADA") && !sinCobro
     const nuevoEstado = sinCobro ? "ENTREGADO_SIN_COBRO" : esRetiro ? "ENTREGADO_SIN_REPARACION" : "ENTREGADO"
 
     // Motivo sin cobro: si vino explícito lo usamos, sino derivamos del estado origen.
@@ -80,6 +80,7 @@ export async function POST(
         // Sugerencia automática (mirror de defaultMotivoSinCobro)
         const e = orden.estado
         if (e === "SIN_REPARACION") motivoSinCobro = "NO_REPARABLE"
+        else if (e === "SIN_FALLA_DETECTADA") motivoSinCobro = "OTRO"
         else if (e === "REPARADO") motivoSinCobro = "CORTESIA"
         else if (e === "PRESUPUESTADO" || e === "APROBADO" || e === "EN_REPARACION" || e === "ESPERANDO_REPUESTO") {
           motivoSinCobro = "CLIENTE_DESISTIO"

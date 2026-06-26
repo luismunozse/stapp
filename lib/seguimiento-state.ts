@@ -22,6 +22,7 @@ export const ESTADOS_RETIRO = new Set([
 export const ESTADOS_TERMINAL = new Set([
   "CANCELADO",
   "SIN_REPARACION",
+  "SIN_FALLA_DETECTADA",
 ])
 
 export const ESTADOS_COMPLETADOS = new Set([
@@ -268,6 +269,7 @@ export function getRetiroLabel(motivo: MotivoSinCobro | string | null | undefine
 export function defaultMotivoSinCobro(estadoActual: string | null | undefined): MotivoSinCobro {
   const e = (estadoActual || "").toUpperCase().trim()
   if (e === "SIN_REPARACION") return "NO_REPARABLE"
+  if (e === "SIN_FALLA_DETECTADA") return "OTRO"
   if (e === "REPARADO") return "CORTESIA"
   if (e === "PRESUPUESTADO" || e === "APROBADO" || e === "EN_REPARACION" || e === "ESPERANDO_REPUESTO") {
     return "CLIENTE_DESISTIO"

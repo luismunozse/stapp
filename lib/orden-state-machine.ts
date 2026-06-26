@@ -9,8 +9,8 @@ import type { EstadoOrden } from "@/types"
  * Cada estado tiene una lista de estados a los que puede transicionar.
  */
 export const TRANSICIONES_VALIDAS: Record<EstadoOrden, EstadoOrden[]> = {
-  RECIBIDO: ["EN_DIAGNOSTICO", "PRESUPUESTADO", "EN_REPARACION", "CANCELADO", "SIN_REPARACION", "ENTREGADO_SIN_COBRO"],
-  EN_DIAGNOSTICO: ["PRESUPUESTADO", "EN_REPARACION", "CANCELADO", "SIN_REPARACION", "ENTREGADO_SIN_COBRO"],
+  RECIBIDO: ["EN_DIAGNOSTICO", "PRESUPUESTADO", "EN_REPARACION", "CANCELADO", "SIN_REPARACION", "SIN_FALLA_DETECTADA", "ENTREGADO_SIN_COBRO"],
+  EN_DIAGNOSTICO: ["PRESUPUESTADO", "EN_REPARACION", "CANCELADO", "SIN_REPARACION", "SIN_FALLA_DETECTADA", "ENTREGADO_SIN_COBRO"],
   PRESUPUESTADO: ["APROBADO", "EN_DIAGNOSTICO", "CANCELADO", "SIN_REPARACION"],
   APROBADO: ["EN_REPARACION", "CANCELADO"],
   EN_REPARACION: ["ESPERANDO_REPUESTO", "REPARADO", "CANCELADO", "SIN_REPARACION"],
@@ -21,6 +21,7 @@ export const TRANSICIONES_VALIDAS: Record<EstadoOrden, EstadoOrden[]> = {
   ENTREGADO_SIN_COBRO: [], // Estado terminal - entregado sin cobrar
   CANCELADO: ["RECIBIDO"], // Puede reactivarse
   SIN_REPARACION: ["RECIBIDO", "ENTREGADO_SIN_REPARACION", "ENTREGADO_SIN_COBRO"], // Puede reactivarse o retirarse
+  SIN_FALLA_DETECTADA: ["RECIBIDO", "ENTREGADO_SIN_REPARACION", "ENTREGADO_SIN_COBRO"], // Puede reactivarse o retirarse
 }
 
 /**
@@ -119,4 +120,5 @@ export const ESTADO_LABELS: Record<EstadoOrden, string> = {
   ENTREGADO_SIN_COBRO: "Entregado sin Cobro",
   CANCELADO: "Cancelado",
   SIN_REPARACION: "Sin Reparación",
+  SIN_FALLA_DETECTADA: "Sin Falla Detectada",
 }
