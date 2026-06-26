@@ -195,13 +195,13 @@ export async function GET(request: Request) {
     if (vencimiento === "vencidas") {
       const now = new Date().toISOString()
       query = query.lt("fecha_prometida", now)
-        .not("estado", "in", "(ENTREGADO,ENTREGADO_SIN_REPARACION,CANCELADO,SIN_REPARACION)")
+        .not("estado", "in", "(ENTREGADO,ENTREGADO_SIN_REPARACION,ENTREGADO_SIN_COBRO,CANCELADO,SIN_REPARACION,SIN_FALLA_DETECTADA)")
     } else if (vencimiento === "venceHoy") {
       const hoy = new Date()
       const inicioHoy = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()).toISOString()
       const finHoy = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate(), 23, 59, 59).toISOString()
       query = query.gte("fecha_prometida", inicioHoy).lte("fecha_prometida", finHoy)
-        .not("estado", "in", "(ENTREGADO,ENTREGADO_SIN_REPARACION,CANCELADO,SIN_REPARACION)")
+        .not("estado", "in", "(ENTREGADO,ENTREGADO_SIN_REPARACION,ENTREGADO_SIN_COBRO,CANCELADO,SIN_REPARACION,SIN_FALLA_DETECTADA)")
     }
 
     if (search) {

@@ -351,6 +351,7 @@ const estadoLabels: Record<string, string> = {
   ENTREGADO_SIN_REPARACION: "Retirado sin Reparación",
   CANCELADO: "Cancelado",
   SIN_REPARACION: "Sin Reparación",
+  SIN_FALLA_DETECTADA: "Sin Falla Detectada",
 }
 
 function getEstadoLabel(estado: string): string {
