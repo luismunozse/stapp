@@ -11,6 +11,8 @@
  *   POST /message/sendText/:instanceName       -> { number, text }
  */
 
+import { formatPhoneForCountry } from "@/lib/countries"
+
 export interface EvolutionCredentials {
   baseUrl: string
   apiKey: string
@@ -62,12 +64,20 @@ async function evoFetch<T = unknown>(
 
 /**
  * Formatear telefono al formato Evolution: digitos puros con codigo pais.
- * Argentina default. Acepta entrada con o sin +, espacios, guiones, 15.
+ * Usa el pais de la organizacion (countryCode) para resolver numeros locales;
+ * Argentina como fallback cuando no se conoce el pais. Acepta entrada con o sin
+ * +, espacios, guiones, 15.
  */
-export function formatPhoneNumber(phone: string): string {
-  let cleaned = phone.replace(/\D/g, "")
-  if (cleaned.startsWith("0")) cleaned = cleaned.substring(1)
-  if (!cleaned.startsWith("54")) cleaned = "54" + cleaned
+export function formatPhoneNumber(phone: string, countryCode?: string | null): string {
+  let cleaned: string
+  if (countryCode) {
+    cleaned = formatPhoneForCountry(phone, countryCode)
+  } else {
+    cleaned = phone.replace(/\D/g, "")
+    if (cleaned.startsWith("0")) cleaned = cleaned.substring(1)
+    if (!cleaned.startsWith("54")) cleaned = "54" + cleaned
+  }
+  // Limpieza del viejo prefijo "15" de moviles argentinos (no afecta otros paises).
   cleaned = cleaned.replace(/^(54\d{2,4})15(\d{6,8})$/, "$1$2")
   return cleaned
 }
@@ -218,10 +228,11 @@ export async function deleteInstance(creds: EvolutionCredentials): Promise<{ suc
 export async function sendText(
   creds: EvolutionCredentials,
   to: string,
-  text: string
+  text: string,
+  countryCode?: string | null
 ): Promise<EvolutionSendResult> {
   try {
-    const number = formatPhoneNumber(to)
+    const number = formatPhoneNumber(to, countryCode)
     const { ok, status, data, raw } = await evoFetch<{
       key?: { id?: string }
       messageId?: string

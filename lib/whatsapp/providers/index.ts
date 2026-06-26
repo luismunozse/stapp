@@ -41,6 +41,20 @@ async function loadConfig(organizationId: string): Promise<ConfigRow | null> {
   return (data as ConfigRow | null) ?? null
 }
 
+/**
+ * País de la organización (código ISO, ej. "AR", "CR"). Se usa para formatear
+ * el número al código de país correcto antes de enviar. Si no está definido,
+ * el formateo cae a Argentina por defecto.
+ */
+async function loadOrgCountry(organizationId: string): Promise<string | null> {
+  const { data } = await supabaseAdmin
+    .from("organizations")
+    .select("pais")
+    .eq("id", organizationId)
+    .single()
+  return (data?.pais as string | null) ?? null
+}
+
 export function getEvolutionCreds(config: ConfigRow): EvolutionCredentials | null {
   const platform = getPlatformEvolutionConfig()
   if (!platform || !config.evolution_instance_name) {
@@ -67,13 +81,14 @@ export async function sendWhatsAppText(
   }
 
   const provider: WhatsAppProvider = config.provider || "meta"
+  const countryCode = await loadOrgCountry(organizationId)
 
   if (provider === "evolution") {
     const creds = getEvolutionCreds(config)
     if (!creds) {
       return { success: false, error: "Evolution API incompleta (URL/instancia/api key)", provider }
     }
-    const result = await evoSendText(creds, to, text)
+    const result = await evoSendText(creds, to, text, countryCode)
     return { ...result, provider }
   }
 
@@ -82,7 +97,7 @@ export async function sendWhatsAppText(
     return { success: false, error: "Meta credenciales incompletas", provider }
   }
   const accessToken = decrypt(config.access_token_encrypted)
-  const result = await metaSendText(config.phone_number_id, accessToken, to, text)
+  const result = await metaSendText(config.phone_number_id, accessToken, to, text, countryCode)
   return { ...result, provider }
 }
 
@@ -104,6 +119,7 @@ export async function sendWhatsAppTemplate(
   }
 
   const provider: WhatsAppProvider = config.provider || "meta"
+  const countryCode = await loadOrgCountry(organizationId)
 
   if (provider === "evolution") {
     if (!renderedFallbackText) {
@@ -113,7 +129,7 @@ export async function sendWhatsAppTemplate(
     if (!creds) {
       return { success: false, error: "Evolution API incompleta", provider }
     }
-    const result = await evoSendText(creds, to, renderedFallbackText)
+    const result = await evoSendText(creds, to, renderedFallbackText, countryCode)
     return { ...result, provider }
   }
 
@@ -127,7 +143,8 @@ export async function sendWhatsAppTemplate(
     to,
     templateName,
     language,
-    components
+    components,
+    countryCode
   )
   return { ...result, provider }
 }
