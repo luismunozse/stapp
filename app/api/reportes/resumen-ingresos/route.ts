@@ -3,6 +3,7 @@ import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { getDeviceTypeLabel } from "@/lib/device-types"
+import { DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 export async function GET(request: Request) {
   try {
@@ -10,6 +11,13 @@ export async function GET(request: Request) {
     if (error) return error
 
     const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
+
+    const { data: orgTz } = await supabaseAdmin
+      .from("organizations")
+      .select("zona_horaria")
+      .eq("id", organizationId!)
+      .single()
+    const tz = orgTz?.zona_horaria ?? DEFAULT_TIMEZONE
 
     const { searchParams } = new URL(request.url)
     const meses = parseInt(searchParams.get("meses") || "6")
@@ -114,8 +122,8 @@ export async function GET(request: Request) {
         const [year, month] = key.split("-")
         const date = new Date(parseInt(year), parseInt(month) - 1)
         return {
-          mes: date.toLocaleDateString("es-AR", { month: "short" }),
-          mesCompleto: date.toLocaleDateString("es-AR", { month: "long", year: "numeric" }),
+          mes: date.toLocaleDateString("es-AR", { month: "short", timeZone: tz }),
+          mesCompleto: date.toLocaleDateString("es-AR", { month: "long", year: "numeric", timeZone: tz }),
           servicios: data.servicios,
           ventas: data.ventas,
           total: data.servicios + data.ventas,

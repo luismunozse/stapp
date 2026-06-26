@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { hasPlanFeature } from "@/lib/subscriptions"
+import { DEFAULT_TIMEZONE, formatDateValue } from "@/lib/timezone"
 
 export async function GET(request: Request) {
   try {
@@ -111,7 +112,7 @@ function jsonToCsv(data: unknown): string {
 function jsonToText(data: unknown, type: string): string {
   const lines: string[] = []
   lines.push(`Reporte: ${type}`)
-  lines.push(`Fecha: ${new Date().toLocaleDateString("es-AR")}`)
+  lines.push(`Fecha: ${formatDateValue(new Date(), DEFAULT_TIMEZONE)}`)
   lines.push("=".repeat(50))
   lines.push("")
 

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 /**
  * Tendencia financiera mensual — últimos N meses.
@@ -23,6 +24,13 @@ export async function GET(request: Request) {
     // Resolve branch filter — applied to every P&L sub-source
     const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
     const sid = !filtro.verTodas && filtro.sucursalId ? filtro.sucursalId : null
+
+    const { data: orgTz } = await supabaseAdmin
+      .from("organizations")
+      .select("zona_horaria")
+      .eq("id", organizationId!)
+      .single()
+    const tz = orgTz?.zona_horaria ?? DEFAULT_TIMEZONE
 
     const { searchParams } = new URL(request.url)
     const meses = Math.max(1, Math.min(24, parseInt(searchParams.get("meses") || "6")))
@@ -58,8 +66,8 @@ export async function GET(request: Request) {
       const d = new Date(now.getFullYear(), now.getMonth() - meses + 1 + i, 1)
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
       buckets[key] = {
-        mes: d.toLocaleDateString("es-AR", { month: "short" }),
-        mesCompleto: d.toLocaleDateString("es-AR", { month: "long", year: "numeric" }),
+        mes: d.toLocaleDateString("es-AR", { month: "short", timeZone: tz }),
+        mesCompleto: d.toLocaleDateString("es-AR", { month: "long", year: "numeric", timeZone: tz }),
         ingresos: 0,
         ingresosVentas: 0,
         ingresosServicios: 0,

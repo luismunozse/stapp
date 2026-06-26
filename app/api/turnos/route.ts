@@ -212,7 +212,7 @@ export async function POST(request: Request) {
     // Verificar módulo agenda activo
     const { data: org } = await supabaseAdmin
       .from("organizations")
-      .select("modulo_agenda")
+      .select("modulo_agenda, zona_horaria")
       .eq("id", organizationId!)
       .single()
     if (!org?.modulo_agenda) {
@@ -221,6 +221,7 @@ export async function POST(request: Request) {
         { status: 403 },
       )
     }
+    const tz = org?.zona_horaria ?? DEFAULT_TIMEZONE
 
     const body = await request.json()
     const data = turnoCreateSchema.parse(body)
@@ -312,6 +313,7 @@ export async function POST(request: Request) {
           year: "numeric",
           hour: "2-digit",
           minute: "2-digit",
+          timeZone: tz,
         })
         return NextResponse.json(
           { error: `El técnico ya tiene un turno en ese horario (${fechaConflicto})` },

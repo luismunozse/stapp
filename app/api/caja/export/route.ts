@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { fetchMovimientosDia, computeTotales } from "@/lib/caja-utils"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { supabaseAdmin } from "@/lib/supabase"
+import { DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 const METODO_LABELS: Record<string, string> = {
   EFECTIVO: "Efectivo",
@@ -47,6 +49,13 @@ export async function GET(request: Request) {
     })
     const sid = filtro.verTodas ? null : filtro.sucursalId
 
+    const { data: orgTz } = await supabaseAdmin
+      .from("organizations")
+      .select("zona_horaria")
+      .eq("id", organizationId!)
+      .single()
+    const tz = orgTz?.zona_horaria ?? DEFAULT_TIMEZONE
+
     const { searchParams } = new URL(request.url)
     const fecha = searchParams.get("fecha") || new Date().toISOString().split("T")[0]
     const fechaDesde = `${fecha}T00:00:00`
@@ -57,7 +66,7 @@ export async function GET(request: Request) {
 
     const headers = ["Hora", "Tipo", "Método de Pago", "Monto", "Referencia", "Observaciones"]
     const rows = movimientos.map((m) => [
-      new Date(m.fecha).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }),
+      new Date(m.fecha).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", timeZone: tz }),
       TIPO_LABELS[m.tipo] || m.tipo,
       METODO_LABELS[m.metodoPago] || m.metodoPago,
       m.esEgreso ? `-${m.monto.toFixed(2)}` : m.monto.toFixed(2),

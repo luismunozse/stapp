@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 /**
  * GET /api/reportes/comparativa-ingresos
@@ -16,6 +17,13 @@ export async function GET() {
     if (error) return error
 
     const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
+
+    const { data: orgTz } = await supabaseAdmin
+      .from("organizations")
+      .select("zona_horaria")
+      .eq("id", organizationId!)
+      .single()
+    const tz = orgTz?.zona_horaria ?? DEFAULT_TIMEZONE
 
     const now = new Date()
     const inicioActual = new Date(now.getFullYear(), now.getMonth(), 1)
@@ -125,7 +133,7 @@ export async function GET() {
 
     return NextResponse.json({
       mesActual: {
-        nombre: obtenerNombreMes(now),
+        nombre: obtenerNombreMes(now, tz),
         // NET income (base imponible) after notas de crédito
         total: actual.total,
         totalIva: actual.totalIva,
@@ -134,7 +142,7 @@ export async function GET() {
         totalNotasCredito: actual.totalNotasCredito,
       },
       mesAnterior: {
-        nombre: obtenerNombreMes(new Date(now.getFullYear(), now.getMonth() - 1)),
+        nombre: obtenerNombreMes(new Date(now.getFullYear(), now.getMonth() - 1), tz),
         // NET income (base imponible) after notas de crédito
         total: anterior.total,
         totalIva: anterior.totalIva,
@@ -157,6 +165,6 @@ export async function GET() {
   }
 }
 
-function obtenerNombreMes(fecha: Date): string {
-  return fecha.toLocaleDateString("es-AR", { month: "long", year: "numeric" })
+function obtenerNombreMes(fecha: Date, tz: string): string {
+  return fecha.toLocaleDateString("es-AR", { month: "long", year: "numeric", timeZone: tz })
 }

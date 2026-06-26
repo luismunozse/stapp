@@ -3,6 +3,7 @@ import { z } from "zod"
 import { requireSuperadmin } from "@/lib/superadmin-auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { safeParseBody } from "@/lib/api-utils"
+import { DEFAULT_TIMEZONE, formatDateValue } from "@/lib/timezone"
 
 const renewSchema = z.object({
   organizationId: z.string().min(1, "ID de organización requerido"),
@@ -233,7 +234,7 @@ export async function POST(request: Request) {
         organization_id: admin.organization_id,
         user_id: admin.id,
         title: "Suscripción Premium activada",
-        body: `Tu plan Premium está activo hasta ${periodEnd.toLocaleDateString("es-AR")}`,
+        body: `Tu plan Premium está activo hasta ${formatDateValue(periodEnd, DEFAULT_TIMEZONE)}`,
         type: "SUBSCRIPTION",
         icon: "credit-card",
         action_url: "/configuracion",
@@ -244,7 +245,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: `Suscripción Premium activada hasta ${periodEnd.toLocaleDateString("es-AR")}`,
+      message: `Suscripción Premium activada hasta ${formatDateValue(periodEnd, DEFAULT_TIMEZONE)}`,
       periodEnd: periodEnd.toISOString(),
     })
   } catch (error) {

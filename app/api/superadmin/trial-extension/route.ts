@@ -9,6 +9,7 @@ import {
   trialAdjustmentStatus,
   TRIAL_NET_EXTENSION_CAP_DAYS,
 } from "@/lib/trial"
+import { DEFAULT_TIMEZONE, formatDateValue } from "@/lib/timezone"
 
 // `dias` accepts negative values (shorten) and the schema also supports
 // `remove: true` to end the trial immediately. Either `remove` or a non-zero
@@ -99,7 +100,7 @@ export async function POST(request: NextRequest) {
       extendido_por: email || "superadmin",
     })
 
-    const fechaFmt = newTrialEnd.toLocaleDateString("es-AR")
+    const fechaFmt = formatDateValue(newTrialEnd, DEFAULT_TIMEZONE)
     const accionDesc = isRemoval
       ? "trial finalizado"
       : deltaDias > 0
