@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { Maximize, Minimize, RefreshCw, WifiOff, ChevronLeft, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 interface KioskOrder {
   id: string
@@ -362,7 +363,7 @@ export function KioskDisplay({ token }: KioskDisplayProps) {
             </div>
           )}
           <p className="text-sm text-gray-400">
-            Actualizado: {lastUpdate.toLocaleTimeString("es-AR")}
+            Actualizado: {lastUpdate.toLocaleTimeString("es-AR", { timeZone: DEFAULT_TIMEZONE })}
           </p>
           <button
             onClick={toggleFullscreen}

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Calendar, Clock, ArrowRight } from "lucide-react"
 import type { BlogPost } from "@/lib/blog-data"
+import { DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 interface BlogListProps {
   posts: BlogPost[]
@@ -75,6 +76,7 @@ export function BlogList({ posts, categories }: BlogListProps) {
                               day: "numeric",
                               month: "short",
                               year: "numeric",
+                              timeZone: DEFAULT_TIMEZONE,
                             })}
                           </time>
                         </div>

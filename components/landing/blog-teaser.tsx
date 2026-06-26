@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { ArrowRight, Calendar, Clock } from "lucide-react"
 import { blogPosts } from "@/lib/blog-data"
+import { DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 export function BlogTeaser() {
   const latestPosts = [...blogPosts]
@@ -67,6 +68,7 @@ export function BlogTeaser() {
                           day: "numeric",
                           month: "short",
                           year: "numeric",
+                          timeZone: DEFAULT_TIMEZONE,
                         })}
                       </time>
                     </span>

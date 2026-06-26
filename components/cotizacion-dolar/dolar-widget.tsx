@@ -13,6 +13,7 @@ import {
   Banknote
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 interface CotizacionDolar {
   moneda: string
@@ -235,7 +236,7 @@ export function DolarWidget() {
             {/* Última actualización */}
             {cotizacionActual?.fechaActualizacion && (
               <p className="text-xs text-muted-foreground text-center pt-2">
-                Actualizado: {new Date(cotizacionActual.fechaActualizacion).toLocaleString("es-AR")}
+                Actualizado: {new Date(cotizacionActual.fechaActualizacion).toLocaleString("es-AR", { timeZone: DEFAULT_TIMEZONE })}
               </p>
             )}
           </>

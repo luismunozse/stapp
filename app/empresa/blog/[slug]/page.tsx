@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { ArrowLeft, Calendar, Clock, ArrowRight } from "lucide-react"
 import { BreadcrumbJsonLd } from "@/components/seo/json-ld"
 import { blogPosts, getBlogPostBySlug } from "@/lib/blog-data"
+import { DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 interface BlogPostPageProps {
   params: Promise<{ slug: string }>
@@ -113,6 +114,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
                         day: "numeric",
                         month: "long",
                         year: "numeric",
+                        timeZone: DEFAULT_TIMEZONE,
                       })}
                     </time>
                   </div>

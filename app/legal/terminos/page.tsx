@@ -1,4 +1,5 @@
 import { Metadata } from "next"
+import { DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 export const metadata: Metadata = {
   title: "Términos de Servicio | STApp",
@@ -13,7 +14,7 @@ export default function TerminosPage() {
     <article className="prose prose-gray max-w-none">
       <h1 className="text-3xl font-bold text-gray-900 mb-8">Términos de Servicio</h1>
 
-      <p className="text-gray-500 mb-8">Última actualización: {new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+      <p className="text-gray-500 mb-8">Última actualización: {new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric', timeZone: DEFAULT_TIMEZONE })}</p>
 
       <section className="mb-8">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">1. Aceptación de los Términos</h2>

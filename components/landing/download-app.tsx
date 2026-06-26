@@ -21,6 +21,7 @@ import {
 } from "lucide-react"
 import { LazyMotion, domAnimation, m, AnimatePresence } from "framer-motion"
 import { cn } from "@/lib/utils"
+import { DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 interface ApkInfo {
   available: boolean
@@ -306,6 +307,7 @@ export function DownloadApp() {
       day: "numeric",
       month: "long",
       year: "numeric",
+      timeZone: DEFAULT_TIMEZONE,
     })
   }
 
