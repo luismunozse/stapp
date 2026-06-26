@@ -49,12 +49,18 @@ export async function GET(request: Request) {
     })
     const sid = filtro.verTodas ? null : filtro.sucursalId
 
-    const { data: orgTz } = await supabaseAdmin
-      .from("organizations")
-      .select("zona_horaria")
-      .eq("id", organizationId!)
-      .single()
-    const tz = orgTz?.zona_horaria ?? DEFAULT_TIMEZONE
+    // Fail-safe: un lookup de zona horaria nunca debe tumbar el export.
+    let tz = DEFAULT_TIMEZONE
+    try {
+      const { data: orgTz } = await supabaseAdmin
+        .from("organizations")
+        .select("zona_horaria")
+        .eq("id", organizationId!)
+        .single()
+      if (orgTz?.zona_horaria) tz = orgTz.zona_horaria
+    } catch {
+      // queda DEFAULT_TIMEZONE
+    }
 
     const { searchParams } = new URL(request.url)
     const fecha = searchParams.get("fecha") || new Date().toISOString().split("T")[0]
