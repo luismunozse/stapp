@@ -21,6 +21,7 @@ import {
 } from "lucide-react"
 import { useSuperadminFetch } from "@/hooks/use-superadmin-fetch"
 import { cn } from "@/lib/utils"
+import { DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 interface FeatureAdoption {
   feature: string
@@ -109,6 +110,7 @@ export function FeatureUsageContent() {
                 day: "2-digit",
                 month: "short",
                 year: "numeric",
+                timeZone: DEFAULT_TIMEZONE,
               })}
               <span className="text-muted-foreground/60">· cron diario 3 AM</span>
             </p>
@@ -324,6 +326,7 @@ export function FeatureUsageContent() {
                                   day: "2-digit",
                                   month: "short",
                                   year: "numeric",
+                                  timeZone: DEFAULT_TIMEZONE,
                                 })
                               : "—"}
                           </span>

@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/select"
 import { useSuperadminFetch } from "@/hooks/use-superadmin-fetch"
 import { cn } from "@/lib/utils"
+import { DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 interface Lead {
   id: string
@@ -375,6 +376,7 @@ export function LeadsContent() {
                         month: "short",
                         hour: "2-digit",
                         minute: "2-digit",
+                        timeZone: DEFAULT_TIMEZONE,
                       })}
                     </span>
                     {lead.chatbot_conversaciones && lead.chatbot_conversaciones.length > 0 && (

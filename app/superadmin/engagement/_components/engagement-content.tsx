@@ -60,6 +60,7 @@ import {
 } from "recharts"
 import { useSuperadminFetch, useSuperadminMutation } from "@/hooks/use-superadmin-fetch"
 import { toast } from "sonner"
+import { DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1033,7 +1034,7 @@ export function EngagementContent() {
                           <span className="text-sm font-medium">{c.nombre}</span>
                         </div>
                         <span className="text-xs text-muted-foreground">
-                          {new Date(c.canceledAt).toLocaleDateString("es-AR")}
+                          {new Date(c.canceledAt).toLocaleDateString("es-AR", { timeZone: DEFAULT_TIMEZONE })}
                         </span>
                       </div>
                     ))

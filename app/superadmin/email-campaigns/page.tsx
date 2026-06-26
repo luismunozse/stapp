@@ -23,6 +23,7 @@ import {
   X,
 } from "lucide-react"
 import { useSuperadminFetch, useSuperadminMutation } from "@/hooks/use-superadmin-fetch"
+import { DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { toast } from "sonner"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 
@@ -554,7 +555,7 @@ export default function EmailCampaignsPage() {
                             <span className="text-red-500">{campaign.totalFailed} fallidos</span>
                           )}
                         </div>
-                        <span>{new Date(campaign.sentAt).toLocaleDateString("es-AR")}</span>
+                        <span>{new Date(campaign.sentAt).toLocaleDateString("es-AR", { timeZone: DEFAULT_TIMEZONE })}</span>
                       </div>
                     </div>
                   ))}

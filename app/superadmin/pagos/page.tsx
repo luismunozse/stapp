@@ -21,6 +21,7 @@ import {
   Clock,
 } from "lucide-react"
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils"
+import { DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { useSuperadminFetch } from "@/hooks/use-superadmin-fetch"
 import { useLastUpdated } from "@/hooks/use-last-updated"
 import { LastUpdated } from "@/components/superadmin/last-updated"
@@ -46,6 +47,7 @@ function formatShortDate(dateStr: string | null | undefined): string {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
+      timeZone: DEFAULT_TIMEZONE,
     })
   } catch {
     return "—"

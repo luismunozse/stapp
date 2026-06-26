@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/select"
 import { useSuperadminFetch } from "@/hooks/use-superadmin-fetch"
 import { cn } from "@/lib/utils"
+import { DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 interface ConversacionResumen {
   id: string
@@ -115,6 +116,7 @@ export function ConversacionesContent() {
                 year: "numeric",
                 hour: "2-digit",
                 minute: "2-digit",
+                timeZone: DEFAULT_TIMEZONE,
               })}
               {" - "}
               {msgs.length} mensajes
@@ -163,6 +165,7 @@ export function ConversacionesContent() {
                         hour: "2-digit",
                         minute: "2-digit",
                         second: "2-digit",
+                        timeZone: DEFAULT_TIMEZONE,
                       })}
                       {msg.intencion_detectada && (
                         <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5">
@@ -300,6 +303,7 @@ export function ConversacionesContent() {
                         month: "short",
                         hour: "2-digit",
                         minute: "2-digit",
+                        timeZone: DEFAULT_TIMEZONE,
                       })}
                     </span>
                   </div>

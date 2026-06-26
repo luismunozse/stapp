@@ -6,6 +6,7 @@ import { formatDistanceToNow } from "date-fns"
 import { es } from "date-fns/locale"
 import { CheckCircle2, XCircle, Edit, Plus } from "lucide-react"
 import type { PlanAudit } from "@/types/superadmin"
+import { DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 interface AuditTimelineProps {
   auditLogs: PlanAudit[]
@@ -192,6 +193,7 @@ export function AuditTimeline({ auditLogs }: AuditTimelineProps) {
                     {new Date(log.created_at).toLocaleString("es-AR", {
                       dateStyle: "medium",
                       timeStyle: "short",
+                      timeZone: DEFAULT_TIMEZONE,
                     })}
                   </div>
                 </div>

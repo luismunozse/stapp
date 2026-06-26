@@ -3,6 +3,7 @@ import { Ban } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import type { OrganizationDetail, SubscriptionWithPlan } from "@/types/superadmin"
+import { DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 interface OrgCommandHeaderProps {
   organization: OrganizationDetail
@@ -29,7 +30,7 @@ export function OrgCommandHeader({ organization, subscription }: OrgCommandHeade
     if (daysLeft > 0) {
       const trialEndFormatted = new Date(subscription!.trial_end!).toLocaleDateString(
         "es-AR",
-        { day: "2-digit", month: "2-digit" }
+        { day: "2-digit", month: "2-digit", timeZone: DEFAULT_TIMEZONE }
       )
       trialBadge = (
         <Badge variant="warningSoft">
@@ -41,7 +42,7 @@ export function OrgCommandHeader({ organization, subscription }: OrgCommandHeade
     }
   }
 
-  const createdAt = new Date(organization.created_at).toLocaleDateString("es-AR")
+  const createdAt = new Date(organization.created_at).toLocaleDateString("es-AR", { timeZone: DEFAULT_TIMEZONE })
 
   return (
     <Card>
@@ -97,7 +98,7 @@ export function OrgCommandHeader({ organization, subscription }: OrgCommandHeade
               {(organization.suspended_at || organization.suspended_by) && (
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   {organization.suspended_at &&
-                    `Suspendida el ${new Date(organization.suspended_at).toLocaleDateString("es-AR")}`}
+                    `Suspendida el ${new Date(organization.suspended_at).toLocaleDateString("es-AR", { timeZone: DEFAULT_TIMEZONE })}`}
                   {organization.suspended_by && ` · por ${organization.suspended_by}`}
                 </p>
               )}

@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Wand2, Loader2, AlertTriangle, CheckCircle2, ExternalLink } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
+import { DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 /**
  * Reconciliador manual de pagos MercadoPago.
@@ -207,7 +208,7 @@ export function ReconcileMpCard({ onReconciled }: { onReconciled?: () => void })
                 {conflict.recentManual && (
                   <p className="text-xs">
                     Último manual: ${conflict.recentManual.amount} el{" "}
-                    {new Date(conflict.recentManual.paid_at).toLocaleString("es-AR")}
+                    {new Date(conflict.recentManual.paid_at).toLocaleString("es-AR", { timeZone: DEFAULT_TIMEZONE })}
                   </p>
                 )}
                 {conflict.organizationSlug && (

@@ -35,6 +35,7 @@ import {
   Star,
 } from "lucide-react"
 import { useSuperadminFetch, useSuperadminMutation } from "@/hooks/use-superadmin-fetch"
+import { DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 interface ChangelogEntry {
   id: string
@@ -181,8 +182,8 @@ export function ChangelogContent() {
                         <p className="text-sm text-muted-foreground mt-1">{entry.descripcion}</p>
                         <p className="text-xs text-muted-foreground mt-1">
                           {entry.fecha_publicacion
-                            ? `Publicado: ${new Date(entry.fecha_publicacion).toLocaleDateString("es-AR")}`
-                            : `Creado: ${new Date(entry.created_at).toLocaleDateString("es-AR")}`}
+                            ? `Publicado: ${new Date(entry.fecha_publicacion).toLocaleDateString("es-AR", { timeZone: DEFAULT_TIMEZONE })}`
+                            : `Creado: ${new Date(entry.created_at).toLocaleDateString("es-AR", { timeZone: DEFAULT_TIMEZONE })}`}
                         </p>
                       </div>
                     </div>

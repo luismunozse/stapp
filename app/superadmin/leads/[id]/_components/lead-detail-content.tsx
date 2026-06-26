@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/select"
 import { useSuperadminFetch, useSuperadminMutation } from "@/hooks/use-superadmin-fetch"
 import { cn } from "@/lib/utils"
+import { DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 interface Mensaje {
   id: string
@@ -158,6 +159,7 @@ export function LeadDetailContent({ leadId }: { leadId: string }) {
               year: "numeric",
               hour: "2-digit",
               minute: "2-digit",
+              timeZone: DEFAULT_TIMEZONE,
             })} via {lead.origen}
           </p>
         </div>
@@ -349,6 +351,7 @@ export function LeadDetailContent({ leadId }: { leadId: string }) {
                         month: "short",
                         hour: "2-digit",
                         minute: "2-digit",
+                        timeZone: DEFAULT_TIMEZONE,
                       })}
                       {" - "}
                       {conv.mensajes.length} mensajes
@@ -388,6 +391,7 @@ export function LeadDetailContent({ leadId }: { leadId: string }) {
                             {new Date(msg.created_at).toLocaleTimeString("es-AR", {
                               hour: "2-digit",
                               minute: "2-digit",
+                              timeZone: DEFAULT_TIMEZONE,
                             })}
                             {msg.intencion_detectada && msg.tipo !== "USER" && (
                               <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5">

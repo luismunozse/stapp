@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
+import { DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import {
@@ -76,6 +77,7 @@ function timeAgo(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("es-AR", {
     day: "numeric",
     month: "short",
+    timeZone: DEFAULT_TIMEZONE,
   })
 }
 
