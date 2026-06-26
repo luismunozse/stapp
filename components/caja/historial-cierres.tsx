@@ -19,7 +19,7 @@ import { useCurrency } from "@/contexts/currency-context"
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 export function HistorialCierres() {
-  const { formatPrice, formatDate } = useCurrency()
+  const { formatPrice, formatDate, timezone } = useCurrency()
   const [desde, setDesde] = useState("")
   const [hasta, setHasta] = useState("")
   const [detailId, setDetailId] = useState<string | null>(null)
@@ -231,7 +231,7 @@ function SesionDetailDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
-  const { formatPrice, formatDate } = useCurrency()
+  const { formatPrice, formatDate, timezone } = useCurrency()
   const { data, isLoading } = useSWR(
     open ? `/api/caja/sesiones/${sesionId}` : null,
     fetcher,
@@ -347,6 +347,7 @@ function SesionDetailDialog({
                   {new Date(sesion.openedAt).toLocaleTimeString("es-AR", {
                     hour: "2-digit",
                     minute: "2-digit",
+                    timeZone: timezone,
                   })}
                 </span>
               )}
@@ -356,6 +357,7 @@ function SesionDetailDialog({
                   {new Date(sesion.closedAt).toLocaleTimeString("es-AR", {
                     hour: "2-digit",
                     minute: "2-digit",
+                    timeZone: timezone,
                   })}
                 </span>
               )}
@@ -376,6 +378,7 @@ function SesionDetailDialog({
                           {new Date(m.fecha).toLocaleTimeString("es-AR", {
                             hour: "2-digit",
                             minute: "2-digit",
+                            timeZone: timezone,
                           })}
                         </span>
                       </div>

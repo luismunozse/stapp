@@ -2,6 +2,7 @@ import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { OrderStatusBadge } from "@/components/ui/badge"
 import { Clock, ArrowRight } from "lucide-react"
+import { DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 interface OrdenReciente {
   id: string
@@ -28,7 +29,7 @@ export function OrdenesRecientes({ ordenes }: OrdenesRecientesProps) {
     if (diffHoras < 1) return "Hace menos de 1 hora"
     if (diffHoras < 24) return `Hace ${diffHoras} hora${diffHoras !== 1 ? "s" : ""}`
     if (diffDias < 7) return `Hace ${diffDias} día${diffDias !== 1 ? "s" : ""}`
-    return date.toLocaleDateString("es-AR", { day: "numeric", month: "short" })
+    return date.toLocaleDateString("es-AR", { day: "numeric", month: "short", timeZone: DEFAULT_TIMEZONE })
   }
 
   if (ordenes.length === 0) {

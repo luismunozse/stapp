@@ -53,7 +53,7 @@ interface TicketShareProps {
 }
 
 export function PosTicketShare({ ventaData, plantillaCorta, countryCode }: TicketShareProps) {
-  const { formatPrice } = useCurrency()
+  const { formatPrice, timezone } = useCurrency()
   const ticketRef = useRef<HTMLDivElement>(null)
   const [generating, setGenerating] = useState(false)
 
@@ -73,7 +73,7 @@ export function PosTicketShare({ ventaData, plantillaCorta, countryCode }: Ticke
   // IVA source: "snapshot" if we read from server fields, "none" if no IVA applies
   // (derived path would require fiscal config which is not passed here)
   const fecha = new Date().toLocaleString("es-AR", {
-    timeZone: "America/Argentina/Buenos_Aires",
+    timeZone: timezone,
     day: "2-digit",
     month: "2-digit",
     year: "numeric",

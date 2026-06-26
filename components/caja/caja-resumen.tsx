@@ -78,7 +78,7 @@ export function CajaResumen({
   onFiltroMetodoChange,
   onFiltroTipoChange,
 }: CajaResumenProps) {
-  const { formatPrice } = useCurrency()
+  const { formatPrice, timezone } = useCurrency()
 
   if (!data) return null
 
@@ -290,7 +290,7 @@ export function CajaResumen({
                           <MetodoIcon className="h-3 w-3" />
                           {METODO_LABELS[mov.metodoPago] || mov.metodoPago}
                           {" · "}
-                          {new Date(mov.fecha).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}
+                          {new Date(mov.fecha).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", timeZone: timezone })}
                         </div>
                         {mov.observaciones && (
                           <div className="text-xs text-muted-foreground">{mov.observaciones}</div>

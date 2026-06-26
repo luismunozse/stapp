@@ -28,7 +28,7 @@ interface MovimientosManualesListProps {
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 export function MovimientosManualesList({ fecha, refreshKey }: MovimientosManualesListProps) {
-  const { formatPrice } = useCurrency()
+  const { formatPrice, timezone } = useCurrency()
   const { showError } = useModal()
   const { data, isLoading, mutate } = useSWR(
     `/api/caja/movimientos?fecha=${fecha}&_=${refreshKey || 0}`,
@@ -164,6 +164,7 @@ export function MovimientosManualesList({ fecha, refreshKey }: MovimientosManual
                       {new Date(m.fecha).toLocaleTimeString("es-AR", {
                         hour: "2-digit",
                         minute: "2-digit",
+                        timeZone: timezone,
                       })}
                       {m.usuarioNombre && ` · ${m.usuarioNombre}`}
                     </div>

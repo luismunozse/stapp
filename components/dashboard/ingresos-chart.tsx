@@ -24,11 +24,11 @@ interface IngresosChartProps {
 }
 
 export const IngresosChart = memo(function IngresosChart({ data, totalPeriodo }: IngresosChartProps) {
-  const { formatPrice } = useCurrency()
+  const { formatPrice, timezone } = useCurrency()
   const formatFecha = useCallback((fecha: string) => {
     const date = new Date(fecha)
-    return date.toLocaleDateString("es-AR", { weekday: "short", day: "numeric" })
-  }, [])
+    return date.toLocaleDateString("es-AR", { weekday: "short", day: "numeric", timeZone: timezone })
+  }, [timezone])
 
   const chartData = useMemo(() =>
     data.map((item) => ({

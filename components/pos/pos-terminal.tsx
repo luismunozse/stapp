@@ -76,7 +76,7 @@ type MobileTab = "products" | "cart"
 
 export function PosTerminal() {
   const router = useRouter()
-  const { formatPrice, pais } = useCurrency()
+  const { formatPrice, pais, timezone } = useCurrency()
   const { confirm, showSuccess, showError } = useModal()
   const { isOnline } = useOffline()
   const searchRef = useRef<PosProductSearchRef>(null)
@@ -427,7 +427,7 @@ export function PosTerminal() {
     try {
       const ticketData = {
         numeroVenta: ventaData.numeroVenta,
-        fecha: new Date().toLocaleString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" }),
+        fecha: new Date().toLocaleString("es-AR", { timeZone: timezone }),
         cliente: {
           nombre: ventaData.clienteNombre || "Consumidor Final",
           telefono: ventaData.clienteTelefono,
@@ -466,7 +466,7 @@ export function PosTerminal() {
     const empresa = ventaData.organizationName || "Servicio Técnico"
     const cliente = ventaData.clienteNombre || "Consumidor Final"
     const fecha = new Date().toLocaleString("es-AR", {
-      timeZone: "America/Argentina/Buenos_Aires",
+      timeZone: timezone,
       day: "2-digit", month: "2-digit", year: "numeric",
       hour: "2-digit", minute: "2-digit",
     })

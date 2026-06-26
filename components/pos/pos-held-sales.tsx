@@ -28,11 +28,11 @@ export function PosHeldSales({
   onRecall,
   onDelete,
 }: PosHeldSalesProps) {
-  const { formatPrice } = useCurrency()
+  const { formatPrice, timezone } = useCurrency()
 
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp)
-    return date.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })
+    return date.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", timeZone: timezone })
   }
 
   const getTotal = (sale: HeldSale) =>
