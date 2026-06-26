@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getRecargosMetodo, factorRecargo } from "@/lib/recargos"
+import { metodoCondicion } from "@/lib/recargos"
 
 describe("getRecargosMetodo", () => {
   beforeEach(() => vi.clearAllMocks())
@@ -41,5 +42,28 @@ describe("factorRecargo", () => {
     const map = { CUENTA_CORRIENTE: 15 }
     expect(factorRecargo(map, "CUENTA_CORRIENTE")).toBeCloseTo(1.15)
     expect(factorRecargo(map, "EFECTIVO")).toBe(1)
+  })
+})
+
+describe("metodoCondicion", () => {
+  it("elige el método del pago de mayor monto", () => {
+    const pagos = [
+      { metodo: "EFECTIVO", monto: 100 },
+      { metodo: "TARJETA_CREDITO", monto: 400 },
+    ]
+    expect(metodoCondicion(pagos, "EFECTIVO")).toBe("TARJETA_CREDITO")
+  })
+
+  it("empate => primero", () => {
+    const pagos = [
+      { metodo: "EFECTIVO", monto: 200 },
+      { metodo: "TARJETA_CREDITO", monto: 200 },
+    ]
+    expect(metodoCondicion(pagos, "EFECTIVO")).toBe("EFECTIVO")
+  })
+
+  it("sin pagos => fallback metodoPago", () => {
+    expect(metodoCondicion(undefined, "CUENTA_CORRIENTE")).toBe("CUENTA_CORRIENTE")
+    expect(metodoCondicion([], "TRANSFERENCIA")).toBe("TRANSFERENCIA")
   })
 })
