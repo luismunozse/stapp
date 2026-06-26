@@ -23,6 +23,7 @@ const updateOrdenSchema = z.object({
       "ENTREGADO_SIN_COBRO",
       "CANCELADO",
       "SIN_REPARACION",
+      "SIN_FALLA_DETECTADA",
     ])
     .optional(),
   tecnicoId: z.string().optional().nullable(),
