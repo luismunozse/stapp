@@ -25,7 +25,7 @@ interface Conversacion {
 }
 
 export function LeadDetailDialog({ lead, isOpen, onClose, onUpdate }: LeadDetailDialogProps) {
-  const { formatDateTime } = useCurrency()
+  const { formatDateTime, timezone } = useCurrency()
   const [loading, setLoading] = useState(false)
   const [conversacion, setConversacion] = useState<Conversacion | null>(null)
   const [notas, setNotas] = useState(lead.notas || "")
@@ -157,7 +157,7 @@ export function LeadDetailDialog({ lead, isOpen, onClose, onUpdate }: LeadDetail
                     >
                       <p className="text-sm">{mensaje.contenido}</p>
                       <span className="text-xs opacity-70">
-                        {new Date(mensaje.created_at).toLocaleTimeString("es-AR")}
+                        {new Date(mensaje.created_at).toLocaleTimeString("es-AR", { timeZone: timezone })}
                       </span>
                     </div>
                   </div>

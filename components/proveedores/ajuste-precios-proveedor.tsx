@@ -63,7 +63,7 @@ function deltaPct(a: number | null, b: number | null): string {
 
 export function AjustePreciosProveedor({ proveedorId }: { proveedorId: string }) {
   const router = useRouter()
-  const { formatPrice } = useCurrency()
+  const { formatPrice, timezone } = useCurrency()
 
   const { data: proveedor } = useSWR<Proveedor>(
     `/api/proveedores/${proveedorId}`,
@@ -258,7 +258,7 @@ export function AjustePreciosProveedor({ proveedorId }: { proveedorId: string })
               id="motivo"
               value={motivo}
               onChange={(e) => setMotivo(e.target.value)}
-              placeholder={`Ej: Lista ${proveedor?.nombre || "proveedor"} — ${new Date().toLocaleDateString("es-AR", { month: "long", year: "numeric" })}`}
+              placeholder={`Ej: Lista ${proveedor?.nombre || "proveedor"} — ${new Date().toLocaleDateString("es-AR", { month: "long", year: "numeric", timeZone: timezone })}`}
               maxLength={200}
             />
           </div>

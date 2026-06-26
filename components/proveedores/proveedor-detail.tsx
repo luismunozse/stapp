@@ -154,15 +154,15 @@ const ESTADO_BADGE: Record<string, { label: string; variant: "default" | "second
   CANCELADA: { label: "Cancelada", variant: "destructive" },
 }
 
-function formatDate(iso: string | null | undefined) {
+function formatDate(iso: string | null | undefined, timezone: string) {
   if (!iso) return "—"
-  return new Date(iso).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" })
+  return new Date(iso).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: timezone })
 }
 
 export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
   const router = useRouter()
   const { confirm } = useModal()
-  const { formatPrice } = useCurrency()
+  const { formatPrice, timezone } = useCurrency()
   const [editing, setEditing] = useState(false)
 
   const { data: proveedor, mutate: mutateProv, isLoading } = useSWR<Proveedor>(
@@ -296,7 +296,7 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
               </div>
             )}
             <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-              Alta: {formatDate(proveedor.createdAt)}
+              Alta: {formatDate(proveedor.createdAt, timezone)}
             </p>
           </div>
         </div>
@@ -360,7 +360,7 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
         <KpiCard
           icon={<Calendar className="h-4 w-4" />}
           label="Última compra"
-          value={stats?.ultimaCompra ? formatDate(stats.ultimaCompra) : "—"}
+          value={stats?.ultimaCompra ? formatDate(stats.ultimaCompra, timezone) : "—"}
         />
       </div>
 
@@ -590,7 +590,7 @@ export function ProveedorDetail({ proveedorId }: { proveedorId: string }) {
                             <Badge variant={badge.variant} className="text-[10px]">{badge.label}</Badge>
                           </div>
                           <div className="text-xs text-muted-foreground">
-                            Emisión: {formatDate(oc.fechaEmision)}
+                            Emisión: {formatDate(oc.fechaEmision, timezone)}
                           </div>
                         </div>
                         <div className="text-sm font-semibold shrink-0">{formatPrice(oc.total)}</div>

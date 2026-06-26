@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { EmptyState } from "@/components/ui/empty-state"
 import { FieldSectionLabel } from "@/components/ui/field-section-label"
+import { useCurrency } from "@/contexts/currency-context"
 
 interface Adjunto {
   id: string
@@ -42,8 +43,8 @@ function fmtSize(n: number | null) {
   return `${(n / (1024 * 1024)).toFixed(2)} MB`
 }
 
-function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" })
+function fmtDate(iso: string, timezone: string) {
+  return new Date(iso).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: timezone })
 }
 
 function fileToBase64(file: File): Promise<string> {
@@ -59,6 +60,7 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 export function ProveedorAdjuntosTab({ proveedorId }: { proveedorId: string }) {
+  const { timezone } = useCurrency()
   const { data: adjuntos = [], mutate } = useSWR<Adjunto[]>(
     `/api/proveedores/${proveedorId}/adjuntos`,
     fetcher,
@@ -183,7 +185,7 @@ export function ProveedorAdjuntosTab({ proveedorId }: { proveedorId: string }) {
                     </a>
                     {a.descripcion && <div className="text-xs text-muted-foreground truncate">{a.descripcion}</div>}
                     <div className="text-[11px] text-muted-foreground">
-                      {fmtDate(a.createdAt)} · {fmtSize(a.sizeBytes)}
+                      {fmtDate(a.createdAt, timezone)} · {fmtSize(a.sizeBytes)}
                     </div>
                   </div>
                   <div className="flex gap-1 shrink-0">

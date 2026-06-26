@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ExternalLink, Receipt } from "lucide-react"
+import { useCurrency } from "@/contexts/currency-context"
 
 interface Payment {
   id: string
@@ -21,6 +22,7 @@ interface PaymentHistoryProps {
 }
 
 export function PaymentHistory({ payments }: PaymentHistoryProps) {
+  const { timezone } = useCurrency()
   const statusColors: Record<string, string> = {
     SUCCEEDED: "bg-green-100 text-green-800",
     PENDING: "bg-yellow-100 text-yellow-800",
@@ -47,6 +49,7 @@ export function PaymentHistory({ payments }: PaymentHistoryProps) {
       day: "numeric",
       month: "long",
       year: "numeric",
+      timeZone: timezone,
     })
   }
 

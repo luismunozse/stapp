@@ -87,7 +87,7 @@ function previousRange(desde: string, hasta: string) {
 }
 
 export function EstadoResultados() {
-  const { formatPrice } = useCurrency()
+  const { formatPrice, timezone } = useCurrency()
   const { showError } = useModal()
   const [{ desde, hasta }, setRango] = useState(defaultRange)
   const [exporting, setExporting] = useState(false)
@@ -140,9 +140,9 @@ export function EstadoResultados() {
           minimumFractionDigits: 2,
         }).format(n)
 
-      const fechaTexto = `${new Date(desde + "T00:00:00").toLocaleDateString("es-AR")} – ${new Date(
+      const fechaTexto = `${new Date(desde + "T00:00:00").toLocaleDateString("es-AR", { timeZone: timezone })} – ${new Date(
         hasta + "T00:00:00"
-      ).toLocaleDateString("es-AR")}`
+      ).toLocaleDateString("es-AR", { timeZone: timezone })}`
 
       // Encabezado
       doc.setFontSize(16)

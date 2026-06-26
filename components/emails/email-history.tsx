@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { History, Mail, AlertCircle, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react"
+import { useCurrency } from "@/contexts/currency-context"
 
 interface EmailRecord {
   id: string
@@ -20,6 +21,7 @@ interface EmailRecord {
 const PAGE_SIZE = 10
 
 export function EmailHistory() {
+  const { timezone } = useCurrency()
   const [emails, setEmails] = useState<EmailRecord[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(0)
@@ -68,6 +70,7 @@ export function EmailHistory() {
       year: "numeric",
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: timezone,
     })
   }
 

@@ -22,6 +22,7 @@ import {
   Check,
 } from "lucide-react"
 import type { SupportTicketMessage, SupportTicketAttachment } from "@/types"
+import { useCurrency } from "@/contexts/currency-context"
 
 interface TicketData {
   id: string
@@ -58,6 +59,7 @@ const prioridadConfig: Record<string, { label: string; color: string }> = {
 
 export function TicketDetail({ ticketId }: { ticketId: string }) {
   const router = useRouter()
+  const { timezone } = useCurrency()
   const [ticket, setTicket] = useState<TicketData | null>(null)
   const [loading, setLoading] = useState(true)
   const [newMessage, setNewMessage] = useState("")
@@ -189,6 +191,7 @@ export function TicketDetail({ ticketId }: { ticketId: string }) {
       year: "numeric",
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: timezone,
     })
   }
 

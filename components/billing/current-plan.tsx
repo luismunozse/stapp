@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Crown, Calendar, AlertCircle, Clock, Sparkles } from "lucide-react"
 import type { SubscriptionInfo } from "@/lib/subscriptions"
+import { useCurrency } from "@/contexts/currency-context"
 
 interface CurrentPlanProps {
   subscription: SubscriptionInfo | null
@@ -15,6 +16,7 @@ interface CurrentPlanProps {
 }
 
 export function CurrentPlan({ subscription, onUpgrade, onManage, onCancel }: CurrentPlanProps) {
+  const { timezone } = useCurrency()
   if (!subscription) {
     return (
       <Card>
@@ -44,6 +46,7 @@ export function CurrentPlan({ subscription, onUpgrade, onManage, onCancel }: Cur
         day: "numeric",
         month: "long",
         year: "numeric",
+        timeZone: timezone,
       })
     : null
 
@@ -52,6 +55,7 @@ export function CurrentPlan({ subscription, onUpgrade, onManage, onCancel }: Cur
         day: "numeric",
         month: "long",
         year: "numeric",
+        timeZone: timezone,
       })
     : null
 

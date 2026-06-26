@@ -26,6 +26,7 @@ import {
   Headset,
 } from "lucide-react"
 import { TicketCreateDialog } from "./ticket-create-dialog"
+import { useCurrency } from "@/contexts/currency-context"
 
 interface TicketListItem {
   id: string
@@ -61,6 +62,7 @@ const prioridadConfig: Record<string, { label: string; color: string }> = {
 
 export function TicketList() {
   const router = useRouter()
+  const { timezone } = useCurrency()
   const [filtroEstado, setFiltroEstado] = useState("")
   const [search, setSearch] = useState("")
   const [showCreate, setShowCreate] = useState(false)
@@ -86,6 +88,7 @@ export function TicketList() {
       day: "2-digit",
       month: "short",
       year: "numeric",
+      timeZone: timezone,
     })
   }
 

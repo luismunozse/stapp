@@ -17,6 +17,7 @@ import {
   DollarSign,
   CalendarClock,
 } from "lucide-react"
+import { useCurrency } from "@/contexts/currency-context"
 
 function getNotificationIcon(type: string) {
   switch (type) {
@@ -46,7 +47,7 @@ function getNotificationIcon(type: string) {
   }
 }
 
-function timeAgo(dateStr: string): string {
+function timeAgo(dateStr: string, timezone: string): string {
   const now = Date.now()
   const date = new Date(dateStr).getTime()
   const diff = Math.floor((now - date) / 1000)
@@ -58,6 +59,7 @@ function timeAgo(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("es-AR", {
     day: "numeric",
     month: "short",
+    timeZone: timezone,
   })
 }
 
@@ -65,10 +67,12 @@ function NotificationItem({
   notification,
   onRead,
   onDismiss,
+  timezone,
 }: {
   notification: UserNotification
   onRead: (id: string, actionUrl?: string | null) => void
   onDismiss: (id: string) => void
+  timezone: string
 }) {
   const isUnread = !notification.read_at
   const [expanded, setExpanded] = useState(false)
@@ -115,7 +119,7 @@ function NotificationItem({
           </p>
           <div className="flex items-center gap-2 mt-1">
             <p className="text-[11px] text-muted-foreground/70">
-              {timeAgo(notification.created_at)}
+              {timeAgo(notification.created_at, timezone)}
             </p>
             {(bodyIsLong || titleIsLong) && (
               <button
@@ -174,6 +178,7 @@ export function NotificationPanel({
   onNavigate,
 }: NotificationPanelProps) {
   const router = useRouter()
+  const { timezone } = useCurrency()
 
   const handleRead = (id: string, actionUrl?: string | null) => {
     markAsRead(id)
@@ -228,6 +233,7 @@ export function NotificationPanel({
                 notification={n}
                 onRead={handleRead}
                 onDismiss={dismiss}
+                timezone={timezone}
               />
             ))}
           </div>

@@ -74,13 +74,13 @@ type EstadoFilter = "todos" | "activos" | "inactivos"
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
-function formatDate(iso: string | null | undefined) {
+function formatDate(iso: string | null | undefined, timezone: string) {
   if (!iso) return "—"
-  return new Date(iso).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" })
+  return new Date(iso).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: timezone })
 }
 
 export function ProveedoresList() {
-  const { formatPrice } = useCurrency()
+  const { formatPrice, timezone } = useCurrency()
   const [showForm, setShowForm] = useState(false)
   const [editingProveedor, setEditingProveedor] = useState<Proveedor | null>(null)
   const [search, setSearch] = useState("")
@@ -375,7 +375,7 @@ export function ProveedoresList() {
                     <Kpi
                       icon={<Calendar className="h-3 w-3" />}
                       label="Última"
-                      value={s?.ultimaCompra ? formatDate(s.ultimaCompra) : "—"}
+                      value={s?.ultimaCompra ? formatDate(s.ultimaCompra, timezone) : "—"}
                     />
                   </Link>
 

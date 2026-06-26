@@ -44,9 +44,9 @@ const empty: Draft = {
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
-function fmtDate(iso: string | null) {
+function fmtDate(iso: string | null, timezone: string) {
   if (!iso) return "—"
-  return new Date(iso).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" })
+  return new Date(iso).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: timezone })
 }
 
 function daysSince(iso: string | null): number | null {
@@ -56,7 +56,7 @@ function daysSince(iso: string | null): number | null {
 }
 
 export function ProveedorCatalogoTab({ proveedorId }: { proveedorId: string }) {
-  const { formatPrice } = useCurrency()
+  const { formatPrice, timezone } = useCurrency()
   const [search, setSearch] = useState("")
   const { data: items = [], mutate } = useSWR<CatalogoItem[]>(
     `/api/proveedores/${proveedorId}/catalogo`,
@@ -266,7 +266,7 @@ export function ProveedorCatalogoTab({ proveedorId }: { proveedorId: string }) {
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap">
                           <span className={stale ? "text-warning-600" : ""}>
-                            {fmtDate(i.precioActualizadoAt)}
+                            {fmtDate(i.precioActualizadoAt, timezone)}
                           </span>
                           {stale && (
                             <span className="ml-1 inline-flex items-center text-[10px] text-warning-600">
