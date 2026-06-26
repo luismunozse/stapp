@@ -3,6 +3,8 @@
  * Documentación: https://developers.facebook.com/docs/whatsapp/cloud-api
  */
 
+import { formatPhoneForCountry } from "@/lib/countries"
+
 const WA_API_BASE = "https://graph.facebook.com/v18.0"
 
 interface SendMessageResult {
@@ -29,12 +31,13 @@ export async function sendTemplateMessage(
   to: string,
   templateName: string,
   language: string = "es",
-  components?: TemplateComponent[]
+  components?: TemplateComponent[],
+  countryCode?: string | null
 ): Promise<SendMessageResult> {
   try {
     const body: Record<string, unknown> = {
       messaging_product: "whatsapp",
-      to: formatPhoneNumber(to),
+      to: formatPhoneNumber(to, countryCode),
       type: "template",
       template: {
         name: templateName,
@@ -80,12 +83,13 @@ export async function sendTextMessage(
   phoneNumberId: string,
   accessToken: string,
   to: string,
-  text: string
+  text: string,
+  countryCode?: string | null
 ): Promise<SendMessageResult> {
   try {
     const body = {
       messaging_product: "whatsapp",
-      to: formatPhoneNumber(to),
+      to: formatPhoneNumber(to, countryCode),
       type: "text",
       text: { body: text },
     }
@@ -148,23 +152,26 @@ export async function verifyCredentials(
 }
 
 /**
- * Formatear número de teléfono argentino al formato internacional.
+ * Formatear número de teléfono al formato internacional.
+ * Usa el país de la organización (countryCode) para resolver números locales;
+ * Argentina como fallback cuando no se conoce el país.
  */
-function formatPhoneNumber(phone: string): string {
-  // Remover caracteres no numéricos
-  let cleaned = phone.replace(/\D/g, "")
-
-  // Si empieza con 0, remover
-  if (cleaned.startsWith("0")) {
-    cleaned = cleaned.substring(1)
+function formatPhoneNumber(phone: string, countryCode?: string | null): string {
+  let cleaned: string
+  if (countryCode) {
+    cleaned = formatPhoneForCountry(phone, countryCode)
+  } else {
+    // Fallback: comportamiento original (Argentina)
+    cleaned = phone.replace(/\D/g, "")
+    if (cleaned.startsWith("0")) {
+      cleaned = cleaned.substring(1)
+    }
+    if (!cleaned.startsWith("54")) {
+      cleaned = "54" + cleaned
+    }
   }
 
-  // Si no tiene código de país, agregar Argentina (54)
-  if (!cleaned.startsWith("54")) {
-    cleaned = "54" + cleaned
-  }
-
-  // Si tiene 15 después del código de área, removerlo (formato viejo)
+  // Si tiene 15 después del código de área argentino, removerlo (formato viejo)
   cleaned = cleaned.replace(/^(54\d{2,4})15(\d{6,8})$/, "$1$2")
 
   return cleaned
