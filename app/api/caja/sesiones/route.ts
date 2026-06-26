@@ -145,6 +145,15 @@ export async function POST(request: Request) {
       .single()
 
     if (insertError) {
+      // El índice único parcial (idx_sesiones_caja_sucursal_abierta) puede
+      // dispararse si el pre-check pasó pero otra request abrió la caja primero
+      // (race / doble-click). Mapear a un 409 legible en vez de un 500 genérico.
+      if (insertError.code === "23505") {
+        return NextResponse.json(
+          { error: "Ya hay una sesión de caja abierta" },
+          { status: 409 }
+        )
+      }
       console.error("Error creating sesion:", insertError)
       return NextResponse.json({ error: "Error al abrir caja" }, { status: 500 })
     }
