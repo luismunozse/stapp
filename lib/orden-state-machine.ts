@@ -21,7 +21,7 @@ export const TRANSICIONES_VALIDAS: Record<EstadoOrden, EstadoOrden[]> = {
   ENTREGADO_SIN_COBRO: [], // Estado terminal - entregado sin cobrar
   CANCELADO: ["RECIBIDO"], // Puede reactivarse
   SIN_REPARACION: ["RECIBIDO", "ENTREGADO_SIN_REPARACION", "ENTREGADO_SIN_COBRO"], // Puede reactivarse o retirarse
-  SIN_FALLA_DETECTADA: ["RECIBIDO", "ENTREGADO_SIN_REPARACION", "ENTREGADO_SIN_COBRO"], // Puede reactivarse o retirarse
+  SIN_FALLA_DETECTADA: ["RECIBIDO", "ENTREGADO", "ENTREGADO_SIN_COBRO"], // Reactivar, entregar con cobro (revisión) o sin cobro
 }
 
 /**

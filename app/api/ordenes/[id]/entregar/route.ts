@@ -67,7 +67,7 @@ export async function POST(
       )
     }
 
-    const esRetiro = (orden.estado === "SIN_REPARACION" || orden.estado === "SIN_FALLA_DETECTADA") && !sinCobro
+    const esRetiro = orden.estado === "SIN_REPARACION" && !sinCobro
     const nuevoEstado = sinCobro ? "ENTREGADO_SIN_COBRO" : esRetiro ? "ENTREGADO_SIN_REPARACION" : "ENTREGADO"
 
     // Motivo sin cobro: si vino explícito lo usamos, sino derivamos del estado origen.
