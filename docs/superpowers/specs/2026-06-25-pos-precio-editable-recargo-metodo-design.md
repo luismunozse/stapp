@@ -18,12 +18,21 @@ Dos limitaciones reportadas en el POS:
 
 1. **(A) Affordance explícita:** reemplazar la flechita ▼ por un botón **"✏ Editar"** claro por línea, que abre el panel existente (Precio unit. + Garantía + Descuento). Sin backend.
 2. **(B) Modelo = regla global por método (%).** El precio del artículo es el **precio base (contado = 0%)**; cada método tiene un % que se suma. No se agregan precios por artículo.
-3. **(B) Recargo fijo / bloqueado.** El % lo define la configuración; el cajero **no** puede editarlo en la venta. Esto **reemplaza** el recargo manual por tarjeta actual.
-4. **(B) % por método, no por cuotas.** El recargo es el mismo para cualquier cantidad de cuotas. (Recargo por cantidad de cuotas = etapa futura, fuera de alcance.)
-5. **(B) Alcance: por organización.** Una política central por org. (Por sucursal = etapa futura.)
-6. **(B) Reutiliza `pagos_venta.recargo_porcentaje`** → **sin cambios en la RPC `crear_venta_atomica`**.
-7. **(B) Enforcement server-side:** la ruta `/api/ventas` reescribe el % con el configurado por método e **ignora** el valor que mande el cliente (así "bloqueado" se cumple de verdad).
-8. **(B) Alcance funcional: ventas del POS.** Órdenes de servicio y facturas quedan fuera.
+3. **(B) El % es INGRESO del negocio, no interés bancario.** *(Confirmado con el usuario, 2026-06-26.)* El % sube el **precio efectivo de la venta** y se contabiliza como ingreso. NO se modela como `recargo_porcentaje` (que `multi-pago-input.tsx:82-83` excluye explícitamente del ingreso del comercio). Esto distingue esta feature del recargo bancario existente.
+4. **(B) Una condición de precio por venta.** El % aplica al **precio efectivo de los items** (sube `precio_unitario` → sube subtotal, IVA, total e ingreso de forma consistente). Como los items son compartidos por toda la venta, la condición es **única por venta**, determinada por el método de pago. **[A confirmar en revisión]** la regla de multi-pago (ver más abajo).
+5. **(B) Recargo fijo / bloqueado.** El % lo define la configuración; el cajero **no** puede editarlo en la venta. Esto **reemplaza** el recargo manual por tarjeta actual.
+6. **(B) % por método, no por cuotas.** El % es el mismo para cualquier cantidad de cuotas. (Por cantidad de cuotas = etapa futura, fuera de alcance.)
+7. **(B) Alcance: por organización.** Una política central por org. (Por sucursal = etapa futura.)
+8. **(B) Enforcement server-side:** la ruta `/api/ventas` calcula el precio efectivo aplicando el % configurado del método e **ignora** cualquier precio "inflado" que mande el cliente (así "bloqueado" se cumple de verdad y no es manipulable).
+9. **(B) Alcance funcional: ventas del POS.** Órdenes de servicio y facturas quedan fuera.
+
+### Regla de multi-pago **[a confirmar en revisión]**
+
+El POS permite pago dividido en varios métodos. Como la condición de precio es **única por venta**, hay que definir qué tier aplica cuando se mezclan métodos de distinto %. Recomendación v1 (la más simple y transparente):
+
+> La condición de precio de la venta = la del **método de pago principal** (el primer pago / el de mayor monto). El precio efectivo de TODA la venta se calcula con ese %. Se muestra el total efectivo claramente antes de confirmar.
+
+Alternativa (más estricta, más trabajo): un **selector explícito de "condición de pago"** (Contado vs Financiado) separado del split, que fija el precio y obliga a que los pagos sean de esa condición. Si preferís esta, lo ajustamos.
 
 ## Arquitectura
 
@@ -64,29 +73,32 @@ Tabla `recargos_metodo_pago`:
 
 - `getRecargosMetodo(organizationId): Promise<Record<string, number>>` → mapa método→%. Cacheable por request. Usado por el POS (vía endpoint) y por la ruta de ventas (enforcement).
 
-#### B.5 — POS (cobro)
+#### B.5 — POS (cobro y precio efectivo)
 
-- `components/pagos/multi-pago-input.tsx`: al elegir un método, **mostrar el % configurado en modo lectura** (no editable) y reflejar el recargo en el total. Eliminar/ocultar el input manual de recargo por tarjeta (lo reemplaza la config). El campo `costoFinanciero` (costo que absorbe el comercio) queda como está si existe; no es parte de este cambio.
 - El POS obtiene el mapa método→% (endpoint `GET` de B.2, o uno liviano dedicado) al montar el checkout.
-- El payload sigue mandando `recargo` por pago (compatibilidad), pero el valor es informativo: el server lo reescribe (ver B.6).
+- Al elegir el método (la **condición de pago**), el POS calcula y muestra el **precio efectivo** de la venta: total base × (1 + %/100). Muestra claramente "Total contado: $X" vs "Total {método}: $Y" para que sea transparente.
+- `components/pagos/multi-pago-input.tsx`: **eliminar el input manual de recargo por tarjeta** (lo reemplaza la condición de pago). El campo `costoFinanciero` (costo que absorbe el comercio) queda como está; no es parte de este cambio.
+- El payload manda el método/condición; los precios efectivos los **recalcula y valida el server** (no se confía en precios del cliente, ver B.6).
 
-#### B.6 — Enforcement en `app/api/ventas/route.ts`
+#### B.6 — Precio efectivo + enforcement en `app/api/ventas/route.ts`
 
-- Antes de armar `p_pagos`, cargar `getRecargosMetodo(organizationId)`.
-- Para cada pago: **forzar** `recargo = recargos[metodo] ?? 0`, ignorando el valor del cliente. Así el % es server-authoritative ("bloqueado").
-- El resto del flujo (cálculo de `monto`, inserción en `pagos_venta.recargo_porcentaje` vía `crear_venta_atomica`) **no cambia**.
+- Cargar `getRecargosMetodo(organizationId)` y derivar la **condición de la venta** (regla de multi-pago, ver arriba: método principal en v1).
+- Calcular `factor = 1 + (recargos[condicion] ?? 0)/100`. Aplicar `factor` al **precio unitario de cada item** ANTES de calcular subtotal/descuentos/IVA/total (líneas `:188-251`). Así el ingreso, IVA y total reflejan el precio efectivo de forma consistente, y los pagos suman ese total.
+- El `costo_unitario_snapshot` (costo) **no** se toca → el margen sube por el mayor precio de venta, correcto.
+- Persistir el % aplicado en la venta (campo nuevo `recargo_metodo_porcentaje` en `ventas`, o en `observaciones`) para trazabilidad/reportes. **[decisión menor — el plan elige]**
+- El cálculo es server-authoritative: aunque el cliente mande precios inflados, el server parte del precio base del catálogo. **Nota:** hoy el precio base viaja en el payload (`precioUnitario`), editable por el cajero (Parte A). El plan debe definir si el server confía en ese `precioUnitario` como "base" (y solo aplica el factor encima) — que es lo coherente con la edición manual de precio del POS.
 
-## Aritmética del recargo (a confirmar en el plan)
+## Materialización del precio (ingreso) — verificación obligatoria del plan
 
-El recargo hoy se guarda en `pagos_venta.recargo_porcentaje`; el cargo final al cliente = `monto + monto * recargo/100` (`multi-pago-input.tsx:111-121`). El plan debe verificar **dónde** se materializa el monto con recargo (en `monto` del pago vs. cálculo en display/arqueo) para que el % configurado impacte el total cobrado y el arqueo de forma consistente, sin doble conteo con `costo_financiero`.
+El total de la venta sale de los precios de los items (`route.ts:188-251`), y los pagos deben sumar ese total. El plan DEBE: (1) aplicar el `factor` sobre `precioUnitario` de los items en el server; (2) confirmar que `pagos_venta.monto` (que lee el arqueo) suma el total efectivo → el ingreso extra aparece en arqueo y reportes; (3) NO usar `recargo_porcentaje` para esto (queda en null/0 salvo que se reintroduzca interés bancario real); (4) evitar doble conteo con `costo_financiero` (que sigue siendo costo del comercio, intacto).
 
 ## Casos borde
 
-- **Método sin config** → 0% (precio contado).
-- **CUENTA_CORRIENTE con recargo** → el % aplica igual; el monto a cuenta corriente sube según el recargo. Verificar interacción con `usar_cuenta_corriente`.
-- **Cliente manda recargo manipulado** → el server lo descarta (B.6).
-- **Venta sin pago (PENDIENTE / fiado)** → sin pagos, sin recargo.
-- **Multi-pago** → cada pago aplica el % de su propio método.
+- **Método sin config** → factor 1.0 (precio contado).
+- **CUENTA_CORRIENTE con %** → el precio efectivo sube; el monto cargado a cuenta corriente = total efectivo. Verificar interacción con `usar_cuenta_corriente` (debe cargar el monto efectivo, no el base).
+- **Cliente manda precio inflado** → el server parte del precio base + aplica el factor; ver nota B.6 sobre la edición manual de precio.
+- **Venta sin pago (PENDIENTE / fiado)** → sin método ⇒ ¿qué condición? v1: precio base (contado) hasta que se cobre. **[el plan lo define]**
+- **Multi-pago con métodos de distinto tier** → v1: aplica el tier del método principal a toda la venta (ver regla de multi-pago).
 
 ## No-goals (fuera de alcance)
 
@@ -100,5 +112,5 @@ El recargo hoy se guarda en `pagos_venta.recargo_porcentaje`; el cargo final al 
 
 - **A:** `components/pos/pos-cart.tsx`
 - **B (nuevo):** migración `recargos_metodo_pago`; `app/api/configuracion/recargos-metodo/route.ts`; `app/(dashboard)/configuracion/recargos-metodo/page.tsx` (+ componente); `lib/recargos.ts`
-- **B (editar):** `app/(dashboard)/configuracion/page.tsx` (card nueva); `components/pagos/multi-pago-input.tsx`; `app/api/ventas/route.ts`
-- **Tests:** unit del enforcement en `/api/ventas`, unit del helper `getRecargosMetodo`, y del cálculo de recargo en el POS.
+- **B (editar):** `app/(dashboard)/configuracion/page.tsx` (card nueva); `components/pagos/multi-pago-input.tsx`; `app/api/ventas/route.ts`; posible columna nueva `ventas.recargo_metodo_porcentaje` (trazabilidad)
+- **Tests:** unit del helper `getRecargosMetodo`; unit del **cálculo del precio efectivo** en `/api/ventas` (total/IVA reflejan el factor, ingreso correcto, server ignora precios inflados); unit del cálculo de precio efectivo mostrado en el POS.
