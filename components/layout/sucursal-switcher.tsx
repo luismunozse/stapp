@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
 import { Store, Check, ChevronsUpDown } from "lucide-react"
 import {
@@ -22,7 +21,6 @@ const TODAS = "todas"
 
 export function SucursalSwitcher() {
   const { data: session } = useSession()
-  const router = useRouter()
   const isAdmin = session?.user?.role === "ADMIN"
 
   const [sucursales, setSucursales] = useState<Sucursal[]>([])
@@ -56,8 +54,13 @@ export function SucursalSwitcher() {
       })
       if (res.ok) {
         setActiva(id)
-        if (typeof window !== "undefined") window.localStorage.setItem("sucursal-activa-ui", id)
-        router.refresh()
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem("sucursal-activa-ui", id)
+          // Recarga completa: el scope de sucursal afecta datos que se cargan
+          // client-side (fetch en useEffect), que router.refresh() no re-dispara.
+          // Un reload garantiza que todo se re-fetchee con la nueva sucursal.
+          window.location.reload()
+        }
       }
     } finally {
       setSaving(false)
