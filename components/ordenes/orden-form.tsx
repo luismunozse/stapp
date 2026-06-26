@@ -359,22 +359,31 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     fetchTecnicos()
   }, [isTecnicoRole])
 
-  // Fetch operadores disponibles para "Recibido por"
+  // Fetch operadores disponibles para "Recibido por".
+  // Excluimos a los ADMIN: si no se elige a nadie, se asume que la orden la
+  // recibió el administrador que la carga (resuelto server-side por fallback).
   useEffect(() => {
     fetch("/api/operadores")
       .then((r) => r.json())
       .then((data) => {
-        if (Array.isArray(data)) setOperadoresDisponibles(data)
+        if (Array.isArray(data)) {
+          setOperadoresDisponibles(
+            data
+              .filter((o) => o.rol !== "ADMIN")
+              .map((o) => ({ id: o.id, nombre: o.nombre }))
+          )
+        }
       })
       .catch(() => {})
   }, [])
 
-  // Pre-seleccionar el usuario actual como "Recibido por"
+  // Pre-seleccionar al usuario actual solo si NO es admin. Para un admin se deja
+  // "Sin asignar" a propósito: el fallback server-side ya lo registra como receptor.
   useEffect(() => {
-    if (session?.user?.id && !selectedRecibidoPorId) {
+    if (session?.user?.id && session.user.role !== "ADMIN" && !selectedRecibidoPorId) {
       setSelectedRecibidoPorId(session.user.id)
     }
-  }, [session?.user?.id])
+  }, [session?.user?.id, session?.user?.role])
 
   useEffect(() => {
     setSelectedSectorId("")
@@ -1182,6 +1191,9 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Si no seleccionás a nadie, queda registrado el administrador que carga la orden.
+              </p>
             </div>
           )}
 
