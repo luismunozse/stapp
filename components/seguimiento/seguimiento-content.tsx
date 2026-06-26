@@ -269,6 +269,7 @@ interface TrackingData {
     logoUrl?: string
   }
   whatsappMensajeConsulta?: string
+  recepcionTerminos?: string[]
 }
 
 
@@ -860,6 +861,19 @@ export function SeguimientoContent({ token }: { token: string }) {
           </div>
         </CardContent>
       </Card>
+
+      {data.recepcionTerminos && data.recepcionTerminos.length > 0 && (
+        <Card>
+          <CardContent className="p-4 sm:p-6">
+            <p className="text-sm font-semibold mb-2">Términos y condiciones</p>
+            <ul className="space-y-1 text-xs text-muted-foreground">
+              {data.recepcionTerminos.map((termino, i) => (
+                <li key={i} className="whitespace-pre-wrap">{termino}</li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       <p className="text-center text-[10px] text-muted-foreground/50 pb-6 pt-2">
         Powered by STApp

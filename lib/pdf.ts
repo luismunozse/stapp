@@ -4,6 +4,7 @@ import { readFile } from "fs/promises"
 import { join } from "path"
 import { formatCurrencyValue, type CurrencyCode, DEFAULT_CURRENCY } from "@/lib/currency"
 import { formatDateValue, formatDateTimeValue, DEFAULT_TIMEZONE } from "@/lib/timezone"
+import { parseRecepcionTerminos } from "@/lib/terminos"
 import QRCode from "qrcode"
 
 // Compatibilidad: algunos bundlers ponen el default dentro de .default
@@ -1408,15 +1409,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   }
 
   // === TERMINOS Y CONDICIONES ===
-  const defaultTerminos = [
-    "1. Conserve este comprobante para retirar su equipo. El plazo de retiro es de 30 días.",
-    "2. No nos hacemos responsables por datos perdidos. Realice backup antes de entregar el equipo.",
-    "3. Al firmar, el cliente declara haber revisado el estado del equipo al momento de la entrega.",
-    "4. El presupuesto puede variar según el diagnóstico final del equipo."
-  ]
-  const terminos = data.recepcionTerminos
-    ? data.recepcionTerminos.replace(/\r/g, "").split("\n").filter(l => l.trim() !== "")
-    : defaultTerminos
+  const terminos = parseRecepcionTerminos(data.recepcionTerminos)
 
   const terminosWrapped: string[] = []
   const maxTermWidth = contentWidth - 24

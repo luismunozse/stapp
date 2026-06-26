@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { getOrderByPublicToken } from "@/lib/public-token"
 import { getDeviceTypeLabel } from "@/lib/device-types"
 import { resolvePlantilla } from "@/lib/whatsapp/plantillas-catalog"
+import { parseRecepcionTerminos } from "@/lib/terminos"
 
 export async function GET(
   request: Request,
@@ -45,7 +46,8 @@ export async function GET(
           direccion,
           logo_url,
           zona_horaria,
-          plantillas_whatsapp
+          plantillas_whatsapp,
+          recepcion_terminos
         )
       `)
     if (error) return error
@@ -154,6 +156,7 @@ export async function GET(
         logoUrl: org?.logo_url || null,
       },
       whatsappMensajeConsulta,
+      recepcionTerminos: parseRecepcionTerminos(org?.recepcion_terminos),
     })
   } catch (error) {
     console.error("Error fetching public order:", error)
