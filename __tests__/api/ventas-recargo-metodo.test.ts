@@ -130,4 +130,39 @@ describe("POST /api/ventas — Task 5: factor de recargo por método de pago", (
     expect(params.p_total).toBeCloseTo(precioBase, 2)
     expect(params.p_items[0].precioUnitario).toBeCloseTo(precioBase, 2)
   })
+
+  it("C1 — rechaza con 400 venta no-parcial cuyo pagos[] suma menos que el total efectivo", async () => {
+    // effective total = 1000 * 1.03 = 1030, but pagos only sends base price 1000
+    const body = {
+      clienteId: "c1",
+      clienteNombre: "Juan",
+      items: [
+        {
+          inventarioId: "inv1",
+          descripcion: "X",
+          cantidad: qty,
+          precioUnitario: precioBase,
+          diasGarantia: 0,
+          descuento: 0,
+          tipoDescuento: "MONTO",
+          porcentajeDescuento: 0,
+        },
+      ],
+      descuento: 0,
+      tipoDescuento: "MONTO",
+      porcentajeDescuento: 0,
+      metodoPago: "CUENTA_CORRIENTE",
+      // Deliberately underpaying: sending base 1000 instead of effective 1030
+      pagos: [{ metodo: "CUENTA_CORRIENTE", monto: precioBase }],
+    }
+
+    const res = await POST(
+      createPostRequest(body, "http://localhost/api/ventas")
+    )
+    expect(res.status).toBe(400)
+    const json = await res.json()
+    expect(json.error).toMatch(/no coincide/)
+    // Must NOT call the RPC when payment is invalid
+    expect(vi.mocked(supabaseAdmin.rpc)).not.toHaveBeenCalled()
+  })
 })

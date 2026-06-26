@@ -341,6 +341,24 @@ export async function POST(request: Request) {
       )
     }
 
+    // Server-side payment/total reconciliation — mirrors the client guard in PosCheckoutDialog.
+    // For non-partial sales: pagos must sum to exactly the effective total (tolerance 0.01).
+    if (data.pagos && data.pagos.length > 0 && !data.pagosParcial) {
+      if (Math.abs(saldoPendiente) > 0.01) {
+        return NextResponse.json(
+          { error: "El total de pagos no coincide con el total de la venta." },
+          { status: 400 }
+        )
+      }
+    }
+    // For partial sales: pagos must not exceed the total.
+    if (data.pagosParcial && montoPagado > total + 0.01) {
+      return NextResponse.json(
+        { error: "El total de pagos no puede exceder el total de la venta." },
+        { status: 400 }
+      )
+    }
+
     const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc("crear_venta_atomica", rpcParams)
 
     if (rpcError) {
