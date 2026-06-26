@@ -6,6 +6,7 @@ import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { formatVenta } from "@/lib/db-utils"
 import { sucursalParaEscritura, sucursalParaLectura, getDepositoDeSucursal } from "@/lib/sucursal"
 import { getRecargosMetodo, factorRecargo, metodoCondicion } from "@/lib/recargos"
+import { resolveOperador } from "@/lib/operadores"
 import { z } from "zod"
 
 const itemSchema = z.object({
@@ -48,6 +49,7 @@ const ventaSchema = z.object({
     montoOriginal: z.number().positive().nullable().optional(),
     costoFinanciero: z.number().min(0).nullable().optional(),
   })).optional(),
+  vendedorId: z.string().uuid().nullable().optional(),
 })
 
 export async function GET(request: Request) {
@@ -296,10 +298,18 @@ export async function POST(request: Request) {
       }
     }
 
+    // Resolver vendedor (server-authoritative: valida que pertenezca a la org con rol válido)
+    const vendedorId = await resolveOperador(
+      organizationId!,
+      data.vendedorId,
+      userId!,
+      { roles: ["VENDEDOR", "ADMIN"] }
+    )
+
     // Crear venta atómicamente
     const rpcParams: Record<string, any> = {
       p_org_id: organizationId!,
-      p_vendedor_id: userId!,
+      p_vendedor_id: vendedorId,
       p_cliente_id: data.clienteId || null,
       p_cliente_nombre: data.clienteNombre,
       p_cliente_telefono: data.clienteTelefono || null,
