@@ -12,6 +12,7 @@ import { sucursalParaEscritura, sucursalParaLectura } from "@/lib/sucursal"
 import { z } from "zod"
 import { tipoValidaImei } from "@/lib/tipos-dispositivo-config"
 import { isValidImei } from "@/lib/imei"
+import { resolveOperador } from "@/lib/operadores"
 
 // Generar token público único
 function generatePublicToken(): string {
@@ -51,6 +52,7 @@ const ordenSchema = z.object({
   // Origen: turno previo (visita on-site agendada). Si viene, al crear la orden
   // se vincula y el turno pasa a estado 'orden_generada' (trigger SQL).
   fromTurnoId: z.string().optional(),
+  recibidoPorId: z.string().nullable().optional(),
 })
 
 export async function GET(request: Request) {
@@ -355,6 +357,9 @@ export async function POST(request: Request) {
     const estadoInicial = data.presupuestoAceptado ? "EN_REPARACION" : "RECIBIDO"
     const costoFinal = data.presupuestoAceptado && data.presupuesto ? data.presupuesto : null
 
+    // Resolver quién recibió el equipo (server-authoritative: fallback al usuario de sesión)
+    const recibidoPor = await resolveOperador(organizationId!, data.recibidoPorId, userId!)
+
     // Resolver sucursal concreta de escritura según rol/cookie/usuario
     const sucursalId = await sucursalParaEscritura({
       role,
@@ -393,6 +398,7 @@ export async function POST(request: Request) {
         metadata: data.metadata || {},
         sector_id: data.sectorId || null,
         tecnico_id: tecnicoAsignadoId,
+        recibido_por: recibidoPor,
         telefono_contacto: data.telefonoContacto || null,
         ...(tecnicoAsignadoId !== null
           ? {
