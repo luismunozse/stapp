@@ -22,6 +22,7 @@ import { resolveOperador } from "@/lib/operadores"
 
 const mockedResolveOperador = resolveOperador as ReturnType<typeof vi.fn>
 
+const VENDEDOR_CUID = "clv0nd3d0r000001"
 const VENDEDOR_UUID = "11111111-1111-1111-1111-111111111111"
 
 function buildTableMocks() {
@@ -73,7 +74,7 @@ describe("POST /api/ventas — vendedor seleccionable", () => {
       porcentajeDescuento: 0,
       metodoPago: "EFECTIVO",
       pagos: [{ metodo: "EFECTIVO", monto: 1000 }],
-      vendedorId: VENDEDOR_UUID,
+      vendedorId: VENDEDOR_CUID,
     }
 
     const res = await POST(createPostRequest(body, "http://localhost/api/ventas"))
@@ -81,7 +82,7 @@ describe("POST /api/ventas — vendedor seleccionable", () => {
 
     expect(mockedResolveOperador).toHaveBeenCalledWith(
       "org-1",
-      VENDEDOR_UUID,
+      VENDEDOR_CUID,
       "sess-user-1",
       { roles: ["VENDEDOR", "ADMIN"] }
     )

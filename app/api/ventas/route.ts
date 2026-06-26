@@ -49,7 +49,7 @@ const ventaSchema = z.object({
     montoOriginal: z.number().positive().nullable().optional(),
     costoFinanciero: z.number().min(0).nullable().optional(),
   })).optional(),
-  vendedorId: z.string().uuid().nullable().optional(),
+  vendedorId: z.string().nullable().optional(),
 })
 
 export async function GET(request: Request) {
