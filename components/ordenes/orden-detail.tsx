@@ -656,8 +656,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             onClick={() => {
               const baseUrl = window.location.origin
               const fecha = orden.fechaIngreso
-                ? new Date(orden.fechaIngreso).toLocaleDateString("es-AR")
-                : new Date().toLocaleDateString("es-AR")
+                ? new Date(orden.fechaIngreso).toLocaleDateString("es-AR", { timeZone: timezone })
+                : new Date().toLocaleDateString("es-AR", { timeZone: timezone })
               printDeviceLabel({
                 codigoOrden: orden.codigoOrden || `#${orden.numeroOrden}`,
                 numeroOrden: orden.numeroOrden,

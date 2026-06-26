@@ -17,6 +17,7 @@ import { imageUrlToRaster, imageUrlToBinarizedDataUrl } from "@/lib/escpos-image
 import { ESTADO_LABELS } from "@/lib/orden-state-machine"
 import { toast } from "sonner"
 import type { OrdenServicio } from "@/types"
+import { useCurrency } from "@/contexts/currency-context"
 
 interface ThermalPrintOrdenProps {
   orden: OrdenServicio & {
@@ -58,6 +59,7 @@ function formatMoney(amount: number): string {
 
 export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
   const { connected, connecting, isSupported, connect, print } = useThermalPrinter()
+  const { timezone } = useCurrency()
   const [open, setOpen] = useState(false)
   const [printingThermal, setPrintingThermal] = useState(false)
 
@@ -76,6 +78,7 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
         ? new Date(orden.fechaIngreso).toLocaleString("es-AR", {
             day: "2-digit", month: "2-digit", year: "numeric",
             hour: "2-digit", minute: "2-digit",
+            timeZone: timezone,
           })
         : "",
       estado: ESTADO_LABELS[orden.estado] || orden.estado,
@@ -91,11 +94,11 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
       presupuesto: orden.presupuesto ?? null,
       costoFinal: orden.costoFinal ?? null,
       fechaPrometida: orden.fechaPrometida
-        ? new Date(orden.fechaPrometida).toLocaleDateString("es-AR")
+        ? new Date(orden.fechaPrometida).toLocaleDateString("es-AR", { timeZone: timezone })
         : null,
       terminosCondiciones: orden.organizationComprobanteTerminos ?? null,
     }
-  }, [orden])
+  }, [orden, timezone])
 
   const buildTicketData = async (): Promise<OrdenTicketData> => {
     let logoRaster: Uint8Array | null = null

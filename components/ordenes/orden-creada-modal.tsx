@@ -117,7 +117,7 @@ export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps
   const [printing, setPrinting] = useState(false)
   const [mensaje, setMensaje] = useState("")
   const [plantillas, setPlantillas] = useState<Record<string, string> | null>(null)
-  const { formatPrice, formatDate } = useCurrency()
+  const { formatPrice, formatDate, timezone } = useCurrency()
 
   // Traer plantillas custom de la organización cuando se abre el modal
   useEffect(() => {
@@ -226,6 +226,7 @@ export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps
     const baseUrl = typeof window !== "undefined" ? window.location.origin : ""
     const fecha = new Date().toLocaleDateString("es-AR", {
       day: "2-digit", month: "2-digit", year: "numeric",
+      timeZone: timezone,
     })
     await printDeviceLabel({
       codigoOrden: orden.codigoOrden || `#${orden.numeroOrden}`,
