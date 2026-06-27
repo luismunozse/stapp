@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import { queueNotification } from "@/lib/notifications/queue"
 import { requireCronAuth } from "@/lib/cron-auth"
+import { resolveTerminologia } from "@/lib/terminologia"
 
 // Este endpoint puede ser llamado por:
 // 1. Vercel Cron Jobs
@@ -16,7 +17,7 @@ export async function GET(request: Request) {
     // Obtener todas las organizaciones con sus configuraciones
     const { data: organizations } = await supabaseAdmin
       .from("organizations")
-      .select("id, nombre, nombre_mostrar, slug, dias_recordatorio, notificaciones_email, notificaciones_whatsapp, moneda, zona_horaria")
+      .select("id, nombre, nombre_mostrar, slug, dias_recordatorio, notificaciones_email, notificaciones_whatsapp, moneda, zona_horaria, terminologia")
       .eq("activo", true)
 
     if (!organizations) {
@@ -90,6 +91,7 @@ export async function GET(request: Request) {
               organizationSlug: org.slug,
               moneda: org.moneda || "ARS",
               zonaHoraria: org.zona_horaria || "America/Argentina/Buenos_Aires",
+              terminologia: resolveTerminologia((org as any).terminologia ?? null),
               cliente: {
                 id: orden.clientes!.id,
                 nombre: orden.clientes!.nombre,

@@ -7,6 +7,7 @@ import {
   NotificationResult,
   NotificationConfig,
 } from "./types"
+import { resolveTerminologia } from "@/lib/terminologia"
 import { generateEmailByType } from "./email-templates"
 import { getWhatsAppTemplates, generateWhatsAppUrl } from "./whatsapp-templates"
 
@@ -298,7 +299,7 @@ export async function createNotificationContext(
     .select(`
       *,
       clientes (*),
-      organizations (nombre_mostrar, moneda, zona_horaria),
+      organizations (nombre_mostrar, moneda, zona_horaria, terminologia),
       garantias (id, dias_validez, fecha_vencimiento)
     `)
     .eq("id", ordenId)
@@ -313,6 +314,7 @@ export async function createNotificationContext(
     organizationName: orden.organizations?.nombre_mostrar,
     moneda: orden.organizations?.moneda || "ARS",
     zonaHoraria: orden.organizations?.zona_horaria || "America/Argentina/Buenos_Aires",
+    terminologia: resolveTerminologia((orden.organizations as any)?.terminologia ?? null),
     cliente: {
       id: orden.clientes.id,
       nombre: orden.clientes.nombre,

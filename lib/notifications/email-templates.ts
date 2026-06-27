@@ -1,6 +1,7 @@
 import { formatCurrencyValue, type CurrencyCode, DEFAULT_CURRENCY } from "@/lib/currency"
 import { formatDateValue } from "@/lib/timezone"
 import { EstadoOrden, NotificationContext, NotificationType } from "./types"
+import { resolveTerminologia, t } from "@/lib/terminologia"
 
 const baseStyles = `
   font-family: Arial, sans-serif;
@@ -82,6 +83,8 @@ export function generateCambioEstadoEmail(ctx: NotificationContext): {
   const estado = ctx.orden!.estado
   const estadoLabel = estadoLabels[estado]
   const estadoColor = estadoColors[estado]
+  const term = resolveTerminologia(ctx.terminologia ?? null)
+  const tEquipo = t(term, "equipo")
 
   return {
     subject: `Orden #${ctx.orden!.numeroOrden} - ${estadoLabel}`,
@@ -127,7 +130,7 @@ export function generateCambioEstadoEmail(ctx: NotificationContext): {
                 ? `
               <div style="background: #dbeafe; padding: 15px; border-radius: 8px; margin: 20px 0;">
                 <p style="margin: 0; color: #1e40af;">
-                  <strong>Su dispositivo esta listo!</strong><br>
+                  <strong>Su ${tEquipo} esta listo!</strong><br>
                   Puede pasar a retirarlo en nuestro local en horario de atencion.
                 </p>
               </div>
@@ -157,6 +160,8 @@ export function generatePresupuestoEmail(ctx: NotificationContext): {
 } {
   const formatCurrency = (amount: number) =>
     formatCurrencyValue(amount, (ctx.moneda as CurrencyCode) || DEFAULT_CURRENCY)
+  const term = resolveTerminologia(ctx.terminologia ?? null)
+  const tReparacion = t(term, "reparacion")
 
   return {
     subject: `Presupuesto definido - Orden #${ctx.orden!.numeroOrden}`,
@@ -174,7 +179,7 @@ export function generatePresupuestoEmail(ctx: NotificationContext): {
               Hola ${ctx.cliente.nombre},
             </h2>
 
-            <p>Hemos definido el presupuesto para la reparacion de su dispositivo:</p>
+            <p>Hemos definido el presupuesto para la ${tReparacion.toLowerCase()} de su ${t(term, "equipo")}:</p>
 
             <div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid #e5e7eb; margin: 20px 0; text-align: center;">
               <p style="color: #6b7280; margin: 0 0 5px 0; font-size: 14px;">Presupuesto estimado</p>
@@ -209,6 +214,8 @@ export function generateGarantiaEmail(ctx: NotificationContext): {
   html: string
 } {
   const formatDate = (date: Date) => formatDateValue(date, ctx.zonaHoraria)
+  const term = resolveTerminologia(ctx.terminologia ?? null)
+  const tReparacion = t(term, "reparacion")
 
   return {
     subject: `Garantia activada - Orden #${ctx.orden!.numeroOrden}`,
@@ -226,7 +233,7 @@ export function generateGarantiaEmail(ctx: NotificationContext): {
               Hola ${ctx.cliente.nombre},
             </h2>
 
-            <p>Su reparacion cuenta ahora con garantia:</p>
+            <p>Su ${tReparacion.toLowerCase()} cuenta ahora con garantia:</p>
 
             <div style="background: #dcfce7; padding: 20px; border-radius: 8px; margin: 20px 0;">
               <div style="text-align: center;">
@@ -268,8 +275,11 @@ export function generateRecordatorioEmail(
   subject: string
   html: string
 } {
+  const term = resolveTerminologia(ctx.terminologia ?? null)
+  const tEquipo = t(term, "equipo")
+
   return {
-    subject: `Recordatorio: Su dispositivo esta listo - Orden #${ctx.orden!.numeroOrden}`,
+    subject: `Recordatorio: Tu ${tEquipo} esta listo para retirar - Orden #${ctx.orden!.numeroOrden}`,
     html: `
       <!DOCTYPE html>
       <html>
@@ -286,10 +296,10 @@ export function generateRecordatorioEmail(
 
             <div style="background: #fef3c7; padding: 20px; border-radius: 8px; margin: 20px 0;">
               <p style="color: #92400e; margin: 0; font-weight: bold;">
-                Le recordamos que su dispositivo esta listo para retirar
+                Le recordamos que su ${tEquipo.toLowerCase()} esta listo para retirar
               </p>
               <p style="color: #92400e; margin: 8px 0 0 0;">
-                Han pasado ${diasCompletado} dia${diasCompletado > 1 ? "s" : ""} desde que fue completada la reparacion.
+                Han pasado ${diasCompletado} dia${diasCompletado > 1 ? "s" : ""} desde que fue completada la ${t(term, "reparacion").toLowerCase()}.
               </p>
             </div>
 

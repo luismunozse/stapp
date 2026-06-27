@@ -16,6 +16,7 @@ export async function queueNotification(params: {
   context: {
     organizationName: string
     organizationSlug?: string
+    terminologia?: import("@/lib/terminologia").Terminologia
     moneda?: string
     zonaHoraria?: string
     cliente: {
