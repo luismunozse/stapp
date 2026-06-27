@@ -17,6 +17,7 @@ export function VocabularioForm() {
       .then((r) => r.json())
       .then((d) => {
         setResuelto(d.terminologia || {})
+        setOverrides(d.terminologiaOverrides || {})
       })
       .catch(() => {
         // fail silently; placeholders fall back to catalog defaults

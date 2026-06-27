@@ -1,11 +1,11 @@
-import { NextResponse } from "next/server"
+﻿import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { uploadLogo, deleteLogo, dataUrlToBuffer } from "@/lib/storage"
 import { COUNTRIES } from "@/lib/countries"
 import { resolveTerminologia, sanitizeTerminologia } from "@/lib/terminologia"
 
-// GET - Obtener configuración (solo ADMIN)
+// GET - Obtener configuraciÃ³n (solo ADMIN)
 export async function GET() {
   try {
     const { error, organizationId } = await requireAdmin()
@@ -70,7 +70,7 @@ export async function GET() {
     }
 
     if (dbError || !organization) {
-      return NextResponse.json({ error: "Organización no encontrada" }, { status: 404 })
+      return NextResponse.json({ error: "OrganizaciÃ³n no encontrada" }, { status: 404 })
     }
 
     // Mapear para compatibilidad con frontend
@@ -105,14 +105,15 @@ export async function GET() {
       redondeoEfectivo: organization.redondeo_efectivo ?? 0,
       comisionAplicaSinReparacion: organization.comision_aplica_sin_reparacion ?? false,
       terminologia: resolveTerminologia(organization.terminologia),
+      terminologiaOverrides: organization.terminologia ?? {},
     })
   } catch (error) {
     console.error("Error fetching config:", error)
-    return NextResponse.json({ error: "Error al obtener configuración" }, { status: 500 })
+    return NextResponse.json({ error: "Error al obtener configuraciÃ³n" }, { status: 500 })
   }
 }
 
-// PUT - Actualizar configuración (solo ADMIN)
+// PUT - Actualizar configuraciÃ³n (solo ADMIN)
 export async function PUT(request: Request) {
   try {
     const { error, organizationId } = await requireAdmin()
@@ -124,7 +125,7 @@ export async function PUT(request: Request) {
     } catch (parseError) {
       console.error("Error parsing request body:", parseError)
       return NextResponse.json(
-        { error: "El archivo es demasiado grande. Usa una imagen de menor tamaño (máx 1MB)." },
+        { error: "El archivo es demasiado grande. Usa una imagen de menor tamaÃ±o (mÃ¡x 1MB)." },
         { status: 413 }
       )
     }
@@ -151,11 +152,11 @@ export async function PUT(request: Request) {
 
     // Si hay nuevo logo en base64, subirlo a Storage
     if (logoData && logoMime) {
-      // Validar tamaño
+      // Validar tamaÃ±o
       const base64Size = logoData.length * 0.75
       if (base64Size > 2 * 1024 * 1024) {
         return NextResponse.json(
-          { error: "La imagen es demasiado grande (máx 2MB)" },
+          { error: "La imagen es demasiado grande (mÃ¡x 2MB)" },
           { status: 400 }
         )
       }
@@ -226,7 +227,7 @@ export async function PUT(request: Request) {
       updateData.cotizacion_terminos = cotizacionTerminos || null
     }
 
-    // recepcion_terminos puede no existir si la migración 072 no se ejecutó
+    // recepcion_terminos puede no existir si la migraciÃ³n 072 no se ejecutÃ³
     let hasRecepcionTerminos = true
     if (recepcionTerminos !== undefined) {
       updateData.recepcion_terminos = recepcionTerminos || null
@@ -334,6 +335,7 @@ export async function PUT(request: Request) {
         redondeoEfectivo: org?.redondeo_efectivo ?? 0,
         comisionAplicaSinReparacion: org?.comision_aplica_sin_reparacion ?? false,
         terminologia: resolveTerminologia(org?.terminologia),
+        terminologiaOverrides: org?.terminologia ?? {},
       })
     }
 
@@ -401,11 +403,12 @@ export async function PUT(request: Request) {
       redondeoEfectivo: organization.redondeo_efectivo ?? 0,
       comisionAplicaSinReparacion: organization.comision_aplica_sin_reparacion ?? false,
       terminologia: resolveTerminologia(organization.terminologia),
+      terminologiaOverrides: organization.terminologia ?? {},
     })
   } catch (error: any) {
     console.error("Error updating config:", error)
     const message = error?.message || (typeof error === "object" ? JSON.stringify(error) : String(error))
-    return NextResponse.json({ error: `Error al actualizar configuración: ${message}` }, { status: 500 })
+    return NextResponse.json({ error: `Error al actualizar configuraciÃ³n: ${message}` }, { status: 500 })
   }
 }
 
@@ -443,3 +446,4 @@ export async function DELETE() {
     return NextResponse.json({ error: "Error al eliminar logo" }, { status: 500 })
   }
 }
+
