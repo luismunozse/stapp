@@ -42,6 +42,9 @@ import { useCurrency } from "@/contexts/currency-context"
 
 type PlantillasMap = Record<string, string>
 
+// WhatsApp caps message bodies at ~4096 chars; keep a safe ceiling.
+const MAX_TEMPLATE_LENGTH = 4000
+
 const CATEGORY_ICONS: Record<PlantillaCategory, React.ComponentType<{ className?: string }>> = {
   ordenes: ClipboardList,
   ventas: ShoppingCart,
@@ -106,7 +109,11 @@ function WhatsAppPreview({ text, timezone }: { text: string; timezone: string })
   }
 
   const lines = text.split("\n")
-  const time = new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", timeZone: timezone })
+  // Compute once per timezone change — avoids the clock jumping on every keystroke re-render
+  const time = useMemo(
+    () => new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", timeZone: timezone }),
+    [timezone],
+  )
 
   return (
     <div className="rounded-lg p-3 bg-[#e5ddd5] dark:bg-[#0b141a]">
@@ -154,7 +161,7 @@ function VariableChip({
           onClick={onClick}
           disabled={disabled}
           className={cn(
-            "px-2 py-1 rounded-md text-[11px] font-mono transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1 border",
+            "px-2 py-1 rounded-md text-[11px] font-mono transition-[transform,background-color,color,border-color] duration-200 ease-out active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1 border",
             recentlyInserted
               ? "bg-primary text-primary-foreground border-primary scale-105"
               : "bg-muted hover:bg-primary/10 hover:text-primary border-transparent hover:border-primary/30",
@@ -222,12 +229,17 @@ function PlantillaEditor({
     const el = textareaRef.current
     const current = value || plantilla.defaultText
     if (!el) {
-      onChange(current + `{${varKey}}`)
+      const appended = current + `{${varKey}}`
+      if (appended.length > MAX_TEMPLATE_LENGTH) return
+      onChange(appended)
       return
     }
     const start = el.selectionStart ?? current.length
     const end = el.selectionEnd ?? current.length
-    const next = current.slice(0, start) + `{${varKey}}` + current.slice(end)
+    const token = `{${varKey}}`
+    const next = current.slice(0, start) + token + current.slice(end)
+    // Guard the length ceiling — inserts bypass the textarea's maxLength
+    if (next.length > MAX_TEMPLATE_LENGTH) return
     onChange(next)
     setLastInserted(varKey)
     setTimeout(() => setLastInserted((cur) => (cur === varKey ? null : cur)), 600)
@@ -278,7 +290,7 @@ function PlantillaEditor({
       </div>
 
       {/* Body */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4">
         {/* Variables */}
         <div>
           <div className="flex items-center justify-between mb-2">
@@ -328,8 +340,15 @@ function PlantillaEditor({
               <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Mensaje
               </label>
-              <span className="text-[10px] text-muted-foreground tabular-nums">
-                {(value || plantilla.defaultText).length} / 4000
+              <span
+                className={cn(
+                  "text-[10px] tabular-nums",
+                  (value || plantilla.defaultText).length >= MAX_TEMPLATE_LENGTH
+                    ? "text-destructive font-medium"
+                    : "text-muted-foreground",
+                )}
+              >
+                {(value || plantilla.defaultText).length} / {MAX_TEMPLATE_LENGTH}
               </span>
             </div>
             <Textarea
@@ -337,6 +356,7 @@ function PlantillaEditor({
               value={value}
               onChange={(e) => onChange(e.target.value)}
               disabled={disabled}
+              maxLength={MAX_TEMPLATE_LENGTH}
               rows={Math.min(20, Math.max(8, effectiveText.split("\n").length + 1))}
               placeholder={plantilla.defaultText}
               className="font-mono text-xs resize-none"
@@ -691,11 +711,11 @@ export function PlantillasWhatsappEditor() {
         </div>
 
         {/* Master-detail layout */}
-        <div className="border rounded-lg overflow-hidden grid lg:grid-cols-[320px_1fr] h-[640px]">
+        <div className="border rounded-lg overflow-hidden grid lg:grid-cols-[320px_1fr] h-[70vh] min-h-[480px] lg:h-[640px]">
           {/* Sidebar */}
           <div
             className={cn(
-              "border-r flex flex-col bg-muted/20",
+              "border-r flex flex-col bg-muted/20 min-h-0",
               showEditorMobile && "hidden lg:flex",
             )}
           >
@@ -759,7 +779,7 @@ export function PlantillasWhatsappEditor() {
             </div>
 
             {/* Plantillas list grouped by category */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto min-h-0">
               {filtered.length === 0 ? (
                 <div className="p-6 text-center text-muted-foreground text-sm">
                   <MessageCircle className="h-8 w-8 mx-auto mb-2 opacity-40" />
@@ -832,7 +852,7 @@ export function PlantillasWhatsappEditor() {
           {/* Editor panel */}
           <div
             className={cn(
-              "flex flex-col bg-background",
+              "flex flex-col bg-background min-h-0",
               !showEditorMobile && "hidden lg:flex",
             )}
           >
