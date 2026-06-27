@@ -23,16 +23,6 @@ import {
   Wifi,
   Battery,
   Signal,
-  // Floating icons for background
-  Smartphone,
-  Wrench,
-  Monitor,
-  Laptop,
-  Cpu,
-  Settings,
-  Tablet,
-  HardDrive,
-  type LucideIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { PlanPrices } from "@/lib/pricing"
@@ -49,101 +39,6 @@ const modules = [
   { id: "inventario", name: "Inventario", icon: Package },
   { id: "clientes", name: "Clientes", icon: Users },
 ]
-
-// Floating icons configuration for animated background
-const floatingIcons: {
-  Icon: LucideIcon
-  position: string
-  size: string
-  animation: { y?: number[]; x?: number[]; rotate?: number[]; scale?: number[] }
-  duration: number
-  delay?: number
-  opacity: string
-}[] = [
-  {
-    Icon: Smartphone,
-    position: "top-24 left-[8%]",
-    size: "w-8 h-8",
-    animation: { y: [-15, 15, -15], rotate: [-5, 5, -5] },
-    duration: 6,
-    opacity: "opacity-[0.15]",
-  },
-  {
-    Icon: Wrench,
-    position: "top-40 left-[18%]",
-    size: "w-6 h-6",
-    animation: { y: [10, -10, 10], rotate: [0, 15, 0] },
-    duration: 5,
-    delay: 0.5,
-    opacity: "opacity-[0.12]",
-  },
-  {
-    Icon: Laptop,
-    position: "bottom-32 left-[5%]",
-    size: "w-10 h-10",
-    animation: { y: [-20, 20, -20], x: [-5, 5, -5] },
-    duration: 8,
-    delay: 1,
-    opacity: "opacity-[0.1]",
-  },
-  {
-    Icon: Cpu,
-    position: "top-32 right-[12%]",
-    size: "w-6 h-6",
-    animation: { y: [-12, 12, -12], rotate: [-10, 10, -10] },
-    duration: 6,
-    delay: 0.8,
-    opacity: "opacity-[0.15]",
-  },
-  {
-    Icon: Tablet,
-    position: "top-52 right-[25%]",
-    size: "w-8 h-8",
-    animation: { y: [20, -20, 20], x: [5, -5, 5] },
-    duration: 9,
-    delay: 1.5,
-    opacity: "opacity-[0.1]",
-  },
-  {
-    Icon: HardDrive,
-    position: "bottom-40 right-[8%]",
-    size: "w-7 h-7",
-    animation: { y: [-18, 18, -18] },
-    duration: 7,
-    delay: 0.3,
-    opacity: "opacity-[0.12]",
-  },
-]
-
-// Floating Icons Background Component
-function FloatingIconsBackground() {
-  const reduceMotion = useReducedMotion()
-  if (reduceMotion) return null
-  return (
-    <>
-      {floatingIcons.map((item) => (
-        <m.div
-          key={item.position}
-          className={cn(
-            "hidden md:block absolute text-primary",
-            item.position,
-            item.size,
-            item.opacity
-          )}
-          animate={item.animation}
-          transition={{
-            duration: item.duration,
-            repeat: Infinity,
-            ease: "easeInOut",
-            delay: item.delay || 0,
-          }}
-        >
-          <item.Icon className="w-full h-full" />
-        </m.div>
-      ))}
-    </>
-  )
-}
 
 // ========================================
 // PHONE MOCKUPS (for mobile view)
@@ -577,15 +472,9 @@ export function Hero({ prices }: { prices: PlanPrices }) {
 
   return (
     <LazyMotion features={domAnimation}>
-      <section className="relative pt-24 pb-4 sm:pt-28 sm:pb-6 lg:pt-32 lg:pb-8 overflow-hidden">
+      <section className="relative pt-28 pb-8 sm:pt-32 sm:pb-10 lg:pt-36 lg:pb-12 overflow-hidden">
         {/* Background gradient */}
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/[0.06] via-white to-primary/[0.03] dark:from-background dark:via-background dark:to-background" />
-
-        {/* Grid pattern overlay */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:24px_24px]" />
-
-        {/* Floating tech icons background */}
-        <FloatingIconsBackground />
+        <div className="absolute inset-0 bg-gradient-to-b from-primary/[0.04] via-background to-background dark:from-background dark:via-background dark:to-background" />
 
         <div className="container relative mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-center">
