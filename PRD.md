@@ -460,9 +460,10 @@ SUPABASE_SERVICE_ROLE_KEY=   # Service role key (servidor)
 NEXTAUTH_SECRET=        # Secret para JWT (32+ caracteres)
 NEXTAUTH_URL=           # URL de la aplicación
 
-# Email
-RESEND_API_KEY=         # API key de Resend
-RESEND_DOMAIN=          # Dominio verificado en Resend
+# Email (Envialosimple)
+ENVIALOSIMPLE_API_KEY=   # API key de Envialosimple
+EMAIL_FROM=             # Dirección remitente verificada (ej. noreply@stapp.com.ar)
+LEAD_NOTIFICATION_EMAIL= # Casilla que recibe avisos de leads nuevos
 
 # Cron
 CRON_SECRET=            # Token para autenticar cron jobs
