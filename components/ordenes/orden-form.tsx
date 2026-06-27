@@ -27,7 +27,7 @@ import { useOffline } from "@/contexts/offline-context"
 import { useModal } from "@/contexts/modal-context"
 import { STORES } from "@/lib/offline/constants"
 import type { Cliente, TipoDispositivoConfig, CampoExtra } from "@/types"
-import { isValidImei, sanitizeImei } from "@/lib/imei"
+import { sanitizeImei, validarSerie } from "@/lib/imei"
 
 interface FotoPreview {
   id: string
@@ -608,9 +608,16 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
   }
 
   const onSubmit = async (data: OrdenFormData) => {
-    // Validate IMEI only when the field is configured as IMEI (15 digits)
-    if (imeiEsImei && !isValidImei(data.imei)) {
-      setError("imei", { message: "El IMEI debe tener exactamente 15 dígitos" })
+    // Validar el identificador según el modo configurado por tipo.
+    const imeiCfg = config.campos?.imei
+    if (!validarSerie(data.imei, imeiCfg)) {
+      setError("imei", {
+        message:
+          imeiCfg?.mensajeError ||
+          (imeiCfg?.validacion === "imei"
+            ? "El IMEI debe tener exactamente 15 dígitos"
+            : "Formato inválido"),
+      })
       return
     }
     setLoading(true)
