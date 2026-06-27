@@ -4,6 +4,7 @@ import { getOrderByPublicToken } from "@/lib/public-token"
 import { getDeviceTypeLabel } from "@/lib/device-types"
 import { resolvePlantilla } from "@/lib/whatsapp/plantillas-catalog"
 import { parseRecepcionTerminos } from "@/lib/terminos"
+import { resolveTerminologia } from "@/lib/terminologia"
 
 export async function GET(
   request: Request,
@@ -47,7 +48,8 @@ export async function GET(
           logo_url,
           zona_horaria,
           plantillas_whatsapp,
-          recepcion_terminos
+          recepcion_terminos,
+          terminologia
         )
       `)
     if (error) return error
@@ -157,6 +159,7 @@ export async function GET(
       },
       whatsappMensajeConsulta,
       recepcionTerminos: parseRecepcionTerminos(org?.recepcion_terminos),
+      terminologia: resolveTerminologia(org?.terminologia ?? null),
     })
   } catch (error) {
     console.error("Error fetching public order:", error)
