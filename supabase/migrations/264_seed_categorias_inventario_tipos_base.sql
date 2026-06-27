@@ -22,7 +22,7 @@ FROM (VALUES
   ('TV',                 '["Pantallas","Fuentes","Placas","LED","Cables","Controles","Otros"]'::jsonb),
   ('HELADERA',           '["Compresores","Termostatos","Motores","Válvulas","Resistencias","Otros"]'::jsonb),
   ('MICROONDAS',         '["Magnetrones","Fusibles","Motores","Placas","Otros"]'::jsonb),
-  ('LAVARROPAS',         '["Motores","Bombas","Correas","Electrválvulas","Placas","Otros"]'::jsonb),
+  ('LAVARROPAS',         '["Motores","Bombas","Correas","Electroválvulas","Placas","Otros"]'::jsonb),
   ('AIRE_ACONDICIONADO', '["Compresores","Filtros","Motores","Placas","Gas refrigerante","Otros"]'::jsonb),
   ('ACCESORIOS',         '["Auriculares","Parlantes","Cables","Adaptadores","Cargadores","Soportes","Otros"]'::jsonb),
   ('TODOS',              '["Pantallas","Baterías","Fundas","Teclados","Memorias","Cargadores","Otros"]'::jsonb)
