@@ -14,12 +14,14 @@ import {
   DEFAULT_TIMEZONE,
 } from "@/lib/timezone"
 import { DEFAULT_COUNTRY, getCountryConfig, type CountryCode } from "@/lib/countries"
+import { resolveTerminologia, t as tLookup, type Terminologia } from "@/lib/terminologia"
 
 interface CurrencyContextType {
   currency: CurrencyCode
   timezone: string
   pais: CountryCode
   organizationName: string
+  terminologia: Terminologia
   formatPrice: (amount: number | string | null | undefined) => string
   formatDate: (date: Date | string | null | undefined) => string
   formatDateTime: (date: Date | string | null | undefined) => string
@@ -30,6 +32,7 @@ const CurrencyContext = createContext<CurrencyContextType>({
   timezone: DEFAULT_TIMEZONE,
   pais: DEFAULT_COUNTRY,
   organizationName: "",
+  terminologia: resolveTerminologia(null),
   formatPrice: (amount) => formatCurrencyValue(amount, DEFAULT_CURRENCY),
   formatDate: (date) => formatDateValue(date, DEFAULT_TIMEZONE),
   formatDateTime: (date) => formatDateTimeValue(date, DEFAULT_TIMEZONE),
@@ -41,6 +44,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
   const [timezone, setTimezone] = useState<string>(DEFAULT_TIMEZONE)
   const [pais, setPais] = useState<CountryCode>(DEFAULT_COUNTRY)
   const [organizationName, setOrganizationName] = useState<string>("")
+  const [terminologia, setTerminologia] = useState<Terminologia>(resolveTerminologia(null))
 
   useEffect(() => {
     if (!session?.user?.organizationId) return
@@ -64,6 +68,9 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
         }
         if (data.nombreEmpresa) {
           setOrganizationName(data.nombreEmpresa)
+        }
+        if (data.terminologia) {
+          setTerminologia(data.terminologia as Terminologia)
         }
       } catch (error) {
         if (controller.signal.aborted) return
@@ -100,7 +107,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
   )
 
   return (
-    <CurrencyContext.Provider value={{ currency, timezone, pais, organizationName, formatPrice, formatDate, formatDateTime }}>
+    <CurrencyContext.Provider value={{ currency, timezone, pais, organizationName, terminologia, formatPrice, formatDate, formatDateTime }}>
       {children}
     </CurrencyContext.Provider>
   )
@@ -108,4 +115,9 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
 
 export function useCurrency() {
   return useContext(CurrencyContext)
+}
+
+export function useTerminologia() {
+  const { terminologia } = useContext(CurrencyContext)
+  return (key: string) => tLookup(terminologia, key)
 }
