@@ -139,8 +139,8 @@ export function ActionStrip({ items }: { items: ActionItem[] }) {
             role="listitem"
             className={cn(
               "group flex items-start gap-3 rounded-xl border p-4",
-              "transition duration-150",
-              "active:scale-[0.98]",
+              "motion-safe:transition motion-safe:duration-150",
+              "motion-safe:active:scale-[0.98]",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               t.box,
               t.hover,
@@ -149,8 +149,8 @@ export function ActionStrip({ items }: { items: ActionItem[] }) {
             <Icon
               className={cn(
                 "mt-0.5 h-5 w-5 shrink-0",
-                "transition-transform duration-150",
-                "[@media(hover:hover)]:group-hover:scale-110",
+                "motion-safe:transition-transform motion-safe:duration-150",
+                "motion-safe:[@media(hover:hover)]:group-hover:scale-110",
                 t.head,
               )}
               aria-hidden
