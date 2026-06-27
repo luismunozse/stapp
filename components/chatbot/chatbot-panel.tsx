@@ -134,10 +134,11 @@ export function ChatbotPanel({ isOpen, onClose }: ChatbotPanelProps) {
         setShowCaptureBadge(true)
       }
 
+      const justCaptured = !!data.leadCaptured
       const interesado =
         (typeof data.leadScore === "number" && data.leadScore >= 60) ||
         INTENCIONES_LEAD.has(data.intencion)
-      if (interesado && !leadCaptured && !offeredForm) {
+      if (interesado && !leadCaptured && !justCaptured && !offeredForm) {
         setOfferedForm(true)
         setShowLeadForm(true)
       }

@@ -53,4 +53,14 @@ describe("POST /api/chatbot/capture-lead", () => {
     const res = await POST(req({ sessionId: "s1", fuente: "form" }))
     expect(res.status).toBe(400)
   })
+
+  it("captura el lead con score null e interes genérico cuando fuente no es form", async () => {
+    const res = await POST(req({ sessionId: "s1", telefono: "1234567890" }))
+    const json = await res.json()
+    expect(res.status).toBe(200)
+    expect(json.success).toBe(true)
+    const [, , data] = upsertMock.mock.calls[0]
+    expect(data.score).toBeNull()
+    expect(data.interes).toBe("Consulta desde chatbot")
+  })
 })
