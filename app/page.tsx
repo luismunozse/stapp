@@ -12,6 +12,7 @@ import { Testimonials } from "@/components/landing/testimonials"
 import { BlogTeaser } from "@/components/landing/blog-teaser"
 import { FAQ } from "@/components/landing/faq"
 import { DownloadApp } from "@/components/landing/download-app"
+import { CtaBand } from "@/components/landing/cta-band"
 import { Footer } from "@/components/landing/footer"
 import { ChatbotButton } from "@/components/chatbot/chatbot-button"
 import { WhatsAppButton } from "@/components/landing/whatsapp-button"
@@ -202,11 +203,12 @@ export default async function Home() {
           <Features />
           <Comparison />
           <UseCasesGrid />
+          <DownloadApp />
+          <CtaBand />
           <Testimonials />
           <PricingSection prices={prices} allPlans={allPlans} />
           <BlogTeaser />
           <FAQ faqs={faqData} />
-          <DownloadApp />
           <Footer />
           <WhatsAppButton />
           <ChatbotButton />
