@@ -6,6 +6,8 @@
  * 80mm printer = ~48 chars per line (normal font)
  */
 
+import { resolveTerminologia, t, type Terminologia } from "@/lib/terminologia"
+
 const CHARS_PER_LINE_58 = 32
 const CHARS_PER_LINE_80 = 48
 
@@ -184,7 +186,12 @@ export interface OrdenTicketData {
   terminosCondiciones?: string | null
 }
 
-export function generateOrdenTicketCommands(data: OrdenTicketData, printerWidth: 58 | 80 = 80): Uint8Array {
+export function generateOrdenTicketCommands(
+  data: OrdenTicketData,
+  printerWidth: 58 | 80 = 80,
+  terminologia?: Terminologia,
+): Uint8Array {
+  const term = terminologia ?? resolveTerminologia(null)
   const W = printerWidth === 58 ? CHARS_PER_LINE_58 : CHARS_PER_LINE_80
   const buf: number[] = []
 
@@ -207,7 +214,7 @@ export function generateOrdenTicketCommands(data: OrdenTicketData, printerWidth:
 
   // === ORDEN NUMBER ===
   add(CMD.BOLD_ON, CMD.DOUBLE_ON)
-  add(line("ORDEN DE SERVICIO"))
+  add(line(t(term, "orden").toUpperCase()))
   add(CMD.DOUBLE_OFF, CMD.BOLD_OFF)
 
   const ordenCode = data.codigoOrden || `#${String(data.numeroOrden).padStart(4, "0")}`
@@ -228,12 +235,12 @@ export function generateOrdenTicketCommands(data: OrdenTicketData, printerWidth:
 
   // === DISPOSITIVO ===
   add(CMD.BOLD_ON)
-  add(line("DISPOSITIVO"))
+  add(line(t(term, "equipo").toUpperCase()))
   add(CMD.BOLD_OFF)
   add(line(data.dispositivo.substring(0, W)))
   if (data.marca) add(columns("Marca:", data.marca.substring(0, W - 8), W))
   if (data.color) add(columns("Color:", data.color.substring(0, W - 8), W))
-  if (data.imei) add(columns("IMEI:", data.imei.substring(0, W - 7), W))
+  if (data.imei) add(columns(t(term, "serie") + ":", data.imei.substring(0, W - 7), W))
   if (data.accesorios) {
     add(line("Accesorios:"))
     for (const l of wrapText(data.accesorios, W)) add(line(" " + l))

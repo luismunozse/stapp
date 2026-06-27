@@ -49,6 +49,8 @@ export interface NotificationContext {
   organizationId: string
   organizationName: string
   organizationSlug?: string
+  /** Resolved terminology map for configurable vocab. Defaults to neutral terms if absent. */
+  terminologia?: import("@/lib/terminologia").Terminologia
   moneda?: string
   zonaHoraria?: string
   cliente: {

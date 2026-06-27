@@ -3,6 +3,7 @@ import { formatDateValue } from "@/lib/timezone"
 import { formatPhoneForCountry } from "@/lib/countries"
 import { EstadoOrden, NotificationContext, MetodoPagoVenta } from "./types"
 import { renderTemplate, getPlantilla } from "@/lib/whatsapp/plantillas-catalog"
+import { resolveTerminologia, t } from "@/lib/terminologia"
 
 export interface WhatsAppTemplate {
   id: string
@@ -375,45 +376,49 @@ export function getWhatsAppTemplates(
 function generateEstadoMessage(ctx: NotificationContext): string {
   const estado = ctx.orden!.estado
   const label = estadoLabels[estado]
+  const term = resolveTerminologia(ctx.terminologia ?? null)
+  const tEquipo = t(term, "equipo")
+  const tOrden = t(term, "orden")
+  const tReparacion = t(term, "reparacion")
 
-  let mensaje = `Hola ${ctx.cliente.nombre}, le informamos que su ${ctx.orden!.dispositivo} (Orden #${ctx.orden!.numeroOrden}) se encuentra ${label}.`
+  let mensaje = `Hola ${ctx.cliente.nombre}, le informamos que su ${ctx.orden!.dispositivo} (${tOrden} #${ctx.orden!.numeroOrden}) se encuentra ${label}.`
 
   switch (estado) {
     case "RECIBIDO":
-      mensaje += "\n\nRecibimos su equipo y ya esta en cola de diagnostico. Le avisaremos apenas tengamos novedades."
+      mensaje += `\n\nRecibimos su ${tEquipo} y ya esta en cola de diagnostico. Le avisaremos apenas tengamos novedades.`
       break
     case "EN_DIAGNOSTICO":
-      mensaje += "\n\nEstamos revisando su equipo para detectar la falla. En breve le enviamos el presupuesto."
+      mensaje += `\n\nEstamos revisando su ${tEquipo} para detectar la falla. En breve le enviamos el presupuesto.`
       break
     case "PRESUPUESTADO":
       mensaje += "\n\nPara avanzar, *apruebe o rechace el presupuesto* desde el link de seguimiento de abajo. Cualquier duda, escribanos."
       break
     case "APROBADO":
-      mensaje += "\n\nGracias por aprobar el presupuesto! Su equipo entra en cola de reparacion. Le avisamos cuando este listo."
+      mensaje += `\n\nGracias por aprobar el presupuesto! Su ${tEquipo} entra en cola de ${tReparacion.toLowerCase()}. Le avisamos cuando este listo.`
       break
     case "EN_REPARACION":
-      mensaje += "\n\nYa estamos reparando su equipo. Le avisamos en cuanto este terminado."
+      mensaje += `\n\nYa estamos trabajando en su ${tEquipo}. Le avisamos en cuanto este terminado.`
       break
     case "ESPERANDO_REPUESTO":
-      mensaje += "\n\nSu reparacion esta en pausa esperando un repuesto. Apenas llegue, retomamos y le avisamos."
+      mensaje += `\n\nSu ${tReparacion.toLowerCase()} esta en pausa esperando un repuesto. Apenas llegue, retomamos y le avisamos.`
       break
     case "REPARADO":
-      mensaje += "\n\nSu equipo esta reparado y *listo para retirar*. Lo esperamos en horario de atencion. Comprobante en el link."
+      mensaje += `\n\nSu ${tEquipo} esta listo y *listo para retirar*. Lo esperamos en horario de atencion. Comprobante en el link.`
       break
     case "ENTREGADO":
-      mensaje += "\n\nSu equipo fue entregado. Gracias por confiar en nosotros! Si necesita algo mas, escribanos."
+      mensaje += `\n\nSu ${tEquipo} fue entregado. Gracias por confiar en nosotros! Si necesita algo mas, escribanos.`
       break
     case "ENTREGADO_SIN_REPARACION":
-      mensaje += "\n\nSu equipo fue retirado sin reparacion. Gracias por consultarnos; quedamos a disposicion."
+      mensaje += `\n\nSu ${tEquipo} fue retirado sin ${tReparacion.toLowerCase()}. Gracias por consultarnos; quedamos a disposicion.`
       break
     case "CANCELADO":
-      mensaje += "\n\nLa orden fue cancelada. Si desea retomar o ingresar un nuevo servicio, escribanos."
+      mensaje += `\n\nLa ${tOrden.toLowerCase()} fue cancelada. Si desea retomar o ingresar un nuevo servicio, escribanos.`
       break
     case "SIN_REPARACION":
-      mensaje += "\n\nNo fue posible reparar su equipo. Puede pasar a retirarlo en horario de atencion. Quedamos a disposicion."
+      mensaje += `\n\nNo fue posible completar la ${tReparacion.toLowerCase()} de su ${tEquipo}. Puede pasar a retirarlo en horario de atencion. Quedamos a disposicion.`
       break
     case "SIN_FALLA_DETECTADA":
-      mensaje += "\n\nRevisamos su equipo y no detectamos la falla reportada. Puede pasar a retirarlo en horario de atencion. Quedamos a disposicion."
+      mensaje += `\n\nRevisamos su ${tEquipo} y no detectamos la falla reportada. Puede pasar a retirarlo en horario de atencion. Quedamos a disposicion.`
       break
   }
 
@@ -428,12 +433,15 @@ function generatePresupuestoMessage(ctx: NotificationContext): string {
     formatCurrencyValue(amount, (ctx.moneda as CurrencyCode) || DEFAULT_CURRENCY)
 
   const links = getOrdenLinks(ctx)
+  const term = resolveTerminologia(ctx.terminologia ?? null)
+  const tReparacion = t(term, "reparacion").toLowerCase()
+  const tOrden = t(term, "orden")
 
-  return `Hola ${ctx.cliente.nombre}, ya tenemos el presupuesto para la reparacion de su ${ctx.orden!.dispositivo}:
+  return `Hola ${ctx.cliente.nombre}, ya tenemos el presupuesto para la ${tReparacion} de su ${ctx.orden!.dispositivo}:
 
 *Presupuesto: ${formatCurrency(ctx.orden!.presupuesto || 0)}*
 
-Orden #${ctx.orden!.numeroOrden}
+${tOrden} #${ctx.orden!.numeroOrden}
 
 Para avanzar, *apruebe o rechace el presupuesto* desde el link de abajo.${appendOrdenLinks(links)}
 
@@ -442,14 +450,18 @@ ${ctx.organizationName}`
 
 function generateGarantiaMessage(ctx: NotificationContext): string {
   const formatDate = (date: Date) => formatDateValue(date, ctx.zonaHoraria)
+  const term = resolveTerminologia(ctx.terminologia ?? null)
+  const tReparacion = t(term, "reparacion").toLowerCase()
+  const tOrden = t(term, "orden")
+  const tEquipo = t(term, "equipo")
 
-  let mensaje = `Hola ${ctx.cliente.nombre}, su reparacion ahora cuenta con garantia:
+  let mensaje = `Hola ${ctx.cliente.nombre}, su ${tReparacion} ahora cuenta con garantia:
 
 *${ctx.garantia!.diasValidez} dias de garantia*
 Valida hasta: ${formatDate(ctx.garantia!.fechaVencimiento)}`
 
   if (ctx.orden) {
-    mensaje += `\n\nOrden #${ctx.orden.numeroOrden}\nDispositivo: ${ctx.orden.dispositivo}`
+    mensaje += `\n\n${tOrden} #${ctx.orden.numeroOrden}\n${tEquipo}: ${ctx.orden.dispositivo}`
     mensaje += appendOrdenLinks(getOrdenLinks(ctx))
   }
 
@@ -460,10 +472,12 @@ Valida hasta: ${formatDate(ctx.garantia!.fechaVencimiento)}`
 
 function generateRecordatorioMessage(ctx: NotificationContext): string {
   const links = getOrdenLinks(ctx)
+  const term = resolveTerminologia(ctx.terminologia ?? null)
+  const tOrden = t(term, "orden")
 
   return `Hola ${ctx.cliente.nombre}, le recordamos que su ${ctx.orden!.dispositivo} esta listo para retirar.
 
-Orden #${ctx.orden!.numeroOrden}
+${tOrden} #${ctx.orden!.numeroOrden}
 
 Puede pasar por nuestro local en horario de atencion. Lo esperamos!${appendOrdenLinks(links)}
 
@@ -472,8 +486,10 @@ ${ctx.organizationName}`
 
 function generateSeguimientoMessage(ctx: NotificationContext): string {
   const links = getOrdenLinks(ctx)
+  const term = resolveTerminologia(ctx.terminologia ?? null)
+  const tOrden = t(term, "orden")
 
-  return `Hola ${ctx.cliente.nombre}, nos comunicamos por su ${ctx.orden!.dispositivo} (Orden #${ctx.orden!.numeroOrden}).
+  return `Hola ${ctx.cliente.nombre}, nos comunicamos por su ${ctx.orden!.dispositivo} (${tOrden} #${ctx.orden!.numeroOrden}).
 
 [Escriba su mensaje aqui]${appendOrdenLinks(links)}
 

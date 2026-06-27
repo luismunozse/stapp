@@ -6,6 +6,7 @@ import { formatCurrencyValue, type CurrencyCode, DEFAULT_CURRENCY } from "@/lib/
 import { formatDateValue, formatDateTimeValue, DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { parseRecepcionTerminos } from "@/lib/terminos"
 import QRCode from "qrcode"
+import { resolveTerminologia, t, type Terminologia } from "@/lib/terminologia"
 
 // Compatibilidad: algunos bundlers ponen el default dentro de .default
 const fontkit = (fontkitModule as any).default || fontkitModule
@@ -823,9 +824,12 @@ interface OrdenPDFData {
   firmaRecepcion?: string | null
   firmaRecepcionMime?: string | null
   fotosIngreso?: Array<{ url: string; descripcion?: string | null }> | null
+  terminologia?: Terminologia
 }
 
 export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
+  const term = resolveTerminologia(data.terminologia ?? null)
+
   // Helper para texto seguro
   const safe = (val: unknown): string => {
     if (val === null || val === undefined) return ""
@@ -1060,7 +1064,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   page.drawRectangle({ x: cardX2, y: y - cardHeight, width: halfWidth, height: cardHeight, color: white, borderColor: lightGray, borderWidth: 0.5 })
   page.drawRectangle({ x: cardX2, y: y - cardHeight, width: 3, height: cardHeight, color: primaryColor })
   page.drawRectangle({ x: cardX2 + 3, y: y - 17, width: halfWidth - 3, height: 17, color: bgGray })
-  page.drawText("DISPOSITIVO", { x: cardX2 + 10, y: y - 12, size: 8, font: helveticaBold, color: primaryColor })
+  page.drawText(t(term, "equipo").toUpperCase(), { x: cardX2 + 10, y: y - 12, size: 8, font: helveticaBold, color: primaryColor })
 
   const tipoBadgeText = tipoDispositivo.toUpperCase()
   const tipoBadgeWidth = helveticaBold.widthOfTextAtSize(tipoBadgeText, 6) + 10
@@ -1069,7 +1073,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   page.drawText(tipoBadgeText, { x: tipoBadgeX + 5, y: y - 12, size: 6, font: helveticaBold, color: white })
 
   let deviceInfoY = y - 30
-  page.drawText("Equipo:", { x: cardX2 + 10, y: deviceInfoY, size: 7, font: helvetica, color: grayColor })
+  page.drawText(t(term, "equipo") + ":", { x: cardX2 + 10, y: deviceInfoY, size: 7, font: helvetica, color: grayColor })
   page.drawText(truncateToWidth(dispositivo, valueMaxWidth, helveticaBold, 8), { x: cardX2 + labelCol + 10, y: deviceInfoY, size: 8, font: helveticaBold, color: textColor })
   deviceInfoY -= rowH
   if (marca) {
@@ -1088,7 +1092,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     deviceInfoY -= rowH
   }
   if (imei) {
-    page.drawText("N/S:", { x: cardX2 + 10, y: deviceInfoY, size: 7, font: helvetica, color: grayColor })
+    page.drawText(t(term, "serie") + ":", { x: cardX2 + 10, y: deviceInfoY, size: 7, font: helvetica, color: grayColor })
     page.drawText(truncateToWidth(imei, valueMaxWidth, courier, 7), { x: cardX2 + labelCol + 10, y: deviceInfoY, size: 7, font: courier, color: textColor })
   }
 

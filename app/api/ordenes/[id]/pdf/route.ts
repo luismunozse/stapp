@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { generateOrdenPDF, OrdenPDFData } from "@/lib/pdf"
 import { getDeviceTypeLabel } from "@/lib/device-types"
 import { headers } from "next/headers"
+import { getTerminologia } from "@/lib/terminologia-server"
 
 export async function GET(
   request: Request,
@@ -164,7 +165,9 @@ export async function GET(
       fotosIngreso: fotosData && fotosData.length > 0 ? fotosData : null,
     }
 
-    // Generar PDF
+    // Resolver terminología configurable y generar PDF
+    const terminologia = await getTerminologia(organizationId!)
+    pdfData.terminologia = terminologia
     const pdfBuffer = await generateOrdenPDF(pdfData)
 
     // Retornar PDF como descarga (convertir Buffer a Uint8Array)

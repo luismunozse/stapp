@@ -4,6 +4,7 @@ import { getOrderByPublicToken } from "@/lib/public-token"
 import { getDeviceTypeLabel } from "@/lib/device-types"
 import { supabaseAdmin } from "@/lib/supabase"
 import { headers } from "next/headers"
+import { getTerminologia } from "@/lib/terminologia-server"
 
 export async function GET(
   request: Request,
@@ -125,7 +126,9 @@ export async function GET(
       soloCliente: true,
     }
 
-    // Generar PDF
+    // Resolver terminología configurable y generar PDF
+    const terminologia = await getTerminologia(orden.organization_id)
+    pdfData.terminologia = terminologia
     const pdfBuffer = await generateOrdenPDF(pdfData)
 
     // Retornar PDF (convertir Buffer a Uint8Array)

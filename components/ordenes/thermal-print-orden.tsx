@@ -59,7 +59,7 @@ function formatMoney(amount: number): string {
 
 export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
   const { connected, connecting, isSupported, connect, print } = useThermalPrinter()
-  const { timezone } = useCurrency()
+  const { timezone, terminologia } = useCurrency()
   const [open, setOpen] = useState(false)
   const [printingThermal, setPrintingThermal] = useState(false)
 
@@ -138,7 +138,7 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
     setPrintingThermal(true)
     try {
       const ticketData = await buildTicketData()
-      const commands = generateOrdenTicketCommands(ticketData, 80)
+      const commands = generateOrdenTicketCommands(ticketData, 80, terminologia)
       const ok = await print(commands)
       if (ok) toast.success("Comprobante impreso")
       else toast.error("Error al imprimir")
