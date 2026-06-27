@@ -25,8 +25,7 @@ export function CtaBand() {
             >
               <Button
                 size="lg"
-                variant="secondary"
-                className="text-sm sm:text-base px-6 py-5 shadow-lg group"
+                className="bg-white text-primary hover:bg-white/90 text-sm sm:text-base px-6 py-5 shadow-lg group"
               >
                 Probar gratis 30 días
                 <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
