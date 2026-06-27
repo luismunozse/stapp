@@ -1,17 +1,9 @@
 import { supabaseAdmin } from "@/lib/supabase"
-import { Resend } from "resend"
+import { sendEmail } from "@/lib/email"
 import { formatDateValue } from "@/lib/timezone"
 import { sendPushToUsers } from "@/lib/push/send"
 import { generateWhatsAppMessage, formatEstado, resolvePlantillaForTipo } from "@/lib/notifications/whatsapp-message"
 import { escapeHtml } from "@/lib/escape-html"
-
-let _resend: Resend | null = null
-function getResend(): Resend {
-  if (!_resend) {
-    _resend = new Resend(process.env.RESEND_API_KEY)
-  }
-  return _resend
-}
 
 type NotificationType = "CAMBIO_ESTADO" | "PRESUPUESTO_DEFINIDO" | "GARANTIA_CREADA" | "RECORDATORIO_RETIRO"
 
@@ -96,11 +88,11 @@ export async function sendNotificationDirect(params: NotificationParams) {
     try {
       const { subject, html } = generateEmailContent(tipo, context)
 
-      const { data, error } = await getResend().emails.send({
-        from: `${context.organizationName} <notificaciones@${process.env.RESEND_DOMAIN || "resend.dev"}>`,
+      const result = await sendEmail({
         to: context.cliente.email,
         subject,
         html,
+        fromName: context.organizationName,
       })
 
       await supabaseAdmin.from("notification_logs").insert({
@@ -110,12 +102,12 @@ export async function sendNotificationDirect(params: NotificationParams) {
         cliente_id: clienteId,
         tipo,
         canal: "EMAIL",
-        estado: error ? "FALLIDO" : "ENVIADO",
+        estado: "ENVIADO",
         destinatario: context.cliente.email,
         asunto: subject,
         contenido: html,
-        error_message: error?.message || null,
-        metadata: JSON.stringify({ messageId: data?.id }),
+        error_message: null,
+        metadata: JSON.stringify({ messageId: (result as { id?: string } | null)?.id ?? null, provider: "envialosimple" }),
       })
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : "Unknown error"

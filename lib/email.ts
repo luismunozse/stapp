@@ -148,6 +148,9 @@ interface SendEmailParams {
   to: string
   subject: string
   html: string
+  /** Nombre a mostrar como remitente (ej. el nombre del taller). La dirección
+   *  sigue siendo la verificada en EMAIL_FROM. */
+  fromName?: string
   substitutions?: Record<string, string>
   attachments?: Array<{
     filename: string
@@ -156,15 +159,23 @@ interface SendEmailParams {
   }>
 }
 
-async function sendEmail({ to, subject, html, substitutions, attachments }: SendEmailParams) {
+/** Extrae la dirección de un from con formato "Nombre <addr>" o "addr". */
+function addressOf(from: string): string {
+  const match = from.match(/<([^>]+)>/)
+  return match ? match[1].trim() : from.trim()
+}
+
+export async function sendEmail({ to, subject, html, fromName, substitutions, attachments }: SendEmailParams) {
   const apiKey = process.env.ENVIALOSIMPLE_API_KEY
 
   if (!apiKey) {
     throw new Error("ENVIALOSIMPLE_API_KEY no está configurada")
   }
 
+  const from = fromName ? `${fromName} <${addressOf(EMAIL_FROM)}>` : EMAIL_FROM
+
   const payload: Record<string, unknown> = {
-    from: EMAIL_FROM,
+    from,
     to,
     subject,
     html,
