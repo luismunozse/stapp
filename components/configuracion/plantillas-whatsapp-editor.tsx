@@ -711,7 +711,7 @@ export function PlantillasWhatsappEditor() {
         </div>
 
         {/* Master-detail layout */}
-        <div className="border rounded-lg overflow-hidden grid lg:grid-cols-[320px_1fr] h-[70vh] min-h-[480px] lg:h-[640px]">
+        <div className="border rounded-lg overflow-hidden grid grid-rows-1 lg:grid-cols-[320px_1fr] h-[70vh] min-h-[480px] lg:h-[640px]">
           {/* Sidebar */}
           <div
             className={cn(
