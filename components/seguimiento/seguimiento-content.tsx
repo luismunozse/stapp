@@ -53,6 +53,7 @@ import {
 } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { useVisibilityPolling } from "@/hooks/use-visibility-polling"
+import { useTerminologia } from "@/contexts/currency-context"
 import {
   classifyEstado,
   shouldShowTimeRemaining,
@@ -113,20 +114,25 @@ const estadoLabels: Record<string, string> = {
   SIN_FALLA_DETECTADA: "Sin falla detectada",
 }
 
-const estadoDescriptions: Record<string, string> = {
-  RECIBIDO: "Tu equipo fue recibido en el taller. Pronto comenzaremos a revisarlo.",
-  EN_DIAGNOSTICO: "Un técnico está evaluando tu equipo para determinar la falla.",
-  PRESUPUESTADO: "Ya tenemos el presupuesto de la reparación. Esperamos tu aprobación.",
-  APROBADO: "Presupuesto aprobado. Tu equipo entrará en reparación a la brevedad.",
-  EN_REPARACION: "Nuestro técnico está trabajando en tu equipo.",
-  ESPERANDO_REPUESTO: "Estamos esperando la llegada de un repuesto necesario.",
-  REPARADO: "Tu equipo está listo. Ya podés pasar a retirarlo.",
-  ENTREGADO: "Equipo entregado. ¡Gracias por confiar en nosotros!",
-  ENTREGADO_SIN_REPARACION: "El equipo fue retirado sin reparación.",
-  ENTREGADO_SIN_COBRO: "El equipo fue retirado sin cobro.",
-  CANCELADO: "La orden fue cancelada. Contactanos si tenés consultas.",
-  SIN_REPARACION: "Lamentablemente no fue posible reparar el equipo.",
-  SIN_FALLA_DETECTADA: "Revisamos tu equipo y no detectamos la falla reportada. Ya podés pasar a retirarlo.",
+function buildEstadoDescriptions(term: (key: string) => string): Record<string, string> {
+  const equipo = term("equipo")
+  const tecnico = term("tecnico")
+  const reparacion = term("reparacion")
+  return {
+    RECIBIDO: `Tu ${equipo} fue recibido en el taller. Pronto comenzaremos a revisarlo.`,
+    EN_DIAGNOSTICO: `Un ${tecnico} está evaluando tu ${equipo} para determinar la falla.`,
+    PRESUPUESTADO: `Ya tenemos el presupuesto de la ${reparacion}. Esperamos tu aprobación.`,
+    APROBADO: `Presupuesto aprobado. Tu ${equipo} entrará en ${reparacion} a la brevedad.`,
+    EN_REPARACION: `Nuestro ${tecnico} está trabajando en tu ${equipo}.`,
+    ESPERANDO_REPUESTO: "Estamos esperando la llegada de un repuesto necesario.",
+    REPARADO: `Tu ${equipo} está listo. Ya podés pasar a retirarlo.`,
+    ENTREGADO: `${equipo} entregado. ¡Gracias por confiar en nosotros!`,
+    ENTREGADO_SIN_REPARACION: `El ${equipo} fue retirado sin ${reparacion}.`,
+    ENTREGADO_SIN_COBRO: `El ${equipo} fue retirado sin cobro.`,
+    CANCELADO: "La orden fue cancelada. Contactanos si tenés consultas.",
+    SIN_REPARACION: `Lamentablemente no fue posible reparar el ${equipo}.`,
+    SIN_FALLA_DETECTADA: `Revisamos tu ${equipo} y no detectamos la falla reportada. Ya podés pasar a retirarlo.`,
+  }
 }
 
 const estadoColors: Record<string, { text: string; bg: string; border: string }> = {
@@ -278,6 +284,8 @@ interface TrackingData {
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export function SeguimientoContent({ token }: { token: string }) {
+  const term = useTerminologia()
+  const estadoDescriptions = buildEstadoDescriptions(term)
   const [data, setData] = useState<TrackingData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -439,7 +447,7 @@ export function SeguimientoContent({ token }: { token: string }) {
       {/* ══════════ GREETING ══════════ */}
       {data.cliente?.nombre && (
         <p className="text-sm text-muted-foreground px-1">
-          Hola <span className="font-semibold text-foreground">{data.cliente.nombre.split(" ")[0]}</span>, acá podés ver el estado de tu equipo.
+          Hola <span className="font-semibold text-foreground">{data.cliente.nombre.split(" ")[0]}</span>, acá podés ver el estado de tu {term("equipo")}.
         </p>
       )}
 
@@ -674,7 +682,7 @@ export function SeguimientoContent({ token }: { token: string }) {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-1">
-                  Diagnóstico del técnico
+                  Diagnóstico del {term("tecnico")}
                 </p>
                 <p className="text-sm leading-relaxed whitespace-pre-wrap">{data.diagnostico}</p>
               </div>
@@ -771,7 +779,7 @@ export function SeguimientoContent({ token }: { token: string }) {
           <div className="p-4">
             <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-3">
               <DeviceIcon className="h-3.5 w-3.5" />
-              Equipo
+              {term("equipo")}
             </div>
             <div>
               <p className="font-bold text-base">{data.dispositivo}</p>

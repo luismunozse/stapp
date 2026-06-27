@@ -21,6 +21,7 @@ import { UpgradeModal } from "@/components/billing/upgrade-modal"
 import { usePlanLimitError } from "@/lib/hooks/use-plan-limit-error"
 import { compressImage } from "@/lib/image-compression"
 import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
+import { useTerminologia } from "@/contexts/currency-context"
 import { SignaturePad } from "@/components/firma/signature-pad"
 import { useOffline } from "@/contexts/offline-context"
 import { useModal } from "@/contexts/modal-context"
@@ -122,6 +123,7 @@ interface OrdenCreadaData {
 }
 
 export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, inSheet = false }: OrdenFormProps) {
+  const term = useTerminologia()
   const { offlineFetch } = useOffline()
   const { showError, showInfo } = useModal()
   const { data: session } = useSession()
@@ -774,7 +776,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle>Nueva Orden de Servicio</CardTitle>
+          <CardTitle>Nueva {term("orden")}</CardTitle>
           <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="h-4 w-4" />
           </Button>
@@ -812,7 +814,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
           {/* Step indicator */}
           {(() => {
             const stepsForLabel = [
-              { step: 1, label: "Cliente y Equipo" },
+              { step: 1, label: `Cliente y ${term("equipo")}` },
               { step: 2, label: "Detalles" },
               { step: 3, label: "Fotos y Checklist" },
             ]
@@ -825,7 +827,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
           })()}
           <div className="flex items-center gap-2 mb-6">
             {[
-              { step: 1, label: "Cliente y Equipo" },
+              { step: 1, label: `Cliente y ${term("equipo")}` },
               { step: 2, label: "Detalles" },
               { step: 3, label: "Fotos y Checklist" },
             ].map(({ step, label }, index) => (
@@ -1156,7 +1158,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
 
           {!isTecnicoRole && tecnicosDisponibles.length > 0 && (
             <div>
-              <Label htmlFor="tecnicoId">Técnico asignado (Opcional)</Label>
+              <Label htmlFor="tecnicoId">{term("tecnico")} asignado (Opcional)</Label>
               <Select
                 value={selectedTecnicoId || "NONE"}
                 onValueChange={(v) => setSelectedTecnicoId(v === "NONE" ? "" : v)}
@@ -1448,7 +1450,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
           {currentStep === 3 && (<>
           {/* Fotos de ingreso */}
           <div>
-            <Label>Fotos del Equipo (Ingreso)</Label>
+            <Label>Fotos del {term("equipo")} (Ingreso)</Label>
             <div className="mt-2 space-y-3">
               <div className="flex gap-2">
                 <input

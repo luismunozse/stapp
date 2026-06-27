@@ -46,7 +46,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import Link from "next/link"
-import { useCurrency } from "@/contexts/currency-context"
+import { useCurrency, useTerminologia } from "@/contexts/currency-context"
 import { CotizacionList } from "@/components/cotizaciones/cotizacion-list"
 import { GarantiaCard } from "@/components/garantias/garantia-card"
 import { FotoGallery } from "@/components/fotos/foto-gallery"
@@ -93,6 +93,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const router = useRouter()
   const { data: session } = useSession()
   const { confirm, alert } = useModal()
+  const term = useTerminologia()
   const { formatPrice, formatDate, currency, timezone } = useCurrency()
   const [orden, setOrden] = useState<OrdenServicio | null>(null)
   const [tecnicos, setTecnicos] = useState<UserType[]>([])
@@ -821,7 +822,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
 
                 {/* Dispositivo */}
                 <div className="space-y-3">
-                  <FieldSectionLabel icon={Smartphone}>Dispositivo</FieldSectionLabel>
+                  <FieldSectionLabel icon={Smartphone}>{term("equipo")}</FieldSectionLabel>
                   <div className="space-y-2">
                     {orden.marca && (
                       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{orden.marca}</p>
@@ -833,7 +834,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                     </div>
                     {orden.imei && (
                       <div className="text-sm">
-                        <span className="text-muted-foreground">IMEI/Serial: </span>
+                        <span className="text-muted-foreground">{term("serie")}: </span>
                         <code className="bg-muted px-1.5 py-0.5 rounded text-xs">{orden.imei}</code>
                       </div>
                     )}
