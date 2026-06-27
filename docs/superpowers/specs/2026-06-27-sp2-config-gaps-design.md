@@ -28,6 +28,8 @@ El motor `tipos_dispositivo.config JSONB` ya guarda `campos`, `camposExtra`, `ac
 
 **Estado actual:** `lib/imei.ts` tiene `isValidImei` (15 dígitos) y `sanitizeImei`. En `orden-form.tsx` (~líneas 275, 612, 1072) la validación se gatea con `config.campos.imei.validacion === "imei"` (15 díg) vs ausente (sin validar). El editor (`tipo-config-editor.tsx` ~176-213) tiene un checkbox "Validar como IMEI (15 díg)". El "serie libre" (sin validación) ya funciona.
 
+**Nota — la ETIQUETA del identificador YA es config-driven (no es trabajo de SP-2):** el nombre del campo identificador varía por rubro (IMEI en telefonía, SN/Número de Serie en computación, N° de cuadro en bicicletería, etc.). Eso ya está resuelto: `config.campos.imei.label` es editable por tipo desde `tipo-config-editor.tsx:43,77`, el form lo renderiza (`orden-form.tsx:272,1069`), y los tipos base están seedeados (CELULAR→"IMEI"). SP-2 cubre solo la **validación**; la etiqueta correcta de entrada por rubro la siembra SP-3 (plantillas). *(Wart interno: la clave del config sigue siendo `imei` aunque represente "el identificador" genérico — funciona porque el usuario solo ve el label; renombrar la clave a `identificador` es limpieza futura, fuera de alcance.)*
+
 **Objetivo:** soportar validación **custom por tipo** (patrón/regex) además de IMEI y libre, manteniendo lo actual intacto.
 
 - **Config (extensión de `config.campos.imei`):**
