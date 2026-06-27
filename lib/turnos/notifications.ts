@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase"
-import { Resend } from "resend"
+import { sendEmail } from "@/lib/email"
 import { renderTemplate, getPlantilla } from "@/lib/whatsapp/plantillas-catalog"
 
 const TURNO_TIPO_TO_CATALOG_KEY: Record<string, string> = {
@@ -9,12 +9,6 @@ const TURNO_TIPO_TO_CATALOG_KEY: Record<string, string> = {
   reprogramado: "turno_reprogramado",
   cancelado: "turno_cancelado",
   tecnico_en_camino: "turno_tecnico_en_camino",
-}
-
-let _resend: Resend | null = null
-function getResend(): Resend {
-  if (!_resend) _resend = new Resend(process.env.RESEND_API_KEY)
-  return _resend
 }
 
 export type TurnoNotifTipo =
@@ -249,13 +243,12 @@ export async function sendTurnoNotification(
   // Email
   if (usarEmail && orgConfig?.notificaciones_email !== false && ctx.destinatarioEmail) {
     try {
-      const { data, error } = await getResend().emails.send({
-        from: `${ctx.organizationName} <notificaciones@${process.env.RESEND_DOMAIN || "resend.dev"}>`,
+      await sendEmail({
         to: ctx.destinatarioEmail,
         subject: tpl.subject,
         html: tpl.html,
+        fromName: ctx.organizationName,
       })
-      if (error) throw new Error(error.message)
       result.email = { sent: true }
       await logNotif(ctx.organizationId, ctx.turnoId, tipo, "email", ctx.destinatarioEmail, "ENVIADO", tpl.html)
     } catch (err: any) {

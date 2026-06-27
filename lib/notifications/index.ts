@@ -1,5 +1,5 @@
-import { Resend } from "resend"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sendEmail } from "@/lib/email"
 import {
   NotificationType,
   NotificationChannel,
@@ -10,15 +10,6 @@ import {
 import { resolveTerminologia } from "@/lib/terminologia"
 import { generateEmailByType } from "./email-templates"
 import { getWhatsAppTemplates, generateWhatsAppUrl } from "./whatsapp-templates"
-
-// Lazy initialization to avoid errors during build
-let _resend: Resend | null = null
-function getResend(): Resend {
-  if (!_resend) {
-    _resend = new Resend(process.env.RESEND_API_KEY)
-  }
-  return _resend
-}
 
 export class NotificationService {
   private organizationId: string
@@ -101,37 +92,20 @@ export class NotificationService {
     }
 
     try {
-      const { data, error } = await getResend().emails.send({
-        from: process.env.EMAIL_FROM || "Servicio Tecnico <onboarding@resend.dev>",
+      const result = await sendEmail({
         to: context.cliente.email,
         subject: emailContent.subject,
         html: emailContent.html,
       })
 
-      if (error) {
-        await this.logNotification({
-          type,
-          channel: "EMAIL",
-          context,
-          success: false,
-          error: error.message,
-          content: emailContent.html,
-          subject: emailContent.subject,
-        })
-
-        return {
-          success: false,
-          channel: "EMAIL",
-          error: error.message,
-        }
-      }
+      const messageId = (result as { id?: string } | null)?.id
 
       await this.logNotification({
         type,
         channel: "EMAIL",
         context,
         success: true,
-        messageId: data?.id,
+        messageId,
         content: emailContent.html,
         subject: emailContent.subject,
       })
@@ -139,7 +113,7 @@ export class NotificationService {
       return {
         success: true,
         channel: "EMAIL",
-        messageId: data?.id,
+        messageId,
       }
     } catch (err) {
       const errorMessage =
