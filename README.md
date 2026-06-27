@@ -83,8 +83,9 @@ SUPABASE_SERVICE_ROLE_KEY="eyJ..."
 NEXTAUTH_SECRET="tu-secret-key-aqui"
 NEXTAUTH_URL="http://localhost:3000"
 
-# Email (opcional para desarrollo)
-RESEND_API_KEY="re_..."
+# Email (Envialosimple)
+ENVIALOSIMPLE_API_KEY="..."
+EMAIL_FROM="noreply@stapp.com.ar"
 ```
 
 ### 5. Ejecuta las migraciones SQL
