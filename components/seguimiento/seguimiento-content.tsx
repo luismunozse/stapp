@@ -53,7 +53,7 @@ import {
 } from "lucide-react"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { useVisibilityPolling } from "@/hooks/use-visibility-polling"
-import { useTerminologia } from "@/contexts/currency-context"
+import { resolveTerminologia, t, type Terminologia } from "@/lib/terminologia"
 import {
   classifyEstado,
   shouldShowTimeRemaining,
@@ -279,13 +279,12 @@ interface TrackingData {
   }
   whatsappMensajeConsulta?: string
   recepcionTerminos?: string[]
+  terminologia?: Terminologia
 }
 
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export function SeguimientoContent({ token }: { token: string }) {
-  const term = useTerminologia()
-  const estadoDescriptions = buildEstadoDescriptions(term)
   const [data, setData] = useState<TrackingData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -364,6 +363,9 @@ export function SeguimientoContent({ token }: { token: string }) {
       </div>
     )
   }
+
+  const term = (key: string) => t(resolveTerminologia(data.terminologia), key)
+  const estadoDescriptions = buildEstadoDescriptions(term)
 
   const DeviceIcon = tipoDispositivoIcons[data.tipoDispositivo] || Package
   const estadoClass = classifyEstado(data.estado)
