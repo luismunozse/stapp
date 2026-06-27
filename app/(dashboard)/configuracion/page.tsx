@@ -18,6 +18,7 @@ import {
   Warehouse,
   Printer,
   Store,
+  Type,
   type LucideIcon,
 } from "lucide-react"
 import { canEditConfiguration } from "@/lib/auth-utils"
@@ -80,6 +81,14 @@ const SECTIONS: SettingSection[] = [
         labelShort: "Kiosco",
         desc: "Pantallas de estado para tu local",
         descShort: "Pantallas",
+      },
+      {
+        href: "/configuracion/vocabulario",
+        icon: Type,
+        label: "Vocabulario",
+        labelShort: "Vocabulario",
+        desc: "Personalizá los términos según tu rubro",
+        descShort: "Términos por rubro",
       },
     ],
   },
