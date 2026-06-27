@@ -28,4 +28,10 @@ test.describe("Paginas publicas", () => {
     // Debe redirigir a login
     await expect(page).toHaveURL(/login/)
   })
+
+  test("la landing muestra eyebrows de seccion", async ({ page }) => {
+    await page.goto("/")
+    await expect(page.getByText("Plataforma todo-en-uno", { exact: true })).toBeVisible()
+    await expect(page.getByText("Precios", { exact: true })).toBeVisible()
+  })
 })

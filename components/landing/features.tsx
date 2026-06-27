@@ -32,6 +32,7 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { m, LazyMotion, domAnimation } from "@/components/animations/motion"
 import { revealHeader, revealPanel, revealStagger, revealCard } from "./reveal"
+import { SectionEyebrow } from "@/components/landing/section-eyebrow"
 
 const categories = [
   {
@@ -286,6 +287,7 @@ export function Features() {
             whileInView="visible"
             viewport={{ once: true, margin: "0px" }}
           >
+            <SectionEyebrow>Plataforma todo-en-uno</SectionEyebrow>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-balance text-foreground mb-4">
               Todo tu taller en una sola plataforma
             </h2>
