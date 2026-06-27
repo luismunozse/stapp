@@ -7,12 +7,16 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { ChatMessage } from "./chat-message"
+import { LeadCaptureForm } from "./lead-capture-form"
 import { v4 as uuidv4 } from "uuid"
 
 const WHATSAPP_NUMBER = "5491169625733"
 const WHATSAPP_MESSAGE = encodeURIComponent(
   "Hola! Estuve chateando con Santi en la web y me gustaría hablar con una persona."
 )
+
+const LEAD_CAPTURED_KEY = "chatbot-lead-captured"
+const INTENCIONES_LEAD = new Set(["solicitar_demo", "preguntar_precio", "lead_calificado"])
 
 interface Message {
   id: string
@@ -35,6 +39,8 @@ export function ChatbotPanel({ isOpen, onClose }: ChatbotPanelProps) {
   const [isClient, setIsClient] = useState(false)
   const [leadCaptured, setLeadCaptured] = useState(false)
   const [showCaptureBadge, setShowCaptureBadge] = useState(false)
+  const [showLeadForm, setShowLeadForm] = useState(false)
+  const [offeredForm, setOfferedForm] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -50,6 +56,10 @@ export function ChatbotPanel({ isOpen, onClose }: ChatbotPanelProps) {
       localStorage.setItem("chatbot-session-id", sid)
     }
     setSessionId(sid)
+
+    if (localStorage.getItem(LEAD_CAPTURED_KEY) === "true") {
+      setLeadCaptured(true)
+    }
 
     if (messages.length === 0) {
       setMessages([
@@ -123,6 +133,15 @@ export function ChatbotPanel({ isOpen, onClose }: ChatbotPanelProps) {
         setLeadCaptured(true)
         setShowCaptureBadge(true)
       }
+
+      const justCaptured = !!data.leadCaptured
+      const interesado =
+        (typeof data.leadScore === "number" && data.leadScore >= 60) ||
+        INTENCIONES_LEAD.has(data.intencion)
+      if (interesado && !leadCaptured && !justCaptured && !offeredForm) {
+        setOfferedForm(true)
+        setShowLeadForm(true)
+      }
     } catch (error) {
       console.error("Error sending message:", error)
       const errorMessage: Message = {
@@ -138,6 +157,13 @@ export function ChatbotPanel({ isOpen, onClose }: ChatbotPanelProps) {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleLeadCaptured = () => {
+    setLeadCaptured(true)
+    setShowLeadForm(false)
+    setShowCaptureBadge(true)
+    if (typeof window !== "undefined") localStorage.setItem(LEAD_CAPTURED_KEY, "true")
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -210,6 +236,13 @@ export function ChatbotPanel({ isOpen, onClose }: ChatbotPanelProps) {
             </span>
           </div>
         )}
+        {showLeadForm && !leadCaptured && sessionId && (
+          <LeadCaptureForm
+            sessionId={sessionId}
+            conversacionId={conversacionId}
+            onCaptured={handleLeadCaptured}
+          />
+        )}
         <div ref={messagesEndRef} />
       </div>
 
@@ -228,9 +261,17 @@ export function ChatbotPanel({ isOpen, onClose }: ChatbotPanelProps) {
           </Button>
         </div>
         <div className="flex items-center justify-between mt-2">
-          <p className="text-xs text-muted-foreground">
-            Presioná Enter para enviar
-          </p>
+          {!leadCaptured ? (
+            <button
+              type="button"
+              onClick={() => setShowLeadForm(true)}
+              className="text-xs font-medium text-primary hover:underline"
+            >
+              📞 Quiero que me contacten
+            </button>
+          ) : (
+            <p className="text-xs text-muted-foreground">Presioná Enter para enviar</p>
+          )}
           <a
             href={`https://wa.me/${WHATSAPP_NUMBER}?text=${WHATSAPP_MESSAGE}`}
             target="_blank"
