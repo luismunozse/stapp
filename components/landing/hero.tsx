@@ -214,9 +214,9 @@ export function Hero({ prices }: { prices: PlanPrices }) {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.2 }}
               >
-                Dejá de anotar en papeles, de olvidarte qué equipo era de quién,
-                y de perseguir cobros. Órdenes, caja, inventario, ventas, finanzas
-                y más: organizá todo tu taller desde el celular.
+                Cargá cada reparación en un minuto, avisale al cliente por WhatsApp
+                cuando está lista y llevá las cuentas al día. Órdenes, caja,
+                inventario y ventas: todo tu taller en un solo lugar.
               </m.p>
 
               {/* Benefits */}
