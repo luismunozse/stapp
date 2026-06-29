@@ -9,12 +9,12 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
   ArrowRight,
+  Check,
   ChevronDown,
   ClipboardList,
   LayoutDashboard,
   Package,
   Users,
-  Star,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { PlanPrices } from "@/lib/pricing"
@@ -183,8 +183,11 @@ export function Hero({ prices }: { prices: PlanPrices }) {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5 }}
               >
-                <Badge variant="secondary" className="px-3 py-1 text-sm font-medium">
-                  <Star className="w-3.5 h-3.5 mr-1.5 text-yellow-500" />
+                <Badge variant="secondary" className="gap-2 px-3 py-1.5 text-sm font-medium">
+                  <span className="relative flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75 motion-safe:animate-ping" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
+                  </span>
                   30 días gratis, sin tarjeta de crédito
                 </Badge>
               </m.div>
@@ -237,23 +240,39 @@ export function Hero({ prices }: { prices: PlanPrices }) {
               </m.div>
 
               {/* Trust indicators */}
-              <m.p
-                className="text-sm text-muted-foreground mt-6"
+              <m.div
+                className="flex flex-wrap justify-center lg:justify-start gap-x-4 gap-y-2 mt-6 text-sm text-muted-foreground"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.5, delay: 0.5 }}
               >
-                Desde <span className="font-semibold text-foreground">${anchorArs}/mes</span> • Configuración en minutos • Cancelás cuando quieras
-              </m.p>
+                <span className="flex items-center gap-1.5">
+                  <Check className="h-4 w-4 text-primary" />
+                  Desde <span className="font-semibold text-foreground">${anchorArs}/mes</span>
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <Check className="h-4 w-4 text-primary" />
+                  Configuración en minutos
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <Check className="h-4 w-4 text-primary" />
+                  Cancelás cuando quieras
+                </span>
+              </m.div>
             </div>
 
             {/* Right column - Hero before/after image */}
             <m.div
-              className="relative mx-auto w-full max-w-md"
+              className="relative isolate mx-auto w-full max-w-md"
               initial={{ opacity: 0, x: 30 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
             >
+              {/* Soft glow behind the image */}
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute -inset-6 -z-10 rounded-[2.5rem] bg-gradient-to-tr from-primary/30 via-primary/15 to-transparent blur-3xl"
+              />
               <Image
                 src="/hero.png"
                 alt="De los papeles al orden: un taller caótico con notas en papel y el mismo taller organizado con STApp"
