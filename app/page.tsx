@@ -7,7 +7,6 @@ import { Hero } from "@/components/landing/hero"
 import { Features } from "@/components/landing/features"
 import { PricingSection } from "@/components/landing/pricing-section"
 import { Comparison } from "@/components/landing/comparison"
-import { UseCasesGrid } from "@/components/landing/use-cases-grid"
 import { Testimonials } from "@/components/landing/testimonials"
 import { BlogTeaser } from "@/components/landing/blog-teaser"
 import { FAQ } from "@/components/landing/faq"
@@ -202,7 +201,6 @@ export default async function Home() {
           <Hero prices={prices} />
           <Features />
           <Comparison />
-          <UseCasesGrid />
           <DownloadApp />
           <CtaBand />
           <Testimonials />
