@@ -249,7 +249,7 @@ export function Hero({ prices }: { prices: PlanPrices }) {
 
             {/* Right column - Hero before/after image */}
             <m.div
-              className="relative mx-auto w-full max-w-md lg:max-w-none"
+              className="relative mx-auto w-full max-w-md"
               initial={{ opacity: 0, x: 30 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
