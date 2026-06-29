@@ -226,9 +226,9 @@ export function Hero({ prices }: { prices: PlanPrices }) {
                     whileTap={{ scale: 0.98 }}
                     transition={{ type: "spring", stiffness: 400, damping: 17 }}
                   >
-                    <Button size="lg" className="text-base sm:text-lg px-6 sm:px-8 py-5 sm:py-6 shadow-lg hover:shadow-xl transition-shadow group">
+                    <Button size="lg" className="h-14 sm:h-16 px-10 sm:px-14 text-lg sm:text-xl rounded-full shadow-lg hover:shadow-xl transition-shadow group">
                       Prueba Gratis
-                      <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                      <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
                     </Button>
                   </m.div>
                 </Link>
