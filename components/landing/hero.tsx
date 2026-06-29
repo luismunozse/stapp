@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
   ArrowRight,
-  CheckCircle,
   ChevronDown,
   ClipboardList,
   LayoutDashboard,
@@ -167,14 +166,6 @@ export function Hero({ prices }: { prices: PlanPrices }) {
   // pagando). "Desde" es honesto porque existe Free ($0) y el mensual es mayor.
   const anchorArs = formatThousands(Math.round(prices.ars.yearly / 12))
 
-  const benefits = [
-    "Órdenes ilimitadas",
-    "Caja y finanzas",
-    "Punto de venta incluido",
-    "Seguimiento online",
-    "Asistente IA 24/7",
-  ]
-
   return (
     <LazyMotion features={domAnimation}>
       <section className="relative pt-28 pb-8 sm:pt-32 sm:pb-10 lg:pt-36 lg:pb-12 overflow-hidden">
@@ -218,21 +209,6 @@ export function Hero({ prices }: { prices: PlanPrices }) {
                 cuando está lista y llevá las cuentas al día. Órdenes, caja,
                 inventario y ventas: todo tu taller en un solo lugar.
               </m.p>
-
-              {/* Benefits */}
-              <m.div
-                className="flex flex-wrap justify-center gap-x-4 gap-y-2 mb-6"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.3 }}
-              >
-                {benefits.map((benefit) => (
-                  <div key={benefit} className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                    <CheckCircle className="w-4 h-4 text-green-500" />
-                    {benefit}
-                  </div>
-                ))}
-              </m.div>
 
               {/* CTAs */}
               <m.div
