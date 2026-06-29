@@ -178,7 +178,7 @@ export function Hero({ prices }: { prices: PlanPrices }) {
             <div className="text-center lg:text-left">
               {/* Badge */}
               <m.div
-                className="inline-block mb-4"
+                className="inline-block mb-5"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5 }}
@@ -191,7 +191,7 @@ export function Hero({ prices }: { prices: PlanPrices }) {
 
               {/* Headline */}
               <m.h1
-                className="text-3xl sm:text-4xl lg:text-5xl font-bold text-foreground tracking-tight text-balance mb-4"
+                className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold text-foreground tracking-tight text-balance mb-6"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.1 }}
@@ -202,7 +202,7 @@ export function Hero({ prices }: { prices: PlanPrices }) {
 
               {/* Subheadline */}
               <m.p
-                className="text-base sm:text-lg text-muted-foreground mb-6 max-w-xl mx-auto lg:mx-0"
+                className="text-lg sm:text-xl text-muted-foreground mb-8 max-w-xl mx-auto lg:mx-0"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.2 }}
@@ -238,7 +238,7 @@ export function Hero({ prices }: { prices: PlanPrices }) {
 
               {/* Trust indicators */}
               <m.p
-                className="text-xs text-muted-foreground mt-4"
+                className="text-sm text-muted-foreground mt-6"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.5, delay: 0.5 }}
