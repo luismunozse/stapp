@@ -173,7 +173,7 @@ export function Hero({ prices }: { prices: PlanPrices }) {
         <div className="absolute inset-0 bg-gradient-to-b from-primary/[0.04] via-background to-background dark:from-background dark:via-background dark:to-background" />
 
         <div className="container relative mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-center">
+          <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-start">
             {/* Left column - Text */}
             <div className="text-center lg:text-left">
               {/* Badge */}
