@@ -173,7 +173,9 @@ export function Hero({ prices }: { prices: PlanPrices }) {
         <div className="absolute inset-0 bg-gradient-to-b from-primary/[0.04] via-background to-background dark:from-background dark:via-background dark:to-background" />
 
         <div className="container relative mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="mx-auto max-w-3xl text-center">
+          <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-center">
+            {/* Left column - Text */}
+            <div className="text-center lg:text-left">
               {/* Badge */}
               <m.div
                 className="inline-block mb-4"
@@ -200,7 +202,7 @@ export function Hero({ prices }: { prices: PlanPrices }) {
 
               {/* Subheadline */}
               <m.p
-                className="text-base sm:text-lg text-muted-foreground mb-6 max-w-xl mx-auto"
+                className="text-base sm:text-lg text-muted-foreground mb-6 max-w-xl mx-auto lg:mx-0"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.2 }}
@@ -212,7 +214,7 @@ export function Hero({ prices }: { prices: PlanPrices }) {
 
               {/* CTAs */}
               <m.div
-                className="flex flex-row items-center gap-3 justify-center"
+                className="flex flex-row items-center gap-3 justify-center lg:justify-start"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.4 }}
@@ -243,6 +245,25 @@ export function Hero({ prices }: { prices: PlanPrices }) {
               >
                 Desde <span className="font-semibold text-foreground">${anchorArs}/mes</span> • Configuración en minutos • Cancelás cuando quieras
               </m.p>
+            </div>
+
+            {/* Right column - Hero before/after image */}
+            <m.div
+              className="relative mx-auto w-full max-w-md lg:max-w-none"
+              initial={{ opacity: 0, x: 30 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+            >
+              <Image
+                src="/hero.png"
+                alt="De los papeles al orden: un taller caótico con notas en papel y el mismo taller organizado con STApp"
+                width={1122}
+                height={1402}
+                className="w-full h-auto rounded-2xl shadow-2xl"
+                priority
+                sizes="(max-width: 1024px) 90vw, 560px"
+              />
+            </m.div>
           </div>
 
           {/* Big product screenshot (Whaticket-style: dominant, below the copy) */}
