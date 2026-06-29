@@ -44,7 +44,7 @@ const SHOT_HEIGHT = 912
 
 function ScreenshotFrame({ src, alt, url }: { src: string; alt: string; url: string }) {
   return (
-    <div className="relative mx-auto w-full max-w-[560px] overflow-hidden rounded-xl border bg-card shadow-2xl">
+    <div className="relative mx-auto w-full max-w-5xl overflow-hidden rounded-xl border bg-card shadow-2xl">
       {/* Browser chrome bar */}
       <div className="flex items-center gap-2 border-b bg-card p-2.5">
         <div className="flex gap-1.5">
@@ -182,9 +182,7 @@ export function Hero({ prices }: { prices: PlanPrices }) {
         <div className="absolute inset-0 bg-gradient-to-b from-primary/[0.04] via-background to-background dark:from-background dark:via-background dark:to-background" />
 
         <div className="container relative mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-center">
-            {/* Left column - Text content */}
-            <div className="text-center lg:text-left">
+          <div className="mx-auto max-w-3xl text-center">
               {/* Badge */}
               <m.div
                 className="inline-block mb-4"
@@ -211,7 +209,7 @@ export function Hero({ prices }: { prices: PlanPrices }) {
 
               {/* Subheadline */}
               <m.p
-                className="text-base sm:text-lg text-muted-foreground mb-6 max-w-lg mx-auto lg:mx-0"
+                className="text-base sm:text-lg text-muted-foreground mb-6 max-w-xl mx-auto"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.2 }}
@@ -223,7 +221,7 @@ export function Hero({ prices }: { prices: PlanPrices }) {
 
               {/* Benefits */}
               <m.div
-                className="flex flex-wrap justify-center lg:justify-start gap-x-4 gap-y-2 mb-6"
+                className="flex flex-wrap justify-center gap-x-4 gap-y-2 mb-6"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.3 }}
@@ -238,7 +236,7 @@ export function Hero({ prices }: { prices: PlanPrices }) {
 
               {/* CTAs */}
               <m.div
-                className="flex flex-row items-center gap-3 justify-center lg:justify-start"
+                className="flex flex-row items-center gap-3 justify-center"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.4 }}
@@ -283,19 +281,18 @@ export function Hero({ prices }: { prices: PlanPrices }) {
               >
                 Desde <span className="font-semibold text-foreground">${anchorArs}/mes</span> • Configuración en minutos • Cancelás cuando quieras
               </m.p>
-            </div>
-
-            {/* Right column - Interactive Mockup Slider */}
-            <m.div
-              id="demo"
-              className="relative scroll-mt-24"
-              initial={{ opacity: 0, x: 30 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.6, delay: 0.3 }}
-            >
-              <MockupSlider />
-            </m.div>
           </div>
+
+          {/* Big product screenshot (Whaticket-style: dominant, below the copy) */}
+          <m.div
+            id="demo"
+            className="relative mt-12 sm:mt-16 scroll-mt-24"
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.3 }}
+          >
+            <MockupSlider />
+          </m.div>
 
           {/* Scroll indicator */}
           <m.a
