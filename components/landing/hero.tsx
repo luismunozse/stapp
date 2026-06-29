@@ -226,26 +226,12 @@ export function Hero({ prices }: { prices: PlanPrices }) {
                     whileTap={{ scale: 0.98 }}
                     transition={{ type: "spring", stiffness: 400, damping: 17 }}
                   >
-                    <Button size="lg" className="text-sm sm:text-base px-4 sm:px-6 py-4 sm:py-5 shadow-lg hover:shadow-xl transition-shadow group">
-                      Probar gratis 30 días
-                      <ArrowRight className="ml-1.5 sm:ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                    <Button size="lg" className="text-base sm:text-lg px-6 sm:px-8 py-5 sm:py-6 shadow-lg hover:shadow-xl transition-shadow group">
+                      Prueba Gratis
+                      <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
                     </Button>
                   </m.div>
                 </Link>
-                <a
-                  href="#demo"
-                  onClick={() => track("landing_cta_click", { cta: "hero_secondary", label: "Ver cómo funciona" })}
-                >
-                  <m.div
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.98 }}
-                    transition={{ type: "spring", stiffness: 400, damping: 17 }}
-                  >
-                    <Button size="lg" variant="outline" className="text-sm sm:text-base px-4 sm:px-6 py-4 sm:py-5">
-                      Ver cómo funciona
-                    </Button>
-                  </m.div>
-                </a>
               </m.div>
 
               {/* Trust indicators */}
