@@ -203,7 +203,7 @@ export function Hero({ prices }: { prices: PlanPrices }) {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.1 }}
               >
-                Nunca más pierdas una{" "}
+                No pierdas más una{" "}
                 <span className="text-primary">reparación entre papeles</span>
               </m.h1>
 
