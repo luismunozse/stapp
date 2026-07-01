@@ -3,7 +3,6 @@
 import { useState, useCallback } from "react"
 import useSWR from "swr"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import {
@@ -58,16 +57,6 @@ interface EstadoResultadosData {
   }
 }
 
-function defaultRange() {
-  const now = new Date()
-  const desde = new Date(now.getFullYear(), now.getMonth(), 1)
-  const hasta = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-  return {
-    desde: desde.toISOString().split("T")[0],
-    hasta: hasta.toISOString().split("T")[0],
-  }
-}
-
 /**
  * Calcula el rango anterior de la misma duración (para comparativa).
  * Ej: si actual es marzo (31 días), anterior es febrero (28 días) → 28 días previos.
@@ -86,10 +75,14 @@ function previousRange(desde: string, hasta: string) {
   }
 }
 
-export function EstadoResultados() {
+interface EstadoResultadosProps {
+  desde: string
+  hasta: string
+}
+
+export function EstadoResultados({ desde, hasta }: EstadoResultadosProps) {
   const { formatPrice, timezone } = useCurrency()
   const { showError } = useModal()
-  const [{ desde, hasta }, setRango] = useState(defaultRange)
   const [exporting, setExporting] = useState(false)
 
   const { data, isLoading, error } = useSWR<EstadoResultadosData>(
@@ -104,26 +97,6 @@ export function EstadoResultados() {
     fetcher,
     { revalidateOnFocus: false }
   )
-
-  const setMesActual = useCallback(() => setRango(defaultRange()), [])
-  const setMesAnterior = useCallback(() => {
-    const now = new Date()
-    const d = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-    const h = new Date(now.getFullYear(), now.getMonth(), 0)
-    setRango({
-      desde: d.toISOString().split("T")[0],
-      hasta: h.toISOString().split("T")[0],
-    })
-  }, [])
-  const setUltimos30 = useCallback(() => {
-    const h = new Date()
-    const d = new Date()
-    d.setDate(d.getDate() - 30)
-    setRango({
-      desde: d.toISOString().split("T")[0],
-      hasta: h.toISOString().split("T")[0],
-    })
-  }, [])
 
   const handleExportPDF = useCallback(async () => {
     if (!data) return
@@ -240,57 +213,22 @@ export function EstadoResultados() {
 
   return (
     <div className="space-y-4">
-      {/* Selector de período */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-wrap items-end gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground">Desde</label>
-              <Input
-                type="date"
-                value={desde}
-                onChange={(e) => setRango((r) => ({ ...r, desde: e.target.value }))}
-                className="w-auto"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Hasta</label>
-              <Input
-                type="date"
-                value={hasta}
-                onChange={(e) => setRango((r) => ({ ...r, hasta: e.target.value }))}
-                className="w-auto"
-              />
-            </div>
-            <div className="flex gap-2 flex-wrap">
-              <Button variant="outline" size="sm" onClick={setMesActual}>
-                Mes actual
-              </Button>
-              <Button variant="outline" size="sm" onClick={setMesAnterior}>
-                Mes anterior
-              </Button>
-              <Button variant="outline" size="sm" onClick={setUltimos30}>
-                Últimos 30 días
-              </Button>
-            </div>
-            <div className="ml-auto">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleExportPDF}
-                disabled={exporting || !data}
-              >
-                {exporting ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                ) : (
-                  <Download className="h-4 w-4 mr-1" />
-                )}
-                Exportar PDF
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Toolbar: exportar (el período se controla desde el selector global) */}
+      <div className="flex justify-end">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleExportPDF}
+          disabled={exporting || !data}
+        >
+          {exporting ? (
+            <Loader2 className="h-4 w-4 animate-spin mr-1" />
+          ) : (
+            <Download className="h-4 w-4 mr-1" />
+          )}
+          Exportar PDF
+        </Button>
+      </div>
 
       {isLoading && (
         <div className="flex items-center justify-center py-12">
