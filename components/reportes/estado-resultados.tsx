@@ -4,7 +4,6 @@ import { useState, useCallback } from "react"
 import useSWR from "swr"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Progress } from "@/components/ui/progress"
 import {
   TrendingUp,
   TrendingDown,
@@ -14,12 +13,10 @@ import {
   AlertTriangle,
   Info,
   Download,
-  Receipt,
 } from "lucide-react"
 import { StatCard } from "@/components/dashboard/stat-card"
 import type { StatChange } from "@/components/dashboard/stat-card"
 import { useCurrency } from "@/contexts/currency-context"
-import { EmptyState } from "@/components/ui/empty-state"
 import { StatusBanner } from "@/components/ui/status-banner"
 import { useModal } from "@/contexts/modal-context"
 
@@ -306,8 +303,9 @@ export function EstadoResultados({ desde, hasta }: EstadoResultadosProps) {
             />
           </div>
 
-          {/* Desglose */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Desglose P&L a ancho completo. El detalle de gastos por
+              categoría vive en la pestaña Gastos (evita duplicación). */}
+          <div className="max-w-3xl">
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Estado de Resultados</CardTitle>
@@ -367,48 +365,6 @@ export function EstadoResultados({ desde, hasta }: EstadoResultadosProps) {
                   positive={data.gananciaNeta >= 0}
                 />
                 <div className="text-xs text-muted-foreground pl-1">Margen neto: {data.margenNeto}%</div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Gastos por categoría</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {data.gastos.porCategoria.length === 0 ? (
-                  <EmptyState
-                    icon={Receipt}
-                    title="Sin gastos"
-                    description="No hay gastos registrados en este período"
-                    variant="search"
-                  />
-                ) : (
-                  <div className="space-y-3">
-                    {data.gastos.porCategoria.map((c) => (
-                      <div key={c.id} className="space-y-1">
-                        <div className="flex items-center justify-between text-sm">
-                          <div className="flex items-center gap-2">
-                            {c.color && (
-                              <span
-                                className="inline-block w-2 h-2 rounded-full"
-                                style={{ backgroundColor: c.color }}
-                              />
-                            )}
-                            <span className="font-medium">{c.nombre}</span>
-                            <span className="text-xs text-muted-foreground">
-                              ({c.tipo === "FIJO" ? "fijo" : "variable"})
-                            </span>
-                          </div>
-                          <div className="text-right">
-                            <div className="font-medium">{formatPrice(c.monto)}</div>
-                            <div className="text-xs text-muted-foreground">{c.porcentaje}%</div>
-                          </div>
-                        </div>
-                        <Progress value={c.porcentaje} className="h-1.5" />
-                      </div>
-                    ))}
-                  </div>
-                )}
               </CardContent>
             </Card>
           </div>
