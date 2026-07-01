@@ -19,6 +19,7 @@ import type { StatChange } from "@/components/dashboard/stat-card"
 import { useCurrency } from "@/contexts/currency-context"
 import { StatusBanner } from "@/components/ui/status-banner"
 import { useModal } from "@/contexts/modal-context"
+import { FINANZAS_CONCEPTS } from "@/lib/finanzas-theme"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -249,7 +250,7 @@ export function EstadoResultados({ desde, hasta }: EstadoResultadosProps) {
               icon={TrendingUp}
               title="Ingresos"
               value={formatPrice(data.ingresos.total)}
-              tone="info"
+              tone={FINANZAS_CONCEPTS.ingresos.tone}
               change={(() => {
                 const prev = dataPrev?.ingresos.total
                 if (prev === undefined || prev === 0) return prev === 0 && data.ingresos.total !== 0 ? null : undefined
@@ -263,7 +264,7 @@ export function EstadoResultados({ desde, hasta }: EstadoResultadosProps) {
               title="Ganancia bruta"
               value={formatPrice(data.gananciaBruta)}
               description={`Margen ${data.margenBruto}%`}
-              tone="success"
+              tone={FINANZAS_CONCEPTS.ganancia.tone}
               change={(() => {
                 const prev = dataPrev?.gananciaBruta
                 if (prev === undefined || prev === 0) return prev === 0 && data.gananciaBruta !== 0 ? null : undefined
@@ -276,7 +277,7 @@ export function EstadoResultados({ desde, hasta }: EstadoResultadosProps) {
               icon={TrendingDown}
               title="Gastos operativos"
               value={formatPrice(data.gastos.total)}
-              tone="warning"
+              tone={FINANZAS_CONCEPTS.gastos.tone}
               change={(() => {
                 const prev = dataPrev?.gastos.total
                 if (prev === undefined || prev === 0) return prev === 0 && data.gastos.total !== 0 ? null : undefined
@@ -368,6 +369,16 @@ export function EstadoResultados({ desde, hasta }: EstadoResultadosProps) {
               </CardContent>
             </Card>
           </div>
+
+          {(data.ingresos.serviciosAdelantos ?? 0) > 0 && (
+            <StatusBanner tone="info" icon={Info}>
+              Los Ingresos de este estado incluyen{" "}
+              <strong>{formatPrice(data.ingresos.serviciosAdelantos!)}</strong> de cobros adelantados
+              de órdenes aún abiertas. Por eso el total puede diferir del de la pestaña{" "}
+              <strong>Ingresos</strong>, que cuenta solo servicios ya facturados/cobrados y ventas
+              del período.
+            </StatusBanner>
+          )}
 
           {(data.meta.itemsSinCostoConocido > 0 || data.meta.gastosNoComputables > 0) && (
             <div className="space-y-2">
