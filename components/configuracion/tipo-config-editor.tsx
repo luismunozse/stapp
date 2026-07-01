@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { TagsInput } from "@/components/catalogo/tags-input"
 import {
   Save,
   Loader2,
@@ -320,15 +321,14 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
                   {/* Options for select/buttons types */}
                   {(campo.tipo === "select" || campo.tipo === "buttons") && (
                     <div className="pl-6">
-                      <Label className="text-xs text-muted-foreground">Opciones (separadas por coma)</Label>
-                      <Input
-                        value={(campo.opciones || []).join(", ")}
-                        onChange={(e) => updateCampoExtra(idx, {
-                          opciones: e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
-                        })}
-                        placeholder="Opcion 1, Opcion 2, Opcion 3"
-                        className="h-8 text-xs mt-1"
-                      />
+                      <Label className="text-xs text-muted-foreground">Opciones</Label>
+                      <div className="mt-1">
+                        <TagsInput
+                          value={campo.opciones || []}
+                          onChange={(opciones) => updateCampoExtra(idx, { opciones })}
+                          placeholder="Agregar opción (Enter o coma)"
+                        />
+                      </div>
                     </div>
                   )}
 
