@@ -1,11 +1,9 @@
 "use client"
 
-import { useState, useCallback } from "react"
 import useSWR from "swr"
 import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useCurrency } from "@/contexts/currency-context"
@@ -35,19 +33,13 @@ interface EstadoResultadosData {
   }
 }
 
-function defaultRange() {
-  const now = new Date()
-  const desde = new Date(now.getFullYear(), now.getMonth(), 1)
-  const hasta = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-  return {
-    desde: desde.toISOString().split("T")[0],
-    hasta: hasta.toISOString().split("T")[0],
-  }
+interface GastosResumenProps {
+  desde: string
+  hasta: string
 }
 
-export function GastosResumen() {
+export function GastosResumen({ desde, hasta }: GastosResumenProps) {
   const { formatPrice } = useCurrency()
-  const [{ desde, hasta }, setRango] = useState(defaultRange)
 
   const { data, isLoading, error } = useSWR<EstadoResultadosData>(
     `/api/reportes/estado-resultados?desde=${desde}&hasta=${hasta}`,
@@ -55,65 +47,8 @@ export function GastosResumen() {
     { revalidateOnFocus: false }
   )
 
-  const setMesActual = useCallback(() => setRango(defaultRange()), [])
-  const setMesAnterior = useCallback(() => {
-    const now = new Date()
-    const d = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-    const h = new Date(now.getFullYear(), now.getMonth(), 0)
-    setRango({
-      desde: d.toISOString().split("T")[0],
-      hasta: h.toISOString().split("T")[0],
-    })
-  }, [])
-  const setUltimos30 = useCallback(() => {
-    const h = new Date()
-    const d = new Date()
-    d.setDate(d.getDate() - 30)
-    setRango({
-      desde: d.toISOString().split("T")[0],
-      hasta: h.toISOString().split("T")[0],
-    })
-  }, [])
-
   return (
     <div className="space-y-4">
-      {/* Período */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-wrap items-end gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground">Desde</label>
-              <Input
-                type="date"
-                value={desde}
-                onChange={(e) => setRango((r) => ({ ...r, desde: e.target.value }))}
-                className="w-auto"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Hasta</label>
-              <Input
-                type="date"
-                value={hasta}
-                onChange={(e) => setRango((r) => ({ ...r, hasta: e.target.value }))}
-                className="w-auto"
-              />
-            </div>
-            <div className="flex gap-2 flex-wrap">
-              <Button variant="outline" size="sm" onClick={setMesActual}>
-                Mes actual
-              </Button>
-              <Button variant="outline" size="sm" onClick={setMesAnterior}>
-                Mes anterior
-              </Button>
-              <Button variant="outline" size="sm" onClick={setUltimos30}>
-                Últimos 30 días
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Acciones rápidas */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Link href="/caja">
