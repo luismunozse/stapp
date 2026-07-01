@@ -317,6 +317,49 @@ describe("GET /api/reportes/resumen-ingresos", () => {
     expect(byMetodo.EFECTIVO).toBe(2500) // 2000 venta + 500 cobro
     expect(byMetodo.TRANSFERENCIA).toBe(3000)
     expect(byMetodo.TARJETA_CREDITO).toBe(1500)
-    expect(byMetodo.SIN_ESPECIFICAR).toBe(5000) // factura sin método
+    expect(byMetodo.SIN_ESPECIFICAR).toBe(5000) // factura sin pagos_parciales → fallback
+  })
+
+  it("prorates factura NET income across payment methods from pagos_parciales", async () => {
+    mockAuthSuccess()
+
+    const now = new Date()
+    const mesKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
+
+    // Factura PAGADA: neto 5000, total bruto 6050 (IVA 1050).
+    // Pagos: 60% efectivo (3630) / 40% transferencia (2420) sobre el bruto.
+    // El neto (5000) debe repartirse en la MISMA proporción: 3000 / 2000.
+    const mockFacturas = [
+      {
+        id: "f1", total: 6050, subtotal: 5000, iva: 1050, fecha: now.toISOString(), orden_id: "o1",
+        ordenes_servicio: { id: "o1", organization_id: "org-1", tipo_dispositivo: "CELULAR", dispositivo: "iPhone", tipos_dispositivo: null },
+        pagos_parciales: [
+          { monto: 3630, metodo_pago: "EFECTIVO" },
+          { monto: 2420, metodo_pago: "TRANSFERENCIA" },
+        ],
+      },
+    ]
+
+    const facturasChain = createChainMock(mockFacturas)
+    facturasChain.then = (resolve: any) => resolve({ data: mockFacturas, error: null })
+
+    const ventasChain = createChainMock([])
+    ventasChain.then = (resolve: any) => resolve({ data: [], error: null })
+
+    const cobrosChain = createChainMock([])
+    cobrosChain.then = (resolve: any) => resolve({ data: [], error: null })
+
+    mockSupabaseFrom({ facturas: facturasChain, ventas: ventasChain, cobros_orden: cobrosChain })
+
+    const response = await GET(createGetRequest("http://localhost:3000/api/reportes/resumen-ingresos?meses=6"))
+    const { status, body } = await parseResponse(response)
+
+    expect(status).toBe(200)
+    const mesActual = body.porMetodoPago.find((m: any) => m.mesKey === mesKey)
+    expect(mesActual.total).toBe(5000) // neto, no bruto
+    const byMetodo = Object.fromEntries(mesActual.metodos.map((m: any) => [m.metodo, m.monto]))
+    expect(byMetodo.EFECTIVO).toBe(3000)
+    expect(byMetodo.TRANSFERENCIA).toBe(2000)
+    expect(byMetodo.SIN_ESPECIFICAR).toBeUndefined()
   })
 })
