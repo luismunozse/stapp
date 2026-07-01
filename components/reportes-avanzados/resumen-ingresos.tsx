@@ -77,7 +77,13 @@ const METODO_PAGO_LABELS: Record<string, string> = {
 
 const metodoLabel = (m: string) => METODO_PAGO_LABELS[m] || m
 
-export function ResumenIngresos() {
+interface ResumenIngresosProps {
+  /** Rango opcional. Sin rango, usa la ventana de los últimos 6 meses. */
+  desde?: string
+  hasta?: string
+}
+
+export function ResumenIngresos({ desde, hasta }: ResumenIngresosProps = {}) {
   const { formatPrice } = useCurrency()
   const [data, setData] = useState<ResumenData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -86,12 +92,14 @@ export function ResumenIngresos() {
 
   useEffect(() => {
     fetchData()
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [desde, hasta])
 
   const fetchData = async () => {
     try {
       setLoading(true)
-      const response = await fetch("/api/reportes/resumen-ingresos?meses=6")
+      const query = desde && hasta ? `desde=${desde}&hasta=${hasta}` : "meses=6"
+      const response = await fetch(`/api/reportes/resumen-ingresos?${query}`)
       if (!response.ok) throw new Error("Error al cargar datos")
       const result = await response.json()
       setData(result)
@@ -157,7 +165,7 @@ export function ResumenIngresos() {
         <StatCard
           title="Total Ingresos"
           value={formatPrice(data.resumen.totalIngresos)}
-          description={`Últimos ${data.periodo.meses} meses`}
+          description={desde && hasta ? "En el período seleccionado" : `Últimos ${data.periodo.meses} meses`}
           icon={DollarSign}
           tone="default"
         />

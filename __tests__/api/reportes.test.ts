@@ -362,4 +362,39 @@ describe("GET /api/reportes/resumen-ingresos", () => {
     expect(byMetodo.TRANSFERENCIA).toBe(2000)
     expect(byMetodo.SIN_ESPECIFICAR).toBeUndefined()
   })
+
+  it("respects an explicit desde/hasta range and buckets by month across it", async () => {
+    mockAuthSuccess()
+
+    // Rango de 2 meses: mayo y junio 2026
+    const mockVentas = [
+      { id: "v1", total: 1210, iva_neto: 1000, iva_monto: 210, metodo_pago: "EFECTIVO", created_at: "2026-05-15T12:00:00.000Z" },
+      { id: "v2", total: 2420, iva_neto: 2000, iva_monto: 420, metodo_pago: "TRANSFERENCIA", created_at: "2026-06-15T12:00:00.000Z" },
+    ]
+
+    const facturasChain = createChainMock([])
+    facturasChain.then = (resolve: any) => resolve({ data: [], error: null })
+    const ventasChain = createChainMock(mockVentas)
+    ventasChain.then = (resolve: any) => resolve({ data: mockVentas, error: null })
+    const cobrosChain = createChainMock([])
+    cobrosChain.then = (resolve: any) => resolve({ data: [], error: null })
+
+    mockSupabaseFrom({ facturas: facturasChain, ventas: ventasChain, cobros_orden: cobrosChain })
+
+    const response = await GET(
+      createGetRequest("http://localhost:3000/api/reportes/resumen-ingresos?desde=2026-05-01&hasta=2026-06-30")
+    )
+    const { status, body } = await parseResponse(response)
+
+    expect(status).toBe(200)
+    expect(body.periodo.meses).toBe(2)
+    expect(body.porMes).toHaveLength(2)
+
+    const mayo = body.porMetodoPago.find((m: any) => m.mesKey === "2026-05")
+    const junio = body.porMetodoPago.find((m: any) => m.mesKey === "2026-06")
+    expect(mayo.total).toBe(1000)
+    expect(junio.total).toBe(2000)
+    expect(mayo.metodos[0]).toEqual({ metodo: "EFECTIVO", monto: 1000 })
+    expect(junio.metodos[0]).toEqual({ metodo: "TRANSFERENCIA", monto: 2000 })
+  })
 })
