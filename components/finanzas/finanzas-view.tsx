@@ -13,8 +13,8 @@ import { PeriodSelector } from "./period-selector"
 import { rangeFromParams, type PeriodRange } from "@/lib/finanzas-period"
 
 // Pestañas que respetan el selector de período global.
-// (Resumen usa su propia ventana de tendencia; Ingresos se suma en el próximo paso.)
-const PERIOD_TABS = new Set(["estado-resultados", "gastos"])
+// (Resumen usa su propia ventana de tendencia histórica.)
+const PERIOD_TABS = new Set(["estado-resultados", "ingresos", "gastos"])
 
 function ReporteSkeleton() {
   return (
@@ -108,7 +108,7 @@ export function FinanzasView() {
         </TabsContent>
 
         <TabsContent value="ingresos">
-          <ResumenIngresos />
+          <ResumenIngresos desde={period.desde} hasta={period.hasta} />
         </TabsContent>
 
         <TabsContent value="gastos">
