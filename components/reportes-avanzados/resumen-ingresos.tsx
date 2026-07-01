@@ -7,6 +7,13 @@ import { DollarSign, Wrench, ShoppingBag, Smartphone } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { StatCard } from "@/components/dashboard/stat-card"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
   BarChart,
   Bar,
   XAxis,
@@ -35,6 +42,13 @@ interface ResumenData {
     ventas: number
     total: number
   }[]
+  porMetodoPago: {
+    mesKey: string
+    mes: string
+    mesCompleto: string
+    total: number
+    metodos: { metodo: string; monto: number }[]
+  }[]
   porDispositivo: {
     tipo: string
     total: number
@@ -49,11 +63,26 @@ interface ResumenData {
 
 const COLORS = ["#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899", "#84cc16"]
 
+const METODO_PAGO_LABELS: Record<string, string> = {
+  EFECTIVO: "Efectivo",
+  TRANSFERENCIA: "Transferencia",
+  TARJETA: "Tarjeta",
+  TARJETA_DEBITO: "T. Débito",
+  TARJETA_CREDITO: "T. Crédito",
+  MERCADOPAGO: "MercadoPago",
+  CUENTA_CORRIENTE: "Cuenta corriente",
+  SIN_ESPECIFICAR: "Sin especificar",
+  OTRO: "Otro",
+}
+
+const metodoLabel = (m: string) => METODO_PAGO_LABELS[m] || m
+
 export function ResumenIngresos() {
   const { formatPrice } = useCurrency()
   const [data, setData] = useState<ResumenData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [mesSeleccionado, setMesSeleccionado] = useState<string | null>(null)
 
   useEffect(() => {
     fetchData()
@@ -66,6 +95,10 @@ export function ResumenIngresos() {
       if (!response.ok) throw new Error("Error al cargar datos")
       const result = await response.json()
       setData(result)
+      // Default: mes más reciente con ingresos, o el último del período
+      const meses = (result.porMetodoPago || []) as ResumenData["porMetodoPago"]
+      const conIngresos = [...meses].reverse().find((m) => m.total > 0)
+      setMesSeleccionado((conIngresos || meses[meses.length - 1])?.mesKey ?? null)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error desconocido")
     } finally {
@@ -192,6 +225,130 @@ export function ResumenIngresos() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Desglose por método de pago (filtrable por mes) */}
+      {data.porMetodoPago.length > 0 && (() => {
+        const mesData =
+          data.porMetodoPago.find((m) => m.mesKey === mesSeleccionado) ??
+          data.porMetodoPago[data.porMetodoPago.length - 1]
+        const metodosPie = mesData.metodos.filter((m) => m.monto > 0)
+        return (
+          <Card>
+            <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <CardTitle className="text-base sm:text-lg">Ingresos por Método de Pago</CardTitle>
+                <CardDescription className="text-xs sm:text-sm">
+                  Cómo cobraste en el mes seleccionado
+                </CardDescription>
+              </div>
+              <Select
+                value={mesSeleccionado ?? mesData.mesKey}
+                onValueChange={setMesSeleccionado}
+              >
+                <SelectTrigger className="w-full sm:w-[200px]">
+                  <SelectValue placeholder="Elegí un mes" />
+                </SelectTrigger>
+                <SelectContent>
+                  {[...data.porMetodoPago].reverse().map((m) => (
+                    <SelectItem key={m.mesKey} value={m.mesKey}>
+                      <span className="capitalize">{m.mesCompleto}</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </CardHeader>
+            <CardContent>
+              {mesData.total === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  Sin ingresos registrados en este mes
+                </p>
+              ) : (
+                <div className="grid gap-6 lg:grid-cols-2">
+                  {/* Tabla con montos y % */}
+                  <div className="overflow-hidden rounded-lg border">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b bg-muted/50 text-left text-xs text-muted-foreground">
+                          <th className="px-3 py-2 font-medium">Método</th>
+                          <th className="px-3 py-2 text-right font-medium">Monto</th>
+                          <th className="px-3 py-2 text-right font-medium">%</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {mesData.metodos.map((m, i) => (
+                          <tr key={m.metodo} className="border-b last:border-0">
+                            <td className="px-3 py-2">
+                              <span className="inline-flex items-center gap-2">
+                                <span
+                                  className="h-2.5 w-2.5 shrink-0 rounded-full"
+                                  style={{ backgroundColor: COLORS[i % COLORS.length] }}
+                                />
+                                {metodoLabel(m.metodo)}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums">
+                              {formatPrice(m.monto)}
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
+                              {Math.round((m.monto / mesData.total) * 100)}%
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t bg-muted/50 font-semibold">
+                          <td className="px-3 py-2">Total</td>
+                          <td className="px-3 py-2 text-right tabular-nums">
+                            {formatPrice(mesData.total)}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
+                            100%
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+
+                  {/* Pie por método */}
+                  {metodosPie.length > 0 && (
+                    <div className="h-[220px] sm:h-[260px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={metodosPie}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            outerRadius={80}
+                            dataKey="monto"
+                            nameKey="metodo"
+                            label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
+                            fontSize={11}
+                          >
+                            {metodosPie.map((m, i) => (
+                              <Cell key={m.metodo} fill={COLORS[i % COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip
+                            formatter={(value: number, name: string) => [
+                              formatPrice(value),
+                              metodoLabel(name),
+                            ]}
+                          />
+                          <Legend
+                            formatter={(value) => metodoLabel(String(value))}
+                            wrapperStyle={{ fontSize: 12 }}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )
+      })()}
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Pie Chart: Source breakdown */}
