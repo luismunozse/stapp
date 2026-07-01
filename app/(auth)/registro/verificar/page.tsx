@@ -13,6 +13,10 @@ function VerificarContent() {
   const searchParams = useSearchParams()
   const email = searchParams.get("email") || ""
   const slug = searchParams.get("slug") || ""
+  // El registro nos avisa cuando el mail de verificación NO llegó a enviarse
+  // (fallo del proveedor). En ese caso mostramos un estado de error accionable
+  // en vez del optimista "revisá tu bandeja".
+  const emailFailed = searchParams.get("emailError") === "1"
 
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
   const loginUrl = slug ? `https://${slug}.${rootDomain}/login` : "/login"
@@ -71,27 +75,51 @@ function VerificarContent() {
             </div>
           </div>
           <CardTitle className="text-2xl text-center">
-            ¡Casi listo! Revisá tu email
+            {emailFailed ? "Tu cuenta se creó, pero…" : "¡Casi listo! Revisá tu email"}
           </CardTitle>
           <CardDescription className="text-center">
-            Te enviamos un enlace de verificación a{" "}
-            {email ? (
-              <span className="font-medium text-foreground">{email}</span>
+            {emailFailed ? (
+              <>
+                No pudimos enviar el email de verificación a{" "}
+                {email ? (
+                  <span className="font-medium text-foreground">{email}</span>
+                ) : (
+                  "tu correo"
+                )}
+                . Reenvialo desde acá.
+              </>
             ) : (
-              "tu correo"
+              <>
+                Te enviamos un enlace de verificación a{" "}
+                {email ? (
+                  <span className="font-medium text-foreground">{email}</span>
+                ) : (
+                  "tu correo"
+                )}
+              </>
             )}
           </CardDescription>
         </CardHeader>
 
         <CardContent className="space-y-4">
-          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 px-4 py-3 rounded text-sm">
-            <p className="font-medium mb-1">Próximos pasos:</p>
-            <ol className="list-decimal list-inside space-y-1 text-xs">
-              <li>Abrí el email que te enviamos.</li>
-              <li>Hacé clic en el botón <strong>"Verificar mi email"</strong>.</li>
-              <li>Iniciá sesión en tu cuenta.</li>
-            </ol>
-          </div>
+          {emailFailed ? (
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 px-4 py-3 rounded text-sm flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+              <span>
+                Hubo un problema al enviar el email de verificación. Tu cuenta ya existe:
+                tocá <strong>"Reenviar email de verificación"</strong> para recibir el enlace.
+              </span>
+            </div>
+          ) : (
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 px-4 py-3 rounded text-sm">
+              <p className="font-medium mb-1">Próximos pasos:</p>
+              <ol className="list-decimal list-inside space-y-1 text-xs">
+                <li>Abrí el email que te enviamos.</li>
+                <li>Hacé clic en el botón <strong>"Verificar mi email"</strong>.</li>
+                <li>Iniciá sesión en tu cuenta.</li>
+              </ol>
+            </div>
+          )}
 
           <p className="text-xs text-muted-foreground text-center">
             ¿No lo encontrás? Revisá la carpeta de <strong>spam</strong> o correo no deseado.
