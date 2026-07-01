@@ -265,4 +265,58 @@ describe("GET /api/reportes/resumen-ingresos", () => {
     expect(body.resumen.totalVentas).toBe(0)
     expect(body.porDispositivo).toHaveLength(0)
   })
+
+  it("breaks down income per month by payment method", async () => {
+    mockAuthSuccess()
+
+    const now = new Date()
+    const mesKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
+
+    // Factura sin cobro directo → sin método → bucket SIN_ESPECIFICAR (net = subtotal)
+    const mockFacturas = [
+      { id: "f1", total: 6050, subtotal: 5000, iva: 1050, fecha: now.toISOString(), orden_id: "o1", ordenes_servicio: { id: "o1", organization_id: "org-1", tipo_dispositivo: "CELULAR", dispositivo: "iPhone", tipos_dispositivo: null } },
+    ]
+
+    // Ventas con método (net = iva_neto)
+    const mockVentas = [
+      { id: "v1", total: 2420, iva_neto: 2000, iva_monto: 420, metodo_pago: "EFECTIVO", created_at: now.toISOString() },
+      { id: "v2", total: 3630, iva_neto: 3000, iva_monto: 630, metodo_pago: "TRANSFERENCIA", created_at: now.toISOString() },
+    ]
+
+    // Cobro directo a orden con método (gross = monto)
+    const mockCobros = [
+      { id: "c1", monto: 1500, metodo_pago: "TARJETA_CREDITO", created_at: now.toISOString(), orden_id: "o9", ordenes_servicio: { organization_id: "org-1", tipo_dispositivo: "CELULAR", dispositivo: "Samsung", tipos_dispositivo: null } },
+      { id: "c2", monto: 500, metodo_pago: "EFECTIVO", created_at: now.toISOString(), orden_id: "o10", ordenes_servicio: { organization_id: "org-1", tipo_dispositivo: "CELULAR", dispositivo: "Motorola", tipos_dispositivo: null } },
+    ]
+
+    const facturasChain = createChainMock(mockFacturas)
+    facturasChain.then = (resolve: any) => resolve({ data: mockFacturas, error: null })
+
+    const ventasChain = createChainMock(mockVentas)
+    ventasChain.then = (resolve: any) => resolve({ data: mockVentas, error: null })
+
+    const cobrosChain = createChainMock(mockCobros)
+    cobrosChain.then = (resolve: any) => resolve({ data: mockCobros, error: null })
+
+    mockSupabaseFrom({ facturas: facturasChain, ventas: ventasChain, cobros_orden: cobrosChain })
+
+    const response = await GET(createGetRequest("http://localhost:3000/api/reportes/resumen-ingresos?meses=6"))
+    const { status, body } = await parseResponse(response)
+
+    expect(status).toBe(200)
+    expect(body.porMetodoPago).toBeInstanceOf(Array)
+
+    const mesActual = body.porMetodoPago.find((m: any) => m.mesKey === mesKey)
+    expect(mesActual).toBeDefined()
+    // 5000 (factura) + 2000 + 3000 (ventas) + 1500 + 500 (cobros) = 12000
+    expect(mesActual.total).toBe(12000)
+
+    const byMetodo = Object.fromEntries(
+      mesActual.metodos.map((m: any) => [m.metodo, m.monto])
+    )
+    expect(byMetodo.EFECTIVO).toBe(2500) // 2000 venta + 500 cobro
+    expect(byMetodo.TRANSFERENCIA).toBe(3000)
+    expect(byMetodo.TARJETA_CREDITO).toBe(1500)
+    expect(byMetodo.SIN_ESPECIFICAR).toBe(5000) // factura sin método
+  })
 })
