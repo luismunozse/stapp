@@ -33,6 +33,7 @@ export async function GET(request: Request) {
       .from("facturas")
       .select(`
         id, total, subtotal, iva, fecha, orden_id,
+        pagos_parciales (monto, metodo_pago),
         ordenes_servicio!inner (
           id, organization_id, sucursal_id, tipo_dispositivo, dispositivo,
           tipos_dispositivo:tipo_dispositivo_id(nombre)
@@ -109,8 +110,18 @@ export async function GET(request: Request) {
       // NET: subtotal (== total when no IVA — EXENTO no-op)
       const monto = Number((f as any).subtotal || f.total || 0)
       if (ingresosPorMes[key]) ingresosPorMes[key].servicios += monto
-      // Facturas pagadas por el flujo de factura no guardan método de pago
-      addMetodo(key, "SIN_ESPECIFICAR", monto)
+      // Método de pago: prorratear el neto según los pagos_parciales (que son brutos).
+      // El bruto de referencia es factura.total; si no hay pagos, cae en SIN_ESPECIFICAR.
+      const pagos = ((f as any).pagos_parciales || []) as { monto: any; metodo_pago: string }[]
+      const brutoTotal = Number(f.total || 0)
+      if (pagos.length > 0 && brutoTotal > 0) {
+        for (const p of pagos) {
+          const share = Number(p.monto || 0) / brutoTotal
+          addMetodo(key, p.metodo_pago || "OTRO", monto * share)
+        }
+      } else {
+        addMetodo(key, "SIN_ESPECIFICAR", monto)
+      }
     }
 
     for (const c of (cobros || []) as any[]) {
