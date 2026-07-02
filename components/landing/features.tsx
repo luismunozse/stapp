@@ -29,9 +29,9 @@ import {
   Bot,
   Mail,
 } from "lucide-react"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { m, LazyMotion, domAnimation } from "@/components/animations/motion"
-import { revealHeader, revealPanel, revealStagger, revealCard } from "./reveal"
+import { revealHeader, revealStagger, revealCard } from "./reveal"
+import { SectionEyebrow } from "@/components/landing/section-eyebrow"
 
 const categories = [
   {
@@ -286,6 +286,7 @@ export function Features() {
             whileInView="visible"
             viewport={{ once: true, margin: "0px" }}
           >
+            <SectionEyebrow>Plataforma todo-en-uno</SectionEyebrow>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-balance text-foreground mb-4">
               Todo tu taller en una sola plataforma
             </h2>
@@ -296,93 +297,44 @@ export function Features() {
             </p>
           </m.div>
 
-          {/* Tabs */}
-          <Tabs defaultValue="servicio" className="w-full">
-            <div className="flex justify-center mb-10 px-2 overflow-x-auto scrollbar-hide">
-              <TabsList className="inline-flex h-auto p-1 sm:p-1.5 bg-muted/80 backdrop-blur-sm rounded-xl sm:rounded-2xl border shadow-sm gap-1 sm:gap-1.5">
-                {categories.map((category) => (
-                  <TabsTrigger
-                    key={category.id}
-                    value={category.id}
-                    className="inline-flex items-center gap-1 sm:gap-2 py-2 px-2.5 sm:py-3 sm:px-4 text-[11px] sm:text-sm font-medium rounded-lg sm:rounded-xl transition-[color,background-color,box-shadow] duration-200 whitespace-nowrap data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground data-[state=inactive]:hover:bg-background/50 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md"
-                  >
-                    <category.icon className="w-4 h-4 sm:w-4 sm:h-4" />
-                    {/* Mobile: solo ícono (label truncado a 4 chars era ilegible).
-                        Desktop: primera palabra del nombre. */}
-                    <span className="hidden sm:inline">{category.name.split(" ")[0]}</span>
-                    <span className="sr-only sm:hidden">{category.name}</span>
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </div>
-
-            {categories.map((category) => {
-              const [featured, ...rest] = category.features
-              return (
-              <TabsContent key={category.id} value={category.id}>
-                {/* Category description */}
-                <p className="text-center text-muted-foreground mb-8">
-                  {category.description}
-                </p>
-
-                {/* Featured feature: el corazón de la categoría, panel ancho */}
-                <div className="grid gap-4 sm:gap-6">
-                  <m.div
-                    className="bg-card rounded-2xl p-6 sm:p-8 shadow-sm border hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5 group transition-colors flex flex-col sm:flex-row sm:items-center gap-5"
-                    variants={revealPanel}
-                    initial="hidden"
-                    whileInView="visible"
-                    viewport={{ once: true, margin: "0px" }}
-                  >
-                    <m.div
-                      className="bg-primary text-primary-foreground w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0"
-                      whileHover={{ scale: 1.1 }}
-                      transition={{ type: "spring", stiffness: 400, damping: 17 }}
-                    >
-                      <featured.icon className="w-7 h-7" />
-                    </m.div>
-                    <div className="min-w-0">
-                      <h3 className="text-xl font-semibold text-foreground mb-1.5">
-                        {featured.name}
-                      </h3>
-                      <p className="text-muted-foreground leading-relaxed">
-                        {featured.description}
-                      </p>
+          {/* Una sola placa con todos los módulos a la vista (sin tabs) */}
+          <div className="mx-auto max-w-6xl rounded-2xl sm:rounded-3xl border bg-card p-6 sm:p-8 lg:p-10 shadow-sm">
+            <m.div
+              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-8 lg:gap-y-10"
+              variants={revealStagger}
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true, margin: "0px" }}
+            >
+              {categories.map((category) => (
+                <m.div key={category.id} variants={revealCard}>
+                  {/* Category header */}
+                  <div className="flex items-center gap-2.5 mb-4 pb-3 border-b">
+                    <div className="bg-primary/10 text-primary w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <category.icon className="w-5 h-5" />
                     </div>
-                  </m.div>
+                    <div className="min-w-0">
+                      <h3 className="font-semibold text-foreground leading-tight">{category.name}</h3>
+                      <p className="text-xs text-muted-foreground leading-tight">{category.description}</p>
+                    </div>
+                  </div>
 
-                  {/* Resto: grid compacto, icon-tiles tintados en brand */}
-                  <m.div
-                    className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6"
-                    variants={revealStagger}
-                    initial="hidden"
-                    whileInView="visible"
-                    viewport={{ once: true, margin: "0px" }}
-                  >
-                    {rest.map((feature) => (
-                      <m.div
+                  {/* Feature list */}
+                  <ul className="space-y-2.5">
+                    {category.features.map((feature) => (
+                      <li
                         key={feature.name}
-                        className="bg-card rounded-xl p-5 shadow-sm border hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 group h-full transition-colors"
-                        variants={revealCard}
-                        whileHover={{ y: -6 }}
+                        className="flex items-start gap-2 text-sm text-muted-foreground"
                       >
-                        <div className="bg-primary/10 text-primary w-11 h-11 rounded-xl flex items-center justify-center mb-3.5 group-hover:bg-primary/15 transition-colors">
-                          <feature.icon className="w-5 h-5" />
-                        </div>
-                        <h3 className="text-base font-semibold text-foreground mb-1.5">
-                          {feature.name}
-                        </h3>
-                        <p className="text-muted-foreground text-sm leading-relaxed">
-                          {feature.description}
-                        </p>
-                      </m.div>
+                        <feature.icon className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                        <span className="leading-snug">{feature.name}</span>
+                      </li>
                     ))}
-                  </m.div>
-                </div>
-              </TabsContent>
-              )
-            })}
-          </Tabs>
+                  </ul>
+                </m.div>
+              ))}
+            </m.div>
+          </div>
         </div>
       </section>
     </LazyMotion>

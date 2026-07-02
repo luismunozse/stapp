@@ -9,6 +9,7 @@ import { Check, X, Globe, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { m, LazyMotion, domAnimation } from "@/components/animations/motion"
 import { revealHeader, revealStagger, revealFocal } from "./reveal"
+import { SectionEyebrow } from "@/components/landing/section-eyebrow"
 import type { PlanPrices, AllPlansPrices } from "@/lib/pricing"
 
 interface PlanFeature {
@@ -149,6 +150,7 @@ export function PricingSection({ prices, allPlans }: PricingSectionProps) {
             whileInView="visible"
             viewport={{ once: true, margin: "0px" }}
           >
+            <SectionEyebrow>Precios</SectionEyebrow>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-balance text-foreground mb-4">
               Elegí el plan que mejor se adapte a tu taller
             </h2>

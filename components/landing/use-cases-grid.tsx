@@ -6,6 +6,7 @@ import { ArrowRight } from "lucide-react"
 import { useCases } from "@/lib/use-cases-data"
 import { m, LazyMotion, domAnimation } from "@/components/animations/motion"
 import { revealHeader, revealStagger, revealCard } from "./reveal"
+import { SectionEyebrow } from "@/components/landing/section-eyebrow"
 
 export function UseCasesGrid() {
   return (
@@ -23,6 +24,7 @@ export function UseCasesGrid() {
           whileInView="visible"
           viewport={{ once: true, margin: "0px" }}
         >
+          <SectionEyebrow>Casos de uso</SectionEyebrow>
           <h2
             id="casos-heading"
             className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-balance text-foreground mb-4"

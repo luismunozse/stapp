@@ -5,6 +5,7 @@ import { ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { LazyMotion, domAnimation, m } from "@/components/animations/motion"
 import { revealHeader, revealStagger, revealRow } from "./reveal"
+import { SectionEyebrow } from "@/components/landing/section-eyebrow"
 
 interface FAQItem {
   question: string
@@ -30,6 +31,7 @@ export function FAQ({ faqs }: FAQProps) {
             whileInView="visible"
             viewport={{ once: true, margin: "0px" }}
           >
+            <SectionEyebrow>Ayuda</SectionEyebrow>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-balance text-foreground mb-4">
               Preguntas frecuentes
             </h2>
