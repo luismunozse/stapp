@@ -14,8 +14,8 @@ test.describe("Health Check", () => {
     expect(["healthy", "degraded"]).toContain(body.status)
     expect(body.timestamp).toBeDefined()
     expect(["ok", "error"]).toContain(body.services.database.status)
-    expect(body.services.database.latency_ms).toBeGreaterThanOrEqual(0)
-    expect(body.version).toBeDefined()
+    // El endpoint es anonimo y minimiza superficie: no expone latency_ms ni
+    // version a proposito (evita leak de latencia y targeting de CVEs).
 
     if (body.services.database.status === "ok") {
       expect(response.status()).toBe(200)
