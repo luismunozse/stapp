@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/select"
 import { Trash2, Percent, DollarSign, Package, X } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
+import { useModal } from "@/contexts/modal-context"
 
 const UNIDADES = [
   { value: "Unidad", label: "Unidad" },
@@ -59,6 +60,7 @@ export function calcItemNeto(item: { cantidad: number; precioUnitario: number; d
 
 export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRepuesto }: ItemRowProps) {
   const { formatPrice } = useCurrency()
+  const { confirm } = useModal()
   const bruto = item.cantidad * item.precioUnitario
   const neto = calcItemNeto(item)
   const [invSearch, setInvSearch] = useState("")
@@ -98,7 +100,7 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
     if (!invSearch || invSearch.length < 2) { setInvResults([]); return }
     const t = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/inventario/search?q=${encodeURIComponent(invSearch)}&limit=5`)
+        const res = await fetch(`/api/inventario/search?q=${encodeURIComponent(invSearch)}&limit=5&includeZeroStock=true`)
         if (res.ok) setInvResults(await res.json())
       } catch { /* ignore */ }
     }, 300)
@@ -115,7 +117,18 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
     return () => document.removeEventListener("mousedown", handleClick)
   }, [])
 
-  const selectInvItem = (inv: any) => {
+  const selectInvItem = async (inv: any) => {
+    const disponible = (Number(inv.stock) || 0) - (Number(inv.stockReservado) || 0)
+    if (disponible <= 0) {
+      const ok = await confirm({
+        title: "Producto sin stock",
+        description: `"${inv.nombre}" no tiene stock disponible. La cotización no reserva stock hasta que se aprueba. ¿Querés cotizarlo igual?`,
+        confirmText: "Cotizar igual",
+        cancelText: "Cancelar",
+        variant: "warning",
+      })
+      if (!ok) return
+    }
     onUpdate(index, "descripcion", inv.nombre)
     onUpdate(index, "precioUnitario", Number(inv.precioVenta))
     onUpdate(index, "inventarioId", inv.id)
@@ -157,11 +170,16 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
                       const pc = Number(inv.precioCompra) || 0
                       const pv = Number(inv.precioVenta) || 0
                       const mPct = pv > 0 && pc > 0 ? Math.round(((pv - pc) / pv) * 100) : null
+                      const disp = (Number(inv.stock) || 0) - (Number(inv.stockReservado) || 0)
                       return (
                         <button key={inv.id} type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-accent" onClick={() => selectInvItem(inv)}>
                           <div className="font-medium">{inv.nombre}</div>
                           <div className="text-xs text-muted-foreground">
-                            Stock: {inv.stock}{inv.stockReservado > 0 ? ` (disp. ${inv.stock - inv.stockReservado})` : ""}
+                            {disp <= 0 ? (
+                              <span className="text-destructive font-medium">Sin stock</span>
+                            ) : (
+                              <>Stock: {inv.stock}{inv.stockReservado > 0 ? ` (disp. ${disp})` : ""}</>
+                            )}
                           </div>
                           <div className="text-xs text-muted-foreground mt-0.5">
                             Costo: {formatPrice(pc)} · Venta: {formatPrice(pv)}{mPct !== null ? ` · ${mPct}%` : ""}
@@ -349,6 +367,7 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
                 const pc = Number(inv.precioCompra) || 0
                 const pv = Number(inv.precioVenta) || 0
                 const mPct = pv > 0 && pc > 0 ? Math.round(((pv - pc) / pv) * 100) : null
+                const disp = (Number(inv.stock) || 0) - (Number(inv.stockReservado) || 0)
                 return (
                   <button key={inv.id} type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-accent" onClick={() => selectInvItem(inv)}>
                     <div className="flex justify-between gap-2">
@@ -356,8 +375,12 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
                         <span className="font-medium">{inv.nombre}</span>
                         <span className="ml-2 text-xs text-muted-foreground">{inv.codigo}</span>
                       </div>
-                      <span className="text-xs text-muted-foreground shrink-0">
-                        Stock: {inv.stock}{inv.stockReservado > 0 ? ` (disp. ${inv.stock - inv.stockReservado})` : ""}
+                      <span className="text-xs shrink-0">
+                        {disp <= 0 ? (
+                          <span className="text-destructive font-medium">Sin stock</span>
+                        ) : (
+                          <span className="text-muted-foreground">Stock: {inv.stock}{inv.stockReservado > 0 ? ` (disp. ${disp})` : ""}</span>
+                        )}
                       </span>
                     </div>
                     <div className="text-xs text-muted-foreground mt-0.5">
