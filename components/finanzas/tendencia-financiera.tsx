@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useCurrency } from "@/contexts/currency-context"
 import { EmptyState } from "@/components/ui/empty-state"
 import { TrendingUp } from "lucide-react"
+import { FINANZAS_CONCEPTS } from "@/lib/finanzas-theme"
 import {
   BarChart,
   Bar,
@@ -152,9 +153,9 @@ export function TendenciaFinanciera() {
                 }}
                 wrapperStyle={{ fontSize: 12 }}
               />
-              <Bar dataKey="ingresos" fill="#22c55e" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="costos" fill="#f97316" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="gastos" fill="#ef4444" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="ingresos" fill={FINANZAS_CONCEPTS.ingresos.color} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="costos" fill={FINANZAS_CONCEPTS.costos.color} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="gastos" fill={FINANZAS_CONCEPTS.gastos.color} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -180,7 +181,7 @@ export function TendenciaFinanciera() {
                 <Line
                   type="monotone"
                   dataKey="gananciaNeta"
-                  stroke="#3b82f6"
+                  stroke={FINANZAS_CONCEPTS.ganancia.color}
                   strokeWidth={3}
                   dot={{ r: 4 }}
                   activeDot={{ r: 6 }}
