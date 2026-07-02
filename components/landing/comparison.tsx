@@ -4,6 +4,7 @@ import { Check, X, Minus } from "lucide-react"
 import { m, LazyMotion, domAnimation } from "@/components/animations/motion"
 import { cn } from "@/lib/utils"
 import { revealHeader, revealPanel, revealStaggerFast, revealRow } from "./reveal"
+import { SectionEyebrow } from "@/components/landing/section-eyebrow"
 
 const rows = [
   {
@@ -220,6 +221,7 @@ export function Comparison() {
             whileInView="visible"
             viewport={{ once: true, margin: "0px" }}
           >
+            <SectionEyebrow>Por qué STApp</SectionEyebrow>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-balance text-foreground mb-4">
               Por qué cambiar a STApp
             </h2>

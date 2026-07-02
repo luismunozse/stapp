@@ -7,11 +7,11 @@ import { Hero } from "@/components/landing/hero"
 import { Features } from "@/components/landing/features"
 import { PricingSection } from "@/components/landing/pricing-section"
 import { Comparison } from "@/components/landing/comparison"
-import { UseCasesGrid } from "@/components/landing/use-cases-grid"
 import { Testimonials } from "@/components/landing/testimonials"
 import { BlogTeaser } from "@/components/landing/blog-teaser"
 import { FAQ } from "@/components/landing/faq"
 import { DownloadApp } from "@/components/landing/download-app"
+import { CtaBand } from "@/components/landing/cta-band"
 import { Footer } from "@/components/landing/footer"
 import { ChatbotButton } from "@/components/chatbot/chatbot-button"
 import { WhatsAppButton } from "@/components/landing/whatsapp-button"
@@ -201,12 +201,12 @@ export default async function Home() {
           <Hero prices={prices} />
           <Features />
           <Comparison />
-          <UseCasesGrid />
+          <DownloadApp />
+          <CtaBand />
           <Testimonials />
           <PricingSection prices={prices} allPlans={allPlans} />
           <BlogTeaser />
           <FAQ faqs={faqData} />
-          <DownloadApp />
           <Footer />
           <WhatsAppButton />
           <ChatbotButton />
