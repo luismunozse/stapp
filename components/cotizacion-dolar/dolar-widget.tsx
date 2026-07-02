@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
   TrendingUp,
   TrendingDown,
@@ -32,7 +33,7 @@ const TIPOS_DOLAR: { key: TipoDolar; label: string; color: string }[] = [
   { key: "tarjeta", label: "Tarjeta", color: "text-purple-600 dark:text-purple-400" },
 ]
 
-export function DolarWidget() {
+export function DolarWidget({ variant = "card" }: { variant?: "card" | "header" } = {}) {
   const [cotizaciones, setCotizaciones] = useState<Record<TipoDolar, CotizacionDolar | null>>({
     blue: null,
     oficial: null,
@@ -112,6 +113,153 @@ export function DolarWidget() {
     }).format(num)
   }
 
+  // Shared panel body — used by both the card and header variants
+  const panelBody = error ? (
+    <p className="text-sm text-destructive">{error}</p>
+  ) : loading && !cotizacionActual ? (
+    <div className="space-y-2">
+      <div className="h-8 bg-muted animate-pulse rounded" />
+      <div className="h-4 bg-muted animate-pulse rounded w-2/3" />
+    </div>
+  ) : (
+    <>
+      {/* Selector de tipo de dólar */}
+      <div className="flex gap-1 p-1 bg-muted rounded-lg">
+        {TIPOS_DOLAR.map(tipo => (
+          <button
+            key={tipo.key}
+            onClick={() => setTipoSeleccionado(tipo.key)}
+            className={cn(
+              "flex-1 px-2 py-1 text-xs font-medium rounded transition-colors",
+              tipoSeleccionado === tipo.key
+                ? "bg-background shadow-sm"
+                : "hover:bg-background/50"
+            )}
+          >
+            {tipo.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Cotización actual */}
+      {cotizacionActual && (
+        <div className="space-y-2">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded bg-green-50 dark:bg-green-900/20">
+                <TrendingUp className="h-3 w-3 text-green-600" />
+              </div>
+              <span className="text-xs text-muted-foreground">Compra</span>
+            </div>
+            <span className="font-semibold text-green-600">
+              ${formatNumber(cotizacionActual.compra)}
+            </span>
+          </div>
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded bg-red-50 dark:bg-red-900/20">
+                <TrendingDown className="h-3 w-3 text-red-600" />
+              </div>
+              <span className="text-xs text-muted-foreground">Venta</span>
+            </div>
+            <span className="font-semibold text-red-600">
+              ${formatNumber(cotizacionActual.venta)}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Conversor */}
+      <div className="pt-3 border-t space-y-3">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <ArrowRightLeft className="h-3 w-3" />
+          <span>Conversor</span>
+        </div>
+
+        <div className="grid grid-cols-[1fr,auto,1fr] gap-2 items-end">
+          <div className="space-y-1">
+            <Label className="text-xs flex items-center gap-1">
+              <Banknote className="h-3 w-3" />
+              ARS
+            </Label>
+            <Input
+              type="text"
+              inputMode="decimal"
+              placeholder="0.00"
+              value={montoPesos}
+              onChange={(e) => handlePesosChange(e.target.value)}
+              className="h-8 text-sm"
+            />
+          </div>
+
+          <div className="pb-1">
+            <ArrowRightLeft className="h-4 w-4 text-muted-foreground" />
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-xs flex items-center gap-1">
+              <DollarSign className="h-3 w-3" />
+              USD
+            </Label>
+            <Input
+              type="text"
+              inputMode="decimal"
+              placeholder="0.00"
+              value={montoDolares}
+              onChange={(e) => handleDolaresChange(e.target.value)}
+              className="h-8 text-sm"
+            />
+          </div>
+        </div>
+
+        {cotizacionActual && (
+          <p className="text-xs text-muted-foreground text-center">
+            {direccion === "pesosADolares"
+              ? `Usando venta: $${formatNumber(cotizacionActual.venta)}`
+              : `Usando compra: $${formatNumber(cotizacionActual.compra)}`
+            }
+          </p>
+        )}
+      </div>
+
+      {/* Última actualización */}
+      {cotizacionActual?.fechaActualizacion && (
+        <p className="text-xs text-muted-foreground text-center pt-2">
+          Actualizado: {new Date(cotizacionActual.fechaActualizacion).toLocaleString("es-AR", { timeZone: DEFAULT_TIMEZONE })}
+        </p>
+      )}
+    </>
+  )
+
+  if (variant === "header") {
+    return (
+      <Popover>
+        <PopoverTrigger asChild>
+          <button className="inline-flex items-center gap-1.5 rounded-lg border bg-card px-3 py-1.5 text-sm transition-colors hover:bg-muted">
+            <DollarSign className="h-4 w-4 text-primary" />
+            <span className="font-medium">Dólar</span>
+            <span className="text-muted-foreground">
+              {cotizaciones.blue ? `blue $${formatNumber(cotizaciones.blue.venta)}` : "—"}
+            </span>
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-80 space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium">Cotización Dólar</p>
+            <button
+              onClick={fetchCotizaciones}
+              disabled={loading}
+              className="p-2 rounded-lg bg-primary-50 dark:bg-primary-900/20 hover:bg-primary-100 dark:hover:bg-primary-900/40 transition-colors"
+            >
+              <RefreshCw className={cn("h-4 w-4 text-primary", loading && "animate-spin")} />
+            </button>
+          </div>
+          {panelBody}
+        </PopoverContent>
+      </Popover>
+    )
+  }
+
   return (
     <Card className="transition-shadow hover:shadow-md">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -125,122 +273,7 @@ export function DolarWidget() {
         </button>
       </CardHeader>
       <CardContent className="space-y-4">
-        {error ? (
-          <p className="text-sm text-destructive">{error}</p>
-        ) : loading && !cotizacionActual ? (
-          <div className="space-y-2">
-            <div className="h-8 bg-muted animate-pulse rounded" />
-            <div className="h-4 bg-muted animate-pulse rounded w-2/3" />
-          </div>
-        ) : (
-          <>
-            {/* Selector de tipo de dólar */}
-            <div className="flex gap-1 p-1 bg-muted rounded-lg">
-              {TIPOS_DOLAR.map(tipo => (
-                <button
-                  key={tipo.key}
-                  onClick={() => setTipoSeleccionado(tipo.key)}
-                  className={cn(
-                    "flex-1 px-2 py-1 text-xs font-medium rounded transition-colors",
-                    tipoSeleccionado === tipo.key
-                      ? "bg-background shadow-sm"
-                      : "hover:bg-background/50"
-                  )}
-                >
-                  {tipo.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Cotización actual */}
-            {cotizacionActual && (
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1.5 rounded bg-green-50 dark:bg-green-900/20">
-                      <TrendingUp className="h-3 w-3 text-green-600" />
-                    </div>
-                    <span className="text-xs text-muted-foreground">Compra</span>
-                  </div>
-                  <span className="font-semibold text-green-600">
-                    ${formatNumber(cotizacionActual.compra)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1.5 rounded bg-red-50 dark:bg-red-900/20">
-                      <TrendingDown className="h-3 w-3 text-red-600" />
-                    </div>
-                    <span className="text-xs text-muted-foreground">Venta</span>
-                  </div>
-                  <span className="font-semibold text-red-600">
-                    ${formatNumber(cotizacionActual.venta)}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* Conversor */}
-            <div className="pt-3 border-t space-y-3">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <ArrowRightLeft className="h-3 w-3" />
-                <span>Conversor</span>
-              </div>
-
-              <div className="grid grid-cols-[1fr,auto,1fr] gap-2 items-end">
-                <div className="space-y-1">
-                  <Label className="text-xs flex items-center gap-1">
-                    <Banknote className="h-3 w-3" />
-                    ARS
-                  </Label>
-                  <Input
-                    type="text"
-                    inputMode="decimal"
-                    placeholder="0.00"
-                    value={montoPesos}
-                    onChange={(e) => handlePesosChange(e.target.value)}
-                    className="h-8 text-sm"
-                  />
-                </div>
-
-                <div className="pb-1">
-                  <ArrowRightLeft className="h-4 w-4 text-muted-foreground" />
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="text-xs flex items-center gap-1">
-                    <DollarSign className="h-3 w-3" />
-                    USD
-                  </Label>
-                  <Input
-                    type="text"
-                    inputMode="decimal"
-                    placeholder="0.00"
-                    value={montoDolares}
-                    onChange={(e) => handleDolaresChange(e.target.value)}
-                    className="h-8 text-sm"
-                  />
-                </div>
-              </div>
-
-              {cotizacionActual && (
-                <p className="text-xs text-muted-foreground text-center">
-                  {direccion === "pesosADolares"
-                    ? `Usando venta: $${formatNumber(cotizacionActual.venta)}`
-                    : `Usando compra: $${formatNumber(cotizacionActual.compra)}`
-                  }
-                </p>
-              )}
-            </div>
-
-            {/* Última actualización */}
-            {cotizacionActual?.fechaActualizacion && (
-              <p className="text-xs text-muted-foreground text-center pt-2">
-                Actualizado: {new Date(cotizacionActual.fechaActualizacion).toLocaleString("es-AR", { timeZone: DEFAULT_TIMEZONE })}
-              </p>
-            )}
-          </>
-        )}
+        {panelBody}
       </CardContent>
     </Card>
   )

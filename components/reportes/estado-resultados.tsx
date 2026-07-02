@@ -3,9 +3,7 @@
 import { useState, useCallback } from "react"
 import useSWR from "swr"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Progress } from "@/components/ui/progress"
 import {
   TrendingUp,
   TrendingDown,
@@ -15,14 +13,13 @@ import {
   AlertTriangle,
   Info,
   Download,
-  Receipt,
 } from "lucide-react"
 import { StatCard } from "@/components/dashboard/stat-card"
 import type { StatChange } from "@/components/dashboard/stat-card"
 import { useCurrency } from "@/contexts/currency-context"
-import { EmptyState } from "@/components/ui/empty-state"
 import { StatusBanner } from "@/components/ui/status-banner"
 import { useModal } from "@/contexts/modal-context"
+import { FINANZAS_CONCEPTS } from "@/lib/finanzas-theme"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -58,16 +55,6 @@ interface EstadoResultadosData {
   }
 }
 
-function defaultRange() {
-  const now = new Date()
-  const desde = new Date(now.getFullYear(), now.getMonth(), 1)
-  const hasta = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-  return {
-    desde: desde.toISOString().split("T")[0],
-    hasta: hasta.toISOString().split("T")[0],
-  }
-}
-
 /**
  * Calcula el rango anterior de la misma duración (para comparativa).
  * Ej: si actual es marzo (31 días), anterior es febrero (28 días) → 28 días previos.
@@ -86,10 +73,14 @@ function previousRange(desde: string, hasta: string) {
   }
 }
 
-export function EstadoResultados() {
+interface EstadoResultadosProps {
+  desde: string
+  hasta: string
+}
+
+export function EstadoResultados({ desde, hasta }: EstadoResultadosProps) {
   const { formatPrice, timezone } = useCurrency()
   const { showError } = useModal()
-  const [{ desde, hasta }, setRango] = useState(defaultRange)
   const [exporting, setExporting] = useState(false)
 
   const { data, isLoading, error } = useSWR<EstadoResultadosData>(
@@ -104,26 +95,6 @@ export function EstadoResultados() {
     fetcher,
     { revalidateOnFocus: false }
   )
-
-  const setMesActual = useCallback(() => setRango(defaultRange()), [])
-  const setMesAnterior = useCallback(() => {
-    const now = new Date()
-    const d = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-    const h = new Date(now.getFullYear(), now.getMonth(), 0)
-    setRango({
-      desde: d.toISOString().split("T")[0],
-      hasta: h.toISOString().split("T")[0],
-    })
-  }, [])
-  const setUltimos30 = useCallback(() => {
-    const h = new Date()
-    const d = new Date()
-    d.setDate(d.getDate() - 30)
-    setRango({
-      desde: d.toISOString().split("T")[0],
-      hasta: h.toISOString().split("T")[0],
-    })
-  }, [])
 
   const handleExportPDF = useCallback(async () => {
     if (!data) return
@@ -240,57 +211,22 @@ export function EstadoResultados() {
 
   return (
     <div className="space-y-4">
-      {/* Selector de período */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-wrap items-end gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground">Desde</label>
-              <Input
-                type="date"
-                value={desde}
-                onChange={(e) => setRango((r) => ({ ...r, desde: e.target.value }))}
-                className="w-auto"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Hasta</label>
-              <Input
-                type="date"
-                value={hasta}
-                onChange={(e) => setRango((r) => ({ ...r, hasta: e.target.value }))}
-                className="w-auto"
-              />
-            </div>
-            <div className="flex gap-2 flex-wrap">
-              <Button variant="outline" size="sm" onClick={setMesActual}>
-                Mes actual
-              </Button>
-              <Button variant="outline" size="sm" onClick={setMesAnterior}>
-                Mes anterior
-              </Button>
-              <Button variant="outline" size="sm" onClick={setUltimos30}>
-                Últimos 30 días
-              </Button>
-            </div>
-            <div className="ml-auto">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleExportPDF}
-                disabled={exporting || !data}
-              >
-                {exporting ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                ) : (
-                  <Download className="h-4 w-4 mr-1" />
-                )}
-                Exportar PDF
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Toolbar: exportar (el período se controla desde el selector global) */}
+      <div className="flex justify-end">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleExportPDF}
+          disabled={exporting || !data}
+        >
+          {exporting ? (
+            <Loader2 className="h-4 w-4 animate-spin mr-1" />
+          ) : (
+            <Download className="h-4 w-4 mr-1" />
+          )}
+          Exportar PDF
+        </Button>
+      </div>
 
       {isLoading && (
         <div className="flex items-center justify-center py-12">
@@ -314,7 +250,7 @@ export function EstadoResultados() {
               icon={TrendingUp}
               title="Ingresos"
               value={formatPrice(data.ingresos.total)}
-              tone="info"
+              tone={FINANZAS_CONCEPTS.ingresos.tone}
               change={(() => {
                 const prev = dataPrev?.ingresos.total
                 if (prev === undefined || prev === 0) return prev === 0 && data.ingresos.total !== 0 ? null : undefined
@@ -328,7 +264,7 @@ export function EstadoResultados() {
               title="Ganancia bruta"
               value={formatPrice(data.gananciaBruta)}
               description={`Margen ${data.margenBruto}%`}
-              tone="success"
+              tone={FINANZAS_CONCEPTS.ganancia.tone}
               change={(() => {
                 const prev = dataPrev?.gananciaBruta
                 if (prev === undefined || prev === 0) return prev === 0 && data.gananciaBruta !== 0 ? null : undefined
@@ -341,7 +277,7 @@ export function EstadoResultados() {
               icon={TrendingDown}
               title="Gastos operativos"
               value={formatPrice(data.gastos.total)}
-              tone="warning"
+              tone={FINANZAS_CONCEPTS.gastos.tone}
               change={(() => {
                 const prev = dataPrev?.gastos.total
                 if (prev === undefined || prev === 0) return prev === 0 && data.gastos.total !== 0 ? null : undefined
@@ -368,8 +304,9 @@ export function EstadoResultados() {
             />
           </div>
 
-          {/* Desglose */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Desglose P&L a ancho completo. El detalle de gastos por
+              categoría vive en la pestaña Gastos (evita duplicación). */}
+          <div className="max-w-3xl">
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Estado de Resultados</CardTitle>
@@ -431,49 +368,17 @@ export function EstadoResultados() {
                 <div className="text-xs text-muted-foreground pl-1">Margen neto: {data.margenNeto}%</div>
               </CardContent>
             </Card>
-
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Gastos por categoría</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {data.gastos.porCategoria.length === 0 ? (
-                  <EmptyState
-                    icon={Receipt}
-                    title="Sin gastos"
-                    description="No hay gastos registrados en este período"
-                    variant="search"
-                  />
-                ) : (
-                  <div className="space-y-3">
-                    {data.gastos.porCategoria.map((c) => (
-                      <div key={c.id} className="space-y-1">
-                        <div className="flex items-center justify-between text-sm">
-                          <div className="flex items-center gap-2">
-                            {c.color && (
-                              <span
-                                className="inline-block w-2 h-2 rounded-full"
-                                style={{ backgroundColor: c.color }}
-                              />
-                            )}
-                            <span className="font-medium">{c.nombre}</span>
-                            <span className="text-xs text-muted-foreground">
-                              ({c.tipo === "FIJO" ? "fijo" : "variable"})
-                            </span>
-                          </div>
-                          <div className="text-right">
-                            <div className="font-medium">{formatPrice(c.monto)}</div>
-                            <div className="text-xs text-muted-foreground">{c.porcentaje}%</div>
-                          </div>
-                        </div>
-                        <Progress value={c.porcentaje} className="h-1.5" />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
           </div>
+
+          {(data.ingresos.serviciosAdelantos ?? 0) > 0 && (
+            <StatusBanner tone="info" icon={Info}>
+              Los Ingresos de este estado incluyen{" "}
+              <strong>{formatPrice(data.ingresos.serviciosAdelantos!)}</strong> de cobros adelantados
+              de órdenes aún abiertas. Por eso el total puede diferir del de la pestaña{" "}
+              <strong>Ingresos</strong>, que cuenta solo servicios ya facturados/cobrados y ventas
+              del período.
+            </StatusBanner>
+          )}
 
           {(data.meta.itemsSinCostoConocido > 0 || data.meta.gastosNoComputables > 0) && (
             <div className="space-y-2">

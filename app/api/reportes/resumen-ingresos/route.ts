@@ -20,19 +20,46 @@ export async function GET(request: Request) {
     const tz = orgTz?.zona_horaria ?? DEFAULT_TIMEZONE
 
     const { searchParams } = new URL(request.url)
+    const desdeParam = searchParams.get("desde")
+    const hastaParam = searchParams.get("hasta")
     const meses = parseInt(searchParams.get("meses") || "6")
 
-    // Calculate date range (last N months)
     const now = new Date()
-    const fechaDesde = new Date(now.getFullYear(), now.getMonth() - meses + 1, 1)
+
+    // Rango explícito (desde/hasta) tiene prioridad sobre `meses`.
+    // Sin rango, se usa la ventana de los últimos N meses (default 6).
+    let fechaDesde: Date
+    let fechaHasta: Date
+    if (desdeParam && hastaParam) {
+      fechaDesde = new Date(`${desdeParam}T00:00:00`)
+      fechaHasta = new Date(`${hastaParam}T23:59:59.999`)
+    } else {
+      fechaDesde = new Date(now.getFullYear(), now.getMonth() - meses + 1, 1)
+      fechaHasta = now
+    }
 
     const desdeISO = fechaDesde.toISOString()
+    const hastaISO = fechaHasta.toISOString()
+
+    // Claves de mes (YYYY-MM) que abarca el rango, en orden.
+    const monthKeys: string[] = []
+    {
+      const cursor = new Date(fechaDesde.getFullYear(), fechaDesde.getMonth(), 1)
+      const end = new Date(fechaHasta.getFullYear(), fechaHasta.getMonth(), 1)
+      while (cursor <= end) {
+        monthKeys.push(
+          `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`
+        )
+        cursor.setMonth(cursor.getMonth() + 1)
+      }
+    }
 
     // Facturas pagadas (branch-filtered via ordenes_servicio!inner)
     let facturasQuery = supabaseAdmin
       .from("facturas")
       .select(`
         id, total, subtotal, iva, fecha, orden_id,
+        pagos_parciales (monto, metodo_pago),
         ordenes_servicio!inner (
           id, organization_id, sucursal_id, tipo_dispositivo, dispositivo,
           tipos_dispositivo:tipo_dispositivo_id(nombre)
@@ -41,6 +68,7 @@ export async function GET(request: Request) {
       .eq("ordenes_servicio.organization_id", organizationId!)
       .eq("estado_pago", "PAGADO")
       .gte("fecha", desdeISO)
+      .lte("fecha", hastaISO)
     if (!filtro.verTodas && filtro.sucursalId) {
       facturasQuery = facturasQuery.eq("ordenes_servicio.sucursal_id", filtro.sucursalId)
     }
@@ -51,10 +79,11 @@ export async function GET(request: Request) {
     // Ventas completadas (branch-filtered directly)
     let ventasQuery = supabaseAdmin
       .from("ventas")
-      .select("id, total, iva_neto, iva_monto, created_at")
+      .select("id, total, iva_neto, iva_monto, metodo_pago, created_at")
       .eq("organization_id", organizationId!)
       .eq("estado", "COMPLETADA")
       .gte("created_at", desdeISO)
+      .lte("created_at", hastaISO)
     if (!filtro.verTodas && filtro.sucursalId) {
       ventasQuery = ventasQuery.eq("sucursal_id", filtro.sucursalId)
     }
@@ -66,7 +95,7 @@ export async function GET(request: Request) {
     let cobrosQuery = supabaseAdmin
       .from("cobros_orden")
       .select(`
-        id, monto, created_at, orden_id,
+        id, monto, created_at, orden_id, metodo_pago,
         ordenes_servicio!inner (
           organization_id, sucursal_id, tipo_dispositivo, dispositivo,
           tipos_dispositivo:tipo_dispositivo_id(nombre)
@@ -76,6 +105,7 @@ export async function GET(request: Request) {
       .eq("ordenes_servicio.organization_id", organizationId!)
       .neq("anulado", true)
       .gte("created_at", desdeISO)
+      .lte("created_at", hastaISO)
     if (!filtro.verTodas && filtro.sucursalId) {
       cobrosQuery = cobrosQuery.eq("ordenes_servicio.sucursal_id", filtro.sucursalId)
     }
@@ -88,10 +118,16 @@ export async function GET(request: Request) {
 
     // Aggregate por mes
     const ingresosPorMes: Record<string, { servicios: number; ventas: number }> = {}
-    for (let i = 0; i < meses; i++) {
-      const d = new Date(now.getFullYear(), now.getMonth() - meses + 1 + i, 1)
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+    // Aggregate por mes × método de pago (facturas sin método → SIN_ESPECIFICAR)
+    const metodoPorMes: Record<string, Record<string, number>> = {}
+    for (const key of monthKeys) {
       ingresosPorMes[key] = { servicios: 0, ventas: 0 }
+      metodoPorMes[key] = {}
+    }
+
+    const addMetodo = (key: string, metodo: string, monto: number) => {
+      if (!metodoPorMes[key]) return
+      metodoPorMes[key][metodo] = (metodoPorMes[key][metodo] || 0) + monto
     }
 
     for (const f of facturas || []) {
@@ -99,21 +135,38 @@ export async function GET(request: Request) {
       const fecha = new Date(f.fecha)
       const key = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}`
       // NET: subtotal (== total when no IVA — EXENTO no-op)
-      if (ingresosPorMes[key]) ingresosPorMes[key].servicios += Number((f as any).subtotal || f.total || 0)
+      const monto = Number((f as any).subtotal || f.total || 0)
+      if (ingresosPorMes[key]) ingresosPorMes[key].servicios += monto
+      // Método de pago: prorratear el neto según los pagos_parciales (que son brutos).
+      // El bruto de referencia es factura.total; si no hay pagos, cae en SIN_ESPECIFICAR.
+      const pagos = ((f as any).pagos_parciales || []) as { monto: any; metodo_pago: string }[]
+      const brutoTotal = Number(f.total || 0)
+      if (pagos.length > 0 && brutoTotal > 0) {
+        for (const p of pagos) {
+          const share = Number(p.monto || 0) / brutoTotal
+          addMetodo(key, p.metodo_pago || "OTRO", monto * share)
+        }
+      } else {
+        addMetodo(key, "SIN_ESPECIFICAR", monto)
+      }
     }
 
     for (const c of (cobros || []) as any[]) {
       const fecha = new Date(c.created_at)
       const key = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}`
       // Direct order payments: no IVA breakdown — kept at gross (face value)
-      if (ingresosPorMes[key]) ingresosPorMes[key].servicios += Number(c.monto || 0)
+      const monto = Number(c.monto || 0)
+      if (ingresosPorMes[key]) ingresosPorMes[key].servicios += monto
+      addMetodo(key, c.metodo_pago || "EFECTIVO", monto)
     }
 
     for (const v of ventas || []) {
       const fecha = new Date(v.created_at)
       const key = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}`
       // NET: COALESCE(iva_neto, total) — iva_neto is NULL for EXENTO/legacy (no-op)
-      if (ingresosPorMes[key]) ingresosPorMes[key].ventas += Number((v as any).iva_neto ?? v.total ?? 0)
+      const monto = Number((v as any).iva_neto ?? v.total ?? 0)
+      if (ingresosPorMes[key]) ingresosPorMes[key].ventas += monto
+      addMetodo(key, (v as any).metodo_pago || "OTRO", monto)
     }
 
     const porMes = Object.entries(ingresosPorMes)
@@ -127,6 +180,24 @@ export async function GET(request: Request) {
           servicios: data.servicios,
           ventas: data.ventas,
           total: data.servicios + data.ventas,
+        }
+      })
+
+    // Desglose mensual por método de pago (para el selector de mes en el frontend)
+    const porMetodoPago = Object.entries(metodoPorMes)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, metodos]) => {
+        const [year, month] = key.split("-")
+        const date = new Date(parseInt(year), parseInt(month) - 1)
+        const lista = Object.entries(metodos)
+          .map(([metodo, monto]) => ({ metodo, monto }))
+          .sort((a, b) => b.monto - a.monto)
+        return {
+          mesKey: key,
+          mes: date.toLocaleDateString("es-AR", { month: "short", timeZone: tz }),
+          mesCompleto: date.toLocaleDateString("es-AR", { month: "long", year: "numeric", timeZone: tz }),
+          total: lista.reduce((sum, m) => sum + m.monto, 0),
+          metodos: lista,
         }
       })
 
@@ -183,6 +254,7 @@ export async function GET(request: Request) {
       .eq("organization_id", organizationId!)
       .eq("anulada", false)
       .gte("fecha", desdeISO)
+      .lte("fecha", hastaISO)
     if (!filtro.verTodas && filtro.sucursalId) {
       notasCreditoQuery = notasCreditoQuery.eq("sucursal_id", filtro.sucursalId)
     }
@@ -204,11 +276,12 @@ export async function GET(request: Request) {
         cantidadVentas: ventas?.length || 0,
       },
       porMes,
+      porMetodoPago,
       porDispositivo,
       periodo: {
         desde: fechaDesde.toISOString(),
-        hasta: now.toISOString(),
-        meses,
+        hasta: fechaHasta.toISOString(),
+        meses: monthKeys.length,
       },
     })
   } catch (error) {

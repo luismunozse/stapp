@@ -23,6 +23,8 @@ export interface StatCardProps {
   href?: string
   /** Month-over-month change. `null` renders the "sin datos" hint. */
   change?: StatChange | null
+  /** Demoted visual treatment for secondary KPIs (smaller padding + value). */
+  compact?: boolean
 }
 
 // Icon-chip tint per tone, mapped to the semantic token scales (no ad-hoc hues).
@@ -54,11 +56,14 @@ export function StatCard({
   urgent = false,
   href,
   change,
+  compact = false,
 }: StatCardProps) {
   const card = (
     <Card
       className={cn(
-        "group h-full p-3 transition-all duration-200 sm:p-5",
+        compact
+          ? "group h-full p-3 transition-all duration-200 sm:p-4"
+          : "group h-full p-3 transition-all duration-200 sm:p-5",
         href && "cursor-pointer hover:-translate-y-0.5 hover:shadow-md",
         urgent && cn("ring-1", TONE_RING[tone])
       )}
@@ -77,7 +82,7 @@ export function StatCard({
         </span>
       </div>
 
-      <p className="mt-2 text-2xl font-semibold tabular-nums tracking-tight text-foreground sm:text-3xl">
+      <p className={cn(compact ? "mt-2 text-xl font-semibold tabular-nums tracking-tight text-foreground sm:text-2xl" : "mt-2 text-2xl font-semibold tabular-nums tracking-tight text-foreground sm:text-3xl")}>
         {value}
       </p>
 
