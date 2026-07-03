@@ -30,11 +30,13 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
       apiKey: platform.apiKey,
     })
 
-    await supabaseAdmin
-      .from("sucursal_whatsapp_config")
-      .update({ evolution_connection_state: "close" })
-      .eq("organization_id", organizationId!)
-      .eq("sucursal_id", sucursalId)
+    if (result.success) {
+      await supabaseAdmin
+        .from("sucursal_whatsapp_config")
+        .update({ evolution_connection_state: "close" })
+        .eq("organization_id", organizationId!)
+        .eq("sucursal_id", sucursalId)
+    }
 
     return NextResponse.json({ success: result.success, error: result.error || null })
   } catch (err) {
