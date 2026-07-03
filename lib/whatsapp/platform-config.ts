@@ -22,3 +22,10 @@ export function getPlatformEvolutionConfig(): PlatformEvolutionConfig | null {
 export function buildInstanceName(organizationId: string): string {
   return `stapp-org-${organizationId}`
 }
+
+/**
+ * Nombre de instancia estable y único por sucursal. No editable por el tenant.
+ */
+export function buildSucursalInstanceName(organizationId: string, sucursalId: string): string {
+  return `stapp-org-${organizationId}-suc-${sucursalId}`
+}
