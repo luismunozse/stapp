@@ -73,8 +73,26 @@ export function getEvolutionCreds(config: ConfigRow): EvolutionCredentials | nul
 export async function sendWhatsAppText(
   organizationId: string,
   to: string,
-  text: string
+  text: string,
+  opts?: { instanceNameOverride?: string }
 ): Promise<SendResult> {
+  // Override por sucursal: enviar por Evolution con una instancia específica,
+  // usando las credenciales de plataforma. No lee whatsapp_config (central).
+  if (opts?.instanceNameOverride) {
+    const platform = getPlatformEvolutionConfig()
+    if (!platform) {
+      return { success: false, error: "Plataforma Evolution no configurada", provider: "evolution" }
+    }
+    const countryCode = await loadOrgCountry(organizationId)
+    const creds = {
+      baseUrl: platform.baseUrl,
+      instanceName: opts.instanceNameOverride,
+      apiKey: platform.apiKey,
+    }
+    const result = await evoSendText(creds, to, text, countryCode)
+    return { ...result, provider: "evolution" }
+  }
+
   const config = await loadConfig(organizationId)
   if (!config || !config.is_configured) {
     return { success: false, error: "WhatsApp no configurado" }
