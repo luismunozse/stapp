@@ -19,11 +19,15 @@ export function SucursalWhatsAppCard({ sucursalId }: { sucursalId: string }) {
   }, [])
 
   const poll = useCallback(async () => {
-    const res = await fetch(`/api/sucursales/${sucursalId}/whatsapp/qr`, { method: "GET" })
-    if (!res.ok) return
-    const d = await res.json()
-    setState(d.state)
-    if (d.state === "open") { setQr(null); stopPoll() }
+    try {
+      const res = await fetch(`/api/sucursales/${sucursalId}/whatsapp/qr`, { method: "GET" })
+      if (!res.ok) return
+      const d = await res.json()
+      setState(d.state)
+      if (d.state === "open") { setQr(null); stopPoll() }
+    } catch {
+      // Error de red al pollear: se reintenta en el próximo ciclo
+    }
   }, [sucursalId, stopPoll])
 
   const connect = useCallback(async () => {
@@ -38,6 +42,8 @@ export function SucursalWhatsAppCard({ sucursalId }: { sucursalId: string }) {
         stopPoll()
         pollRef.current = setInterval(poll, 3000)
       }
+    } catch {
+      setError("Error de conexión")
     } finally {
       setLoading(false)
     }
@@ -46,8 +52,12 @@ export function SucursalWhatsAppCard({ sucursalId }: { sucursalId: string }) {
   const logout = useCallback(async () => {
     setLoading(true); setError(null)
     try {
-      await fetch(`/api/sucursales/${sucursalId}/whatsapp/logout`, { method: "POST" })
+      const res = await fetch(`/api/sucursales/${sucursalId}/whatsapp/logout`, { method: "POST" })
+      const d = await res.json()
+      if (!res.ok || !d.success) { setError(d.error || "No se pudo desconectar"); return }
       setState("close"); setQr(null); stopPoll()
+    } catch {
+      setError("Error de conexión")
     } finally {
       setLoading(false)
     }
