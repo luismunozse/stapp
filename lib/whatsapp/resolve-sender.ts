@@ -18,12 +18,16 @@ export async function resolveWhatsAppSender(
 ): Promise<ResolvedSender> {
   if (!sucursalId) return { scope: "central" }
 
-  const { data } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from("sucursal_whatsapp_config")
     .select("activo, evolution_connection_state, evolution_instance_name")
     .eq("organization_id", organizationId)
     .eq("sucursal_id", sucursalId)
     .maybeSingle()
+
+  if (error) {
+    console.error("resolveWhatsAppSender: error consultando sucursal_whatsapp_config", error)
+  }
 
   if (
     data &&
