@@ -10,12 +10,17 @@ export async function getSucursalWhatsAppConfig(
   organizationId: string,
   sucursalId: string
 ): Promise<SucursalWhatsAppRow | null> {
-  const { data } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from("sucursal_whatsapp_config")
     .select("evolution_instance_name, evolution_connection_state, activo")
     .eq("organization_id", organizationId)
     .eq("sucursal_id", sucursalId)
     .maybeSingle()
+
+  if (error) {
+    console.error("getSucursalWhatsAppConfig: error consultando sucursal_whatsapp_config", error)
+  }
+
   return (data as SucursalWhatsAppRow | null) ?? null
 }
 
@@ -26,7 +31,7 @@ export async function upsertSucursalWhatsAppState(
   state: string,
   opts?: { qr?: boolean }
 ): Promise<void> {
-  await supabaseAdmin.from("sucursal_whatsapp_config").upsert(
+  const { error } = await supabaseAdmin.from("sucursal_whatsapp_config").upsert(
     {
       organization_id: organizationId,
       sucursal_id: sucursalId,
@@ -37,4 +42,8 @@ export async function upsertSucursalWhatsAppState(
     },
     { onConflict: "sucursal_id" }
   )
+
+  if (error) {
+    console.error("upsertSucursalWhatsAppState: error actualizando sucursal_whatsapp_config", error)
+  }
 }
