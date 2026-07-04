@@ -398,6 +398,7 @@ export async function PUT(
     if (estadoFinal && estadoFinal !== orden.estado && !(estadoFinal === "PRESUPUESTADO" && presupuestoCambio)) {
       queueNotification({
         organizationId: organizationId!,
+        sucursalId: (orden as any).sucursal_id ?? null,
         ordenId: id,
         clienteId: cliente.id,
         tipo: "CAMBIO_ESTADO",
@@ -431,6 +432,7 @@ export async function PUT(
     if (presupuestoCambio) {
       queueNotification({
         organizationId: organizationId!,
+        sucursalId: (orden as any).sucursal_id ?? null,
         ordenId: id,
         clienteId: cliente.id,
         tipo: "PRESUPUESTO_DEFINIDO",

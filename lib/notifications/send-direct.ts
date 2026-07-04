@@ -9,6 +9,7 @@ type NotificationType = "CAMBIO_ESTADO" | "PRESUPUESTO_DEFINIDO" | "GARANTIA_CRE
 
 interface NotificationParams {
   organizationId: string
+  sucursalId?: string | null
   ordenId?: string
   garantiaId?: string
   clienteId: string
@@ -69,7 +70,7 @@ interface NotificationParams {
  * Se ejecuta como fire-and-forget desde las API routes.
  */
 export async function sendNotificationDirect(params: NotificationParams) {
-  const { organizationId, ordenId, garantiaId, clienteId, tipo, context } = params
+  const { organizationId, sucursalId, ordenId, garantiaId, clienteId, tipo, context } = params
 
   // Obtener configuración de la organización
   const { data: orgConfig } = await supabaseAdmin
@@ -141,6 +142,9 @@ export async function sendNotificationDirect(params: NotificationParams) {
 
   if (orgConfig.notificaciones_whatsapp && context.cliente.telefono && aceptaWhatsapp) {
     try {
+      const { resolveWhatsAppSender } = await import("@/lib/whatsapp/resolve-sender")
+      const sender = await resolveWhatsAppSender(organizationId, sucursalId)
+
       const { data: waConfig } = await supabaseAdmin
         .from("whatsapp_config")
         .select("provider, is_configured, is_verified, evolution_connection_state")
@@ -148,11 +152,14 @@ export async function sendNotificationDirect(params: NotificationParams) {
         .single()
 
       const provider = (waConfig?.provider || "meta") as "meta" | "evolution"
-      const canSendViaApi =
+      const canSendCentralApi =
         waConfig?.is_configured &&
         (provider === "evolution"
           ? waConfig.evolution_connection_state === "open"
           : waConfig.is_verified)
+
+      // La sucursal conectada puede enviar por API aunque el central no esté configurado.
+      const canSendViaApi = sender.scope === "sucursal" || !!canSendCentralApi
 
       if (canSendViaApi) {
         const { sendWhatsAppText } = await import("@/lib/whatsapp/providers")
@@ -167,7 +174,8 @@ export async function sendNotificationDirect(params: NotificationParams) {
         const result = await sendWhatsAppText(
           organizationId,
           context.cliente.telefono,
-          fallbackText
+          fallbackText,
+          sender.scope === "sucursal" ? { instanceNameOverride: sender.instanceName } : undefined
         )
 
         await supabaseAdmin.from("notification_logs").insert({
@@ -180,7 +188,7 @@ export async function sendNotificationDirect(params: NotificationParams) {
           estado: result.success ? "ENVIADO" : "FALLIDO",
           destinatario: context.cliente.telefono,
           contenido: fallbackText,
-          metadata: JSON.stringify({ messageId: result.messageId, viaApi: true, provider: result.provider }),
+          metadata: JSON.stringify({ messageId: result.messageId, viaApi: true, provider: result.provider, senderScope: sender.scope }),
           error_message: result.error || null,
         })
 

@@ -9,6 +9,7 @@ import { sendNotificationDirect } from "./send-direct"
  */
 export async function queueNotification(params: {
   organizationId: string
+  sucursalId?: string | null
   ordenId?: string
   garantiaId?: string
   clienteId: string

@@ -178,6 +178,7 @@ export async function POST(
     if (cliente) {
       queueNotification({
         organizationId: organizationId!,
+        sucursalId: (orden as any).sucursal_id ?? null,
         ordenId: id,
         clienteId: cliente.id,
         tipo: "CAMBIO_ESTADO",
