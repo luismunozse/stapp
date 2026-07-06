@@ -213,6 +213,8 @@ export function TemplateEditor() {
       )
 
       if (!res.ok) {
+        const error = await res.json().catch(() => ({}))
+        await showError(error.error || "Error al eliminar item")
         return
       }
 
@@ -293,11 +295,14 @@ export function TemplateEditor() {
       )
 
       if (!res.ok) {
+        const error = await res.json().catch(() => ({}))
+        await showError(error.error || "Error al eliminar template")
         return
       }
 
-      setTemplates((prev) => prev.filter((t) => t.id !== selectedTemplate.id))
-      setSelectedTemplate(templates.length > 1 ? templates[0] : null)
+      const remaining = templates.filter((t) => t.id !== selectedTemplate.id)
+      setTemplates(remaining)
+      setSelectedTemplate(remaining[0] ?? null)
     } catch (error) {
       console.error("Error:", error)
     }
