@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { getNextQuoteNumber } from "@/lib/counters"
 import { parsePagination } from "@/lib/api-utils"
 import { createAuditLogger } from "@/lib/audit"
+import { hasPlanFeature } from "@/lib/subscriptions"
 import { randomBytes } from "crypto"
 import { z } from "zod"
 
@@ -253,6 +254,14 @@ export async function POST(request: Request) {
   try {
     const { error, organizationId, userId, role } = await requireAuth()
     if (error) return error
+
+    const hasCotizaciones = await hasPlanFeature(organizationId!, "cotizaciones_online")
+    if (!hasCotizaciones) {
+      return NextResponse.json(
+        { error: "Las cotizaciones requieren el plan Profesional", code: "FEATURE_REQUIRED", feature: "cotizaciones_online" },
+        { status: 403 }
+      )
+    }
 
     const body = await request.json()
     const data = cotizacionSchema.parse(body)
