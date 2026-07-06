@@ -24,6 +24,7 @@ import {
 
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { useCurrency } from "@/contexts/currency-context"
+import { useHasFeature } from "@/hooks/use-subscription"
 import { CotizacionForm } from "./cotizacion-form"
 import { CotizacionApprovalDialog } from "./cotizacion-approval-dialog"
 import { SignatureDisplay } from "@/components/firma/signature-display"
@@ -87,6 +88,8 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
   const [approvingCotizacion, setApprovingCotizacion] = useState<Cotizacion | null>(null)
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null)
   const { confirm, showError, showSuccess, showWarning } = useModal()
+  const { hasFeature: hasCotizaciones, loading: cotizacionesLoading } = useHasFeature("cotizaciones_online")
+  const canCrear = cotizacionesLoading || hasCotizaciones
 
   const fetcher = (url: string) => fetch(url).then(res => res.json())
   const { data: cotizaciones = [], isLoading: loading, mutate } = useSWR<Cotizacion[]>(
@@ -308,7 +311,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
           <FileText className="h-4 w-4" />
           Cotizaciones ({cotizaciones.length})
         </h3>
-        {!readOnly && !showForm && !editingCotizacion && (
+        {!readOnly && !showForm && !editingCotizacion && canCrear && (
           <div className="flex gap-2">
             {repuestos.length > 0 && (
               <Button size="sm" variant="outline" onClick={() => { setPrefillFromRepuestos(true); setShowForm(true) }}>
@@ -439,7 +442,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
 
                   {/* Actions */}
                   <div className="flex flex-wrap gap-2 pt-2 border-t">
-                    {canSend && (
+                    {canSend && canCrear && (
                       !clienteEmail ? (
                         <Button
                           size="sm"
@@ -462,7 +465,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
                         </Button>
                       )
                     )}
-                    {!readOnly && canEdit && (
+                    {!readOnly && canEdit && canCrear && (
                       <Button
                         size="sm"
                         variant="outline"
@@ -494,7 +497,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
                         </Button>
                       </>
                     )}
-                    {!readOnly && (
+                    {!readOnly && canCrear && (
                       <Button
                         size="sm"
                         variant="ghost"
