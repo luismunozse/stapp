@@ -52,6 +52,8 @@ import { SignatureDisplay } from "@/components/firma/signature-display"
 import { useModal } from "@/contexts/modal-context"
 import { PageShell } from "@/components/ui/page-shell"
 import { EmptyState } from "@/components/ui/empty-state"
+import { useHasFeature } from "@/hooks/use-subscription"
+import Link from "next/link"
 
 interface Cotizacion {
   id: string
@@ -151,6 +153,7 @@ export default function CotizacionesPage() {
   const [estadoFilter, setEstadoFilter] = useState("TODOS")
   const [page, setPage] = useState(1)
   const [viewMode, setViewMode] = useState<"cards" | "list">("cards")
+  const { hasFeature: canCrear } = useHasFeature("cotizaciones_online")
 
   // Persistir preferencia de vista
   useEffect(() => {
@@ -509,13 +512,27 @@ export default function CotizacionesPage() {
         title="Cotizaciones"
         icon={Receipt}
         className="space-y-4"
-        actions={!showForm && !editingCotizacion ? (
+        actions={!showForm && !editingCotizacion && canCrear ? (
           <Button onClick={() => setShowTipoSelector(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Nueva Cotización
           </Button>
         ) : undefined}
       >
+
+      {!canCrear && (
+        <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium">Las cotizaciones son parte del plan Profesional</p>
+            <p className="text-xs text-muted-foreground">
+              Podés seguir viendo y cerrando las que ya tenés. Para crear nuevas, pasate a Profesional.
+            </p>
+          </div>
+          <Link href="/precios">
+            <Button size="sm">Ver planes</Button>
+          </Link>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
@@ -672,7 +689,7 @@ export default function CotizacionesPage() {
           description={!debouncedSearch && estadoFilter === "TODOS"
             ? "Creá tu primera cotización para enviar presupuestos a tus clientes."
             : "No se encontraron cotizaciones con los filtros aplicados."}
-          action={!debouncedSearch && estadoFilter === "TODOS" ? { label: "Nueva Cotización", onClick: () => setShowForm(true) } : undefined}
+          action={!debouncedSearch && estadoFilter === "TODOS" && canCrear ? { label: "Nueva Cotización", onClick: () => setShowForm(true) } : undefined}
         />
       ) : (
         <>
@@ -742,7 +759,7 @@ export default function CotizacionesPage() {
                           <td className="p-3 text-right font-medium">{formatPrice(cotizacion.total)}</td>
                           <td className="p-3">
                             <div className="flex items-center justify-center gap-1 flex-wrap">
-                              {canEdit && (
+                              {canEdit && canCrear && (
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -752,7 +769,7 @@ export default function CotizacionesPage() {
                                   <Edit className="h-4 w-4" />
                                 </Button>
                               )}
-                              {canSend && (
+                              {canSend && canCrear && (
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -837,7 +854,7 @@ export default function CotizacionesPage() {
                                   <Link2 className="h-4 w-4" />
                                 </Button>
                               )}
-                              {cotizacion.publicToken && (
+                              {cotizacion.publicToken && canCrear && (
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -848,15 +865,17 @@ export default function CotizacionesPage() {
                                   <WhatsAppIcon className="h-4 w-4" />
                                 </Button>
                               )}
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDuplicate(cotizacion)}
-                                disabled={duplicatingId === cotizacion.id}
-                                title="Duplicar"
-                              >
-                                <Copy className="h-4 w-4" />
-                              </Button>
+                              {canCrear && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDuplicate(cotizacion)}
+                                  disabled={duplicatingId === cotizacion.id}
+                                  title="Duplicar"
+                                >
+                                  <Copy className="h-4 w-4" />
+                                </Button>
+                              )}
                               {canDelete && (
                                 <Button
                                   variant="ghost"
@@ -994,7 +1013,7 @@ export default function CotizacionesPage() {
 
                     {/* Actions */}
                     <div className="flex flex-wrap gap-2 pt-2 border-t">
-                      {canSend && (
+                      {canSend && canCrear && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -1006,7 +1025,7 @@ export default function CotizacionesPage() {
                           {sendingId === cotizacion.id ? "Enviando..." : !cotizacion.clienteEmail ? "Sin email" : "Enviar"}
                         </Button>
                       )}
-                      {canEdit && (
+                      {canEdit && canCrear && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -1038,15 +1057,17 @@ export default function CotizacionesPage() {
                           </Button>
                         </>
                       )}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleDuplicate(cotizacion)}
-                        disabled={duplicatingId === cotizacion.id}
-                      >
-                        <Copy className="mr-2 h-3 w-3" />
-                        {duplicatingId === cotizacion.id ? "Duplicando..." : "Duplicar"}
-                      </Button>
+                      {canCrear && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleDuplicate(cotizacion)}
+                          disabled={duplicatingId === cotizacion.id}
+                        >
+                          <Copy className="mr-2 h-3 w-3" />
+                          {duplicatingId === cotizacion.id ? "Duplicando..." : "Duplicar"}
+                        </Button>
+                      )}
                       {cotizacion.estado === "ACEPTADA" && cotizacion.tipo !== "PRESUPUESTO" && (
                         <Button
                           size="sm"
@@ -1110,7 +1131,7 @@ export default function CotizacionesPage() {
                           Compartir
                         </Button>
                       )}
-                      {cotizacion.publicToken && (
+                      {cotizacion.publicToken && canCrear && (
                         <Button
                           size="sm"
                           variant="ghost"
@@ -1121,14 +1142,16 @@ export default function CotizacionesPage() {
                           WhatsApp
                         </Button>
                       )}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleSaveAsTemplate(cotizacion)}
-                      >
-                        <BookmarkPlus className="mr-2 h-3 w-3" />
-                        Plantilla
-                      </Button>
+                      {canCrear && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleSaveAsTemplate(cotizacion)}
+                        >
+                          <BookmarkPlus className="mr-2 h-3 w-3" />
+                          Plantilla
+                        </Button>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
