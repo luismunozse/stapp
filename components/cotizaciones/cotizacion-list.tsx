@@ -528,7 +528,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
                       <Download className="mr-2 h-3 w-3" />
                       PDF
                     </Button>
-                    {cotizacion.publicToken && (
+                    {cotizacion.publicToken && (canCrear || cotizacion.estado !== "BORRADOR") && (
                       <Button
                         size="sm"
                         variant={cotizacion.estado === "BORRADOR" ? "default" : "ghost"}
@@ -542,7 +542,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
                         )}
                       </Button>
                     )}
-                    {cotizacion.publicToken && (
+                    {cotizacion.publicToken && (canCrear || cotizacion.estado !== "BORRADOR") && (
                       <Button
                         size="sm"
                         variant="ghost"
