@@ -251,15 +251,20 @@ export default function CotizacionesPage() {
   useEffect(() => {
     const clienteIdParam = searchParams?.get("clienteId")
     if (!clienteIdParam || clienteParamRef.current === clienteIdParam) return
+    // Esperar a que resuelva la suscripción antes de decidir (evita la carrera del loading).
+    if (cotizacionesLoading) return
     clienteParamRef.current = clienteIdParam
-    setNuevoClienteId(clienteIdParam)
-    setEditingCotizacion(null)
-    setFormTipo("PRESUPUESTO")
-    setShowForm(true)
+    // Solo abrir el form si el plan permite crear cotizaciones; si no, se limpia el param y no se abre nada.
+    if (hasCotizaciones) {
+      setNuevoClienteId(clienteIdParam)
+      setEditingCotizacion(null)
+      setFormTipo("PRESUPUESTO")
+      setShowForm(true)
+    }
     const params = new URLSearchParams(searchParams?.toString() ?? "")
     params.delete("clienteId")
     router.replace(`/cotizaciones${params.toString() ? `?${params.toString()}` : ""}`, { scroll: false })
-  }, [searchParams, router])
+  }, [searchParams, router, cotizacionesLoading, hasCotizaciones])
 
   const cotizaciones = response?.data || []
   const totalPages = response?.totalPages || 1
