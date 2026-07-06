@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getNextQuoteNumber } from "@/lib/counters"
+import { hasPlanFeature } from "@/lib/subscriptions"
 import { randomBytes } from "crypto"
 
 export async function POST(
@@ -11,6 +12,14 @@ export async function POST(
   try {
     const { error, organizationId, userId, role } = await requireAuth()
     if (error) return error
+
+    const hasCotizaciones = await hasPlanFeature(organizationId!, "cotizaciones_online")
+    if (!hasCotizaciones) {
+      return NextResponse.json(
+        { error: "Las cotizaciones requieren el plan Profesional", code: "FEATURE_REQUIRED", feature: "cotizaciones_online" },
+        { status: 403 }
+      )
+    }
 
     const { id } = await params
 
