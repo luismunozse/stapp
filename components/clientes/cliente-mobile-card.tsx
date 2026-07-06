@@ -8,6 +8,7 @@ import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import type { Cliente } from "@/types"
 import { useCurrency } from "@/contexts/currency-context"
+import { useHasFeature } from "@/hooks/use-subscription"
 
 interface ClienteMobileCardProps {
   cliente: Cliente
@@ -22,6 +23,8 @@ interface ClienteMobileCardProps {
 export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCuentaCorriente, onCobrar, deleting }: ClienteMobileCardProps) {
   const router = useRouter()
   const { formatDate, formatPrice } = useCurrency()
+  const { hasFeature: hasCotizaciones, loading: cotizacionesLoading } = useHasFeature("cotizaciones_online")
+  const puedeCotizar = cotizacionesLoading || hasCotizaciones
 
   return (
     <Card>
@@ -86,14 +89,16 @@ export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCue
                   <Wrench className="h-4 w-4" />
                   Nueva orden
                 </button>
-                <button
-                  type="button"
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
-                  onClick={(e) => { e.stopPropagation(); router.push(`/cotizaciones?clienteId=${cliente.id}`) }}
-                >
-                  <Receipt className="h-4 w-4" />
-                  Nueva cotización
-                </button>
+                {puedeCotizar && (
+                  <button
+                    type="button"
+                    className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
+                    onClick={(e) => { e.stopPropagation(); router.push(`/cotizaciones?clienteId=${cliente.id}`) }}
+                  >
+                    <Receipt className="h-4 w-4" />
+                    Nueva cotización
+                  </button>
+                )}
                 <div className="h-px bg-border my-1" />
                 {onWhatsApp && (
                   <button

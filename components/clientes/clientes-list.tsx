@@ -24,6 +24,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import type { Cliente } from "@/types"
 import { useModal } from "@/contexts/modal-context"
 import { useCurrency } from "@/contexts/currency-context"
+import { useHasFeature } from "@/hooks/use-subscription"
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
@@ -35,6 +36,8 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
   const router = useRouter()
   const { confirm, showError } = useModal()
   const { formatDate, formatPrice } = useCurrency()
+  const { hasFeature: hasCotizaciones, loading: cotizacionesLoading } = useHasFeature("cotizaciones_online")
+  const puedeCotizar = cotizacionesLoading || hasCotizaciones
   const [showForm, setShowForm] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null)
@@ -315,14 +318,16 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
                 <Wrench className="h-4 w-4" />
                 Nueva orden
               </button>
-              <button
-                type="button"
-                className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
-                onClick={(e) => { e.stopPropagation(); router.push(`/cotizaciones?clienteId=${cliente.id}`) }}
-              >
-                <Receipt className="h-4 w-4" />
-                Nueva cotización
-              </button>
+              {puedeCotizar && (
+                <button
+                  type="button"
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
+                  onClick={(e) => { e.stopPropagation(); router.push(`/cotizaciones?clienteId=${cliente.id}`) }}
+                >
+                  <Receipt className="h-4 w-4" />
+                  Nueva cotización
+                </button>
+              )}
               <div className="h-px bg-border my-1" />
               <button
                 type="button"

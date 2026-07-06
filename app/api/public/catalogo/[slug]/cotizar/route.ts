@@ -4,6 +4,7 @@ import { getNextQuoteNumber } from "@/lib/counters"
 import { randomBytes } from "crypto"
 import { z } from "zod"
 import { resolvePlantilla } from "@/lib/whatsapp/plantillas-catalog"
+import { hasPlanFeature } from "@/lib/subscriptions"
 
 const cotizarSchema = z.object({
   cliente: z.object({
@@ -58,6 +59,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   }
 
   const organizationId = config.organization_id
+
+  // Gate de plan: catálogos de orgs Free no reciben nuevas cotizaciones.
+  // Chequeo público (sin auth) — corre ANTES de tocar el carrito para no
+  // hacer ningún trabajo de cotización si el org no tiene la feature.
+  const tieneCotizaciones = await hasPlanFeature(organizationId, "cotizaciones_online")
+  if (!tieneCotizaciones) {
+    return NextResponse.json(
+      { error: "Este catálogo no está tomando solicitudes de cotización en este momento", code: "FEATURE_REQUIRED" },
+      { status: 403 }
+    )
+  }
 
   // 2. Cargar items del carrito + validar existencia y stock
   const itemIds = Array.from(new Set(data.items.map((i) => i.itemId)))
