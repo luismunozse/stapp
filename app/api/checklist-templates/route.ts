@@ -20,7 +20,7 @@ export async function GET(request: Request) {
 
     let query = supabaseAdmin
       .from("checklist_templates")
-      .select(`*, checklist_template_items (*), tipos_dispositivo (id, nombre, codigo)`)
+      .select(`*, checklist_template_items (*), tipos_dispositivo (id, nombre, codigo), checklist_recepcion (count)`)
       .eq("organization_id", organizationId!)
       .order("created_at", { ascending: false })
 
@@ -32,13 +32,19 @@ export async function GET(request: Request) {
 
     if (dbError) throw dbError
 
-    // Mapear checklist_template_items a items para el frontend
-    const mappedTemplates = templates?.map(t => ({
-      ...t,
-      items: t.checklist_template_items || [],
-      tipoDispositivo: t.tipos_dispositivo || null,
-      tipoDispositivoId: t.tipo_dispositivo_id || null,
-    })) || []
+    // Mapear checklist_template_items a items para el frontend y exponer el
+    // conteo de usos (checklist_recepcion) como _count.checklists, que la UI
+    // usa para deshabilitar el borrado y mostrar "Usado en N orden(es)".
+    const mappedTemplates = templates?.map(t => {
+      const { checklist_recepcion, ...rest } = t
+      return {
+        ...rest,
+        items: t.checklist_template_items || [],
+        tipoDispositivo: t.tipos_dispositivo || null,
+        tipoDispositivoId: t.tipo_dispositivo_id || null,
+        _count: { checklists: checklist_recepcion?.[0]?.count ?? 0 },
+      }
+    }) || []
 
     return NextResponse.json(mappedTemplates)
   } catch (error) {
