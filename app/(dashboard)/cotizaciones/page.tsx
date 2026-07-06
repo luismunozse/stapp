@@ -153,7 +153,8 @@ export default function CotizacionesPage() {
   const [estadoFilter, setEstadoFilter] = useState("TODOS")
   const [page, setPage] = useState(1)
   const [viewMode, setViewMode] = useState<"cards" | "list">("cards")
-  const { hasFeature: canCrear } = useHasFeature("cotizaciones_online")
+  const { hasFeature: hasCotizaciones, loading: cotizacionesLoading } = useHasFeature("cotizaciones_online")
+  const canCrear = cotizacionesLoading || hasCotizaciones
 
   // Persistir preferencia de vista
   useEffect(() => {
@@ -520,7 +521,7 @@ export default function CotizacionesPage() {
         ) : undefined}
       >
 
-      {!canCrear && (
+      {!cotizacionesLoading && !hasCotizaciones && (
         <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <p className="text-sm font-medium">Las cotizaciones son parte del plan Profesional</p>
