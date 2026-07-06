@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { useCurrency } from "@/contexts/currency-context"
+import { useHasFeature } from "@/hooks/use-subscription"
 import type { Cliente } from "@/types"
 
 interface ClienteDetalleHeaderProps {
@@ -25,6 +26,8 @@ export function ClienteDetalleHeader({
   const { formatPrice } = useCurrency()
   const router = useRouter()
   const esEmpresa = cliente.tipoCliente === "EMPRESA"
+  const { hasFeature: hasCotizaciones, loading: cotizacionesLoading } = useHasFeature("cotizaciones_online")
+  const puedeCotizar = cotizacionesLoading || hasCotizaciones
 
   return (
     <div className="sticky top-0 z-10 bg-background border-b -mx-4 px-4 pb-4 sm:-mx-6 sm:px-6">
@@ -63,13 +66,15 @@ export function ClienteDetalleHeader({
               >
                 <Wrench className="h-4 w-4" /> Nueva orden
               </button>
-              <button
-                type="button"
-                className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
-                onClick={() => router.push(`/cotizaciones?clienteId=${cliente.id}`)}
-              >
-                <Receipt className="h-4 w-4" /> Nueva cotización
-              </button>
+              {puedeCotizar && (
+                <button
+                  type="button"
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
+                  onClick={() => router.push(`/cotizaciones?clienteId=${cliente.id}`)}
+                >
+                  <Receipt className="h-4 w-4" /> Nueva cotización
+                </button>
+              )}
             </PopoverContent>
           </Popover>
           <Button variant="outline" size="sm" onClick={onEdit} className="gap-1.5">
