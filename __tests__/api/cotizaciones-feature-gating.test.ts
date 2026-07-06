@@ -7,6 +7,10 @@ vi.mock("@/lib/subscriptions", () => ({
 
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { POST as crearCotizacion } from "@/app/api/cotizaciones/route"
+import { PUT as editarCotizacion } from "@/app/api/cotizaciones/[id]/route"
+import { POST as enviarCotizacion } from "@/app/api/cotizaciones/[id]/enviar/route"
+import { POST as duplicarCotizacion } from "@/app/api/cotizaciones/[id]/duplicar/route"
+import { POST as crearTemplate } from "@/app/api/cotizacion-templates/route"
 
 describe("gating de cotizaciones_online — POST /api/cotizaciones", () => {
   beforeEach(() => vi.clearAllMocks())
@@ -34,5 +38,44 @@ describe("gating de cotizaciones_online — POST /api/cotizaciones", () => {
     const res = await crearCotizacion(createPostRequest({ items: [] }))
     const { status } = await parseResponse(res)
     expect(status).not.toBe(403)
+  })
+})
+
+const params = { params: Promise.resolve({ id: "cot-1" }) }
+
+describe("gating — rutas de escritura restantes", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("PUT [id] → 403 sin feature", async () => {
+    mockAuthSuccess()
+    vi.mocked(hasPlanFeature).mockResolvedValueOnce(false)
+    const res = await editarCotizacion(createPostRequest({ estado: "ENVIADA" }), params)
+    const { status, body } = await parseResponse(res)
+    expect(status).toBe(403)
+    expect(body.feature).toBe("cotizaciones_online")
+  })
+
+  it("enviar → 403 sin feature", async () => {
+    mockAuthSuccess()
+    vi.mocked(hasPlanFeature).mockResolvedValueOnce(false)
+    const res = await enviarCotizacion(createPostRequest({}), params)
+    const { status } = await parseResponse(res)
+    expect(status).toBe(403)
+  })
+
+  it("duplicar → 403 sin feature", async () => {
+    mockAuthSuccess()
+    vi.mocked(hasPlanFeature).mockResolvedValueOnce(false)
+    const res = await duplicarCotizacion(createPostRequest({}), params)
+    const { status } = await parseResponse(res)
+    expect(status).toBe(403)
+  })
+
+  it("crear template → 403 sin feature", async () => {
+    mockAuthSuccess()
+    vi.mocked(hasPlanFeature).mockResolvedValueOnce(false)
+    const res = await crearTemplate(createPostRequest({ nombre: "x", items: [] }))
+    const { status } = await parseResponse(res)
+    expect(status).toBe(403)
   })
 })
