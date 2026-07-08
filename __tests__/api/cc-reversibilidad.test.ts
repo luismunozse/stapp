@@ -35,7 +35,7 @@ describe("anular cobro orden — reacredita USO", () => {
     mockAuthSuccess({ role: "ADMIN" })
     // orden no entregada; cobro método CUENTA_CORRIENTE
     mockSupabaseFrom({
-      ordenes_servicio: createChainMock({ estado: "REPARADO", cliente_id: "c1" }),
+      ordenes_servicio: createChainMock({ estado: "REPARADO", cliente_id: "c1", sucursal_id: "suc-1" }),
       cobros_orden: createChainMock({ id: "cob1", monto: 50, anulado: false, metodo_pago: "CUENTA_CORRIENTE" }),
     })
 
@@ -46,7 +46,10 @@ describe("anular cobro orden — reacredita USO", () => {
 
     expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
       "devolver_cuenta_corriente",
-      expect.objectContaining({ p_cliente_id: "c1", p_monto: 50, p_referencia_tipo: "ORDEN", p_referencia_id: "o1" })
+      expect.objectContaining({
+        p_cliente_id: "c1", p_monto: 50, p_referencia_tipo: "ORDEN", p_referencia_id: "o1",
+        p_sucursal_id: "suc-1",
+      })
     )
   })
 
@@ -64,6 +67,24 @@ describe("anular cobro orden — reacredita USO", () => {
 
     const calls = vi.mocked(supabaseAdmin.rpc).mock.calls.map((c) => c[0])
     expect(calls).not.toContain("devolver_cuenta_corriente")
+  })
+
+  it("propaga sucursal_id NULL cuando la orden no tiene sucursal asignada", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    mockSupabaseFrom({
+      ordenes_servicio: createChainMock({ estado: "REPARADO", cliente_id: "c1", sucursal_id: null }),
+      cobros_orden: createChainMock({ id: "cob1", monto: 50, anulado: false, metodo_pago: "CUENTA_CORRIENTE" }),
+    })
+
+    await cobrosDELETE(
+      createGetRequest("http://localhost/api/ordenes/o1/cobros?cobroId=cob1"),
+      { params: Promise.resolve({ id: "o1" }) } as any
+    )
+
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
+      "devolver_cuenta_corriente",
+      expect.objectContaining({ p_sucursal_id: null })
+    )
   })
 })
 
@@ -85,7 +106,7 @@ describe("devolucion venta — reembolso a CC", () => {
   })
 
   const VENTA_DATA = {
-    id: "v1", estado: "COMPLETADA", cliente_id: "c1", organization_id: "org-1",
+    id: "v1", estado: "COMPLETADA", cliente_id: "c1", organization_id: "org-1", sucursal_id: "suc-1",
     items_venta: [{ id: "iv1", cantidad: 5, descripcion: "Item", inventario_id: null, precio_unitario: 10 }],
   }
 
@@ -139,7 +160,10 @@ describe("devolucion venta — reembolso a CC", () => {
 
     expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
       "devolver_cuenta_corriente",
-      expect.objectContaining({ p_cliente_id: "c1", p_monto: 20, p_referencia_tipo: "VENTA", p_referencia_id: "v1" })
+      expect.objectContaining({
+        p_cliente_id: "c1", p_monto: 20, p_referencia_tipo: "VENTA", p_referencia_id: "v1",
+        p_sucursal_id: "suc-1",
+      })
     )
   })
 
@@ -162,5 +186,29 @@ describe("devolucion venta — reembolso a CC", () => {
 
     const calls = vi.mocked(supabaseAdmin.rpc).mock.calls.map((c) => c[0])
     expect(calls).not.toContain("devolver_cuenta_corriente")
+  })
+
+  it("propaga sucursal_id NULL cuando la venta no tiene sucursal asignada", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "ventas") return createChainMock({ ...VENTA_DATA, sucursal_id: null }) as any
+      if (table === "devoluciones_venta") return buildDevolucionesChain()
+      if (table === "items_devolucion") return createChainMock({ id: "id1" }) as any
+      return createChainMock(null, { message: `No mock for table: ${table}` }) as any
+    })
+
+    await devolucionPOST(
+      createPostRequest({
+        motivo: "Defectuoso",
+        metodoReembolso: "CUENTA_CORRIENTE",
+        items: [{ itemVentaId: "iv1", cantidad: 2, precioUnitario: 10, restaurarStock: false }],
+      }, "http://localhost/api/ventas/v1/devolucion"),
+      { params: Promise.resolve({ id: "v1" }) } as any
+    )
+
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
+      "devolver_cuenta_corriente",
+      expect.objectContaining({ p_sucursal_id: null })
+    )
   })
 })

@@ -404,6 +404,9 @@ async function jsDevolucionFallback(
       p_referencia_id: id,
       p_usuario_id: userId,
       p_observaciones: `Devolucion ${numeroDevolucion}`,
+      // Derived from the venta's own sucursal_id (parent record), not the
+      // current operator's active cookie.
+      p_sucursal_id: venta.sucursal_id ?? null,
     })
     if (ccError) {
       console.error("Error reembolsando a cuenta corriente:", ccError)

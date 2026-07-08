@@ -36,6 +36,7 @@ function facturaRow(over: Partial<any> = {}) {
     ordenes_servicio: {
       organization_id: "org-1",
       cliente_id: "c1",
+      sucursal_id: "suc-1",
     },
     ...over,
   }
@@ -307,6 +308,58 @@ describe("POST /api/pagos — JS fallback (function missing)", () => {
     expect(status).toBe(201)
     expect(body.pagos).toHaveLength(1)
     expect(body.factura.montoAbonado).toBe(500)
+  })
+
+  it("fallback: CUENTA_CORRIENTE pago calls usar_cuenta_corriente with p_sucursal_id from the parent orden", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+
+    const pagoCreado = {
+      id: "pp1",
+      monto: 500,
+      metodo_pago: "CUENTA_CORRIENTE",
+      numero_referencia: null,
+      fecha: "2024-01-01",
+      cuotas: null,
+      recargo_porcentaje: null,
+      monto_original: null,
+      costo_financiero_porcentaje: null,
+      costo_financiero_monto: null,
+    }
+
+    vi.mocked(supabaseAdmin.rpc).mockImplementation(((fn: string) => {
+      if (fn === "registrar_pago_factura_atomica") {
+        return Promise.resolve({ data: null, error: FUNCTION_MISSING_ERROR })
+      }
+      return Promise.resolve({ data: null, error: null })
+    }) as any)
+
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "facturas") {
+        return createChainMock(facturaRow()) as any
+      }
+      if (table === "pagos_parciales") {
+        return createChainMock(pagoCreado) as any
+      }
+      return createChainMock(null) as any
+    })
+
+    const payload = {
+      facturaId: "f1",
+      pagos: [{ monto: 500, metodo: "CUENTA_CORRIENTE" }],
+      clienteId: "c1",
+    }
+    const res = await POST(createPostRequest(payload))
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(201)
+
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
+      "usar_cuenta_corriente",
+      expect.objectContaining({
+        p_cliente_id: "c1", p_monto: 500, p_referencia_tipo: "FACTURA", p_referencia_id: "f1",
+        p_sucursal_id: "suc-1",
+      })
+    )
   })
 
   it("fallback: facturas UPDATE error → 500 (proves fallback checks update error)", async () => {

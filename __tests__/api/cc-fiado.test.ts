@@ -8,7 +8,7 @@ function ordenRow(over: Partial<any> = {}) {
   return {
     id: "o1", costo_final: "100", total_cobrado: "0", estado_cobro: "PENDIENTE",
     descuento_cobro: "0", cliente_id: "c1", organization_id: "org-1",
-    estado: "ENTREGADO", ...over,
+    estado: "ENTREGADO", sucursal_id: "suc-1", ...over,
   }
 }
 
@@ -43,7 +43,10 @@ describe("cobros orden — reconciliación de fiado", () => {
 
     expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
       "pagar_fiado_cuenta_corriente",
-      expect.objectContaining({ p_cliente_id: "c1", p_monto: 40, p_referencia_tipo: "ORDEN", p_referencia_id: "o1" })
+      expect.objectContaining({
+        p_cliente_id: "c1", p_monto: 40, p_referencia_tipo: "ORDEN", p_referencia_id: "o1",
+        p_sucursal_id: "suc-1",
+      })
     )
   })
 
@@ -78,6 +81,29 @@ describe("cobros orden — reconciliación de fiado", () => {
     const calls = vi.mocked(supabaseAdmin.rpc).mock.calls.map((c) => c[0])
     expect(calls).toContain("usar_cuenta_corriente")
     expect(calls).not.toContain("pagar_fiado_cuenta_corriente")
+
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
+      "usar_cuenta_corriente",
+      expect.objectContaining({ p_cliente_id: "c1", p_monto: 40, p_sucursal_id: "suc-1" })
+    )
+  })
+
+  it("propaga sucursal_id NULL cuando la orden no tiene sucursal asignada", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    mockSupabaseFrom({
+      ordenes_servicio: createChainMock(ordenRow({ sucursal_id: null })),
+      cobros_orden: createChainMock({ id: "cob1" }),
+    })
+
+    await cobrosPOST(
+      createPostRequest({ pagos: [{ monto: 40, metodo: "EFECTIVO" }] }, "http://localhost/api/ordenes/o1/cobros"),
+      { params: Promise.resolve({ id: "o1" }) } as any
+    )
+
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
+      "pagar_fiado_cuenta_corriente",
+      expect.objectContaining({ p_sucursal_id: null })
+    )
   })
 })
 
@@ -104,7 +130,7 @@ describe("pagos venta — reconciliación de fiado", () => {
   it("acredita PAGO al pagar en efectivo una venta a fiado", async () => {
     mockAuthSuccess({ role: "ADMIN" })
     mockSupabaseFrom({
-      ventas: createChainMock({ id: "v1", total: "100", monto_abonado: "0", estado: "COMPLETADA", cliente_id: "c1", organization_id: "org-1" }),
+      ventas: createChainMock({ id: "v1", total: "100", monto_abonado: "0", estado: "COMPLETADA", cliente_id: "c1", organization_id: "org-1", sucursal_id: "suc-1" }),
       pagos_venta: createChainMock({ id: "p1", monto: 40, metodo_pago: "EFECTIVO" }),
     })
 
@@ -115,14 +141,17 @@ describe("pagos venta — reconciliación de fiado", () => {
 
     expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
       "pagar_fiado_cuenta_corriente",
-      expect.objectContaining({ p_cliente_id: "c1", p_monto: 40, p_referencia_tipo: "VENTA", p_referencia_id: "v1" })
+      expect.objectContaining({
+        p_cliente_id: "c1", p_monto: 40, p_referencia_tipo: "VENTA", p_referencia_id: "v1",
+        p_sucursal_id: "suc-1",
+      })
     )
   })
 
   it("con CUENTA_CORRIENTE usa usar, no pagar_fiado", async () => {
     mockAuthSuccess({ role: "ADMIN" })
     mockSupabaseFrom({
-      ventas: createChainMock({ id: "v1", total: "100", monto_abonado: "0", estado: "COMPLETADA", cliente_id: "c1", organization_id: "org-1" }),
+      ventas: createChainMock({ id: "v1", total: "100", monto_abonado: "0", estado: "COMPLETADA", cliente_id: "c1", organization_id: "org-1", sucursal_id: "suc-1" }),
       pagos_venta: createChainMock({ id: "p1" }),
     })
 
@@ -134,5 +163,28 @@ describe("pagos venta — reconciliación de fiado", () => {
     const calls = vi.mocked(supabaseAdmin.rpc).mock.calls.map((c) => c[0])
     expect(calls).toContain("usar_cuenta_corriente")
     expect(calls).not.toContain("pagar_fiado_cuenta_corriente")
+
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
+      "usar_cuenta_corriente",
+      expect.objectContaining({ p_cliente_id: "c1", p_monto: 40, p_sucursal_id: "suc-1" })
+    )
+  })
+
+  it("propaga sucursal_id NULL cuando la venta no tiene sucursal asignada", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    mockSupabaseFrom({
+      ventas: createChainMock({ id: "v1", total: "100", monto_abonado: "0", estado: "COMPLETADA", cliente_id: "c1", organization_id: "org-1", sucursal_id: null }),
+      pagos_venta: createChainMock({ id: "p1", monto: 40, metodo_pago: "EFECTIVO" }),
+    })
+
+    await ventaPagosPOST(
+      createPostRequest({ pagos: [{ monto: 40, metodo: "EFECTIVO" }] }, "http://localhost/api/ventas/v1/pagos"),
+      { params: Promise.resolve({ id: "v1" }) } as any
+    )
+
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
+      "pagar_fiado_cuenta_corriente",
+      expect.objectContaining({ p_sucursal_id: null })
+    )
   })
 })

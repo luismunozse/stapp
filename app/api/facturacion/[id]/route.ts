@@ -219,7 +219,7 @@ async function anularFacturaJsFallback(opts: {
     .from("facturas")
     .select(`
       id, numero_factura, estado_pago,
-      ordenes_servicio!inner(organization_id, cliente_id),
+      ordenes_servicio!inner(organization_id, cliente_id, sucursal_id),
       pagos_parciales(monto, metodo_pago)
     `)
     .eq("id", id)
@@ -239,6 +239,7 @@ async function anularFacturaJsFallback(opts: {
   }
 
   const clienteId = (factura.ordenes_servicio as any)?.cliente_id
+  const sucursalId = (factura.ordenes_servicio as any)?.sucursal_id ?? null
   const pagos: Array<{ monto: number; metodo_pago: string }> =
     (factura as any).pagos_parciales ?? []
 
@@ -253,6 +254,9 @@ async function anularFacturaJsFallback(opts: {
         p_referencia_id: id,
         p_usuario_id: userId,
         p_observaciones: `Anulacion factura ${(factura as any).numero_factura}`,
+        // Derived from the parent orden's sucursal_id, not the current
+        // operator's active cookie.
+        p_sucursal_id: sucursalId,
       })
       if (ccError) {
         console.error("[facturacion] Error re-crediting CC on anular:", ccError)
@@ -450,14 +454,15 @@ async function eliminarFacturaJsFallback(opts: {
     return NextResponse.json({ error: "Error al eliminar factura" }, { status: 500 })
   }
 
-  // Load cliente_id from orden
+  // Load cliente_id + sucursal_id from orden
   const { data: fullFactura } = await supabaseAdmin
     .from("facturas")
-    .select("ordenes_servicio!inner(cliente_id)")
+    .select("ordenes_servicio!inner(cliente_id, sucursal_id)")
     .eq("id", id)
     .single()
 
   const clienteId = (fullFactura?.ordenes_servicio as any)?.cliente_id
+  const sucursalId = (fullFactura?.ordenes_servicio as any)?.sucursal_id ?? null
 
   // Re-credit CC before deleting — abort on error
   for (const pago of (pagos ?? [])) {
@@ -470,6 +475,9 @@ async function eliminarFacturaJsFallback(opts: {
         p_referencia_id: id,
         p_usuario_id: userId,
         p_observaciones: `Eliminacion factura ${factura.numero_factura}`,
+        // Derived from the parent orden's sucursal_id, not the current
+        // operator's active cookie.
+        p_sucursal_id: sucursalId,
       })
       if (ccError) {
         console.error("[facturacion] Error re-crediting CC on delete:", ccError)

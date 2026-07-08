@@ -127,7 +127,7 @@ export async function POST(
     // Obtener orden
     const { data: orden, error: ordenError } = await supabaseAdmin
       .from("ordenes_servicio")
-      .select("id, costo_final, total_cobrado, estado_cobro, descuento_cobro, cliente_id, organization_id, estado")
+      .select("id, costo_final, total_cobrado, estado_cobro, descuento_cobro, cliente_id, organization_id, estado, sucursal_id")
       .eq("id", ordenId)
       .eq("organization_id", organizationId!)
       .single()
@@ -277,6 +277,9 @@ async function runJsFallback(opts: {
         p_referencia_tipo: "ORDEN",
         p_referencia_id: ordenId,
         p_usuario_id: userId,
+        // Derived from the orden's own sucursal_id (parent record), not the
+        // current operator's active cookie.
+        p_sucursal_id: orden.sucursal_id ?? null,
       })
       if (ccError) {
         return NextResponse.json({ error: ccError.message || "Error al usar cuenta corriente" }, { status: 400 })
@@ -324,6 +327,7 @@ async function runJsFallback(opts: {
         p_referencia_tipo: "ORDEN",
         p_referencia_id: ordenId,
         p_usuario_id: userId,
+        p_sucursal_id: orden.sucursal_id ?? null,
       })
       if (pagoFiadoError) {
         console.error("Error acreditando pago de fiado:", pagoFiadoError)
@@ -411,7 +415,7 @@ export async function DELETE(
     // Verificar que la orden no esté entregada
     const { data: ordenCheck } = await supabaseAdmin
       .from("ordenes_servicio")
-      .select("estado, cliente_id")
+      .select("estado, cliente_id, sucursal_id")
       .eq("id", ordenId)
       .eq("organization_id", organizationId!)
       .single()
@@ -518,6 +522,9 @@ async function runAnularJsFallback(opts: {
       p_referencia_id: ordenId,
       p_usuario_id: userId,
       p_observaciones: "Anulacion de cobro con cuenta corriente",
+      // Derived from the orden's own sucursal_id (parent record), not the
+      // current operator's active cookie.
+      p_sucursal_id: ordenCheck.sucursal_id ?? null,
     })
     if (devError) {
       console.error("[cobros fallback] devolver_cuenta_corriente failed, aborting anulado:", devError)

@@ -126,6 +126,9 @@ export async function POST(
           p_referencia_tipo: "ORDEN",
           p_referencia_id: id,
           p_usuario_id: userId!,
+          // Derived from the orden's own sucursal_id (parent record), not the
+          // current operator's active cookie.
+          p_sucursal_id: (orden as any).sucursal_id ?? null,
         })
         if (fiadoError) {
           // No abortar la entrega por un error de CC; registrar y seguir

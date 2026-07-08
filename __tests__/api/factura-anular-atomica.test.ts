@@ -58,6 +58,7 @@ function facturaWithOrden(over: Partial<any> = {}) {
     ordenes_servicio: {
       organization_id: "org-1",
       cliente_id: "c1",
+      sucursal_id: "suc-1",
     },
     ...over,
   }
@@ -324,6 +325,7 @@ describe("PUT /api/facturacion/[id] — JS fallback (anular_factura_atomica miss
     expect(devolverCalls[0][1]).toMatchObject({
       p_cliente_id: "c1",
       p_monto: 400,
+      p_sucursal_id: "suc-1",
     })
   })
 
@@ -442,6 +444,82 @@ describe("DELETE /api/facturacion/[id] — calls eliminar_factura_atomica", () =
     const { status } = await parseResponse(res)
 
     expect(status).toBe(403)
+  })
+
+  it("JS fallback (eliminar_factura_atomica missing): re-credits CC with sucursal_id from the parent orden", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+
+    vi.mocked(supabaseAdmin.rpc).mockImplementation(((fn: string) => {
+      if (fn === "eliminar_factura_atomica") {
+        return Promise.resolve({ data: null, error: ELIMINAR_FUNCTION_MISSING_ERROR })
+      }
+      // devolver_cuenta_corriente succeeds
+      return Promise.resolve({ data: { ok: true }, error: null })
+    }) as any)
+
+    const pagos = [{ monto: 400, metodo_pago: "CUENTA_CORRIENTE" }]
+
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "facturas") {
+        return createChainMock(facturaWithOrden({ numero_factura: 42 })) as any
+      }
+      if (table === "pagos_parciales") {
+        return createChainMock(pagos) as any
+      }
+      return createChainMock(null) as any
+    })
+
+    const res = await DELETE(createDeleteRequest(), params)
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(200)
+
+    const rpcCalls = vi.mocked(supabaseAdmin.rpc).mock.calls
+    const devolverCalls = rpcCalls.filter(([fn]) => fn === "devolver_cuenta_corriente")
+    expect(devolverCalls).toHaveLength(1)
+    expect(devolverCalls[0][1]).toMatchObject({
+      p_cliente_id: "c1",
+      p_monto: 400,
+      p_sucursal_id: "suc-1",
+    })
+  })
+
+  it("JS fallback: propaga sucursal_id NULL cuando la orden no tiene sucursal asignada", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+
+    vi.mocked(supabaseAdmin.rpc).mockImplementation(((fn: string) => {
+      if (fn === "eliminar_factura_atomica") {
+        return Promise.resolve({ data: null, error: ELIMINAR_FUNCTION_MISSING_ERROR })
+      }
+      return Promise.resolve({ data: { ok: true }, error: null })
+    }) as any)
+
+    const pagos = [{ monto: 400, metodo_pago: "CUENTA_CORRIENTE" }]
+
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "facturas") {
+        return createChainMock(
+          facturaWithOrden({
+            numero_factura: 42,
+            ordenes_servicio: { organization_id: "org-1", cliente_id: "c1", sucursal_id: null },
+          })
+        ) as any
+      }
+      if (table === "pagos_parciales") {
+        return createChainMock(pagos) as any
+      }
+      return createChainMock(null) as any
+    })
+
+    const res = await DELETE(createDeleteRequest(), params)
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(200)
+
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
+      "devolver_cuenta_corriente",
+      expect.objectContaining({ p_sucursal_id: null })
+    )
   })
 })
 
