@@ -7,12 +7,15 @@
  *   - branch-scoped operator (TECNICO/VENDEDOR) → RPC called with p_sucursal_id = their branch
  *   - ADMIN verTodas (no cookie / cookie "todas") → RPC called with p_sucursal_id = null
  *   - response shape { deudaTotal, deudaFiado, deudaOrdenes }
+ *   - fail-closed: non-admin operator with sucursalId null → RPC called with the
+ *     SUCURSAL_NINGUNA sentinel, never with raw null (which would mean "all branches")
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { auth } from "@/lib/auth"
 import { cookies } from "next/headers"
 import { supabaseAdmin } from "@/lib/supabase"
 import { mockAuthError, createChainMock, createGetRequest, parseResponse } from "./helpers"
+import { SUCURSAL_NINGUNA } from "@/lib/sucursal"
 
 import { GET } from "@/app/api/clientes/[id]/deuda-sucursal/route"
 
@@ -103,6 +106,28 @@ describe("GET /api/clientes/[id]/deuda-sucursal", () => {
       p_cliente_id: "cliente-1",
       p_sucursal_id: "suc-A",
     })
+  })
+
+  it("FC-1 — TECNICO/VENDEDOR with sucursalId null: RPC MUST be called with SUCURSAL_NINGUNA (not raw null)", async () => {
+    mockAuthWithSucursal({ role: "VENDEDOR", sucursalId: null })
+    mockCookie(null)
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "clientes") return createChainMock({ id: "cliente-1" }) as any
+      return createChainMock(null) as any
+    })
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
+      data: [{ deuda_fiado: 0, deuda_ordenes: 0, deuda_total: 0 }],
+      error: null,
+    } as any)
+
+    const response = await callRoute()
+    const { status } = await parseResponse(response)
+
+    expect(status).toBe(200)
+    const rpcArgs = vi.mocked(supabaseAdmin.rpc).mock.calls[0]
+    // Before the fix, a falsy-but-not-null guard could pass `null` straight through,
+    // which the RPC interprets as "sum across all branches" — a cross-org/branch leak.
+    expect(rpcArgs[1]).toMatchObject({ p_sucursal_id: SUCURSAL_NINGUNA })
   })
 
   it("ADMIN verTodas (no cookie) → RPC called with p_sucursal_id: null", async () => {

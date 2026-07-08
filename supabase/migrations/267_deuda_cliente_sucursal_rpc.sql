@@ -61,6 +61,16 @@
 -- anular_factura_atomica, eliminar_factura_atomica, restore_stock_on_cancel
 -- trigger) — a materially larger, separate change that does not fit this slice's
 -- PR1 scope. Flagged as a CRITICAL follow-up in the apply-progress report.
+--
+-- ------------------------------------------------------------------------------
+-- Product rule (confirmed by owner) — STRICT per-sucursal, no cross-branch netting
+-- ------------------------------------------------------------------------------
+-- Fiado debt is tracked PER-SUCURSAL and branches never net against each other:
+-- a PAGO recorded at branch B does NOT cancel/reduce debt accrued at branch A,
+-- even if the client's global (cross-branch) balance nets out to zero. Each
+-- branch's operator only ever sees/collects the debt attributable to their own
+-- branch. This is why this RPC filters by p_sucursal_id instead of falling back
+-- to clientes.saldo_cuenta (a global, cross-branch aggregate).
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION get_deuda_cliente_sucursal(
@@ -76,6 +86,7 @@ RETURNS TABLE (
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
+SET search_path = public
 AS $$
   SELECT
     fiado.monto              AS deuda_fiado,
@@ -102,6 +113,19 @@ AS $$
       AND (p_sucursal_id IS NULL OR o.sucursal_id = p_sucursal_id)
   ) ordenes;
 $$;
+
+-- ============================================================
+-- RPC sensible — REVOKE de PUBLIC/anon/authenticated
+-- ============================================================
+-- Solo se invoca desde app/api/clientes/[id]/deuda-sucursal/route.ts vía
+-- supabaseAdmin (service_role). Sin este REVOKE, cualquier anon/authenticated
+-- key podría invocarla directo por PostgREST y leer la deuda de cualquier
+-- cliente de cualquier organización (SECURITY DEFINER corre con privilegios
+-- del owner, ignora RLS).
+REVOKE EXECUTE ON FUNCTION get_deuda_cliente_sucursal(TEXT, TEXT, TEXT) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION get_deuda_cliente_sucursal(TEXT, TEXT, TEXT) FROM anon;
+REVOKE EXECUTE ON FUNCTION get_deuda_cliente_sucursal(TEXT, TEXT, TEXT) FROM authenticated;
+GRANT EXECUTE ON FUNCTION get_deuda_cliente_sucursal(TEXT, TEXT, TEXT) TO service_role;
 
 COMMENT ON FUNCTION get_deuda_cliente_sucursal(TEXT, TEXT, TEXT) IS
   'Per-branch combined debt (fiado + unpaid ordenes) for one cliente. '
