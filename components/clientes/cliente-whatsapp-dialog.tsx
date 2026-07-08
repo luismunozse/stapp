@@ -26,30 +26,47 @@ interface ClienteWhatsAppDialogProps {
   onOpenChange: (open: boolean) => void
 }
 
+interface DeudaSucursal {
+  deudaTotal: number
+  deudaFiado: number
+  deudaOrdenes: number
+}
+
 export function ClienteWhatsAppDialog({
   cliente,
   organizationName,
   open,
   onOpenChange,
 }: ClienteWhatsAppDialogProps) {
-  const { pais } = useCurrency()
+  const { pais, currency } = useCurrency()
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
   const [customMessage, setCustomMessage] = useState("")
   const [copied, setCopied] = useState(false)
   const [plantillasOverride, setPlantillasOverride] = useState<Record<string, string> | null>(null)
   const [loadingPlantillas, setLoadingPlantillas] = useState(true)
   const [customMessageEdited, setCustomMessageEdited] = useState(false)
+  const [deuda, setDeuda] = useState<DeudaSucursal | null>(null)
 
   // Contexto sin orden para mostrar plantillas genéricas
   const context: NotificationContext = {
     organizationId: "",
     organizationName,
+    moneda: currency,
     cliente: {
       id: cliente.id,
       nombre: cliente.nombre,
       email: cliente.email,
       telefono: cliente.telefono,
     },
+    ...(deuda && deuda.deudaTotal > 0
+      ? {
+          pago: {
+            monto: deuda.deudaTotal,
+            saldoPendiente: deuda.deudaTotal,
+            desglose: { fiado: deuda.deudaFiado, ordenes: deuda.deudaOrdenes },
+          },
+        }
+      : {}),
   }
 
   useEffect(() => {
@@ -70,6 +87,29 @@ export function ClienteWhatsAppDialog({
       cancelled = true
     }
   }, [open])
+
+  // Deuda combinada (cuenta corriente + ordenes) de la sucursal activa, para
+  // habilitar el recordatorio de pago. Si el fetch falla, el dialog sigue
+  // funcionando sin esa plantilla (degrada, no rompe).
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    setDeuda(null)
+    fetch(`/api/clientes/${cliente.id}/deuda-sucursal`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return
+        setDeuda({
+          deudaTotal: data.deudaTotal ?? 0,
+          deudaFiado: data.deudaFiado ?? 0,
+          deudaOrdenes: data.deudaOrdenes ?? 0,
+        })
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [open, cliente.id])
 
   const templates = getWhatsAppTemplates(context, plantillasOverride)
 

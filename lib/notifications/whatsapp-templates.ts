@@ -76,6 +76,9 @@ function buildVarsFromContext(ctx: NotificationContext): Record<string, string |
     vars.monto_pago = ctx.pago.monto ? formatCurrency(ctx.pago.monto) : ""
     vars.saldo = ctx.pago.saldoPendiente ? formatCurrency(ctx.pago.saldoPendiente) : "Al día"
     vars.link_pago = ctx.pago.linkPago || ""
+    vars.saldo_fiado = ctx.pago.desglose ? formatCurrency(ctx.pago.desglose.fiado) : ""
+    vars.saldo_ordenes = ctx.pago.desglose ? formatCurrency(ctx.pago.desglose.ordenes) : ""
+    vars.linea_desglose_pago = ctx.pago.desglose ? buildDesgloseLines(ctx.pago.desglose, formatCurrency) : ""
   }
 
   if (ctx.repuesto) {
@@ -106,6 +109,20 @@ function buildVarsFromContext(ctx: NotificationContext): Record<string, string |
   }
 
   return vars
+}
+
+/**
+ * Arma las lineas de desglose de deuda (cuenta corriente + ordenes) para el
+ * recordatorio de pago. Solo incluye el componente que sea > 0.
+ */
+function buildDesgloseLines(
+  desglose: { fiado: number; ordenes: number },
+  formatCurrency: (amount: number) => string,
+): string {
+  const lines: string[] = []
+  if (desglose.fiado > 0) lines.push(`Cuenta corriente: ${formatCurrency(desglose.fiado)}`)
+  if (desglose.ordenes > 0) lines.push(`Órdenes pendientes: ${formatCurrency(desglose.ordenes)}`)
+  return lines.length ? `\n${lines.join("\n")}` : ""
 }
 
 /**
@@ -645,6 +662,10 @@ function generateRecordatorioPagoMessage(ctx: NotificationContext): string {
 
   const saldo = ctx.pago?.saldoPendiente || 0
   let mensaje = `Hola ${ctx.cliente.nombre}, le recordamos que tiene un saldo pendiente de *${formatCurrency(saldo)}*.`
+
+  if (ctx.pago?.desglose) {
+    mensaje += buildDesgloseLines(ctx.pago.desglose, formatCurrency)
+  }
 
   if (ctx.orden) {
     mensaje += `\n\nOrden #${ctx.orden.numeroOrden} - ${ctx.orden.dispositivo}`
