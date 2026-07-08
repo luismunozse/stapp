@@ -6,7 +6,7 @@
 -- Gap (discovered while shipping recordatorios-cobro-whatsapp / PR 1.5):
 -- mig 268 added p_sucursal_id TEXT DEFAULT NULL to the 4 fiado writers, and
 -- PR 1.5 updated the ~10 app-layer TypeScript callers to pass it. However,
--- these same 4 writers are ALSO called from INSIDE 8 atomic SQL RPCs, which
+-- these same 4 writers are ALSO called from INSIDE 9 atomic SQL RPCs, which
 -- are the code that actually runs in production once each RPC migration is
 -- applied (the JS fallback paths only fire if Postgres reports the RPC as
 -- missing). None of those internal calls passed p_sucursal_id, so every
@@ -16,11 +16,11 @@
 -- anular_factura_atomica, eliminar_factura_atomica, registrar_devolucion_atomica,
 -- and crear_nota_credito still landed with cuenta_corriente.sucursal_id = NULL.
 --
--- Fix: CREATE OR REPLACE each of the 8 atomic RPCs, changing ONLY the
+-- Fix: CREATE OR REPLACE each of the 9 atomic RPCs, changing ONLY the
 -- fiado-writer call arguments to pass sucursal_id sourced from the parent
 -- row each function already holds (ventas.sucursal_id / ordenes_servicio.
 -- sucursal_id, or a derived variable where the parent row isn't already
--- SELECTed in full). No signature changes to any of the 8 RPCs. No other
+-- SELECTed in full). No signature changes to any of the 9 RPCs. No other
 -- behavioral edits — every function body below is otherwise verbatim from
 -- its latest prior CREATE OR REPLACE definition (cited per function).
 --
