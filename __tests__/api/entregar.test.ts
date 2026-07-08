@@ -231,7 +231,7 @@ describe("POST /api/ordenes/[id]/entregar", () => {
 
     const mockOrden = {
       id: "o1", estado: "REPARADO", numero_orden: 7, tecnico_id: "t1",
-      cliente_id: "c1",
+      cliente_id: "c1", sucursal_id: "suc-1",
       clientes: { id: "c1", nombre: "Juan", email: null, telefono: "123" },
     }
     const mockUpdated = {
@@ -261,7 +261,45 @@ describe("POST /api/ordenes/[id]/entregar", () => {
       "cargar_deuda_cuenta_corriente",
       expect.objectContaining({
         p_cliente_id: "c1", p_monto: 70, p_referencia_tipo: "ORDEN", p_referencia_id: "o1",
+        p_sucursal_id: "suc-1",
       })
+    )
+  })
+
+  it("propaga sucursal_id NULL cuando la orden no tiene sucursal asignada", async () => {
+    mockAuthSuccess({ userId: "user-1" })
+
+    const mockOrden = {
+      id: "o1", estado: "REPARADO", numero_orden: 9, tecnico_id: "t1",
+      cliente_id: "c1", sucursal_id: null,
+      clientes: { id: "c1", nombre: "Juan", email: null, telefono: "123" },
+    }
+    const mockUpdated = {
+      id: "o1", numero_orden: 9, codigo_orden: "CEL-009", estado: "ENTREGADO",
+      fecha_entrega: new Date().toISOString(), notas_entrega: null,
+      costo_final: "100", descuento_cobro: "0", total_cobrado: "30",
+      users: { id: "user-1", nombre: "Admin" },
+      clientes: mockOrden.clientes,
+    }
+
+    let callCount = 0
+    const chain = createChainMock(null)
+    chain.single = vi.fn().mockImplementation(() => {
+      callCount++
+      if (callCount === 1) return Promise.resolve({ data: mockOrden, error: null })
+      if (callCount === 2) return Promise.resolve({ data: mockUpdated, error: null })
+      return Promise.resolve({ data: { nombre: "Mi Taller" }, error: null })
+    })
+    mockSupabaseFrom({
+      ordenes_servicio: chain,
+      organizations: createChainMock({ nombre: "Mi Taller", moneda: "ARS", zona_horaria: "America/Argentina/Buenos_Aires" }),
+    })
+
+    await POST(createPostRequest({ notasEntrega: null }), createParams("o1"))
+
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith(
+      "cargar_deuda_cuenta_corriente",
+      expect.objectContaining({ p_sucursal_id: null })
     )
   })
 

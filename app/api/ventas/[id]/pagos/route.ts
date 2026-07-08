@@ -289,6 +289,10 @@ async function runJsFallback(opts: {
           p_referencia_tipo: "VENTA",
           p_referencia_id: ventaId,
           p_usuario_id: userId,
+          // Derived from the venta's own sucursal_id (single source of truth for
+          // where this transaction happened), not the current operator's active
+          // cookie — mirrors crear_nota_credito's "derive from parent" pattern.
+          p_sucursal_id: venta.sucursal_id ?? null,
         })
         if (ccError) {
           // CC error: early return — success stays false → finally deletes poison row
@@ -338,6 +342,7 @@ async function runJsFallback(opts: {
           p_referencia_tipo: "VENTA",
           p_referencia_id: ventaId,
           p_usuario_id: userId,
+          p_sucursal_id: venta.sucursal_id ?? null,
         })
         if (pagoFiadoError) {
           console.error("Error acreditando pago de fiado (venta):", pagoFiadoError)

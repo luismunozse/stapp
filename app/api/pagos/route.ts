@@ -109,7 +109,7 @@ export async function POST(request: Request) {
     // Obtener factura actual y verificar org
     const { data: factura, error: fetchError } = await supabaseAdmin
       .from("facturas")
-      .select(`*, ordenes_servicio!inner(organization_id, cliente_id)`)
+      .select(`*, ordenes_servicio!inner(organization_id, cliente_id, sucursal_id)`)
       .eq("id", data.facturaId)
       .single()
 
@@ -236,6 +236,9 @@ async function runJsFallback(opts: {
         p_referencia_tipo: "FACTURA",
         p_referencia_id: data.facturaId,
         p_usuario_id: userId,
+        // Derived from the parent orden's sucursal_id, not the current
+        // operator's active cookie.
+        p_sucursal_id: (factura.ordenes_servicio as any)?.sucursal_id ?? null,
       })
       if (ccError) {
         return NextResponse.json(
