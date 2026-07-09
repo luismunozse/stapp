@@ -46,6 +46,7 @@ export function ClienteWhatsAppDialog({
   const [loadingPlantillas, setLoadingPlantillas] = useState(true)
   const [customMessageEdited, setCustomMessageEdited] = useState(false)
   const [deuda, setDeuda] = useState<DeudaSucursal | null>(null)
+  const [loadingDeuda, setLoadingDeuda] = useState(true)
 
   // Contexto sin orden para mostrar plantillas genéricas
   const context: NotificationContext = {
@@ -95,6 +96,7 @@ export function ClienteWhatsAppDialog({
     if (!open) return
     let cancelled = false
     setDeuda(null)
+    setLoadingDeuda(true)
     fetch(`/api/clientes/${cliente.id}/deuda-sucursal`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
@@ -106,6 +108,9 @@ export function ClienteWhatsAppDialog({
         })
       })
       .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoadingDeuda(false)
+      })
     return () => {
       cancelled = true
     }
@@ -125,13 +130,13 @@ export function ClienteWhatsAppDialog({
   // Auto-seleccionar primera plantilla cuando el dialog está abierto
   // y las plantillas (con override aplicado) ya están listas.
   useEffect(() => {
-    if (open && !loadingPlantillas && !selectedTemplate && templates.length > 0) {
+    if (open && !loadingPlantillas && !loadingDeuda && !selectedTemplate && templates.length > 0) {
       const first = templates[0]
       setSelectedTemplate(first.id)
       setCustomMessage(first.mensaje)
       setCustomMessageEdited(false)
     }
-  }, [open, loadingPlantillas, plantillasOverride, selectedTemplate, templates])
+  }, [open, loadingPlantillas, loadingDeuda, plantillasOverride, selectedTemplate, templates])
 
   // Si el override llega después de seleccionar, reaplicar si el usuario
   // no editó el textarea manualmente.

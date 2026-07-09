@@ -174,7 +174,7 @@ function VariableChip({
       <TooltipContent side="top" className="text-xs">
         <div className="font-medium">{variable.label}</div>
         {variable.example && (
-          <div className="text-muted-foreground mt-0.5">Ejemplo: {variable.example}</div>
+          <div className="text-muted-foreground mt-0.5 whitespace-pre-line">Ejemplo: {variable.example}</div>
         )}
       </TooltipContent>
     </Tooltip>

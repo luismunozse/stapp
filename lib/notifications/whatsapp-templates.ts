@@ -65,6 +65,7 @@ function buildVarsFromContext(ctx: NotificationContext): Record<string, string |
     vars.presupuesto = ctx.orden.presupuesto ? formatCurrency(ctx.orden.presupuesto) : ""
     vars.link_seguimiento = links?.trackingUrl || ""
     vars.link_pdf = links?.pdfUrl || ""
+    vars.linea_orden = `\n\nOrden #${ctx.orden.numeroOrden}`
   }
 
   if (ctx.garantia) {
@@ -76,8 +77,8 @@ function buildVarsFromContext(ctx: NotificationContext): Record<string, string |
     vars.monto_pago = ctx.pago.monto ? formatCurrency(ctx.pago.monto) : ""
     vars.saldo = ctx.pago.saldoPendiente ? formatCurrency(ctx.pago.saldoPendiente) : "Al día"
     vars.link_pago = ctx.pago.linkPago || ""
-    vars.saldo_fiado = ctx.pago.desglose ? formatCurrency(ctx.pago.desglose.fiado) : ""
-    vars.saldo_ordenes = ctx.pago.desglose ? formatCurrency(ctx.pago.desglose.ordenes) : ""
+    vars.saldo_fiado = ctx.pago.desglose && ctx.pago.desglose.fiado > 0 ? formatCurrency(ctx.pago.desglose.fiado) : ""
+    vars.saldo_ordenes = ctx.pago.desglose && ctx.pago.desglose.ordenes > 0 ? formatCurrency(ctx.pago.desglose.ordenes) : ""
     vars.linea_desglose_pago = ctx.pago.desglose ? buildDesgloseLines(ctx.pago.desglose, formatCurrency) : ""
   }
 
@@ -259,11 +260,17 @@ export function getWhatsAppTemplates(
       })
     }
 
-    templates.push({
-      id: "confirmacion_pago",
-      nombre: "Confirmacion de pago",
-      mensaje: ov("confirmacion_pago", generateConfirmacionPagoMessage(ctx)),
-    })
+    // Solo se ofrece cuando hay una señal explícita de pago recibido
+    // (fechaPago o metodoPago). ctx.pago también se popula con saldo
+    // pendiente sin pago (ver orden-detail.tsx / cliente-whatsapp-dialog.tsx),
+    // y en ese caso no corresponde ofrecer "confirmamos la recepción de su pago".
+    if (ctx.pago.fechaPago || ctx.pago.metodoPago) {
+      templates.push({
+        id: "confirmacion_pago",
+        nombre: "Confirmacion de pago",
+        mensaje: ov("confirmacion_pago", generateConfirmacionPagoMessage(ctx)),
+      })
+    }
 
     if (ctx.pago.linkPago) {
       templates.push({
@@ -656,6 +663,10 @@ Si desea traer su equipo para una revision sin cargo, estamos a su disposicion.
 ${ctx.organizationName}`
 }
 
+// NOTE: unreachable in practice while "cobranza_recordatorio_pago" has a
+// non-empty defaultText in the catalog — applyOverride resolves the catalog
+// default before falling back to this generator (see applyOverride priority).
+// Kept as the last-resort fallback for legacyIds without a catalog entry.
 function generateRecordatorioPagoMessage(ctx: NotificationContext): string {
   const formatCurrency = (amount: number) =>
     formatCurrencyValue(amount, (ctx.moneda as CurrencyCode) || DEFAULT_CURRENCY)
