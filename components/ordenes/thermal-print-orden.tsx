@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog"
 import { Receipt, Loader2, Usb, Printer, Eye } from "lucide-react"
 import { useThermalPrinter } from "@/components/pos/use-thermal-printer"
+import { useTerminologia } from "@/contexts/currency-context"
 import { generateOrdenTicketCommands, type OrdenTicketData } from "@/lib/escpos"
 import { imageUrlToRaster, imageUrlToBinarizedDataUrl } from "@/lib/escpos-image"
 import { ESTADO_LABELS } from "@/lib/orden-state-machine"
@@ -40,6 +41,7 @@ interface PreviewData {
   clienteNombre: string
   clienteTelefono: string | null
   dispositivo: string
+  tipo: string | null
   marca: string | null
   color: string | null
   imei: string | null
@@ -85,6 +87,7 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
       clienteNombre: orden.cliente?.nombre || "",
       clienteTelefono: orden.telefonoContacto || orden.cliente?.telefono || null,
       dispositivo: orden.dispositivo,
+      tipo: orden.tipoDispositivo || null,
       marca: orden.marca ?? null,
       color: orden.color ?? null,
       imei: orden.imei ?? null,
@@ -112,6 +115,7 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
       estado: preview.estado,
       cliente: { nombre: preview.clienteNombre, telefono: preview.clienteTelefono },
       dispositivo: preview.dispositivo,
+      tipo: preview.tipo,
       marca: preview.marca,
       color: preview.color,
       imei: preview.imei,
@@ -229,6 +233,17 @@ ${styles}
     const triggerPrint = async () => {
       try {
         await waitForImages()
+        try { await doc.fonts.ready } catch { /* measurement falls back to current metrics */ }
+        // Match the page height to the rendered content so drivers with a
+        // fixed paper length (e.g. 80x297mm) cut right after the receipt
+        // instead of feeding a full blank page.
+        const area = doc.getElementById("thermal-receipt-print-area")
+        if (area && area.offsetHeight > 0) {
+          const heightMm = Math.ceil((area.offsetHeight * 25.4) / 96) + 2
+          const pageStyle = doc.createElement("style")
+          pageStyle.textContent = `@page { size: 80mm ${heightMm}mm; margin: 0; }`
+          doc.head.appendChild(pageStyle)
+        }
         iframe.contentWindow?.focus()
         iframe.contentWindow?.print()
       } finally {
@@ -321,6 +336,7 @@ function Row({ left, right }: { left: string; right: string }) {
 }
 
 function ReceiptPreview({ data }: { data: PreviewData }) {
+  const term = useTerminologia()
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
 
   useEffect(() => {
@@ -355,7 +371,7 @@ function ReceiptPreview({ data }: { data: PreviewData }) {
 
       <Sep char="=" />
 
-      <div className="text-center font-bold text-base">ORDEN DE SERVICIO</div>
+      <div className="text-center font-bold text-base">{term("orden").toUpperCase()}</div>
       <div className="font-bold">{data.ordenCode}</div>
       <div>{data.fechaIngreso}</div>
       <Row left="Estado:" right={data.estado} />
@@ -368,11 +384,12 @@ function ReceiptPreview({ data }: { data: PreviewData }) {
 
       <Sep />
 
-      <div className="font-bold">DISPOSITIVO</div>
-      <div>{data.dispositivo}</div>
-      {data.marca && <Row left="Marca:" right={data.marca} />}
+      <div className="font-bold">{term("equipo").toUpperCase()}</div>
+      {data.tipo && <Row left="Tipo:" right={data.tipo} />}
+      {data.marca && <Row left={`${term("marca")}:`} right={data.marca} />}
+      <Row left={`${term("modelo")}:`} right={data.dispositivo} />
       {data.color && <Row left="Color:" right={data.color} />}
-      {data.imei && <Row left="IMEI:" right={data.imei} />}
+      {data.imei && <Row left={`${term("serie")}:`} right={data.imei} />}
       {data.accesorios && (
         <>
           <div>Accesorios:</div>

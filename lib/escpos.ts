@@ -166,6 +166,7 @@ export interface OrdenTicketData {
   estado: string
   cliente: { nombre: string; telefono?: string | null }
   dispositivo: string
+  tipo?: string | null
   marca?: string | null
   color?: string | null
   imei?: string | null
@@ -237,10 +238,20 @@ export function generateOrdenTicketCommands(
   add(CMD.BOLD_ON)
   add(line(t(term, "equipo").toUpperCase()))
   add(CMD.BOLD_OFF)
-  add(line(data.dispositivo.substring(0, W)))
-  if (data.marca) add(columns("Marca:", data.marca.substring(0, W - 8), W))
-  if (data.color) add(columns("Color:", data.color.substring(0, W - 8), W))
-  if (data.imei) add(columns(t(term, "serie") + ":", data.imei.substring(0, W - 7), W))
+  // Custom terminologia labels have no length cap: when the label leaves no
+  // reasonable room for the value, print it on its own line instead.
+  const field = (label: string, value: string): number[] => {
+    const room = W - label.length - 1
+    if (room >= 8) return columns(label, value.substring(0, room), W)
+    const out = line(label.substring(0, W))
+    for (const l of wrapText(value, W - 1)) out.push(...line(" " + l))
+    return out
+  }
+  if (data.tipo) add(field("Tipo:", data.tipo))
+  if (data.marca) add(field(t(term, "marca") + ":", data.marca))
+  add(field(t(term, "modelo") + ":", data.dispositivo))
+  if (data.color) add(field("Color:", data.color))
+  if (data.imei) add(field(t(term, "serie") + ":", data.imei))
   if (data.accesorios) {
     add(line("Accesorios:"))
     for (const l of wrapText(data.accesorios, W)) add(line(" " + l))
