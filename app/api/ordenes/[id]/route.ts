@@ -311,12 +311,17 @@ export async function PUT(
     // Registrar evento en orden_eventos para timeline público (fire-and-forget)
     const estadoFinal = updateData.estado
     if (estadoFinal && estadoFinal !== orden.estado) {
+      // PRESUPUESTADO -> APROBADO se marca con el mismo tipo que usan las
+      // vías de aprobación de cotización (portal + firma presencial), para
+      // que el timeline lo muestre de forma consistente sin importar por
+      // dónde se aprobó. El resto de las transiciones siguen siendo genéricas.
+      const esAprobacionManual = orden.estado === "PRESUPUESTADO" && estadoFinal === "APROBADO"
       void (async () => {
         try {
           await supabaseAdmin.from("orden_eventos").insert({
             orden_id: id,
             organization_id: organizationId!,
-            tipo: "CAMBIO_ESTADO",
+            tipo: esAprobacionManual ? "PRESUPUESTO_APROBADO" : "CAMBIO_ESTADO",
             estado_anterior: orden.estado,
             estado_nuevo: estadoFinal,
             descripcion: `Estado cambiado de ${orden.estado} a ${estadoFinal}`,

@@ -446,3 +446,79 @@ describe("PUT /api/ordenes/[id] - Dedup notificaciones al presupuestar", () => {
     expect(tipos).not.toContain("CAMBIO_ESTADO")
   })
 })
+
+describe("PUT /api/ordenes/[id] - Evento de aprobación manual de presupuesto", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it("emite PRESUPUESTO_APROBADO (no CAMBIO_ESTADO genérico) al pasar de PRESUPUESTADO a APROBADO", async () => {
+    mockAuthSuccess()
+
+    const mockOrden = createMockOrden({ estado: "PRESUPUESTADO", presupuesto: 5000 })
+    const mockUpdated = { ...mockOrden, estado: "APROBADO" }
+
+    let callCount = 0
+    const chain = createChainMock(null)
+    chain.single = vi.fn().mockImplementation(() => {
+      callCount++
+      if (callCount === 1) return Promise.resolve({ data: mockOrden, error: null })
+      return Promise.resolve({ data: mockUpdated, error: null })
+    })
+
+    const eventosChain = createChainMock(null)
+    mockSupabaseFrom({
+      ordenes_servicio: chain,
+      orden_eventos: eventosChain,
+    })
+
+    const response = await PUT(
+      createPutRequest({ estado: "APROBADO" }),
+      createParams("o1")
+    )
+    const { status } = await parseResponse(response)
+
+    expect(status).toBe(200)
+
+    const insertCall = eventosChain.insert.mock.calls.find(
+      (call: any[]) => call[0]?.estado_nuevo === "APROBADO"
+    )
+    expect(insertCall).toBeDefined()
+    expect(insertCall![0].tipo).toBe("PRESUPUESTO_APROBADO")
+  })
+
+  it("mantiene CAMBIO_ESTADO genérico para transiciones que no son aprobación de presupuesto", async () => {
+    mockAuthSuccess()
+
+    const mockOrden = createMockOrden({ estado: "RECIBIDO" })
+    const mockUpdated = { ...mockOrden, estado: "EN_DIAGNOSTICO" }
+
+    let callCount = 0
+    const chain = createChainMock(null)
+    chain.single = vi.fn().mockImplementation(() => {
+      callCount++
+      if (callCount === 1) return Promise.resolve({ data: mockOrden, error: null })
+      return Promise.resolve({ data: mockUpdated, error: null })
+    })
+
+    const eventosChain = createChainMock(null)
+    mockSupabaseFrom({
+      ordenes_servicio: chain,
+      orden_eventos: eventosChain,
+    })
+
+    const response = await PUT(
+      createPutRequest({ estado: "EN_DIAGNOSTICO" }),
+      createParams("o1")
+    )
+    const { status } = await parseResponse(response)
+
+    expect(status).toBe(200)
+
+    const insertCall = eventosChain.insert.mock.calls.find(
+      (call: any[]) => call[0]?.estado_nuevo === "EN_DIAGNOSTICO"
+    )
+    expect(insertCall).toBeDefined()
+    expect(insertCall![0].tipo).toBe("CAMBIO_ESTADO")
+  })
+})
