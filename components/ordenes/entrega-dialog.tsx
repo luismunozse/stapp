@@ -14,15 +14,29 @@ import { Label } from "@/components/ui/label"
 import { SignaturePad } from "@/components/firma/signature-pad"
 import { Input } from "@/components/ui/input"
 import { Loader2, PackageCheck, PackageX, AlertTriangle, Shield, HandCoins } from "lucide-react"
-import { defaultMotivoSinCobro, type MotivoSinCobro } from "@/lib/seguimiento-state"
+import {
+  defaultMotivoSinCobro,
+  MOTIVOS_SIN_COBRO,
+  MOTIVO_SIN_COBRO_LABELS,
+  type MotivoSinCobro,
+} from "@/lib/seguimiento-state"
 
-const MOTIVO_OPTIONS: Array<{ value: MotivoSinCobro; label: string; hint: string }> = [
-  { value: "NO_REPARABLE", label: "No reparable", hint: "El equipo no se pudo reparar." },
-  { value: "CORTESIA", label: "Cortesía del taller", hint: "Reparado pero decidimos no cobrar." },
-  { value: "GARANTIA", label: "Garantía vigente", hint: "Reingreso bajo garantía, sin cargo." },
-  { value: "CLIENTE_DESISTIO", label: "Cliente desistió", hint: "Cliente aprobó y luego se arrepintió." },
-  { value: "OTRO", label: "Otro motivo", hint: "" },
-]
+// Hints propios de este diálogo; los labels vienen del mapa compartido para
+// no divergir del texto usado en el timeline de eventos y el detalle de orden.
+const MOTIVO_HINTS: Record<MotivoSinCobro, string> = {
+  NO_REPARABLE: "El equipo no se pudo reparar.",
+  CORTESIA: "Reparado pero decidimos no cobrar.",
+  GARANTIA: "Reingreso bajo garantía, sin cargo.",
+  CLIENTE_DESISTIO: "Cliente aprobó y luego se arrepintió.",
+  OTRO: "",
+}
+
+const MOTIVO_OPTIONS: Array<{ value: MotivoSinCobro; label: string; hint: string }> =
+  MOTIVOS_SIN_COBRO.map((value) => ({
+    value,
+    label: MOTIVO_SIN_COBRO_LABELS[value],
+    hint: MOTIVO_HINTS[value],
+  }))
 
 interface EntregaDialogProps {
   open: boolean

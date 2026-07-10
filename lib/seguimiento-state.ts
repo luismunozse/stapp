@@ -168,6 +168,19 @@ export const MOTIVOS_SIN_COBRO = [
 
 export type MotivoSinCobro = (typeof MOTIVOS_SIN_COBRO)[number]
 
+/**
+ * Labels cortos para uso interno (select de EntregaDialog, timeline de
+ * eventos, detalle de orden). No confundir con `getRetiroLabel`, que arma
+ * title/description para el seguimiento público del cliente.
+ */
+export const MOTIVO_SIN_COBRO_LABELS: Record<MotivoSinCobro, string> = {
+  NO_REPARABLE: "No reparable",
+  CORTESIA: "Cortesía del taller",
+  GARANTIA: "Garantía vigente",
+  CLIENTE_DESISTIO: "Cliente desistió",
+  OTRO: "Otro motivo",
+}
+
 export type RetiroStep = {
   key: string
   label: string
