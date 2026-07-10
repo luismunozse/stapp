@@ -72,7 +72,8 @@ async function revertirOrdenSinPresupuestoActivo(
   ordenId: string,
   organizationId: string,
   estadoAnterior: string,
-  descripcion: string
+  descripcion: string,
+  userId?: string | null
 ) {
   await supabaseAdmin
     .from("ordenes_servicio")
@@ -97,6 +98,7 @@ async function revertirOrdenSinPresupuestoActivo(
         estado_anterior: estadoAnterior,
         estado_nuevo: "EN_DIAGNOSTICO",
         descripcion,
+        ...(userId ? { created_by: userId } : {}),
       })
     } catch (err) {
       console.error("Error inserting orden_evento:", err)
@@ -104,7 +106,7 @@ async function revertirOrdenSinPresupuestoActivo(
   })()
 }
 
-async function recalcPresupuestoOrden(ordenId: string, organizationId: string) {
+async function recalcPresupuestoOrden(ordenId: string, organizationId: string, userId?: string | null) {
   const { data: allCots } = await supabaseAdmin
     .from("cotizaciones")
     .select("total")
@@ -129,7 +131,8 @@ async function recalcPresupuestoOrden(ordenId: string, organizationId: string) {
         ordenId,
         organizationId,
         orden.estado,
-        "Cotización desvinculada o eliminada: se removió el último presupuesto activo de la orden"
+        "Cotización desvinculada o eliminada: se removió el último presupuesto activo de la orden",
+        userId
       )
     } else {
       await supabaseAdmin
@@ -454,7 +457,7 @@ export async function PUT(
       if (efectiva) ordenesARecalcular.add(efectiva)
     }
     for (const oid of ordenesARecalcular) {
-      await recalcPresupuestoOrden(oid, organizationId!)
+      await recalcPresupuestoOrden(oid, organizationId!, userId)
     }
 
     // If changing to RECHAZADA from ACEPTADA, release reservations
@@ -635,7 +638,8 @@ export async function DELETE(
             cotizacion.orden_id,
             organizationId!,
             orden.estado,
-            "Cotización eliminada: se removió el último presupuesto activo de la orden"
+            "Cotización eliminada: se removió el último presupuesto activo de la orden",
+            userId
           )
         } else {
           // Otros estados: solo limpiar montos
