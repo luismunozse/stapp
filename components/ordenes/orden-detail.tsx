@@ -226,6 +226,9 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
       setOrden(data)
     } catch (error) {
       console.error("Error fetching orden:", error)
+      // `id` fijo: evita apilar un toast por cada intento fallido del polling
+      // de 15s (useVisibilityPolling), en vez de solo loguear en consola.
+      toast.error("No se pudo actualizar la orden", { id: "fetch-orden-error" })
     } finally {
       setLoading(false)
     }

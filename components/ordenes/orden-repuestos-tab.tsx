@@ -22,7 +22,11 @@ interface Repuesto {
 interface OrdenRepuestosTabProps {
   ordenId: string
   repuestos: Repuesto[]
-  onRepuestosChanged: () => void
+  /** Puede devolver una promesa: el llamador espera a que el refetch del
+   *  padre termine antes de reactivar los controles, para evitar la ventana
+   *  en la que el panel muestra "sin repuestos" mientras el padre aun no
+   *  refrescó (lo que invitaba a reintentar y crear un repuesto duplicado). */
+  onRepuestosChanged: () => void | Promise<void>
 }
 
 export function OrdenRepuestosTab({ ordenId, repuestos, onRepuestosChanged }: OrdenRepuestosTabProps) {
@@ -100,12 +104,15 @@ export function OrdenRepuestosTab({ ordenId, repuestos, onRepuestosChanged }: Or
       })
 
       if (res.ok) {
+        // Esperamos el refetch del padre antes de cerrar el formulario: si no,
+        // el panel muestra brevemente "no hay repuestos agregados" sin ningun
+        // indicador de carga, lo que invita a reintentar y duplicar el alta.
+        await onRepuestosChanged?.()
         setNuevoRepuesto({ inventarioId: "", cantidad: 1, nombre: "", precioUnitario: 0 })
         setCantidadDraft("1")
         setPrecioDraft("")
         setShowAddRepuesto(false)
         setInventarioLoaded(false) // Refresh inventory stock on next open
-        onRepuestosChanged()
       } else {
         const error = await res.json()
         await alert({
@@ -137,8 +144,10 @@ export function OrdenRepuestosTab({ ordenId, repuestos, onRepuestosChanged }: Or
         { method: "DELETE" }
       )
       if (res.ok) {
+        // Mismo tratamiento que al agregar: esperar el refetch antes de
+        // reactivar los controles evita la ventana de estado enganoso.
+        await onRepuestosChanged?.()
         setInventarioLoaded(false) // Refresh inventory stock on next open
-        onRepuestosChanged()
       } else {
         const error = await res.json()
         await alert({ title: "Error", description: error.error || "Error al eliminar repuesto", variant: "error" })
@@ -315,7 +324,7 @@ export function OrdenRepuestosTab({ ordenId, repuestos, onRepuestosChanged }: Or
                   <span className="font-semibold">
                     {formatPrice(repuesto.cantidad * repuesto.precioUnitario)}
                   </span>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleRemoveRepuesto(repuesto.id)}>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" disabled={updating} onClick={() => handleRemoveRepuesto(repuesto.id)}>
                     <Trash2 className="h-4 w-4 text-destructive" />
                   </Button>
                 </div>
