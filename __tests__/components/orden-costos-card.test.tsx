@@ -23,13 +23,13 @@ describe("OrdenCostosCard — etiqueta de saldo vs. cobrado", () => {
     const cobradoMatches = screen.getAllByText("Cobrado")
     expect(cobradoMatches).toHaveLength(1)
 
-    // La línea de saldo debe seguir rotulada "Pendiente" (o un estado de pago
-    // distinto de "Cobrado"), nunca la palabra "Cobrado".
-    expect(screen.getByText("Pendiente")).toBeInTheDocument()
+    // La línea de saldo se rotula "Saldo" y en pago completo muestra el
+    // badge "Pagado" — nunca la palabra "Cobrado".
+    expect(screen.getByText("Saldo")).toBeInTheDocument()
     expect(screen.getByText("Pagado")).toBeInTheDocument()
   })
 
-  it("orden con saldo pendiente: la línea de saldo dice 'Pendiente' con el monto adeudado", () => {
+  it("orden con saldo pendiente: la línea de saldo dice 'Saldo' con el monto adeudado", () => {
     render(
       <OrdenCostosCard
         ordenId="orden-2"
@@ -45,7 +45,7 @@ describe("OrdenCostosCard — etiqueta de saldo vs. cobrado", () => {
     )
 
     expect(screen.queryAllByText("Cobrado")).toHaveLength(1) // solo el total cobrado real
-    expect(screen.getByText("Pendiente")).toBeInTheDocument()
+    expect(screen.getByText("Saldo")).toBeInTheDocument()
     expect(screen.queryByText("Pagado")).not.toBeInTheDocument()
   })
 })

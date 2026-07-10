@@ -152,7 +152,7 @@ export function OrdenCostosCard({
               </div>
             )}
             <div className="flex justify-between items-center font-semibold">
-              <span>Pendiente</span>
+              <span>Saldo</span>
               {pendienteReal <= 0 ? (
                 <PaymentStatusBadge status="PAGADO" />
               ) : (
