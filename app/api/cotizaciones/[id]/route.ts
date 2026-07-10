@@ -64,7 +64,47 @@ const updateCotizacionSchema = z.object({
   checklist: checklistSchema.nullable().optional(),
 })
 
-async function recalcPresupuestoOrden(ordenId: string) {
+// Revierte una orden a EN_DIAGNOSTICO cuando deja de tener un presupuesto
+// activo (última cotización desvinculada o eliminada) y registra el evento
+// correspondiente en el historial. Usado por recalcPresupuestoOrden (PUT) y
+// por el DELETE de cotización.
+async function revertirOrdenSinPresupuestoActivo(
+  ordenId: string,
+  organizationId: string,
+  estadoAnterior: string,
+  descripcion: string
+) {
+  await supabaseAdmin
+    .from("ordenes_servicio")
+    .update({
+      estado: "EN_DIAGNOSTICO",
+      presupuesto: null,
+      costo_final: null,
+      presupuesto_aprobado_portal: false,
+      presupuesto_firma_url: null,
+      presupuesto_fecha_aprobacion: null,
+    })
+    .eq("id", ordenId)
+
+  // Evento en el historial de la orden (fire-and-forget: un fallo acá no
+  // debe hacer fallar la actualización/eliminación de la cotización)
+  void (async () => {
+    try {
+      await supabaseAdmin.from("orden_eventos").insert({
+        orden_id: ordenId,
+        organization_id: organizationId,
+        tipo: "CAMBIO_ESTADO",
+        estado_anterior: estadoAnterior,
+        estado_nuevo: "EN_DIAGNOSTICO",
+        descripcion,
+      })
+    } catch (err) {
+      console.error("Error inserting orden_evento:", err)
+    }
+  })()
+}
+
+async function recalcPresupuestoOrden(ordenId: string, organizationId: string) {
   const { data: allCots } = await supabaseAdmin
     .from("cotizaciones")
     .select("total")
@@ -85,17 +125,12 @@ async function recalcPresupuestoOrden(ordenId: string) {
       .eq("id", ordenId)
       .single()
     if (orden && (orden.estado === "PRESUPUESTADO" || orden.estado === "APROBADO")) {
-      await supabaseAdmin
-        .from("ordenes_servicio")
-        .update({
-          estado: "EN_DIAGNOSTICO",
-          presupuesto: null,
-          costo_final: null,
-          presupuesto_aprobado_portal: false,
-          presupuesto_firma_url: null,
-          presupuesto_fecha_aprobacion: null,
-        })
-        .eq("id", ordenId)
+      await revertirOrdenSinPresupuestoActivo(
+        ordenId,
+        organizationId,
+        orden.estado,
+        "Cotización desvinculada o eliminada: se removió el último presupuesto activo de la orden"
+      )
     } else {
       await supabaseAdmin
         .from("ordenes_servicio")
@@ -419,7 +454,7 @@ export async function PUT(
       if (efectiva) ordenesARecalcular.add(efectiva)
     }
     for (const oid of ordenesARecalcular) {
-      await recalcPresupuestoOrden(oid)
+      await recalcPresupuestoOrden(oid, organizationId!)
     }
 
     // If changing to RECHAZADA from ACEPTADA, release reservations
@@ -596,17 +631,12 @@ export async function DELETE(
             .eq("id", cotizacion.orden_id)
         } else if (orden.estado === "PRESUPUESTADO" || orden.estado === "APROBADO") {
           // No quedan cotizaciones activas: revertir a EN_DIAGNOSTICO solo si la orden estaba en flujo de presupuesto
-          await supabaseAdmin
-            .from("ordenes_servicio")
-            .update({
-              estado: "EN_DIAGNOSTICO",
-              presupuesto: null,
-              costo_final: null,
-              presupuesto_aprobado_portal: false,
-              presupuesto_firma_url: null,
-              presupuesto_fecha_aprobacion: null,
-            })
-            .eq("id", cotizacion.orden_id)
+          await revertirOrdenSinPresupuestoActivo(
+            cotizacion.orden_id,
+            organizationId!,
+            orden.estado,
+            "Cotización eliminada: se removió el último presupuesto activo de la orden"
+          )
         } else {
           // Otros estados: solo limpiar montos
           await supabaseAdmin
