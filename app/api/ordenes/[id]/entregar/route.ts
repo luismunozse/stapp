@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger, diffObjects } from "@/lib/audit"
 import { queueNotification } from "@/lib/notifications/queue"
 import { addDaysInTimeZone, DEFAULT_TIMEZONE } from "@/lib/timezone"
+import { MOTIVO_SIN_COBRO_LABELS, type MotivoSinCobro } from "@/lib/seguimiento-state"
 import { z } from "zod"
 
 const entregarSchema = z.object({
@@ -116,14 +117,19 @@ export async function POST(
     // de ordenes usa para esta misma tabla).
     void (async () => {
       try {
+        const descripcionBase = `Estado cambiado de ${orden.estado} a ${nuevoEstado}`
+        const descripcion = motivoSinCobro
+          ? `${descripcionBase} · Motivo: ${MOTIVO_SIN_COBRO_LABELS[motivoSinCobro as MotivoSinCobro] || motivoSinCobro}`
+          : descripcionBase
         await supabaseAdmin.from("orden_eventos").insert({
           orden_id: id,
           organization_id: organizationId!,
           tipo: "CAMBIO_ESTADO",
           estado_anterior: orden.estado,
           estado_nuevo: nuevoEstado,
-          descripcion: `Estado cambiado de ${orden.estado} a ${nuevoEstado}`,
+          descripcion,
           created_by: userId,
+          ...(motivoSinCobro ? { metadata: { motivoSinCobro } } : {}),
         })
       } catch (err) { console.error("Error inserting orden_evento:", err) }
     })()

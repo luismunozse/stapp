@@ -437,7 +437,10 @@ describe("POST /api/ordenes/[id]/entregar", () => {
       orden_eventos: eventosChain,
     })
 
-    await POST(createPostRequest({ sinCobro: true }), createParams("o1"))
+    await POST(
+      createPostRequest({ sinCobro: true, motivoSinCobro: "CLIENTE_DESISTIO" }),
+      createParams("o1")
+    )
 
     const insertCall = eventosChain.insert.mock.calls.find(
       (call: any[]) => call[0]?.estado_nuevo === "ENTREGADO_SIN_COBRO"
@@ -449,6 +452,10 @@ describe("POST /api/ordenes/[id]/entregar", () => {
       estado_anterior: "REPARADO",
       estado_nuevo: "ENTREGADO_SIN_COBRO",
     })
+    // El motivo debe quedar visible en la descripción del evento (timeline) y
+    // el valor crudo debe viajar en metadata para consumo estructurado.
+    expect(insertCall![0].descripcion).toContain("Cliente desistió")
+    expect(insertCall![0].metadata).toEqual({ motivoSinCobro: "CLIENTE_DESISTIO" })
   })
 
   it("registra un evento CAMBIO_ESTADO en orden_eventos al entregar un retiro (ENTREGADO_SIN_REPARACION)", async () => {
