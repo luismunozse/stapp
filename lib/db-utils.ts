@@ -80,6 +80,7 @@ export function formatOrden(orden: any) {
     // Campos existentes
     problemaReportado: orden.problema_reportado,
     estado: orden.estado,
+    motivoSinCobro: orden.motivo_sin_cobro || null,
     presupuesto: orden.presupuesto,
     costoFinal: orden.costo_final,
     sena: orden.sena || 0,
