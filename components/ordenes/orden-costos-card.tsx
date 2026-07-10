@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
+import { Badge, PaymentStatusBadge } from "@/components/ui/badge"
 import { DollarSign, FileText, Lock } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 
@@ -151,11 +151,13 @@ export function OrdenCostosCard({
                 <span className="text-muted-foreground">-{formatPrice(descuentoCobro)}</span>
               </div>
             )}
-            <div className="flex justify-between font-semibold">
-              <span>{pendienteReal <= 0 ? "Cobrado" : "Pendiente"}</span>
-              <span className={`text-lg ${pendienteReal <= 0 ? "text-success" : ""}`}>
-                {formatPrice(pendienteReal)}
-              </span>
+            <div className="flex justify-between items-center font-semibold">
+              <span>Pendiente</span>
+              {pendienteReal <= 0 ? (
+                <PaymentStatusBadge status="PAGADO" />
+              ) : (
+                <span className="text-lg">{formatPrice(pendienteReal)}</span>
+              )}
             </div>
             {onCobrar && !readOnly && estado !== "CANCELADO" && estado !== "SIN_REPARACION" && (
               <Button
