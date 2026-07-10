@@ -153,6 +153,56 @@ describe("POST /api/ordenes/[id]/reingreso", () => {
     expect(body.id).toBe("o2")
   })
 
+  it("inserts a creation event on the new reingreso order (in addition to the origin NOTA)", async () => {
+    mockAuthSuccess()
+
+    const mockOrden = createMockOrdenOriginal({ estado: "ENTREGADO" })
+    const mockNuevaOrden = {
+      id: "o2",
+      numero_orden: 2,
+      codigo_orden: "CEL-002",
+      es_reingreso: true,
+      orden_origen_id: "o1",
+      clientes: { id: "c1", nombre: "Juan" },
+    }
+
+    const ordenChain = createChainMock(null)
+    let singleCallCount = 0
+    ordenChain.single = vi.fn().mockImplementation(() => {
+      singleCallCount++
+      if (singleCallCount === 1) return Promise.resolve({ data: mockOrden, error: null })
+      return Promise.resolve({ data: mockNuevaOrden, error: null })
+    })
+
+    const eventosChain = createChainMock(null)
+    eventosChain.then = (resolve: any) => resolve({ data: null, error: null })
+    const insertSpy = vi.fn().mockReturnValue(eventosChain)
+    eventosChain.insert = insertSpy
+
+    mockSupabaseFrom({
+      ordenes_servicio: ordenChain,
+      orden_eventos: eventosChain,
+    })
+
+    const response = await POST(
+      createPostRequest({ problemaReportado: "Problema recurrente" }),
+      createParams("o1")
+    )
+    const { status } = await parseResponse(response)
+    expect(status).toBe(201)
+
+    expect(insertSpy).toHaveBeenCalledTimes(2)
+    const creationEventCall = insertSpy.mock.calls.find((call: any) => call[0].orden_id === "o2")
+    expect(creationEventCall).toBeDefined()
+    expect(creationEventCall![0].tipo).toBe("CAMBIO_ESTADO")
+    expect(creationEventCall![0].estado_nuevo).toBe("RECIBIDO")
+    expect(creationEventCall![0].estado_anterior).toBeUndefined()
+
+    const origenEventCall = insertSpy.mock.calls.find((call: any) => call[0].orden_id === "o1")
+    expect(origenEventCall).toBeDefined()
+    expect(origenEventCall![0].tipo).toBe("NOTA")
+  })
+
   it("allows re-ingreso from REPARADO state", async () => {
     mockAuthSuccess()
 
