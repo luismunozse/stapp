@@ -67,6 +67,7 @@ const eventoConfig: Record<string, { label: string; icon: typeof Clock; color: s
   CAMBIO_ESTADO: { label: "Cambio de estado", icon: ArrowRight, color: "text-blue-600" },
   PRESUPUESTO_DEFINIDO: { label: "Presupuesto definido", icon: FileText, color: "text-purple-600" },
   PRESUPUESTO_APROBADO: { label: "Presupuesto aprobado", icon: CheckCircle, color: "text-green-600" },
+  PRESUPUESTO_RECHAZADO: { label: "Presupuesto rechazado", icon: XCircle, color: "text-red-600" },
   NOTA: { label: "Diagnóstico", icon: MessageSquare, color: "text-gray-600" },
   REPUESTO_AGREGADO: { label: "Repuesto agregado", icon: Package, color: "text-orange-600" },
   FOTO_AGREGADA: { label: "Foto agregada", icon: Camera, color: "text-indigo-600" },
