@@ -100,6 +100,11 @@ export interface NotificationContext {
     fechaPago?: Date
     saldoPendiente?: number
     linkPago?: string
+    /** Desglose de la deuda combinada por sucursal (fiado + ordenes). */
+    desglose?: {
+      fiado: number
+      ordenes: number
+    }
   }
   mantenimiento?: {
     ultimoServicio?: Date

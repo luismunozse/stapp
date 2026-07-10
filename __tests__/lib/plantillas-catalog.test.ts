@@ -137,6 +137,13 @@ describe("PLANTILLAS_CATALOG integridad", () => {
     expect(keys).toContain("seguimiento_consulta_cliente")
   })
 
+  it("cobranza_recordatorio_pago expone variables de desglose (saldo_fiado, saldo_ordenes) para overrides de la organizacion", () => {
+    const def = getPlantilla("cobranza_recordatorio_pago")!
+    const keys = def.variables.map((v) => v.key)
+    expect(keys).toContain("saldo_fiado")
+    expect(keys).toContain("saldo_ordenes")
+  })
+
   it("incluye las 12 plantillas por estado individual (orden_estado_<estado>)", () => {
     const keys = PLANTILLAS_CATALOG.map((p) => p.key)
     const estados = [

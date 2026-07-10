@@ -49,6 +49,10 @@ const VAR_LINK_SEGUIMIENTO: PlantillaVariable = { key: "link_seguimiento", label
 const VAR_LINK_PDF: PlantillaVariable = { key: "link_pdf", label: "Link al PDF", example: "https://..." }
 const VAR_MONTO_PAGO: PlantillaVariable = { key: "monto_pago", label: "Monto del pago", example: "$10.000" }
 const VAR_SALDO: PlantillaVariable = { key: "saldo", label: "Saldo pendiente", example: "$5.000" }
+const VAR_SALDO_FIADO: PlantillaVariable = { key: "saldo_fiado", label: "Saldo de cuenta corriente (fiado)", example: "$3.000" }
+const VAR_SALDO_ORDENES: PlantillaVariable = { key: "saldo_ordenes", label: "Saldo de órdenes pendientes", example: "$2.000" }
+const VAR_LINEA_DESGLOSE_PAGO: PlantillaVariable = { key: "linea_desglose_pago", label: "Desglose de la deuda (auto)", example: "\nCuenta corriente: $3.000\nÓrdenes pendientes: $2.000" }
+const VAR_LINEA_ORDEN: PlantillaVariable = { key: "linea_orden", label: "Línea de orden asociada (auto)", example: "\n\nOrden #1234" }
 const VAR_LINK_PAGO: PlantillaVariable = { key: "link_pago", label: "Link de pago", example: "https://..." }
 const VAR_REPUESTO: PlantillaVariable = { key: "repuesto", label: "Nombre del repuesto", example: "Pantalla" }
 const VAR_MOTIVO_DEMORA: PlantillaVariable = { key: "motivo_demora", label: "Motivo de demora", example: "Falta repuesto" }
@@ -557,11 +561,9 @@ Lo esperamos pronto!
     key: "cobranza_recordatorio_pago",
     label: "Recordatorio de pago",
     category: "cobranza",
-    description: "Recordatorio de saldo pendiente.",
-    variables: [VAR_CLIENTE, VAR_SALDO, VAR_NUMERO_ORDEN, VAR_EMPRESA],
-    defaultText: `Hola {cliente}, le recordamos que tiene un saldo pendiente de *{saldo}*.
-
-Orden #{numero_orden}
+    description: "Recordatorio de saldo pendiente, con desglose de cuenta corriente y órdenes cuando aplica.",
+    variables: [VAR_CLIENTE, VAR_SALDO, VAR_SALDO_FIADO, VAR_SALDO_ORDENES, VAR_LINEA_DESGLOSE_PAGO, VAR_LINEA_ORDEN, VAR_NUMERO_ORDEN, VAR_EMPRESA],
+    defaultText: `Hola {cliente}, le recordamos que tiene un saldo pendiente de *{saldo}*.{linea_desglose_pago}{linea_orden}
 
 Puede acercarse a nuestro local o consultarnos por medios de pago disponibles.
 

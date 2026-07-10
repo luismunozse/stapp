@@ -204,3 +204,155 @@ describe("link_seguimiento / link_pdf en plantillas", () => {
     expect(t!.mensaje).toBe("Link:")
   })
 })
+
+describe("recordatorio_pago con desglose (deuda combinada por sucursal)", () => {
+  function ctxPago(
+    desglose: { fiado: number; ordenes: number } | undefined,
+    overrides: Partial<NotificationContext> = {},
+  ): NotificationContext {
+    const saldoPendiente = desglose ? desglose.fiado + desglose.ordenes : 8000
+    return {
+      organizationId: "org1",
+      organizationName: "ACME",
+      cliente: baseCliente,
+      moneda: "ARS",
+      pago: {
+        monto: saldoPendiente,
+        saldoPendiente,
+        desglose,
+      },
+      ...overrides,
+    }
+  }
+
+  it("incluye lineas de cuenta corriente y ordenes cuando ambos componentes son > 0", () => {
+    const t = getWhatsAppTemplates(ctxPago({ fiado: 5000, ordenes: 3000 })).find(
+      (x) => x.id === "recordatorio_pago",
+    )
+    expect(t).toBeDefined()
+    expect(t!.mensaje).toContain("8.000")
+    expect(t!.mensaje).toMatch(/cuenta corriente/i)
+    expect(t!.mensaje).toMatch(/5\.000/)
+    expect(t!.mensaje).toMatch(/[oó]rdenes pendientes/i)
+    expect(t!.mensaje).toMatch(/3\.000/)
+  })
+
+  it("incluye solo la linea de cuenta corriente cuando el componente de ordenes es 0", () => {
+    const t = getWhatsAppTemplates(ctxPago({ fiado: 5000, ordenes: 0 })).find(
+      (x) => x.id === "recordatorio_pago",
+    )
+    expect(t!.mensaje).toMatch(/cuenta corriente/i)
+    expect(t!.mensaje).not.toMatch(/[oó]rdenes pendientes/i)
+  })
+
+  it("incluye solo la linea de ordenes cuando el componente de fiado es 0", () => {
+    const t = getWhatsAppTemplates(ctxPago({ fiado: 0, ordenes: 3000 })).find(
+      (x) => x.id === "recordatorio_pago",
+    )
+    expect(t!.mensaje).not.toMatch(/cuenta corriente/i)
+    expect(t!.mensaje).toMatch(/[oó]rdenes pendientes/i)
+  })
+
+  it("no agrega lineas de desglose cuando ctx.pago.desglose esta ausente (back-compat)", () => {
+    const t = getWhatsAppTemplates(ctxPago(undefined)).find((x) => x.id === "recordatorio_pago")
+    expect(t).toBeDefined()
+    expect(t!.mensaje).not.toMatch(/cuenta corriente/i)
+    expect(t!.mensaje).not.toMatch(/[oó]rdenes pendientes/i)
+  })
+
+  it("formatea los montos del desglose usando ctx.moneda", () => {
+    const ctx = ctxPago({ fiado: 5000, ordenes: 0 }, { moneda: "USD" })
+    const t = getWhatsAppTemplates(ctx).find((x) => x.id === "recordatorio_pago")
+    expect(t!.mensaje).toMatch(/5,000\.00/)
+  })
+
+  it("expone {saldo_fiado} y {saldo_ordenes} para plantillas override de la organizacion", () => {
+    const override = {
+      cobranza_recordatorio_pago: "Fiado: {saldo_fiado} - Ordenes: {saldo_ordenes}",
+    }
+    const t = getWhatsAppTemplates(ctxPago({ fiado: 5000, ordenes: 3000 }), override).find(
+      (x) => x.id === "recordatorio_pago",
+    )
+    expect(t!.mensaje).toContain("5.000")
+    expect(t!.mensaje).toContain("3.000")
+  })
+
+  it("mensaje completo (cliente sin orden asociada) incluye total + desglose y NO contiene 'Orden #'", () => {
+    const t = getWhatsAppTemplates(ctxPago({ fiado: 5000, ordenes: 3000 })).find(
+      (x) => x.id === "recordatorio_pago",
+    )
+    expect(t).toBeDefined()
+    expect(t!.mensaje).toContain("8.000")
+    expect(t!.mensaje).toMatch(/cuenta corriente/i)
+    expect(t!.mensaje).toMatch(/5\.000/)
+    expect(t!.mensaje).toMatch(/[oó]rdenes pendientes/i)
+    expect(t!.mensaje).toMatch(/3\.000/)
+    expect(t!.mensaje).not.toContain("Orden #")
+  })
+
+  it("{saldo_fiado}/{saldo_ordenes} quedan vacíos cuando su componente es 0 (no exponen $0)", () => {
+    const override = {
+      cobranza_recordatorio_pago: "Fiado:[{saldo_fiado}] Ordenes:[{saldo_ordenes}]",
+    }
+    const t = getWhatsAppTemplates(ctxPago({ fiado: 5000, ordenes: 0 }), override).find(
+      (x) => x.id === "recordatorio_pago",
+    )
+    expect(t!.mensaje).toMatch(/Fiado:\[.*5\.000.*\]/)
+    expect(t!.mensaje).toContain("Ordenes:[]")
+  })
+})
+
+describe("recordatorio_pago con ctx.orden asociada", () => {
+  it("incluye la linea 'Orden #' solo cuando ctx.orden esta presente", () => {
+    const ctx: NotificationContext = {
+      organizationId: "org1",
+      organizationName: "ACME",
+      cliente: baseCliente,
+      moneda: "ARS",
+      orden: {
+        id: "o1",
+        numeroOrden: 77,
+        dispositivo: "iPhone 12",
+        estado: "RECIBIDO",
+      },
+      pago: { monto: 8000, saldoPendiente: 8000 },
+    }
+    const t = getWhatsAppTemplates(ctx).find((x) => x.id === "recordatorio_pago")
+    expect(t!.mensaje).toContain("Orden #77")
+  })
+})
+
+describe("confirmacion_pago — gating por señal explícita de pago recibido", () => {
+  it("NO se ofrece cuando hay deuda pero no hay señal de pago (fechaPago/metodoPago ausentes)", () => {
+    const ctx: NotificationContext = {
+      organizationId: "org1",
+      organizationName: "ACME",
+      cliente: baseCliente,
+      pago: { monto: 8000, saldoPendiente: 8000 },
+    }
+    const ids = getWhatsAppTemplates(ctx).map((t) => t.id)
+    expect(ids).not.toContain("confirmacion_pago")
+  })
+
+  it("SI se ofrece cuando ctx.pago.fechaPago esta presente", () => {
+    const ctx: NotificationContext = {
+      organizationId: "org1",
+      organizationName: "ACME",
+      cliente: baseCliente,
+      pago: { monto: 5000, fechaPago: new Date("2026-07-01") },
+    }
+    const ids = getWhatsAppTemplates(ctx).map((t) => t.id)
+    expect(ids).toContain("confirmacion_pago")
+  })
+
+  it("SI se ofrece cuando ctx.pago.metodoPago esta presente", () => {
+    const ctx: NotificationContext = {
+      organizationId: "org1",
+      organizationName: "ACME",
+      cliente: baseCliente,
+      pago: { monto: 5000, metodoPago: "EFECTIVO" },
+    }
+    const ids = getWhatsAppTemplates(ctx).map((t) => t.id)
+    expect(ids).toContain("confirmacion_pago")
+  })
+})
