@@ -502,6 +502,23 @@ export async function POST(request: Request) {
       fotos_ingreso: data.fotos?.length || 0,
     })
 
+    // Evento de creación en el historial de la orden (fire-and-forget: un
+    // fallo acá no debe hacer fallar la creación de la orden)
+    void (async () => {
+      try {
+        await supabaseAdmin.from("orden_eventos").insert({
+          orden_id: orden.id,
+          organization_id: organizationId!,
+          tipo: "CAMBIO_ESTADO",
+          estado_nuevo: estadoInicial,
+          descripcion: "Orden creada",
+          created_by: userId,
+        })
+      } catch (err) {
+        console.error("Error inserting orden_evento (creación):", err)
+      }
+    })()
+
     // Obtener datos de la organización para el mensaje de WhatsApp y comprobante térmico
     const { data: org } = await supabaseAdmin
       .from("organizations")

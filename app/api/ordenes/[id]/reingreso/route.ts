@@ -114,6 +114,24 @@ export async function POST(
       created_by: userId,
     })
 
+    // Evento de creación en la nueva orden (fire-and-forget: un fallo acá
+    // no debe hacer fallar la creación del re-ingreso)
+    void (async () => {
+      try {
+        await supabaseAdmin.from("orden_eventos").insert({
+          orden_id: nuevaOrden.id,
+          organization_id: organizationId!,
+          tipo: "CAMBIO_ESTADO",
+          estado_nuevo: "RECIBIDO",
+          descripcion: `Orden creada como re-ingreso de la orden ${ordenOrigen.codigo_orden || `#${ordenOrigen.numero_orden}`}`,
+          metadata: { ordenOrigenId },
+          created_by: userId,
+        })
+      } catch (err) {
+        console.error("Error inserting orden_evento (creación reingreso):", err)
+      }
+    })()
+
     // Auditoría
     const audit = createAuditLogger(organizationId!, userId!, request)
     await audit.create("ordenes_servicio", nuevaOrden.id, {
