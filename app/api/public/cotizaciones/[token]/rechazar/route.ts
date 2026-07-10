@@ -72,6 +72,19 @@ export async function POST(
           .from("ordenes_servicio")
           .update({ estado: "EN_DIAGNOSTICO" })
           .eq("id", cotizacion.orden_id)
+
+        // Registrar evento
+        await supabaseAdmin.from("orden_eventos").insert({
+          orden_id: cotizacion.orden_id,
+          organization_id: cotizacion.organization_id,
+          tipo: "PRESUPUESTO_RECHAZADO",
+          estado_anterior: "PRESUPUESTADO",
+          estado_nuevo: "EN_DIAGNOSTICO",
+          descripcion: motivo
+            ? `Presupuesto rechazado por el cliente: ${motivo}`
+            : "Presupuesto rechazado por el cliente desde el portal público",
+          metadata: { rechazadoDesdePortal: true, cotizacionId: cotizacion.id, motivo: motivo || null },
+        })
       }
     }
 
