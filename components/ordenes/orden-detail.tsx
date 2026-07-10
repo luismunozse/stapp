@@ -65,6 +65,7 @@ import { CobrarOrdenDialog } from "@/components/ordenes/cobrar-orden-dialog"
 import { NotaCreditoDialog } from "@/components/notas-credito/nota-credito-dialog"
 import { PatternDisplay } from "@/components/ui/pattern-display"
 import { StatusBanner } from "@/components/ui/status-banner"
+import { MOTIVO_SIN_COBRO_LABELS, type MotivoSinCobro } from "@/lib/seguimiento-state"
 import { FieldSectionLabel } from "@/components/ui/field-section-label"
 import { EditableTextField } from "@/components/ui/editable-text-field"
 import { useModal } from "@/contexts/modal-context"
@@ -727,6 +728,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
       {isSinCobro && (
         <StatusBanner tone="success" icon={HandCoins}>
           Entregado sin cobro — El equipo fue entregado al cliente sin cargo.
+          {orden.motivoSinCobro &&
+            ` Motivo: ${MOTIVO_SIN_COBRO_LABELS[orden.motivoSinCobro as MotivoSinCobro] || orden.motivoSinCobro}.`}
         </StatusBanner>
       )}
 

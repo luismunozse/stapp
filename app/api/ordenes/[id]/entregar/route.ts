@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger, diffObjects } from "@/lib/audit"
 import { queueNotification } from "@/lib/notifications/queue"
 import { addDaysInTimeZone, DEFAULT_TIMEZONE } from "@/lib/timezone"
+import { MOTIVO_SIN_COBRO_LABELS, type MotivoSinCobro } from "@/lib/seguimiento-state"
 import { z } from "zod"
 
 const entregarSchema = z.object({
@@ -110,6 +111,28 @@ export async function POST(
       .single()
 
     if (updateError) throw updateError
+
+    // Registrar evento en orden_eventos para timeline público (fire-and-forget;
+    // un fallo acá no debe abortar la entrega, mismo criterio que el PUT genérico
+    // de ordenes usa para esta misma tabla).
+    void (async () => {
+      try {
+        const descripcionBase = `Estado cambiado de ${orden.estado} a ${nuevoEstado}`
+        const descripcion = motivoSinCobro
+          ? `${descripcionBase} · Motivo: ${MOTIVO_SIN_COBRO_LABELS[motivoSinCobro as MotivoSinCobro] || motivoSinCobro}`
+          : descripcionBase
+        await supabaseAdmin.from("orden_eventos").insert({
+          orden_id: id,
+          organization_id: organizationId!,
+          tipo: "CAMBIO_ESTADO",
+          estado_anterior: orden.estado,
+          estado_nuevo: nuevoEstado,
+          descripcion,
+          created_by: userId,
+          ...(motivoSinCobro ? { metadata: { motivoSinCobro } } : {}),
+        })
+      } catch (err) { console.error("Error inserting orden_evento:", err) }
+    })()
 
     // Fiado: si se entrega con saldo pendiente (y no es entrega sin cobro),
     // debitar la cuenta corriente del cliente.

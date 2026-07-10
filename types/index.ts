@@ -131,6 +131,7 @@ export interface OrdenServicio {
   telefonoContacto?: string | null
   problemaReportado: string
   estado: EstadoOrden
+  motivoSinCobro?: string | null
   presupuesto?: number | null
   costoFinal?: number | null
   sena?: number
