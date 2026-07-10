@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
+import { aplicarAprobacionCotizacionAOrden } from "@/lib/cotizacion-aprobar-orden"
 import { z } from "zod"
 
 const aprobarSchema = z.object({
@@ -62,6 +63,43 @@ function buildResponse(cotizacion: any): NextResponse {
       subtotal: i.subtotal,
     })),
   })
+}
+
+// Si la cotización aprobada con firma presencial está vinculada a una orden
+// en PRESUPUESTADO, la transiciona a APROBADO igual que los portales
+// públicos. Se aísla en try/catch propio: la cotización ya quedó ACEPTADA
+// en este punto, así que un fallo acá no debe convertir la aprobación en
+// un 500 — sólo se loguea (mismo criterio "no bloquear" que el resto del
+// endpoint usa para stock/notificaciones).
+async function transicionarOrdenTrasFirma(
+  cotizacion: { id: string; orden_id: string | null },
+  cotizacionTotal: number,
+  userId: string | undefined
+) {
+  if (!cotizacion.orden_id) return
+  try {
+    const { data: orden } = await supabaseAdmin
+      .from("ordenes_servicio")
+      .select(
+        "id, estado, organization_id, cliente_id, numero_orden, dispositivo, public_token, clientes (id, nombre, email, telefono), organizations (nombre, nombre_mostrar, slug, moneda, zona_horaria)"
+      )
+      .eq("id", cotizacion.orden_id)
+      .single()
+
+    if (!orden) return
+
+    await aplicarAprobacionCotizacionAOrden({
+      orden: orden as any,
+      cotizacionId: cotizacion.id,
+      cotizacionTotal,
+      descripcionEvento: "Cotización aprobada con firma del cliente en el local",
+      metadataEvento: { aprobadoDesdePortal: false, cotizacionId: cotizacion.id },
+      aprobadoDesdePortal: false,
+      actorUserId: userId,
+    })
+  } catch (err) {
+    console.error("[aprobar] Error transitioning orden after signature approval:", err)
+  }
 }
 
 export async function POST(
@@ -141,6 +179,8 @@ export async function POST(
         ordenId: updatedCotizacion.orden_id ?? null,
       }).catch(() => {})
 
+      await transicionarOrdenTrasFirma(updatedCotizacion, updatedCotizacion.total, userId)
+
       return buildResponse(updatedCotizacion)
     }
 
@@ -214,6 +254,8 @@ export async function POST(
       clienteId: (updatedCotizacion.clientes as any)?.id ?? null,
       ordenId: updatedCotizacion.orden_id ?? null,
     }).catch(() => {})
+
+    await transicionarOrdenTrasFirma(updatedCotizacion, updatedCotizacion.total, userId)
 
     return buildResponse(updatedCotizacion)
 

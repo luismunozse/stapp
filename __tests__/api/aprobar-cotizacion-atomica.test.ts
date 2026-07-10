@@ -7,7 +7,12 @@ import {
   parseResponse,
 } from "./helpers"
 
+vi.mock("@/lib/notifications/queue", () => ({
+  queueNotification: vi.fn().mockResolvedValue(undefined),
+}))
+
 import { supabaseAdmin } from "@/lib/supabase"
+import { queueNotification } from "@/lib/notifications/queue"
 import { POST } from "@/app/api/cotizaciones/[id]/aprobar/route"
 
 function createParams(id: string) {
@@ -42,6 +47,35 @@ const mockCotizacionEnviada = {
 const mockCotizacionAceptada = {
   ...mockCotizacionEnviada,
   estado: "ACEPTADA",
+}
+
+// Cotizacion linked to an order still in PRESUPUESTADO — signature approval
+// must transition the order the same way the public portal routes do.
+const mockCotizacionConOrden = {
+  ...mockCotizacionEnviada,
+  orden_id: "orden-1",
+}
+const mockCotizacionConOrdenAceptada = {
+  ...mockCotizacionConOrden,
+  estado: "ACEPTADA",
+}
+
+const mockOrdenPresupuestada = {
+  id: "orden-1",
+  estado: "PRESUPUESTADO",
+  organization_id: "org-1",
+  cliente_id: "c1",
+  numero_orden: 42,
+  dispositivo: "iPhone 12",
+  public_token: "tok123",
+  clientes: { id: "c1", nombre: "Juan", email: null, telefono: "123" },
+  organizations: {
+    nombre: "Taller",
+    nombre_mostrar: null,
+    slug: "taller",
+    moneda: "ARS",
+    zona_horaria: "America/Argentina/Buenos_Aires",
+  },
 }
 
 describe("POST /api/cotizaciones/[id]/aprobar — atomic RPC path", () => {
@@ -185,6 +219,77 @@ describe("POST /api/cotizaciones/[id]/aprobar — atomic RPC path", () => {
     expect(body).toHaveProperty("id")
     expect(body).toHaveProperty("estado")
     expect(body.estado).toBe("ACEPTADA")
+  })
+
+  it("transitions linked order to APROBADO and records orden_eventos on signature approval", async () => {
+    mockAuthSuccess({ userId: "user-1" })
+
+    const ordenChain = createChainMock(mockOrdenPresupuestada)
+    const eventosChain = createChainMock(null)
+
+    let cotizacionCallCount = 0
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "cotizaciones") {
+        cotizacionCallCount++
+        return (cotizacionCallCount === 1 ? createChainMock(mockCotizacionConOrden) : createChainMock(mockCotizacionConOrdenAceptada)) as any
+      }
+      if (table === "ordenes_servicio") return ordenChain as any
+      if (table === "orden_eventos") return eventosChain as any
+      return createChainMock(null) as any
+    })
+
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ok: true }, error: null } as any)
+
+    const response = await POST(createPostRequest(validBody), createParams("cot-1"))
+    const { status } = await parseResponse(response)
+
+    expect(status).toBe(200)
+
+    const updateCall = ordenChain.update.mock.calls.find(
+      (call: any[]) => call[0]?.estado === "APROBADO"
+    )
+    expect(updateCall).toBeDefined()
+
+    const insertCall = eventosChain.insert.mock.calls.find(
+      (call: any[]) => call[0]?.tipo === "PRESUPUESTO_APROBADO"
+    )
+    expect(insertCall).toBeDefined()
+    expect(insertCall![0]).toMatchObject({
+      orden_id: "orden-1",
+      organization_id: "org-1",
+      estado_anterior: "PRESUPUESTADO",
+      estado_nuevo: "APROBADO",
+    })
+
+    expect(queueNotification).toHaveBeenCalled()
+  })
+
+  it("does not transition the order when it is not in PRESUPUESTADO state", async () => {
+    mockAuthSuccess({ userId: "user-1" })
+
+    const ordenYaAprobada = { ...mockOrdenPresupuestada, estado: "APROBADO" }
+    const ordenChain = createChainMock(ordenYaAprobada)
+    const eventosChain = createChainMock(null)
+
+    let cotizacionCallCount = 0
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "cotizaciones") {
+        cotizacionCallCount++
+        return (cotizacionCallCount === 1 ? createChainMock(mockCotizacionConOrden) : createChainMock(mockCotizacionConOrdenAceptada)) as any
+      }
+      if (table === "ordenes_servicio") return ordenChain as any
+      if (table === "orden_eventos") return eventosChain as any
+      return createChainMock(null) as any
+    })
+
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: { ok: true }, error: null } as any)
+
+    const response = await POST(createPostRequest(validBody), createParams("cot-1"))
+    const { status } = await parseResponse(response)
+
+    expect(status).toBe(200)
+    expect(ordenChain.update).not.toHaveBeenCalled()
+    expect(eventosChain.insert).not.toHaveBeenCalled()
   })
 })
 
