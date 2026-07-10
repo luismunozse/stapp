@@ -215,6 +215,56 @@ describe("POST /api/ordenes", () => {
     expect(body.organizationName).toBe("Mi Taller Pro")
   })
 
+  it("inserts a CAMBIO_ESTADO orden_eventos row (creación) with estado_nuevo y sin estado_anterior", async () => {
+    mockAuthSuccess()
+
+    const mockOrden = {
+      id: "o-new-evt",
+      numero_orden: 6,
+      codigo_orden: "CEL-006",
+      cliente_id: "c1",
+      organization_id: "org-1",
+      tipo_dispositivo: "CELULAR",
+      dispositivo: "iPhone 14",
+      problema_reportado: "No enciende",
+      estado: "RECIBIDO",
+      fecha_ingreso: "2024-01-01",
+      fecha_prometida: null,
+      public_token: "tok-evt",
+      clientes: { id: "c1", nombre: "Juan" },
+    }
+
+    const ordenChain = createChainMock(mockOrden)
+    const orgChain = createChainMock({ nombre: "Mi Taller", nombre_mostrar: "Mi Taller Pro" })
+    const eventosChain = createChainMock(null)
+    const insertSpy = vi.fn().mockReturnValue(eventosChain)
+    eventosChain.insert = insertSpy
+
+    mockSupabaseFrom({
+      ordenes_servicio: ordenChain,
+      organizations: orgChain,
+      orden_eventos: eventosChain,
+    })
+
+    const response = await POST(
+      createPostRequest({
+        clienteId: "c1",
+        dispositivo: "iPhone 14",
+        tipoDispositivo: "CELULAR",
+        problemaReportado: "No enciende",
+      })
+    )
+    const { status } = await parseResponse(response)
+
+    expect(status).toBe(201)
+    expect(insertSpy).toHaveBeenCalledTimes(1)
+    const payload = insertSpy.mock.calls[0][0]
+    expect(payload.orden_id).toBe("o-new-evt")
+    expect(payload.tipo).toBe("CAMBIO_ESTADO")
+    expect(payload.estado_nuevo).toBe("RECIBIDO")
+    expect(payload.estado_anterior).toBeUndefined()
+  })
+
   it("la orden nace con sucursal_id del contexto", async () => {
     vi.mocked(auth).mockResolvedValue({
       user: { id: "u-1", organizationId: "org-1", role: "TECNICO", sucursalId: "suc-1", email: "t@t.com" },
