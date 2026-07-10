@@ -1022,7 +1022,11 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
               ) : (
                 <Input
                   id="dispositivo"
-                  {...register("dispositivo")}
+                  {...register("dispositivo", {
+                    onChange: (e) => {
+                      if (e.target.value.trim()) clearErrors("dispositivo")
+                    },
+                  })}
                   placeholder="Modelo o descripcion del equipo"
                 />
               )}
@@ -1119,7 +1123,11 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
             )}
             <Textarea
               id="problemaReportado"
-              {...register("problemaReportado")}
+              {...register("problemaReportado", {
+                onChange: (e) => {
+                  if (e.target.value.trim()) clearErrors("problemaReportado")
+                },
+              })}
               placeholder="Describa el problema del equipo..."
               rows={3}
             />
