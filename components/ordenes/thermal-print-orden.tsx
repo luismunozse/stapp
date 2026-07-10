@@ -13,6 +13,7 @@ import {
 import { Receipt, Loader2, Usb, Printer, Eye } from "lucide-react"
 import { useThermalPrinter } from "@/components/pos/use-thermal-printer"
 import { useTerminologia } from "@/contexts/currency-context"
+import { fitPrintPageToContent } from "@/lib/print-fit-page"
 import { generateOrdenTicketCommands, type OrdenTicketData } from "@/lib/escpos"
 import { imageUrlToRaster, imageUrlToBinarizedDataUrl } from "@/lib/escpos-image"
 import { ESTADO_LABELS } from "@/lib/orden-state-machine"
@@ -234,16 +235,7 @@ ${styles}
       try {
         await waitForImages()
         try { await doc.fonts.ready } catch { /* measurement falls back to current metrics */ }
-        // Match the page height to the rendered content so drivers with a
-        // fixed paper length (e.g. 80x297mm) cut right after the receipt
-        // instead of feeding a full blank page.
-        const area = doc.getElementById("thermal-receipt-print-area")
-        if (area && area.offsetHeight > 0) {
-          const heightMm = Math.ceil((area.offsetHeight * 25.4) / 96) + 2
-          const pageStyle = doc.createElement("style")
-          pageStyle.textContent = `@page { size: 80mm ${heightMm}mm; margin: 0; }`
-          doc.head.appendChild(pageStyle)
-        }
+        fitPrintPageToContent(doc, doc.getElementById("thermal-receipt-print-area"), 80)
         iframe.contentWindow?.focus()
         iframe.contentWindow?.print()
       } finally {

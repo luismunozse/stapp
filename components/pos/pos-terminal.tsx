@@ -35,6 +35,7 @@ import { useThermalPrinter } from "./use-thermal-printer"
 import { BarcodeScanner } from "@/components/inventario/barcode-scanner"
 import { useCurrency } from "@/contexts/currency-context"
 import { generateTicketCommands } from "@/lib/escpos"
+import { fitPrintPageToContent } from "@/lib/print-fit-page"
 import type {
   PosCartItem,
   PosCliente,
@@ -514,15 +515,27 @@ export function PosTerminal() {
   <div class="center bold">¡Gracias por su compra!</div>
   <div class="center small">Conserve este ticket como comprobante</div>
   <br><br>
-<script>window.onload=function(){window.print();}<\/script>
 </body></html>`
 
     const printWindow = window.open("", "_blank", "width=320,height=600")
     if (printWindow) {
       printWindow.document.write(html)
       printWindow.document.close()
+
+      const doc = printWindow.document
+      const triggerPrint = async () => {
+        try { await doc.fonts.ready } catch { /* fall back to current metrics */ }
+        fitPrintPageToContent(doc, doc.body, printerWidth)
+        printWindow.focus()
+        printWindow.print()
+      }
+      if (doc.readyState === "complete") {
+        void triggerPrint()
+      } else {
+        printWindow.onload = () => { void triggerPrint() }
+      }
     }
-  }, [])
+  }, [timezone, printerWidth])
 
   // --- Checkout ---
   const handleCheckoutComplete = useCallback(async (ventaData: any) => {
