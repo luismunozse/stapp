@@ -86,7 +86,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, role } = await requireAuth()
+    const { error, organizationId, userId, role } = await requireAuth()
     if (error) return error
 
     if (role !== "ADMIN") {
@@ -153,12 +153,31 @@ export async function PUT(
           tipo_dispositivo: reclamo.garantias.ordenes_servicio.tipo_dispositivo,
           problema_reportado: `[RECLAMO GARANTÍA] ${reclamo.descripcion}`,
           observaciones: `Reclamo de garantía de la orden #${reclamo.garantias.ordenes_servicio.numero_orden}`,
+          estado: "RECIBIDO",
         })
         .select()
         .single()
 
       if (ordenError) throw ordenError
       ordenReparacionId = nuevaOrden.id
+
+      // Evento de creación en el historial de la orden (fire-and-forget: un
+      // fallo acá no debe hacer fallar la resolución del reclamo)
+      void (async () => {
+        try {
+          await supabaseAdmin.from("orden_eventos").insert({
+            orden_id: nuevaOrden.id,
+            organization_id: orgId,
+            tipo: "CAMBIO_ESTADO",
+            estado_nuevo: "RECIBIDO",
+            descripcion: "Orden creada desde reclamo de garantía",
+            metadata: { reclamoId, garantiaId },
+            created_by: userId,
+          })
+        } catch (err) {
+          console.error("Error inserting orden_evento (creación desde reclamo):", err)
+        }
+      })()
     }
 
     // Actualizar el reclamo
