@@ -120,7 +120,7 @@ export async function GET(
       .from("orden_eventos")
       .select("estado_anterior, estado_nuevo, created_at")
       .eq("orden_id", id)
-      .eq("tipo", "CAMBIO_ESTADO")
+      .in("tipo", ["CAMBIO_ESTADO", "PRESUPUESTO_APROBADO"])
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle()
