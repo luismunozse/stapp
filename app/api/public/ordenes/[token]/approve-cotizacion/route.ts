@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin, STORAGE_BUCKETS } from "@/lib/supabase"
-import { queueNotification } from "@/lib/notifications/queue"
+import { aplicarAprobacionCotizacionAOrden } from "@/lib/cotizacion-aprobar-orden"
 import { z } from "zod"
 import { getOrderByPublicToken } from "@/lib/public-token"
 
@@ -91,64 +91,15 @@ export async function POST(
 
     if (cotUpdateError) throw cotUpdateError
 
-    // Update order to APROBADO and set presupuesto + costo_final from cotizacion total
-    const { error: updateError } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .update({
-        estado: "APROBADO",
-        presupuesto: cotizacion.total,
-        costo_final: cotizacion.total,
-        presupuesto_aprobado_portal: true,
-        presupuesto_firma_url: firmaUrl,
-        presupuesto_firma_path: firmaPath,
-        presupuesto_fecha_aprobacion: new Date().toISOString(),
-      })
-      .eq("id", orden.id)
-
-    if (updateError) throw updateError
-
-    // Record event
-    await supabaseAdmin.from("orden_eventos").insert({
-      orden_id: orden.id,
-      organization_id: orden.organization_id,
-      tipo: "PRESUPUESTO_APROBADO",
-      estado_anterior: "PRESUPUESTADO",
-      estado_nuevo: "APROBADO",
-      descripcion: "Cotizacion aprobada por el cliente desde el portal de seguimiento",
-      metadata: { aprobadoDesdePortal: true, cotizacionId: cotizacion.id },
+    // Update order to APROBADO, record the event and queue the notification
+    await aplicarAprobacionCotizacionAOrden({
+      orden: orden as any,
+      cotizacionId: cotizacion.id,
+      cotizacionTotal: cotizacion.total,
+      descripcionEvento: "Cotizacion aprobada por el cliente desde el portal de seguimiento",
+      metadataEvento: { aprobadoDesdePortal: true, cotizacionId: cotizacion.id },
+      camposAdicionalesOrden: { presupuesto_firma_url: firmaUrl, presupuesto_firma_path: firmaPath },
     })
-
-    // Send notification (fire-and-forget)
-    const org = orden.organizations as unknown as Record<string, unknown>
-    const cliente = orden.clientes as unknown as Record<string, unknown>
-
-    queueNotification({
-      organizationId: orden.organization_id,
-      ordenId: orden.id,
-      clienteId: orden.cliente_id,
-      tipo: "CAMBIO_ESTADO",
-      context: {
-        organizationName: (org?.nombre_mostrar as string) || (org?.nombre as string) || "",
-        organizationSlug: org?.slug as string | undefined,
-        moneda: (org?.moneda as string) || "ARS",
-        zonaHoraria: (org?.zona_horaria as string) || "America/Argentina/Buenos_Aires",
-        cliente: {
-          id: cliente?.id as string,
-          nombre: cliente?.nombre as string,
-          email: cliente?.email as string | null,
-          telefono: cliente?.telefono as string,
-        },
-        orden: {
-          id: orden.id,
-          numeroOrden: orden.numero_orden,
-          dispositivo: orden.dispositivo,
-          estado: "APROBADO",
-          estadoAnterior: "PRESUPUESTADO",
-          presupuesto: cotizacion.total,
-          publicToken: orden.public_token,
-        },
-      },
-    }).catch(err => console.error("Error sending notification:", err))
 
     return NextResponse.json({
       message: "Cotizacion aprobada exitosamente",
