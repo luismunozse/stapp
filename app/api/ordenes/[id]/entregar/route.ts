@@ -111,6 +111,23 @@ export async function POST(
 
     if (updateError) throw updateError
 
+    // Registrar evento en orden_eventos para timeline público (fire-and-forget;
+    // un fallo acá no debe abortar la entrega, mismo criterio que el PUT genérico
+    // de ordenes usa para esta misma tabla).
+    void (async () => {
+      try {
+        await supabaseAdmin.from("orden_eventos").insert({
+          orden_id: id,
+          organization_id: organizationId!,
+          tipo: "CAMBIO_ESTADO",
+          estado_anterior: orden.estado,
+          estado_nuevo: nuevoEstado,
+          descripcion: `Estado cambiado de ${orden.estado} a ${nuevoEstado}`,
+          created_by: userId,
+        })
+      } catch (err) { console.error("Error inserting orden_evento:", err) }
+    })()
+
     // Fiado: si se entrega con saldo pendiente (y no es entrega sin cobro),
     // debitar la cuenta corriente del cliente.
     if (!sinCobro && orden.cliente_id) {
