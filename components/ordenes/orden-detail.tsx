@@ -967,7 +967,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             <TabsContent value="cotizaciones" className="mt-4">
               <Card>
                 <CardContent className="p-6">
-                  <CotizacionList ordenId={ordenId} clienteEmail={orden.cliente?.email} readOnly={!isAdmin && userRole !== "TECNICO"} repuestos={(orden as any).repuestos || []} />
+                  <CotizacionList ordenId={ordenId} clienteEmail={orden.cliente?.email} readOnly={!isAdmin && userRole !== "TECNICO"} repuestos={(orden as any).repuestos || []} onOrdenChanged={fetchOrden} />
                 </CardContent>
               </Card>
             </TabsContent>

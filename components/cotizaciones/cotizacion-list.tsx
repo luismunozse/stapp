@@ -70,6 +70,10 @@ interface CotizacionListProps {
   clienteEmail?: string | null
   readOnly?: boolean
   repuestos?: RepuestoOrden[]
+  /** Notifica al padre cuando una acción de esta lista puede haber cambiado
+   *  el estado de la orden vinculada (compartir, enviar, aprobar, rechazar
+   *  o eliminar una cotización), para que refresque su propio `orden`. */
+  onOrdenChanged?: () => void
 }
 
 const estadoConfig: Record<string, { label: string; icon: typeof Clock; color: string }> = {
@@ -79,7 +83,7 @@ const estadoConfig: Record<string, { label: string; icon: typeof Clock; color: s
   RECHAZADA: { label: "Rechazada", icon: XCircle, color: "bg-destructive/10 text-destructive" },
 }
 
-export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repuestos = [] }: CotizacionListProps) {
+export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repuestos = [], onOrdenChanged }: CotizacionListProps) {
   const { formatPrice, formatDate } = useCurrency()
   const [showForm, setShowForm] = useState(false)
   const [prefillFromRepuestos, setPrefillFromRepuestos] = useState(false)
@@ -128,6 +132,8 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
 
       await showSuccess("Cotización enviada exitosamente")
       mutate()
+      // El servidor puede transicionar la orden vinculada a PRESUPUESTADO.
+      onOrdenChanged?.()
     } catch (error) {
       console.error("Error:", error)
       await showError("Error al enviar cotización")
@@ -159,6 +165,8 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
       }
 
       mutate()
+      // Eliminar la cotización puede revertir el estado de la orden vinculada.
+      onOrdenChanged?.()
     } catch (error) {
       console.error("Error:", error)
       await showError("Error al eliminar cotización")
@@ -180,6 +188,8 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
       }
 
       mutate()
+      // El PUT puede transicionar la orden vinculada (p.ej. al aceptar/rechazar).
+      onOrdenChanged?.()
     } catch (error) {
       console.error("Error:", error)
     }
@@ -201,6 +211,8 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
         })
         if (res.ok) {
           mutate() // Refresh list
+          // El servidor transiciona la orden vinculada a PRESUPUESTADO.
+          onOrdenChanged?.()
         }
       } catch {
         // Continue with share even if state change fails
@@ -235,7 +247,11 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ estado: "ENVIADA" }),
         })
-        if (res.ok) mutate()
+        if (res.ok) {
+          mutate()
+          // El servidor transiciona la orden vinculada a PRESUPUESTADO.
+          onOrdenChanged?.()
+        }
       } catch {
         // continuar igual
       }
@@ -578,7 +594,7 @@ export function CotizacionList({ ordenId, clienteEmail, readOnly = false, repues
         <CotizacionApprovalDialog
           open={!!approvingCotizacion}
           onClose={() => setApprovingCotizacion(null)}
-          onSuccess={() => mutate()}
+          onSuccess={() => { mutate(); onOrdenChanged?.() }}
           cotizacion={approvingCotizacion}
         />
       )}
