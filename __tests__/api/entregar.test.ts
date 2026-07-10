@@ -450,4 +450,56 @@ describe("POST /api/ordenes/[id]/entregar", () => {
       estado_nuevo: "ENTREGADO_SIN_COBRO",
     })
   })
+
+  it("registra un evento CAMBIO_ESTADO en orden_eventos al entregar un retiro (ENTREGADO_SIN_REPARACION)", async () => {
+    mockAuthSuccess({ userId: "user-1" })
+
+    const mockOrden = {
+      id: "o1",
+      estado: "SIN_REPARACION",
+      numero_orden: 5,
+      tecnico_id: "t1",
+      clientes: { id: "c1", nombre: "Juan", email: "juan@test.com", telefono: "123" },
+    }
+
+    const mockUpdated = {
+      id: "o1",
+      numero_orden: 5,
+      codigo_orden: "CEL-005",
+      estado: "ENTREGADO_SIN_REPARACION",
+      fecha_entrega: new Date().toISOString(),
+      notas_entrega: null,
+      users: { id: "user-1", nombre: "Admin" },
+      clientes: mockOrden.clientes,
+    }
+
+    let callCount = 0
+    const chain = createChainMock(null)
+    chain.single = vi.fn().mockImplementation(() => {
+      callCount++
+      if (callCount === 1) return Promise.resolve({ data: mockOrden, error: null })
+      if (callCount === 2) return Promise.resolve({ data: mockUpdated, error: null })
+      return Promise.resolve({ data: { nombre: "Mi Taller" }, error: null })
+    })
+
+    const eventosChain = createChainMock(null)
+    mockSupabaseFrom({
+      ordenes_servicio: chain,
+      organizations: createChainMock({ nombre: "Mi Taller", moneda: "ARS", zona_horaria: "America/Argentina/Buenos_Aires" }),
+      orden_eventos: eventosChain,
+    })
+
+    await POST(createPostRequest({ notasEntrega: null }), createParams("o1"))
+
+    const insertCall = eventosChain.insert.mock.calls.find(
+      (call: any[]) => call[0]?.estado_nuevo === "ENTREGADO_SIN_REPARACION"
+    )
+    expect(insertCall).toBeDefined()
+    expect(insertCall![0]).toMatchObject({
+      orden_id: "o1",
+      tipo: "CAMBIO_ESTADO",
+      estado_anterior: "SIN_REPARACION",
+      estado_nuevo: "ENTREGADO_SIN_REPARACION",
+    })
+  })
 })
