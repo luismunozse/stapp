@@ -1,0 +1,79 @@
+name: E2E (Playwright)
+
+# Dedicated end-to-end suite against the QA tenant.
+# Note: ci.yml already runs the PUBLIC smoke specs on a mock build. This workflow
+# runs the FULL suite (incl. authenticated modules) against a real QA tenant.
+# Authenticated specs SELF-SKIP when the STAPP_TEST_* secrets are absent, so this
+# job stays green even before secrets are configured.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        env:
+          # Provided via repo secrets. If unset, authenticated specs skip.
+          STAPP_TEST_URL: ${{ secrets.STAPP_TEST_URL }}
+          STAPP_TEST_EMAIL: ${{ secrets.STAPP_TEST_EMAIL }}
+          STAPP_TEST_PASSWORD: ${{ secrets.STAPP_TEST_PASSWORD }}
+        run: npx playwright test
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
+
+      - name: Comment results on PR
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let summary = 'No machine-readable results found.';
+            try {
+              const data = JSON.parse(fs.readFileSync('playwright-report/results.json', 'utf8'));
+              const s = data.stats || {};
+              summary = `**E2E results:** ${s.expected ?? 0} passed · ${s.unexpected ?? 0} failed · ${s.skipped ?? 0} skipped · ${s.flaky ?? 0} flaky`;
+            } catch (e) {
+              const status = '${{ job.status }}';
+              summary = `E2E job status: **${status}**. See the uploaded \`playwright-report\` artifact for details.`;
+            }
+            const body = `### 🎭 Playwright E2E\n\n${summary}\n\n_Artifact: \`playwright-report\` (HTML report with screenshots/video of failures)._`;
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const marker = '<!-- playwright-e2e-comment -->';
+            const comments = await github.rest.issues.listComments({ owner, repo, issue_number });
+            const existing = comments.data.find(c => c.body.includes(marker));
+            const finalBody = `${marker}\n${body}`;
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body: finalBody });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body: finalBody });
+            }
