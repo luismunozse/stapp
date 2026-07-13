@@ -113,7 +113,7 @@ export function CatalogoHero({ bannerUrl, logoUrl, titulo, descripcion, whatsapp
             <Button
               variant="secondary"
               onClick={handleShare}
-              className="h-11 gap-1.5 rounded-full bg-cat-surface/90 font-display font-bold text-cat-ink backdrop-blur hover:bg-cat-surface"
+              className="h-11 gap-1.5 rounded-full bg-cat-surface font-display font-bold text-cat-ink backdrop-blur"
             >
               {shared ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}
               <span className="hidden sm:inline">Compartir</span>

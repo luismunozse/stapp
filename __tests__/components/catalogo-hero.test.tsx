@@ -44,4 +44,17 @@ describe("CatalogoHero — warm commercial v2", () => {
     render(<CatalogoHero {...baseProps} />)
     expect(screen.getByRole("heading", { level: 1 }).className).toContain("font-display")
   })
+
+  it("renders the WhatsApp CTA before a VISIBLE share button in the banner variant", () => {
+    render(<CatalogoHero {...baseProps} bannerUrl="https://example.com/banner.jpg" />)
+    const wa = screen.getByRole("link", { name: /whatsapp/i })
+    const share = screen.getByRole("button", { name: /compartir/i })
+    expect(wa.className).toContain("bg-whatsapp")
+    expect(wa.compareDocumentPosition(share) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // The alpha modifier on cat-surface silently fails (var() without <alpha-value>),
+    // so the button must use the solid class, never the broken alpha variant.
+    expect(share.className).toContain("bg-cat-surface")
+    expect(share.className).not.toContain("bg-cat-surface/90")
+    expect(screen.getByRole("heading", { level: 1 }).className).toContain("font-display")
+  })
 })
