@@ -54,4 +54,24 @@ describe("TagsInput", () => {
     fireEvent.click(screen.getByRole("button", { name: /agregar oferta/i }))
     expect(onChange).toHaveBeenCalledWith(["rojo", "oferta"])
   })
+
+  it("blur commits the pending draft so it is not silently lost", () => {
+    const { onChange } = setup([])
+    const input = screen.getByRole("textbox")
+    fireEvent.change(input, { target: { value: "verde" } })
+    fireEvent.blur(input)
+    expect(onChange).toHaveBeenCalledWith(["verde"])
+    expect(input).toHaveValue("")
+  })
+
+  it("blur with empty or duplicate draft does nothing", () => {
+    const onChange = vi.fn()
+    setup(["Rojo"], onChange)
+    const input = screen.getByRole("textbox")
+    fireEvent.change(input, { target: { value: "   " } })
+    fireEvent.blur(input)
+    fireEvent.change(input, { target: { value: "rojo" } })
+    fireEvent.blur(input)
+    expect(onChange).not.toHaveBeenCalled()
+  })
 })

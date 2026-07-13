@@ -41,6 +41,14 @@ export function TagsInput({
     }
   }
 
+  // Commit the pending draft on blur so a typed tag isn't silently lost when
+  // the user moves focus (e.g. straight to a Save button) without confirming
+  // with Enter or comma.
+  const onBlur = () => {
+    add(draft)
+    setDraft("")
+  }
+
   const freeSuggestions = suggestions.filter(
     (s) => !value.some((v) => v.toLowerCase() === s.toLowerCase()),
   )
@@ -68,6 +76,7 @@ export function TagsInput({
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={onKeyDown}
+          onBlur={onBlur}
           placeholder={placeholder}
           maxLength={maxLength}
           className="h-7 flex-1 min-w-[120px] border-0 shadow-none focus-visible:ring-0 px-1"
