@@ -20,6 +20,9 @@ jobs:
     name: E2E Tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: write # results comment
     env:
       # Mock env vars so the dev server boots without real services (same
       # pattern as ci.yml). Public specs run against this; authenticated
@@ -62,6 +65,8 @@ jobs:
 
       - name: Comment results on PR
         if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        # Cosmetic: a comment failure must never redden the suite.
+        continue-on-error: true
         uses: actions/github-script@v7
         with:
           script: |
