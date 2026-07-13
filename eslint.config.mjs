@@ -6,6 +6,14 @@ const eslintConfig = [
     ignores: ["android/**"],
   },
   {
+    // Playwright fixtures receive a `use` callback parameter (test.extend API);
+    // the react-hooks rule misreads those calls as React hook violations.
+    files: ["e2e/**"],
+    rules: {
+      "react-hooks/rules-of-hooks": "off",
+    },
+  },
+  {
     rules: {
       "react-hooks/set-state-in-effect": "warn",
       "react-hooks/purity": "warn",
