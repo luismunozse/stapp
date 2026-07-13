@@ -65,7 +65,7 @@ export function ItemCard({ item, onClick, onQuickAdd, formatPrecio, brandColor, 
         visible: { opacity: 1, y: 0 },
       }}
       whileHover={{ y: -3 }}
-      className={`group relative rounded-xl border bg-card overflow-hidden transition-all duration-200 hover:shadow-xl hover:border-foreground/15 ${
+      className={`group relative rounded-cat bg-cat-surface shadow-cat overflow-hidden transition-all duration-200 hover:shadow-cat-lg ${
         agotado ? "opacity-60" : ""
       }`}
     >
@@ -85,7 +85,8 @@ export function ItemCard({ item, onClick, onQuickAdd, formatPrecio, brandColor, 
         aria-label={item.nombre}
         className="block w-full text-left cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-current"
       >
-        <div className="aspect-square bg-muted relative overflow-hidden">
+        <div className="p-2.5 pb-0">
+        <div className="aspect-square bg-cat-chip relative overflow-hidden rounded-cat-inner">
           {item.imagen_url ? (
             <Image
               src={item.imagen_url}
@@ -102,34 +103,25 @@ export function ItemCard({ item, onClick, onQuickAdd, formatPrecio, brandColor, 
           {/* Badges esquina superior izquierda — máx 1 visible para no saturar */}
           <div className="absolute top-2 left-2 flex flex-col gap-1 items-start pointer-events-none">
             {item.destacado ? (
-              <Badge
-                className="gap-1 border-0 text-white shadow-sm font-semibold"
-                style={{ backgroundColor: brandColor }}
-              >
+              <Badge className="gap-1 border-0 bg-orange-100 text-orange-800 shadow-sm font-bold font-display">
                 <Star className="h-3 w-3 fill-current" />
                 Destacado
               </Badge>
             ) : (item.vistas_semana ?? 0) >= 5 ? (
-              <Badge
-                variant="secondary"
-                className="gap-1 bg-background/90 backdrop-blur shadow-sm text-[10px] font-semibold"
-              >
+              <Badge variant="secondary" className="gap-1 border-0 bg-white/90 text-cat-ink backdrop-blur shadow-sm text-[10px] font-semibold">
                 <Eye className="h-3 w-3" />
                 {item.vistas_semana} vieron
               </Badge>
             ) : null}
 
             {tieneAnchor && pctDescuento > 0 && (
-              <Badge className="gap-0.5 border-0 bg-emerald-600 hover:bg-emerald-600 text-white text-[10px] font-bold shadow-sm">
+              <Badge className="gap-0.5 border-0 bg-green-100 text-green-800 text-[10px] font-bold shadow-sm">
                 -{pctDescuento}%
               </Badge>
             )}
 
             {stockBajo && !agotado && (
-              <Badge
-                variant="secondary"
-                className="gap-1 bg-orange-100 dark:bg-orange-950/60 text-orange-800 dark:text-orange-200 border-orange-200 dark:border-orange-900 text-[10px] font-semibold shadow-sm"
-              >
+              <Badge variant="secondary" className="gap-1 border-0 bg-orange-100 text-orange-800 text-[10px] font-semibold shadow-sm">
                 <Flame className="h-3 w-3" />
                 Últimas {item.stock_disponible}
               </Badge>
@@ -148,7 +140,7 @@ export function ItemCard({ item, onClick, onQuickAdd, formatPrecio, brandColor, 
               className={`absolute top-2 right-2 h-11 w-11 sm:h-9 sm:w-9 rounded-full backdrop-blur flex items-center justify-center transition-all active:scale-90 ${
                 isFav
                   ? "bg-white/95 text-rose-500 shadow"
-                  : "bg-background/80 text-muted-foreground sm:opacity-0 sm:group-hover:opacity-100 hover:text-rose-500 shadow-sm"
+                  : "bg-white/80 text-cat-muted sm:opacity-0 sm:group-hover:opacity-100 hover:text-rose-500 shadow-sm"
               }`}
               aria-label={isFav ? "Quitar de favoritos" : "Agregar a favoritos"}
             >
@@ -157,33 +149,34 @@ export function ItemCard({ item, onClick, onQuickAdd, formatPrecio, brandColor, 
           )}
 
           {agotado && (
-            <div className="absolute inset-0 bg-background/60 backdrop-blur-[1px] flex items-center justify-center">
+            <div className="absolute inset-0 bg-white/60 backdrop-blur-[1px] flex items-center justify-center">
               <Badge variant="secondary" className="text-base shadow">Agotado</Badge>
             </div>
           )}
         </div>
+        </div>
 
-        <div className="p-3 space-y-1">
-          <h3 className="font-medium text-sm line-clamp-2 min-h-[2.5rem] leading-snug">
+        <div className="p-3 pt-2.5 space-y-1">
+          <h3 className="font-medium text-sm text-cat-ink line-clamp-2 min-h-[2.5rem] leading-snug">
             {item.nombre}
           </h3>
           {item.descripcion && (
-            <p className="text-[11px] text-muted-foreground line-clamp-1 leading-tight">
+            <p className="text-[11px] text-cat-muted line-clamp-1 leading-tight">
               {item.descripcion}
             </p>
           )}
           <div className="flex items-baseline gap-1.5 flex-wrap min-h-[1.5rem]">
             {sinPrecio ? (
-              <span className="text-sm font-normal text-muted-foreground italic">Consultar precio</span>
+              <span className="text-sm font-normal text-cat-muted italic">Consultar precio</span>
             ) : (
               <>
-                <span className="text-base font-bold leading-none" style={{ color: brandColor }}>
+                <span className="font-display text-lg font-extrabold tracking-tight text-cat-ink leading-none">
                   {item.precio_hasta != null
                     ? `Desde ${formatPrecio(Number(item.precio))}`
                     : formatPrecio(Number(item.precio))}
                 </span>
                 {tieneAnchor && (
-                  <span className="text-xs text-muted-foreground line-through leading-none">
+                  <span className="text-xs text-cat-muted line-through leading-none">
                     {formatPrecio(Number(item.precio_lista))}
                   </span>
                 )}
@@ -197,8 +190,7 @@ export function ItemCard({ item, onClick, onQuickAdd, formatPrecio, brandColor, 
       {canQuickAdd && (
         <button
           onClick={handleQuickAdd}
-          className="absolute bottom-3 right-3 h-11 w-11 sm:h-10 sm:w-10 rounded-full text-white shadow-lg flex items-center justify-center transition-all sm:opacity-0 sm:group-hover:opacity-100 hover:scale-110 active:scale-95 z-10"
-          style={{ backgroundColor: brandColor }}
+          className="absolute bottom-3 right-3 h-11 w-11 sm:h-10 sm:w-10 rounded-full bg-brand text-brand-foreground shadow-brand flex items-center justify-center transition-all sm:opacity-0 sm:group-hover:opacity-100 hover:scale-110 active:scale-95 z-10"
           aria-label={`Agregar ${item.nombre}`}
         >
           {added ? <Check className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
