@@ -98,11 +98,38 @@ const config: Config = {
           4: "hsl(var(--chart-4))",
           5: "hsl(var(--chart-5))",
         },
+        cat: {
+          bg: "var(--cat-bg)",
+          surface: "var(--cat-surface)",
+          border: "var(--cat-border)",
+          chip: "var(--cat-chip)",
+          ink: "var(--cat-ink)",
+          muted: "var(--cat-muted)",
+        },
+        brand: {
+          DEFAULT: "var(--brand)",
+          foreground: "var(--brand-foreground)",
+          tint: "var(--brand-tint)",
+          "tint-strong": "var(--brand-tint-strong)",
+        },
+        whatsapp: "#22c55e",
+      },
+      fontFamily: {
+        display: ["var(--font-display)", "system-ui", "sans-serif"],
+        body: ["var(--font-body)", "system-ui", "sans-serif"],
+      },
+      boxShadow: {
+        cat: "0 6px 20px rgba(120,90,40,.10)",
+        "cat-lg": "0 8px 28px rgba(120,90,40,.13)",
+        brand: "0 5px 16px var(--brand-tint-strong)",
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        cat: "24px",
+        "cat-inner": "16px",
+        squircle: "22px",
       },
       // Curvas fuertes (Emil). tailwindcss-animate lee animationTimingFunction
       // desde transitionTimingFunction, asi que `ease-snappy` fija tambien la

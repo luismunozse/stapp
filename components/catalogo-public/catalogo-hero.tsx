@@ -42,20 +42,21 @@ const TRUST_ICONS: Record<string, LucideIcon> = {
 function TrustStrip({ items, brandColor }: { items: TrustBadgeData[]; brandColor: string }) {
   if (!items?.length) return null
   return (
-    <div className="border-y bg-muted/30">
-      <div className="container mx-auto max-w-5xl px-4 py-2.5">
-        <ul className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs sm:text-sm text-muted-foreground">
-          {items.map((b, i) => {
-            const Icon = TRUST_ICONS[b.icon] ?? CheckCircle2
-            return (
-              <li key={`${b.icon}-${i}`} className="inline-flex items-center gap-1.5">
-                <Icon className="h-4 w-4 shrink-0" style={{ color: brandColor }} />
-                <span className="font-medium text-foreground">{b.label}</span>
-              </li>
-            )
-          })}
-        </ul>
-      </div>
+    <div className="container mx-auto max-w-5xl px-4 pb-2">
+      <ul className="flex flex-wrap items-center gap-2">
+        {items.map((b, i) => {
+          const Icon = TRUST_ICONS[b.icon] ?? CheckCircle2
+          return (
+            <li
+              key={`${b.icon}-${i}`}
+              className="inline-flex items-center gap-1.5 rounded-full border-[1.5px] border-cat-border bg-cat-surface px-3.5 py-1.5 text-xs font-medium text-cat-ink"
+            >
+              <Icon className="h-3.5 w-3.5 shrink-0" style={{ color: brandColor }} />
+              <span>{b.label}</span>
+            </li>
+          )
+        })}
+      </ul>
     </div>
   )
 }
@@ -92,52 +93,43 @@ export function CatalogoHero({ bannerUrl, logoUrl, titulo, descripcion, whatsapp
     return (
       <>
       <header className="relative">
-        <div className={`${aspectMobile} ${aspectDesktop} relative overflow-hidden bg-muted`}>
-          <Image
-            src={bannerUrl}
-            alt=""
-            fill
-            priority
-            sizes="100vw"
-            className="object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+        <div className={`${aspectMobile} ${aspectDesktop} relative overflow-hidden bg-cat-chip`}>
+          <Image src={bannerUrl} alt="" fill priority sizes="100vw" className="object-cover" />
+          {/* Warm ink gradient (not neutral black) per design system */}
+          <div className="absolute inset-0 bg-gradient-to-t from-[#221c14]/70 via-[#221c14]/10 to-transparent" />
+          <div className="absolute bottom-3 right-3 flex gap-2 sm:bottom-4 sm:right-4">
+            {whatsappLink && (
+              <Button
+                asChild
+                className="h-11 gap-2 rounded-full bg-whatsapp px-4 font-display font-bold text-white shadow-lg hover:bg-whatsapp/90"
+                aria-label="Contactar por WhatsApp"
+              >
+                <a href={whatsappLink} target="_blank" rel="noreferrer">
+                  <WhatsAppIcon className="h-5 w-5" />
+                  <span>WhatsApp</span>
+                </a>
+              </Button>
+            )}
+            <Button
+              variant="secondary"
+              onClick={handleShare}
+              className="h-11 gap-1.5 rounded-full bg-cat-surface font-display font-bold text-cat-ink backdrop-blur"
+            >
+              {shared ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}
+              <span className="hidden sm:inline">Compartir</span>
+            </Button>
+          </div>
         </div>
-        <div className="container mx-auto max-w-5xl px-4 -mt-20 sm:-mt-24 relative pb-6">
-          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-end">
+        <div className="container relative mx-auto max-w-5xl px-4 pb-4">
+          <div className="flex items-end gap-4">
             {logoUrl && (
-              <div className="relative h-20 w-20 sm:h-24 sm:w-24 rounded-2xl overflow-hidden bg-white border-4 border-background shadow-lg shrink-0">
+              <div className="relative -mt-9 h-[76px] w-[76px] shrink-0 overflow-hidden rounded-squircle border-[3px] border-cat-surface bg-white shadow-cat-lg sm:-mt-11 sm:h-24 sm:w-24">
                 <Image src={logoUrl} alt={titulo} fill sizes="96px" className="object-contain p-1" priority />
               </div>
             )}
-            <div className="flex-1 min-w-0 text-white sm:pb-2">
-              <h1 className="text-2xl sm:text-4xl font-bold drop-shadow-lg">{titulo}</h1>
-              {descripcion && <p className="mt-1 sm:text-lg drop-shadow opacity-90 line-clamp-2">{descripcion}</p>}
-            </div>
-            <div className="flex gap-2 sm:pb-2">
-              <Button
-                variant="secondary"
-                onClick={handleShare}
-                className="gap-1.5 h-11 bg-white/90 backdrop-blur text-foreground hover:bg-white"
-              >
-                {shared ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}
-                <span className="hidden sm:inline">Compartir</span>
-              </Button>
-              {whatsappLink && (
-                <Button
-                  asChild
-                  className="gap-2 h-11 px-4 shadow-md hover:shadow-lg transition-shadow"
-                  style={{ backgroundColor: "var(--brand)", color: "var(--brand-foreground)" }}
-                  aria-label="Contactar por WhatsApp"
-                >
-                  <a href={whatsappLink} target="_blank" rel="noreferrer">
-                    <WhatsAppIcon className="h-5 w-5" />
-                    <span>WhatsApp</span>
-                  </a>
-                </Button>
-              )}
-            </div>
           </div>
+          <h1 className="mt-3 font-display text-2xl font-extrabold tracking-tight text-cat-ink sm:text-4xl">{titulo}</h1>
+          {descripcion && <p className="mt-1 text-sm text-cat-muted sm:text-base line-clamp-2">{descripcion}</p>}
         </div>
       </header>
       <TrustStrip items={trustBadges ?? []} brandColor={brandColor} />
@@ -147,53 +139,52 @@ export function CatalogoHero({ bannerUrl, logoUrl, titulo, descripcion, whatsapp
 
   return (
     <>
-    <header className="relative border-b overflow-hidden">
-      {/* Mesh de marca: gradientes radiales en el brand color (vía CSS vars) */}
+    <header className="relative overflow-hidden">
+      {/* Radial brand mesh over ivory: every store looks distinct with zero config */}
       <div
-        className="absolute inset-0 pointer-events-none"
+        className="pointer-events-none absolute inset-0"
         style={{
           background:
             "radial-gradient(75% 65% at 0% -20%, var(--brand-tint-strong, #0f172a14), transparent 60%)," +
             "radial-gradient(65% 60% at 100% 0%, var(--brand-tint, #0f172a0a), transparent 55%)",
         }}
       />
-      <div className={`container mx-auto max-w-5xl px-4 relative ${descripcion ? "py-12 sm:py-16" : "py-10 sm:py-12"}`}>
-        <div className="flex flex-col sm:flex-row gap-5 sm:gap-6 items-start sm:items-center">
-          <div className="relative h-16 w-16 sm:h-20 sm:w-20 rounded-2xl overflow-hidden border bg-background shadow-sm shrink-0">
+      <div className={`container relative mx-auto max-w-5xl px-4 ${descripcion ? "py-10 sm:py-14" : "py-8 sm:py-10"}`}>
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:gap-6">
+          <div className="relative h-[72px] w-[72px] shrink-0 overflow-hidden rounded-squircle bg-cat-surface shadow-cat-lg sm:h-20 sm:w-20">
             {logoUrl ? (
               <Image src={logoUrl} alt={titulo} fill sizes="80px" className="object-contain p-1.5" priority />
             ) : (
               <CatalogoImagePlaceholder name={titulo} className="h-full w-full" />
             )}
           </div>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-3xl sm:text-5xl font-bold tracking-tight leading-[1.05]">{titulo}</h1>
+          <div className="min-w-0 flex-1">
+            <h1 className="font-display text-3xl font-extrabold leading-[1.05] tracking-tight text-cat-ink sm:text-5xl">{titulo}</h1>
             {descripcion && (
-              <p className="text-muted-foreground mt-2 text-base sm:text-lg leading-relaxed line-clamp-3 max-w-2xl">{descripcion}</p>
+              <p className="mt-2 max-w-2xl text-base leading-relaxed text-cat-muted sm:text-lg line-clamp-3">{descripcion}</p>
             )}
           </div>
-          <div className="flex gap-2 w-full sm:w-auto sm:shrink-0">
-            <Button
-              variant="outline"
-              onClick={handleShare}
-              className="gap-1.5 flex-1 sm:flex-none h-11 bg-background/80 backdrop-blur"
-            >
-              {shared ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}
-              <span className="hidden sm:inline">Compartir</span>
-            </Button>
+          <div className="flex w-full gap-2 sm:w-auto sm:shrink-0">
             {whatsappLink && (
               <Button
                 asChild
-                className="gap-2 flex-1 sm:flex-none h-11 px-4 shadow-md hover:shadow-lg transition-shadow"
-                style={{ backgroundColor: "var(--brand)", color: "var(--brand-foreground)" }}
+                className="h-11 flex-1 gap-2 rounded-full bg-whatsapp px-4 font-display font-bold text-white shadow-lg hover:bg-whatsapp/90 sm:flex-none"
                 aria-label="Contactar por WhatsApp"
               >
                 <a href={whatsappLink} target="_blank" rel="noreferrer">
                   <WhatsAppIcon className="h-5 w-5" />
-                  <span>WhatsApp</span>
+                  <span>Pedir por WhatsApp</span>
                 </a>
               </Button>
             )}
+            <Button
+              variant="outline"
+              onClick={handleShare}
+              className="h-11 flex-1 gap-1.5 rounded-full border-[1.5px] border-cat-border bg-cat-surface font-display font-bold text-cat-ink sm:flex-none"
+            >
+              {shared ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}
+              <span className="hidden sm:inline">Compartir</span>
+            </Button>
           </div>
         </div>
       </div>
