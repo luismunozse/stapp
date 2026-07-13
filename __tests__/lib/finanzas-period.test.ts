@@ -5,6 +5,7 @@ import {
   ultimosDias,
   esteAnio,
   detectPreset,
+  nombreMesCivil,
   type PeriodRange,
 } from "@/lib/finanzas-period"
 
@@ -35,5 +36,21 @@ describe("finanzas-period", () => {
     expect(detectPreset(esteAnio(now), now)).toBe("este-anio")
     const custom: PeriodRange = { desde: "2020-03-01", hasta: "2020-03-10" }
     expect(detectPreset(custom, now)).toBe("personalizado")
+  })
+})
+
+describe("nombreMesCivil", () => {
+  const tz = "America/Argentina/Buenos_Aires"
+
+  // Regresión: en un server UTC (Vercel/CI) el label se corría al mes anterior
+  // porque el marcador caía a medianoche UTC y se formateaba en tz negativa.
+  it("no se corre al mes anterior aunque el server corra en UTC (offset negativo)", () => {
+    expect(nombreMesCivil(2026, 7, tz).completo).toBe("julio de 2026")
+    expect(nombreMesCivil(2026, 7, tz).corto).toBe("jul")
+  })
+
+  it("respeta el cruce de año en enero", () => {
+    expect(nombreMesCivil(2026, 1, tz).completo).toBe("enero de 2026")
+    expect(nombreMesCivil(2026, 12, tz).completo).toBe("diciembre de 2026")
   })
 })

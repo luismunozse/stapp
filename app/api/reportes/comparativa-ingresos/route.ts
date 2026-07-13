@@ -2,7 +2,8 @@ import { NextResponse } from "next/server"
 import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
-import { DEFAULT_TIMEZONE } from "@/lib/timezone"
+import { DEFAULT_TIMEZONE, getZonedParts } from "@/lib/timezone"
+import { nombreMesCivil } from "@/lib/finanzas-period"
 
 /**
  * GET /api/reportes/comparativa-ingresos
@@ -131,9 +132,15 @@ export async function GET() {
       direccion = "up"
     }
 
+    // Mes civil de `now` resuelto en la tz del negocio (no en la del server).
+    // Ambos labels derivan de acá para no correrse un mes cuando el server
+    // corre en UTC; nombreMesCivil ancla al mediodía UTC y Date.UTC normaliza
+    // el cruce de enero (month - 1 === 0 → diciembre del año previo).
+    const { year: anioCivil, month: mesCivil } = getZonedParts(now, tz)
+
     return NextResponse.json({
       mesActual: {
-        nombre: obtenerNombreMes(now, tz),
+        nombre: nombreMesCivil(anioCivil, mesCivil, tz).completo,
         // NET income (base imponible) after notas de crédito
         total: actual.total,
         totalIva: actual.totalIva,
@@ -142,7 +149,7 @@ export async function GET() {
         totalNotasCredito: actual.totalNotasCredito,
       },
       mesAnterior: {
-        nombre: obtenerNombreMes(new Date(now.getFullYear(), now.getMonth() - 1), tz),
+        nombre: nombreMesCivil(anioCivil, mesCivil - 1, tz).completo,
         // NET income (base imponible) after notas de crédito
         total: anterior.total,
         totalIva: anterior.totalIva,
@@ -163,8 +170,4 @@ export async function GET() {
       { status: 500 }
     )
   }
-}
-
-function obtenerNombreMes(fecha: Date, tz: string): string {
-  return fecha.toLocaleDateString("es-AR", { month: "long", year: "numeric", timeZone: tz })
 }
