@@ -226,7 +226,7 @@ export async function GET(request: Request) {
     if (sid) cobrosPeriodoQuery = cobrosPeriodoQuery.eq("ordenes_servicio.sucursal_id", sid)
     const { data: cobrosPeriodo } = await cobrosPeriodoQuery
 
-    const ESTADOS_NUNCA_DEVENGAN = new Set(["CANCELADO", "SIN_REPARACION"])
+    const ESTADOS_NUNCA_DEVENGAN = new Set(["CANCELADO", "SIN_REPARACION", "SIN_FALLA_DETECTADA"])
     const ESTADOS_TERMINALES_DEV = new Set(["REPARADO", "ENTREGADO", "ENTREGADO_SIN_REPARACION", "ENTREGADO_SIN_COBRO"])
 
     for (const c of (cobrosPeriodo || []) as any[]) {
