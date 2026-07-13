@@ -1,6 +1,15 @@
 import '@testing-library/jest-dom'
 import { vi } from 'vitest'
 
+// jsdom no implementa ResizeObserver; lo necesitan componentes Radix (ej. Slider)
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+}
+
 // Mock para React cache
 vi.mock('react', async () => {
   const actual = await vi.importActual('react')

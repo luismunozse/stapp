@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { Search, SlidersHorizontal, X } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -12,6 +13,7 @@ import {
 } from "@/components/ui/sheet"
 import { Slider } from "@/components/ui/slider"
 import { useState } from "react"
+import { CatalogoImagePlaceholder } from "./catalogo-image-placeholder"
 
 export type SortOption = "recomendados" | "precio_asc" | "precio_desc" | "nombre_asc"
 
@@ -19,6 +21,7 @@ interface Categoria {
   id: string
   nombre: string
   slug: string | null
+  imagen_url: string | null
 }
 
 interface Props {
@@ -145,14 +148,25 @@ export function CatalogoFilters({
                   onCategoria(null)
                 }
               }}
-              className={`snap-start shrink-0 px-3.5 py-2 rounded-full text-sm font-medium transition-all border whitespace-nowrap ${
-                categoriaActiva === null
-                  ? "text-white shadow-sm"
-                  : "bg-background hover:bg-muted hover:border-foreground/20 active:scale-95"
-              }`}
-              style={categoriaActiva === null ? { backgroundColor: brandColor, borderColor: brandColor } : undefined}
+              aria-current={categoriaActiva === null ? "true" : undefined}
+              className="snap-start shrink-0 flex flex-col items-center gap-1.5 w-[64px] group/cat"
             >
-              Todos
+              <span
+                className={`h-[60px] w-[60px] rounded-full flex items-center justify-center font-display text-[11px] font-extrabold transition-all ${
+                  categoriaActiva === null
+                    ? "bg-brand text-brand-foreground shadow-brand"
+                    : "bg-cat-chip text-cat-ink border-[1.5px] border-cat-border group-hover/cat:border-cat-ink"
+                }`}
+              >
+                Todo
+              </span>
+              <span
+                className={`text-[11px] leading-tight text-center truncate w-full ${
+                  categoriaActiva === null ? "font-bold text-cat-ink" : "text-cat-muted"
+                }`}
+              >
+                Todos
+              </span>
             </Link>
             {categorias.map((cat) => {
               const active = categoriaActiva === cat.id
@@ -168,14 +182,35 @@ export function CatalogoFilters({
                       onCategoria(cat.id)
                     }
                   }}
-                  className={`snap-start shrink-0 px-3.5 py-2 rounded-full text-sm font-medium transition-all border whitespace-nowrap ${
-                    active
-                      ? "text-white shadow-sm"
-                      : "bg-background hover:bg-muted hover:border-foreground/20 active:scale-95"
-                  }`}
-                  style={active ? { backgroundColor: brandColor, borderColor: brandColor } : undefined}
+                  aria-current={active ? "true" : undefined}
+                  className="snap-start shrink-0 flex flex-col items-center gap-1.5 w-[64px] group/cat"
                 >
-                  {cat.nombre}
+                  <span
+                    className={`relative h-[60px] w-[60px] rounded-full overflow-hidden transition-all ${
+                      active
+                        ? "ring-[2.5px] ring-[var(--brand)] ring-offset-2 ring-offset-cat-bg shadow-brand"
+                        : "border-[1.5px] border-cat-border group-hover/cat:border-cat-ink"
+                    }`}
+                  >
+                    {cat.imagen_url ? (
+                      <Image
+                        src={cat.imagen_url}
+                        alt={cat.nombre}
+                        fill
+                        sizes="60px"
+                        className="object-cover rounded-full"
+                      />
+                    ) : (
+                      <CatalogoImagePlaceholder name={cat.nombre} className="h-full w-full" />
+                    )}
+                  </span>
+                  <span
+                    className={`text-[11px] leading-tight text-center truncate w-full ${
+                      active ? "font-bold text-cat-ink" : "text-cat-muted"
+                    }`}
+                  >
+                    {cat.nombre}
+                  </span>
                 </Link>
               )
             })}
