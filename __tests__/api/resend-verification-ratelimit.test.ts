@@ -139,3 +139,41 @@ describe("resend-verification: rate limiting", () => {
     expect(supabaseAdmin.from).not.toHaveBeenCalled()
   })
 })
+
+describe("resend-verification: email normalization", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.resetModules()
+  })
+
+  it("normalizes the email to lowercase before looking up the user", async () => {
+    // Users are stored with lowercase email (see register/route.ts). PostgREST
+    // `.eq` is case-sensitive, so the lookup MUST normalize or resend silently
+    // no-ops for any casing mismatch.
+    const { persistentRateLimit } = await import("@/lib/rate-limit")
+    vi.mocked(persistentRateLimit).mockResolvedValue({
+      success: true,
+      limit: 3,
+      remaining: 2,
+      reset: Date.now() + 3600,
+    })
+
+    const { userChain } = await setupSupabaseMock({
+      id: "user-1",
+      email: "user@example.com",
+      nombre: "Alice",
+      email_verified: false,
+      organization_id: "org-1",
+      organizations: { slug: "acme" },
+    })
+
+    const { sendVerificationEmail } = await import("@/lib/email")
+
+    const res = await callRoute({ email: "User@Example.COM" })
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    expect(userChain.eq).toHaveBeenCalledWith("email", "user@example.com")
+    expect(sendVerificationEmail).toHaveBeenCalled()
+  })
+})

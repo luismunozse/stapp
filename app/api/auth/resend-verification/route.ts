@@ -32,7 +32,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Buscar usuario por email con su organización
+    // Buscar usuario por email con su organización.
+    // Usamos el email normalizado (lowercase+trim): el registro guarda el email
+    // en lowercase y PostgREST `.eq` es case-sensitive, así que consultar con el
+    // email crudo hace que el reenvío falle en silencio ante cualquier diferencia
+    // de mayúsculas.
     const { data: user, error: findError } = await supabaseAdmin
       .from("users")
       .select(`
@@ -43,7 +47,7 @@ export async function POST(request: NextRequest) {
         organization_id,
         organizations!inner (slug)
       `)
-      .eq("email", email)
+      .eq("email", normalizedEmail)
       .single()
 
     if (findError || !user) {

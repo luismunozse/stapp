@@ -299,6 +299,80 @@ export async function sendVerificationEmail({
   })
 }
 
+interface SendAccountActivatedEmailParams {
+  email: string
+  nombre: string
+  slug: string
+}
+
+/**
+ * Confirmación post-verificación: se envía justo después de que el usuario
+ * verifica su email. Confirma que la cuenta quedó activa e incluye el enlace
+ * directo de ingreso a su subdominio.
+ */
+export async function sendAccountActivatedEmail({
+  email,
+  nombre,
+  slug,
+}: SendAccountActivatedEmailParams) {
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "stapp.com.ar"
+  const loginUrl = `https://${slug}.${rootDomain}/login`
+
+  const content = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td align="center" style="padding-bottom: 24px;">
+          <table role="presentation" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%); width: 80px; height: 80px; border-radius: 50%; text-align: center; vertical-align: middle; font-size: 36px;">
+                &#9989;
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+      <tr>
+        <td align="center">
+          <h1 class="text-heading" style="color: #1f2937; font-size: 24px; font-weight: 700; margin: 0 0 8px 0;">
+            ¡Tu cuenta está activa!
+          </h1>
+        </td>
+      </tr>
+    </table>
+
+    <p class="text-body" style="color: #4b5563; font-size: 16px; text-align: center; margin: 16px 0 0 0;">
+      Hola <strong>${nombre}</strong>, tu correo fue verificado correctamente.
+    </p>
+
+    <p class="text-body" style="color: #4b5563; font-size: 16px; text-align: center; margin: 8px 0 0 0;">
+      Ya podés ingresar a tu cuenta y empezar a usar STApp.
+    </p>
+
+    ${getButton(loginUrl, "Iniciar sesión", "#22c55e")}
+
+    ${getDivider()}
+
+    <p class="text-muted" style="color: #9ca3af; font-size: 13px; text-align: center; margin: 0 0 8px 0;">
+      ¿El botón no funciona? Copia y pega este enlace en tu navegador:
+    </p>
+    <p class="text-link" style="color: #3b82f6; font-size: 12px; word-break: break-all; text-align: center; margin: 0;">
+      ${loginUrl}
+    </p>
+  `
+
+  return sendEmail({
+    to: email,
+    subject: "Tu cuenta está activa - STApp",
+    html: getBaseTemplate({
+      preheader: `${nombre}, tu cuenta de STApp ya está activa. Iniciá sesión.`,
+      headerGradient: "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)",
+      content,
+      rootDomain,
+      footerText: "Recibiste este correo porque acabás de verificar tu cuenta en STApp.",
+    }),
+  })
+}
+
 interface SendPasswordResetEmailParams {
   email: string
   token: string

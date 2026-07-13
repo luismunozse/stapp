@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sendAccountActivatedEmail } from "@/lib/email"
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,10 +14,18 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Buscar usuario con este token
+    // Buscar usuario con este token (traemos nombre + slug para el mail de
+    // confirmación de cuenta activa).
     const { data: user, error: findError } = await supabaseAdmin
       .from("users")
-      .select("id, email, email_verification_expires, email_verified")
+      .select(`
+        id,
+        email,
+        nombre,
+        email_verification_expires,
+        email_verified,
+        organizations!inner (slug)
+      `)
       .eq("email_verification_token", token)
       .single()
 
@@ -63,6 +72,19 @@ export async function GET(request: NextRequest) {
         { error: "Error al verificar el email" },
         { status: 500 }
       )
+    }
+
+    // Enviar mail de confirmación de cuenta activa con el enlace de ingreso.
+    // Si falla, no bloqueamos la verificación (que ya quedó persistida).
+    try {
+      const org = (user as unknown as { organizations: { slug: string } }).organizations
+      await sendAccountActivatedEmail({
+        email: user.email,
+        nombre: user.nombre,
+        slug: org.slug,
+      })
+    } catch (emailError) {
+      console.error("Error sending account activated email:", emailError)
     }
 
     return NextResponse.json({

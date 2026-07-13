@@ -275,6 +275,11 @@ function RegistroForm() {
         email: formData.email,
         slug: cleanSlug,
       })
+      // Si el mail de verificación no llegó a enviarse, avisamos a la pantalla
+      // siguiente para que muestre el estado real (y no un falso "revisá tu inbox").
+      if (data.emailSent === false) {
+        params.set("emailError", "1")
+      }
       window.location.href = `/registro/verificar?${params.toString()}`
     } catch (err) {
       console.error("Error:", err)

@@ -295,7 +295,11 @@ export async function POST(request: NextRequest) {
       ])
     }
 
-    // Enviar email de verificación (solo para registro con credentials)
+    // Enviar email de verificación (solo para registro con credentials).
+    // Rastreamos si el envío efectivamente salió: NO hacemos rollback si falla
+    // (el usuario puede reenviar), pero se lo informamos al cliente para no
+    // mostrarle un "revisá tu email" cuando el mail nunca se envió.
+    let verificationEmailSent = false
     if (!isGoogleRegister && verificationToken) {
       try {
         await sendVerificationEmail({
@@ -304,6 +308,7 @@ export async function POST(request: NextRequest) {
           nombre: userName,
           slug: newOrg.slug,
         })
+        verificationEmailSent = true
       } catch (emailError) {
         console.error("Error sending verification email:", emailError)
         // No hacemos rollback, el usuario puede solicitar reenvío
@@ -316,6 +321,8 @@ export async function POST(request: NextRequest) {
         ? "Cuenta creada exitosamente."
         : "Cuenta creada. Revisá tu email para verificar tu cuenta.",
       requiresVerification: !isGoogleRegister,
+      // Para Google el email ya está verificado (no aplica envío).
+      emailSent: isGoogleRegister ? true : verificationEmailSent,
       provider: isGoogleRegister ? "google" : "credentials",
       organization: {
         id: newOrg.id,
