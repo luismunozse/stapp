@@ -535,3 +535,16 @@
     display: none;
   }
 }
+
+/* ── Catalog storefront tokens (warm commercial v2) ─────────────────────────
+   Fixed light theme: values are constants on purpose — the public storefront
+   does not follow the dashboard's dark mode. Brand vars (--brand*) are set
+   per view via brandCssVars(). See docs/superpowers/specs/2026-07-13-catalogo-redesign-design.md */
+.catalogo-storefront {
+  --cat-bg: #f7f1e8;
+  --cat-surface: #fffdf9;
+  --cat-border: #e8decf;
+  --cat-chip: #f1ebe2;
+  --cat-ink: #221c14;
+  --cat-muted: #95877a;
+}
