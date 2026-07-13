@@ -81,6 +81,32 @@ export function detectPreset(range: PeriodRange, now: Date = new Date()): Period
   return "personalizado"
 }
 
+/**
+ * Nombre del mes civil (`year`, `month1` en 1-12) formateado en `tz`.
+ *
+ * Ancla al mediodía UTC del día 1 para que el mes se renderice correcto sin
+ * importar el offset horario del server. Construir el marcador con
+ * `new Date(y, m, 1)` cae a medianoche LOCAL del server (UTC en Vercel) y, al
+ * formatear con una tz de offset negativo, se corría al mes anterior ("julio"
+ * salía "junio"). Misma convención de ancla al mediodía UTC que
+ * `addDaysInTimeZone` en `lib/timezone.ts`.
+ */
+export function nombreMesCivil(
+  year: number,
+  month1: number,
+  tz: string
+): { corto: string; completo: string } {
+  const anchor = new Date(Date.UTC(year, month1 - 1, 1, 12, 0, 0))
+  return {
+    corto: anchor.toLocaleDateString("es-AR", { month: "short", timeZone: tz }),
+    completo: anchor.toLocaleDateString("es-AR", {
+      month: "long",
+      year: "numeric",
+      timeZone: tz,
+    }),
+  }
+}
+
 /** Lee un rango de los search params de la URL; cae en el default si faltan. */
 export function rangeFromParams(
   params: { desde?: string | null; hasta?: string | null },

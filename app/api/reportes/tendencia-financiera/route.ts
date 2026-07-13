@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { DEFAULT_TIMEZONE } from "@/lib/timezone"
+import { nombreMesCivil } from "@/lib/finanzas-period"
 
 /**
  * Tendencia financiera mensual — últimos N meses.
@@ -65,9 +66,10 @@ export async function GET(request: Request) {
     for (let i = 0; i < meses; i++) {
       const d = new Date(now.getFullYear(), now.getMonth() - meses + 1 + i, 1)
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+      const nombreMes = nombreMesCivil(d.getFullYear(), d.getMonth() + 1, tz)
       buckets[key] = {
-        mes: d.toLocaleDateString("es-AR", { month: "short", timeZone: tz }),
-        mesCompleto: d.toLocaleDateString("es-AR", { month: "long", year: "numeric", timeZone: tz }),
+        mes: nombreMes.corto,
+        mesCompleto: nombreMes.completo,
         ingresos: 0,
         ingresosVentas: 0,
         ingresosServicios: 0,

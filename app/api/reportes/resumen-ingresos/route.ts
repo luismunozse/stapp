@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { getDeviceTypeLabel } from "@/lib/device-types"
 import { DEFAULT_TIMEZONE } from "@/lib/timezone"
+import { nombreMesCivil } from "@/lib/finanzas-period"
 
 export async function GET(request: Request) {
   try {
@@ -173,10 +174,10 @@ export async function GET(request: Request) {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([key, data]) => {
         const [year, month] = key.split("-")
-        const date = new Date(parseInt(year), parseInt(month) - 1)
+        const nombreMes = nombreMesCivil(parseInt(year), parseInt(month), tz)
         return {
-          mes: date.toLocaleDateString("es-AR", { month: "short", timeZone: tz }),
-          mesCompleto: date.toLocaleDateString("es-AR", { month: "long", year: "numeric", timeZone: tz }),
+          mes: nombreMes.corto,
+          mesCompleto: nombreMes.completo,
           servicios: data.servicios,
           ventas: data.ventas,
           total: data.servicios + data.ventas,
@@ -188,14 +189,14 @@ export async function GET(request: Request) {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([key, metodos]) => {
         const [year, month] = key.split("-")
-        const date = new Date(parseInt(year), parseInt(month) - 1)
+        const nombreMes = nombreMesCivil(parseInt(year), parseInt(month), tz)
         const lista = Object.entries(metodos)
           .map(([metodo, monto]) => ({ metodo, monto }))
           .sort((a, b) => b.monto - a.monto)
         return {
           mesKey: key,
-          mes: date.toLocaleDateString("es-AR", { month: "short", timeZone: tz }),
-          mesCompleto: date.toLocaleDateString("es-AR", { month: "long", year: "numeric", timeZone: tz }),
+          mes: nombreMes.corto,
+          mesCompleto: nombreMes.completo,
           total: lista.reduce((sum, m) => sum + m.monto, 0),
           metodos: lista,
         }
