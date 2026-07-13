@@ -344,3 +344,54 @@ describe("tendencia-financiera — branch filter applied to all sources (PR3b)",
     }
   })
 })
+
+describe("tendencia-financiera — SIN_FALLA_DETECTADA nunca devenga", () => {
+  let GET: any
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    vi.resetModules()
+    const mod = await import("@/app/api/reportes/tendencia-financiera/route")
+    GET = mod.GET
+  })
+
+  it("no cuenta como ingreso un cobro sobre una orden en SIN_FALLA_DETECTADA", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    mockCookie("todas")
+
+    const now = new Date()
+    const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
+
+    // Cobro sobre una orden que quedó en SIN_FALLA_DETECTADA (equipo OK, sin falla).
+    // Debe ignorarse como ingreso, igual que SIN_REPARACION / CANCELADO.
+    const cobro = {
+      orden_id: "o-sfd",
+      monto: "1000",
+      created_at: `${currentKey}-10T00:00:00Z`,
+      costo_financiero_monto: null,
+      ordenes_servicio: {
+        estado: "SIN_FALLA_DETECTADA",
+        fecha_completado: null,
+        organization_id: "org-1",
+        sucursal_id: "suc-A",
+      },
+    }
+
+    mockSupabaseFrom({
+      ventas: createChainMock([]),
+      ordenes_servicio: createChainMock([]),
+      cobros_orden: createChainMock([cobro]),
+      movimientos_caja: createChainMock([]),
+      pagos_venta: createChainMock([]),
+      pagos_parciales: createChainMock([]),
+      facturas: createChainMock([]),
+      notas_credito: createChainMock([]),
+      ajustes_inventario: createChainMock([]),
+    })
+
+    const res = await GET(createGetRequest("http://localhost/api/reportes/tendencia-financiera?meses=3"))
+    const { body } = await parseResponse(res)
+
+    expect(body.totales.ingresos).toBe(0)
+  })
+})
