@@ -271,7 +271,7 @@ export function CatalogoView({
 
   return (
     <div
-      className="min-h-dvh bg-background"
+      className="min-h-dvh bg-cat-bg"
       style={brandCssVars(data.config.color_primary) as CSSProperties}
     >
       <CatalogoHero
@@ -492,7 +492,7 @@ export function CatalogoView({
             animate={{ y: 0 }}
             exit={{ y: 100 }}
             transition={{ type: "spring", damping: 25 }}
-            className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-background border-t shadow-2xl px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]"
+            className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-cat-surface border-t border-cat-border shadow-2xl px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]"
           >
             <Button
               onClick={() => setCartOpen(true)}
