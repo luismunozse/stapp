@@ -43,7 +43,11 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
   const [imeiVisible, setImeiVisible] = useState(config.campos?.imei?.visible !== false)
   const [imeiLabel, setImeiLabel] = useState(config.campos?.imei?.label || "Numero de Serie")
   const [imeiPlaceholder, setImeiPlaceholder] = useState(config.campos?.imei?.placeholder || "")
-  const [imeiValidacionImei, setImeiValidacionImei] = useState(config.campos?.imei?.validacion === "imei")
+  const [imeiValidacion, setImeiValidacion] = useState<"none" | "imei" | "pattern">(
+    config.campos?.imei?.validacion ?? "none"
+  )
+  const [imeiPattern, setImeiPattern] = useState(config.campos?.imei?.pattern || "")
+  const [imeiMensajeError, setImeiMensajeError] = useState(config.campos?.imei?.mensajeError || "")
   const [passwordVisible, setPasswordVisible] = useState(config.campos?.password?.visible !== false)
   const [colorVisible, setColorVisible] = useState(config.campos?.color?.visible !== false)
   const [marcaVisible, setMarcaVisible] = useState(config.campos?.marca?.visible !== false)
@@ -75,7 +79,7 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
     try {
       const newConfig: TipoDispositivoConfig = {
         campos: {
-          imei: { visible: imeiVisible, label: imeiLabel, placeholder: imeiPlaceholder, ...(imeiValidacionImei ? { validacion: "imei" as const } : {}) },
+          imei: { visible: imeiVisible, label: imeiLabel, placeholder: imeiPlaceholder, ...(imeiValidacion !== "none" ? { validacion: imeiValidacion } : {}), ...(imeiValidacion === "pattern" && imeiPattern ? { pattern: imeiPattern } : {}), ...(imeiValidacion === "pattern" && imeiMensajeError ? { mensajeError: imeiMensajeError } : {}) },
           password: { visible: passwordVisible },
           color: { visible: colorVisible },
           marca: { visible: marcaVisible },
@@ -200,15 +204,31 @@ export function TipoConfigEditor({ tipoId, tipoNombre, config, onSave, onClose }
                     placeholder="Placeholder"
                     className="h-7 text-xs"
                   />
-                  <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={imeiValidacionImei}
-                      onChange={(e) => setImeiValidacionImei(e.target.checked)}
-                      className="h-3.5 w-3.5"
-                    />
-                    Validar como IMEI (15 dígitos)
-                  </label>
+                  <select
+                    value={imeiValidacion}
+                    onChange={(e) => setImeiValidacion(e.target.value as "none" | "imei" | "pattern")}
+                    className="h-7 text-xs rounded border px-1"
+                  >
+                    <option value="none">Sin validación</option>
+                    <option value="imei">IMEI (15 dígitos)</option>
+                    <option value="pattern">Patrón personalizado</option>
+                  </select>
+                  {imeiValidacion === "pattern" && (
+                    <>
+                      <Input
+                        value={imeiPattern}
+                        onChange={(e) => setImeiPattern(e.target.value)}
+                        placeholder="Regex, ej: ^[A-Z]{2}-\d{4}$"
+                        className="h-7 text-xs"
+                      />
+                      <Input
+                        value={imeiMensajeError}
+                        onChange={(e) => setImeiMensajeError(e.target.value)}
+                        placeholder="Mensaje de error (opcional)"
+                        className="h-7 text-xs"
+                      />
+                    </>
+                  )}
                 </>
               )}
             </div>
