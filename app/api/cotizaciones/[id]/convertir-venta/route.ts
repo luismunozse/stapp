@@ -120,6 +120,16 @@ export async function POST(
     const clienteTelefono = cliente?.telefono || null
     const clienteId = cliente?.id || null
 
+    // Bug #3: sin cliente registrado, usar_cuenta_corriente no corre (el RPC lo
+    // guardea por p_cliente_id) → la venta quedaría PAGADA sin debitar a nadie.
+    // Mismo criterio que venta-form. Bloquear antes de crear la venta.
+    if (data.metodoPago === "CUENTA_CORRIENTE" && !clienteId) {
+      return NextResponse.json(
+        { error: "Debe seleccionar un cliente registrado para usar cuenta corriente" },
+        { status: 400 }
+      )
+    }
+
     // La venta hereda la sucursal de la orden vinculada para mantener la
     // atribución por sucursal consistente (la cotización es org-wide). Si la
     // cotización no proviene de una orden, usa la sucursal activa resuelta arriba.
@@ -228,6 +238,11 @@ export async function POST(
       p_monto_original: null,
       p_items: pItems,
       p_sucursal_id: ventaSucursalId,
+      // Bug #3: registrar el pago explícito del total. Sin p_pagos el RPC marca
+      // la venta PAGADA pero NO ejecuta usar_cuenta_corriente, así que una venta
+      // en CUENTA_CORRIENTE nunca debitaba la cuenta del cliente. Con p_pagos, el
+      // loop del RPC corre usar_cuenta_corriente para el pago en cuenta corriente.
+      p_pagos: total > 0 ? [{ metodo: data.metodoPago, monto: total }] : null,
     }
 
     // --- Atomic RPC path (migration 246) ---

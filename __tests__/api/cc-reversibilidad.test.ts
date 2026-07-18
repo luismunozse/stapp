@@ -107,7 +107,9 @@ describe("devolucion venta — reembolso a CC", () => {
 
   const VENTA_DATA = {
     id: "v1", estado: "COMPLETADA", cliente_id: "c1", organization_id: "org-1", sucursal_id: "suc-1",
-    items_venta: [{ id: "iv1", cantidad: 5, descripcion: "Item", inventario_id: null, precio_unitario: 10 }],
+    // total = 5 × 10 (sin descuentos) — presente en toda venta real (select "*").
+    total: 50, subtotal: 50, descuento: 0,
+    items_venta: [{ id: "iv1", cantidad: 5, descripcion: "Item", inventario_id: null, precio_unitario: 10, descuento: 0, tipo_descuento: "MONTO", porcentaje_descuento: 0 }],
   }
 
   /**

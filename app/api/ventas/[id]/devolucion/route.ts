@@ -5,6 +5,7 @@ import { formatDevolucion } from "@/lib/db-utils"
 import { getNextReturnNumber } from "@/lib/counters"
 import { createAuditLogger } from "@/lib/audit"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { computeDevolucionMonto, effectivePaidUnitPrice, saleNetTotal } from "@/lib/devolucion-refund"
 import { z } from "zod"
 
 const itemDevolucionSchema = z.object({
@@ -242,11 +243,13 @@ async function jsDevolucionFallback(
   // 2. Validate each item's cantidad doesn't exceed original minus already returned
   const { data: existingDevoluciones } = await supabaseAdmin
     .from("devoluciones_venta")
-    .select("items_devolucion (*)")
+    .select("monto_devolucion, items_devolucion (*)")
     .eq("venta_id", id)
 
   const returnedMap: Record<string, number> = {}
+  let priorRefunded = 0
   for (const dev of existingDevoluciones || []) {
+    priorRefunded += Number((dev as any).monto_devolucion ?? 0)
     for (const item of dev.items_devolucion || []) {
       returnedMap[item.item_venta_id] = (returnedMap[item.item_venta_id] || 0) + item.cantidad
     }
@@ -288,11 +291,15 @@ async function jsDevolucionFallback(
   )
   const tipo = allFullyReturned ? "TOTAL" : "PARCIAL"
 
-  // 4. Calculate monto using DB prices
-  const montoDevolucion = data.items.reduce((sum, item) => {
-    const original = originalItemsMap[item.itemVentaId]
-    return sum + item.cantidad * Number(original?.precio_unitario ?? 0)
-  }, 0)
+  // 4. Calculate monto: porción de venta.total efectivamente pagada por las
+  // unidades devueltas (neto de descuentos de línea + global + IVA). Nunca el
+  // precio bruto. Espeja el RPC registrar_devolucion_atomica (migración 272).
+  const montoDevolucion = computeDevolucionMonto(
+    Number(venta.total ?? 0),
+    (venta.items_venta || []) as any,
+    data.items.map((i) => ({ itemVentaId: i.itemVentaId, cantidad: i.cantidad })),
+    { priorRefunded, isTotal: tipo === "TOTAL" }
+  )
 
   // 5. Insert devoluciones_venta
   const { data: devolucion, error: devError } = await supabaseAdmin
@@ -319,16 +326,20 @@ async function jsDevolucionFallback(
     throw devError
   }
 
-  // 6. Insert items_devolucion
+  // 6. Insert items_devolucion — precio pagado por unidad (pliega global/IVA)
+  // para que los subtotales reconcilien con monto_devolucion.
+  const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100
+  const saleNet = saleNetTotal((venta.items_venta || []) as any)
   const itemsToInsert = data.items.map((item) => {
-    const precio = Number(originalItemsMap[item.itemVentaId]?.precio_unitario ?? 0)
+    const original = originalItemsMap[item.itemVentaId]
+    const precio = original ? effectivePaidUnitPrice(original, Number(venta.total ?? 0), saleNet) : 0
     return {
       devolucion_id: devolucion.id,
       item_venta_id: item.itemVentaId,
       inventario_id: item.inventarioId || null,
       cantidad: item.cantidad,
-      precio_unitario: precio,
-      subtotal: item.cantidad * precio,
+      precio_unitario: round2(precio),
+      subtotal: round2(item.cantidad * precio),
       restaurar_stock: item.restaurarStock,
     }
   })
