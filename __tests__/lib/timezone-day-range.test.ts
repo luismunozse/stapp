@@ -1,8 +1,27 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest"
-import { dayRangeUtc, todayInTimeZone, monthRangeUtc } from "@/lib/timezone"
+import { dayRangeUtc, todayInTimeZone, monthRangeUtc, addMonthsToDateOnly } from "@/lib/timezone"
 
 const ART = "America/Argentina/Buenos_Aires" // UTC-3
+
+describe("addMonthsToDateOnly — suma meses a un YYYY-MM-DD sin desfase de tz", () => {
+  it("suma un mes dentro del año", () => {
+    expect(addMonthsToDateOnly("2026-07-20", 1)).toBe("2026-08-20")
+  })
+
+  it("cruza el año", () => {
+    expect(addMonthsToDateOnly("2026-12-20", 1)).toBe("2027-01-20")
+  })
+
+  it("varias cuotas mensuales desde la base", () => {
+    expect(addMonthsToDateOnly("2026-07-20", 3)).toBe("2026-10-20")
+  })
+
+  it("mantiene el día (no se corre por UTC)", () => {
+    // el 1ro no cae al mes anterior
+    expect(addMonthsToDateOnly("2026-07-01", 1)).toBe("2026-08-01")
+  })
+})
 
 describe("monthRangeUtc — límites del mes de la org como instantes UTC", () => {
   it("julio ART va de 2026-07-01 03:00Z a 2026-08-01 03:00Z (menos 1ms)", () => {

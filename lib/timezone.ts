@@ -326,3 +326,15 @@ export function monthRangeUtc(
   const startNext = zonedTimeToUtc(year, month + 1, 1, 0, 0, 0, timeZone)
   return { desde: start, hasta: new Date(startNext.getTime() - 1) }
 }
+
+/**
+ * Suma `months` meses a una fecha "date-only" ("YYYY-MM-DD") y devuelve otro
+ * "YYYY-MM-DD". Opera sobre las partes de calendario ancladas a UTC, así que NO
+ * depende de la hora del server (evita el desfase de `new Date()` + setMonth,
+ * cuyo instante UTC puede caer en otro día según la tz). `Date.UTC` normaliza el
+ * cruce de año y el overflow de mes.
+ */
+export function addMonthsToDateOnly(fecha: string, months: number): string {
+  const [y, m, d] = fecha.split("-").map(Number)
+  return new Date(Date.UTC(y, m - 1 + months, d)).toISOString().split("T")[0]
+}
