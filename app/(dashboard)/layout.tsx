@@ -39,6 +39,15 @@ const getCachedAccessInfo = unstable_cache(
   { revalidate: 60, tags: ["subscription"] }
 )
 
+// Cachear el gate del asistente por 1 minuto — evita ~3 queries de
+// suscripción/override en cada navegación del dashboard (mismo patrón que
+// getCachedAccessInfo arriba).
+const getCachedAsistenteEnabled = unstable_cache(
+  async (organizationId: string) => canUseAsistente(organizationId),
+  ["asistente-enabled", "by-org"],
+  { revalidate: 60, tags: ["subscription"] }
+)
+
 // Query directo sin cache — es un single-row lookup por PK, ultra rápido
 async function getMaintenanceBanner() {
   await connection()
@@ -75,7 +84,7 @@ export default async function DashboardLayout({
   }
 
   // Gate del asistente IA (plan Profesional con suscripción ACTIVE)
-  const asistenteEnabled = await canUseAsistente(organizationId)
+  const asistenteEnabled = await getCachedAsistenteEnabled(organizationId)
 
   // Verificar si tiene datos de ejemplo
   const { data: orgData } = await supabaseAdmin
