@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { registrarEgresoCajaEfectivo } from "@/lib/caja-utils"
 import { z } from "zod"
 
 const itemSchema = z.object({
@@ -91,16 +92,19 @@ export async function POST(request: Request) {
     const body = await request.json()
     const data = notaCreditoSchema.parse(body)
 
-    // Verificar venta/orden pertenece a org
+    // Verificar venta/orden pertenece a org (y capturar su sucursal para el egreso)
+    let sucursalId: string | null = null
     if (data.ventaId) {
       const { data: v } = await supabaseAdmin
-        .from("ventas").select("id, total").eq("id", data.ventaId).eq("organization_id", organizationId!).single()
+        .from("ventas").select("id, total, sucursal_id").eq("id", data.ventaId).eq("organization_id", organizationId!).single()
       if (!v) return NextResponse.json({ error: "Venta no encontrada" }, { status: 404 })
+      sucursalId = (v as any).sucursal_id ?? null
     }
     if (data.ordenId) {
       const { data: o } = await supabaseAdmin
-        .from("ordenes_servicio").select("id").eq("id", data.ordenId).eq("organization_id", organizationId!).single()
+        .from("ordenes_servicio").select("id, sucursal_id").eq("id", data.ordenId).eq("organization_id", organizationId!).single()
       if (!o) return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
+      sucursalId = (o as any).sucursal_id ?? null
     }
 
     const { data: result, error: rpcError } = await supabaseAdmin.rpc("crear_nota_credito", {
@@ -126,6 +130,17 @@ export async function POST(request: Request) {
 
     if (rpcError) throw rpcError
     if (result?.error) return NextResponse.json({ error: result.error }, { status: 400 })
+
+    // Nota de crédito reembolsada en efectivo → egreso de caja (arqueo).
+    await registrarEgresoCajaEfectivo({
+      organizationId: organizationId!,
+      userId: userId!,
+      sucursalId,
+      monto: data.monto,
+      metodoPago: data.metodoDevolucion,
+      concepto: `Nota de crédito ${result.numero}`,
+      observaciones: "Reembolso en efectivo de nota de crédito",
+    })
 
     return NextResponse.json({ success: true, id: result.id, numero: result.numero }, { status: 201 })
   } catch (err) {
