@@ -3,7 +3,7 @@ import { requireAdmin } from "@/lib/auth-utils"
 import { fetchMovimientosDia, computeTotales } from "@/lib/caja-utils"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { supabaseAdmin } from "@/lib/supabase"
-import { DEFAULT_TIMEZONE } from "@/lib/timezone"
+import { DEFAULT_TIMEZONE, todayInTimeZone, dayRangeUtc } from "@/lib/timezone"
 
 const METODO_LABELS: Record<string, string> = {
   EFECTIVO: "Efectivo",
@@ -63,9 +63,8 @@ export async function GET(request: Request) {
     }
 
     const { searchParams } = new URL(request.url)
-    const fecha = searchParams.get("fecha") || new Date().toISOString().split("T")[0]
-    const fechaDesde = `${fecha}T00:00:00`
-    const fechaHasta = `${fecha}T23:59:59`
+    const fecha = searchParams.get("fecha") || todayInTimeZone(tz)
+    const { desde: fechaDesde, hasta: fechaHasta } = dayRangeUtc(fecha, tz)
 
     const movimientos = await fetchMovimientosDia(organizationId!, fechaDesde, fechaHasta, undefined, sid)
     const totales = computeTotales(movimientos)

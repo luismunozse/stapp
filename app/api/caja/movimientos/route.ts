@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaEscritura, sucursalParaLectura } from "@/lib/sucursal"
 import { esMovimientoCogsAutomatico } from "@/lib/caja-utils"
+import { todayInTimeZone, dayRangeUtc, DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { z } from "zod"
 
 const movimientoSchema = z.object({
@@ -24,10 +25,17 @@ export async function GET(request: Request) {
 
     const filtro = await sucursalParaLectura({ role, userSucursalId: session!.user.sucursalId ?? null })
 
+    // Día de caja = día calendario de la ORG (no de UTC).
+    const { data: orgTz } = await supabaseAdmin
+      .from("organizations")
+      .select("zona_horaria")
+      .eq("id", organizationId!)
+      .single()
+    const tz = orgTz?.zona_horaria || DEFAULT_TIMEZONE
+
     const { searchParams } = new URL(request.url)
-    const fecha = searchParams.get("fecha") || new Date().toISOString().split("T")[0]
-    const fechaDesde = `${fecha}T00:00:00`
-    const fechaHasta = `${fecha}T23:59:59`
+    const fecha = searchParams.get("fecha") || todayInTimeZone(tz)
+    const { desde: fechaDesde, hasta: fechaHasta } = dayRangeUtc(fecha, tz)
 
     let movimientosQuery = supabaseAdmin
       .from("movimientos_caja")

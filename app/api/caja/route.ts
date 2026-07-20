@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { fetchMovimientosDia, computeTotales } from "@/lib/caja-utils"
 import { sucursalParaLectura } from "@/lib/sucursal"
+import { todayInTimeZone, dayRangeUtc, DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 export async function GET(request: Request) {
   try {
@@ -15,10 +16,18 @@ export async function GET(request: Request) {
     })
     const sid = filtro.verTodas ? null : filtro.sucursalId
 
+    // Día de caja = día calendario de la ORG (no de UTC): las ventas de
+    // 21:00-24:00 locales en UTC-3 pertenecen al día local, no al de UTC.
+    const { data: orgTz } = await supabaseAdmin
+      .from("organizations")
+      .select("zona_horaria")
+      .eq("id", organizationId!)
+      .single()
+    const tz = orgTz?.zona_horaria || DEFAULT_TIMEZONE
+
     const { searchParams } = new URL(request.url)
-    const fecha = searchParams.get("fecha") || new Date().toISOString().split("T")[0]
-    const fechaDesde = `${fecha}T00:00:00`
-    const fechaHasta = `${fecha}T23:59:59`
+    const fecha = searchParams.get("fecha") || todayInTimeZone(tz)
+    const { desde: fechaDesde, hasta: fechaHasta } = dayRangeUtc(fecha, tz)
     const metodoPago = searchParams.get("metodoPago") || undefined
     const tipo = searchParams.get("tipo") || undefined
 
