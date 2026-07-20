@@ -15,8 +15,10 @@ import { OfflineProvider } from "@/contexts/offline-context"
 import { OfflineBanner } from "@/components/offline/offline-banner"
 import { SyncStatusIndicator } from "@/components/offline/sync-status-indicator"
 import { CapacitorBackButtonHandler } from "@/components/capacitor/back-button-handler"
+import { AsistenteWidget } from "@/components/asistente/asistente-widget"
 import { auth } from "@/lib/auth"
 import { isSuperadminEmail } from "@/lib/superadmin-auth"
+import { canUseAsistente } from "@/lib/asistente/access"
 import { hasValidAccess, getTrialInfo, getSubscriptionInfo } from "@/lib/subscriptions"
 import { supabaseAdmin } from "@/lib/supabase"
 import { redirect } from "next/navigation"
@@ -34,6 +36,15 @@ const getCachedAccessInfo = unstable_cache(
     return { accessResult, trialInfo, planNombre: subscription?.planNombre || "Profesional" }
   },
   ["access-info", "by-org"],
+  { revalidate: 60, tags: ["subscription"] }
+)
+
+// Cachear el gate del asistente por 1 minuto — evita ~3 queries de
+// suscripción/override en cada navegación del dashboard (mismo patrón que
+// getCachedAccessInfo arriba).
+const getCachedAsistenteEnabled = unstable_cache(
+  async (organizationId: string) => canUseAsistente(organizationId),
+  ["asistente-enabled", "by-org"],
   { revalidate: 60, tags: ["subscription"] }
 )
 
@@ -71,6 +82,9 @@ export default async function DashboardLayout({
     // Redirigir a página de trial expirado/bloqueo
     redirect(`/suscripcion-requerida?reason=${accessResult.reason || "trial_expired"}`)
   }
+
+  // Gate del asistente IA (plan Profesional con suscripción ACTIVE)
+  const asistenteEnabled = await getCachedAsistenteEnabled(organizationId)
 
   // Verificar si tiene datos de ejemplo
   const { data: orgData } = await supabaseAdmin
@@ -142,6 +156,8 @@ export default async function DashboardLayout({
           <GuidedTour />
           {/* Indicador de operaciones offline pendientes */}
           <SyncStatusIndicator />
+          {/* Asistente IA flotante (bloqueado si el plan no lo incluye) */}
+          <AsistenteWidget enabled={asistenteEnabled} />
           {/* Handler del botón "Atrás" hardware (Android/Capacitor) */}
           <CapacitorBackButtonHandler />
         </div>
