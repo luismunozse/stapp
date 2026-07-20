@@ -344,3 +344,48 @@ describe("estado-resultados — branch filter applied to all sources (PR3b)", ()
     expect(bodyAll.ingresos.total).toBe(800)
   })
 })
+
+describe("estado-resultados — costos financieros scopeados por org (anti cross-tenant)", () => {
+  let GET: any
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    vi.resetModules()
+    const mod = await import("@/app/api/reportes/estado-resultados/route")
+    GET = mod.GET
+  })
+
+  const url = "http://localhost/api/reportes/estado-resultados?desde=2026-05-01&hasta=2026-05-31"
+
+  it("pagos_venta CF: la query scopea por ventas.organization_id (no fetch de todas las orgs)", async () => {
+    mockAuthSuccess({ role: "ADMIN" }) // org-1 por defecto
+    mockCookie("todas")
+    const chains = buildChains()
+
+    await GET(createGetRequest(url))
+
+    // El bug traía pagos_venta sin scoping (truncado a 1000 filas cross-org).
+    // El fix filtra por la org en la propia query vía ventas!inner.
+    expect(hasEqCall(chains.pagosVenta, "ventas.organization_id", "org-1")).toBe(true)
+  })
+
+  it("pagos_parciales CF: la query scopea por facturas.ordenes_servicio.organization_id", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    mockCookie("todas")
+    const chains = buildChains()
+
+    await GET(createGetRequest(url))
+
+    expect(hasEqCall(chains.pagosParciales, "facturas.ordenes_servicio.organization_id", "org-1")).toBe(true)
+  })
+
+  it("pagos_venta CF: aplica .eq('ventas.sucursal_id', 'suc-A') con branch activo", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    mockCookie("suc-A")
+    const chains = buildChains()
+
+    await GET(createGetRequest(url))
+
+    expect(hasEqCall(chains.pagosVenta, "ventas.sucursal_id", "suc-A")).toBe(true)
+  })
+})

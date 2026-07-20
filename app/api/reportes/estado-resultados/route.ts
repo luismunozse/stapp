@@ -240,69 +240,45 @@ export async function GET(request: Request) {
     // ========================================
     // 4. COSTOS FINANCIEROS (comisiones de terminales de pago)
     // ========================================
-    // Pagos de ventas con costo financiero
-    const { data: pagosVentaCF } = await supabaseAdmin
+    // Pagos de ventas con costo financiero — scopeado por org + período EN LA
+    // PROPIA query (vía ventas!inner). El fetch sin scoping traía filas de todas
+    // las orgs y PostgREST lo truncaba a 1000, subestimando el costo financiero
+    // de esta org (y sobreestimando la ganancia neta). Espeja tendencia-financiera.
+    let pagosVentaCFQuery = supabaseAdmin
       .from("pagos_venta")
-      .select("costo_financiero_monto, venta_id")
+      .select("costo_financiero_monto, ventas!inner(organization_id, estado, created_at, sucursal_id)")
+      .eq("ventas.organization_id", organizationId!)
+      .eq("ventas.estado", "COMPLETADA")
       .not("costo_financiero_monto", "is", null)
       .gt("costo_financiero_monto", 0)
+      .gte("ventas.created_at", desdeISO)
+      .lte("ventas.created_at", hastaISO)
+    if (sid) pagosVentaCFQuery = pagosVentaCFQuery.eq("ventas.sucursal_id", sid)
+    const { data: pagosVentaCF } = await pagosVentaCFQuery
 
-    // Filtrar por ventas COMPLETADAS de esta org y período (alineado con sec 1)
     let costosFinancierosVentas = 0
-    if (pagosVentaCF && pagosVentaCF.length > 0) {
-      const ventaIds = [...new Set(pagosVentaCF.map(p => p.venta_id))]
-      let ventasValidasQuery = supabaseAdmin
-        .from("ventas")
-        .select("id")
-        .eq("organization_id", organizationId!)
-        .eq("estado", "COMPLETADA")
-        .gte("created_at", desdeISO)
-        .lte("created_at", hastaISO)
-        .in("id", ventaIds)
-      if (sid) ventasValidasQuery = ventasValidasQuery.eq("sucursal_id", sid)
-      const { data: ventasValidas } = await ventasValidasQuery
-
-      const ventaIdsValidos = new Set((ventasValidas || []).map(v => v.id))
-      for (const p of pagosVentaCF) {
-        if (ventaIdsValidos.has(p.venta_id)) {
-          costosFinancierosVentas += parseFloat(p.costo_financiero_monto || "0")
-        }
-      }
+    for (const p of (pagosVentaCF || []) as any[]) {
+      costosFinancierosVentas += parseFloat(p.costo_financiero_monto || "0")
     }
 
-    // Pagos de facturas (servicios) con costo financiero — alineado por fecha_completado de la orden
-    const { data: pagosParcialCF } = await supabaseAdmin
+    // Pagos de facturas (servicios) con costo financiero — scopeado por org +
+    // período en la query vía facturas!inner→ordenes_servicio!inner (alineado por
+    // fecha_completado). Mismo bug/fix que pagos_venta arriba.
+    let pagosParcialCFQuery = supabaseAdmin
       .from("pagos_parciales")
-      .select("costo_financiero_monto, factura_id")
+      .select("costo_financiero_monto, facturas!inner(ordenes_servicio!inner(organization_id, fecha_completado, sucursal_id))")
+      .eq("facturas.ordenes_servicio.organization_id", organizationId!)
       .not("costo_financiero_monto", "is", null)
       .gt("costo_financiero_monto", 0)
+      .not("facturas.ordenes_servicio.fecha_completado", "is", null)
+      .gte("facturas.ordenes_servicio.fecha_completado", desdeISO)
+      .lte("facturas.ordenes_servicio.fecha_completado", hastaISO)
+    if (sid) pagosParcialCFQuery = pagosParcialCFQuery.eq("facturas.ordenes_servicio.sucursal_id", sid)
+    const { data: pagosParcialCF } = await pagosParcialCFQuery
 
     let costosFinancierosServicios = 0
-    if (pagosParcialCF && pagosParcialCF.length > 0) {
-      const facturaIds = [...new Set(pagosParcialCF.map(p => p.factura_id))]
-      let facturasValidasQuery = supabaseAdmin
-        .from("facturas")
-        .select("id, ordenes_servicio!inner(organization_id, fecha_completado, estado, sucursal_id)")
-        .in("id", facturaIds)
-      if (sid) facturasValidasQuery = facturasValidasQuery.eq("ordenes_servicio.sucursal_id", sid)
-      const { data: facturasValidas } = await facturasValidasQuery
-
-      const facturaIdsValidos = new Set(
-        (facturasValidas || [])
-          .filter(f => {
-            const os = (f.ordenes_servicio as any)
-            if (!os || os.organization_id !== organizationId) return false
-            if (!os.fecha_completado) return false
-            const fc = new Date(os.fecha_completado).toISOString()
-            return fc >= desdeISO && fc <= hastaISO
-          })
-          .map(f => f.id)
-      )
-      for (const p of pagosParcialCF) {
-        if (facturaIdsValidos.has(p.factura_id)) {
-          costosFinancierosServicios += parseFloat(p.costo_financiero_monto || "0")
-        }
-      }
+    for (const p of (pagosParcialCF || []) as any[]) {
+      costosFinancierosServicios += parseFloat(p.costo_financiero_monto || "0")
     }
 
     // CF de cobros directos a orden (sin factura) en período
