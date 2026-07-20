@@ -23,9 +23,7 @@ describe('buildAsistenteSystemPrompt', () => {
     const year = new Date().getFullYear().toString()
     expect(prompt).not.toContain(year)
     // Permitir amounts estáticos como "$10.000" (fondo fijo de caja)
-    const dynamicValueRegex = /\$\s?\d/
-    const staticAmounts = /\$10\.000/
-    const hasDynamicValues = dynamicValueRegex.test(prompt) && !staticAmounts.test(prompt)
-    expect(hasDynamicValues).toBe(false)
+    const withoutKnownStatic = prompt.replace(/\$10\.000/g, '')
+    expect(withoutKnownStatic).not.toMatch(/\$\s?\d/)
   })
 })
