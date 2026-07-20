@@ -47,6 +47,7 @@ export async function GET(request: Request) {
           numero_orden,
           dispositivo,
           public_token,
+          sucursal_id,
           clientes (id, nombre, email, telefono)
         `)
         .eq("organization_id", org.id)
@@ -57,6 +58,7 @@ export async function GET(request: Request) {
             numero_orden: number
             dispositivo: string
             public_token: string | null
+            sucursal_id: string | null
             clientes: { id: string; nombre: string; email: string | null; telefono: string | null } | null
           }[] | null
         }
@@ -83,6 +85,7 @@ export async function GET(request: Request) {
         try {
           await queueNotification({
             organizationId: org.id,
+            sucursalId: orden.sucursal_id,
             ordenId: orden.id,
             clienteId: orden.clientes!.id,
             tipo: "RECORDATORIO_RETIRO",

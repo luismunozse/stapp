@@ -124,6 +124,7 @@ export async function POST(request: Request) {
         numero_orden,
         dispositivo,
         organization_id,
+        sucursal_id,
         public_token,
         clientes (*),
         organizations (id, nombre, nombre_mostrar, slug, moneda, zona_horaria),
@@ -181,6 +182,7 @@ export async function POST(request: Request) {
 
     queueNotification({
       organizationId: organizationId!,
+      sucursalId: (orden as any).sucursal_id ?? null,
       ordenId: data.ordenId,
       garantiaId: garantia.id,
       clienteId: cliente.id,

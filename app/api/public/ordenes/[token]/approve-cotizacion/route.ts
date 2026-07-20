@@ -21,7 +21,7 @@ export async function POST(
 
     // Get order
     const { orden, error } = await getOrderByPublicToken(token, `
-        id, estado, presupuesto, organization_id, cliente_id,
+        id, estado, presupuesto, organization_id, sucursal_id, cliente_id,
         numero_orden, dispositivo,
         clientes (id, nombre, email, telefono),
         organizations (nombre, nombre_mostrar, slug, moneda, zona_horaria)
