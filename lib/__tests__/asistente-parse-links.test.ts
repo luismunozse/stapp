@@ -38,4 +38,14 @@ describe('parseAsistenteLinks', () => {
     expect(segs[0]).toEqual({ type: 'text', text: 'Paso 1\nPaso 2 en ' })
     expect(segs[2]).toEqual({ type: 'text', text: '\nPaso 3' })
   })
+
+  it('NO renderiza como link una ruta interna inexistente (alucinada)', () => {
+    const segs = parseAsistenteLinks('Andá a [Pagos](/pagos-magicos) ya')
+    expect(segs.every((s) => s.type === 'text')).toBe(true)
+  })
+
+  it('NO renderiza como link una ruta con traversal', () => {
+    const segs = parseAsistenteLinks('Mirá [esto](/../evil) por favor')
+    expect(segs.every((s) => s.type === 'text')).toBe(true)
+  })
 })
