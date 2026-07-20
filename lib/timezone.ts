@@ -228,3 +228,37 @@ export function formatDateTimeValue(
     timeZone: timezone,
   }).format(d)
 }
+
+/**
+ * Día calendario "hoy" en `timeZone`, como "YYYY-MM-DD". A diferencia de
+ * `new Date().toISOString().split("T")[0]` (que da el día UTC), respeta la tz
+ * de la org: a las 22:00 de Argentina (01:00 UTC del día siguiente) sigue
+ * devolviendo el día local, no el de UTC.
+ */
+export function todayInTimeZone(
+  timeZone: string = DEFAULT_TIMEZONE,
+  now: Date = new Date()
+): string {
+  const { year, month, day } = getZonedParts(now, timeZone)
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+}
+
+/**
+ * Devuelve los instantes UTC (ISO) que acotan el día calendario `fecha`
+ * ("YYYY-MM-DD") en `timeZone`. Sirve para filtrar columnas TIMESTAMPTZ por el
+ * "día de la org": `${fecha}T00:00:00` sin offset lo interpreta Postgres como
+ * UTC, de modo que en UTC-3 las ventas de 21:00-24:00 locales caen en el día
+ * siguiente. `hasta` es el último milisegundo del día (para usar con `.lte`).
+ */
+export function dayRangeUtc(
+  fecha: string,
+  timeZone: string = DEFAULT_TIMEZONE
+): { desde: string; hasta: string } {
+  const [y, m, d] = fecha.split("-").map(Number)
+  const start = zonedTimeToUtc(y, m, d, 0, 0, 0, timeZone)
+  const startNext = zonedTimeToUtc(y, m, d + 1, 0, 0, 0, timeZone)
+  return {
+    desde: start.toISOString(),
+    hasta: new Date(startNext.getTime() - 1).toISOString(),
+  }
+}

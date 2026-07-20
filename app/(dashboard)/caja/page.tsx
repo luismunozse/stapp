@@ -19,12 +19,17 @@ import { MovimientosManualesList } from "@/components/caja/movimientos-manuales-
 import { HistorialCierres } from "@/components/caja/historial-cierres"
 import { ExportButton } from "@/components/caja/export-button"
 import { PageShell } from "@/components/ui/page-shell"
+import { useCurrency } from "@/contexts/currency-context"
+import { todayInTimeZone } from "@/lib/timezone"
 
 export default function CajaPage() {
   const { data: session } = useSession()
+  const { timezone } = useCurrency()
   const isAdmin = session?.user?.role === "ADMIN"
 
-  const [fecha, setFecha] = useState(new Date().toISOString().split("T")[0])
+  // Día de caja por defecto = hoy en la tz de la org (no el día UTC, que a las
+  // 21:00 local en UTC-3 ya salta al día siguiente y muestra caja vacía).
+  const [fecha, setFecha] = useState(() => todayInTimeZone(timezone))
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<any>(null)
   const [filtroMetodo, setFiltroMetodo] = useState("")
