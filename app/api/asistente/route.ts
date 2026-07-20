@@ -98,13 +98,6 @@ export async function POST(request: Request) {
       .limit(HISTORY_TURNS)
     const ordered = (historial ?? []).slice().reverse()
 
-    await supabaseAdmin.from("asistente_mensajes").insert({
-      conversacion_id: convId,
-      organization_id: organizationId!,
-      tipo: "USER",
-      contenido: message,
-    })
-
     // Multi-turn real (no concatenación en un string): preserva la caché
     // del system prompt entre turnos.
     const messages: Anthropic.MessageParam[] = [
@@ -115,24 +108,43 @@ export async function POST(request: Request) {
       { role: "user" as const, content: message },
     ]
 
-    const response = await anthropic.messages.create({
-      model: ASISTENTE_MODEL,
-      max_tokens: MAX_TOKENS,
-      system: [
+    let response: Anthropic.Message
+    try {
+      response = await anthropic.messages.create({
+        model: ASISTENTE_MODEL,
+        max_tokens: MAX_TOKENS,
+        system: [
+          {
+            type: "text",
+            text: buildAsistenteSystemPrompt(),
+            cache_control: { type: "ephemeral" },
+          },
+        ],
+        messages,
+      })
+    } catch (claudeError) {
+      console.error("[Asistente] Claude API error:", claudeError)
+      return NextResponse.json(
         {
-          type: "text",
-          text: buildAsistenteSystemPrompt(),
-          cache_control: { type: "ephemeral" },
+          error: "El asistente está teniendo problemas para responder. Probá de nuevo en unos segundos.",
+          code: "UPSTREAM_ERROR",
         },
-      ],
-      messages,
-    })
+        { status: 502 }
+      )
+    }
 
     const textBlock = response.content.find((b) => b.type === "text")
     const assistantMessage =
       textBlock && textBlock.type === "text" && textBlock.text
         ? textBlock.text
         : "Disculpá, tuve un problema para responder. Probá de nuevo en unos segundos."
+
+    await supabaseAdmin.from("asistente_mensajes").insert({
+      conversacion_id: convId,
+      organization_id: organizationId!,
+      tipo: "USER",
+      contenido: message,
+    })
 
     await supabaseAdmin.from("asistente_mensajes").insert({
       conversacion_id: convId,
