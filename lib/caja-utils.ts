@@ -1,5 +1,48 @@
 import { supabaseAdmin } from "@/lib/supabase"
 
+/**
+ * Registra un EGRESO de caja por un reembolso en EFECTIVO (devolución de venta o
+ * nota de crédito). El efectivo sale del cajón; sin este movimiento el arqueo
+ * del día queda con un faltante fantasma. Solo aplica a EFECTIVO (transferencia/
+ * tarjeta no son caja física; el reembolso a cuenta corriente se maneja aparte).
+ * `afecta_rentabilidad=false`: es un movimiento de caja, no un gasto operativo
+ * del P&L (la reversión de ingreso va por notas de crédito). Best-effort: un
+ * fallo se loguea, no rompe la operación ya registrada.
+ */
+export async function registrarEgresoCajaEfectivo(opts: {
+  organizationId: string
+  userId: string
+  sucursalId: string | null
+  monto: number
+  metodoPago?: string | null
+  concepto: string
+  observaciones?: string
+}): Promise<void> {
+  if (opts.metodoPago !== "EFECTIVO" || !opts.monto || opts.monto <= 0) return
+
+  let sesionQuery = supabaseAdmin
+    .from("sesiones_caja")
+    .select("id")
+    .eq("organization_id", opts.organizationId)
+    .eq("estado", "ABIERTA")
+  if (opts.sucursalId) sesionQuery = sesionQuery.eq("sucursal_id", opts.sucursalId)
+  const { data: sesion } = await sesionQuery.maybeSingle()
+
+  const { error } = await supabaseAdmin.from("movimientos_caja").insert({
+    organization_id: opts.organizationId,
+    sesion_caja_id: sesion?.id || null,
+    tipo: "EGRESO",
+    monto: opts.monto,
+    metodo_pago: "EFECTIVO",
+    concepto: opts.concepto,
+    observaciones: opts.observaciones ?? null,
+    usuario_id: opts.userId,
+    afecta_rentabilidad: false,
+    sucursal_id: opts.sucursalId,
+  })
+  if (error) console.error("Error registrando egreso de caja (efectivo):", error)
+}
+
 export interface MovimientoUnificado {
   tipo: string
   monto: number

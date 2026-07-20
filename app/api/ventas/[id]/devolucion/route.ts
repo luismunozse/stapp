@@ -6,6 +6,7 @@ import { getNextReturnNumber } from "@/lib/counters"
 import { createAuditLogger } from "@/lib/audit"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { computeDevolucionMonto, effectivePaidUnitPrice, saleNetTotal, aggregateReturnItems } from "@/lib/devolucion-refund"
+import { registrarEgresoCajaEfectivo } from "@/lib/caja-utils"
 import { z } from "zod"
 
 const itemDevolucionSchema = z.object({
@@ -110,7 +111,7 @@ export async function POST(
     const { id } = await params
 
     const filtroP = await sucursalParaLectura({ role, userSucursalId: (session!.user as any).sucursalId ?? null })
-    let ventaCheckQuery = supabaseAdmin.from("ventas").select("id").eq("id", id).eq("organization_id", organizationId!)
+    let ventaCheckQuery = supabaseAdmin.from("ventas").select("id, sucursal_id").eq("id", id).eq("organization_id", organizationId!)
     if (!filtroP.verTodas && filtroP.sucursalId) {
       ventaCheckQuery = ventaCheckQuery.eq("sucursal_id", filtroP.sucursalId)
     }
@@ -193,6 +194,17 @@ export async function POST(
       tipo: (rpcData as any).tipo,
       monto_devolucion: (rpcData as any).montoDevolucion,
       items_count: data.items.length,
+    })
+
+    // Reembolso en efectivo → egreso de caja (para que el arqueo cuadre).
+    await registrarEgresoCajaEfectivo({
+      organizationId: organizationId!,
+      userId: userId!,
+      sucursalId: (ventaCheck as any).sucursal_id ?? null,
+      monto: (rpcData as any).montoDevolucion,
+      metodoPago: data.metodoReembolso,
+      concepto: `Devolución ${numeroDevolucion}`,
+      observaciones: "Reembolso en efectivo de devolución de venta",
     })
 
     return NextResponse.json(formatDevolucion(devolucionCompleta), { status: 201 })
@@ -428,6 +440,17 @@ async function jsDevolucionFallback(
       console.error("Error reembolsando a cuenta corriente:", ccError)
     }
   }
+
+  // 8c. Reembolso en efectivo → egreso de caja (arqueo).
+  await registrarEgresoCajaEfectivo({
+    organizationId,
+    userId,
+    sucursalId: venta.sucursal_id ?? null,
+    monto: montoDevolucion,
+    metodoPago: data.metodoReembolso,
+    concepto: `Devolución ${numeroDevolucion}`,
+    observaciones: "Reembolso en efectivo de devolución de venta",
+  })
 
   // 9. Audit log
   const audit = createAuditLogger(organizationId, userId, request)
