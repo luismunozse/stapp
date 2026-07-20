@@ -12,7 +12,41 @@ vi.mock("@/lib/sucursal", () => ({
 
 import { sucursalParaEscritura } from "@/lib/sucursal"
 import { supabaseAdmin } from "@/lib/supabase"
-import { POST } from "@/app/api/gastos-recurrentes/materializar/route"
+import { POST, calcularProximo } from "@/app/api/gastos-recurrentes/materializar/route"
+
+describe("calcularProximo — MENSUAL no saltea meses por overflow de día", () => {
+  it("31/01 con día 31 → 28/02 (NO 31/03: febrero no se saltea)", () => {
+    expect(calcularProximo("2026-01-31", "MENSUAL", 31)).toBe("2026-02-28")
+  })
+
+  it("28/02 con día 31 → 31/03 (recupera el ancla en un mes de 31 días)", () => {
+    expect(calcularProximo("2026-02-28", "MENSUAL", 31)).toBe("2026-03-31")
+  })
+
+  it("31/05 con día 31 → 30/06 (junio tiene 30, no saltea a julio)", () => {
+    expect(calcularProximo("2026-05-31", "MENSUAL", 31)).toBe("2026-06-30")
+  })
+
+  it("cruza el año: 31/12 con día 31 → 31/01 del año siguiente", () => {
+    expect(calcularProximo("2026-12-31", "MENSUAL", 31)).toBe("2027-01-31")
+  })
+
+  it("día del mes normal (15) avanza un mes", () => {
+    expect(calcularProximo("2026-01-15", "MENSUAL", 15)).toBe("2026-02-15")
+  })
+
+  it("sin dia_del_mes: usa el día de la fecha y no desborda", () => {
+    expect(calcularProximo("2026-01-31", "MENSUAL", null)).toBe("2026-02-28")
+  })
+
+  it("SEMANAL suma 7 días", () => {
+    expect(calcularProximo("2026-01-10", "SEMANAL", null)).toBe("2026-01-17")
+  })
+
+  it("ANUAL suma un año", () => {
+    expect(calcularProximo("2026-06-15", "ANUAL", null)).toBe("2027-06-15")
+  })
+})
 
 const mockVencidos = [
   {
