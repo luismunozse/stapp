@@ -76,7 +76,7 @@ export function AsistentePanel({ onClose }: AsistentePanelProps) {
   }
 
   return (
-    <div className="fixed bottom-20 right-4 md:bottom-6 md:right-6 z-50 w-[90vw] max-w-md h-[500px] max-h-[75vh] bg-card border shadow-2xl rounded-2xl flex flex-col overflow-hidden">
+    <div className="fixed bottom-20 right-4 md:bottom-6 md:right-6 z-[60] w-[90vw] max-w-md h-[500px] max-h-[75vh] bg-card border shadow-2xl rounded-2xl flex flex-col overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b bg-primary text-primary-foreground">
         <div className="flex items-center gap-2">
           <Sparkles className="w-4 h-4" />
