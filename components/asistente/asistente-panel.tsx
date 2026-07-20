@@ -1,10 +1,12 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import Link from "next/link"
 import { X, Send, Loader2, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
+import { parseAsistenteLinks } from "@/lib/asistente/parse-links"
 
 interface Message {
   id: string
@@ -96,7 +98,17 @@ export function AsistentePanel({ onClose }: AsistentePanelProps) {
                 m.tipo === "USER" ? "bg-primary text-primary-foreground" : "bg-muted"
               )}
             >
-              {m.contenido}
+              {m.tipo === "ASSISTANT"
+                ? parseAsistenteLinks(m.contenido).map((seg, i) =>
+                    seg.type === "link" ? (
+                      <Link key={i} href={seg.href} className="underline text-primary font-medium">
+                        {seg.label}
+                      </Link>
+                    ) : (
+                      <span key={i}>{seg.text}</span>
+                    )
+                  )
+                : m.contenido}
             </div>
           </div>
         ))}
