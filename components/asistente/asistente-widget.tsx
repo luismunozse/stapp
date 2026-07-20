@@ -11,7 +11,7 @@ const AsistentePanel = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="fixed bottom-36 right-4 md:bottom-20 md:right-6 z-[60] w-[90vw] max-w-md h-[500px] bg-card border shadow-2xl rounded-2xl flex items-center justify-center">
+      <div className="fixed bottom-36 right-4 lg:bottom-20 lg:right-6 z-[60] w-[90vw] max-w-md h-[500px] bg-card border shadow-2xl rounded-2xl flex items-center justify-center">
         <Loader2 className="w-6 h-6 animate-spin text-primary" />
       </div>
     ),
@@ -28,8 +28,8 @@ export function AsistenteWidget({ enabled }: AsistenteWidgetProps) {
 
   if (!enabled) {
     return (
-      <div className="fixed bottom-36 right-4 md:bottom-20 md:right-6 z-40">
-        {/* bottom-36/md:bottom-20: clears SyncStatusIndicator (bottom-24 mobile / lg:bottom-6, z-[55]) */}
+      <div className="fixed bottom-36 right-4 lg:bottom-20 lg:right-6 z-40">
+        {/* bottom-36/lg:bottom-20: clears SyncStatusIndicator (bottom-24 mobile / lg:bottom-6, z-[55]) */}
         {showLockedTip && (
           <div className="absolute bottom-14 right-0 w-64 bg-card border shadow-lg rounded-xl p-3 text-sm">
             <p className="font-medium mb-1">Asistente de STApp</p>
@@ -60,12 +60,12 @@ export function AsistenteWidget({ enabled }: AsistenteWidgetProps) {
       {isOpen && <AsistentePanel onClose={() => setIsOpen(false)} />}
       {!isOpen && (
         <>
-          {/* bottom-36/md:bottom-20: clears SyncStatusIndicator (bottom-24 mobile / lg:bottom-6, z-[55]) */}
+          {/* bottom-36/lg:bottom-20: clears SyncStatusIndicator (bottom-24 mobile / lg:bottom-6, z-[55]) */}
           <button
             onClick={() => setIsOpen(true)}
             aria-label="Abrir asistente de STApp"
             className={cn(
-              "fixed bottom-36 right-4 md:bottom-20 md:right-6 z-40",
+              "fixed bottom-36 right-4 lg:bottom-20 lg:right-6 z-40",
               "w-12 h-12 rounded-full flex items-center justify-center",
               "bg-primary text-primary-foreground shadow-lg hover:opacity-90 transition-opacity"
             )}
