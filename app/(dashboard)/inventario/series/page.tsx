@@ -43,7 +43,7 @@ const ESTADO_COLOR: Record<SerieRow["estado"], string> = {
 }
 
 export default function SeriesGlobalPage() {
-  const { timezone } = useCurrency()
+  const { formatDate } = useCurrency()
   const [q, setQ] = useState("")
   const [results, setResults] = useState<SerieRow[]>([])
   const [loading, setLoading] = useState(false)
@@ -171,14 +171,14 @@ export default function SeriesGlobalPage() {
                       </td>
                       <td className="p-3 text-xs text-muted-foreground">
                         {s.fecha_venta
-                          ? new Date(s.fecha_venta).toLocaleDateString("es-AR", { timeZone: timezone })
+                          ? formatDate(s.fecha_venta)
                           : "—"}
                       </td>
                       <td className="p-3 text-xs text-muted-foreground">
                         {s.fecha_garantia_vence ? (
                           <span className="flex items-center gap-1">
                             <ShieldCheck className="h-3 w-3" />
-                            {new Date(s.fecha_garantia_vence).toLocaleDateString("es-AR", { timeZone: timezone })}
+                            {formatDate(s.fecha_garantia_vence)}
                           </span>
                         ) : (
                           "—"

@@ -41,7 +41,7 @@ interface LoteVencer {
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 export default function LotesPage() {
-  const { timezone } = useCurrency()
+  const { formatDate } = useCurrency()
   const [dias, setDias] = useState<string>("30")
   const [marking, setMarking] = useState(false)
   const [error, setError] = useState("")
@@ -210,7 +210,7 @@ export default function LotesPage() {
                               }`}
                             >
                               <CalendarClock className="h-3 w-3" />
-                              {new Date(l.fecha_vencimiento).toLocaleDateString("es-AR", { timeZone: timezone })}
+                              {formatDate(l.fecha_vencimiento)}
                               <span className="text-[11px] ml-1">
                                 ({dr < 0 ? `hace ${-dr}d` : `en ${dr}d`})
                               </span>

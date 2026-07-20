@@ -130,13 +130,32 @@ export function zonedTimeToUtc(
   return new Date(guess - offset)
 }
 
+// Matchea una fecha "date-only" (columna DATE de Postgres): YYYY-MM-DD sin hora.
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/
+
+/**
+ * Convierte el valor de fecha a un instante para formatear. Para strings
+ * "date-only" (YYYY-MM-DD, típico de columnas DATE) ancla al MEDIODÍA UTC, de
+ * modo que renderice el mismo día calendario en todas las tz soportadas
+ * (UTC-8..UTC+1). `new Date("2026-07-20")` parsea a medianoche UTC y, en una tz
+ * de offset negativo (UTC-3), se muestra el día anterior (bug off-by-one).
+ * Los timestamps completos (con hora/offset) se parsean tal cual.
+ */
+function toDisplayInstant(date: Date | string): Date {
+  if (typeof date === "string") {
+    if (DATE_ONLY_RE.test(date)) return new Date(`${date}T12:00:00Z`)
+    return new Date(date)
+  }
+  return date
+}
+
 export function formatDateValue(
   date: Date | string | null | undefined,
   timezone: string = DEFAULT_TIMEZONE,
   locale: string = "es-AR"
 ): string {
   if (!date) return ""
-  const d = typeof date === "string" ? new Date(date) : date
+  const d = toDisplayInstant(date)
   if (Number.isNaN(d.getTime())) return ""
 
   return new Intl.DateTimeFormat(locale, {

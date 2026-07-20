@@ -43,7 +43,7 @@ export function CobrarOrdenDialog({
   orden,
   onSuccess,
 }: CobrarOrdenDialogProps) {
-  const { formatPrice, timezone } = useCurrency()
+  const { formatPrice, formatDate } = useCurrency()
   const { showError, showInfo } = useModal()
   const { offlineFetch } = useOffline()
   const [loading, setLoading] = useState(false)
@@ -299,7 +299,7 @@ export function CobrarOrdenDialog({
               {cuotasPendientes.map((c: any) => (
                 <div key={c.id} className="flex justify-between text-xs">
                   <span className="text-amber-700 dark:text-amber-400">
-                    Cuota {c.numeroCuota}/{c.totalCuotas} — vence {new Date(c.fechaVencimiento).toLocaleDateString("es-AR", { timeZone: timezone })}
+                    Cuota {c.numeroCuota}/{c.totalCuotas} — vence {formatDate(c.fechaVencimiento)}
                   </span>
                   <span className="font-medium text-amber-800 dark:text-amber-300">
                     {formatPrice(c.monto)}
