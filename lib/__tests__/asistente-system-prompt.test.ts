@@ -26,4 +26,11 @@ describe('buildAsistenteSystemPrompt', () => {
     const withoutKnownStatic = prompt.replace(/\$10\.000/g, '')
     expect(withoutKnownStatic).not.toMatch(/\$\s?\d/)
   })
+
+  it('incluye las rutas del panel', () => {
+    const prompt = buildAsistenteSystemPrompt()
+    expect(prompt).toContain('# Rutas del panel')
+    expect(prompt).toContain('/configuracion/whatsapp')
+    expect(prompt).toContain('[Nombre de la pantalla](/ruta)')
+  })
 })
