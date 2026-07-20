@@ -5,7 +5,7 @@ import { formatDevolucion } from "@/lib/db-utils"
 import { getNextReturnNumber } from "@/lib/counters"
 import { createAuditLogger } from "@/lib/audit"
 import { sucursalParaLectura } from "@/lib/sucursal"
-import { computeDevolucionMonto, effectivePaidUnitPrice, saleNetTotal } from "@/lib/devolucion-refund"
+import { computeDevolucionMonto, effectivePaidUnitPrice, saleNetTotal, aggregateReturnItems } from "@/lib/devolucion-refund"
 import { z } from "zod"
 
 const itemDevolucionSchema = z.object({
@@ -121,6 +121,11 @@ export async function POST(
 
     const body = await request.json()
     const data = devolucionSchema.parse(body)
+
+    // Agregar líneas con el mismo itemVentaId: sin esto, entradas duplicadas
+    // pasan cada una la validación de máximo devolvible por separado y permiten
+    // devolver (y reembolsar) más de lo vendido.
+    data.items = aggregateReturnItems(data.items)
 
     // Get the return number before branching (both paths need it)
     const numeroDevolucion = await getNextReturnNumber(organizationId!)

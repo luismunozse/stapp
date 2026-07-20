@@ -4,6 +4,7 @@ import {
   effectiveUnitNet,
   effectivePaidUnitPrice,
   saleNetTotal,
+  aggregateReturnItems,
 } from "@/lib/devolucion-refund"
 
 // Sale item shape as stored in items_venta (values may arrive as strings from PostgREST).
@@ -132,6 +133,42 @@ describe("computeDevolucionMonto — cap y true-up en devoluciones secuenciales"
     expect(computeDevolucionMonto(300, [item({ id: "i1", cantidad: 3, precio_unitario: 100 })], [
       { itemVentaId: "i1", cantidad: 1 },
     ])).toBeCloseTo(100, 2)
+  })
+})
+
+describe("aggregateReturnItems — agrega itemVentaId duplicados antes de validar", () => {
+  it("suma la cantidad de entradas con el mismo itemVentaId", () => {
+    const out = aggregateReturnItems([
+      { itemVentaId: "iv1", cantidad: 5, restaurarStock: false },
+      { itemVentaId: "iv1", cantidad: 5, restaurarStock: false },
+    ])
+    expect(out).toHaveLength(1)
+    expect(out[0]).toMatchObject({ itemVentaId: "iv1", cantidad: 10 })
+  })
+
+  it("preserva entradas de distinto itemVentaId", () => {
+    const out = aggregateReturnItems([
+      { itemVentaId: "iv1", cantidad: 2 },
+      { itemVentaId: "iv2", cantidad: 3 },
+    ])
+    expect(out).toHaveLength(2)
+  })
+
+  it("restaurarStock = OR entre entradas del mismo ítem", () => {
+    const out = aggregateReturnItems([
+      { itemVentaId: "iv1", cantidad: 1, restaurarStock: false },
+      { itemVentaId: "iv1", cantidad: 1, restaurarStock: true },
+    ])
+    expect(out[0].restaurarStock).toBe(true)
+  })
+
+  it("no muta el array de entrada", () => {
+    const input = [
+      { itemVentaId: "iv1", cantidad: 1 },
+      { itemVentaId: "iv1", cantidad: 1 },
+    ]
+    aggregateReturnItems(input)
+    expect(input[0].cantidad).toBe(1)
   })
 })
 

@@ -30,6 +30,33 @@ const num = (v: unknown): number => {
   return Number.isFinite(n) ? n : 0
 }
 
+export interface AggregatableReturnItem {
+  itemVentaId: string
+  cantidad: number
+  restaurarStock?: boolean
+  [k: string]: unknown
+}
+
+/**
+ * Agrega entradas de devolución con el mismo `itemVentaId` sumando la cantidad,
+ * para que la validación de máximo devolvible y el cálculo del monto no puedan
+ * ser burlados con líneas duplicadas (devolver más de lo vendido). No muta la
+ * entrada. `restaurarStock` se combina con OR.
+ */
+export function aggregateReturnItems<T extends AggregatableReturnItem>(items: T[]): T[] {
+  const map = new Map<string, T>()
+  for (const it of items) {
+    const existing = map.get(it.itemVentaId)
+    if (existing) {
+      existing.cantidad += num(it.cantidad)
+      if (it.restaurarStock) existing.restaurarStock = true
+    } else {
+      map.set(it.itemVentaId, { ...it, cantidad: num(it.cantidad) })
+    }
+  }
+  return Array.from(map.values())
+}
+
 const round2 = (n: number): number => Math.round((n + Number.EPSILON) * 100) / 100
 
 /** Neto total de la venta = Σ (neto de línea) sobre todas las líneas. */

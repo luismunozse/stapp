@@ -60,6 +60,33 @@ describe("POST /api/ventas/[id]/devolucion — atomic RPC path", () => {
     )
   })
 
+  it("agrega itemVentaId duplicados en p_items antes de llamar la RPC (anti over-refund)", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+    mockSupabaseFrom({
+      ventas: createChainMock({ id: "v1" }),
+      devoluciones_venta: createChainMock(DEV_COMPLETA),
+    })
+    let captured: any = null
+    vi.mocked(supabaseAdmin.rpc).mockImplementation(((fn: string, params?: any) => {
+      if (fn === "registrar_devolucion_atomica") captured = params
+      return Promise.resolve({ data: RPC_SUCCESS, error: null })
+    }) as any)
+
+    await POST(
+      createPostRequest({
+        motivo: "Test",
+        items: [
+          { itemVentaId: "iv1", cantidad: 5, precioUnitario: 10, restaurarStock: false },
+          { itemVentaId: "iv1", cantidad: 5, precioUnitario: 10, restaurarStock: false },
+        ],
+      }, "http://localhost/api/ventas/v1/devolucion"),
+      createParams("v1")
+    )
+
+    expect(captured.p_items).toHaveLength(1)
+    expect(captured.p_items[0]).toMatchObject({ itemVentaId: "iv1", cantidad: 10 })
+  })
+
   it("rpc 'excede lo permitido' error → 400", async () => {
     mockAuthSuccess({ role: "ADMIN" })
     mockSupabaseFrom({ ventas: createChainMock({ id: "v1" }) })
