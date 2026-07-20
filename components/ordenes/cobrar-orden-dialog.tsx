@@ -19,6 +19,7 @@ import { useOffline } from "@/contexts/offline-context"
 import { STORES } from "@/lib/offline/constants"
 import { MultiPagoInput, createPagoLine, type PagoLineItem } from "@/components/pagos/multi-pago-input"
 import { PagosHistorial } from "@/components/facturacion/pagos-historial"
+import { parseMoneyInput } from "@/lib/parse-money"
 
 interface CobrarOrdenDialogProps {
   open: boolean
@@ -57,7 +58,7 @@ export function CobrarOrdenDialog({
 
   const [mostrarDescuento, setMostrarDescuento] = useState(false)
 
-  const descuentoNum = parseFloat(descuento) || 0
+  const descuentoNum = parseMoneyInput(descuento) || 0
   const costoConDescuento = orden.costoFinal - orden.descuentoCobro - descuentoNum
   const pendiente = Math.max(0, costoConDescuento - orden.totalCobrado)
   const yaCobradoTotal = orden.costoFinal - orden.descuentoCobro - orden.totalCobrado <= 0
