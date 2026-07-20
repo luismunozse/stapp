@@ -5,11 +5,17 @@ import { fetchMovimientosDia } from "@/lib/caja-utils"
 // Helper to build a chainable Supabase query mock that captures eq() calls
 function makeQueryChain(finalData: any[]) {
   const eqCalls: Array<[string, string]> = []
+  const neqCalls: Array<[string, string]> = []
   const chain: any = {
     _eqCalls: eqCalls,
+    _neqCalls: neqCalls,
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockImplementation((col: string, val: string) => {
       eqCalls.push([col, val])
+      return chain
+    }),
+    neq: vi.fn().mockImplementation((col: string, val: string) => {
+      neqCalls.push([col, val])
       return chain
     }),
     gte: vi.fn().mockReturnThis(),
@@ -126,6 +132,35 @@ describe("fetchMovimientosDia — sucursal filtering", () => {
     const sucursalFilter = ventaEqCalls.find(([col]) => col === "ventas.sucursal_id")
     expect(sucursalFilter).toBeDefined()
     expect(sucursalFilter![1]).toBe("suc-B")
+  })
+
+  it("excluye del arqueo los pagos de ventas ANULADAS y facturas ANULADAS", async () => {
+    const cobrosChain = makeQueryChain([])
+    const facturaChain = makeQueryChain([])
+    const ventaChain = makeQueryChain([])
+    const ccChain = makeQueryChain([])
+    const movChain = makeQueryChain([])
+
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "cobros_orden") return cobrosChain
+      if (table === "pagos_parciales") return facturaChain
+      if (table === "pagos_venta") return ventaChain
+      if (table === "cuenta_corriente") return ccChain
+      if (table === "movimientos_caja") return movChain
+      return makeQueryChain([])
+    })
+
+    await fetchMovimientosDia(ORG_ID, FECHA_DESDE, FECHA_HASTA)
+
+    // pagos de ventas anuladas no cuentan en el arqueo (como los cobros anulados)
+    const ventaNeq = (ventaChain._neqCalls as [string, string][]).find(([col]) => col === "ventas.estado")
+    expect(ventaNeq).toBeDefined()
+    expect(ventaNeq![1]).toBe("ANULADA")
+
+    // pagos de facturas anuladas tampoco
+    const facturaNeq = (facturaChain._neqCalls as [string, string][]).find(([col]) => col === "facturas.estado_pago")
+    expect(facturaNeq).toBeDefined()
+    expect(facturaNeq![1]).toBe("ANULADA")
   })
 
   it("with null sucursalId — behaves same as omitted (no filtering)", async () => {
