@@ -35,16 +35,36 @@ const CMD = {
   FEED_5: [ESC, 0x64, 0x05], // Feed 5 lines
 }
 
-// Convert text to Latin-1 bytes (handles Spanish chars)
-function textToBytes(text: string): number[] {
+// Mapa Unicode → byte de code page 858 (la page en la que se inicializa la
+// impresora, ver CMD.CHARSET_LATIN). Antes se emitían los code points Latin-1
+// crudos (á=0xE1…), que en CP858 son otros glifos (0xE1='ß'), así que los
+// acentos salían garabateados. CP858 = CP850 + € en 0xD5.
+const CP858: Record<string, number> = {
+  "á": 0xa0, "é": 0x82, "í": 0xa1, "ó": 0xa2, "ú": 0xa3, "ñ": 0xa4, "Ñ": 0xa5,
+  "Á": 0xb5, "É": 0x90, "Í": 0xd6, "Ó": 0xe0, "Ú": 0xe9,
+  "ü": 0x81, "Ü": 0x9a, "ç": 0x87, "Ç": 0x80,
+  "¿": 0xa8, "¡": 0xad, "°": 0xf8, "º": 0xa7, "ª": 0xa6, "€": 0xd5,
+  "à": 0x85, "è": 0x8a, "ì": 0x8d, "ò": 0x95, "ù": 0x97,
+  "â": 0x83, "ê": 0x88, "î": 0x8c, "ô": 0x93, "û": 0x96,
+  "ä": 0x84, "ë": 0x89, "ï": 0x8b, "ö": 0x94,
+  "«": 0xae, "»": 0xaf,
+}
+
+// Convierte texto a bytes de code page 858 (los acentos españoles mapean a su
+// byte de CP858; el ASCII pasa igual; lo no mapeado se reemplaza por '?').
+export function textToBytes(text: string): number[] {
   const bytes: number[] = []
-  for (let i = 0; i < text.length; i++) {
-    const code = text.charCodeAt(i)
-    // Map common Spanish/Latin chars to Latin-1
-    if (code <= 0xff) {
-      bytes.push(code)
+  for (const ch of text) {
+    const mapped = CP858[ch]
+    if (mapped !== undefined) {
+      bytes.push(mapped)
+      continue
+    }
+    const code = ch.charCodeAt(0)
+    if (code <= 0x7f) {
+      bytes.push(code) // ASCII == CP858
     } else {
-      bytes.push(0x3f) // '?' for unmapped chars
+      bytes.push(0x3f) // '?' para lo no mapeado
     }
   }
   return bytes
