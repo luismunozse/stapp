@@ -383,12 +383,16 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
           venta={{
             id: venta.id,
             numeroVenta: venta.numeroVenta,
+            total: venta.total,
             items: venta.items.map(item => ({
               id: item.id,
               inventarioId: item.inventarioId,
               descripcion: item.descripcion,
               cantidad: item.cantidad,
               precioUnitario: item.precioUnitario,
+              descuento: item.descuento,
+              tipoDescuento: item.tipoDescuento,
+              porcentajeDescuento: item.porcentajeDescuento,
             })),
           }}
           onSuccess={() => fetchVenta()}

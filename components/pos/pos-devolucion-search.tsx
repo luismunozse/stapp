@@ -19,12 +19,16 @@ import { useCurrency } from "@/contexts/currency-context"
 export interface VentaForDevolucion {
   id: string
   numeroVenta: number
+  total: number
   items: Array<{
     id: string
     inventarioId: string | null
     descripcion: string
     cantidad: number
     precioUnitario: number
+    descuento?: number
+    tipoDescuento?: "MONTO" | "PORCENTAJE"
+    porcentajeDescuento?: number
   }>
 }
 
@@ -41,6 +45,9 @@ interface VentaFromApi {
     descripcion: string
     cantidad: number
     precioUnitario: number
+    descuento?: number
+    tipoDescuento?: "MONTO" | "PORCENTAJE"
+    porcentajeDescuento?: number
     [key: string]: unknown
   }>
   [key: string]: unknown
@@ -56,12 +63,16 @@ function mapVenta(v: VentaFromApi): VentaForDevolucion {
   return {
     id: v.id,
     numeroVenta: v.numeroVenta,
+    total: v.total,
     items: v.items.map((i) => ({
       id: i.id,
       inventarioId: i.inventarioId ?? null,
       descripcion: i.descripcion,
       cantidad: i.cantidad,
       precioUnitario: i.precioUnitario,
+      descuento: i.descuento,
+      tipoDescuento: i.tipoDescuento,
+      porcentajeDescuento: i.porcentajeDescuento,
     })),
   }
 }
