@@ -73,6 +73,6 @@ COMMENT ON TABLE asistente_mensajes IS 'Mensajes del asistente del panel, con to
 
 -- (3) Flag de plan: solo Profesional
 UPDATE plans SET
-  feature_flags = feature_flags || '{"asistente_ia": true}'::jsonb,
+  feature_flags = COALESCE(feature_flags, '{}'::jsonb) || '{"asistente_ia": true}'::jsonb,
   updated_at = NOW()
 WHERE slug = 'profesional';
