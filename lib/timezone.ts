@@ -149,6 +149,33 @@ function toDisplayInstant(date: Date | string): Date {
   return date
 }
 
+/**
+ * Convierte una fecha "date-only" (p.ej. de `<input type="date">`, "YYYY-MM-DD")
+ * a un ISO anclado al MEDIODÍA UTC. Así el valor guardado en una columna
+ * TIMESTAMPTZ representa ese día calendario de forma estable: se muestra y se
+ * compara como el mismo día en todas las tz soportadas (UTC-8..UTC+1). Guardar
+ * `new Date("2026-07-18").toISOString()` (medianoche UTC) hace que en UTC-3 se
+ * muestre 17/07 y que "venza" la tarde anterior.
+ */
+export function dateOnlyToNoonUtcISO(value: string): string {
+  if (DATE_ONLY_RE.test(value)) return new Date(`${value}T12:00:00Z`).toISOString()
+  return new Date(value).toISOString()
+}
+
+/**
+ * Número de día calendario (YYYYMMDD) del instante `date` evaluado en `timeZone`.
+ * Sirve para comparar fechas por día (p.ej. si una cotización está vencida)
+ * sin que la hora del instante ni el offset provoquen off-by-one.
+ */
+export function dateNumberInTimeZone(
+  date: Date | string,
+  timeZone: string = DEFAULT_TIMEZONE
+): number {
+  const d = typeof date === "string" ? toDisplayInstant(date) : date
+  const { year, month, day } = getZonedParts(d, timeZone)
+  return year * 10000 + month * 100 + day
+}
+
 export function formatDateValue(
   date: Date | string | null | undefined,
   timezone: string = DEFAULT_TIMEZONE,

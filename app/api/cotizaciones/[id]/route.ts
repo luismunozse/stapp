@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger } from "@/lib/audit"
 import { hasPlanFeature } from "@/lib/subscriptions"
+import { dateOnlyToNoonUtcISO } from "@/lib/timezone"
 import { z } from "zod"
 
 const itemSchema = z.object({
@@ -327,7 +328,7 @@ export async function PUT(
     if (data.terminos !== undefined) updateData.terminos = data.terminos
     if (data.fechaVencimiento !== undefined) {
       updateData.fecha_vencimiento = data.fechaVencimiento
-        ? new Date(data.fechaVencimiento).toISOString()
+        ? dateOnlyToNoonUtcISO(data.fechaVencimiento)
         : null
     }
     if (data.descuentoGlobalTipo !== undefined) updateData.descuento_global_tipo = data.descuentoGlobalTipo

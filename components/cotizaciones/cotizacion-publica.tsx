@@ -24,7 +24,7 @@ import {
   ClipboardCheck,
 } from "lucide-react"
 import { formatCurrencyValue, type CurrencyCode } from "@/lib/currency"
-import { formatDateValue } from "@/lib/timezone"
+import { formatDateValue, dateNumberInTimeZone } from "@/lib/timezone"
 
 interface CotizacionData {
   id: string
@@ -235,7 +235,12 @@ export function CotizacionPublica({ token }: { token: string }) {
   }
 
   const config = estadoConfig[data.estado] || estadoConfig.BORRADOR
-  const isExpired = data.fechaVencimiento && new Date(data.fechaVencimiento) < new Date()
+  // Vencida sólo cuando HOY (en la tz de la org) es posterior al día de
+  // vencimiento — válida durante todo el día de vencimiento, sin cortar la
+  // tarde anterior por el desfase UTC.
+  const isExpired = !!data.fechaVencimiento &&
+    dateNumberInTimeZone(new Date(), data.zonaHoraria) >
+      dateNumberInTimeZone(data.fechaVencimiento, data.zonaHoraria)
   const moneda = (data.moneda as CurrencyCode) || "ARS"
   const fmt = (v: number) => formatCurrencyValue(v, moneda)
 
