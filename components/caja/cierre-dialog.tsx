@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog"
 import { Loader2, TrendingUp, TrendingDown, Minus } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
+import { parseMoneyInput } from "@/lib/parse-money"
 
 interface CierreDialogProps {
   open: boolean
@@ -42,7 +43,7 @@ export function CierreDialog({
   const [error, setError] = useState("")
 
   const esperado = saldoInicial + totalIngresosEfectivo - totalEgresosEfectivo
-  const conteo = parseFloat(conteoFisico || "0")
+  const conteo = parseMoneyInput(conteoFisico || "0")
   const diferencia = conteo - esperado
 
   useEffect(() => {

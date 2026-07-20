@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Loader2, Plus, Paperclip, X, FileText } from "lucide-react"
+import { parseMoneyInput } from "@/lib/parse-money"
 
 const CONCEPTOS_INGRESO = [
   "Ingreso manual",
@@ -110,7 +111,7 @@ export function MovimientoManualForm({ onCreated }: MovimientoManualFormProps) {
     e.preventDefault()
     setError("")
 
-    const montoNum = parseFloat(monto)
+    const montoNum = parseMoneyInput(monto)
     if (!monto || isNaN(montoNum) || montoNum <= 0) {
       setError("Ingrese un monto válido mayor a 0")
       return

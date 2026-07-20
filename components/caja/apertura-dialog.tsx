@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { parseMoneyInput } from "@/lib/parse-money"
 import {
   Dialog,
   DialogContent,
@@ -25,7 +26,7 @@ export function AperturaDialog({ open, onOpenChange, onSuccess }: AperturaDialog
 
   const handleSubmit = async () => {
     setError("")
-    const monto = parseFloat(saldoInicial || "0")
+    const monto = parseMoneyInput(saldoInicial || "0")
     if (isNaN(monto) || monto < 0) {
       setError("Ingrese un monto válido")
       return
