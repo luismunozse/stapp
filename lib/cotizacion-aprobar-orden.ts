@@ -10,6 +10,7 @@ export interface OrdenParaAprobacionCotizacion {
   id: string
   estado: string
   organization_id: string
+  sucursal_id?: string | null
   cliente_id: string
   numero_orden: number
   dispositivo: string
@@ -103,6 +104,7 @@ export async function aplicarAprobacionCotizacionAOrden(
 
   queueNotification({
     organizationId: orden.organization_id,
+    sucursalId: orden.sucursal_id ?? null,
     ordenId: orden.id,
     clienteId: orden.cliente_id,
     tipo: "CAMBIO_ESTADO",

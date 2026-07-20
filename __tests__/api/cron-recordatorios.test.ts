@@ -30,6 +30,7 @@ const mockOrden = {
   numero_orden: 42,
   dispositivo: "iPhone 13",
   public_token: "tok-abc123",
+  sucursal_id: "suc-1",
   clientes: {
     id: "cliente-1",
     nombre: "Ana Gomez",
@@ -60,6 +61,8 @@ describe("GET /api/cron/recordatorios", () => {
     expect(calls.length).toBeGreaterThan(0)
     expect(calls[0][0].tipo).toBe("RECORDATORIO_RETIRO")
     expect(calls[0][0].context.orden?.publicToken).toBeTruthy()
+    // El recordatorio debe salir del número de la sucursal de la orden, no del central.
+    expect(calls[0][0].sucursalId).toBe("suc-1")
   })
 
   it("no encola si la org no tiene ningun canal habilitado", async () => {

@@ -19,7 +19,7 @@ export async function POST(
 
     // Obtener orden
     const { orden, error } = await getOrderByPublicToken(token, `
-        id, estado, presupuesto, organization_id, cliente_id,
+        id, estado, presupuesto, organization_id, cliente_id, sucursal_id,
         numero_orden, dispositivo, tecnico_id, public_token,
         clientes (id, nombre, email, telefono),
         organizations (nombre, nombre_mostrar, slug, moneda, zona_horaria)
@@ -88,6 +88,7 @@ export async function POST(
 
     queueNotification({
       organizationId: orden.organization_id,
+      sucursalId: (orden as any).sucursal_id ?? null,
       ordenId: orden.id,
       clienteId: orden.cliente_id,
       tipo: "CAMBIO_ESTADO",

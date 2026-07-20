@@ -90,7 +90,7 @@ export async function POST(
     if (cotizacion.orden_id) {
       const { data: orden } = await supabaseAdmin
         .from("ordenes_servicio")
-        .select("id, estado, organization_id, cliente_id, numero_orden, dispositivo, public_token, clientes (id, nombre, email, telefono), organizations (nombre, nombre_mostrar, slug, moneda, zona_horaria)")
+        .select("id, estado, organization_id, sucursal_id, cliente_id, numero_orden, dispositivo, public_token, clientes (id, nombre, email, telefono), organizations (nombre, nombre_mostrar, slug, moneda, zona_horaria)")
         .eq("id", cotizacion.orden_id)
         .single()
 
