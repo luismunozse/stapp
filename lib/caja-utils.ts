@@ -69,18 +69,20 @@ export async function fetchMovimientosDia(
   }
   const { data: cobrosOrdenes } = await cobrosQuery
 
-  // 2. Pagos de facturas
+  // 2. Pagos de facturas (excluir facturas ANULADAS — su pago no es ingreso real
+  //    de caja, igual que los cobros anulados de source 1).
   let pagosFacturasQuery = supabaseAdmin
     .from("pagos_parciales")
     .select(`
       monto, metodo_pago, fecha, factura_id, observaciones,
       costo_financiero_porcentaje, costo_financiero_monto,
       facturas!inner(
-        id, numero_factura,
+        id, numero_factura, estado_pago,
         ordenes_servicio!inner(organization_id, numero_orden, sucursal_id)
       )
     `)
     .eq("facturas.ordenes_servicio.organization_id", organizationId)
+    .neq("facturas.estado_pago", "ANULADA")
     .gte("fecha", fechaDesde)
     .lte("fecha", fechaHasta)
     .order("fecha", { ascending: false })
@@ -89,15 +91,18 @@ export async function fetchMovimientosDia(
   }
   const { data: pagosFacturas } = await pagosFacturasQuery
 
-  // 3. Pagos de ventas
+  // 3. Pagos de ventas (excluir ventas ANULADAS — la anulación revierte stock/CC
+  //    pero deja las filas de pagos_venta; contarlas inflaba el esperado del
+  //    arqueo y generaba un faltante fantasma si el efectivo se devolvió).
   let pagosVentasQuery = supabaseAdmin
     .from("pagos_venta")
     .select(`
       monto, metodo_pago, fecha, venta_id, observaciones,
       costo_financiero_porcentaje, costo_financiero_monto,
-      ventas!inner(organization_id, numero_venta, sucursal_id)
+      ventas!inner(organization_id, numero_venta, estado, sucursal_id)
     `)
     .eq("ventas.organization_id", organizationId)
+    .neq("ventas.estado", "ANULADA")
     .gte("fecha", fechaDesde)
     .lte("fecha", fechaHasta)
     .order("fecha", { ascending: false })
