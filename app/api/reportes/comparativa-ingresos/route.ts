@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdminOrVendedor } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
-import { DEFAULT_TIMEZONE, getZonedParts } from "@/lib/timezone"
+import { DEFAULT_TIMEZONE, getZonedParts, monthRangeUtc } from "@/lib/timezone"
 import { nombreMesCivil } from "@/lib/finanzas-period"
 
 /**
@@ -27,9 +27,15 @@ export async function GET() {
     const tz = orgTz?.zona_horaria ?? DEFAULT_TIMEZONE
 
     const now = new Date()
-    const inicioActual = new Date(now.getFullYear(), now.getMonth(), 1)
-    const inicioAnterior = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-    const finAnterior = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59)
+    // Mes civil de `now` en la tz de la org — los límites Y los labels derivan de
+    // acá. Antes los límites salían de now.getMonth() (UTC en Vercel), así que en
+    // el tramo 21-24h del último día del mes las ventas caían en el mes siguiente
+    // y quedaban desincronizadas del nombre del mes mostrado.
+    const { year: anioCivil, month: mesCivil } = getZonedParts(now, tz)
+    const inicioActual = monthRangeUtc(anioCivil, mesCivil, tz).desde
+    const rangoAnterior = monthRangeUtc(anioCivil, mesCivil - 1, tz)
+    const inicioAnterior = rangoAnterior.desde
+    const finAnterior = rangoAnterior.hasta
 
     const sumarPeriodo = async (desde: Date, hasta?: Date) => {
       const desdeISO = desde.toISOString()
@@ -132,12 +138,8 @@ export async function GET() {
       direccion = "up"
     }
 
-    // Mes civil de `now` resuelto en la tz del negocio (no en la del server).
-    // Ambos labels derivan de acá para no correrse un mes cuando el server
-    // corre en UTC; nombreMesCivil ancla al mediodía UTC y Date.UTC normaliza
-    // el cruce de enero (month - 1 === 0 → diciembre del año previo).
-    const { year: anioCivil, month: mesCivil } = getZonedParts(now, tz)
-
+    // anioCivil / mesCivil ya se resolvieron arriba desde la tz de la org, así
+    // que los nombres de mes coinciden con los límites de las queries.
     return NextResponse.json({
       mesActual: {
         nombre: nombreMesCivil(anioCivil, mesCivil, tz).completo,
