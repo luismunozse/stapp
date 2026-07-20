@@ -141,6 +141,69 @@ describe("POST /api/cotizaciones/[id]/convertir-venta", () => {
     expect(capturedRpcParams.p_sucursal_id).toBe("suc-A")
   })
 
+  it("bug #3: con CUENTA_CORRIENTE arma p_pagos para que el RPC debite la cuenta", async () => {
+    mockAuthSuccess()
+    vi.mocked(sucursalParaEscritura).mockResolvedValue("suc-A")
+
+    const cotizacionChain = createChainMock(mockCotizacion)
+    const ventaChain = createChainMock({ numero_venta: 1 })
+    let capturedRpcParams: any = null
+
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "cotizaciones") return cotizacionChain as any
+      if (table === "ventas") return ventaChain as any
+      return createChainMock(null) as any
+    })
+
+    vi.mocked(supabaseAdmin.rpc).mockImplementation((fn: string, params?: any) => {
+      if (fn === "convertir_cotizacion_venta_atomica") {
+        capturedRpcParams = params
+        return Promise.resolve({ data: { ventaId: "venta-1", numeroVenta: 1 }, error: null }) as any
+      }
+      return Promise.resolve({ data: null, error: null }) as any
+    })
+
+    const response = await POST(
+      createPostRequest(
+        { metodoPago: "CUENTA_CORRIENTE", items: [{ cotizacionItemId: "item-1", diasGarantia: 0 }] },
+        "http://localhost/api/cotizaciones/cot-1/convertir-venta"
+      ),
+      createParams("cot-1")
+    )
+    const { status } = await parseResponse(response)
+
+    expect(status).toBe(201)
+    // total del mock = 10000 (item 10000, sin descuento, iva 0)
+    expect(capturedRpcParams.p_pagos).toEqual([{ metodo: "CUENTA_CORRIENTE", monto: 10000 }])
+  })
+
+  it("bug #3: rechaza con 400 conversión en CUENTA_CORRIENTE sin cliente registrado", async () => {
+    mockAuthSuccess()
+    vi.mocked(sucursalParaEscritura).mockResolvedValue("suc-A")
+
+    // Cotización sin cliente (ni directo ni por orden) → clienteId null.
+    const cotizacionSinCliente = { ...mockCotizacion, clientes: null, ordenes_servicio: null }
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "cotizaciones") return createChainMock(cotizacionSinCliente) as any
+      return createChainMock(null) as any
+    })
+
+    const response = await POST(
+      createPostRequest(
+        { metodoPago: "CUENTA_CORRIENTE", items: [{ cotizacionItemId: "item-1", diasGarantia: 0 }] },
+        "http://localhost/api/cotizaciones/cot-1/convertir-venta"
+      ),
+      createParams("cot-1")
+    )
+    const { status, body } = await parseResponse(response)
+
+    expect(status).toBe(400)
+    expect(body.error).toMatch(/cuenta corriente/i)
+    // No debe crear la venta.
+    const rpcCalls = vi.mocked(supabaseAdmin.rpc).mock.calls.map((c) => c[0])
+    expect(rpcCalls).not.toContain("convertir_cotizacion_venta_atomica")
+  })
+
   it("calls sucursalParaEscritura with correct args", async () => {
     mockAuthSuccess({ organizationId: "org-99", role: "ADMIN" })
     vi.mocked(sucursalParaEscritura).mockResolvedValue("suc-X")

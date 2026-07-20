@@ -19,6 +19,7 @@ import { useModal } from "@/contexts/modal-context"
 import { useCurrency } from "@/contexts/currency-context"
 import { RotateCcw, Package, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { computeDevolucionMonto, effectivePaidUnitPrice, saleNetTotal } from "@/lib/devolucion-refund"
 
 // --- Types ---
 
@@ -28,12 +29,18 @@ interface DevolucionFormProps {
   venta: {
     id: string
     numeroVenta: number
+    /** Total efectivamente cobrado (con descuento global + IVA). */
+    total: number
     items: Array<{
       id: string
       inventarioId: string | null
       descripcion: string
       cantidad: number
       precioUnitario: number
+      // Descuento de línea (opcional): permite estimar el reembolso neto real.
+      descuento?: number
+      tipoDescuento?: "MONTO" | "PORCENTAJE"
+      porcentajeDescuento?: number
     }>
   }
   onSuccess: () => void
@@ -102,13 +109,39 @@ export function DevolucionForm({
     return venta.items.filter((item) => itemStates[item.id]?.selected)
   }, [venta.items, itemStates])
 
+  // Items de la venta en el shape que espera la lógica de reembolso.
+  const saleItems = useMemo(
+    () =>
+      venta.items.map((it) => ({
+        id: it.id,
+        cantidad: it.cantidad,
+        precio_unitario: it.precioUnitario,
+        descuento: it.descuento ?? 0,
+        tipo_descuento: it.tipoDescuento ?? "MONTO",
+        porcentaje_descuento: it.porcentajeDescuento ?? 0,
+      })),
+    [venta.items]
+  )
+  const saleNet = useMemo(() => saleNetTotal(saleItems), [saleItems])
+  const saleItemsById = useMemo(
+    () => new Map(saleItems.map((it) => [it.id, it])),
+    [saleItems]
+  )
+
+  // Precio pagado por unidad (neto de descuentos de línea + global + IVA), para
+  // que el preview coincida con lo que realmente se reembolsa.
+  const netUnitPrice = (itemId: string) => {
+    const si = saleItemsById.get(itemId)
+    return si ? effectivePaidUnitPrice(si, venta.total, saleNet) : 0
+  }
+
   const totalReembolso = useMemo(() => {
-    return selectedItems.reduce((sum, item) => {
-      const state = itemStates[item.id]
-      if (!state) return sum
-      return sum + state.cantidad * item.precioUnitario
-    }, 0)
-  }, [selectedItems, itemStates])
+    const returned = selectedItems.map((item) => ({
+      itemVentaId: item.id,
+      cantidad: itemStates[item.id]?.cantidad ?? 0,
+    }))
+    return computeDevolucionMonto(venta.total, saleItems, returned)
+  }, [selectedItems, itemStates, saleItems, venta.total])
 
   // --- Handlers ---
 
@@ -358,7 +391,7 @@ export function DevolucionForm({
                     <span className="text-muted-foreground">
                       {item.descripcion} x {state.cantidad}
                     </span>
-                    <span>{formatPrice(state.cantidad * item.precioUnitario)}</span>
+                    <span>{formatPrice(state.cantidad * netUnitPrice(item.id))}</span>
                   </div>
                 )
               })}
