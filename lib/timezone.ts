@@ -130,13 +130,59 @@ export function zonedTimeToUtc(
   return new Date(guess - offset)
 }
 
+// Matchea una fecha "date-only" (columna DATE de Postgres): YYYY-MM-DD sin hora.
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/
+
+/**
+ * Convierte el valor de fecha a un instante para formatear. Para strings
+ * "date-only" (YYYY-MM-DD, típico de columnas DATE) ancla al MEDIODÍA UTC, de
+ * modo que renderice el mismo día calendario en todas las tz soportadas
+ * (UTC-8..UTC+1). `new Date("2026-07-20")` parsea a medianoche UTC y, en una tz
+ * de offset negativo (UTC-3), se muestra el día anterior (bug off-by-one).
+ * Los timestamps completos (con hora/offset) se parsean tal cual.
+ */
+function toDisplayInstant(date: Date | string): Date {
+  if (typeof date === "string") {
+    if (DATE_ONLY_RE.test(date)) return new Date(`${date}T12:00:00Z`)
+    return new Date(date)
+  }
+  return date
+}
+
+/**
+ * Convierte una fecha "date-only" (p.ej. de `<input type="date">`, "YYYY-MM-DD")
+ * a un ISO anclado al MEDIODÍA UTC. Así el valor guardado en una columna
+ * TIMESTAMPTZ representa ese día calendario de forma estable: se muestra y se
+ * compara como el mismo día en todas las tz soportadas (UTC-8..UTC+1). Guardar
+ * `new Date("2026-07-18").toISOString()` (medianoche UTC) hace que en UTC-3 se
+ * muestre 17/07 y que "venza" la tarde anterior.
+ */
+export function dateOnlyToNoonUtcISO(value: string): string {
+  if (DATE_ONLY_RE.test(value)) return new Date(`${value}T12:00:00Z`).toISOString()
+  return new Date(value).toISOString()
+}
+
+/**
+ * Número de día calendario (YYYYMMDD) del instante `date` evaluado en `timeZone`.
+ * Sirve para comparar fechas por día (p.ej. si una cotización está vencida)
+ * sin que la hora del instante ni el offset provoquen off-by-one.
+ */
+export function dateNumberInTimeZone(
+  date: Date | string,
+  timeZone: string = DEFAULT_TIMEZONE
+): number {
+  const d = typeof date === "string" ? toDisplayInstant(date) : date
+  const { year, month, day } = getZonedParts(d, timeZone)
+  return year * 10000 + month * 100 + day
+}
+
 export function formatDateValue(
   date: Date | string | null | undefined,
   timezone: string = DEFAULT_TIMEZONE,
   locale: string = "es-AR"
 ): string {
   if (!date) return ""
-  const d = typeof date === "string" ? new Date(date) : date
+  const d = toDisplayInstant(date)
   if (Number.isNaN(d.getTime())) return ""
 
   return new Intl.DateTimeFormat(locale, {

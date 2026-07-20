@@ -87,7 +87,7 @@ export function LotesDialog({
   inventarioNombre,
   onSuccess,
 }: Props) {
-  const { timezone } = useCurrency()
+  const { formatDate } = useCurrency()
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [lotes, setLotes] = useState<Lote[]>([])
@@ -331,7 +331,7 @@ export function LotesDialog({
                             }`}
                           >
                             <CalendarClock className="h-3 w-3" />
-                            {new Date(l.fecha_vencimiento).toLocaleDateString("es-AR", { timeZone: timezone })}
+                            {formatDate(l.fecha_vencimiento)}
                             {dias !== null && (
                               <span className="ml-1">
                                 ({dias < 0 ? `hace ${-dias}d` : `${dias}d`})

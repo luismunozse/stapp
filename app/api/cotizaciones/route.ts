@@ -5,6 +5,7 @@ import { getNextQuoteNumber } from "@/lib/counters"
 import { parsePagination } from "@/lib/api-utils"
 import { createAuditLogger } from "@/lib/audit"
 import { hasPlanFeature } from "@/lib/subscriptions"
+import { dateOnlyToNoonUtcISO, dateNumberInTimeZone, DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { randomBytes } from "crypto"
 import { z } from "zod"
 
@@ -335,11 +336,19 @@ export async function POST(request: Request) {
       clienteIdForInsert = data.clienteId
     }
 
-    // Validate fecha_vencimiento is not in the past
+    // Validate fecha_vencimiento is not in the past — comparado por DÍA calendario
+    // en la tz de la org (evita rechazar "hoy" en el tramo 21:00-24:00 local, en
+    // que el UTC del server ya es el día siguiente).
     if (data.fechaVencimiento) {
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
-      if (new Date(data.fechaVencimiento) < today) {
+      const { data: orgTz } = await supabaseAdmin
+        .from("organizations")
+        .select("zona_horaria")
+        .eq("id", organizationId!)
+        .single()
+      const tz = orgTz?.zona_horaria || DEFAULT_TIMEZONE
+      const vencNum = dateNumberInTimeZone(dateOnlyToNoonUtcISO(data.fechaVencimiento), tz)
+      const hoyNum = dateNumberInTimeZone(new Date(), tz)
+      if (vencNum < hoyNum) {
         return NextResponse.json(
           { error: "La fecha de vencimiento no puede ser anterior a hoy" },
           { status: 400 }
@@ -386,7 +395,7 @@ export async function POST(request: Request) {
         notas: data.notas || null,
         terminos: data.terminos || null,
         fecha_vencimiento: data.fechaVencimiento
-          ? new Date(data.fechaVencimiento).toISOString()
+          ? dateOnlyToNoonUtcISO(data.fechaVencimiento)
           : null,
         descuento_global_tipo: descGlobalTipo,
         descuento_global_valor: descGlobalValor,
