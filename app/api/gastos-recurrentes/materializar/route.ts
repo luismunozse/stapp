@@ -126,17 +126,20 @@ export async function POST() {
   }
 }
 
-function calcularProximo(actual: string, frecuencia: string, diaDelMes: number | null): string {
+export function calcularProximo(actual: string, frecuencia: string, diaDelMes: number | null): string {
   const d = new Date(actual + "T00:00:00")
   if (frecuencia === "SEMANAL") {
     d.setDate(d.getDate() + 7)
   } else if (frecuencia === "MENSUAL") {
-    d.setMonth(d.getMonth() + 1)
-    if (diaDelMes) {
-      // Ajustar al día deseado, manejando meses con menos días
-      const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
-      d.setDate(Math.min(diaDelMes, lastDay))
-    }
+    // Avanzar de mes sin que el día desborde. `setMonth(+1)` sobre un 31 cae a
+    // "Feb 31" → JS lo rueda a marzo y se SALTEA febrero. Se calcula el mes
+    // destino y se clampa el día ANTES de asignar (setFullYear atómico).
+    const targetIndex = d.getMonth() + 1
+    const year = d.getFullYear() + Math.floor(targetIndex / 12)
+    const month = ((targetIndex % 12) + 12) % 12
+    const lastDay = new Date(year, month + 1, 0).getDate()
+    const desiredDay = diaDelMes ?? d.getDate()
+    d.setFullYear(year, month, Math.min(desiredDay, lastDay))
   } else if (frecuencia === "ANUAL") {
     d.setFullYear(d.getFullYear() + 1)
   }
