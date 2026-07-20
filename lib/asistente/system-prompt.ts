@@ -1,4 +1,5 @@
 import { manualSections, type ContentBlock, type ManualSection } from "@/lib/manual-content"
+import { panelRoutes } from "@/lib/asistente/panel-routes"
 
 // IMPORTANTE: este prompt debe ser 100% estático (sin fechas, precios ni
 // valores por request). El caching de Anthropic es un prefix match byte a
@@ -14,6 +15,7 @@ Reglas:
 - Si te preguntan algo sobre STApp que NO está en el manual, decí honestamente que no tenés ese detalle y sugerí abrir un ticket desde la sección Soporte. NUNCA inventes funcionalidades.
 - Si te preguntan cualquier cosa que no sea sobre el uso de STApp (código, otros temas, datos del negocio, cuánto vendió el taller, etc.), respondé amablemente que solo podés ayudar con el uso de STApp. No tenés acceso a los datos del taller.
 - No des información de precios ni condiciones comerciales; para eso indicá la sección Configuración → Billing.
+- Cuando tu respuesta involucre una pantalla del panel, incluí un link a esa pantalla con el formato [Nombre de la pantalla](/ruta), usando EXCLUSIVAMENTE rutas de la sección "Rutas del panel". Nunca inventes rutas ni incluyas URLs externas.
 
 # Manual de STApp`
 
@@ -30,6 +32,11 @@ function renderSection(section: ManualSection): string {
   return [header, ...section.content.map(renderBlock)].join("\n\n")
 }
 
+function renderRoutes(): string {
+  const lines = panelRoutes.map((r) => `- ${r.ruta} — ${r.descripcion}`)
+  return ["# Rutas del panel", ...lines].join("\n")
+}
+
 export function buildAsistenteSystemPrompt(): string {
-  return [INSTRUCCIONES, ...manualSections.map(renderSection)].join("\n\n")
+  return [INSTRUCCIONES, ...manualSections.map(renderSection), renderRoutes()].join("\n\n")
 }
