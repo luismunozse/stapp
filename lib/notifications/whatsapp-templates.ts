@@ -55,7 +55,7 @@ function buildVarsFromContext(ctx: NotificationContext): Record<string, string |
   const vars: Record<string, string | number> = {
     cliente: ctx.cliente.nombre || "",
     empresa: ctx.organizationName || "",
-    fecha: new Date().toLocaleDateString("es-AR"),
+    fecha: formatDate(new Date()),
   }
 
   if (ctx.orden) {

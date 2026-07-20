@@ -89,7 +89,7 @@ function buildVarsForContext(context: any): Record<string, string | number> {
   const vars: Record<string, string | number> = {
     cliente: context.cliente?.nombre || "",
     empresa: context.organizationName || "",
-    fecha: new Date().toLocaleDateString("es-AR"),
+    fecha: formatDateValue(new Date(), context.zonaHoraria),
   }
 
   if (context.orden) {
