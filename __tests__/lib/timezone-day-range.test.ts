@@ -1,8 +1,34 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest"
-import { dayRangeUtc, todayInTimeZone } from "@/lib/timezone"
+import { dayRangeUtc, todayInTimeZone, monthRangeUtc } from "@/lib/timezone"
 
 const ART = "America/Argentina/Buenos_Aires" // UTC-3
+
+describe("monthRangeUtc — límites del mes de la org como instantes UTC", () => {
+  it("julio ART va de 2026-07-01 03:00Z a 2026-08-01 03:00Z (menos 1ms)", () => {
+    const { desde, hasta } = monthRangeUtc(2026, 7, ART)
+    expect(desde.toISOString()).toBe("2026-07-01T03:00:00.000Z")
+    expect(hasta.toISOString()).toBe("2026-08-01T02:59:59.999Z")
+  })
+
+  it("una venta a las 22:00 ART del 31/07 (01:00Z del 01/08) cae DENTRO de julio", () => {
+    const { desde, hasta } = monthRangeUtc(2026, 7, ART)
+    const venta = new Date("2026-08-01T01:00:00.000Z") // 22:00 ART del 31/07
+    expect(venta >= desde && venta <= hasta).toBe(true)
+  })
+
+  it("esa misma venta NO cae en agosto", () => {
+    const { desde } = monthRangeUtc(2026, 8, ART)
+    const venta = new Date("2026-08-01T01:00:00.000Z")
+    expect(venta >= desde).toBe(false)
+  })
+
+  it("month 0 = diciembre del año anterior (mes previo de enero)", () => {
+    const { desde } = monthRangeUtc(2026, 0, ART)
+    // 1 dic 2025 00:00 ART = 2025-12-01T03:00:00Z
+    expect(desde.toISOString()).toBe("2025-12-01T03:00:00.000Z")
+  })
+})
 
 describe("dayRangeUtc — límites del día de la org como instantes UTC", () => {
   it("el día ART va de 03:00Z a 03:00Z del día siguiente (menos 1ms)", () => {

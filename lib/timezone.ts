@@ -308,3 +308,21 @@ export function dayRangeUtc(
     hasta: new Date(startNext.getTime() - 1).toISOString(),
   }
 }
+
+/**
+ * Instantes UTC que acotan el mes calendario (`year`, `month` 1-based) en
+ * `timeZone`. Análogo a `dayRangeUtc` pero para meses: `desde` = medianoche
+ * local del día 1; `hasta` = último ms del mes (00:00 del mes siguiente − 1ms).
+ * `Date.UTC` (dentro de zonedTimeToUtc) normaliza el overflow, así que `month`
+ * puede ser 0 (diciembre del año previo) o 13 (enero del año siguiente).
+ * Devuelve Date (el consumidor de comparativa-ingresos trabaja con Date).
+ */
+export function monthRangeUtc(
+  year: number,
+  month: number,
+  timeZone: string = DEFAULT_TIMEZONE
+): { desde: Date; hasta: Date } {
+  const start = zonedTimeToUtc(year, month, 1, 0, 0, 0, timeZone)
+  const startNext = zonedTimeToUtc(year, month + 1, 1, 0, 0, 0, timeZone)
+  return { desde: start, hasta: new Date(startNext.getTime() - 1) }
+}
