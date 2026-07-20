@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Plus, Trash2, Banknote, ArrowRightLeft, CreditCard, Wallet, MoreHorizontal, PiggyBank } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useCurrency } from "@/contexts/currency-context"
+import { parseMoneyInput } from "@/lib/parse-money"
 
 const METODOS_PAGO = [
   { value: "EFECTIVO", label: "Efectivo", icon: Banknote },
@@ -205,7 +206,7 @@ export function MultiPagoInput({
                 value={displayValue(`${pago.id}:monto`, pago.monto)}
                 onChange={(e) => {
                   setRaw(`${pago.id}:monto`, e.target.value)
-                  updatePago(index, { monto: parseFloat(e.target.value) || 0 })
+                  updatePago(index, { monto: parseMoneyInput(e.target.value) || 0 })
                 }}
                 placeholder="0.00"
               />
@@ -243,7 +244,7 @@ export function MultiPagoInput({
                   value={displayValue(`${pago.id}:costoFinanciero`, pago.costoFinanciero)}
                   onChange={(e) => {
                     setRaw(`${pago.id}:costoFinanciero`, e.target.value)
-                    updatePago(index, { costoFinanciero: parseFloat(e.target.value) || null })
+                    updatePago(index, { costoFinanciero: parseMoneyInput(e.target.value) || null })
                   }}
                   placeholder="Ej: 12"
                 />

@@ -28,6 +28,7 @@ import { useModal } from "@/contexts/modal-context"
 import { STORES } from "@/lib/offline/constants"
 import type { Cliente, TipoDispositivoConfig, CampoExtra } from "@/types"
 import { isValidImei, sanitizeImei } from "@/lib/imei"
+import { parseMoneyInput } from "@/lib/parse-money"
 
 interface FotoPreview {
   id: string
@@ -139,7 +140,9 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   const planLimitError = usePlanLimitError()
   const [presupuestoAceptado, setPresupuestoAceptado] = useState(false)
-  const [sena, setSena] = useState<number | undefined>(undefined)
+  // Draft en string para permitir escribir decimales (coma es-AR). Se parsea con senaNum.
+  const [sena, setSena] = useState("")
+  const senaNum = parseMoneyInput(sena)
   const [metodoPagoSena, setMetodoPagoSena] = useState<string>("EFECTIVO")
   const [comprimiendo, setComprimiendo] = useState(false)
   const [camposExtraValues, setCamposExtraValues] = useState<Record<string, any>>({})
@@ -647,8 +650,8 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
         fechaPrometida: data.fechaPrometida || undefined,
         fotos: fotosData.length > 0 ? fotosData : undefined,
         presupuestoAceptado: presupuestoAceptado,
-        sena: presupuestoAceptado && sena ? sena : undefined,
-        metodoPagoSena: presupuestoAceptado && sena ? metodoPagoSena : undefined,
+        sena: presupuestoAceptado && senaNum > 0 ? senaNum : undefined,
+        metodoPagoSena: presupuestoAceptado && senaNum > 0 ? metodoPagoSena : undefined,
         observaciones: data.observaciones || undefined,
         notasInternas: data.notasInternas || undefined,
         telefonoContacto: data.telefonoContacto || undefined,
@@ -1150,7 +1153,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                 step="0.01"
                 min="0"
                 {...register("presupuesto", {
-                  setValueAs: (value) => value === "" || value === null || value === undefined ? undefined : Number(value)
+                  setValueAs: (value) => value === "" || value === null || value === undefined ? undefined : parseMoneyInput(value)
                 })}
                 placeholder="0.00"
               />
@@ -1216,7 +1219,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                   checked={presupuestoAceptado}
                   onChange={(e) => {
                     setPresupuestoAceptado(e.target.checked)
-                    if (!e.target.checked) setSena(undefined)
+                    if (!e.target.checked) setSena("")
                   }}
                   className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
                 />
@@ -1242,13 +1245,13 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
                       step="0.01"
                       min="0"
                       max={watch("presupuesto") || undefined}
-                      value={sena || ""}
-                      onChange={(e) => setSena(e.target.value ? Number(e.target.value) : undefined)}
+                      value={sena}
+                      onChange={(e) => setSena(e.target.value)}
                       placeholder="0.00"
                       className="w-28 sm:w-40"
                     />
                   </div>
-                  {sena && sena > 0 && (
+                  {senaNum > 0 && (
                     <div className="mt-2">
                       <Label className="text-xs text-muted-foreground">Método de pago de la seña</Label>
                       <div className="flex flex-wrap gap-1.5 mt-1">

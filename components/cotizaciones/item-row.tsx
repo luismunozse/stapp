@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { Input } from "@/components/ui/input"
+import { parseMoneyInput } from "@/lib/parse-money"
 import { Button } from "@/components/ui/button"
 import {
   Select,
@@ -84,13 +85,13 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.cantidad])
   useEffect(() => {
-    if ((parseFloat(precioStr) || 0) !== (item.precioUnitario || 0)) {
+    if ((parseMoneyInput(precioStr) || 0) !== (item.precioUnitario || 0)) {
       setPrecioStr(item.precioUnitario ? String(item.precioUnitario) : "")
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.precioUnitario])
   useEffect(() => {
-    if ((parseFloat(descuentoStr) || 0) !== (item.descuentoValor || 0)) {
+    if ((parseMoneyInput(descuentoStr) || 0) !== (item.descuentoValor || 0)) {
       setDescuentoStr(item.descuentoValor ? String(item.descuentoValor) : "")
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -273,7 +274,7 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
               step="0.01"
               placeholder="Precio"
               value={precioStr}
-              onChange={(e) => { setPrecioStr(e.target.value); onUpdate(index, "precioUnitario", parseFloat(e.target.value) || 0) }}
+              onChange={(e) => { setPrecioStr(e.target.value); onUpdate(index, "precioUnitario", parseMoneyInput(e.target.value) || 0) }}
               disabled={disabled}
             />
           </div>
@@ -306,7 +307,7 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
             step="0.01"
             placeholder="0"
             value={descuentoStr}
-            onChange={(e) => { setDescuentoStr(e.target.value); onUpdate(index, "descuentoValor", parseFloat(e.target.value) || 0) }}
+            onChange={(e) => { setDescuentoStr(e.target.value); onUpdate(index, "descuentoValor", parseMoneyInput(e.target.value) || 0) }}
             disabled={disabled}
             className="w-20"
           />
@@ -468,7 +469,7 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
             step="0.01"
             placeholder="Precio"
             value={precioStr}
-            onChange={(e) => { setPrecioStr(e.target.value); onUpdate(index, "precioUnitario", parseFloat(e.target.value) || 0) }}
+            onChange={(e) => { setPrecioStr(e.target.value); onUpdate(index, "precioUnitario", parseMoneyInput(e.target.value) || 0) }}
             disabled={disabled}
           />
         </div>
@@ -480,7 +481,7 @@ export function ItemRow({ item, index, onUpdate, onRemove, disabled, showTipoRep
             step="0.01"
             placeholder="0"
             value={descuentoStr}
-            onChange={(e) => { setDescuentoStr(e.target.value); onUpdate(index, "descuentoValor", parseFloat(e.target.value) || 0) }}
+            onChange={(e) => { setDescuentoStr(e.target.value); onUpdate(index, "descuentoValor", parseMoneyInput(e.target.value) || 0) }}
             disabled={disabled}
             className="w-full"
           />

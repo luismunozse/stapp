@@ -14,6 +14,7 @@ import { X, ChevronDown, ChevronUp, Plus, Check, Loader2, ImagePlus, Trash2, Pac
 import type { Inventario } from "@/types"
 import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
 import { compressImage } from "@/lib/image-compression"
+import { parseMoneyInput } from "@/lib/parse-money"
 import { validateBarcode, computeEAN13CheckDigit } from "@/lib/barcode-validation"
 import useSWR from "swr"
 import { useModal } from "@/contexts/modal-context"
@@ -882,7 +883,7 @@ export function InventarioForm({
                 type="text"
                 inputMode="decimal"
                 step="0.01"
-                {...register("precioCompra", { valueAsNumber: true })}
+                {...register("precioCompra", { setValueAs: (v: string) => parseMoneyInput(v) })}
                 min={0}
                 placeholder="0.00"
               />
@@ -900,7 +901,7 @@ export function InventarioForm({
                 type="text"
                 inputMode="decimal"
                 step="0.01"
-                {...register("precioVenta", { valueAsNumber: true })}
+                {...register("precioVenta", { setValueAs: (v: string) => parseMoneyInput(v) })}
                 min={0}
                 placeholder="0.00"
               />

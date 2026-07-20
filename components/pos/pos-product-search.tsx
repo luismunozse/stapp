@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react"
 import { Input } from "@/components/ui/input"
+import { parseMoneyInput } from "@/lib/parse-money"
 import { Button } from "@/components/ui/button"
 import {
   Popover,
@@ -154,8 +155,10 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
     const [initialLoad, setInitialLoad] = useState(true)
     const [showManualForm, setShowManualForm] = useState(false)
     const [manualNombre, setManualNombre] = useState("")
-    const [manualPrecio, setManualPrecio] = useState<number | "">(0)
-    const [manualCosto, setManualCosto] = useState<number | "">("")
+    // Draft en string para permitir escribir decimales (coma es-AR) sin que el
+    // valor se colapse al parsear en cada tecla. Se parsea al agregar.
+    const [manualPrecio, setManualPrecio] = useState("")
+    const [manualCosto, setManualCosto] = useState("")
 
     useImperativeHandle(ref, () => ({
       focusSearch: () => {
@@ -214,14 +217,16 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
 
     const handleAddManual = useCallback(() => {
       const nombre = manualNombre.trim()
-      if (!nombre || !manualPrecio || manualPrecio <= 0) return
+      const precio = parseMoneyInput(manualPrecio)
+      if (!nombre || !(precio > 0)) return
+      const costoNum = parseMoneyInput(manualCosto)
       onAddManualProduct({
         nombre,
-        precioUnitario: manualPrecio,
-        costo: manualCosto === "" ? undefined : manualCosto,
+        precioUnitario: precio,
+        costo: Number.isFinite(costoNum) ? costoNum : undefined,
       })
       setManualNombre("")
-      setManualPrecio(0)
+      setManualPrecio("")
       setManualCosto("")
       setShowManualForm(false)
       setQuery("")
@@ -232,7 +237,7 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
     const openManualForm = useCallback(() => {
       setShowManualForm(true)
       setManualNombre("")
-      setManualPrecio(0)
+      setManualPrecio("")
       setManualCosto("")
       setTimeout(() => manualNameRef.current?.focus(), 100)
     }, [])
@@ -358,8 +363,8 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
                     inputMode="decimal"
                     min={0}
                     step="0.01"
-                    value={manualPrecio || ""}
-                    onChange={(e) => setManualPrecio(e.target.value ? parseFloat(e.target.value) : "")}
+                    value={manualPrecio}
+                    onChange={(e) => setManualPrecio(e.target.value)}
                     placeholder="Precio"
                     className="h-11 text-base font-medium"
                     onKeyDown={(e) => {
@@ -376,8 +381,8 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
                     inputMode="decimal"
                     min={0}
                     step="0.01"
-                    value={manualCosto === "" ? "" : manualCosto}
-                    onChange={(e) => setManualCosto(e.target.value ? parseFloat(e.target.value) : "")}
+                    value={manualCosto}
+                    onChange={(e) => setManualCosto(e.target.value)}
                     placeholder="Costo"
                     className="h-11 text-sm"
                     title="Costo (opcional) — para margen correcto en reportes"
@@ -386,7 +391,7 @@ export const PosProductSearch = forwardRef<PosProductSearchRef, PosProductSearch
                 <Button
                   className="h-11 px-4"
                   onClick={handleAddManual}
-                  disabled={!manualNombre.trim() || !manualPrecio || manualPrecio <= 0}
+                  disabled={!manualNombre.trim() || !(parseMoneyInput(manualPrecio) > 0)}
                 >
                   <Plus className="h-4 w-4 sm:mr-1.5" />
                   <span className="hidden sm:inline">Agregar</span>
