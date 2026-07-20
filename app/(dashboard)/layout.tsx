@@ -15,8 +15,10 @@ import { OfflineProvider } from "@/contexts/offline-context"
 import { OfflineBanner } from "@/components/offline/offline-banner"
 import { SyncStatusIndicator } from "@/components/offline/sync-status-indicator"
 import { CapacitorBackButtonHandler } from "@/components/capacitor/back-button-handler"
+import { AsistenteWidget } from "@/components/asistente/asistente-widget"
 import { auth } from "@/lib/auth"
 import { isSuperadminEmail } from "@/lib/superadmin-auth"
+import { canUseAsistente } from "@/lib/asistente/access"
 import { hasValidAccess, getTrialInfo, getSubscriptionInfo } from "@/lib/subscriptions"
 import { supabaseAdmin } from "@/lib/supabase"
 import { redirect } from "next/navigation"
@@ -71,6 +73,9 @@ export default async function DashboardLayout({
     // Redirigir a página de trial expirado/bloqueo
     redirect(`/suscripcion-requerida?reason=${accessResult.reason || "trial_expired"}`)
   }
+
+  // Gate del asistente IA (plan Profesional con suscripción ACTIVE)
+  const asistenteEnabled = await canUseAsistente(organizationId)
 
   // Verificar si tiene datos de ejemplo
   const { data: orgData } = await supabaseAdmin
@@ -142,6 +147,8 @@ export default async function DashboardLayout({
           <GuidedTour />
           {/* Indicador de operaciones offline pendientes */}
           <SyncStatusIndicator />
+          {/* Asistente IA flotante (bloqueado si el plan no lo incluye) */}
+          <AsistenteWidget enabled={asistenteEnabled} />
           {/* Handler del botón "Atrás" hardware (Android/Capacitor) */}
           <CapacitorBackButtonHandler />
         </div>
