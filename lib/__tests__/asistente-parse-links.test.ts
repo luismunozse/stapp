@@ -48,4 +48,41 @@ describe('parseAsistenteLinks', () => {
     const segs = parseAsistenteLinks('Mirá [esto](/../evil) por favor')
     expect(segs.every((s) => s.type === 'text')).toBe(true)
   })
+
+  it('parsea negrita como segmento bold', () => {
+    expect(parseAsistenteLinks('Andá a **Tipos de Dispositivo** y creá uno')).toEqual([
+      { type: 'text', text: 'Andá a ' },
+      { type: 'bold', text: 'Tipos de Dispositivo' },
+      { type: 'text', text: ' y creá uno' },
+    ])
+  })
+
+  it('parsea negrita y link en el mismo mensaje', () => {
+    const segs = parseAsistenteLinks('Abrí **Caja** desde [Caja](/caja)')
+    expect(segs).toEqual([
+      { type: 'text', text: 'Abrí ' },
+      { type: 'bold', text: 'Caja' },
+      { type: 'text', text: ' desde ' },
+      { type: 'link', label: 'Caja', href: '/caja' },
+    ])
+  })
+
+  it('limpia los ** dentro del label de un link', () => {
+    const segs = parseAsistenteLinks('[**Órdenes**](/ordenes)')
+    expect(segs).toEqual([{ type: 'link', label: 'Órdenes', href: '/ordenes' }])
+  })
+
+  it('asteriscos sueltos o sin cerrar quedan como texto plano', () => {
+    expect(parseAsistenteLinks('2 * 3 = 6 y **sin cerrar')).toEqual([
+      { type: 'text', text: '2 * 3 = 6 y **sin cerrar' },
+    ])
+  })
+
+  it('quita la negrita que envuelve un link (patrón **[X](/ruta)**)', () => {
+    expect(parseAsistenteLinks('Andá a **[Caja](/caja)** ahora')).toEqual([
+      { type: 'text', text: 'Andá a ' },
+      { type: 'link', label: 'Caja', href: '/caja' },
+      { type: 'text', text: ' ahora' },
+    ])
+  })
 })

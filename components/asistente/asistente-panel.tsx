@@ -104,6 +104,8 @@ export function AsistentePanel({ onClose }: AsistentePanelProps) {
                       <Link key={i} href={seg.href} className="underline text-primary font-medium">
                         {seg.label}
                       </Link>
+                    ) : seg.type === "bold" ? (
+                      <strong key={i}>{seg.text}</strong>
                     ) : (
                       <span key={i}>{seg.text}</span>
                     )
