@@ -28,16 +28,20 @@ function parseBold(text: string): AsistenteSegment[] {
 }
 
 export function parseAsistenteLinks(text: string): AsistenteSegment[] {
+  // El modelo a veces envuelve un link en negrita (**[X](/ruta)**): quitamos
+  // esos ** para que no queden asteriscos literales alrededor del link.
+  const normalized = text.replace(/\*\*(\[[^\]\n]+\]\([^)\s]+\))\*\*/g, "$1")
+
   const segments: AsistenteSegment[] = []
   let lastIndex = 0
-  for (const match of text.matchAll(LINK_RE)) {
+  for (const match of normalized.matchAll(LINK_RE)) {
     const [full, rawLabel, href] = match
     const index = match.index ?? 0
     if (!RUTAS_VALIDAS.has(href)) continue
-    if (index > lastIndex) segments.push(...parseBold(text.slice(lastIndex, index)))
+    if (index > lastIndex) segments.push(...parseBold(normalized.slice(lastIndex, index)))
     segments.push({ type: "link", label: rawLabel.replaceAll("**", ""), href })
     lastIndex = index + full.length
   }
-  if (lastIndex < text.length) segments.push(...parseBold(text.slice(lastIndex)))
+  if (lastIndex < normalized.length) segments.push(...parseBold(normalized.slice(lastIndex)))
   return segments
 }

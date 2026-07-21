@@ -77,4 +77,12 @@ describe('parseAsistenteLinks', () => {
       { type: 'text', text: '2 * 3 = 6 y **sin cerrar' },
     ])
   })
+
+  it('quita la negrita que envuelve un link (patrón **[X](/ruta)**)', () => {
+    expect(parseAsistenteLinks('Andá a **[Caja](/caja)** ahora')).toEqual([
+      { type: 'text', text: 'Andá a ' },
+      { type: 'link', label: 'Caja', href: '/caja' },
+      { type: 'text', text: ' ahora' },
+    ])
+  })
 })
