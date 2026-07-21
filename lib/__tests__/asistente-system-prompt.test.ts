@@ -33,4 +33,8 @@ describe('buildAsistenteSystemPrompt', () => {
     expect(prompt).toContain('/configuracion/whatsapp')
     expect(prompt).toContain('[Nombre de la pantalla](/ruta)')
   })
+
+  it('declara el formato permitido de respuesta', () => {
+    expect(buildAsistenteSystemPrompt()).toContain('Formato permitido')
+  })
 })
