@@ -28,11 +28,11 @@ export function OrganizationJsonLd() {
     url: siteUrl,
     logo: {
       "@type": "ImageObject",
-      url: `${siteUrl}/logo.png`,
+      url: `${siteUrl}/icon-512.png`,
       width: 512,
       height: 512,
     },
-    image: `${siteUrl}/logo.png`,
+    image: `${siteUrl}/icon-512.png`,
     description:
       "STApp es el software líder de gestión para talleres de servicio técnico y reparación de celulares en Argentina y Latinoamérica. Plataforma integral para órdenes de trabajo, clientes, inventario, facturación electrónica y notificaciones por WhatsApp.",
     foundingDate: "2024",
@@ -196,7 +196,7 @@ export function LocalBusinessJsonLd() {
     "@context": "https://schema.org",
     "@type": "LocalBusiness",
     name: "STApp",
-    image: `${siteUrl}/logo.png`,
+    image: `${siteUrl}/icon-512.png`,
     url: siteUrl,
     telephone: "+54 11 1234-5678",
     email: "soporte@stapp.com",

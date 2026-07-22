@@ -5,9 +5,8 @@ import Link from "next/link"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Calendar, Clock, ArrowRight } from "lucide-react"
+import { Clock, ArrowRight } from "lucide-react"
 import type { BlogPost } from "@/lib/blog-data"
-import { DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 interface BlogListProps {
   posts: BlogPost[]
@@ -75,21 +74,13 @@ export function BlogList({ posts, categories }: BlogListProps) {
                       </div>
                     </div>
                     <CardHeader>
+                      {/* Contenido evergreen: no mostramos la fecha de
+                          publicación (la fecha real vive en el JSON-LD para
+                          buscadores). Solo el tiempo de lectura. */}
                       <div className="flex items-center gap-4 text-sm text-muted-foreground mb-3">
                         <div className="flex items-center gap-1">
-                          <Calendar className="h-4 w-4" />
-                          <time dateTime={post.date}>
-                            {new Date(post.date).toLocaleDateString("es-AR", {
-                              day: "numeric",
-                              month: "short",
-                              year: "numeric",
-                              timeZone: DEFAULT_TIMEZONE,
-                            })}
-                          </time>
-                        </div>
-                        <div className="flex items-center gap-1">
                           <Clock className="h-4 w-4" />
-                          <span>{post.readTime}</span>
+                          <span>{post.readTime} de lectura</span>
                         </div>
                       </div>
                       <CardTitle className="text-xl leading-tight hover:text-primary transition-colors">

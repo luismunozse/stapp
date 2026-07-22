@@ -290,7 +290,7 @@ No necesitás un gran presupuesto para empezar. Con constancia y las herramienta
   {
     id: 6,
     slug: "tendencias-reparacion-dispositivos-2024",
-    title: "Tendencias en reparación de dispositivos para 2024",
+    title: "Tendencias en reparación de dispositivos electrónicos",
     excerpt:
       "Manténte al día con las últimas tendencias y tecnologías en la industria de reparación electrónica.",
     content: `
@@ -327,7 +327,7 @@ Adaptarse a las tendencias es fundamental para sobrevivir y crecer en la industr
     readTime: "6 min",
     image: "https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=800",
     keywords: [
-      "tendencias reparación 2024",
+      "tendencias reparación electrónica",
       "futuro reparación celulares",
       "industria reparación electrónica",
       "innovación talleres",
@@ -795,7 +795,7 @@ Las notificaciones WhatsApp no son un lujo, son una necesidad. Mejoran la experi
   {
     id: 15,
     slug: "elegir-mejor-software-servicio-tecnico",
-    title: "Cómo elegir el mejor software de servicio técnico en 2025",
+    title: "Cómo elegir el mejor software de servicio técnico",
     excerpt:
       "Criterios clave para evaluar y elegir el software de gestión ideal para tu taller de reparación. Comparativa de funciones esenciales.",
     content: `
