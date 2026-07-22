@@ -16,6 +16,9 @@ export interface UseCase {
   heroTitle: string
   heroHighlight: string
   heroDescription: string
+  // Resumen corto y de beneficio para las cards del índice de casos de uso.
+  // Copy propio (no truncar heroDescription): sin cortes ni "...".
+  cardDescription: string
   longIntro: string[]
   problems: string[]
   solutions: { title: string; description: string }[]
@@ -38,8 +41,10 @@ export const useCases: UseCase[] = [
     heroHighlight: "reparación de celulares",
     heroDescription:
       "Gestioná órdenes de reparación de pantallas, baterías, placas y más. Documentá cada paso con fotos, controlá tu stock de repuestos y mantené a tus clientes informados por WhatsApp.",
+    cardDescription:
+      "Órdenes, repuestos y avisos por WhatsApp para tu taller de celulares. Cada reparación bajo control, de la recepción a la entrega.",
     longIntro: [
-      "Los talleres de reparación de celulares manejan un volumen alto de órdenes con tiempos cortos y márgenes ajustados. Un iPhone con pantalla rota a la mañana, un Samsung con batería inflada al mediodía, tres Motorola con problemas de carga por la tarde — todo pasa rápido y cada equipo tiene un dueño impaciente esperando novedades. Sin un sistema, terminás anotando en una planilla, perdiéndote entre mensajes de WhatsApp y rogando que no se confunda un repuesto con otro.",
+      "Los talleres de reparación de celulares manejan un volumen alto de órdenes con tiempos cortos y márgenes ajustados. Un iPhone con pantalla rota a la mañana, un Samsung con batería inflada al mediodía, tres Motorola con problemas de carga por la tarde. Todo pasa rápido y cada equipo tiene un dueño impaciente esperando novedades. Sin un sistema, terminás anotando en una planilla, perdiéndote entre mensajes de WhatsApp y rogando que no se confunda un repuesto con otro.",
       "STApp fue pensado específicamente para esta realidad. Registrás el equipo en menos de un minuto, asignás técnico, seleccionás el tipo de falla desde una lista preconfigurada (pantalla, batería, conector de carga, módulo de cámara, daño por líquidos, problemas de software) y el cliente recibe automáticamente un link para seguir su reparación en tiempo real. Menos llamadas, menos fricciones, más equipos terminados por día.",
     ],
     problems: [
@@ -101,7 +106,7 @@ export const useCases: UseCase[] = [
       {
         title: "Catálogo por marca y modelo",
         description:
-          "Cargás una vez el catálogo de pantallas para iPhone 13, batería de Samsung A54, flex de carga de Xiaomi Redmi 12, y al abrir una orden solo seleccionás el modelo — el sistema descuenta el stock automáticamente.",
+          "Cargás una vez el catálogo de pantallas para iPhone 13, batería de Samsung A54, flex de carga de Xiaomi Redmi 12, y al abrir una orden solo seleccionás el modelo: el sistema descuenta el stock automáticamente.",
       },
       {
         title: "Reparaciones express y estándar",
@@ -123,7 +128,7 @@ export const useCases: UseCase[] = [
       {
         question: "¿Puedo usar STApp si tengo un taller de celulares chico con un solo técnico?",
         answer:
-          "Sí, el plan inicial está pensado para talleres de 1 a 2 personas. Podés cargar órdenes, llevar stock de los repuestos más comunes (pantallas, baterías, flex), enviar notificaciones por WhatsApp y hacer seguimiento — sin pagar funciones que no vas a usar. Cuando sumás técnicos, pasás al plan siguiente sin perder nada de lo que cargaste.",
+          "Sí, el plan inicial está pensado para talleres de 1 a 2 personas. Podés cargar órdenes, llevar stock de los repuestos más comunes (pantallas, baterías, flex), enviar notificaciones por WhatsApp y hacer seguimiento, sin pagar funciones que no vas a usar. Cuando sumás técnicos, pasás al plan siguiente sin perder nada de lo que cargaste.",
       },
       {
         question: "¿Cómo funciona el seguimiento por WhatsApp para mis clientes?",
@@ -133,12 +138,12 @@ export const useCases: UseCase[] = [
       {
         question: "¿Puedo cargar mi catálogo de repuestos actual al sistema?",
         answer:
-          "Sí. Los cargás uno por uno desde el panel o importás desde una planilla Excel/CSV con nombre, marca, modelo compatible, costo y stock. Después el sistema te avisa cuando algún repuesto cae bajo el mínimo que vos definiste — nunca más se te escapa un pedido de pantallas de iPhone.",
+          "Sí. Los cargás uno por uno desde el panel o importás desde una planilla Excel/CSV con nombre, marca, modelo compatible, costo y stock. Después el sistema te avisa cuando algún repuesto cae bajo el mínimo que vos definiste, así nunca más se te escapa un pedido de pantallas de iPhone.",
       },
       {
         question: "¿Qué pasa si el cliente viene a retirar y el equipo no está 100% listo?",
         answer:
-          "Antes de eso ya recibió por WhatsApp la notificación de 'listo para retirar' — no va a venir en blanco. Si igual pasa, en el panel del técnico ves el estado exacto, qué falta y podés avisarle en el momento cuánto más va a demorar, con evidencia visual del paso en que está.",
+          "Antes de eso ya recibió por WhatsApp la notificación de 'listo para retirar', así que no va a venir en blanco. Si igual pasa, en el panel del técnico ves el estado exacto, qué falta y podés avisarle en el momento cuánto más va a demorar, con evidencia visual del paso en que está.",
       },
       {
         question: "¿Sirve para manejar liberaciones y cuentas iCloud además de reparaciones físicas?",
@@ -167,9 +172,11 @@ export const useCases: UseCase[] = [
     heroHighlight: "computadoras",
     heroDescription:
       "Administrá reparaciones de PCs, notebooks y laptops. Desde el diagnóstico hasta la entrega con firma digital, todo queda documentado y trazable.",
+    cardDescription:
+      "Diagnósticos documentados, presupuestos con opciones y garantías por componente para PCs, notebooks y laptops.",
     longIntro: [
       "Reparar computadoras no es lo mismo que reparar celulares. Un diagnóstico puede llevar horas: test de memoria, chequeo de disco con SMART, revisar temperaturas, armar un presupuesto con opciones (cambio de disco rígido por SSD vs. formateo vs. reemplazo de placa madre). El cliente muchas veces prefiere elegir entre alternativas, y vos necesitás que ese historial quede registrado para defender tu trabajo si algo falla meses después.",
-      "STApp para servicio técnico de PC y notebooks te da checklists de diagnóstico reutilizables, presupuestos con múltiples alternativas que el cliente aprueba con firma digital, y control completo de garantías por componente. Si dentro de 6 meses vuelve con un disco que cambiaste, sabés al instante qué se instaló, cuándo y si está cubierto — sin revolver papeles ni planillas sueltas.",
+      "STApp para servicio técnico de PC y notebooks te da checklists de diagnóstico reutilizables, presupuestos con múltiples alternativas que el cliente aprueba con firma digital, y control completo de garantías por componente. Si dentro de 6 meses vuelve con un disco que cambiaste, sabés al instante qué se instaló, cuándo y si está cubierto, sin revolver papeles ni planillas sueltas.",
     ],
     problems: [
       "Las reparaciones de computadoras llevan más tiempo y es difícil hacer seguimiento",
@@ -181,7 +188,7 @@ export const useCases: UseCase[] = [
       {
         title: "Checklists de diagnóstico",
         description:
-          "Creá checklists personalizados para cada tipo de equipo. RAM, disco, placa madre, fuente — todo queda registrado en la orden.",
+          "Creá checklists personalizados para cada tipo de equipo. RAM, disco, placa madre, fuente: todo queda registrado en la orden.",
       },
       {
         title: "Presupuestos con opciones",
@@ -235,7 +242,7 @@ export const useCases: UseCase[] = [
       {
         title: "Presupuestos multi-opción",
         description:
-          "Ofrecé al cliente hasta tres alternativas numeradas de reparación (ej: Opción 1 — cambio de SSD, Opción 2 — también más RAM, Opción 3 — equipo reacondicionado). El cliente aprueba una sola.",
+          "Ofrecé al cliente hasta tres alternativas numeradas de reparación (ej: Opción 1: cambio de SSD, Opción 2: también más RAM, Opción 3: equipo reacondicionado). El cliente aprueba una sola.",
       },
       {
         title: "Garantía por componente",
@@ -252,12 +259,12 @@ export const useCases: UseCase[] = [
       {
         question: "¿Puedo registrar trabajos de formateo e instalación además de reparaciones físicas?",
         answer:
-          "Sí. Creás tipos de orden distintos — reparación de hardware, formateo, instalación de Office, recuperación de datos, limpieza y mantenimiento — cada uno con su tarifa y tiempo estimado. Todo entra en el historial del cliente y del equipo.",
+          "Sí. Creás tipos de orden distintos (reparación de hardware, formateo, instalación de Office, recuperación de datos, limpieza y mantenimiento), cada uno con su tarifa y tiempo estimado. Todo entra en el historial del cliente y del equipo.",
       },
       {
         question: "¿Cómo manejo presupuestos con varias opciones de reparación?",
         answer:
-          "Armás un presupuesto con alternativas numeradas (por ejemplo: Opción 1 — cambio de SSD $X, Opción 2 — también más RAM $Y, Opción 3 — equipo completo reacondicionado $Z). El cliente lo recibe por WhatsApp y aprueba la elegida con firma digital. Queda registrado qué eligió y por qué.",
+          "Armás un presupuesto con alternativas numeradas (por ejemplo: Opción 1: cambio de SSD $X, Opción 2: también más RAM $Y, Opción 3: equipo completo reacondicionado $Z). El cliente lo recibe por WhatsApp y aprueba la elegida con firma digital. Queda registrado qué eligió y por qué.",
       },
       {
         question: "¿Sirve para PCs de empresas con contratos de mantenimiento?",
@@ -295,9 +302,11 @@ export const useCases: UseCase[] = [
     heroTitle: "El sistema para talleres de",
     heroHighlight: "electrónicos y dispositivos",
     heroDescription:
-      "Tablets, consolas, equipos de audio, cámaras — si lo reparás, STApp lo gestiona. Un solo sistema flexible para cualquier tipo de dispositivo electrónico.",
+      "Tablets, consolas, equipos de audio, cámaras: si lo reparás, STApp lo gestiona. Un solo sistema flexible para cualquier tipo de dispositivo electrónico.",
+    cardDescription:
+      "Un solo sistema flexible para cualquier electrónico: órdenes a medida, stock por categorías libres y reportes por rubro.",
     longIntro: [
-      "Los talleres de electrónica general — microondas, equipos de audio, TVs, cámaras, monitores, pequeños electrodomésticos — enfrentan un desafío distinto a los talleres de un solo tipo de dispositivo: cada equipo que entra es diferente, cada marca usa componentes propios y los repuestos van desde capacitores sueltos hasta plaquetas completas. Los software pensados para un vertical específico te fuerzan a encajar tu realidad en formatos cerrados.",
+      "Los talleres de electrónica general (microondas, equipos de audio, TVs, cámaras, monitores, pequeños electrodomésticos) enfrentan un desafío distinto a los talleres de un solo tipo de dispositivo: cada equipo que entra es diferente, cada marca usa componentes propios y los repuestos van desde capacitores sueltos hasta plaquetas completas. Los software pensados para un vertical específico te fuerzan a encajar tu realidad en formatos cerrados.",
       "STApp te permite gestionar esa variedad sin casarte con un formato rígido. Creás tipos de dispositivo con campos propios (un microondas lleva magnetrón y plato giratorio; un amplificador lleva transistores de salida y relés), organizás el stock por categorías libres y tenés reportes que te dicen qué rubro te deja más plata y cuál consume más tiempo. Ideal para talleres generalistas que no encajan en software hecho para un solo vertical.",
     ],
     problems: [
@@ -359,7 +368,7 @@ export const useCases: UseCase[] = [
       {
         title: "Tipos de dispositivo personalizables",
         description:
-          "No te casás con categorías cerradas: creás 'cafetera express', 'mezclador de DJ', 'proyector LED', 'plaqueta automotriz' — lo que reparás, con los campos que te sirven.",
+          "No te casás con categorías cerradas: creás 'cafetera express', 'mezclador de DJ', 'proyector LED', 'plaqueta automotriz', lo que reparás, con los campos que te sirven.",
       },
       {
         title: "Stock con categorías libres",
@@ -381,7 +390,7 @@ export const useCases: UseCase[] = [
       {
         question: "¿STApp sirve si reparo cosas muy diversas, desde microondas hasta plaquetas de autos?",
         answer:
-          "Sí. El sistema no te obliga a trabajar con categorías predefinidas. Creás los tipos de dispositivo que vos reparás — 'microondas', 'ECU automotriz', 'balanza electrónica' — con los campos que te sirven, y gestionás todo desde el mismo panel. No hay formato rígido que se imponga a tu realidad.",
+          "Sí. El sistema no te obliga a trabajar con categorías predefinidas. Creás los tipos de dispositivo que vos reparás ('microondas', 'ECU automotriz', 'balanza electrónica') con los campos que te sirven, y gestionás todo desde el mismo panel. No hay formato rígido que se imponga a tu realidad.",
       },
       {
         question: "¿Cómo organizo un inventario con componentes muy variados?",
@@ -425,8 +434,10 @@ export const useCases: UseCase[] = [
     heroHighlight: "reparación de tablets",
     heroDescription:
       "Gestioná reparaciones de iPads, tablets Samsung, Lenovo y más. Registrá diagnósticos, controlá stock de pantallas y digitalizadores, y mantené informado a tu cliente.",
+    cardDescription:
+      "Stock por modelo, presupuestos según el tipo de pantalla y seguimiento por WhatsApp para iPads y tablets Android.",
     longIntro: [
-      "Las tablets parecen celulares grandes pero en la mesa del técnico son otra cosa. Los iPad requieren herramientas específicas y pegamento caliente, las Samsung Galaxy Tab usan displays únicos por modelo, y una Lenovo no cruza repuestos con una Huawei. Los clientes — padres con tablets de los chicos, comercios con terminales Android para pedidos, empresas con iPads para ventas en la calle — todos llegan con equipos distintos y el taller que no ordena su stock por modelo termina perdiendo plata en repuestos mal comprados.",
+      "Las tablets parecen celulares grandes pero en la mesa del técnico son otra cosa. Los iPad requieren herramientas específicas y pegamento caliente, las Samsung Galaxy Tab usan displays únicos por modelo, y una Lenovo no cruza repuestos con una Huawei. Los clientes (padres con tablets de los chicos, comercios con terminales Android para pedidos, empresas con iPads para ventas en la calle) llegan con equipos distintos y el taller que no ordena su stock por modelo termina perdiendo plata en repuestos mal comprados.",
       "STApp ordena ese caos. Organizás el stock por marca y modelo exacto (iPad Pro 11\" 3ra gen, Samsung Tab A7 Lite, Lenovo Tab M10 Plus), generás presupuestos diferenciados según si es cambio de digitalizador, pantalla completa o solo vidrio, y el cliente sigue su reparación por WhatsApp sin tener que llamarte. Todo diseñado para que un taller con volumen de tablets pueda escalar sin volverse un desastre operativo.",
     ],
     problems: [
@@ -503,7 +514,7 @@ export const useCases: UseCase[] = [
       {
         title: "Seguimiento web con link único",
         description:
-          "El cliente abre un link sin descargar nada, ve el estado de su iPad, el ETA actualizado, las fotos del equipo y el presupuesto. Cero fricción — nadie tiene que instalar una app para ser cliente.",
+          "El cliente abre un link sin descargar nada, ve el estado de su iPad, el ETA actualizado, las fotos del equipo y el presupuesto. Cero fricción: nadie tiene que instalar una app para ser cliente.",
       },
     ],
     faqs: [
@@ -553,10 +564,12 @@ export const useCases: UseCase[] = [
     heroTitle: "Gestioná tu taller de reparación de",
     heroHighlight: "consolas de videojuegos",
     heroDescription:
-      "PlayStation, Xbox, Nintendo Switch — administrá reparaciones de consolas con un sistema profesional. Control de órdenes, repuestos y comunicación con clientes.",
+      "PlayStation, Xbox, Nintendo Switch: administrá reparaciones de consolas con un sistema profesional. Control de órdenes, repuestos y comunicación con clientes.",
+    cardDescription:
+      "Órdenes, stock por plataforma y garantía con fotos para PlayStation, Xbox y Nintendo Switch.",
     longIntro: [
       "Las reparaciones de consolas tienen picos estacionales (post-Navidad, vacaciones, lanzamientos grandes), clientes jóvenes muy exigentes con el tiempo y fallas técnicas específicas que no se parecen a otras reparaciones: drift de joysticks, lectores ópticos que no leen discos, ventiladores ruidosos, cambio de pasta térmica en PS4 y PS5, HDMI quemado por conexión indebida, Switch con problemas de carga o joycons desincronizados.",
-      "STApp gestiona tu taller de consolas pensando en esto. Categorizás por plataforma (PlayStation, Xbox, Nintendo), llevás stock específico (joycons, lectoras, ventiladores, pasta térmica de calidad), y el cliente gamer sigue cada paso por WhatsApp. Además, documentás garantía digital con fotos del antes/después — en este rubro los reclamos por 'me lo devolvieron peor' son frecuentes, y la evidencia visual te protege.",
+      "STApp gestiona tu taller de consolas pensando en esto. Categorizás por plataforma (PlayStation, Xbox, Nintendo), llevás stock específico (joycons, lectoras, ventiladores, pasta térmica de calidad), y el cliente gamer sigue cada paso por WhatsApp. Además, documentás garantía digital con fotos del antes/después. En este rubro los reclamos por 'me lo devolvieron peor' son frecuentes, y la evidencia visual te protege.",
     ],
     problems: [
       "Las consolas requieren diagnósticos técnicos específicos difíciles de documentar",
@@ -622,7 +635,7 @@ export const useCases: UseCase[] = [
       {
         title: "Diagnóstico por falla típica",
         description:
-          "El sistema te sugiere las causas más frecuentes por modelo (ej: PS4 Fat con overheating — 90% es pasta térmica vieja; Switch con drift — cambio de módulo de joystick) con tiempos estimados asociados.",
+          "El sistema te sugiere las causas más frecuentes por modelo (ej: PS4 Fat con overheating suele ser pasta térmica vieja; Switch con drift, cambio de módulo de joystick) con tiempos estimados asociados.",
       },
       {
         title: "Evidencia fotográfica obligatoria",
@@ -639,7 +652,7 @@ export const useCases: UseCase[] = [
       {
         question: "¿Gestiono tanto reparaciones físicas como temas de software (backup de saves, recupero de cuenta)?",
         answer:
-          "Sí. Creás tipos de orden separados — reparación de hardware, backup de juegos, recupero de partidas guardadas, actualización de firmware — cada uno con su flujo, tarifa y plazos. Todo en el mismo panel, con el mismo cliente y la misma consola identificada por serial.",
+          "Sí. Creás tipos de orden separados (reparación de hardware, backup de juegos, recupero de partidas guardadas, actualización de firmware), cada uno con su flujo, tarifa y plazos. Todo en el mismo panel, con el mismo cliente y la misma consola identificada por serial.",
       },
       {
         question: "¿Cómo manejo las temporadas altas cuando entran muchas consolas juntas?",
@@ -659,7 +672,7 @@ export const useCases: UseCase[] = [
       {
         question: "¿Manejo garantías distintas por tipo de reparación?",
         answer:
-          "Sí. Cada tipo de trabajo tiene su garantía por defecto configurable — limpieza y mantenimiento 30 días, cambio de componentes 3 a 6 meses, cambios de placa o soldaduras mayores 6 meses. Al entregar, el comprobante se genera con la fecha y el alcance específico.",
+          "Sí. Cada tipo de trabajo tiene su garantía por defecto configurable: limpieza y mantenimiento 30 días, cambio de componentes 3 a 6 meses, cambios de placa o soldaduras mayores 6 meses. Al entregar, el comprobante se genera con la fecha y el alcance específico.",
       },
     ],
     relatedSlugs: ["celulares", "electronicos"],
