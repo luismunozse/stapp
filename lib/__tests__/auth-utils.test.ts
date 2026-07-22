@@ -1,33 +1,22 @@
 import { describe, it, expect } from 'vitest'
-import {
-  canManageInventory,
-  canCreateOrders
-} from '../auth-utils'
+import { hasInventarioAccess, canCreateOrders } from '../auth-utils'
 
-describe('canManageInventory', () => {
-  it('retorna true solo para ADMIN', () => {
-    expect(canManageInventory('ADMIN')).toBe(true)
+describe('hasInventarioAccess', () => {
+  it('ADMIN accede siempre, con flag apagado o prendido', () => {
+    expect(hasInventarioAccess('ADMIN', false)).toBe(true)
+    expect(hasInventarioAccess('ADMIN', true)).toBe(true)
   })
-
-  it('retorna false para TECNICO', () => {
-    expect(canManageInventory('TECNICO')).toBe(false)
+  it('VENDEDOR accede solo con el flag de la org prendido', () => {
+    expect(hasInventarioAccess('VENDEDOR', true)).toBe(true)
+    expect(hasInventarioAccess('VENDEDOR', false)).toBe(false)
   })
-
-  it('retorna false para VENDEDOR', () => {
-    expect(canManageInventory('VENDEDOR')).toBe(false)
+  it('TECNICO nunca accede, incluso con flag prendido', () => {
+    expect(hasInventarioAccess('TECNICO', true)).toBe(false)
   })
-
-  it('retorna false para null', () => {
-    expect(canManageInventory(null)).toBe(false)
-  })
-
-  it('retorna false para string vacio', () => {
-    expect(canManageInventory('')).toBe(false)
-  })
-
-  it('retorna false para rol desconocido', () => {
-    expect(canManageInventory('OTRO')).toBe(false)
-    expect(canManageInventory('admin')).toBe(false) // case sensitive
+  it('rol nulo/vacío/desconocido nunca accede', () => {
+    expect(hasInventarioAccess(null, true)).toBe(false)
+    expect(hasInventarioAccess('', true)).toBe(false)
+    expect(hasInventarioAccess('admin', true)).toBe(false) // case sensitive
   })
 })
 
