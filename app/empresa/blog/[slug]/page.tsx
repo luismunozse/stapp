@@ -3,7 +3,7 @@ import { notFound } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, Calendar, Clock, RefreshCw } from "lucide-react"
+import { ArrowLeft, Clock, RefreshCw } from "lucide-react"
 import { BreadcrumbJsonLd, BlogPostingJsonLd } from "@/components/seo/json-ld"
 import { BlogCta } from "@/components/blog/blog-cta"
 import { ProductShotFrame } from "@/components/blog/product-shot-frame"
@@ -199,11 +199,11 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
                   {post.title}
                 </h1>
 
+                {/* Contenido evergreen: no mostramos la fecha de publicación
+                    (vive en el JSON-LD para buscadores). Solo surface la fecha
+                    cuando el post se actualizó de verdad (updatedAt), como
+                    señal de frescura positiva. */}
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                  <div className="flex items-center gap-1">
-                    <Calendar className="h-4 w-4" />
-                    <time dateTime={post.date}>{formatBlogDate(post.date)}</time>
-                  </div>
                   {post.updatedAt && (
                     <div className="flex items-center gap-1">
                       <RefreshCw className="h-4 w-4" />
