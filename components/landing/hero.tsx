@@ -1,160 +1,90 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { captureUtmParams } from "@/lib/utm"
 import { track } from "@/lib/analytics/track"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import {
-  ArrowRight,
-  Check,
-  ChevronDown,
-  ClipboardList,
-  LayoutDashboard,
-  Package,
-  Users,
-} from "lucide-react"
-import { cn } from "@/lib/utils"
+import { ArrowRight, Check, CheckCircle2, MessageCircle } from "lucide-react"
 import type { PlanPrices } from "@/lib/pricing"
-import { LazyMotion, domAnimation, m, AnimatePresence, useReducedMotion } from "framer-motion"
+import { LazyMotion, domAnimation, m, useReducedMotion } from "framer-motion"
 
 // Formatea con separador de miles (igual que pricing-section): 12500 -> "12.500"
 function formatThousands(price: number): string {
   return price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
 }
 
-const modules = [
-  { id: "ordenes", name: "Órdenes", icon: ClipboardList },
-  { id: "dashboard", name: "Dashboard", icon: LayoutDashboard },
-  { id: "inventario", name: "Inventario", icon: Package },
-  { id: "clientes", name: "Clientes", icon: Users },
-]
-
-// Capturas reales del producto (viewport 1409x912). Anonimizadas donde
-// aparecían datos de clientes (clientes/ordenes) antes de publicarse.
-const SHOT_WIDTH = 1409
-const SHOT_HEIGHT = 912
+const WHATSAPP_DEMO_URL =
+  "https://wa.me/5491169625733?text=" +
+  encodeURIComponent("Hola! Quiero agendar una demo de STApp para mi taller.")
 
 // ========================================
-// BROWSER FRAME (real screenshot)
+// FLOATING UI CARDS (mini-componentes reales del producto, no mockups)
 // ========================================
 
-function ScreenshotFrame({ src, alt, url }: { src: string; alt: string; url: string }) {
+function FloatingWhatsAppCard({ reduceMotion }: { reduceMotion: boolean | null }) {
   return (
-    <div className="relative mx-auto w-full max-w-5xl overflow-hidden rounded-xl border bg-card shadow-2xl">
-      {/* Browser chrome bar */}
-      <div className="flex items-center gap-2 border-b bg-card p-2.5">
-        <div className="flex gap-1.5">
-          <div className="h-2.5 w-2.5 rounded-full bg-red-500" />
-          <div className="h-2.5 w-2.5 rounded-full bg-yellow-500" />
-          <div className="h-2.5 w-2.5 rounded-full bg-green-500" />
-        </div>
-        <div className="flex-1 truncate rounded bg-muted px-2 py-0.5 text-center text-[10px] text-muted-foreground">
-          {url}
+    <m.div
+      className="absolute -right-3 top-6 z-10 w-56 rounded-xl border bg-card p-3 shadow-xl shadow-primary/10 sm:-right-6 sm:top-10 sm:w-64"
+      initial={{ opacity: 0, y: 12 }}
+      animate={
+        reduceMotion
+          ? { opacity: 1, y: 0 }
+          : { opacity: 1, y: [0, -6, 0] }
+      }
+      transition={
+        reduceMotion
+          ? { duration: 0.5, delay: 0.5 }
+          : { opacity: { duration: 0.5, delay: 0.5 }, y: { duration: 5, repeat: Infinity, ease: "easeInOut", delay: 0.5 } }
+      }
+    >
+      <div className="flex items-start gap-2.5">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#25D366]">
+          <MessageCircle className="h-4 w-4 text-white" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-xs font-semibold text-foreground">Aviso enviado a Juan</p>
+          <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
+            {"“Tu equipo está listo para retirar. Te esperamos!”"}
+          </p>
         </div>
       </div>
-      {/* Real screenshot */}
-      <Image
-        src={src}
-        alt={alt}
-        width={SHOT_WIDTH}
-        height={SHOT_HEIGHT}
-        className="block h-auto w-full"
-        priority
-        sizes="(max-width: 1024px) 90vw, 560px"
-      />
-    </div>
+    </m.div>
+  )
+}
+
+function FloatingCobroCard({ reduceMotion }: { reduceMotion: boolean | null }) {
+  return (
+    <m.div
+      className="absolute -left-3 bottom-8 z-10 rounded-xl border bg-card p-3 shadow-xl shadow-primary/10 sm:-left-6 sm:bottom-12"
+      initial={{ opacity: 0, y: 12 }}
+      animate={
+        reduceMotion
+          ? { opacity: 1, y: 0 }
+          : { opacity: 1, y: [0, 6, 0] }
+      }
+      transition={
+        reduceMotion
+          ? { duration: 0.5, delay: 0.7 }
+          : { opacity: { duration: 0.5, delay: 0.7 }, y: { duration: 6, repeat: Infinity, ease: "easeInOut", delay: 0.7 } }
+      }
+    >
+      <div className="flex items-center gap-2.5">
+        <CheckCircle2 className="h-7 w-7 shrink-0 text-success-600" />
+        <div>
+          <p className="text-xs font-semibold text-foreground">Cobro registrado</p>
+          <p className="text-xs text-muted-foreground">
+            <span className="font-semibold text-foreground">$45.000</span> · Orden #128
+          </p>
+        </div>
+      </div>
+    </m.div>
   )
 }
 
 // ========================================
-// INTERACTIVE MOCKUP SLIDER
-// ========================================
-
-function MockupSlider() {
-  const [activeModule, setActiveModule] = useState("ordenes")
-  const reduceMotion = useReducedMotion()
-
-  // Auto-rotate every 4 seconds (respeta prefers-reduced-motion)
-  useEffect(() => {
-    if (reduceMotion) return
-    const interval = setInterval(() => {
-      setActiveModule((current) => {
-        const currentIndex = modules.findIndex((m) => m.id === current)
-        const nextIndex = (currentIndex + 1) % modules.length
-        return modules[nextIndex].id
-      })
-    }, 4000)
-    return () => clearInterval(interval)
-  }, [reduceMotion])
-
-  const activeModuleData = modules.find((m) => m.id === activeModule)
-
-  return (
-    <div className="relative">
-      {/* Module tabs */}
-      <div className="flex justify-center gap-1.5 sm:gap-2 mb-4">
-        {modules.map((module) => {
-          const Icon = module.icon
-          const isActive = activeModule === module.id
-          return (
-            <button
-              key={module.id}
-              onClick={() => setActiveModule(module.id)}
-              className={cn(
-                "no-touch-min flex items-center justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-medium transition-[color,background-color,box-shadow]",
-                isActive
-                  ? "bg-primary text-primary-foreground shadow-md"
-                  : "bg-muted/80 text-muted-foreground hover:bg-muted"
-              )}
-            >
-              <Icon className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">{module.name}</span>
-            </button>
-          )
-        })}
-      </div>
-
-      {/* Screenshot container */}
-      <AnimatePresence mode="wait">
-        <m.div
-          key={activeModule}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          transition={{ duration: 0.3 }}
-        >
-          <ScreenshotFrame
-            src={`/screenshots/desktop/${activeModule}.png`}
-            alt={`STApp — ${activeModuleData?.name ?? "panel"}`}
-            url={`stapp.com.ar/${activeModule}`}
-          />
-        </m.div>
-      </AnimatePresence>
-
-      {/* Progress dots */}
-      <div className="flex justify-center gap-2.5 mt-3 sm:mt-4">
-        {modules.map((module) => (
-          <button
-            key={module.id}
-            onClick={() => setActiveModule(module.id)}
-            className={cn(
-              "no-touch-min w-2.5 h-2.5 rounded-full transition-[transform,background-color] duration-300",
-              activeModule === module.id
-                ? "bg-primary scale-110"
-                : "bg-muted-foreground/25 hover:bg-muted-foreground/40"
-            )}
-          />
-        ))}
-      </div>
-    </div>
-  )
-}
-
-// ========================================
-// MAIN HERO COMPONENT
+// MAIN HERO
 // ========================================
 
 export function Hero({ prices }: { prices: PlanPrices }) {
@@ -168,152 +98,132 @@ export function Hero({ prices }: { prices: PlanPrices }) {
 
   return (
     <LazyMotion features={domAnimation}>
-      <section className="relative pt-28 pb-8 sm:pt-32 sm:pb-10 lg:pt-36 lg:pb-12 overflow-hidden">
-        {/* Background gradient */}
-        <div className="absolute inset-0 bg-gradient-to-b from-primary/[0.04] via-background to-background dark:from-background dark:via-background dark:to-background" />
+      <section className="relative overflow-hidden pt-24 pb-14 sm:pt-28 lg:pt-32 lg:pb-20">
+        {/* Fondo: gradiente suave de marca, estilo tech limpio */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 bg-gradient-to-b from-primary/[0.05] via-background to-background"
+        />
 
         <div className="container relative mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-start">
-            {/* Left column - Text */}
+          <div className="grid items-center gap-12 lg:grid-cols-[1.05fr_1fr] lg:gap-10">
+            {/* Columna izquierda: la transformación */}
             <div className="text-center lg:text-left">
-              {/* Badge */}
-              <m.div
-                className="inline-block mb-5"
+              <m.h1
+                className="text-4xl font-bold tracking-tight text-balance text-foreground sm:text-5xl lg:text-6xl"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5 }}
               >
-                <Badge variant="secondary" className="gap-2 px-3 py-1.5 text-sm font-medium">
-                  <span className="relative flex h-2 w-2">
-                    <span className="absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75 motion-safe:animate-ping" />
-                    <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
-                  </span>
-                  30 días gratis, sin tarjeta de crédito
-                </Badge>
-              </m.div>
+                Menos caos en tu taller.{" "}
+                <span className="text-primary">Más plata a fin de mes.</span>
+              </m.h1>
 
-              {/* Headline */}
-              <m.h1
-                className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold text-foreground tracking-tight text-balance mb-6"
+              <m.p
+                className="mx-auto mt-6 max-w-xl text-lg text-muted-foreground sm:text-xl lg:mx-0"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.1 }}
               >
-                No pierdas más una{" "}
-                <span className="text-primary">reparación entre papeles</span>
-              </m.h1>
+                STApp ordena tus reparaciones, cobros y stock, y avisa solo a
+                tus clientes por WhatsApp. Vos dedicate a reparar.
+              </m.p>
 
-              {/* Subheadline */}
-              <m.p
-                className="text-lg sm:text-xl text-muted-foreground mb-8 max-w-xl mx-auto lg:mx-0"
+              <m.div
+                className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center lg:justify-start"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.2 }}
               >
-                Cargá cada reparación en un minuto, avisale al cliente por WhatsApp
-                cuando está lista y llevá las cuentas al día. Órdenes, caja,
-                inventario y ventas: todo tu taller en un solo lugar.
-              </m.p>
-
-              {/* CTAs */}
-              <m.div
-                className="flex flex-row items-center gap-3 justify-center lg:justify-start"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.4 }}
-              >
                 <Link
                   href="/registro?plan=profesional"
-                  onClick={() => track("landing_cta_click", { cta: "hero_primary", label: "Comenzar Gratis" })}
+                  className="w-full sm:w-auto"
+                  onClick={() => track("landing_cta_click", { cta: "hero_primary", label: "Probar gratis" })}
                 >
-                  <m.div
-                    whileHover={{ scale: 1.05, y: -2 }}
-                    whileTap={{ scale: 0.98 }}
-                    transition={{ type: "spring", stiffness: 400, damping: 17 }}
+                  <Button
+                    size="lg"
+                    className="group h-14 w-full rounded-full px-10 text-lg shadow-lg shadow-primary/25 transition-shadow hover:shadow-xl hover:shadow-primary/30 sm:w-auto"
                   >
-                    <Button size="lg" className="h-14 sm:h-16 px-10 sm:px-14 text-lg sm:text-xl rounded-full shadow-lg hover:shadow-xl transition-shadow group">
-                      Prueba Gratis
-                      <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                    </Button>
-                  </m.div>
+                    Probar gratis
+                    <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
+                  </Button>
                 </Link>
-              </m.div>
-
-              {/* Trust indicators */}
-              <m.div
-                className="flex flex-wrap justify-center lg:justify-start gap-x-4 gap-y-2 mt-6 text-sm text-muted-foreground"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.5, delay: 0.5 }}
-              >
-                <span className="flex items-center gap-1.5">
-                  <Check className="h-4 w-4 text-primary" />
-                  Desde <span className="font-semibold text-foreground">${anchorArs}/mes</span>
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <Check className="h-4 w-4 text-primary" />
-                  Configuración en minutos
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <Check className="h-4 w-4 text-primary" />
-                  Cancelás cuando quieras
-                </span>
+                <a
+                  href={WHATSAPP_DEMO_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full sm:w-auto"
+                  onClick={() => track("landing_cta_click", { cta: "hero_demo", label: "Agendar una demo" })}
+                >
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    className="h-14 w-full rounded-full px-8 text-lg sm:w-auto"
+                  >
+                    Agendar una demo
+                  </Button>
+                </a>
               </m.div>
             </div>
 
-            {/* Right column - Hero before/after image */}
+            {/* Columna derecha: producto REAL + tarjetas UI flotantes */}
             <m.div
-              className="relative isolate mx-auto w-full max-w-md"
-              initial={{ opacity: 0, x: 30 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.6, delay: 0.2 }}
+              id="demo"
+              className="relative isolate mx-auto w-full max-w-xl scroll-mt-24 px-4 sm:px-6 lg:px-0"
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.25 }}
             >
-              {/* Soft glow behind the image */}
+              {/* Glow suave detrás */}
               <div
                 aria-hidden="true"
-                className="pointer-events-none absolute -inset-6 -z-10 rounded-[2.5rem] bg-gradient-to-tr from-primary/30 via-primary/15 to-transparent blur-3xl"
+                className="pointer-events-none absolute -inset-8 -z-10 rounded-[2.5rem] bg-gradient-to-tr from-primary/25 via-primary/10 to-transparent blur-3xl"
               />
-              <Image
-                src="/hero.png"
-                alt="De los papeles al orden: un taller caótico con notas en papel y el mismo taller organizado con STApp"
-                width={1122}
-                height={1402}
-                className="w-full h-auto rounded-2xl shadow-2xl"
-                priority
-                sizes="(max-width: 1024px) 90vw, 560px"
-              />
+
+              <div className="overflow-hidden rounded-2xl border bg-card shadow-2xl shadow-primary/10">
+                <Image
+                  src="/screenshots/desktop/dashboard.png"
+                  alt="Dashboard de STApp mostrando los ingresos del mes de un taller y sus órdenes pendientes"
+                  width={1409}
+                  height={912}
+                  className="block h-auto w-full"
+                  priority
+                  sizes="(max-width: 1024px) 92vw, 620px"
+                />
+              </div>
+
+              <FloatingWhatsAppCard reduceMotion={reduceMotion} />
+              <FloatingCobroCard reduceMotion={reduceMotion} />
             </m.div>
           </div>
-
-          {/* Big product screenshot (Whaticket-style: dominant, below the copy) */}
-          <m.div
-            id="demo"
-            className="relative mt-12 sm:mt-16 scroll-mt-24"
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-          >
-            <MockupSlider />
-          </m.div>
-
-          {/* Scroll indicator */}
-          <m.a
-            href="#features"
-            className="flex flex-col items-center gap-1 mt-6 sm:mt-8 text-muted-foreground/60 hover:text-muted-foreground transition-colors"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.8, duration: 0.5 }}
-            aria-label="Ver más contenido"
-          >
-            <span className="text-xs font-medium">Descubrí más</span>
-            <m.div
-              animate={reduceMotion ? undefined : { y: [0, 6, 0] }}
-              transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-            >
-              <ChevronDown className="w-5 h-5" />
-            </m.div>
-          </m.a>
         </div>
+
+        {/* Trust strip: solo hechos reales, debajo del hero */}
+        <m.div
+          className="container relative mx-auto mt-14 px-4 sm:px-6 lg:mt-16 lg:px-8"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5, delay: 0.5 }}
+        >
+          <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3 border-y py-5 text-sm text-muted-foreground">
+            <span className="flex items-center gap-2">
+              <Check className="h-4 w-4 text-primary" />
+              30 días gratis
+            </span>
+            <span className="flex items-center gap-2">
+              <Check className="h-4 w-4 text-primary" />
+              Sin tarjeta de crédito
+            </span>
+            <span className="flex items-center gap-2">
+              <Check className="h-4 w-4 text-primary" />
+              Desde <span className="font-semibold text-foreground">${anchorArs}/mes</span>
+            </span>
+            <span className="hidden items-center gap-2 sm:flex">
+              <Check className="h-4 w-4 text-primary" />
+              Soporte directo por WhatsApp
+            </span>
+          </div>
+        </m.div>
       </section>
     </LazyMotion>
   )

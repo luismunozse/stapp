@@ -9,7 +9,6 @@ import { Check, X, Globe, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { m, LazyMotion, domAnimation } from "@/components/animations/motion"
 import { revealHeader, revealStagger, revealFocal } from "./reveal"
-import { SectionEyebrow } from "@/components/landing/section-eyebrow"
 import type { PlanPrices, AllPlansPrices } from "@/lib/pricing"
 
 interface PlanFeature {
@@ -31,6 +30,8 @@ interface Plan {
   ctaVariant: "outline" | "default"
 }
 
+// Bullets orientados a resultado, no a specs. El detalle completo de cada
+// plan vive en /precios (linkeado debajo de las cards).
 const plans: Plan[] = [
   {
     name: "Free",
@@ -38,50 +39,33 @@ const plans: Plan[] = [
     description: "Para arrancar y conocer STApp",
     priceMultiplier: 0,
     features: [
-      { text: "Hasta 30 órdenes/mes", included: true },
-      { text: "1 técnico", included: true },
-      { text: "Hasta 200 clientes", included: true },
-      { text: "1 sucursal", included: true },
-      { text: "Punto de venta (POS)", included: true },
-      { text: "Portal de seguimiento", included: true },
+      { text: "Hasta 30 reparaciones por mes", included: true },
+      { text: "Tus clientes siguen su reparación online", included: true },
+      { text: "Ventas de mostrador (POS)", included: true },
       { text: "Inventario básico", included: true },
-      { text: "100MB almacenamiento", included: true },
-      { text: "Soporte por email", included: true },
-      { text: "Cotizaciones online", included: false },
-      { text: "Notificaciones WhatsApp", included: false },
-      { text: "Reportes avanzados", included: false },
-      { text: "Logo personalizado", included: false },
+      { text: "Avisos automáticos por WhatsApp", included: false },
+      { text: "Números y reportes del negocio", included: false },
     ],
-    cta: "Comenzar Gratis",
+    cta: "Comenzar gratis",
     ctaHref: "/registro",
     ctaVariant: "outline",
   },
   {
     name: "Profesional",
     slug: "profesional",
-    description: "Todo lo que tu taller necesita",
+    description: "Tu taller completo, sin límites",
     priceMultiplier: 1,
     badge: "Más popular",
     recommended: true,
     features: [
-      { text: "Órdenes ilimitadas", included: true },
-      { text: "Técnicos ilimitados", included: true },
-      { text: "Clientes ilimitados", included: true },
-      { text: "Punto de venta con garantías", included: true },
-      { text: "Cotizaciones con aprobación online", included: true },
-      { text: "Portal de seguimiento para clientes", included: true, highlight: "Diferencial" },
-      { text: "Modo kiosco para tu local", included: true },
-      { text: "Multi-sucursal (hasta 3)", included: true },
-      { text: "Catálogo online + cupones", included: true },
-      { text: "Reportes avanzados", included: true },
-      { text: "5GB almacenamiento", included: true },
-      { text: "Notificaciones WhatsApp", included: true },
-      { text: "Cuenta corriente de clientes", included: true },
-      { text: "Import/export datos", included: true },
-      { text: "Tu logo en presupuestos", included: true, highlight: "Tu marca" },
-      { text: "Soporte prioritario", included: true },
+      { text: "Reparaciones, técnicos y clientes ilimitados", included: true },
+      { text: "Avisos automáticos por WhatsApp", included: true, highlight: "Diferencial" },
+      { text: "Caja diaria y números claros del negocio", included: true },
+      { text: "Presupuestos que tu cliente aprueba online", included: true },
+      { text: "Hasta 3 sucursales", included: true },
+      { text: "Tu logo en presupuestos y comprobantes", included: true, highlight: "Tu marca" },
     ],
-    cta: "Probar gratis 30 días",
+    cta: "Probar gratis",
     ctaHref: "/registro?plan=profesional",
     ctaVariant: "default",
   },
@@ -150,12 +134,11 @@ export function PricingSection({ prices, allPlans }: PricingSectionProps) {
             whileInView="visible"
             viewport={{ once: true, margin: "0px" }}
           >
-            <SectionEyebrow>Precios</SectionEyebrow>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-balance text-foreground mb-4">
-              Elegí el plan que mejor se adapte a tu taller
+              Cuesta menos que una reparación al mes
             </h2>
             <p className="text-lg text-muted-foreground">
-              30 días gratis con acceso total al plan Profesional. Sin tarjeta de crédito.
+              Probá el plan Profesional 30 días gratis, sin tarjeta. Después decidís.
             </p>
           </m.div>
 
@@ -312,6 +295,11 @@ export function PricingSection({ prices, allPlans }: PricingSectionProps) {
           <div className="text-center mt-10 space-y-4">
             <p className="text-sm text-muted-foreground">
               Si no te convence en 30 días, no pagás nada. Sin preguntas, sin vueltas.
+            </p>
+            <p className="text-sm">
+              <Link href="/precios" className="font-medium text-primary hover:underline">
+                Ver la comparación completa de planes
+              </Link>
             </p>
             <m.div
               className="flex items-center justify-center gap-2 text-sm text-muted-foreground"
