@@ -59,7 +59,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
 
-type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; roles?: string[]; featureFlag?: "moduloAgenda" }
+type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; roles?: string[]; featureFlag?: "moduloAgenda"; vendedorFeatureFlag?: "vendedoresAdministranInventario" }
 
 type NavSection = { label: string; items: NavItem[] }
 
@@ -77,7 +77,7 @@ const navItems: NavItem[] = [
   { href: "/pos", label: "POS", icon: Store, roles: ["ADMIN", "VENDEDOR"] },
   { href: "/cotizaciones", label: "Cotizaciones", icon: Receipt, roles: ["ADMIN", "TECNICO"] },
   { href: "/catalogo", label: "Catálogo público", icon: BookMarked, roles: ["ADMIN"] },
-  { href: "/inventario", label: "Inventario", icon: Package, roles: ["ADMIN"] },
+  { href: "/inventario", label: "Inventario", icon: Package, roles: ["ADMIN", "VENDEDOR"], vendedorFeatureFlag: "vendedoresAdministranInventario" },
   { href: "/ordenes-compra", label: "Compras", icon: Truck, roles: ["ADMIN"] },
   { href: "/caja", label: "Caja", icon: Landmark, roles: ["ADMIN"] },
   { href: "/finanzas", label: "Finanzas", icon: Wallet, roles: ["ADMIN"] },
@@ -98,7 +98,7 @@ const navSections: NavSection[] = [
       { href: "/ordenes", label: "Órdenes", icon: ClipboardList },
       { href: "/agenda", label: "Agenda", icon: CalendarDays, featureFlag: "moduloAgenda" },
       { href: "/clientes", label: "Clientes", icon: Users, roles: ["ADMIN", "VENDEDOR", "TECNICO"] },
-      { href: "/inventario", label: "Inventario", icon: Package, roles: ["ADMIN"] },
+      { href: "/inventario", label: "Inventario", icon: Package, roles: ["ADMIN", "VENDEDOR"], vendedorFeatureFlag: "vendedoresAdministranInventario" },
       { href: "/ventas", label: "Ventas / POS", icon: ShoppingCart, roles: ["ADMIN", "VENDEDOR"] },
       { href: "/finanzas", label: "Finanzas", icon: Wallet, roles: ["ADMIN"] },
     ],
@@ -146,6 +146,7 @@ const bottomNavByRole: Record<string, NavItem[]> = {
     { href: "/pos", label: "POS", icon: Store },
     { href: "/ventas", label: "Ventas", icon: ShoppingCart },
     { href: "/clientes", label: "Clientes", icon: Users },
+    { href: "/inventario", label: "Inventario", icon: Package, vendedorFeatureFlag: "vendedoresAdministranInventario" },
   ],
   TECNICO: [
     { href: "/dashboard", label: "Inicio", icon: LayoutDashboard },
@@ -171,8 +172,9 @@ export function Navbar() {
   // disparado desde /perfil después de un cambio.
   const [liveName, setLiveName] = useState<string | null>(null)
   const [liveAvatar, setLiveAvatar] = useState<string | null>(null)
-  const [orgFeatures, setOrgFeatures] = useState<{ moduloAgenda: boolean }>({
+  const [orgFeatures, setOrgFeatures] = useState<{ moduloAgenda: boolean; vendedoresAdministranInventario: boolean }>({
     moduloAgenda: false,
+    vendedoresAdministranInventario: false,
   })
 
   useEffect(() => {
@@ -182,7 +184,10 @@ export function Navbar() {
         .then(r => r.ok ? r.json() : null)
         .then(d => {
           if (cancelled || !d) return
-          setOrgFeatures({ moduloAgenda: !!d.moduloAgenda })
+          setOrgFeatures({
+            moduloAgenda: !!d.moduloAgenda,
+            vendedoresAdministranInventario: !!d.vendedoresAdministranInventario,
+          })
         })
         .catch(() => {})
     }
@@ -199,6 +204,13 @@ export function Navbar() {
     if (!flag) return true
     return !!orgFeatures[flag]
   }, [orgFeatures])
+
+  // ADMIN siempre ve el módulo; VENDEDOR solo si la org habilitó el flag.
+  // A diferencia de featureFlag (que oculta para TODOS los roles), esta
+  // gate solo restringe al rol VENDEDOR.
+  const vendedorAllowed = useCallback((item: NavItem) => (
+    userRole !== "VENDEDOR" || !item.vendedorFeatureFlag || !!orgFeatures[item.vendedorFeatureFlag]
+  ), [userRole, orgFeatures])
 
   useEffect(() => {
     let cancelled = false
@@ -247,7 +259,7 @@ export function Navbar() {
 
   const allNavItems = [
     ...navItems.filter(item =>
-      (!item.roles || item.roles.includes(userRole)) && isFeatureEnabled(item.featureFlag),
+      (!item.roles || item.roles.includes(userRole)) && isFeatureEnabled(item.featureFlag) && vendedorAllowed(item),
     ),
     ...(userRole === "ADMIN" || userRole === "VENDEDOR" ? [
       { href: "/proveedores", label: "Proveedores", icon: Store }
@@ -261,7 +273,7 @@ export function Navbar() {
   const filteredSections = navSections.map(section => ({
     ...section,
     items: section.items.filter(item =>
-      (!item.roles || item.roles.includes(userRole)) && isFeatureEnabled(item.featureFlag),
+      (!item.roles || item.roles.includes(userRole)) && isFeatureEnabled(item.featureFlag) && vendedorAllowed(item),
     ),
   })).filter(section => section.items.length > 0)
 
@@ -312,7 +324,7 @@ export function Navbar() {
   }
 
   const filteredBottomNavItems = (bottomNavByRole[userRole] ?? bottomNavByRole.ADMIN)
-    .filter(item => isFeatureEnabled(item.featureFlag))
+    .filter(item => isFeatureEnabled(item.featureFlag) && vendedorAllowed(item))
 
   // Items que no están en el bottom nav (para el menú "Más")
   const moreItems = allNavItems.filter(

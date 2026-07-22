@@ -11,13 +11,14 @@ export async function GET() {
 
     const { data } = await supabaseAdmin
       .from("organizations")
-      .select("modulo_agenda")
+      .select("modulo_agenda, vendedores_administran_inventario")
       .eq("id", organizationId!)
       .single()
 
     return NextResponse.json(
       {
         moduloAgenda: !!data?.modulo_agenda,
+        vendedoresAdministranInventario: !!data?.vendedores_administran_inventario,
       },
       {
         headers: {
@@ -28,7 +29,7 @@ export async function GET() {
   } catch (err) {
     console.error("Error fetching org features:", err)
     return NextResponse.json(
-      { moduloAgenda: false },
+      { moduloAgenda: false, vendedoresAdministranInventario: false },
       { status: 200 },
     )
   }
