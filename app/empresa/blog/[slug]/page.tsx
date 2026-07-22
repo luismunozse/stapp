@@ -3,10 +3,21 @@ import { notFound } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, Calendar, Clock, ArrowRight } from "lucide-react"
-import { BreadcrumbJsonLd } from "@/components/seo/json-ld"
+import { ArrowLeft, Calendar, Clock, RefreshCw } from "lucide-react"
+import { BreadcrumbJsonLd, BlogPostingJsonLd } from "@/components/seo/json-ld"
+import { BlogCta } from "@/components/blog/blog-cta"
+import { ProductShotFrame } from "@/components/blog/product-shot-frame"
 import { blogPosts, getBlogPostBySlug } from "@/lib/blog-data"
 import { DEFAULT_TIMEZONE } from "@/lib/timezone"
+
+function formatBlogDate(value: string): string {
+  return new Date(value).toLocaleDateString("es-AR", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: DEFAULT_TIMEZONE,
+  })
+}
 
 interface BlogPostPageProps {
   params: Promise<{ slug: string }>
@@ -66,6 +77,76 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
     .filter((p) => p.category === post.category && p.id !== post.id)
     .slice(0, 3)
 
+  // Render del contenido markdown-lite a bloques, con un CTA insertado cerca
+  // de la mitad (el lector que no llega al final igual ve una conversión).
+  const lines = post.content.split("\n")
+  const blocks: React.ReactNode[] = []
+  const headingBlockIndexes: number[] = []
+
+  lines.forEach((line, i) => {
+    const trimmed = line.trim()
+    if (!trimmed) return
+    if (trimmed.startsWith("## ")) {
+      headingBlockIndexes.push(blocks.length)
+      blocks.push(
+        <h2 key={i} className="text-2xl font-bold mt-8 mb-4">
+          {trimmed.replace("## ", "")}
+        </h2>
+      )
+      return
+    }
+    if (trimmed.startsWith("### ")) {
+      blocks.push(
+        <h3 key={i} className="text-xl font-semibold mt-6 mb-3">
+          {trimmed.replace("### ", "")}
+        </h3>
+      )
+      return
+    }
+    if (trimmed.startsWith("- **")) {
+      blocks.push(
+        <li key={i} className="ml-4 mb-1">
+          <strong>{trimmed.match(/\*\*(.*?)\*\*/)?.[1]}</strong>:{" "}
+          {trimmed.replace(/- \*\*.*?\*\*:?\s*/, "")}
+        </li>
+      )
+      return
+    }
+    if (trimmed.startsWith("- ")) {
+      blocks.push(
+        <li key={i} className="ml-4 mb-1">
+          {trimmed.replace("- ", "")}
+        </li>
+      )
+      return
+    }
+    if (/^\d+\.\s/.test(trimmed)) {
+      blocks.push(
+        <li key={i} className="ml-4 mb-1 list-decimal">
+          {trimmed.replace(/^\d+\.\s/, "")}
+        </li>
+      )
+      return
+    }
+    blocks.push(
+      <p key={i} className="text-muted-foreground mb-4">
+        {trimmed}
+      </p>
+    )
+  })
+
+  // Punto de inserción: el encabezado más cercano a la mitad del artículo.
+  // Si no hay suficientes encabezados, cae al bloque del medio.
+  const midpoint = Math.floor(blocks.length / 2)
+  const ctaIndex =
+    headingBlockIndexes
+      .filter((idx) => idx > 0)
+      .sort((a, b) => Math.abs(a - midpoint) - Math.abs(b - midpoint))[0] ??
+    midpoint
+  if (blocks.length > 4) {
+    blocks.splice(ctaIndex, 0, <BlogCta key="inline-cta" variant="inline" />)
+  }
+
   return (
     <>
       <BreadcrumbJsonLd
@@ -77,6 +158,18 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
             url: `https://stapp.com.ar/empresa/blog/${post.slug}`,
           },
         ]}
+      />
+      <BlogPostingJsonLd
+        post={{
+          slug: post.slug,
+          title: post.title,
+          excerpt: post.excerpt,
+          image: post.image,
+          date: post.date,
+          updatedAt: post.updatedAt,
+          category: post.category,
+          keywords: post.keywords,
+        }}
       />
 
       <div className="min-h-dvh bg-gradient-to-b from-muted/50 to-background">
@@ -106,18 +199,22 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
                   {post.title}
                 </h1>
 
-                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
                   <div className="flex items-center gap-1">
                     <Calendar className="h-4 w-4" />
-                    <time dateTime={post.date}>
-                      {new Date(post.date).toLocaleDateString("es-AR", {
-                        day: "numeric",
-                        month: "long",
-                        year: "numeric",
-                        timeZone: DEFAULT_TIMEZONE,
-                      })}
-                    </time>
+                    <time dateTime={post.date}>{formatBlogDate(post.date)}</time>
                   </div>
+                  {post.updatedAt && (
+                    <div className="flex items-center gap-1">
+                      <RefreshCw className="h-4 w-4" />
+                      <span>
+                        Actualizado el{" "}
+                        <time dateTime={post.updatedAt}>
+                          {formatBlogDate(post.updatedAt)}
+                        </time>
+                      </span>
+                    </div>
+                  )}
                   <div className="flex items-center gap-1">
                     <Clock className="h-4 w-4" />
                     <span>{post.readTime} de lectura</span>
@@ -125,76 +222,34 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
                 </div>
               </div>
 
-              {/* Featured image */}
-              <div className="aspect-video relative rounded-lg overflow-hidden mb-8">
-                <Image
-                  src={post.image}
-                  alt={`${post.title} - Artículo del blog de STApp sobre ${post.category.toLowerCase()} para talleres de reparación`}
-                  fill
-                  sizes="(max-width: 768px) 100vw, 768px"
-                  className="object-cover"
-                  priority
+              {/* Featured: captura real del producto (enmarcada) si mapea 1:1
+                  con una pantalla; si no, foto editorial */}
+              {post.productShot ? (
+                <ProductShotFrame
+                  src={post.productShot.src}
+                  url={post.productShot.url}
+                  alt={`Pantalla de ${post.category.toLowerCase()} en STApp: ${post.title}`}
                 />
-              </div>
+              ) : (
+                <div className="aspect-video relative rounded-lg overflow-hidden mb-8">
+                  <Image
+                    src={post.image}
+                    alt={`${post.title} - Artículo del blog de STApp sobre ${post.category.toLowerCase()} para talleres de reparación`}
+                    fill
+                    sizes="(max-width: 768px) 100vw, 768px"
+                    className="object-cover"
+                    priority
+                  />
+                </div>
+              )}
 
-              {/* Article content */}
+              {/* Article content (con CTA insertado a mitad de artículo) */}
               <div className="prose prose-lg dark:prose-invert max-w-none">
-                {post.content.split("\n").map((line, i) => {
-                  const trimmed = line.trim()
-                  if (!trimmed) return null
-                  if (trimmed.startsWith("## "))
-                    return (
-                      <h2 key={i} className="text-2xl font-bold mt-8 mb-4">
-                        {trimmed.replace("## ", "")}
-                      </h2>
-                    )
-                  if (trimmed.startsWith("### "))
-                    return (
-                      <h3 key={i} className="text-xl font-semibold mt-6 mb-3">
-                        {trimmed.replace("### ", "")}
-                      </h3>
-                    )
-                  if (trimmed.startsWith("- **"))
-                    return (
-                      <li key={i} className="ml-4 mb-1">
-                        <strong>
-                          {trimmed.match(/\*\*(.*?)\*\*/)?.[1]}
-                        </strong>
-                        : {trimmed.replace(/- \*\*.*?\*\*:?\s*/, "")}
-                      </li>
-                    )
-                  if (trimmed.startsWith("- "))
-                    return (
-                      <li key={i} className="ml-4 mb-1">
-                        {trimmed.replace("- ", "")}
-                      </li>
-                    )
-                  if (/^\d+\.\s/.test(trimmed))
-                    return (
-                      <li key={i} className="ml-4 mb-1 list-decimal">
-                        {trimmed.replace(/^\d+\.\s/, "")}
-                      </li>
-                    )
-                  return (
-                    <p key={i} className="text-muted-foreground mb-4">
-                      {trimmed}
-                    </p>
-                  )
-                })}
+                {blocks}
               </div>
 
-              {/* CTA */}
-              <div className="mt-12 p-6 bg-primary/5 rounded-lg border border-primary/20 text-center">
-                <h3 className="text-xl font-bold mb-2">
-                  ¿Listo para profesionalizar tu taller?
-                </h3>
-                <p className="text-muted-foreground mb-4">
-                  Probá STApp gratis por 30 días. Sin tarjeta de crédito.
-                </p>
-                <Link href="/registro">
-                  <Button size="lg">Comenzar gratis</Button>
-                </Link>
-              </div>
+              {/* CTA de cierre */}
+              <BlogCta variant="block" />
             </div>
           </div>
         </article>

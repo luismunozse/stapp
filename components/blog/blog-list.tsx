@@ -53,9 +53,16 @@ export function BlogList({ posts, categories }: BlogListProps) {
                 <Link key={post.id} href={`/empresa/blog/${post.slug}`}>
                   <Card className="overflow-hidden hover:shadow-lg transition-shadow h-full">
                     <div className="aspect-video bg-muted relative overflow-hidden">
+                      {/* Preferimos la captura propia (self-hosted, no se pudre
+                          como las URLs de stock) cuando la nota mapea 1:1 con
+                          una pantalla del producto. */}
                       <Image
-                        src={post.image}
-                        alt={`${post.title} - Artículo sobre ${post.category.toLowerCase()} para talleres de reparación de celulares`}
+                        src={post.productShot?.src ?? post.image}
+                        alt={
+                          post.productShot
+                            ? `Pantalla de ${post.category.toLowerCase()} en STApp: ${post.title}`
+                            : `${post.title} - Artículo sobre ${post.category.toLowerCase()} para talleres de reparación de celulares`
+                        }
                         fill
                         sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
                         className="object-cover"

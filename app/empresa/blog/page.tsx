@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, ArrowRight } from "lucide-react"
 import { BreadcrumbJsonLd } from "@/components/seo/json-ld"
 import { blogPosts, blogCategories } from "@/lib/blog-data"
 import { BlogList } from "@/components/blog/blog-list"
@@ -62,6 +62,14 @@ export default function BlogPage() {
                 Consejos, novedades y mejores prácticas para hacer crecer tu taller
                 de reparación de celulares y dispositivos electrónicos
               </p>
+              <div className="mt-8">
+                <Link href="/registro?plan=profesional">
+                  <Button size="lg" className="group rounded-full px-8">
+                    Probar STApp gratis
+                    <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
+                  </Button>
+                </Link>
+              </div>
             </div>
           </div>
         </section>
