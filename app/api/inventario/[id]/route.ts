@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { revalidateTag } from "next/cache"
-import { requireAuth, requireAdmin } from "@/lib/auth-utils"
+import { requireAuth, requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatInventario } from "@/lib/db-utils"
 import { createAuditLogger, diffObjects } from "@/lib/audit"
@@ -99,7 +99,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, session, organizationId, userId, role } = await requireAdmin()
+    const { error, session, organizationId, userId, role } = await requireInventarioAccess()
     if (error) return error
 
     const { id } = await params
@@ -273,7 +273,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId, userId } = await requireAdmin()
+    const { error, organizationId, userId } = await requireInventarioAccess()
     if (error) return error
 
     const { id } = await params

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAdmin } from "@/lib/auth-utils"
+import { requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { uploadInventarioImage, deleteInventarioImage } from "@/lib/storage"
 
@@ -11,7 +11,7 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { error, organizationId } = await requireAdmin()
+  const { error, organizationId } = await requireInventarioAccess()
   if (error) return error
 
   try {
@@ -108,7 +108,7 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { error, organizationId } = await requireAdmin()
+  const { error, organizationId } = await requireInventarioAccess()
   if (error) return error
 
   try {

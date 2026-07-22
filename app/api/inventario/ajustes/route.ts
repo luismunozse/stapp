@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { revalidateTag } from "next/cache"
-import { requireAdmin } from "@/lib/auth-utils"
+import { requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaEscritura, getDepositoDeSucursal } from "@/lib/sucursal"
 import { z } from "zod"
@@ -18,7 +18,7 @@ const ajusteSchema = z.object({
 // GET - listado de ajustes (opcionalmente filtrado por item, tipo, fechas)
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAdmin()
+    const { error, organizationId } = await requireInventarioAccess()
     if (error) return error
 
     const { searchParams } = new URL(request.url)
@@ -71,7 +71,7 @@ export async function GET(request: Request) {
 // POST - crear ajuste atómico
 export async function POST(request: Request) {
   try {
-    const { error, organizationId, userId, role } = await requireAdmin()
+    const { error, organizationId, userId, role } = await requireInventarioAccess()
     if (error) return error
 
     const body = await request.json()

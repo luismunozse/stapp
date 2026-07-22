@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAdmin } from "@/lib/auth-utils"
+import { requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatInventario } from "@/lib/db-utils"
 import { createAuditLogger } from "@/lib/audit"
@@ -53,7 +53,7 @@ function prefixFor(categoria: string) {
 
 export async function POST(request: Request) {
   try {
-    const { error, organizationId, userId } = await requireAdmin()
+    const { error, organizationId, userId } = await requireInventarioAccess()
     if (error) return error
 
     const body = await request.json()

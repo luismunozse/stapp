@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
-import { requireAdmin } from "@/lib/auth-utils"
+import { requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 
 const updateSchema = z.object({
@@ -21,7 +21,7 @@ const RPC_BATCH_SIZE = 500
 
 export async function POST(request: Request) {
   try {
-    const { error, organizationId, userId } = await requireAdmin()
+    const { error, organizationId, userId } = await requireInventarioAccess()
     if (error) return error
 
     const body = await request.json()

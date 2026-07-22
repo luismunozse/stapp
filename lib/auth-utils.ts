@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth"
 import { NextResponse } from "next/server"
 import { headers } from "next/headers"
 import { validateUserTenant } from "@/lib/tenant"
+import { supabaseAdmin } from "@/lib/supabase"
 
 export async function getAuthSession() {
   const session = await auth()
@@ -102,9 +103,51 @@ export async function requireAdminOrVendedor() {
   return result
 }
 
-// Verifica si el usuario puede gestionar inventario (solo ADMIN)
-export function canManageInventory(role: string | null): boolean {
-  return role === "ADMIN"
+// Regla pura de acceso a administración de inventario.
+// ADMIN siempre; VENDEDOR solo si la org habilitó el permiso (opt-in,
+// default apagado); TECNICO y cualquier otro rol, nunca.
+export function hasInventarioAccess(
+  role: string | null,
+  vendedoresHabilitados: boolean
+): boolean {
+  if (role === "ADMIN") return true
+  if (role === "VENDEDOR") return vendedoresHabilitados
+  return false
+}
+
+// Guard de endpoints de inventario. Mismo contrato que requireAdmin() para
+// swap 1:1. Fail-closed: si la columna no existe o la lectura falla,
+// el VENDEDOR queda denegado (idéntico al comportamiento histórico).
+export async function requireInventarioAccess() {
+  const result = await requireAuth()
+  if (result.error) return result
+
+  if (result.role === "ADMIN") return result
+
+  let vendedoresHabilitados = false
+  if (result.role === "VENDEDOR") {
+    try {
+      const { data } = await supabaseAdmin
+        .from("organizations")
+        .select("vendedores_administran_inventario")
+        .eq("id", result.organizationId!)
+        .single()
+      vendedoresHabilitados = data?.vendedores_administran_inventario === true
+    } catch {
+      vendedoresHabilitados = false
+    }
+  }
+
+  if (!hasInventarioAccess(result.role, vendedoresHabilitados)) {
+    return {
+      error: NextResponse.json({ error: "Acceso denegado" }, { status: 403 }),
+      session: null,
+      organizationId: null,
+      userId: null,
+      role: null,
+    }
+  }
+  return result
 }
 
 // Verifica si el usuario puede crear órdenes y clientes (ADMIN, VENDEDOR)

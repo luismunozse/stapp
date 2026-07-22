@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth, requireAdmin } from "@/lib/auth-utils"
+import { requireAuth, requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { formatInventario } from "@/lib/db-utils"
 import { createAuditLogger } from "@/lib/audit"
@@ -146,7 +146,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { error, organizationId, userId } = await requireAdmin()
+    const { error, organizationId, userId } = await requireInventarioAccess()
     if (error) return error
 
     const body = await request.json()

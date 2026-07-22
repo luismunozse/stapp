@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAuth, requireAdmin } from "@/lib/auth-utils"
+import { requireAuth, requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { uploadInventarioImage } from "@/lib/storage"
 
@@ -53,7 +53,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAdmin()
+    const { error, organizationId } = await requireInventarioAccess()
     if (error) return error
 
     const { id } = await params

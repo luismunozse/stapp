@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAdmin } from "@/lib/auth-utils"
+import { requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 
 // POST /api/inventario/lotes/marcar-vencidos
@@ -7,7 +7,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 // scheduled, llamar a la RPC desde un cron externo. Devuelve count.
 export async function POST() {
   try {
-    const { error } = await requireAdmin()
+    const { error } = await requireInventarioAccess()
     if (error) return error
 
     const { data, error: rpcErr } = await supabaseAdmin.rpc("marcar_lotes_vencidos")
