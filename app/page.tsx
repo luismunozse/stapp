@@ -4,13 +4,11 @@ import { auth } from "@/lib/auth"
 import { supabaseAdmin } from "@/lib/supabase"
 import { NavbarLanding } from "@/components/landing/navbar-landing"
 import { Hero } from "@/components/landing/hero"
+import { Transformation } from "@/components/landing/transformation"
 import { Features } from "@/components/landing/features"
 import { PricingSection } from "@/components/landing/pricing-section"
-import { Comparison } from "@/components/landing/comparison"
 import { Testimonials } from "@/components/landing/testimonials"
-import { BlogTeaser } from "@/components/landing/blog-teaser"
 import { FAQ } from "@/components/landing/faq"
-import { DownloadApp } from "@/components/landing/download-app"
 import { CtaBand } from "@/components/landing/cta-band"
 import { Footer } from "@/components/landing/footer"
 import { ChatbotButton } from "@/components/chatbot/chatbot-button"
@@ -88,34 +86,9 @@ const faqData = [
       "\u00a1Por supuesto! Ten\u00e9s 30 d\u00edas gratis con acceso completo a todas las funciones, sin necesidad de tarjeta de cr\u00e9dito. Si no te convence, simplemente no hac\u00e9s nada y la prueba finaliza sin ning\u00fan cargo.",
   },
   {
-    question: "\u00bfQu\u00e9 m\u00e9todos de pago aceptan?",
-    answer:
-      "Aceptamos tarjetas de cr\u00e9dito, d\u00e9bito, efectivo y otros medios de pago a trav\u00e9s de MercadoPago. Pod\u00e9s elegir entre plan mensual o anual (con descuento). Los pagos se procesan de forma segura.",
-  },
-  {
-    question: "\u00bfPuedo cancelar mi suscripci\u00f3n en cualquier momento?",
-    answer:
-      "S\u00ed, pod\u00e9s cancelar cuando quieras sin penalidades ni cargos ocultos. Mantendr\u00e1s el acceso a todas las funciones hasta el final del per\u00edodo ya facturado.",
-  },
-  {
-    question: "\u00bfPuedo importar y exportar mis datos?",
-    answer:
-      "S\u00ed, pod\u00e9s importar clientes e inventario desde archivos Excel o CSV con plantillas descargables y validaci\u00f3n autom\u00e1tica. Tambi\u00e9n pod\u00e9s exportar tus datos en cualquier momento. Tus datos son tuyos siempre.",
-  },
-  {
-    question: "\u00bfMis datos est\u00e1n seguros?",
-    answer:
-      "Absolutamente. Usamos encriptaci\u00f3n HTTPS/TLS, autenticaci\u00f3n de dos factores (2FA) con c\u00f3digos de respaldo, controles de acceso estrictos, monitoreo continuo y copias de seguridad peri\u00f3dicas. Tu informaci\u00f3n y la de tus clientes est\u00e1 protegida en todo momento.",
-  },
-  {
     question: "\u00bfC\u00f3mo funcionan las notificaciones por WhatsApp?",
     answer:
       "STApp incluye plantillas listas para enviar actualizaciones a tus clientes por WhatsApp: aviso de equipo listo, presupuestos, seguimiento de reparaci\u00f3n y m\u00e1s. Todo con un solo clic desde la orden de servicio.",
-  },
-  {
-    question: "\u00bfPuedo gestionar varios t\u00e9cnicos y vendedores?",
-    answer:
-      "S\u00ed, pod\u00e9s agregar t\u00e9cnicos y vendedores ilimitados con roles diferenciados (admin, t\u00e9cnico, vendedor). Asign\u00e1 reparaciones, visualiz\u00e1 la carga de trabajo de cada uno y segu\u00ed el rendimiento del equipo con m\u00e9tricas individuales.",
   },
   {
     question: "\u00bfMi cliente puede ver el estado de su reparaci\u00f3n?",
@@ -123,44 +96,19 @@ const faqData = [
       "S\u00ed. Cada orden genera un link \u00fanico que pod\u00e9s compartir por WhatsApp. Tu cliente ve el estado actualizado, las fotos, la informaci\u00f3n de garant\u00eda y puede descargar el comprobante en PDF. No necesita crear cuenta ni instalar nada.",
   },
   {
-    question: "\u00bfPuedo vender accesorios y repuestos adem\u00e1s de reparar?",
-    answer:
-      "S\u00ed, STApp incluye un m\u00f3dulo de ventas completo. Registr\u00e1 ventas con garant\u00eda por producto, m\u00faltiples medios de pago, gesti\u00f3n de devoluciones y seguimiento de vendedores con m\u00e9tricas individuales.",
-  },
-  {
-    question: "\u00bfC\u00f3mo puedo obtener soporte si tengo un problema?",
-    answer:
-      "Ten\u00e9s varias opciones: nuestro asistente virtual Santi disponible dentro de la app, el sistema de tickets de soporte para reportar errores o hacer consultas, y tambi\u00e9n pod\u00e9s contactarnos directamente. Brindamos soporte prioritario a todos los usuarios.",
-  },
-  {
-    question: "\u00bfPueden agregar funciones que necesito?",
-    answer:
-      "\u00a1Claro! Estamos en constante mejora bas\u00e1ndonos en el feedback de nuestros usuarios. Pod\u00e9s enviar sugerencias desde el sistema de soporte dentro de la app y muchas funciones nuevas nacen de las ideas de nuestros clientes.",
-  },
-  {
     question: "\u00bfSTApp tiene control de caja y finanzas?",
     answer:
-      "S\u00ed. STApp incluye caja diaria con apertura y cierre, control de movimientos de efectivo, gesti\u00f3n de gastos por categor\u00eda, gastos recurrentes (alquiler, servicios, sueldos) y un dashboard anal\u00edtico con los KPIs de tu taller actualizados. Tambi\u00e9n pod\u00e9s gestionar \u00f3rdenes de compra a proveedores vinculadas directamente al inventario.",
+      "S\u00ed. STApp incluye caja diaria con apertura y cierre, control de movimientos de efectivo, gesti\u00f3n de gastos y un dashboard con los n\u00fameros de tu taller siempre actualizados: cu\u00e1nto entr\u00f3, cu\u00e1nto sali\u00f3 y cu\u00e1nto queda.",
   },
   {
-    question: "\u00bfQu\u00e9 es Santi, el asistente de IA?",
+    question: "\u00bfPuedo cancelar mi suscripci\u00f3n en cualquier momento?",
     answer:
-      "Santi es tu asistente virtual integrado dentro de STApp, disponible 24/7. Pod\u00e9s preguntarle c\u00f3mo usar cualquier funci\u00f3n, pedirle ayuda para resolver problemas, o que te gu\u00ede paso a paso. Es como tener soporte t\u00e9cnico instant\u00e1neo sin esperar.",
+      "S\u00ed, pod\u00e9s cancelar cuando quieras sin penalidades ni cargos ocultos. Mantendr\u00e1s el acceso a todas las funciones hasta el final del per\u00edodo ya facturado.",
   },
   {
-    question: "\u00bfPuedo captar leads y darles seguimiento?",
+    question: "\u00bfMis datos est\u00e1n seguros?",
     answer:
-      "S\u00ed. STApp incluye un m\u00f3dulo de captaci\u00f3n de leads donde pod\u00e9s registrar consultas y potenciales clientes. Hac\u00e9 seguimiento de cada lead hasta convertirlo en una orden de trabajo real, sin que se te escape ninguna oportunidad.",
-  },
-  {
-    question: "\u00bfPuedo manejar varias sucursales?",
-    answer:
-      "S\u00ed. STApp es multi-sucursal: gestion\u00e1s \u00f3rdenes, ventas, caja, dep\u00f3sitos y usuarios por sucursal. La cantidad de sucursales depende de tu plan (el plan Free incluye 1 y el Profesional hasta 3). Adem\u00e1s soporta m\u00faltiples monedas.",
-  },
-  {
-    question: "\u00bfSTApp tiene API o integraciones?",
-    answer:
-      "S\u00ed. STApp ofrece una API REST (v1) para clientes, inventario y \u00f3rdenes con API keys, adem\u00e1s de webhooks salientes configurables para conectar STApp con tus otras herramientas y notificarte de eventos al instante.",
+      "Absolutamente. Usamos encriptaci\u00f3n HTTPS/TLS, autenticaci\u00f3n de dos factores (2FA) con c\u00f3digos de respaldo, controles de acceso estrictos, monitoreo continuo y copias de seguridad peri\u00f3dicas. Tu informaci\u00f3n y la de tus clientes est\u00e1 protegida en todo momento.",
   },
 ]
 
@@ -199,14 +147,14 @@ export default async function Home() {
         <ReducedMotionProvider>
           <NavbarLanding />
           <Hero prices={prices} />
+          <Transformation />
           <Features />
-          <Comparison />
-          <DownloadApp />
-          <CtaBand />
+          {/* Prueba social: se activa sola cuando haya testimonios reales
+              cargados (regla del proyecto: nunca fabricar prueba social). */}
           <Testimonials />
           <PricingSection prices={prices} allPlans={allPlans} />
-          <BlogTeaser />
           <FAQ faqs={faqData} />
+          <CtaBand />
           <Footer />
           <WhatsAppButton />
           <ChatbotButton />

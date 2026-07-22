@@ -29,24 +29,46 @@ test.describe("Paginas publicas", () => {
     await expect(page).toHaveURL(/login/)
   })
 
-  test("la landing muestra eyebrows de seccion", async ({ page }) => {
+  test("el hero muestra la promesa y los dos CTAs arriba del fold", async ({ page }) => {
     await page.goto("/")
-    await expect(page.getByText("Plataforma todo-en-uno", { exact: true })).toBeVisible()
-    // Scope to the pricing section: the navbar also has a "Precios" link, so an
-    // unscoped exact-text match resolves to 2 elements and trips strict mode.
+
+    // Scope al hero: es la primera <section>. Sin scope, "Probar gratis" matchea
+    // también el CTA del navbar y el test dejaría de validar el hero real.
+    const hero = page.locator("section").first()
+
     await expect(
-      page.locator("#pricing").getByText("Precios", { exact: true })
+      hero.getByRole("heading", { name: /menos caos en tu taller/i })
+    ).toBeVisible()
+    // CTA primario (hero) y secundario (demo por WhatsApp)
+    await expect(
+      hero.getByRole("link", { name: /probar gratis/i })
+    ).toBeVisible()
+    await expect(
+      hero.getByRole("link", { name: /agendar una demo/i })
     ).toBeVisible()
   })
 
-  test("la landing tiene banda CTA antes de los precios", async ({ page }) => {
+  test("la landing muestra transformación y precios", async ({ page }) => {
+    await page.goto("/")
+
+    await expect(
+      page.getByRole("heading", { name: /del cuaderno al control total/i })
+    ).toBeVisible()
+    await expect(
+      page.locator("#pricing").getByRole("heading", {
+        name: /cuesta menos que una reparación al mes/i,
+      })
+    ).toBeVisible()
+  })
+
+  test("la landing cierra con la banda CTA final después de los precios", async ({ page }) => {
     await page.goto("/")
 
     const ctaHeading = page.getByRole("heading", {
-      name: /empezá a ordenar tu taller hoy/i,
+      name: /mañana tu taller puede trabajar ordenado/i,
     })
     const pricingHeading = page.getByRole("heading", {
-      name: /elegí el plan que mejor se adapte/i,
+      name: /cuesta menos que una reparación al mes/i,
     })
 
     await expect(ctaHeading).toBeVisible()
@@ -55,7 +77,7 @@ test.describe("Paginas publicas", () => {
     const ctaBox = await ctaHeading.boundingBox()
     const pricingBox = await pricingHeading.boundingBox()
     expect(ctaBox && pricingBox).toBeTruthy()
-    // CTA band sits above the pricing section.
-    expect((ctaBox as { y: number }).y).toBeLessThan((pricingBox as { y: number }).y)
+    // La banda CTA es el cierre: va después del pricing.
+    expect((ctaBox as { y: number }).y).toBeGreaterThan((pricingBox as { y: number }).y)
   })
 })
