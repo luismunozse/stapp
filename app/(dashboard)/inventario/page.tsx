@@ -11,7 +11,7 @@ import { PageShell } from "@/components/ui/page-shell"
 
 export default function InventarioPage() {
   const [showAnalytics, setShowAnalytics] = useState(false)
-  const { data: session } = useSession()
+  const { data: session, status } = useSession()
   const router = useRouter()
   const [accesoVendedor, setAccesoVendedor] = useState<boolean | null>(null)
 
@@ -26,6 +26,7 @@ export default function InventarioPage() {
       .catch(() => router.replace("/dashboard"))
   }, [session, router])
 
+  if (status === "loading") return null
   if (session?.user?.role === "VENDEDOR" && accesoVendedor !== true) return null
 
   return (
