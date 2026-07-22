@@ -6,8 +6,19 @@ export interface BlogPost {
   content: string
   category: string
   date: string
+  // Fecha de última revisión real del contenido. Alimenta dateModified en el
+  // structured data (señal de frescura) y "Actualizado el…" en la nota.
+  // Setear SOLO cuando el post se revisa/actualiza de verdad; no inventar.
+  updatedAt?: string
   readTime: string
   image: string
+  // Captura real del producto para usar como imagen destacada (enmarcada),
+  // en vez de la foto de stock. Setear solo cuando la nota mapea 1:1 con una
+  // pantalla real de STApp; si no, es preferible una foto editorial variada.
+  productShot?: {
+    src: string
+    url: string
+  }
   keywords: string[]
 }
 
@@ -57,6 +68,10 @@ La tecnología es tu aliada. Un sistema de gestión integral te permite automati
     date: "2024-01-15",
     readTime: "5 min",
     image: "https://images.unsplash.com/photo-1556742031-c6961e8560b0?w=800",
+    productShot: {
+      src: "/screenshots/desktop/clientes.png",
+      url: "stapp.com.ar/clientes",
+    },
     keywords: [
       "experiencia del cliente",
       "taller reparación",
@@ -112,6 +127,10 @@ Un software de control de inventario te ahorra horas de trabajo manual y previen
     date: "2024-01-10",
     readTime: "7 min",
     image: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=800",
+    productShot: {
+      src: "/screenshots/desktop/inventario.png",
+      url: "stapp.com.ar/inventario",
+    },
     keywords: [
       "inventario repuestos",
       "control stock taller",
@@ -260,7 +279,7 @@ No necesitás un gran presupuesto para empezar. Con constancia y las herramienta
     category: "Marketing",
     date: "2023-12-20",
     readTime: "8 min",
-    image: "https://images.unsplash.com/photo-1432888622747-4eb9a8f2c293?w=800",
+    image: "https://images.unsplash.com/photo-1533750349088-cd871a92f312?w=800",
     keywords: [
       "marketing taller reparación",
       "publicidad taller celulares",
@@ -432,6 +451,10 @@ Las órdenes de trabajo digitales son la base de un taller organizado y profesio
     date: "2024-02-10",
     readTime: "6 min",
     image: "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=800",
+    productShot: {
+      src: "/screenshots/desktop/ordenes.png",
+      url: "stapp.com.ar/ordenes",
+    },
     keywords: [
       "órdenes de trabajo servicio técnico",
       "orden de trabajo reparación",
@@ -585,6 +608,10 @@ Un software especializado como STApp se paga solo en la primera semana de uso. L
     date: "2024-03-01",
     readTime: "8 min",
     image: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800",
+    productShot: {
+      src: "/screenshots/desktop/dashboard.png",
+      url: "stapp.com.ar/dashboard",
+    },
     keywords: [
       "software vs excel taller",
       "dejar excel servicio técnico",

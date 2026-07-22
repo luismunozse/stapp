@@ -1,7 +1,21 @@
 import Script from "next/script"
 import { getPremiumPrices } from "@/lib/pricing"
+import { blogPostingSchema, type BlogPostingSchemaInput } from "@/lib/blog-seo"
 
 const siteUrl = "https://stapp.com.ar"
+
+// BlogPosting Schema - rich results para los artículos del blog
+export function BlogPostingJsonLd({ post }: { post: BlogPostingSchemaInput }) {
+  const schema = blogPostingSchema(post)
+
+  return (
+    <Script
+      id={`jsonld-blogposting-${post.slug}`}
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+    />
+  )
+}
 
 // Organization Schema - Enhanced for GEO
 export function OrganizationJsonLd() {
