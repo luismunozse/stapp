@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAdmin } from "@/lib/auth-utils"
+import { requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
 
@@ -21,7 +21,7 @@ export async function PATCH(
   { params }: { params: Promise<{ serieId: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAdmin()
+    const { error, organizationId } = await requireInventarioAccess()
     if (error) return error
 
     const { serieId } = await params

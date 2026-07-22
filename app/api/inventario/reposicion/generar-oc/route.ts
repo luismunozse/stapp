@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAdmin } from "@/lib/auth-utils"
+import { requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { z } from "zod"
 
@@ -29,7 +29,7 @@ const schema = z.object({
 // Devuelve lista de OCs creadas con su id + numero.
 export async function POST(request: Request) {
   try {
-    const { error, organizationId, userId } = await requireAdmin()
+    const { error, organizationId, userId } = await requireInventarioAccess()
     if (error) return error
 
     const body = await request.json()

@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server"
-import { requireAdmin } from "@/lib/auth-utils"
+import { requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 
 // GET /api/inventario/analisis-abc?dias=90&diasMuerto=90
 // Devuelve análisis ABC + rotación por item, con totales agregados.
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAdmin()
+    const { error, organizationId } = await requireInventarioAccess()
     if (error) return error
 
     const { searchParams } = new URL(request.url)

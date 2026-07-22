@@ -132,8 +132,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { requireAdmin } = await import("@/lib/auth-utils")
-    const { error, organizationId } = await requireAdmin()
+    const { requireInventarioAccess } = await import("@/lib/auth-utils")
+    const { error, organizationId } = await requireInventarioAccess()
     if (error) return error
 
     const { id } = await params

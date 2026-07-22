@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
-import { requireAdmin } from "@/lib/auth-utils"
+import { requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { loadWorkbook, mapRows, readSheetRows } from "@/lib/precios-import"
 
@@ -25,7 +25,7 @@ const schema = z.object({
 
 export async function POST(request: Request) {
   try {
-    const { error, organizationId } = await requireAdmin()
+    const { error, organizationId } = await requireInventarioAccess()
     if (error) return error
 
     const body = await request.json()

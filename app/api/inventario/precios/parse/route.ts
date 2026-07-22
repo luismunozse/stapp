@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
-import { requireAdmin } from "@/lib/auth-utils"
+import { requireInventarioAccess } from "@/lib/auth-utils"
 import { getSheetPreviews } from "@/lib/precios-import"
 
 const schema = z.object({
@@ -12,7 +12,7 @@ const MAX_BASE64_BYTES = 8 * 1024 * 1024 // ~6MB binary
 
 export async function POST(request: Request) {
   try {
-    const { error } = await requireAdmin()
+    const { error } = await requireInventarioAccess()
     if (error) return error
 
     const body = await request.json()

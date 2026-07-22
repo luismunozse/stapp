@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAdmin } from "@/lib/auth-utils"
+import { requireInventarioAccess } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger } from "@/lib/audit"
 
@@ -9,7 +9,7 @@ import { createAuditLogger } from "@/lib/audit"
 // behavior of /api/inventario/bulk?action=delete.
 export async function DELETE(request: Request) {
   try {
-    const { error, organizationId, userId } = await requireAdmin()
+    const { error, organizationId, userId } = await requireInventarioAccess()
     if (error) return error
 
     const { data: allRows, error: listErr } = await supabaseAdmin
