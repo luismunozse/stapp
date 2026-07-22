@@ -508,8 +508,11 @@ export async function middleware(request: NextRequest) {
 
   // Protección de rutas por rol
   const userRole = token.role as string
-  const adminOnlyRoutes = ["/tecnicos", "/vendedores", "/configuracion", "/emails", "/facturacion", "/inventario", "/finanzas"]
-  const adminOrVendedorRoutes = ["/ventas", "/pos", "/reportes", "/proveedores"]
+  const adminOnlyRoutes = ["/tecnicos", "/vendedores", "/configuracion", "/emails", "/facturacion", "/finanzas"]
+  // /inventario admite VENDEDOR a nivel de ruta; el permiso fino por
+  // organización (opt-in) lo resuelven el gate de la página y la API
+  // (requireInventarioAccess), que sí pueden leer el flag en la BD.
+  const adminOrVendedorRoutes = ["/ventas", "/pos", "/reportes", "/proveedores", "/inventario"]
 
   const isAdminOnly = adminOnlyRoutes.some(r => pathname === r || pathname.startsWith(r + "/"))
   const isAdminOrVendedor = adminOrVendedorRoutes.some(r => pathname === r || pathname.startsWith(r + "/"))
