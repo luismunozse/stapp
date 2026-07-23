@@ -32,4 +32,20 @@ describe("canEmitirFacturaElectronica", () => {
     ;(supabaseAdmin.from as any).mockReturnValueOnce(orgRow({ pais: "MX", facturacion_electronica_habilitada: true }))
     expect(await canEmitirFacturaElectronica("o1")).toBe(false)
   })
+  it("false when facturacion_electronica_habilitada is toggled off", async () => {
+    ;(hasPlanFeature as any).mockResolvedValue(true)
+    ;(supabaseAdmin.from as any).mockReturnValueOnce(orgRow({ pais: "AR", facturacion_electronica_habilitada: false }))
+    expect(await canEmitirFacturaElectronica("o1")).toBe(false)
+  })
+  it("false when no credentials row exists", async () => {
+    ;(hasPlanFeature as any).mockResolvedValue(true)
+    ;(supabaseAdmin.from as any)
+      .mockReturnValueOnce(orgRow({ pais: "AR", facturacion_electronica_habilitada: true }))
+      .mockReturnValueOnce(credRow(null))
+    expect(await canEmitirFacturaElectronica("o1")).toBe(false)
+  })
+  it("fails closed to false when hasPlanFeature throws", async () => {
+    ;(hasPlanFeature as any).mockRejectedValue(new Error("boom"))
+    expect(await canEmitirFacturaElectronica("o1")).toBe(false)
+  })
 })
