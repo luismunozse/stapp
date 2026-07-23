@@ -68,12 +68,13 @@ Idempotent, with a banner comment, following the conventions of migrations 265/2
 
 ### 2. Token helpers — `lib/foto-borrador-token.ts`
 
-Pure functions, no I/O, so the security-critical logic is testable without infrastructure:
+Pure functions, no I/O, so the security-critical logic is testable without infrastructure. Follows the idiom already established by `lib/api-keys.ts` (`randomBytes` + `createHash("sha256")`):
 
-- `generateToken()` → raw token + its SHA-256 hash.
-- `hashToken(raw)` → hash for lookup.
-- `isExpired(borrador, now)` → TTL check, `now` injected (no ambient clock).
-- `canAcceptPhoto(borrador, itemCount, now)` → single predicate covering revoked / expired / cap reached, returning a discriminated reason.
+- `generateBorradorToken()` → raw token + its SHA-256 hash.
+- `hashBorradorToken(raw)` → hash for lookup.
+- `canAcceptFoto(borrador, cantidadActual, now)` → **the single gate**, covering revoked / expired / cap reached and returning a discriminated reason. `now` is injected, so expiry is testable without an ambient clock.
+
+Expiry is deliberately not exposed as a separate `isExpired()` helper: one gate means a caller cannot check expiry and forget the revoked and cap checks.
 
 ### 3. Image validation — `lib/foto-borrador-image.ts`
 
@@ -97,7 +98,7 @@ Tradeoff accepted: `sharp` is a native binary dependency and adds build weight. 
 
 `POST /api/public/carga-foto/[token]` — placed under the existing `/api/public` namespace, which `isPublicPath()` in `middleware.ts` already exempts from auth.
 
-Order of checks, all before any write: rate limit → token hash lookup → `canAcceptPhoto` → size cap → magic-byte sniff → re-encode → store → insert row. Every failure returns a generic message; the response never distinguishes "unknown token" from "expired token", so the endpoint cannot be used to probe for valid drafts.
+Order of checks, all before any write: rate limit → token hash lookup → `canAcceptFoto` → size cap → magic-byte sniff → re-encode → store → insert row. Every failure returns a generic message; the response never distinguishes "unknown token" from "expired token", so the endpoint cannot be used to probe for valid drafts.
 
 ### 6. Order creation stays untouched
 
