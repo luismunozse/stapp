@@ -105,13 +105,16 @@ export async function POST(request: Request) {
     if (insErr.code === UNIQUE_VIOLATION) {
       // Otro request ya está emitiendo (o ya emitió) esta venta: no se llama
       // al proveedor, se devuelve el comprobante activo existente.
-      const { data: active } = await supabaseAdmin
+      const { data: active, error: activeErr } = await supabaseAdmin
         .from("comprobantes_fiscales")
         .select(SAFE_COLUMNS)
         .eq("venta_id", ventaId)
         .eq("organization_id", organizationId!)
         .in("estado", ["pendiente", "emitido"])
         .maybeSingle()
+      if (activeErr) {
+        return NextResponse.json({ error: "Comprobante en proceso o ya emitido" }, { status: 409 })
+      }
       return NextResponse.json({ comprobante: active, yaEmitido: true }, { status: 409 })
     }
     return NextResponse.json({ error: "No se pudo iniciar el comprobante" }, { status: 500 })
@@ -127,7 +130,7 @@ export async function POST(request: Request) {
     // No dejamos un comprobante "pendiente" colgado: si el proveedor tira
     // una excepción (timeout, red, etc.), lo marcamos rechazado para que se
     // pueda reintentar.
-    await supabaseAdmin
+    const { error: catchUpdErr } = await supabaseAdmin
       .from("comprobantes_fiscales")
       .update({
         estado: "rechazado",
@@ -135,6 +138,14 @@ export async function POST(request: Request) {
         updated_at: new Date().toISOString(),
       })
       .eq("id", pend.id)
+    if (catchUpdErr) {
+      // No se confirmó el rechazo y acá nunca hubo CAE (el proveedor tiró
+      // una excepción antes de responder): dejar el "pendiente" colgado
+      // bloquearía la venta para siempre contra el índice único parcial, así
+      // que se borra para liberarla y permitir reintentar.
+      await supabaseAdmin.from("comprobantes_fiscales").delete().eq("id", pend.id)
+      return NextResponse.json({ error: "No se pudo emitir (error del proveedor)" }, { status: 502 })
+    }
     return NextResponse.json({ error: "Error al emitir el comprobante" }, { status: 422 })
   }
 
@@ -155,12 +166,23 @@ export async function POST(request: Request) {
       .select(SAFE_COLUMNS)
       .single()
     if (updErr) {
-      return NextResponse.json({ error: "No se pudo registrar el comprobante emitido" }, { status: 500 })
+      // El proveedor SÍ emitió un CAE real acá: nunca se borra el pendiente
+      // (perderíamos la única referencia a esa emisión). Se loguea todo lo
+      // necesario para reconciliar el registro a mano.
+      console.error("[facturacion] emitido pero fallo el update", {
+        ventaId,
+        cae: result.cae,
+        numero: result.numero,
+      })
+      return NextResponse.json(
+        { error: "No se pudo registrar el comprobante emitido", cae: result.cae, numero: result.numero },
+        { status: 500 }
+      )
     }
     return NextResponse.json({ comprobante: updated }, { status: 200 })
   }
 
-  const { data: rej } = await supabaseAdmin
+  const { data: rej, error: rejErr } = await supabaseAdmin
     .from("comprobantes_fiscales")
     .update({
       estado: "rechazado",
@@ -171,5 +193,12 @@ export async function POST(request: Request) {
     .eq("id", pend.id)
     .select(SAFE_COLUMNS)
     .single()
+  if (rejErr) {
+    // Tampoco acá hubo CAE (el proveedor respondió ok:false): mismo
+    // razonamiento que en el catch de arriba, se borra el pendiente para no
+    // dejar la venta bloqueada contra el índice único parcial.
+    await supabaseAdmin.from("comprobantes_fiscales").delete().eq("id", pend.id)
+    return NextResponse.json({ error: "No se pudo registrar el rechazo" }, { status: 500 })
+  }
   return NextResponse.json({ comprobante: rej, error: "Rechazado por el proveedor" }, { status: 422 })
 }

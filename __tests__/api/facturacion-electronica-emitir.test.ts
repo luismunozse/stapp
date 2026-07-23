@@ -226,4 +226,148 @@ describe("POST /api/facturacion-electronica/emitir", () => {
     expect(updateChain.select).toHaveBeenCalledWith(SAFE_COLUMNS)
     expect(body.comprobante).not.toHaveProperty("provider_response")
   })
+
+  it("409 without a leaked undefined comprobante when the active re-fetch after a 23505 conflict errors", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
+    mockSupabaseSequenced({
+      comprobantes_fiscales: [
+        createChainMock(null), // existing check -> none
+        createChainMock(null, {
+          code: "23505",
+          message: 'duplicate key value violates unique constraint "uq_comprobante_venta_activo"',
+        }), // insert -> unique violation
+        createChainMock(null, { message: "re-fetch failed" }), // race re-fetch -> errors
+      ],
+      ventas: [createChainMock(VENTA)],
+      items_venta: [createChainMock(ITEMS)],
+      facturacion_credenciales: [createChainMock(CREDENCIALES)],
+    })
+
+    const { status, body } = await parseResponse(await POST(createPostRequest({ ventaId: "venta-1" })))
+
+    expect(status).toBe(409)
+    expect(body.error).toBeDefined()
+    expect(body).not.toHaveProperty("comprobante")
+    expect(tusFacturasProvider.emitir).not.toHaveBeenCalled()
+  })
+
+  it("422 when the provider throws and the rechazado-recovery update succeeds (no pendiente cleanup)", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
+    vi.mocked(tusFacturasProvider.emitir).mockRejectedValue(new Error("boom"))
+    const updateChain = createChainMock({ id: "cmp-1", estado: "rechazado" })
+    mockSupabaseSequenced({
+      comprobantes_fiscales: [
+        createChainMock(null), // existing check -> none
+        createChainMock({ id: "cmp-1" }), // insert pendiente
+        updateChain, // update -> rechazado succeeds
+      ],
+      ventas: [createChainMock(VENTA)],
+      items_venta: [createChainMock(ITEMS)],
+      facturacion_credenciales: [createChainMock(CREDENCIALES)],
+    })
+
+    const { status, body } = await parseResponse(await POST(createPostRequest({ ventaId: "venta-1" })))
+
+    expect(status).toBe(422)
+    expect(body.error).toBeDefined()
+    expect(updateChain.update).toHaveBeenCalledWith(
+      expect.objectContaining({ estado: "rechazado", error_msg: "boom" })
+    )
+    expect(updateChain.delete).not.toHaveBeenCalled()
+  })
+
+  it("502 when the provider throws and the rechazado-recovery update also fails (deletes the stuck pendiente)", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
+    vi.mocked(tusFacturasProvider.emitir).mockRejectedValue(new Error("boom"))
+    const failedUpdateChain = createChainMock(null, { message: "update failed" })
+    const deleteChain = createChainMock(null)
+    mockSupabaseSequenced({
+      comprobantes_fiscales: [
+        createChainMock(null), // existing check -> none
+        createChainMock({ id: "cmp-1" }), // insert pendiente
+        failedUpdateChain, // update -> rechazado attempt fails (no CAE was ever confirmed)
+        deleteChain, // cleanup delete of the stuck pendiente
+      ],
+      ventas: [createChainMock(VENTA)],
+      items_venta: [createChainMock(ITEMS)],
+      facturacion_credenciales: [createChainMock(CREDENCIALES)],
+    })
+
+    const { status, body } = await parseResponse(await POST(createPostRequest({ ventaId: "venta-1" })))
+
+    expect(status).toBe(502)
+    expect(body.error).toBeDefined()
+    expect(deleteChain.delete).toHaveBeenCalled()
+    expect(deleteChain.eq).toHaveBeenCalledWith("id", "cmp-1")
+  })
+
+  it("500 when the provider returns ok:false and the rechazado update fails (deletes the stuck pendiente)", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
+    vi.mocked(tusFacturasProvider.emitir).mockResolvedValue({
+      ok: false,
+      errores: ["CUIT invalido"],
+      raw: {},
+    } as any)
+    const failedUpdateChain = createChainMock(null, { message: "update failed" })
+    const deleteChain = createChainMock(null)
+    mockSupabaseSequenced({
+      comprobantes_fiscales: [
+        createChainMock(null), // existing check -> none
+        createChainMock({ id: "cmp-1" }), // insert pendiente
+        failedUpdateChain, // update -> rechazado attempt fails (no CAE was ever issued)
+        deleteChain, // cleanup delete of the stuck pendiente
+      ],
+      ventas: [createChainMock(VENTA)],
+      items_venta: [createChainMock(ITEMS)],
+      facturacion_credenciales: [createChainMock(CREDENCIALES)],
+    })
+
+    const { status, body } = await parseResponse(await POST(createPostRequest({ ventaId: "venta-1" })))
+
+    expect(status).toBe(500)
+    expect(body.error).toBeDefined()
+    expect(deleteChain.delete).toHaveBeenCalled()
+    expect(deleteChain.eq).toHaveBeenCalledWith("id", "cmp-1")
+  })
+
+  it("500 with cae/numero for manual reconciliation when the emitido update fails after a real CAE was issued (never deletes)", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
+    vi.mocked(tusFacturasProvider.emitir).mockResolvedValue({
+      ok: true,
+      cae: "cae-123",
+      numero: "0003-1",
+      tipo: "C",
+      pdfUrl: "http://p",
+      raw: {},
+    } as any)
+    const failedUpdateChain = createChainMock(null, { message: "update failed" })
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    mockSupabaseSequenced({
+      comprobantes_fiscales: [
+        createChainMock(null), // existing check -> none
+        createChainMock({ id: "cmp-1" }), // insert pendiente
+        failedUpdateChain, // update -> emitido fails (CAE is real, must NOT delete)
+      ],
+      ventas: [createChainMock(VENTA)],
+      items_venta: [createChainMock(ITEMS)],
+      facturacion_credenciales: [createChainMock(CREDENCIALES)],
+    })
+
+    const { status, body } = await parseResponse(await POST(createPostRequest({ ventaId: "venta-1" })))
+
+    expect(status).toBe(500)
+    expect(body.cae).toBe("cae-123")
+    expect(body.numero).toBe("0003-1")
+    expect(failedUpdateChain.delete).not.toHaveBeenCalled()
+    expect(consoleSpy).toHaveBeenCalledWith(
+      "[facturacion] emitido pero fallo el update",
+      expect.objectContaining({ cae: "cae-123", numero: "0003-1" })
+    )
+    consoleSpy.mockRestore()
+  })
 })
