@@ -35,7 +35,7 @@ CREATE POLICY facturacion_credenciales_select ON facturacion_credenciales
 
 DROP POLICY IF EXISTS facturacion_credenciales_all_service ON facturacion_credenciales;
 CREATE POLICY facturacion_credenciales_all_service ON facturacion_credenciales
-  FOR ALL USING (true) WITH CHECK (true);
+  FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 DROP TRIGGER IF EXISTS facturacion_credenciales_updated_at ON facturacion_credenciales;
 CREATE TRIGGER facturacion_credenciales_updated_at
@@ -85,7 +85,7 @@ CREATE POLICY comprobantes_fiscales_select ON comprobantes_fiscales
 
 DROP POLICY IF EXISTS comprobantes_fiscales_all_service ON comprobantes_fiscales;
 CREATE POLICY comprobantes_fiscales_all_service ON comprobantes_fiscales
-  FOR ALL USING (true) WITH CHECK (true);
+  FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 DROP TRIGGER IF EXISTS comprobantes_fiscales_updated_at ON comprobantes_fiscales;
 CREATE TRIGGER comprobantes_fiscales_updated_at
