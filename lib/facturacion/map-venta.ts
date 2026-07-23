@@ -1,7 +1,7 @@
 import type { EmitirInput } from "./types"
 
 export function mapVentaToEmitirInput(venta: any, items: any[]): EmitirInput {
-  const alic = Number(venta.iva_tasa) || 21
+  const alic = venta.iva_tasa == null ? 21 : Number(venta.iva_tasa)
   return {
     ventaId: venta.id,
     moneda: "PES",
@@ -13,7 +13,7 @@ export function mapVentaToEmitirInput(venta: any, items: any[]): EmitirInput {
       condicionIva: "CF",
     },
     items: (items || []).map((it) => ({
-      cantidad: Number(it.cantidad) || 1,
+      cantidad: it.cantidad == null ? 1 : Number(it.cantidad),
       descripcion: it.descripcion || "Item",
       importeUnitario: Number(it.precio_unitario) || 0,
       alicuotaIva: alic,
