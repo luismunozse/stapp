@@ -75,6 +75,11 @@ const MAPPED_INPUT = {
   items: [{ cantidad: 1, descripcion: "Servicio", importeUnitario: 100, alicuotaIva: 21 }],
 }
 
+// Debe coincidir exactamente con la lista de columnas seguras del route:
+// nunca incluye provider_response (nunca se devuelve al cliente).
+const SAFE_COLUMNS =
+  "id, venta_id, tipo, punto_venta, numero, cae, cae_vencimiento, estado, pdf_url, receptor_doc_tipo, receptor_doc_nro, receptor_condicion_iva, total, provider, error_msg, created_at, updated_at"
+
 describe("POST /api/facturacion-electronica/emitir", () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -123,6 +128,34 @@ describe("POST /api/facturacion-electronica/emitir", () => {
     expect(status).toBe(409)
     expect(body.yaEmitido).toBe(true)
     expect(body.comprobante).toEqual(existing)
+    expect(body.comprobante).not.toHaveProperty("provider_response")
+    expect(tusFacturasProvider.emitir).not.toHaveBeenCalled()
+  })
+
+  it("409 when insert hits a unique violation (23505) — in-flight/duplicate, does not call the provider", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    vi.mocked(canEmitirFacturaElectronica).mockResolvedValue(true)
+    const active = { id: "cmp-active", venta_id: "venta-1", estado: "pendiente", cae: null }
+    mockSupabaseSequenced({
+      comprobantes_fiscales: [
+        createChainMock(null), // existing check -> none
+        createChainMock(null, {
+          code: "23505",
+          message: 'duplicate key value violates unique constraint "uq_comprobante_venta_activo"',
+        }), // insert -> unique violation (another active comprobante already exists)
+        createChainMock(active), // race re-fetch -> the active row
+      ],
+      ventas: [createChainMock(VENTA)],
+      items_venta: [createChainMock(ITEMS)],
+      facturacion_credenciales: [createChainMock(CREDENCIALES)],
+    })
+
+    const { status, body } = await parseResponse(await POST(createPostRequest({ ventaId: "venta-1" })))
+
+    expect(status).toBe(409)
+    expect(body.yaEmitido).toBe(true)
+    expect(body.comprobante).toEqual(active)
+    expect(body.comprobante).not.toHaveProperty("provider_response")
     expect(tusFacturasProvider.emitir).not.toHaveBeenCalled()
   })
 
@@ -138,11 +171,13 @@ describe("POST /api/facturacion-electronica/emitir", () => {
       raw: {},
     } as any)
     const updated = { id: "cmp-1", estado: "emitido", cae: "1", numero: "0003-1", pdf_url: "http://p" }
+    const insertChain = createChainMock({ id: "cmp-1" })
+    const updateChain = createChainMock(updated)
     mockSupabaseSequenced({
       comprobantes_fiscales: [
         createChainMock(null), // existing check -> none
-        createChainMock({ id: "cmp-1" }), // insert pendiente
-        createChainMock(updated), // update -> emitido
+        insertChain, // insert pendiente
+        updateChain, // update -> emitido
       ],
       ventas: [createChainMock(VENTA)],
       items_venta: [createChainMock(ITEMS)],
@@ -155,6 +190,11 @@ describe("POST /api/facturacion-electronica/emitir", () => {
     expect(body.comprobante.estado).toBe("emitido")
     expect(body.comprobante.cae).toBe("1")
     expect(tusFacturasProvider.emitir).toHaveBeenCalledTimes(1)
+    expect(updateChain.update).toHaveBeenCalledWith(
+      expect.objectContaining({ estado: "emitido", cae: "1", numero: "0003-1" })
+    )
+    expect(updateChain.select).toHaveBeenCalledWith(SAFE_COLUMNS)
+    expect(body.comprobante).not.toHaveProperty("provider_response")
   })
 
   it("422 + estado rechazado on provider failure", async () => {
@@ -166,11 +206,12 @@ describe("POST /api/facturacion-electronica/emitir", () => {
       raw: {},
     } as any)
     const rejected = { id: "cmp-1", estado: "rechazado", error_msg: "CUIT invalido" }
+    const updateChain = createChainMock(rejected)
     mockSupabaseSequenced({
       comprobantes_fiscales: [
         createChainMock(null), // existing check -> none
         createChainMock({ id: "cmp-1" }), // insert pendiente
-        createChainMock(rejected), // update -> rechazado
+        updateChain, // update -> rechazado
       ],
       ventas: [createChainMock(VENTA)],
       items_venta: [createChainMock(ITEMS)],
@@ -182,5 +223,7 @@ describe("POST /api/facturacion-electronica/emitir", () => {
     expect(status).toBe(422)
     expect(body.comprobante.estado).toBe("rechazado")
     expect(body.error).toBeDefined()
+    expect(updateChain.select).toHaveBeenCalledWith(SAFE_COLUMNS)
+    expect(body.comprobante).not.toHaveProperty("provider_response")
   })
 })

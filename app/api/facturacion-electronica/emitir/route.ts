@@ -6,6 +6,15 @@ import { decryptSecret } from "@/lib/facturacion/crypto"
 import { tusFacturasProvider } from "@/lib/facturacion/tusfacturas-provider"
 import { mapVentaToEmitirInput } from "@/lib/facturacion/map-venta"
 
+// Columnas seguras para devolver un comprobante al cliente. NUNCA incluir
+// provider_response acá: es la respuesta cruda del proveedor y puede traer
+// datos internos que no corresponde exponer.
+const SAFE_COLUMNS =
+  "id, venta_id, tipo, punto_venta, numero, cae, cae_vencimiento, estado, pdf_url, receptor_doc_tipo, receptor_doc_nro, receptor_condicion_iva, total, provider, error_msg, created_at, updated_at"
+
+// Código de Postgres para violación de constraint UNIQUE.
+const UNIQUE_VIOLATION = "23505"
+
 export async function POST(request: Request) {
   const { error, organizationId } = await requireAdmin()
   if (error) return error
@@ -19,30 +28,45 @@ export async function POST(request: Request) {
   const { ventaId } = (await request.json().catch(() => ({}))) as { ventaId?: string }
   if (!ventaId) return NextResponse.json({ error: "Falta ventaId" }, { status: 400 })
 
-  // Idempotencia: si ya existe un comprobante emitido para esta venta, no se
-  // vuelve a emitir contra el proveedor.
-  const { data: existing } = await supabaseAdmin
+  // Idempotencia amigable: si ya existe un comprobante emitido para esta
+  // venta (org-scoped), no se vuelve a emitir contra el proveedor. Esto es
+  // solo un atajo de UX; la garantía real contra la carrera vive en el
+  // índice único parcial de la migración (uq_comprobante_venta_activo),
+  // aplicado más abajo en el INSERT.
+  const { data: existing, error: existingErr } = await supabaseAdmin
     .from("comprobantes_fiscales")
-    .select("*")
+    .select(SAFE_COLUMNS)
     .eq("venta_id", ventaId)
+    .eq("organization_id", organizationId!)
     .eq("estado", "emitido")
     .maybeSingle()
+  if (existingErr) {
+    return NextResponse.json({ error: "No se pudo verificar el comprobante" }, { status: 500 })
+  }
   if (existing) return NextResponse.json({ comprobante: existing, yaEmitido: true }, { status: 409 })
 
-  const { data: venta } = await supabaseAdmin
+  const { data: venta, error: ventaErr } = await supabaseAdmin
     .from("ventas")
     .select("*")
     .eq("id", ventaId)
     .eq("organization_id", organizationId!)
     .single()
-  if (!venta) return NextResponse.json({ error: "Venta no encontrada" }, { status: 404 })
+  if (ventaErr || !venta) return NextResponse.json({ error: "Venta no encontrada" }, { status: 404 })
 
-  const { data: items } = await supabaseAdmin.from("items_venta").select("*").eq("venta_id", ventaId)
-  const { data: cred } = await supabaseAdmin
+  const { data: items, error: itemsErr } = await supabaseAdmin
+    .from("items_venta")
+    .select("*")
+    .eq("venta_id", ventaId)
+  if (itemsErr) {
+    return NextResponse.json({ error: "No se pudieron cargar los items de la venta" }, { status: 500 })
+  }
+
+  const { data: cred, error: credErr } = await supabaseAdmin
     .from("facturacion_credenciales")
     .select("*")
     .eq("organization_id", organizationId!)
     .single()
+  if (credErr) return NextResponse.json({ error: "No se pudieron cargar las credenciales" }, { status: 500 })
   if (!cred) return NextResponse.json({ error: "Credenciales no configuradas" }, { status: 400 })
 
   // Los secretos se desencriptan recién acá, en memoria, para llamar al
@@ -56,7 +80,12 @@ export async function POST(request: Request) {
   }
   const input = mapVentaToEmitirInput(venta, items || [])
 
-  const { data: pend } = await supabaseAdmin
+  // El INSERT es el gate real contra la carrera: el índice único parcial
+  // uq_comprobante_venta_activo (estado IN ('pendiente','emitido')) rechaza
+  // un segundo comprobante activo para la misma venta a nivel DB, sin
+  // importar cuántos requests concurrentes pasaron el chequeo amigable de
+  // arriba.
+  const { data: pend, error: insErr } = await supabaseAdmin
     .from("comprobantes_fiscales")
     .insert({
       organization_id: organizationId!,
@@ -72,10 +101,45 @@ export async function POST(request: Request) {
     .select("id")
     .single()
 
-  const result = await tusFacturasProvider.emitir(creds, input)
+  if (insErr) {
+    if (insErr.code === UNIQUE_VIOLATION) {
+      // Otro request ya está emitiendo (o ya emitió) esta venta: no se llama
+      // al proveedor, se devuelve el comprobante activo existente.
+      const { data: active } = await supabaseAdmin
+        .from("comprobantes_fiscales")
+        .select(SAFE_COLUMNS)
+        .eq("venta_id", ventaId)
+        .eq("organization_id", organizationId!)
+        .in("estado", ["pendiente", "emitido"])
+        .maybeSingle()
+      return NextResponse.json({ comprobante: active, yaEmitido: true }, { status: 409 })
+    }
+    return NextResponse.json({ error: "No se pudo iniciar el comprobante" }, { status: 500 })
+  }
+  if (!pend) {
+    return NextResponse.json({ error: "No se pudo iniciar el comprobante" }, { status: 500 })
+  }
+
+  let result
+  try {
+    result = await tusFacturasProvider.emitir(creds, input)
+  } catch (err) {
+    // No dejamos un comprobante "pendiente" colgado: si el proveedor tira
+    // una excepción (timeout, red, etc.), lo marcamos rechazado para que se
+    // pueda reintentar.
+    await supabaseAdmin
+      .from("comprobantes_fiscales")
+      .update({
+        estado: "rechazado",
+        error_msg: err instanceof Error ? err.message : "Error desconocido al emitir",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", pend.id)
+    return NextResponse.json({ error: "Error al emitir el comprobante" }, { status: 422 })
+  }
 
   if (result.ok) {
-    const { data: updated } = await supabaseAdmin
+    const { data: updated, error: updErr } = await supabaseAdmin
       .from("comprobantes_fiscales")
       .update({
         estado: "emitido",
@@ -87,9 +151,12 @@ export async function POST(request: Request) {
         provider_response: result.raw as any,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", pend!.id)
-      .select("*")
+      .eq("id", pend.id)
+      .select(SAFE_COLUMNS)
       .single()
+    if (updErr) {
+      return NextResponse.json({ error: "No se pudo registrar el comprobante emitido" }, { status: 500 })
+    }
     return NextResponse.json({ comprobante: updated }, { status: 200 })
   }
 
@@ -101,8 +168,8 @@ export async function POST(request: Request) {
       provider_response: result.raw as any,
       updated_at: new Date().toISOString(),
     })
-    .eq("id", pend!.id)
-    .select("*")
+    .eq("id", pend.id)
+    .select(SAFE_COLUMNS)
     .single()
   return NextResponse.json({ comprobante: rej, error: "Rechazado por el proveedor" }, { status: 422 })
 }

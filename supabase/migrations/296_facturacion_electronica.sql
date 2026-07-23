@@ -67,9 +67,13 @@ CREATE TABLE IF NOT EXISTS comprobantes_fiscales (
   updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Una venta no puede tener dos comprobantes EMITIDOS
-CREATE UNIQUE INDEX IF NOT EXISTS uq_comprobante_venta_emitido
-  ON comprobantes_fiscales(venta_id) WHERE estado = 'emitido';
+-- Una venta no puede tener dos comprobantes ACTIVOS a la vez (pendiente o
+-- emitido). Esto bloquea la carrera de dos emisiones concurrentes a nivel DB
+-- y a la vez permite reintentar después de un rechazo (estado 'rechazado'
+-- queda fuera del índice).
+DROP INDEX IF EXISTS uq_comprobante_venta_emitido;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_comprobante_venta_activo
+  ON comprobantes_fiscales(venta_id) WHERE estado IN ('pendiente', 'emitido');
 
 CREATE INDEX IF NOT EXISTS idx_comprobantes_org ON comprobantes_fiscales(organization_id);
 
