@@ -32,6 +32,15 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: "Faltan credenciales" }, { status: 400 })
   }
 
+  let puntoVentaValidado = 1
+  if (puntoVenta !== undefined) {
+    const n = Number(puntoVenta)
+    if (!Number.isInteger(n) || n <= 0) {
+      return NextResponse.json({ error: "Punto de venta inválido" }, { status: 400 })
+    }
+    puntoVentaValidado = n
+  }
+
   const cond = condicionFiscal === "RESPONSABLE_INSCRIPTO" ? "RESPONSABLE_INSCRIPTO" : "MONOTRIBUTO"
 
   const { error: dbError } = await supabaseAdmin.from("facturacion_credenciales").upsert({
@@ -39,7 +48,7 @@ export async function PUT(request: Request) {
     apitoken_enc: encryptSecret(String(apitoken)),
     apikey_enc: encryptSecret(String(apikey)),
     usertoken_enc: encryptSecret(String(usertoken)),
-    punto_venta: Number(puntoVenta) || 1,
+    punto_venta: puntoVentaValidado,
     condicion_fiscal: cond,
     estado: "conectado",
     updated_at: new Date().toISOString(),
@@ -51,7 +60,7 @@ export async function PUT(request: Request) {
 
   return NextResponse.json({
     conectado: true,
-    puntoVenta: Number(puntoVenta) || 1,
+    puntoVenta: puntoVentaValidado,
     condicionFiscal: cond,
   })
 }

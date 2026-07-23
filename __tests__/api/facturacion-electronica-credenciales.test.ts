@@ -93,6 +93,49 @@ describe("facturacion-electronica/credenciales", () => {
     expect(status).toBe(403)
   })
 
+  it("PUT 400 when a required secret is missing", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "o1" })
+
+    const { status, body } = await parseResponse(
+      await PUT(
+        createPostRequest({
+          apitoken: "a",
+          apikey: "k",
+          // usertoken omitted
+          puntoVenta: 1,
+          condicionFiscal: "MONOTRIBUTO",
+        })
+      )
+    )
+
+    expect(status).toBe(400)
+    expect(body.error).toBeDefined()
+  })
+
+  it("PUT 400 when puntoVenta is not a positive integer", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "o1" })
+    const upsertSpy = vi.fn().mockResolvedValue({ data: null, error: null })
+    mockSupabaseFrom({
+      facturacion_credenciales: { upsert: upsertSpy } as any,
+    })
+
+    const { status, body } = await parseResponse(
+      await PUT(
+        createPostRequest({
+          apitoken: "a",
+          apikey: "k",
+          usertoken: "u",
+          puntoVenta: -5,
+          condicionFiscal: "MONOTRIBUTO",
+        })
+      )
+    )
+
+    expect(status).toBe(400)
+    expect(body.error).toBe("Punto de venta inválido")
+    expect(upsertSpy).not.toHaveBeenCalled()
+  })
+
   it("PUT encrypts secrets and upserts, response never includes them", async () => {
     mockAuthSuccess({ role: "ADMIN", organizationId: "o1" })
     const upsertSpy = vi.fn().mockResolvedValue({ data: null, error: null })
