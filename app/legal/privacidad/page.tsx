@@ -36,6 +36,7 @@ export default function PrivacidadPage() {
           <li><strong>Información del negocio:</strong> dirección, teléfono, logo, configuraciones</li>
           <li><strong>Datos de clientes:</strong> información de sus clientes que usted ingresa al sistema</li>
           <li><strong>Datos de órdenes:</strong> detalles de reparaciones, inventario, facturación</li>
+          <li><strong>Fotos e imágenes:</strong> fotografías de equipos, dispositivos o comprobantes que usted captura con la cámara del dispositivo o sube desde su galería</li>
           <li><strong>Información de pago:</strong> datos de tarjeta procesados de forma segura por terceros</li>
         </ul>
 
@@ -43,6 +44,7 @@ export default function PrivacidadPage() {
         <ul className="list-disc list-inside text-gray-600 space-y-2 ml-4">
           <li><strong>Datos de uso:</strong> páginas visitadas, funciones utilizadas, tiempo de uso</li>
           <li><strong>Información del dispositivo:</strong> tipo de navegador, sistema operativo, dirección IP</li>
+          <li><strong>Identificadores de notificaciones:</strong> token de notificaciones push (FCM en Android / Web Push en navegadores) utilizado únicamente para enviarle avisos del servicio</li>
           <li><strong>Cookies y tecnologías similares:</strong> para mejorar su experiencia</li>
         </ul>
       </section>

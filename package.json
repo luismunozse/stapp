@@ -21,11 +21,11 @@
     "test:e2e:install:all": "playwright install --with-deps chromium firefox",
     "cap:sync": "npx cap sync",
     "cap:open:android": "npx cap open android",
-    "cap:build:apk": "cd android && gradlew assembleDebug",
-    "cap:build:aab": "npx cap sync && cd android && gradlew bundleRelease",
-    "cap:build:apk:release": "npx cap sync && cd android && gradlew assembleRelease",
+    "cap:build:apk": "node scripts/android-gradle.mjs assembleDebug",
+    "cap:build:aab": "npx cap sync && node scripts/android-gradle.mjs bundleRelease",
+    "cap:build:apk:release": "npx cap sync && node scripts/android-gradle.mjs assembleRelease",
     "cap:upload:apk": "node scripts/upload-apk.mjs",
-    "cap:publish:apk": "npx cap sync && cd android && gradlew assembleDebug && cd .. && node scripts/upload-apk.mjs"
+    "cap:publish:apk": "npx cap sync && node scripts/android-gradle.mjs assembleDebug && node scripts/upload-apk.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.105.0",
@@ -62,6 +62,7 @@
     "date-fns": "^3.6.0",
     "driver.js": "^1.4.0",
     "exceljs": "^4.4.0",
+    "firebase-admin": "^14.1.0",
     "framer-motion": "^12.30.0",
     "fuse.js": "^7.3.0",
     "html2canvas": "^1.4.1",
