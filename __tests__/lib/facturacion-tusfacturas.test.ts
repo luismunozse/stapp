@@ -18,10 +18,20 @@ describe("buildPayload", () => {
     expect(p.comprobante.punto_venta).toBe("3")
     expect(p.comprobante.detalle).toHaveLength(1)
   })
+
+  it("rounds money fields to 2 decimals avoiding float artifacts", () => {
+    const fractionalInput: EmitirInput = {
+      ...input,
+      items: [{ cantidad: 3, descripcion: "Servicio", importeUnitario: 0.1, alicuotaIva: 21 }],
+    }
+    const p = buildPayload(creds, fractionalInput, "C")
+    expect(p.comprobante.detalle[0].importe).toBe("0.30")
+    expect(p.comprobante.detalle[0].producto.precio_unitario_sin_iva).toBe("0.10")
+  })
 })
 
 describe("tusFacturasProvider.emitir", () => {
-  beforeEach(() => { vi.restoreAllMocks() })
+  beforeEach(() => { vi.unstubAllGlobals() })
   it("maps a success response", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ json: async () => ({
       error: "N", errores: [], cae: "123", vencimiento_cae: "2026-08-01",
@@ -35,5 +45,12 @@ describe("tusFacturasProvider.emitir", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ json: async () => ({ error: "S", errores: ["CUIT inválido"] }) }))
     const r = await tusFacturasProvider.emitir(creds, input)
     expect(r.ok).toBe(false); expect(r.errores).toContain("CUIT inválido")
+  })
+  it("returns ok:false with errores when the network request fails", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("boom")))
+    const r = await tusFacturasProvider.emitir(creds, input)
+    expect(r.ok).toBe(false)
+    expect(r.errores).toBeDefined()
+    expect(r.errores!.length).toBeGreaterThan(0)
   })
 })
