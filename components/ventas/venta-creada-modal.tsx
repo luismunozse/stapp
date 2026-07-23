@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -17,6 +18,7 @@ import {
   FileText,
   Loader2,
   AlertTriangle,
+  Receipt,
 } from "lucide-react"
 import type { VentaCreadaData } from "./venta-form"
 import { useCurrency } from "@/contexts/currency-context"
@@ -34,6 +36,20 @@ interface VentaCreadaModalProps {
   open: boolean
   onClose: () => void
   venta: VentaCreadaData | null
+  // Gate comercial (plan Profesional + país AR). Si el llamador ya conoce el
+  // valor (por ejemplo porque ya consultó /api/configuracion) puede pasarlo
+  // acá para evitar un fetch duplicado. Si se omite, el modal lo resuelve
+  // por su cuenta al abrirse.
+  facturacionDisponible?: boolean
+}
+
+interface ComprobanteFiscal {
+  tipo: string | null
+  numero: number | string | null
+  cae: string | null
+  pdf_url: string | null
+  estado: string
+  error_msg?: string | null
 }
 
 function generateVentaMessage(
@@ -45,13 +61,25 @@ function generateVentaMessage(
   return renderVentaMessage(plantilla, ctx)
 }
 
-export function VentaCreadaModal({ open, onClose, venta }: VentaCreadaModalProps) {
+export function VentaCreadaModal({ open, onClose, venta, facturacionDisponible = false }: VentaCreadaModalProps) {
   const { formatPrice, pais } = useCurrency()
   const { showError } = useModal()
   const [copied, setCopied] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [mensaje, setMensaje] = useState("")
   const [plantilla, setPlantilla] = useState<{ venta_comprobante?: string; venta_comprobante_corto?: string }>({})
+
+  // Disponibilidad de facturación electrónica: si el llamador no la pasó por
+  // prop, se resuelve acá mismo consultando /api/configuracion al abrirse.
+  const [facturacionDisponibleFetched, setFacturacionDisponibleFetched] = useState(false)
+  const puedeEmitirFactura = facturacionDisponible || facturacionDisponibleFetched
+
+  const [emitiendo, setEmitiendo] = useState(false)
+  const [comprobante, setComprobante] = useState<ComprobanteFiscal | null>(null)
+  const [rechazadoFE, setRechazadoFE] = useState(false)
+  const [noDisponibleFE, setNoDisponibleFE] = useState(false)
+  const [errorFE, setErrorFE] = useState<string | null>(null)
+  const facturaEmitida = comprobante !== null && !rechazadoFE
 
   useEffect(() => {
     if (!open) return
@@ -70,10 +98,37 @@ export function VentaCreadaModal({ open, onClose, venta }: VentaCreadaModalProps
   }, [open])
 
   useEffect(() => {
+    if (!open || facturacionDisponible) return
+    let cancelled = false
+    fetch("/api/configuracion")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.facturacionElectronicaDisponible) {
+          setFacturacionDisponibleFetched(true)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [open, facturacionDisponible])
+
+  useEffect(() => {
     if (venta) {
       setMensaje(generateVentaMessage(venta, formatPrice, plantilla.venta_comprobante))
     }
   }, [venta, plantilla.venta_comprobante, formatPrice])
+
+  useEffect(() => {
+    // Nueva venta: limpiar el estado de emisión de la venta anterior. Se
+    // separa del efecto de arriba porque ese también corre cuando llega la
+    // plantilla de WhatsApp, y acá solo nos interesa el cambio de venta.
+    setEmitiendo(false)
+    setComprobante(null)
+    setRechazadoFE(false)
+    setNoDisponibleFE(false)
+    setErrorFE(null)
+  }, [venta?.id])
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(mensaje)
@@ -97,6 +152,45 @@ export function VentaCreadaModal({ open, onClose, venta }: VentaCreadaModalProps
       await showError("Error al abrir el PDF")
     } finally {
       setDownloading(false)
+    }
+  }
+
+  const handleEmitirFactura = async () => {
+    if (!venta || emitiendo || facturaEmitida) return
+
+    setEmitiendo(true)
+    setErrorFE(null)
+    setRechazadoFE(false)
+    setNoDisponibleFE(false)
+    try {
+      const response = await fetch("/api/facturacion-electronica/emitir", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ventaId: venta.id }),
+      })
+      const data = await response.json().catch(() => ({}))
+
+      if (response.status === 200 || response.status === 409) {
+        setComprobante(data.comprobante ?? null)
+        return
+      }
+      if (response.status === 422) {
+        setComprobante(data.comprobante ?? null)
+        setRechazadoFE(true)
+        setErrorFE(data.comprobante?.error_msg || data.error || "El comprobante fue rechazado por el proveedor.")
+        return
+      }
+      if (response.status === 403) {
+        setNoDisponibleFE(true)
+        setErrorFE(data.error || "La facturación electrónica no está disponible para tu organización.")
+        return
+      }
+      setErrorFE(data.error || "No se pudo emitir la factura electrónica.")
+    } catch (error) {
+      console.error("Error emitiendo factura electrónica:", error)
+      setErrorFE("No se pudo emitir la factura. Verificá tu conexión e intentá de nuevo.")
+    } finally {
+      setEmitiendo(false)
     }
   }
 
@@ -160,6 +254,63 @@ export function VentaCreadaModal({ open, onClose, venta }: VentaCreadaModalProps
             )}
             Ver Comprobante PDF
           </Button>
+
+          {/* Emitir factura electrónica (AFIP/ARCA) */}
+          {puedeEmitirFactura && (
+            <div className="space-y-2">
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={handleEmitirFactura}
+                disabled={emitiendo || facturaEmitida}
+              >
+                {emitiendo ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Receipt className="mr-2 h-4 w-4" />
+                )}
+                {facturaEmitida ? "Factura emitida" : "Emitir factura"}
+              </Button>
+
+              {facturaEmitida && comprobante && (
+                <StatusBanner tone="success" icon={Check}>
+                  Factura {comprobante.tipo ? `tipo ${comprobante.tipo} ` : ""}N° {comprobante.numero ?? "-"} emitida.{" "}
+                  {comprobante.pdf_url && (
+                    <a
+                      href={comprobante.pdf_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline font-medium"
+                    >
+                      Ver factura PDF
+                    </a>
+                  )}
+                </StatusBanner>
+              )}
+
+              {rechazadoFE && errorFE && (
+                <StatusBanner tone="danger" icon={AlertTriangle}>
+                  No se pudo emitir la factura: {errorFE}
+                </StatusBanner>
+              )}
+
+              {noDisponibleFE && (
+                <StatusBanner tone="warning" icon={AlertTriangle}>
+                  La facturación electrónica no está disponible. Configurala en{" "}
+                  <Link href="/configuracion" className="underline font-medium">
+                    Ajustes
+                  </Link>
+                  .
+                </StatusBanner>
+              )}
+
+              {errorFE && !rechazadoFE && !noDisponibleFE && (
+                <StatusBanner tone="danger" icon={AlertTriangle}>
+                  {errorFE}
+                </StatusBanner>
+              )}
+            </div>
+          )}
 
           {/* Enviar ticket como imagen por WhatsApp */}
           <PosTicketShare ventaData={venta} plantillaCorta={plantilla.venta_comprobante_corto} countryCode={pais} />
