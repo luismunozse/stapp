@@ -5,8 +5,17 @@ import { createAuditLogger, diffObjects } from "@/lib/audit"
 import { emitWebhookEvent } from "@/lib/webhooks/dispatcher"
 import { queueNotification } from "@/lib/notifications/queue"
 import { formatOrden } from "@/lib/db-utils"
-import { esTransicionValida, getMensajeTransicionInvalida, validarCamposRequeridos } from "@/lib/orden-state-machine"
+import { esTransicionValida, getMensajeTransicionInvalida, validarCamposRequeridos, ESTADO_LABELS } from "@/lib/orden-state-machine"
 import { z } from "zod"
+
+// Estados que solo se alcanzan por POST /api/ordenes/[id]/entregar. Ese endpoint,
+// además de cambiar el estado, registra la fecha de entrega, las firmas, el cargo
+// del saldo pendiente a cuenta corriente y el consumo de las reservas de stock.
+const ESTADOS_SOLO_VIA_ENTREGA = new Set([
+  "ENTREGADO",
+  "ENTREGADO_SIN_REPARACION",
+  "ENTREGADO_SIN_COBRO",
+])
 
 const updateOrdenSchema = z.object({
   estado: z
@@ -194,6 +203,19 @@ export async function PUT(
       if (!esTransicionValida(orden.estado, data.estado)) {
         return NextResponse.json(
           { error: getMensajeTransicionInvalida(orden.estado, data.estado) },
+          { status: 400 }
+        )
+      }
+
+      // Los estados de entrega no se pueden setear por acá: este endpoint solo
+      // cambia el estado, sin registrar fecha de entrega, firmas, cargo a cuenta
+      // corriente ni consumo de reservas. Las órdenes que entraban por este
+      // camino quedaban entregadas con el saldo del cliente fuera del ledger.
+      if (ESTADOS_SOLO_VIA_ENTREGA.has(data.estado)) {
+        return NextResponse.json(
+          {
+            error: `Para marcar la orden como "${ESTADO_LABELS[data.estado]}" hay que usar el flujo de entrega, que registra la fecha, las firmas y el saldo pendiente.`,
+          },
           { status: 400 }
         )
       }
