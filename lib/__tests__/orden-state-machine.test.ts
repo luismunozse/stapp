@@ -158,20 +158,13 @@ describe("orden-state-machine", () => {
       expect(error).not.toBeNull()
     })
 
-    it("requiere costo final (presupuesto aceptado) para EN_REPARACION cuando no hay técnico ni costo", () => {
-      // tecnico_id ya no es un campo requerido por la state machine; solo costo_final lo es.
+    it("permite EN_REPARACION sin costo final (el costo no es requerido para arrancar la reparación)", () => {
+      // El costo se exige recién en REPARADO; se puede empezar a reparar sin precio definido.
       const error = validarCamposRequeridos("EN_REPARACION", { tecnico_id: null, costo_final: null })
-      expect(error).not.toBeNull()
-      expect(error).toContain("Costo final")
+      expect(error).toBeNull()
     })
 
-    it("requiere costo final para EN_REPARACION", () => {
-      const error = validarCamposRequeridos("EN_REPARACION", { tecnico_id: "t1", costo_final: null })
-      expect(error).not.toBeNull()
-      expect(error).toContain("Costo final")
-    })
-
-    it("permite EN_REPARACION con técnico y costo final", () => {
+    it("permite EN_REPARACION con costo final ya definido (camino con presupuesto)", () => {
       const error = validarCamposRequeridos("EN_REPARACION", { tecnico_id: "t1", costo_final: 5000 })
       expect(error).toBeNull()
     })

@@ -70,13 +70,10 @@ export const CAMPOS_REQUERIDOS_POR_ESTADO: Partial<Record<EstadoOrden, {
       validar: (o) => o.presupuesto != null && o.presupuesto > 0,
     },
   ],
-  EN_REPARACION: [
-    {
-      campo: "costo_final",
-      label: "Costo final (presupuesto aceptado)",
-      validar: (o) => o.costo_final != null && parseFloat(o.costo_final) > 0,
-    },
-  ],
+  // EN_REPARACION no exige costo_final: se puede empezar a reparar sin un precio
+  // definido (p. ej. reparaciones express que se cotizan al final). El costo se
+  // vuelve obligatorio recién en REPARADO, y el cobro se auto-bloquea hasta que
+  // exista un costo cargado.
   REPARADO: [
     {
       campo: "costo_final",

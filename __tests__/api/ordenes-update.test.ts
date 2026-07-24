@@ -255,21 +255,32 @@ describe("PUT /api/ordenes/[id] - Campos Requeridos", () => {
     expect(status).toBe(200)
   })
 
-  it("rechaza EN_REPARACION sin costo final", async () => {
+  it("permite EN_REPARACION sin costo final (el costo se exige recién en REPARADO)", async () => {
     mockAuthSuccess()
 
     const mockOrden = createMockOrden({ estado: "APROBADO", presupuesto: 5000, costo_final: null, tecnico_id: "t1" })
-    const chain = createChainMock(mockOrden)
-    mockSupabaseFrom({ ordenes_servicio: chain })
+    const mockUpdated = { ...mockOrden, estado: "EN_REPARACION" }
+
+    let callCount = 0
+    const chain = createChainMock(null)
+    chain.single = vi.fn().mockImplementation(() => {
+      callCount++
+      if (callCount === 1) return Promise.resolve({ data: mockOrden, error: null })
+      return Promise.resolve({ data: mockUpdated, error: null })
+    })
+
+    mockSupabaseFrom({
+      ordenes_servicio: chain,
+      orden_eventos: createChainMock(null),
+    })
 
     const response = await PUT(
       createPutRequest({ estado: "EN_REPARACION" }),
       createParams("o1")
     )
-    const { status, body } = await parseResponse(response)
+    const { status } = await parseResponse(response)
 
-    expect(status).toBe(400)
-    expect(body.error).toContain("Costo final")
+    expect(status).toBe(200)
   })
 
   it("permite EN_REPARACION si técnico y costoFinal se envían en la misma request", async () => {
