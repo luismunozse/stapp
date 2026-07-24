@@ -10,6 +10,20 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
   }
 }
 
+// jsdom tampoco implementa matchMedia; lo consultan algunos componentes/diálogos.
+if (typeof window !== 'undefined' && typeof window.matchMedia === 'undefined') {
+  window.matchMedia = ((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  })) as unknown as typeof window.matchMedia
+}
+
 // Mock para React cache
 vi.mock('react', async () => {
   const actual = await vi.importActual('react')
