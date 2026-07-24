@@ -9,14 +9,23 @@ interface LabelData {
   fechaIngreso: string
   publicToken?: string | null
   organizationName?: string
+  /** "ingreso" (default): intake label with reported problem. "reparado": ready-for-pickup tag. */
+  variant?: "ingreso" | "reparado"
+  /** Repair completion date shown on the "reparado" variant (falls back to fechaIngreso). */
+  fechaReparacion?: string
 }
 
 /**
  * Opens a print window with a device label sized for label printers.
  * Supports common sizes: 50x30mm, 60x40mm, 70x40mm.
  * Includes QR code for order tracking if publicToken is available.
+ *
+ * The "reparado" variant prints an internal ready-for-pickup tag to stick on
+ * the device once the order reaches REPARADO (badge + repair date instead of
+ * the reported problem).
  */
 export async function printDeviceLabel(data: LabelData, baseUrl: string) {
+  const esReparado = data.variant === "reparado"
   const codigo = data.codigoOrden || `#${data.numeroOrden}`
   const problema = data.problemaReportado.length > 50
     ? data.problemaReportado.substring(0, 50) + "..."
@@ -28,6 +37,7 @@ export async function printDeviceLabel(data: LabelData, baseUrl: string) {
     ? data.dispositivo.substring(0, 28) + "..."
     : data.dispositivo
   const empresa = data.organizationName || ""
+  const fechaPie = esReparado ? (data.fechaReparacion || data.fechaIngreso) : data.fechaIngreso
 
   // Generate QR code as data URL
   let qrDataUrl = ""
@@ -43,7 +53,7 @@ export async function printDeviceLabel(data: LabelData, baseUrl: string) {
   }
 
   const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Etiqueta ${codigo}</title>
+<html><head><meta charset="utf-8"><title>Etiqueta ${esReparado ? "Reparado " : ""}${codigo}</title>
 <style>
   @page { size: 60mm 40mm; margin: 0; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -112,6 +122,21 @@ export async function printDeviceLabel(data: LabelData, baseUrl: string) {
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  .badge {
+    display: inline-block;
+    background: #000;
+    color: #fff;
+    font-size: 9pt;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    padding: 0.8mm 2mm;
+    margin-bottom: 1mm;
+  }
+  .listo {
+    font-size: 7pt;
+    font-weight: bold;
+    margin-top: 0.5mm;
+  }
   .fecha {
     font-size: 6pt;
     color: #888;
@@ -121,12 +146,15 @@ export async function printDeviceLabel(data: LabelData, baseUrl: string) {
   <div class="left">
     ${empresa ? `<div class="empresa">${empresa}</div>` : ""}
     <div class="codigo">${codigo}</div>
+    ${esReparado ? `<span class="badge">✓ REPARADO</span>` : ""}
     <div class="info">
       <div><span class="label">Cliente: </span><span class="value">${cliente}</span></div>
       <div><span class="label">Equipo: </span><span class="value">${dispositivo}</span></div>
-      <div><span class="label">Problema: </span>${problema}</div>
+      ${esReparado
+        ? `<div class="listo">Listo para entregar</div>`
+        : `<div><span class="label">Problema: </span>${problema}</div>`}
     </div>
-    <div class="fecha">${data.fechaIngreso}</div>
+    <div class="fecha">${fechaPie}</div>
   </div>
   ${qrDataUrl ? `
   <div class="right">
