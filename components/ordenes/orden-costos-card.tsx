@@ -12,7 +12,6 @@ interface OrdenCostosCardProps {
   ordenId: string
   presupuesto: number | null | undefined
   costoFinal: number | null | undefined
-  horasTrabajadas?: number
   sena: number
   totalCobrado?: number
   descuentoCobro?: number
@@ -28,7 +27,6 @@ export function OrdenCostosCard({
   ordenId,
   presupuesto,
   costoFinal,
-  horasTrabajadas,
   sena,
   totalCobrado = 0,
   descuentoCobro = 0,
@@ -43,6 +41,10 @@ export function OrdenCostosCard({
   const pendienteReal = Math.max(0, (costoFinal || 0) - descuentoCobro - totalCobrado)
   const fromCotizacion = origenPresupuesto === "cotizacion"
   const isLocked = fromCotizacion || readOnly
+  // Fase cotización: el número operativo es el presupuesto (estimación previa a
+  // la aprobación). Desde APROBADO en adelante (incl. el flujo express que entra
+  // directo a EN_REPARACION) el número operativo es el costo final que se factura.
+  const enCotizacion = estado === "RECIBIDO" || estado === "EN_DIAGNOSTICO" || estado === "PRESUPUESTADO"
 
   return (
     <Card>
@@ -53,82 +55,74 @@ export function OrdenCostosCard({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Label className="text-xs text-muted-foreground">Presupuesto</Label>
-            {fromCotizacion && (
-              <Badge variant="outline" className="text-[10px] h-4 gap-1">
-                <FileText className="h-2.5 w-2.5" />
-                Cotizacion
-              </Badge>
-            )}
-          </div>
-          {isLocked ? (
-            <div className="flex items-center gap-2 h-9 px-3 rounded-md border bg-muted/50 text-sm">
-              {fromCotizacion && <Lock className="h-3 w-3 text-muted-foreground" />}
-              <span>{formatPrice(presupuesto || 0)}</span>
-            </div>
-          ) : (
-            <Input
-              key={`presupuesto-${ordenId}-${presupuesto}`}
-              type="number"
-              step="0.01"
-              defaultValue={presupuesto || ""}
-              placeholder="0.00"
-              onBlur={(e) => {
-                const value = parseFloat(e.target.value) || null
-                if (value !== presupuesto) onUpdateField("presupuesto", value)
-              }}
-            />
-          )}
-        </div>
-
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Label className="text-xs text-muted-foreground">Costo Final</Label>
-            {fromCotizacion && (
-              <Badge variant="outline" className="text-[10px] h-4 gap-1">
-                <FileText className="h-2.5 w-2.5" />
-                Cotizacion
-              </Badge>
-            )}
-          </div>
-          {isLocked ? (
-            <div className="flex items-center gap-2 h-9 px-3 rounded-md border bg-muted/50 text-sm">
-              {fromCotizacion && <Lock className="h-3 w-3 text-muted-foreground" />}
-              <span>{formatPrice(costoFinal || 0)}</span>
-            </div>
-          ) : (
-            <Input
-              key={`costoFinal-${ordenId}-${costoFinal}`}
-              type="number"
-              step="0.01"
-              defaultValue={costoFinal || ""}
-              placeholder="0.00"
-              onBlur={(e) => {
-                const value = parseFloat(e.target.value) || null
-                if (value !== costoFinal) onUpdateField("costoFinal", value)
-              }}
-            />
-          )}
-        </div>
-
-        {!readOnly && (
+        {enCotizacion ? (
           <div>
-            <Label className="text-xs text-muted-foreground mb-1 block">Horas trabajadas</Label>
-            <Input
-              key={`horas-${ordenId}-${horasTrabajadas}`}
-              type="number"
-              step="0.25"
-              min="0"
-              defaultValue={horasTrabajadas || ""}
-              placeholder="0"
-              onBlur={(e) => {
-                const value = parseFloat(e.target.value) || 0
-                if (value !== (horasTrabajadas || 0)) onUpdateField("horasTrabajadas", value)
-              }}
-            />
+            <div className="flex items-center gap-2 mb-1">
+              <Label className="text-xs text-muted-foreground">Presupuesto</Label>
+              {fromCotizacion && (
+                <Badge variant="outline" className="text-[10px] h-4 gap-1">
+                  <FileText className="h-2.5 w-2.5" />
+                  Cotizacion
+                </Badge>
+              )}
+            </div>
+            {isLocked ? (
+              <div className="flex items-center gap-2 h-9 px-3 rounded-md border bg-muted/50 text-sm">
+                {fromCotizacion && <Lock className="h-3 w-3 text-muted-foreground" />}
+                <span>{formatPrice(presupuesto || 0)}</span>
+              </div>
+            ) : (
+              <Input
+                key={`presupuesto-${ordenId}-${presupuesto}`}
+                type="number"
+                step="0.01"
+                defaultValue={presupuesto || ""}
+                placeholder="0.00"
+                onBlur={(e) => {
+                  const value = parseFloat(e.target.value) || null
+                  if (value !== presupuesto) onUpdateField("presupuesto", value)
+                }}
+              />
+            )}
           </div>
+        ) : (
+          <>
+            {presupuesto != null && presupuesto > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Presupuesto estimado</span>
+                <span className="text-muted-foreground">{formatPrice(presupuesto)}</span>
+              </div>
+            )}
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <Label className="text-xs text-muted-foreground">Costo Final</Label>
+                {fromCotizacion && (
+                  <Badge variant="outline" className="text-[10px] h-4 gap-1">
+                    <FileText className="h-2.5 w-2.5" />
+                    Cotizacion
+                  </Badge>
+                )}
+              </div>
+              {isLocked ? (
+                <div className="flex items-center gap-2 h-9 px-3 rounded-md border bg-muted/50 text-sm">
+                  {fromCotizacion && <Lock className="h-3 w-3 text-muted-foreground" />}
+                  <span>{formatPrice(costoFinal || 0)}</span>
+                </div>
+              ) : (
+                <Input
+                  key={`costoFinal-${ordenId}-${costoFinal}`}
+                  type="number"
+                  step="0.01"
+                  defaultValue={costoFinal || ""}
+                  placeholder="0.00"
+                  onBlur={(e) => {
+                    const value = parseFloat(e.target.value) || null
+                    if (value !== costoFinal) onUpdateField("costoFinal", value)
+                  }}
+                />
+              )}
+            </div>
+          </>
         )}
 
         {costoFinal && costoFinal > 0 && (

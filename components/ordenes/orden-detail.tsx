@@ -1055,7 +1055,6 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             ordenId={orden.id}
             presupuesto={orden.presupuesto}
             costoFinal={orden.costoFinal}
-            horasTrabajadas={(orden as any).horasTrabajadas || 0}
             sena={orden.sena || 0}
             totalCobrado={orden.totalCobrado || 0}
             descuentoCobro={orden.descuentoCobro || 0}
@@ -1079,6 +1078,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
               porcentajeComision={(orden as any).porcentajeComision}
               comisionPagada={(orden as any).comisionPagada}
               fechaPagoComision={(orden as any).fechaPagoComision}
+              horasTrabajadas={(orden as any).horasTrabajadas || 0}
               onUpdateField={handleUpdateField}
             />
           )}
@@ -1113,7 +1113,6 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
           ordenId={orden.id}
           presupuesto={orden.presupuesto}
           costoFinal={orden.costoFinal}
-          horasTrabajadas={(orden as any).horasTrabajadas || 0}
           sena={orden.sena || 0}
           totalCobrado={orden.totalCobrado || 0}
           descuentoCobro={orden.descuentoCobro || 0}
@@ -1134,6 +1133,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             porcentajeComision={(orden as any).porcentajeComision}
             comisionPagada={(orden as any).comisionPagada}
             fechaPagoComision={(orden as any).fechaPagoComision}
+            horasTrabajadas={(orden as any).horasTrabajadas || 0}
             onUpdateField={handleUpdateField}
           />
         )}
