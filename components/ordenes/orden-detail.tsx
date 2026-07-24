@@ -62,6 +62,7 @@ import { OrdenCostosCard } from "@/components/ordenes/orden-costos-card"
 import { OrdenComisionCard } from "@/components/ordenes/orden-comision-card"
 import { OrdenRepuestosTab } from "@/components/ordenes/orden-repuestos-tab"
 import { CobrarOrdenDialog } from "@/components/ordenes/cobrar-orden-dialog"
+import { ConfirmarReparadoDialog } from "@/components/ordenes/confirmar-reparado-dialog"
 import { NotaCreditoDialog } from "@/components/notas-credito/nota-credito-dialog"
 import { PatternDisplay } from "@/components/ui/pattern-display"
 import { StatusBanner } from "@/components/ui/status-banner"
@@ -107,6 +108,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const [showEntregaDialog, setShowEntregaDialog] = useState(false)
   const [sinCobroEntrega, setSinCobroEntrega] = useState(false)
   const [showCobrarDialog, setShowCobrarDialog] = useState(false)
+  const [showReparadoDialog, setShowReparadoDialog] = useState(false)
   const [showNCDialog, setShowNCDialog] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
 
@@ -270,6 +272,14 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
     if (nuevoEstado === "ENTREGADO_SIN_COBRO") {
       setSinCobroEntrega(true)
       setShowEntregaDialog(true)
+      return
+    }
+
+    // REPARADO abre un modal de cierre de precio (captura costo_final + marca
+    // reparado en un solo PUT) en vez del PUT directo, que fallaba con 400
+    // cuando la orden venía sin costo del flujo express.
+    if (nuevoEstado === "REPARADO") {
+      setShowReparadoDialog(true)
       return
     }
 
@@ -1156,6 +1166,28 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             clienteNombre: orden.cliente?.nombre,
           }}
           onSuccess={() => fetchOrden()}
+        />
+      )}
+
+      {orden && (
+        <ConfirmarReparadoDialog
+          open={showReparadoDialog}
+          onOpenChange={setShowReparadoDialog}
+          orden={{
+            id: orden.id,
+            numeroOrden: orden.numeroOrden,
+            codigoOrden: orden.codigoOrden,
+            presupuesto: orden.presupuesto,
+            costoFinal: orden.costoFinal,
+            sena: orden.sena || 0,
+            totalCobrado: orden.totalCobrado || 0,
+            descuentoCobro: orden.descuentoCobro || 0,
+            clienteNombre: orden.cliente?.nombre,
+          }}
+          onSuccess={() => {
+            fetchOrden()
+            toast.success("Orden marcada como reparada")
+          }}
         />
       )}
 

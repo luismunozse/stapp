@@ -82,10 +82,13 @@ const estadoOptions = [
   { value: "ENTREGADO_SIN_COBRO", label: "Entregado sin Cobro" },
 ]
 
-// Los estados de entrega quedan fuera del cambio masivo: cada entrega necesita su
-// propio paso (firmas, saldo pendiente, garantía) y solo se puede registrar desde
-// el detalle de la orden. El backend también los rechaza en el PUT.
-const ESTADOS_NO_MASIVOS = ["ENTREGADO", "ENTREGADO_SIN_REPARACION", "ENTREGADO_SIN_COBRO"]
+// Estados fuera del cambio masivo porque cada uno necesita su propio paso desde el
+// detalle de la orden:
+// - Entregas (ENTREGADO*): firmas, saldo pendiente, garantía. El backend también
+//   las rechaza en el PUT.
+// - REPARADO: requiere capturar el costo final del arreglo (modal de cierre de
+//   precio); en masivo no hay dónde cargarlo y las órdenes sin costo fallarían.
+const ESTADOS_NO_MASIVOS = ["REPARADO", "ENTREGADO", "ENTREGADO_SIN_REPARACION", "ENTREGADO_SIN_COBRO"]
 const estadoOptionsBulk = estadoOptions.filter((opt) => !ESTADOS_NO_MASIVOS.includes(opt.value))
 
 // Placeholder rotativo para el buscador de órdenes
