@@ -165,7 +165,53 @@ describe("POST /api/ordenes/[id]/entregar", () => {
     const { status, body } = await parseResponse(response)
 
     expect(status).toBe(400)
-    expect(body.error).toContain("REPARADO")
+    expect(body.error).toContain("No se puede entregar")
+  })
+
+  it("rechaza entrega sin cobro desde EN_REPARACION (backdoor cerrado)", async () => {
+    mockAuthSuccess()
+
+    const mockOrden = {
+      id: "o1",
+      estado: "EN_REPARACION",
+      tecnico_id: "t1",
+      clientes: { id: "c1", nombre: "Test" },
+    }
+
+    const chain = createChainMock(mockOrden)
+    mockSupabaseFrom({ ordenes_servicio: chain })
+
+    const response = await POST(
+      createPostRequest({ sinCobro: true, motivoSinCobro: "CLIENTE_DESISTIO" }),
+      createParams("o1")
+    )
+    const { status, body } = await parseResponse(response)
+
+    expect(status).toBe(400)
+    expect(body.error).toContain("No se puede entregar")
+  })
+
+  it("rechaza entrega sin cobro desde ESPERANDO_REPUESTO (backdoor cerrado)", async () => {
+    mockAuthSuccess()
+
+    const mockOrden = {
+      id: "o1",
+      estado: "ESPERANDO_REPUESTO",
+      tecnico_id: "t1",
+      clientes: { id: "c1", nombre: "Test" },
+    }
+
+    const chain = createChainMock(mockOrden)
+    mockSupabaseFrom({ ordenes_servicio: chain })
+
+    const response = await POST(
+      createPostRequest({ sinCobro: true }),
+      createParams("o1")
+    )
+    const { status, body } = await parseResponse(response)
+
+    expect(status).toBe(400)
+    expect(body.error).toContain("No se puede entregar")
   })
 
   it("delivers order successfully", async () => {

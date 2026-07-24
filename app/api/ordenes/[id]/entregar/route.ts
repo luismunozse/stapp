@@ -5,6 +5,7 @@ import { createAuditLogger, diffObjects } from "@/lib/audit"
 import { queueNotification } from "@/lib/notifications/queue"
 import { addDaysInTimeZone, DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { MOTIVO_SIN_COBRO_LABELS, type MotivoSinCobro } from "@/lib/seguimiento-state"
+import { resolverEstadoEntrega, esTransicionValida, ESTADO_LABELS } from "@/lib/orden-state-machine"
 import { z } from "zod"
 
 const entregarSchema = z.object({
@@ -57,19 +58,20 @@ export async function POST(
     }
 
     const sinCobro = data.sinCobro === true
-    const estadosPermitidos = sinCobro
-      ? ["REPARADO", "SIN_REPARACION", "SIN_FALLA_DETECTADA", "EN_DIAGNOSTICO", "RECIBIDO", "EN_REPARACION", "ESPERANDO_REPUESTO"]
-      : ["REPARADO", "SIN_REPARACION", "SIN_FALLA_DETECTADA"]
+    const nuevoEstado = resolverEstadoEntrega(orden.estado, sinCobro)
+    const esRetiro = nuevoEstado === "ENTREGADO_SIN_REPARACION"
 
-    if (!estadosPermitidos.includes(orden.estado)) {
+    // La máquina de estados es la única autoridad sobre qué orígenes pueden
+    // entregar: mismo criterio que usa el PUT genérico y el dropdown de la UI.
+    // Antes este endpoint tenía su propia whitelist hardcodeada, que divergía
+    // (permitía entregar sin cobro desde EN_REPARACION/ESPERANDO_REPUESTO, cosa
+    // que ni la máquina de estados ni la UI habilitan).
+    if (!esTransicionValida(orden.estado, nuevoEstado)) {
       return NextResponse.json(
-        { error: `No se puede entregar una orden en estado "${orden.estado}". Debe estar en estado "REPARADO" o "SIN_REPARACION".` },
+        { error: `No se puede entregar una orden en estado "${ESTADO_LABELS[orden.estado as keyof typeof ESTADO_LABELS] ?? orden.estado}".` },
         { status: 400 }
       )
     }
-
-    const esRetiro = orden.estado === "SIN_REPARACION" && !sinCobro
-    const nuevoEstado = sinCobro ? "ENTREGADO_SIN_COBRO" : esRetiro ? "ENTREGADO_SIN_REPARACION" : "ENTREGADO"
 
     // Motivo sin cobro: si vino explícito lo usamos, sino derivamos del estado origen.
     // Para entregas con cobro normal, dejamos NULL.
@@ -78,16 +80,14 @@ export async function POST(
       if (data.motivoSinCobro) {
         motivoSinCobro = data.motivoSinCobro
       } else {
-        // Sugerencia automática (mirror de defaultMotivoSinCobro)
+        // Sugerencia automática (mirror de defaultMotivoSinCobro). Solo llegan
+        // acá los estados que la máquina de estados habilita para entrega sin
+        // cobro: RECIBIDO, EN_DIAGNOSTICO, REPARADO, SIN_REPARACION,
+        // SIN_FALLA_DETECTADA. El resto queda bloqueado por esTransicionValida.
         const e = orden.estado
         if (e === "SIN_REPARACION") motivoSinCobro = "NO_REPARABLE"
-        else if (e === "SIN_FALLA_DETECTADA") motivoSinCobro = "OTRO"
         else if (e === "REPARADO") motivoSinCobro = "CORTESIA"
-        else if (e === "PRESUPUESTADO" || e === "APROBADO" || e === "EN_REPARACION" || e === "ESPERANDO_REPUESTO") {
-          motivoSinCobro = "CLIENTE_DESISTIO"
-        } else {
-          motivoSinCobro = "OTRO"
-        }
+        else motivoSinCobro = "OTRO"
       }
     }
 
