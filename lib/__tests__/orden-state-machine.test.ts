@@ -4,6 +4,7 @@ import {
   getTransicionesPosibles,
   getMensajeTransicionInvalida,
   validarCamposRequeridos,
+  resolverEstadoEntrega,
   TRANSICIONES_VALIDAS,
   ESTADO_LABELS,
 } from "../orden-state-machine"
@@ -235,6 +236,50 @@ describe("orden-state-machine", () => {
         expect(ESTADO_LABELS[estado]).toBeDefined()
         expect(typeof ESTADO_LABELS[estado]).toBe("string")
         expect(ESTADO_LABELS[estado].length).toBeGreaterThan(0)
+      }
+    })
+  })
+
+  describe("resolverEstadoEntrega", () => {
+    it("REPARADO con cobro -> ENTREGADO", () => {
+      expect(resolverEstadoEntrega("REPARADO", false)).toBe("ENTREGADO")
+    })
+
+    it("SIN_FALLA_DETECTADA con cobro -> ENTREGADO (revisión)", () => {
+      expect(resolverEstadoEntrega("SIN_FALLA_DETECTADA", false)).toBe("ENTREGADO")
+    })
+
+    it("SIN_REPARACION con cobro -> ENTREGADO_SIN_REPARACION (retiro)", () => {
+      expect(resolverEstadoEntrega("SIN_REPARACION", false)).toBe("ENTREGADO_SIN_REPARACION")
+    })
+
+    it("cualquier estado sin cobro -> ENTREGADO_SIN_COBRO", () => {
+      expect(resolverEstadoEntrega("REPARADO", true)).toBe("ENTREGADO_SIN_COBRO")
+      expect(resolverEstadoEntrega("SIN_REPARACION", true)).toBe("ENTREGADO_SIN_COBRO")
+      expect(resolverEstadoEntrega("RECIBIDO", true)).toBe("ENTREGADO_SIN_COBRO")
+    })
+
+    it("sin cobro tiene prioridad sobre el retiro", () => {
+      // SIN_REPARACION + sinCobro debe ser ENTREGADO_SIN_COBRO, no el retiro.
+      expect(resolverEstadoEntrega("SIN_REPARACION", true)).toBe("ENTREGADO_SIN_COBRO")
+    })
+  })
+
+  describe("estados de entrega respaldados por la máquina de estados", () => {
+    // El endpoint /entregar deriva el estado con resolverEstadoEntrega y luego
+    // valida con esTransicionValida. Estos casos fijan qué orígenes son válidos
+    // para que backend, UI (dropdown) y máquina de estados no diverjan.
+    it("permite entregar sin cobro desde los estados que la máquina habilita", () => {
+      for (const origen of ["RECIBIDO", "EN_DIAGNOSTICO", "REPARADO", "SIN_REPARACION", "SIN_FALLA_DETECTADA"] as EstadoOrden[]) {
+        const destino = resolverEstadoEntrega(origen, true)
+        expect(esTransicionValida(origen, destino)).toBe(true)
+      }
+    })
+
+    it("bloquea entregar sin cobro desde EN_REPARACION y ESPERANDO_REPUESTO (backdoor cerrado)", () => {
+      for (const origen of ["EN_REPARACION", "ESPERANDO_REPUESTO"] as EstadoOrden[]) {
+        const destino = resolverEstadoEntrega(origen, true)
+        expect(esTransicionValida(origen, destino)).toBe(false)
       }
     })
   })
