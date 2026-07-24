@@ -34,6 +34,7 @@ import {
   Receipt,
   Printer,
   Tag,
+  BadgeCheck,
   HandCoins,
   Lock,
   AlertTriangle,
@@ -693,6 +694,34 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             <Tag className="h-4 w-4 mr-2" />
             Etiqueta
           </Button>
+          {orden.estado === "REPARADO" && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const baseUrl = window.location.origin
+                const fechaRep = orden.fechaCompletado
+                  ? new Date(orden.fechaCompletado).toLocaleDateString("es-AR", { timeZone: timezone })
+                  : new Date().toLocaleDateString("es-AR", { timeZone: timezone })
+                printDeviceLabel({
+                  codigoOrden: orden.codigoOrden || `#${orden.numeroOrden}`,
+                  numeroOrden: orden.numeroOrden,
+                  clienteNombre: orden.cliente?.nombre || "",
+                  dispositivo: orden.dispositivo,
+                  problemaReportado: orden.problemaReportado,
+                  fechaIngreso: fechaRep,
+                  publicToken: orden.publicToken,
+                  organizationName: undefined,
+                  variant: "reparado",
+                  fechaReparacion: fechaRep,
+                }, baseUrl)
+              }}
+              title="Imprimir etiqueta de reparado para pegar en el equipo"
+            >
+              <BadgeCheck className="h-4 w-4 mr-2" />
+              Etiqueta Reparado
+            </Button>
+          )}
           {isAdmin && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
