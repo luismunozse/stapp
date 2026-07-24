@@ -82,6 +82,15 @@ const estadoOptions = [
   { value: "ENTREGADO_SIN_COBRO", label: "Entregado sin Cobro" },
 ]
 
+// Estados fuera del cambio masivo porque cada uno necesita su propio paso desde el
+// detalle de la orden:
+// - Entregas (ENTREGADO*): firmas, saldo pendiente, garantía. El backend también
+//   las rechaza en el PUT.
+// - REPARADO: requiere capturar el costo final del arreglo (modal de cierre de
+//   precio); en masivo no hay dónde cargarlo y las órdenes sin costo fallarían.
+const ESTADOS_NO_MASIVOS = ["REPARADO", "ENTREGADO", "ENTREGADO_SIN_REPARACION", "ENTREGADO_SIN_COBRO"]
+const estadoOptionsBulk = estadoOptions.filter((opt) => !ESTADOS_NO_MASIVOS.includes(opt.value))
+
 // Placeholder rotativo para el buscador de órdenes
 const SEARCH_PLACEHOLDERS = [
   "Buscar por número: CEL040...",
@@ -145,16 +154,37 @@ export function OrdenesList() {
     if (selectedIds.size === 0) return
     setBulkUpdating(true)
     try {
-      const promises = Array.from(selectedIds).map((id) =>
-        fetch(`/api/ordenes/${id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ estado: nuevoEstado }),
+      // El endpoint expone PUT, no PATCH: con PATCH todas las requests devolvían
+      // 405 y el contador de éxitos quedaba en cero, pero igual se mostraba un
+      // toast de éxito ("0 órdenes actualizadas").
+      const results = await Promise.all(
+        Array.from(selectedIds).map(async (id) => {
+          const res = await fetch(`/api/ordenes/${id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ estado: nuevoEstado }),
+          })
+          if (res.ok) return { ok: true, error: null }
+          const body = await res.json().catch(() => null)
+          return { ok: false, error: body?.error ?? null }
         })
       )
-      const results = await Promise.all(promises)
-      const successCount = results.filter((r) => r.ok).length
-      toast.success(`${successCount} órdenes actualizadas a ${ESTADO_LABELS_MAP[nuevoEstado]}`)
+
+      const exitosas = results.filter((r) => r.ok).length
+      const fallidas = results.filter((r) => !r.ok)
+      const label = ESTADO_LABELS_MAP[nuevoEstado]
+      const detalle = fallidas.find((r) => r.error)?.error
+
+      if (fallidas.length === 0) {
+        toast.success(`${exitosas} ${exitosas === 1 ? "orden actualizada" : "órdenes actualizadas"} a ${label}`)
+      } else if (exitosas === 0) {
+        toast.error(detalle || `No se pudo actualizar ninguna orden a ${label}`)
+      } else {
+        toast.warning(
+          `${exitosas} de ${results.length} actualizadas a ${label}.${detalle ? ` ${detalle}` : ""}`
+        )
+      }
+
       setSelectedIds(new Set())
       mutate()
     } catch (error) {
@@ -894,7 +924,7 @@ export function OrdenesList() {
                     <SelectValue placeholder="Cambiar estado a..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {estadoOptions.map((opt) => (
+                    {estadoOptionsBulk.map((opt) => (
                       <SelectItem key={opt.value} value={opt.value}>
                         {opt.label}
                       </SelectItem>

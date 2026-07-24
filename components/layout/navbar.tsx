@@ -583,7 +583,10 @@ export function Navbar() {
         id="mobile-menu-drawer"
         ref={menuRef}
         className={cn(
-          "lg:hidden fixed top-0 right-0 bottom-0 z-40 w-[min(18rem,85vw)] bg-background shadow-xl transition-transform duration-200 ease-out",
+          // Ends above the fixed bottom-nav (z-50): anything the drawer paints
+          // inside that band is covered by it and swallows the tap, which left
+          // the footer's logout button unreachable on mobile.
+          "lg:hidden fixed top-0 right-0 bottom-[calc(4rem+env(safe-area-inset-bottom,0px))] z-40 w-[min(18rem,85vw)] bg-background shadow-xl transition-transform duration-200 ease-out",
           mobileMenuOpen ? "translate-x-0" : "translate-x-full"
         )}
       >
@@ -634,7 +637,7 @@ export function Navbar() {
               </div>
             ))}
           </nav>
-          <div className="border-t border-border safe-bottom p-3 space-y-1">
+          <div className="border-t border-border p-3 space-y-1">
             <Link
               href="/ayuda/manual"
               onClick={() => setMobileMenuOpen(false)}

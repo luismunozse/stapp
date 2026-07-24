@@ -24,6 +24,7 @@ interface OrdenComisionCardProps {
   porcentajeComision: number | null | undefined
   comisionPagada?: boolean
   fechaPagoComision?: string | null
+  horasTrabajadas?: number
   onUpdateField: (field: string, value: any) => void
   readOnly?: boolean
 }
@@ -37,6 +38,7 @@ export function OrdenComisionCard({
   porcentajeComision,
   comisionPagada,
   fechaPagoComision,
+  horasTrabajadas,
   onUpdateField,
   readOnly,
 }: OrdenComisionCardProps) {
@@ -107,6 +109,28 @@ export function OrdenComisionCard({
         <div className="flex justify-between items-center pt-2 border-t">
           <span className="font-semibold">Comisión</span>
           <span className="text-lg font-semibold text-primary">{formatPrice(comision)}</span>
+        </div>
+
+        <div className="pt-2 border-t">
+          <Label className="text-xs text-muted-foreground mb-1 block">Horas trabajadas</Label>
+          {readOnly ? (
+            <div className="h-9 px-3 flex items-center rounded-md border bg-muted/50 text-sm">
+              {Number(horasTrabajadas || 0)}
+            </div>
+          ) : (
+            <Input
+              key={`horas-${ordenId}-${horasTrabajadas}`}
+              type="number"
+              step="0.25"
+              min="0"
+              defaultValue={horasTrabajadas || ""}
+              placeholder="0"
+              onBlur={(e) => {
+                const value = parseFloat(e.target.value) || 0
+                if (value !== (horasTrabajadas || 0)) onUpdateField("horasTrabajadas", value)
+              }}
+            />
+          )}
         </div>
 
         {comisionPagada && fechaPagoComision && (

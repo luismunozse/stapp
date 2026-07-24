@@ -70,13 +70,10 @@ export const CAMPOS_REQUERIDOS_POR_ESTADO: Partial<Record<EstadoOrden, {
       validar: (o) => o.presupuesto != null && o.presupuesto > 0,
     },
   ],
-  EN_REPARACION: [
-    {
-      campo: "costo_final",
-      label: "Costo final (presupuesto aceptado)",
-      validar: (o) => o.costo_final != null && parseFloat(o.costo_final) > 0,
-    },
-  ],
+  // EN_REPARACION no exige costo_final: se puede empezar a reparar sin un precio
+  // definido (p. ej. reparaciones express que se cotizan al final). El costo se
+  // vuelve obligatorio recién en REPARADO, y el cobro se auto-bloquea hasta que
+  // exista un costo cargado.
   REPARADO: [
     {
       campo: "costo_final",
@@ -101,6 +98,39 @@ export function validarCamposRequeridos(
   if (faltantes.length === 0) return null
 
   return `Para cambiar a "${estadoNuevo}" se requiere: ${faltantes.map((f) => f.label).join(", ")}.`
+}
+
+// ============================================
+// ENTREGA: derivación del estado terminal
+// ============================================
+
+/**
+ * Estados terminales que solo se alcanzan por el flujo de entrega
+ * (POST /api/ordenes/[id]/entregar), nunca por el PUT genérico: además del
+ * cambio de estado registran fecha de entrega, firmas, cargo a cuenta corriente
+ * y consumo de reservas.
+ */
+export const ESTADOS_ENTREGA: EstadoOrden[] = [
+  "ENTREGADO",
+  "ENTREGADO_SIN_REPARACION",
+  "ENTREGADO_SIN_COBRO",
+]
+
+/**
+ * Deriva el estado de entrega a partir del estado actual y si la entrega es sin
+ * cobro. Es la única fuente que traduce (estado, sinCobro) -> estado de entrega:
+ * - sin cobro -> ENTREGADO_SIN_COBRO (tiene prioridad sobre el retiro)
+ * - retiro (SIN_REPARACION con cobro) -> ENTREGADO_SIN_REPARACION
+ * - resto -> ENTREGADO
+ *
+ * El estado derivado DEBE validarse con esTransicionValida() antes de aplicarlo:
+ * la máquina de estados es la autoridad sobre qué orígenes pueden entregar, para
+ * que backend, UI (dropdown) y esta derivación no diverjan.
+ */
+export function resolverEstadoEntrega(estadoActual: EstadoOrden, sinCobro: boolean): EstadoOrden {
+  if (sinCobro) return "ENTREGADO_SIN_COBRO"
+  if (estadoActual === "SIN_REPARACION") return "ENTREGADO_SIN_REPARACION"
+  return "ENTREGADO"
 }
 
 // ============================================
