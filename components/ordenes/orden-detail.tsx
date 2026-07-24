@@ -257,7 +257,11 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   }
 
   const handleUpdateEstado = async (nuevoEstado: EstadoOrden) => {
-    if (nuevoEstado === "ENTREGADO") {
+    // ENTREGADO_SIN_REPARACION comparte el flujo de entrega: el backend lo
+    // deriva de esRetiro (SIN_REPARACION + entrega con cobro). Sin este caso,
+    // el estado caía al PUT genérico y se salteaba fecha de entrega, cargo a
+    // cuenta corriente, consumo de reservas y firmas.
+    if (nuevoEstado === "ENTREGADO" || nuevoEstado === "ENTREGADO_SIN_REPARACION") {
       setSinCobroEntrega(false)
       setShowEntregaDialog(true)
       return
