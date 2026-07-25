@@ -15,6 +15,7 @@ import {
   Mail,
   MapPin,
   Wrench,
+  Hammer,
   Trash2,
   FileText,
   FileDown,
@@ -61,6 +62,7 @@ import { OrdenTecnicoCard } from "@/components/ordenes/orden-tecnico-card"
 import { OrdenCostosCard } from "@/components/ordenes/orden-costos-card"
 import { OrdenComisionCard } from "@/components/ordenes/orden-comision-card"
 import { OrdenRepuestosTab } from "@/components/ordenes/orden-repuestos-tab"
+import { OrdenServiciosTab } from "@/components/ordenes/orden-servicios-tab"
 import { CobrarOrdenDialog } from "@/components/ordenes/cobrar-orden-dialog"
 import { ConfirmarReparadoDialog } from "@/components/ordenes/confirmar-reparado-dialog"
 import { NotaCreditoDialog } from "@/components/notas-credito/nota-credito-dialog"
@@ -950,6 +952,10 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                 <Package className="h-4 w-4" />
                 Repuestos
               </TabsTrigger>
+              <TabsTrigger value="servicios" className="gap-2">
+                <Hammer className="h-4 w-4" />
+                Servicios
+              </TabsTrigger>
               <TabsTrigger value="fotos" className="gap-2">
                 <Camera className="h-4 w-4" />
                 Fotos
@@ -973,6 +979,15 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                 ordenId={ordenId}
                 repuestos={(orden as any).repuestos || []}
                 onRepuestosChanged={fetchOrden}
+              />
+            </TabsContent>
+
+            <TabsContent value="servicios" className="mt-4">
+              <OrdenServiciosTab
+                ordenId={ordenId}
+                servicios={(orden as any).servicios || []}
+                costoFinal={orden.costoFinal ?? null}
+                onServiciosChanged={fetchOrden}
               />
             </TabsContent>
 

@@ -76,6 +76,7 @@ export async function GET(
           *,
           inventario (*)
         ),
+        servicios_orden (*),
         cotizaciones!cotizaciones_orden_id_fkey (
           id,
           estado,
