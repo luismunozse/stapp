@@ -1490,6 +1490,7 @@ Crear `components/ordenes/orden-servicios-tab.tsx`, espejando la estructura de `
 - En el modo manual, un checkbox **"Guardar en Servicios"** que envía `guardarEnCatalogo: true`.
 - El pie muestra **"Subtotal Servicios"**.
 - Si la respuesta trae `costoFinalActualizado: false` y `sumaServicios` difiere del `costo_final` de la orden, mostrar un aviso con un botón **"Aplicar al total"** que hace `PUT /api/ordenes/[id]` con `{ costoFinal: sumaServicios }`.
+- El aviso compara `subtotalServicios` contra `costoFinal` (una comparación derivada, que sobrevive a un reload de página), pero solo cuando `servicios.length > 0` **o** la última alta/baja de esta sesión devolvió `costoFinalActualizado: false` (guardado en estado local). El guard de `length > 0` evita un falso positivo en órdenes anteriores a esta funcionalidad (costo cargado a mano, cero líneas, nunca desincronizadas); el flag de sesión evita que ese mismo guard esconda el aviso cuando se elimina la última línea de una orden con cobros (o con el costo editado a mano) — ahí el backend no puede sincronizar `costo_final` a `null` y, sin el flag, la tab se queda sin forma de ofrecer la reconciliación.
 
 Igual que en la tab de repuestos, esperar el refetch del padre antes de cerrar el formulario y reactivar los controles (ver el comentario en `orden-repuestos-tab.tsx:25-29`): cerrar antes provoca un parpadeo de "sin servicios" que invita a reintentar y duplicar el alta.
 
@@ -1509,7 +1510,11 @@ Verificar sobre una orden sin cobros:
 3. Editar el costo final a mano a 30000 y agregar un tercer servicio → el costo final **no** cambia y aparece el botón "Aplicar al total".
 4. Eliminar todas las líneas → el costo final queda vacío.
 
-Y sobre una orden con un cobro registrado: agregar un servicio → el costo final **no** cambia y aparece el aviso.
+Y sobre una orden con un cobro registrado:
+5. Agregar un servicio → el costo final **no** cambia y aparece el aviso.
+6. Eliminar la única línea de servicio → el costo final sigue sin cambiar, la tab queda en "No hay servicios agregados" y el aviso **sigue apareciendo** (fix de esta ronda: antes desaparecía junto con la última línea, dejando `costo_final` desincronizado sin forma de reconciliar desde esta tab).
+
+Y sobre una orden **anterior a esta funcionalidad** (costo final cargado a mano, cero líneas de servicio, nunca tocada en esta tab): no debe aparecer ningún aviso.
 
 - [ ] **Step 4: Correr toda la suite**
 

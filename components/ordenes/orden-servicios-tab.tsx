@@ -42,6 +42,9 @@ export function OrdenServiciosTab({ ordenId, servicios, costoFinal, onServiciosC
   const [catalogo, setCatalogo] = useState<any[]>([])
   const [catalogoLoaded, setCatalogoLoaded] = useState(false)
   const [updating, setUpdating] = useState(false)
+  // Recuerda si la ultima alta/baja en esta sesion volvio con
+  // costoFinalActualizado:false (ver requiereAplicarAlTotal mas abajo).
+  const [costoFinalNoSincronizado, setCostoFinalNoSincronizado] = useState(false)
   const [nuevoServicio, setNuevoServicio] = useState({
     servicioId: "",
     cantidad: 1,
@@ -113,6 +116,10 @@ export function OrdenServiciosTab({ ordenId, servicios, costoFinal, onServiciosC
       })
 
       if (res.ok) {
+        const data = await res.json()
+        // Si el backend no pudo sincronizar costo_final (cobros o edicion a
+        // mano de por medio), lo recordamos para esta sesion.
+        setCostoFinalNoSincronizado(data.costoFinalActualizado === false)
         // Esperamos el refetch del padre antes de cerrar el formulario: si no,
         // el panel muestra brevemente "no hay servicios agregados" sin ningun
         // indicador de carga, lo que invita a reintentar y duplicar el alta.
@@ -153,6 +160,10 @@ export function OrdenServiciosTab({ ordenId, servicios, costoFinal, onServiciosC
         { method: "DELETE" }
       )
       if (res.ok) {
+        const data = await res.json()
+        // Idem alta: si el backend no pudo sincronizar costo_final, lo
+        // recordamos para esta sesion (ver requiereAplicarAlTotal).
+        setCostoFinalNoSincronizado(data.costoFinalActualizado === false)
         // Mismo tratamiento que al agregar: esperar el refetch antes de
         // reactivar los controles evita la ventana de estado enganoso.
         await onServiciosChanged?.()
@@ -198,9 +209,25 @@ export function OrdenServiciosTab({ ordenId, servicios, costoFinal, onServiciosC
   // costo_final solo sigue a las lineas de servicio (ver sincronizar-costo-final.ts).
   // Si difiere es porque la orden tiene cobros o alguien lo edito a mano: en
   // ambos casos el backend deja de actualizarlo solo y hace falta este botón.
+  //
+  // El guard "servicios.length > 0" evita un falso positivo en ordenes viejas
+  // (previas a esta funcionalidad) que ya tenian costo_final cargado a mano y
+  // cero lineas de servicio: esas nunca estuvieron desincronizadas por esta
+  // feature, asi que no hay nada que ofrecer reconciliar sin que el usuario
+  // haya tocado esta tab. Pero ese mismo guard esconde el aviso justo cuando
+  // hace falta: si se borra la ultima linea de una orden con cobros (o con el
+  // costo editado a mano), el backend no puede sincronizar costo_final, la
+  // orden queda en 0 lineas con un costo desactualizado, y sin
+  // costoFinalNoSincronizado el aviso nunca aparece.
+  //
+  // Por eso se combina con OR: costoFinalNoSincronizado solo se enciende
+  // cuando una mutacion de ESTA sesion informo costoFinalActualizado:false,
+  // asi que una orden vieja jamas lo activa. La comparacion numerica sigue
+  // siendo la que decide si hace falta el aviso (y la unica que sobrevive un
+  // reload de pagina, donde el estado de sesion se pierde).
   const costoFinalNum = Number(costoFinal ?? 0)
   const requiereAplicarAlTotal =
-    (servicios?.length ?? 0) > 0 &&
+    ((servicios?.length ?? 0) > 0 || costoFinalNoSincronizado) &&
     Math.round(subtotalServicios * 100) !== Math.round(costoFinalNum * 100)
 
   return (
