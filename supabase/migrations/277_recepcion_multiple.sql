@@ -18,33 +18,66 @@
 --
 -- La FK usa ON DELETE SET NULL, nunca CASCADE: borrar un comprobante de
 -- recepción no puede arrastrar las órdenes que tienen los equipos reales
--- del cliente.
+-- del cliente. Por el mismo criterio, `sucursal_id`, `recibido_por` y
+-- `created_by` también son ON DELETE SET NULL: un comprobante firmado tiene
+-- que poder sobrevivir a la baja de la sucursal o del usuario que lo tomó,
+-- y esa baja no puede quedar bloqueada por un documento histórico (el
+-- default de Postgres, NO ACTION, haría fallar el DELETE del usuario).
 --
--- RLS: se sigue la convención vigente de 274_asistente_panel.sql
--- (current_setting('app.organization_id', true) para SELECT + policy de
--- servicio permisiva), no el patrón viejo con auth.uid() de
--- 067_cobros_orden_caja.sql. La app accede con service role
--- (supabaseAdmin), así que esta RLS es defensa en profundidad.
+-- RLS: se sigue la decisión vigente de 201_rls_hardening_phase1.sql, NO el
+-- patrón de 274_asistente_panel.sql (que es posterior en número pero
+-- regresionó contra 201):
+--   * la policy de servicio va explícitamente TO service_role. Sin cláusula
+--     TO, Postgres la aplica a PUBLIC — que incluye `anon`, y el anon key
+--     viaja en el bundle del browser (lib/supabase.ts) → cualquiera podría
+--     leer (y con FOR ALL, escribir) las firmas de todos los tenants.
+--     Mismo bug que 203_drop_anon_realtime_policies.sql clasificó CRITICAL.
+--   * la policy de SELECT usa public.get_current_organization_id() y no
+--     current_setting('app.organization_id', true): esa GUC nunca se setea en
+--     el request flow normal (ver 201, Change C) y quedaría como patrón roto
+--     listo para copiarse. Se conserva la policy (no se dropea) porque eso es
+--     exactamente lo que hizo 201 con sus equivalentes.
+-- La app accede con service role (supabaseAdmin), así que esta RLS es
+-- defensa en profundidad y su impacto en runtime es cero.
+--
+-- SAFE-UNDER-LOAD GUARD: el ALTER TABLE sobre `ordenes_servicio` toma
+-- ACCESS EXCLUSIVE sobre la tabla más caliente del sistema. Agregar una
+-- columna nullable sin default es metadata-only, pero si el lock queda
+-- encolado detrás de una query larga, TODO request que toque órdenes se
+-- encola detrás del ALTER. lock_timeout hace que la transacción ABORTE y
+-- ROLLBACKEE limpio a los 3s en vez de frenar tráfico vivo. Si aborta con
+-- "canceling statement due to lock timeout" NO SE APLICÓ NADA (es atómico):
+-- simplemente volvé a correr el archivo. Todo es IF NOT EXISTS / OR REPLACE,
+-- así que re-correrlo es seguro. Preferí igual una ventana de bajo tráfico.
+--
+-- El índice sobre ordenes_servicio va CONCURRENTLY y por eso queda FUERA de
+-- la transacción (Postgres lo prohíbe adentro) — ver la nota al pie.
 -- ============================================================================
+
+BEGIN;
+SET LOCAL lock_timeout = '3s';
 
 CREATE TABLE IF NOT EXISTS recepciones (
   id TEXT PRIMARY KEY DEFAULT generate_cuid(),
   organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  sucursal_id TEXT REFERENCES sucursales(id),
+  sucursal_id TEXT REFERENCES sucursales(id) ON DELETE SET NULL,
   cliente_id TEXT NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
   numero INTEGER NOT NULL,
   codigo TEXT NOT NULL,
   firma_cliente TEXT,
   firma_mime TEXT,
   terminos_aceptados BOOLEAN NOT NULL DEFAULT FALSE,
-  recibido_por TEXT REFERENCES users(id),
+  recibido_por TEXT REFERENCES users(id) ON DELETE SET NULL,
   observaciones TEXT,
-  created_by TEXT REFERENCES users(id),
+  created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
   UNIQUE(organization_id, numero)
 );
 
+-- Índices de la tabla nueva: van adentro de la transacción sin CONCURRENTLY
+-- a propósito. La tabla se acaba de crear en esta misma transacción, está
+-- vacía y nadie más la ve todavía: no hay tráfico que bloquear.
 CREATE INDEX IF NOT EXISTS recepciones_org_created_idx
   ON recepciones(organization_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS recepciones_cliente_idx
@@ -52,13 +85,19 @@ CREATE INDEX IF NOT EXISTS recepciones_cliente_idx
 
 ALTER TABLE recepciones ENABLE ROW LEVEL SECURITY;
 
+-- SELECT org-scoped para `authenticated`, con el helper que lee el claim del
+-- JWT (201 Change C + 251: sin claim devuelve NULL → fail-closed).
 DROP POLICY IF EXISTS recepciones_select ON recepciones;
 CREATE POLICY recepciones_select ON recepciones
-  FOR SELECT USING (organization_id = current_setting('app.organization_id', true));
+  FOR SELECT TO authenticated
+  USING (organization_id = public.get_current_organization_id());
 
+-- Catch-all de escritura SOLO para service_role (201 Change B). El TO es la
+-- parte que importa: sin él esta policy sería PUBLIC → anon con RW total.
 DROP POLICY IF EXISTS recepciones_all_service ON recepciones;
 CREATE POLICY recepciones_all_service ON recepciones
-  FOR ALL USING (true) WITH CHECK (true);
+  FOR ALL TO service_role
+  USING (true) WITH CHECK (true);
 
 COMMENT ON TABLE recepciones IS
   'Comprobante de recepción de N equipos del mismo cliente en una atención. Documento, no entidad con ciclo de vida: sin columna estado a propósito.';
@@ -66,11 +105,6 @@ COMMENT ON TABLE recepciones IS
 -- Vínculo opcional desde la orden
 ALTER TABLE ordenes_servicio
   ADD COLUMN IF NOT EXISTS recepcion_id TEXT REFERENCES recepciones(id) ON DELETE SET NULL;
-
--- Índice PARCIAL: cero costo para el flujo clásico
-CREATE INDEX IF NOT EXISTS ordenes_recepcion_idx
-  ON ordenes_servicio(recepcion_id)
-  WHERE recepcion_id IS NOT NULL;
 
 COMMENT ON COLUMN ordenes_servicio.recepcion_id IS
   'Lote de recepción múltiple, NULL en el alta clásica. Nunca asumir que existe.';
@@ -127,3 +161,30 @@ UPDATE plans SET
   feature_flags = COALESCE(feature_flags, '{}'::jsonb) || '{"recepcion_multiple": true}'::jsonb,
   updated_at = NOW()
 WHERE slug IN ('profesional', 'pro');
+
+COMMIT;
+
+-- ============================================================================
+-- FUERA DE LA TRANSACCIÓN — índice parcial sobre ordenes_servicio
+-- ============================================================================
+-- CREATE INDEX (sin CONCURRENTLY) toma un lock que bloquea TODA escritura en
+-- ordenes_servicio durante el scan completo de la tabla. CONCURRENTLY no lo
+-- hace, pero Postgres prohíbe correrlo dentro de un bloque de transacción:
+-- por eso va acá abajo, después del COMMIT, y nunca adentro del BEGIN.
+--
+-- CÓMO CORRERLO: seleccioná y ejecutá ESTA SENTENCIA SOLA, en una ejecución
+-- aparte del bloque de arriba. En un batch multi-sentencia (todo el archivo
+-- pegado de una) Postgres la considera dentro de un bloque de transacción
+-- implícito y falla con "CREATE INDEX CONCURRENTLY cannot run inside a
+-- transaction block".
+--
+-- SI FALLA A MITAD: CONCURRENTLY deja el índice en estado INVALID, y un
+-- re-run con IF NOT EXISTS lo saltearía dejándolo inválido para siempre.
+-- Ante cualquier error acá, primero:
+--     DROP INDEX IF EXISTS ordenes_recepcion_idx;
+-- y recién después volvé a correr el CREATE INDEX CONCURRENTLY.
+--
+-- Índice PARCIAL: cero costo para el flujo clásico (recepcion_id NULL).
+CREATE INDEX CONCURRENTLY IF NOT EXISTS ordenes_recepcion_idx
+  ON ordenes_servicio(recepcion_id)
+  WHERE recepcion_id IS NOT NULL;
