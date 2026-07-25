@@ -540,15 +540,14 @@ describe("GET /api/servicios", () => {
   })
 
   it("devuelve los servicios de la organizacion", async () => {
-    mockSupabaseFrom({
-      servicios: createChainMock([
-        {
-          id: "srv-1", codigo: "SRV-001", nombre: "Instalacion de Windows",
-          descripcion: null, categoria: "Software", precio: 25000,
-          duracion_estimada_min: 60, activo: true,
-        },
-      ]),
-    })
+    const chain = createChainMock([
+      {
+        id: "srv-1", codigo: "SRV-001", nombre: "Instalacion de Windows",
+        descripcion: null, categoria: "Software", precio: 25000,
+        duracion_estimada_min: 60, activo: true,
+      },
+    ])
+    mockSupabaseFrom({ servicios: chain })
 
     const res = await GET(createGetRequest("http://localhost:3000/api/servicios"))
     const { status, body } = await parseResponse(res)
@@ -557,6 +556,7 @@ describe("GET /api/servicios", () => {
     expect(body.servicios).toHaveLength(1)
     expect(body.servicios[0].nombre).toBe("Instalacion de Windows")
     expect(body.servicios[0].precio).toBe(25000)
+    expect(chain.eq).toHaveBeenCalledWith("organization_id", "org-1")
   })
 })
 
@@ -567,13 +567,12 @@ describe("POST /api/servicios", () => {
 
   it("crea un servicio", async () => {
     mockAuthSuccess({ organizationId: "org-1", role: "ADMIN" })
-    mockSupabaseFrom({
-      servicios: createChainMock({
-        id: "srv-1", codigo: "SRV-001", nombre: "Instalacion de Windows",
-        descripcion: null, categoria: null, precio: 25000,
-        duracion_estimada_min: null, activo: true,
-      }),
+    const chain = createChainMock({
+      id: "srv-1", codigo: "SRV-001", nombre: "Instalacion de Windows",
+      descripcion: null, categoria: null, precio: 25000,
+      duracion_estimada_min: null, activo: true,
     })
+    mockSupabaseFrom({ servicios: chain })
 
     const res = await POST(
       createPostRequest({ codigo: "SRV-001", nombre: "Instalacion de Windows", precio: 25000 })
@@ -582,6 +581,9 @@ describe("POST /api/servicios", () => {
 
     expect(status).toBe(201)
     expect(body.servicio.id).toBe("srv-1")
+    expect(chain.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ organization_id: "org-1" })
+    )
   })
 
   it("rechaza precio negativo", async () => {
@@ -794,13 +796,12 @@ describe("PUT /api/servicios/[id]", () => {
 
   it("actualiza el precio", async () => {
     mockAuthSuccess({ organizationId: "org-1", role: "ADMIN" })
-    mockSupabaseFrom({
-      servicios: createChainMock({
-        id: "srv-1", codigo: "SRV-001", nombre: "Instalacion de Windows",
-        descripcion: null, categoria: null, precio: 30000,
-        duracion_estimada_min: null, activo: true,
-      }),
+    const chain = createChainMock({
+      id: "srv-1", codigo: "SRV-001", nombre: "Instalacion de Windows",
+      descripcion: null, categoria: null, precio: 30000,
+      duracion_estimada_min: null, activo: true,
     })
+    mockSupabaseFrom({ servicios: chain })
 
     const req = new Request("http://localhost:3000/api/servicios/srv-1", {
       method: "PUT",
@@ -812,6 +813,7 @@ describe("PUT /api/servicios/[id]", () => {
 
     expect(status).toBe(200)
     expect(body.servicio.precio).toBe(30000)
+    expect(chain.eq).toHaveBeenCalledWith("organization_id", "org-1")
   })
 
   it("devuelve 403 si el usuario no es ADMIN", async () => {
@@ -826,6 +828,22 @@ describe("PUT /api/servicios/[id]", () => {
 
     const { status } = await parseResponse(await PUT(req, params("srv-1")))
     expect(status).toBe(403)
+  })
+
+  it("devuelve 404 si el servicio no existe", async () => {
+    mockAuthSuccess({ organizationId: "org-1", role: "ADMIN" })
+    mockSupabaseFrom({
+      servicios: createChainMock(null, { code: "PGRST116", message: "no rows returned" }),
+    })
+
+    const req = new Request("http://localhost:3000/api/servicios/srv-1", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ precio: 1 }),
+    })
+
+    const { status } = await parseResponse(await PUT(req, params("srv-1")))
+    expect(status).toBe(404)
   })
 })
 
@@ -843,6 +861,7 @@ describe("DELETE /api/servicios/[id]", () => {
     expect(status).toBe(200)
     expect(chain.update).toHaveBeenCalled()
     expect(chain.delete).not.toHaveBeenCalled()
+    expect(chain.eq).toHaveBeenCalledWith("organization_id", "org-1")
   })
 })
 ```
@@ -923,10 +942,19 @@ export async function PUT(
           { status: 400 }
         )
       }
+      if (dbError.code === "PGRST116") {
+        return NextResponse.json(
+          { error: "Servicio no encontrado" },
+          { status: 404 }
+        )
+      }
       console.error("Error updating servicio:", dbError)
       return NextResponse.json({ error: "Error al actualizar el servicio" }, { status: 500 })
     }
 
+    // Defensivo: con .single() supabase-js siempre setea error.code = PGRST116
+    // en cero filas, así que esta rama no debería alcanzarse. Se mantiene
+    // como guarda de segundo nivel, no como el único camino a 404.
     if (!data) {
       return NextResponse.json({ error: "Servicio no encontrado" }, { status: 404 })
     }
@@ -959,8 +987,16 @@ export async function DELETE(
       .update({ deleted_at: new Date().toISOString(), activo: false })
       .eq("id", id)
       .eq("organization_id", organizationId!)
+      .select("id")
+      .single()
 
     if (dbError) {
+      if (dbError.code === "PGRST116") {
+        return NextResponse.json(
+          { error: "Servicio no encontrado" },
+          { status: 404 }
+        )
+      }
       console.error("Error deleting servicio:", dbError)
       return NextResponse.json({ error: "Error al eliminar el servicio" }, { status: 500 })
     }
@@ -976,7 +1012,7 @@ export async function DELETE(
 - [ ] **Step 4: Correr el test — debe pasar**
 
 Run: `npm run test:run -- __tests__/api/servicios-id.test.ts`
-Expected: PASS, 3 tests.
+Expected: PASS, 4 tests.
 
 - [ ] **Step 5: Commit**
 

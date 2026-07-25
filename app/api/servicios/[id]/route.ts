@@ -64,10 +64,19 @@ export async function PUT(
           { status: 400 }
         )
       }
+      if (dbError.code === "PGRST116") {
+        return NextResponse.json(
+          { error: "Servicio no encontrado" },
+          { status: 404 }
+        )
+      }
       console.error("Error updating servicio:", dbError)
       return NextResponse.json({ error: "Error al actualizar el servicio" }, { status: 500 })
     }
 
+    // Defensivo: con .single() supabase-js siempre setea error.code = PGRST116
+    // en cero filas, así que esta rama no debería alcanzarse. Se mantiene
+    // como guarda de segundo nivel, no como el único camino a 404.
     if (!data) {
       return NextResponse.json({ error: "Servicio no encontrado" }, { status: 404 })
     }
@@ -100,8 +109,16 @@ export async function DELETE(
       .update({ deleted_at: new Date().toISOString(), activo: false })
       .eq("id", id)
       .eq("organization_id", organizationId!)
+      .select("id")
+      .single()
 
     if (dbError) {
+      if (dbError.code === "PGRST116") {
+        return NextResponse.json(
+          { error: "Servicio no encontrado" },
+          { status: 404 }
+        )
+      }
       console.error("Error deleting servicio:", dbError)
       return NextResponse.json({ error: "Error al eliminar el servicio" }, { status: 500 })
     }

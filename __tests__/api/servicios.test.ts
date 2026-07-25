@@ -17,15 +17,14 @@ describe("GET /api/servicios", () => {
   })
 
   it("devuelve los servicios de la organizacion", async () => {
-    mockSupabaseFrom({
-      servicios: createChainMock([
-        {
-          id: "srv-1", codigo: "SRV-001", nombre: "Instalacion de Windows",
-          descripcion: null, categoria: "Software", precio: 25000,
-          duracion_estimada_min: 60, activo: true,
-        },
-      ]),
-    })
+    const chain = createChainMock([
+      {
+        id: "srv-1", codigo: "SRV-001", nombre: "Instalacion de Windows",
+        descripcion: null, categoria: "Software", precio: 25000,
+        duracion_estimada_min: 60, activo: true,
+      },
+    ])
+    mockSupabaseFrom({ servicios: chain })
 
     const res = await GET(createGetRequest("http://localhost:3000/api/servicios"))
     const { status, body } = await parseResponse(res)
@@ -34,6 +33,7 @@ describe("GET /api/servicios", () => {
     expect(body.servicios).toHaveLength(1)
     expect(body.servicios[0].nombre).toBe("Instalacion de Windows")
     expect(body.servicios[0].precio).toBe(25000)
+    expect(chain.eq).toHaveBeenCalledWith("organization_id", "org-1")
   })
 })
 
@@ -44,13 +44,12 @@ describe("POST /api/servicios", () => {
 
   it("crea un servicio", async () => {
     mockAuthSuccess({ organizationId: "org-1", role: "ADMIN" })
-    mockSupabaseFrom({
-      servicios: createChainMock({
-        id: "srv-1", codigo: "SRV-001", nombre: "Instalacion de Windows",
-        descripcion: null, categoria: null, precio: 25000,
-        duracion_estimada_min: null, activo: true,
-      }),
+    const chain = createChainMock({
+      id: "srv-1", codigo: "SRV-001", nombre: "Instalacion de Windows",
+      descripcion: null, categoria: null, precio: 25000,
+      duracion_estimada_min: null, activo: true,
     })
+    mockSupabaseFrom({ servicios: chain })
 
     const res = await POST(
       createPostRequest({ codigo: "SRV-001", nombre: "Instalacion de Windows", precio: 25000 })
@@ -59,6 +58,9 @@ describe("POST /api/servicios", () => {
 
     expect(status).toBe(201)
     expect(body.servicio.id).toBe("srv-1")
+    expect(chain.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ organization_id: "org-1" })
+    )
   })
 
   it("rechaza precio negativo", async () => {

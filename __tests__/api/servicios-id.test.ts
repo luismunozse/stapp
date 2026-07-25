@@ -18,13 +18,12 @@ describe("PUT /api/servicios/[id]", () => {
 
   it("actualiza el precio", async () => {
     mockAuthSuccess({ organizationId: "org-1", role: "ADMIN" })
-    mockSupabaseFrom({
-      servicios: createChainMock({
-        id: "srv-1", codigo: "SRV-001", nombre: "Instalacion de Windows",
-        descripcion: null, categoria: null, precio: 30000,
-        duracion_estimada_min: null, activo: true,
-      }),
+    const chain = createChainMock({
+      id: "srv-1", codigo: "SRV-001", nombre: "Instalacion de Windows",
+      descripcion: null, categoria: null, precio: 30000,
+      duracion_estimada_min: null, activo: true,
     })
+    mockSupabaseFrom({ servicios: chain })
 
     const req = new Request("http://localhost:3000/api/servicios/srv-1", {
       method: "PUT",
@@ -36,6 +35,7 @@ describe("PUT /api/servicios/[id]", () => {
 
     expect(status).toBe(200)
     expect(body.servicio.precio).toBe(30000)
+    expect(chain.eq).toHaveBeenCalledWith("organization_id", "org-1")
   })
 
   it("devuelve 403 si el usuario no es ADMIN", async () => {
@@ -50,6 +50,22 @@ describe("PUT /api/servicios/[id]", () => {
 
     const { status } = await parseResponse(await PUT(req, params("srv-1")))
     expect(status).toBe(403)
+  })
+
+  it("devuelve 404 si el servicio no existe", async () => {
+    mockAuthSuccess({ organizationId: "org-1", role: "ADMIN" })
+    mockSupabaseFrom({
+      servicios: createChainMock(null, { code: "PGRST116", message: "no rows returned" }),
+    })
+
+    const req = new Request("http://localhost:3000/api/servicios/srv-1", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ precio: 1 }),
+    })
+
+    const { status } = await parseResponse(await PUT(req, params("srv-1")))
+    expect(status).toBe(404)
   })
 })
 
@@ -67,5 +83,6 @@ describe("DELETE /api/servicios/[id]", () => {
     expect(status).toBe(200)
     expect(chain.update).toHaveBeenCalled()
     expect(chain.delete).not.toHaveBeenCalled()
+    expect(chain.eq).toHaveBeenCalledWith("organization_id", "org-1")
   })
 })
