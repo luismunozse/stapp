@@ -55,7 +55,17 @@ SELECT
   estado_correcto,
   COUNT(*)                                                    AS ordenes,
   COUNT(DISTINCT organization_id)                             AS organizaciones,
-  ROUND(SUM(GREATEST(costo_final - descuento - cobrado_real, 0)), 2) AS saldo_que_aparece
+  -- saldo_visible_en_deuda solo cuenta órdenes con estado IN ('REPARADO','ENTREGADO'):
+  -- esa es la deuda que el dueño realmente ve, según los dos lugares que la muestran
+  -- (273_deuda_solo_ordenes_cobrables.sql:56-57 y :84-85). Una orden en otro estado
+  -- (ej. EN_REPARACION) puede tener saldo matemático pero no aparece en ninguna
+  -- pantalla de deuda, así que no debe inflar el número que dimensiona el backfill.
+  ROUND(SUM(
+    CASE WHEN estado IN ('REPARADO','ENTREGADO')
+         THEN GREATEST(costo_final - descuento - cobrado_real, 0)
+         ELSE 0
+    END
+  ), 2)                                                        AS saldo_visible_en_deuda
 FROM divergentes
 GROUP BY estado_actual, estado_correcto
 ORDER BY ordenes DESC;
@@ -77,6 +87,11 @@ ORDER BY ordenes DESC;
 -- Las órdenes que sí cumplen ambas condiciones desaparecen de /comisiones.
 -- El técnico ya cobró una comisión calculada sobre un ingreso que nunca
 -- entró, y además pierde la orden de su historial visible.
+--
+-- LEFT JOIN a propósito: si organization_id quedó huérfano (sin fila en
+-- organizations), no queremos que la orden desaparezca en silencio del
+-- conteo. El flag ausente se resuelve con COALESCE(...,FALSE), el mismo
+-- default que tiene la columna (257_comision_sin_reparacion_flag.sql:10).
 --
 -- Si este número es alto, NO aplicar el backfill completo de una: evaluar
 -- excluir estas órdenes o avisar organización por organización.
@@ -114,11 +129,11 @@ SELECT
   COUNT(*)                          AS ordenes_con_comision_pagada,
   COUNT(DISTINCT d.organization_id) AS organizaciones_afectadas
 FROM divergentes d
-JOIN organizations org ON org.id = d.organization_id
+LEFT JOIN organizations org ON org.id = d.organization_id
 WHERE d.estado_actual = 'COBRADO'
   AND d.comision_pagada = TRUE
   AND d.estado = ANY(
-        CASE WHEN org.comision_aplica_sin_reparacion
+        CASE WHEN COALESCE(org.comision_aplica_sin_reparacion, FALSE)
              THEN ARRAY['REPARADO','ENTREGADO','ENTREGADO_SIN_REPARACION']
              ELSE ARRAY['REPARADO','ENTREGADO']
         END);
@@ -157,23 +172,31 @@ divergentes AS (
 )
 SELECT
   d.organization_id,
-  org.nombre                                                        AS organizacion,
+  -- LEFT JOIN a propósito (ver Reporte 2): si es huérfana, se ve, no se pierde.
+  COALESCE(org.nombre, '(organizacion no encontrada)')              AS organizacion,
   COUNT(*)                                                          AS ordenes,
-  -- Misma lógica de estadosComision que el Reporte 2 (app/api/comisiones/route.ts:32-34):
-  -- sin el filtro de estado, esta columna también sobrecuenta.
+  -- Misma lógica de estadosComision que el Reporte 2 (app/api/comisiones/route.ts:32-34),
+  -- con el mismo COALESCE(...,FALSE) para organización huérfana.
   COUNT(*) FILTER (
     WHERE d.comision_pagada
       AND d.estado = ANY(
-            CASE WHEN org.comision_aplica_sin_reparacion
+            CASE WHEN COALESCE(org.comision_aplica_sin_reparacion, FALSE)
                  THEN ARRAY['REPARADO','ENTREGADO','ENTREGADO_SIN_REPARACION']
                  ELSE ARRAY['REPARADO','ENTREGADO']
             END)
   )                                                                  AS con_comision_pagada,
-  ROUND(SUM(GREATEST(d.costo_final - d.descuento - d.cobrado_real, 0)), 2) AS saldo_que_aparece
+  -- saldo_visible_en_deuda: mismo filtro de estado que el Reporte 1, ver ese
+  -- comentario y 273_deuda_solo_ordenes_cobrables.sql:56-57 y :84-85.
+  ROUND(SUM(
+    CASE WHEN d.estado IN ('REPARADO','ENTREGADO')
+         THEN GREATEST(d.costo_final - d.descuento - d.cobrado_real, 0)
+         ELSE 0
+    END
+  ), 2)                                                              AS saldo_visible_en_deuda
 FROM divergentes d
-JOIN organizations org ON org.id = d.organization_id
+LEFT JOIN organizations org ON org.id = d.organization_id
 GROUP BY d.organization_id, org.nombre
-ORDER BY saldo_que_aparece DESC NULLS LAST;
+ORDER BY saldo_visible_en_deuda DESC NULLS LAST;
 
 -- ---------------------------------------------------------------------------
 -- REPORTE 4 — Las 50 órdenes de mayor impacto, para inspección manual
@@ -217,8 +240,15 @@ SELECT
   costo_final,
   descuento,
   cobrado_real,
-  GREATEST(costo_final - descuento - cobrado_real, 0) AS saldo_que_aparece,
+  -- saldo_visible_en_deuda: mismo filtro de estado que el Reporte 1, ver ese
+  -- comentario y 273_deuda_solo_ordenes_cobrables.sql:56-57 y :84-85. El orden
+  -- (ORDER BY) usa este mismo valor, no el saldo matemático crudo, para que el
+  -- "top 50 por impacto" refleje impacto REALMENTE visible para el dueño.
+  CASE WHEN estado IN ('REPARADO','ENTREGADO')
+       THEN GREATEST(costo_final - descuento - cobrado_real, 0)
+       ELSE 0
+  END                                                   AS saldo_visible_en_deuda,
   comision_pagada
 FROM divergentes
-ORDER BY GREATEST(costo_final - descuento - cobrado_real, 0) DESC
+ORDER BY saldo_visible_en_deuda DESC
 LIMIT 50;

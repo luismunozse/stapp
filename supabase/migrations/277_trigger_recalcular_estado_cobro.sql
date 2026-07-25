@@ -10,6 +10,7 @@
 --   - app/api/public/ordenes/[token]/reject-budget/route.ts:41
 --   - app/api/cotizaciones/route.ts:454
 --   - app/api/cotizaciones/[id]/route.ts:84, 122, 141, 507, 634, 649
+--   - app/api/cotizaciones/[id]/enviar/route.ts:155 (auto-transición a PRESUPUESTADO al enviar)
 --
 -- IMPACTO
 --   - 273_deuda_solo_ordenes_cobrables.sql:56 filtra estado_cobro IN ('PENDIENTE','PARCIAL'),
