@@ -18,6 +18,13 @@ export interface RecepcionReceiptEquipo {
   tipoDispositivo?: string | null
   marca?: string | null
   dispositivo: string
+  /**
+   * IMEI o numero de serie. En un comprobante firmado que cubre N equipos es
+   * el campo que identifica a CUAL equipo corresponde cada linea, asi que se
+   * imprime cuando esta. Muchos tipos de dispositivo no lo piden (ver
+   * tipoValidaImei): cuando no hay, la linea se omite entera.
+   */
+  imei?: string | null
   problemaReportado: string
   accesorios?: string | null
 }
@@ -223,6 +230,9 @@ function RecepcionReceiptPreview({ data }: { data: RecepcionReceiptData }) {
           <div className="text-center">
             {[equipo.tipoDispositivo, equipo.marca, equipo.dispositivo].filter(Boolean).join(" - ")}
           </div>
+          {equipo.imei && (
+            <div className="whitespace-pre-wrap break-words">IMEI/Serie: {equipo.imei}</div>
+          )}
           <div className="whitespace-pre-wrap break-words">Problema: {equipo.problemaReportado}</div>
           {equipo.accesorios && (
             <div className="whitespace-pre-wrap break-words">Accesorios: {equipo.accesorios}</div>

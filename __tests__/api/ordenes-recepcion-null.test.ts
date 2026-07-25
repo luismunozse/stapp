@@ -48,6 +48,7 @@ vi.mock("@/lib/pdf", () => ({
 }))
 
 import { POST } from "@/app/api/ordenes/route"
+import { generateOrdenPDF } from "@/lib/pdf"
 import { GET as GET_PDF } from "@/app/api/ordenes/[id]/pdf/route"
 
 const validBody = {
@@ -130,5 +131,30 @@ describe("GET /api/ordenes/[id]/pdf — sin lote no consulta recepciones", () =>
 
     expect(res.status).toBe(200)
     expect(recepcionesChain.select).not.toHaveBeenCalled()
+  })
+
+  // Contracara del test de arriba: con lote, la firma UNICA del comprobante
+  // tiene que terminar en el payload del PDF de cada orden del lote. Es la
+  // unica firma que existe para esas ordenes (la recepcion multiple no crea
+  // checklist_recepcion por equipo), asi que si esto se rompe el PDF sale sin
+  // firma y el comprobante deja de probar la conformidad del cliente.
+  it("resuelve la firma del lote hacia el PDF cuando recepcion_id esta seteado", async () => {
+    const recepcionesChain = createChainMock({ firma_cliente: "data:image/png;base64,FIRMALOTE" }, null)
+    mockSupabaseFrom({
+      ordenes_servicio: createChainMock({ ...ordenCreada, recepcion_id: "rec-1" }, null),
+      checklist_recepcion: createChainMock(null, null),
+      fotos_orden: createChainMock([], null),
+      organizations: createChainMock({ nombre: "Taller", terminologia: null }, null),
+      recepciones: recepcionesChain,
+    })
+
+    const res = await GET_PDF(createGetRequest(), { params: Promise.resolve({ id: "ord-1" }) })
+
+    expect(res.status).toBe(200)
+    expect(recepcionesChain.select).toHaveBeenCalledWith("firma_cliente")
+    expect(recepcionesChain.eq).toHaveBeenCalledWith("id", "rec-1")
+
+    const pdfData = vi.mocked(generateOrdenPDF).mock.calls[0][0]
+    expect(pdfData.firmaRecepcion).toBe("data:image/png;base64,FIRMALOTE")
   })
 })

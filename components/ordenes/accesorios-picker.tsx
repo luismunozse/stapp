@@ -75,7 +75,7 @@ export function AccesoriosPicker({
             }
           }}
         />
-        <Button type="button" variant="outline" onClick={onOtroAdd}>
+        <Button type="button" variant="outline" onClick={onOtroAdd} aria-label="Agregar otro accesorio">
           <Plus className="h-4 w-4" />
         </Button>
       </div>

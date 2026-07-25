@@ -10,6 +10,12 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
+    // El default de vitest (5000ms) deja rojo un `npx vitest run` limpio: hay
+    // tests de componente pesados que lo superan de manera reproducible --
+    // __tests__/components/orden-form-dispositivo-error.test.tsx tarda ~18.6s
+    // montando el wizard completo. Subir el techo global es lo que hace que el
+    // comando por defecto del repo pase sin flags.
+    testTimeout: 30000,
     setupFiles: ['./vitest.setup.ts'],
     include: ['**/*.{test,spec}.{ts,tsx}'],
     exclude: ['node_modules', '.next', 'dist', 'e2e', '.claude/**'],

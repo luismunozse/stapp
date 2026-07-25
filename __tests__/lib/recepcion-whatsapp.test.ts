@@ -37,4 +37,25 @@ describe("construirMensajeRecepcion", () => {
     const msg = construirMensajeRecepcion(params)
     expect(msg.split("REC001").length - 1).toBe(1)
   })
+
+  it("nombra la empresa en el saludo cuando hay nombre", () => {
+    const msg = construirMensajeRecepcion(params)
+    expect(msg).toContain("recibimos tus 2 equipos en Taller Central.")
+  })
+
+  // POST /api/recepciones puede devolver organizationName null (la org sin
+  // nombre_mostrar ni nombre), y el modal lo normaliza a "". El saludo tiene
+  // que omitir el "en <empresa>" entero, igual que el comprobante impreso
+  // omite la linea del encabezado: nunca "...equipos en ."
+  it.each([
+    ["vacio", ""],
+    ["null", null],
+    ["undefined", undefined],
+    ["solo espacios", "   "],
+  ])("omite la empresa del saludo cuando el nombre viene %s", (_caso, organizationName) => {
+    const msg = construirMensajeRecepcion({ ...params, organizationName })
+    expect(msg).toContain("recibimos tus 2 equipos.")
+    expect(msg).not.toContain("equipos en ")
+    expect(msg).not.toContain(" en .")
+  })
 })

@@ -32,6 +32,7 @@ export interface EquipoRecepcionEnviado {
   tipoDispositivo?: string | null
   marca?: string | null
   color?: string | null
+  imei?: string | null
   accesorios?: string | null
 }
 
@@ -107,6 +108,7 @@ export function RecepcionCreadaModal({
     tipoDispositivo: equipos[i]?.tipoDispositivo ?? null,
     marca: equipos[i]?.marca ?? null,
     dispositivo: orden.dispositivo,
+    imei: equipos[i]?.imei ?? null,
     problemaReportado: equipos[i]?.problemaReportado ?? "",
     accesorios: equipos[i]?.accesorios ?? null,
   }))

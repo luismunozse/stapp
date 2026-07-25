@@ -6,6 +6,7 @@
  * tests fijan que la ruta NO hace inserts sueltos en ordenes_servicio.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import { NextResponse } from "next/server"
 import { mockAuthSuccess, createChainMock, mockSupabaseFrom, createPostRequest, parseResponse } from "./helpers"
 
 vi.mock("@/lib/subscriptions", () => ({ hasPlanFeature: vi.fn().mockResolvedValue(true) }))
@@ -20,6 +21,7 @@ vi.mock("@/lib/tipos-dispositivo-config", () => ({ tipoValidaImei: vi.fn().mockR
 vi.mock("@/lib/audit", () => ({ createAuditLogger: () => ({ create: vi.fn().mockResolvedValue(undefined) }) }))
 
 import { supabaseAdmin } from "@/lib/supabase"
+import { isPlanLimitError, planLimitErrorResponse } from "@/lib/plan-limits"
 import { POST } from "@/app/api/recepciones/route"
 
 const body = {
@@ -44,6 +46,10 @@ const rpcOk = {
 describe("POST /api/recepciones — atomicidad", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // clearAllMocks limpia llamadas pero NO implementaciones: sin esto, el
+    // mockReturnValue(true) del test de limite de plan se filtraria a los
+    // tests siguientes.
+    vi.mocked(isPlanLimitError).mockReturnValue(false)
     mockAuthSuccess()
     mockSupabaseFrom({
       orden_eventos: createChainMock(null, null),
@@ -105,13 +111,51 @@ describe("POST /api/recepciones — atomicidad", () => {
   it("devuelve 500 y no crea nada cuando la RPC falla", async () => {
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
       data: null,
-      error: { message: "límite de órdenes alcanzado" },
+      error: { message: "error inesperado de base" },
     } as any)
+    const ordenesChain = createChainMock(null, null)
+    mockSupabaseFrom({
+      ordenes_servicio: ordenesChain,
+      orden_eventos: createChainMock(null, null),
+      fotos_orden: createChainMock(null, null),
+    })
 
     const res = await POST(createPostRequest(body))
     const { status } = await parseResponse(res)
 
     expect(status).toBe(500)
+    expect(ordenesChain.insert).not.toHaveBeenCalled()
+  })
+
+  it("mapea el limite del plan a 403 PLAN_LIMIT_EXCEEDED en vez de un 500 generico", async () => {
+    // El trigger update_ordenes_count (167_atomic_plan_limit_enforcement.sql)
+    // rollbackea el lote entero y raisea PLAN_LIMIT_EXCEEDED. Ese error llega
+    // como rpcError y la ruta lo traduce con isPlanLimitError ->
+    // planLimitErrorResponse: es el mensaje que ve el operador de mostrador
+    // cuando el lote no entra en el plan, no un "Error al crear la recepcion".
+    const rpcError = { message: "PLAN_LIMIT_EXCEEDED:ordenes:50:50" }
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: null, error: rpcError } as any)
+    vi.mocked(isPlanLimitError).mockReturnValue(true)
+    vi.mocked(planLimitErrorResponse).mockReturnValue(
+      NextResponse.json(
+        { error: "Llegaste al limite del plan", code: "PLAN_LIMIT_EXCEEDED", limitType: "ordenes" },
+        { status: 403 },
+      ) as any,
+    )
+    const ordenesChain = createChainMock(null, null)
+    mockSupabaseFrom({
+      ordenes_servicio: ordenesChain,
+      orden_eventos: createChainMock(null, null),
+      fotos_orden: createChainMock(null, null),
+    })
+
+    const res = await POST(createPostRequest(body))
+    const { status, body: json } = await parseResponse(res)
+
+    expect(status).toBe(403)
+    expect(json.code).toBe("PLAN_LIMIT_EXCEEDED")
+    expect(planLimitErrorResponse).toHaveBeenCalledWith(rpcError)
+    expect(ordenesChain.insert).not.toHaveBeenCalled()
   })
 
   it("rechaza con 400 cuando viene un solo equipo", async () => {

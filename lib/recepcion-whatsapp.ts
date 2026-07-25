@@ -12,7 +12,8 @@ interface OrdenDelLote {
  * modal de exito (ver components/ordenes/recepcion-creada-modal.tsx).
  */
 export function construirMensajeRecepcion(params: {
-  organizationName: string
+  /** Puede venir vacio o null: el endpoint lo permite (ver el guard abajo). */
+  organizationName?: string | null
   clienteNombre: string
   codigoRecepcion: string
   ordenes: OrdenDelLote[]
@@ -24,8 +25,17 @@ export function construirMensajeRecepcion(params: {
     (o) => `• ${o.codigoOrden} — ${o.dispositivo}\n  ${baseUrl}/seguimiento/${o.publicToken}`,
   )
 
+  // El endpoint puede devolver organizationName null (app/api/recepciones/route.ts)
+  // y el modal lo normaliza a "". Sin este guard el mensaje termina en
+  // "recibimos tus 3 equipos en ." — el comprobante impreso ya omite la linea
+  // limpiamente cuando no hay nombre, asi que el mensaje hace lo mismo.
+  const empresa = organizationName?.trim()
+  const saludo = empresa
+    ? `Hola ${clienteNombre}, recibimos tus ${ordenes.length} equipos en ${empresa}.`
+    : `Hola ${clienteNombre}, recibimos tus ${ordenes.length} equipos.`
+
   return [
-    `Hola ${clienteNombre}, recibimos tus ${ordenes.length} equipos en ${organizationName}.`,
+    saludo,
     ``,
     `Comprobante: ${codigoRecepcion}`,
     ``,

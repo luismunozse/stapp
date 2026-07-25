@@ -411,6 +411,7 @@ export function RecepcionForm() {
           tipoDispositivo: equipo.tipoDispositivo,
           marca: equipo.marca || null,
           color: equipo.color || null,
+          imei: equipo.imei || null,
           accesorios: equipo.accesorios ?? null,
         }))
       )
