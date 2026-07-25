@@ -32,6 +32,7 @@ import { isValidImei, sanitizeImei } from "@/lib/imei"
 import { parseMoneyInput } from "@/lib/parse-money"
 import { FotosIngreso, type FotoPreview } from "./fotos-ingreso"
 import { AccesoriosPicker } from "./accesorios-picker"
+import { TipoDispositivoPicker } from "./tipo-dispositivo-picker"
 
 const ordenSchema = z.object({
   clienteId: z.string().min(1, "El cliente es requerido"),
@@ -905,42 +906,13 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
           )}
 
           {/* Tipo de dispositivo con selector visual */}
-          <div>
-            <Label>Tipo de Dispositivo *</Label>
-            {tiposLoading ? (
-              <div className="flex items-center justify-center py-4">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              </div>
-            ) : (
-              <div className={`grid gap-2 mt-2 ${
-                tiposDispositivo.length <= 5
-                  ? "grid-cols-3 sm:grid-cols-5"
-                  : tiposDispositivo.length <= 8
-                  ? "grid-cols-3 sm:grid-cols-4"
-                  : "grid-cols-3 sm:grid-cols-4 lg:grid-cols-5"
-              }`}>
-                {tiposDispositivo.map((tipo) => (
-                  <button
-                    key={tipo.codigo}
-                    type="button"
-                    onClick={() => handleTipoChange(tipo.codigo)}
-                    className={`flex flex-col items-center justify-center p-3 border rounded-lg transition-all ${
-                      tipoDispositivo === tipo.codigo
-                        ? "bg-primary text-primary-foreground border-primary shadow-md scale-105"
-                        : "hover:bg-muted hover:border-primary/50"
-                    }`}
-                  >
-                    <span className="text-xs font-medium truncate w-full text-center">{tipo.nombre}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-            {errors.tipoDispositivo && (
-              <p className="text-sm text-destructive mt-1">
-                {errors.tipoDispositivo.message}
-              </p>
-            )}
-          </div>
+          <TipoDispositivoPicker
+            tipos={tiposDispositivo}
+            value={tipoDispositivo}
+            onChange={handleTipoChange}
+            loading={tiposLoading}
+            error={errors.tipoDispositivo?.message}
+          />
 
           {/* Marca y Dispositivo */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
