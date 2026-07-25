@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "./supabase"
 import { queueNotification } from "./notifications/queue"
+import { transicionarOrden } from "./orden-transicion"
 
 /**
  * Datos mínimos de la orden vinculada necesarios para transicionarla a
@@ -74,19 +75,23 @@ export async function aplicarAprobacionCotizacionAOrden(
 
   if (orden.estado !== "PRESUPUESTADO") return false
 
-  const { error: updateError } = await supabaseAdmin
-    .from("ordenes_servicio")
-    .update({
-      estado: "APROBADO",
+  // UPDATE atómico vía la máquina de estados: condicionado a estado=PRESUPUESTADO,
+  // de modo que dos aprobaciones concurrentes no dupliquen evento/notificación.
+  const resultado = await transicionarOrden(supabaseAdmin, {
+    ordenId: orden.id,
+    organizationId: orden.organization_id,
+    esperado: "PRESUPUESTADO",
+    nuevo: "APROBADO",
+    camposExtra: {
       presupuesto: cotizacionTotal,
       costo_final: cotizacionTotal,
       presupuesto_aprobado_portal: aprobadoDesdePortal,
       presupuesto_fecha_aprobacion: new Date().toISOString(),
       ...camposAdicionalesOrden,
-    })
-    .eq("id", orden.id)
+    },
+  })
 
-  if (updateError) throw updateError
+  if (!resultado.ok) return false
 
   await supabaseAdmin.from("orden_eventos").insert({
     orden_id: orden.id,

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger } from "@/lib/audit"
+import { transicionarOrden } from "@/lib/orden-transicion"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { dateOnlyToNoonUtcISO } from "@/lib/timezone"
 import { z } from "zod"
@@ -76,17 +77,24 @@ async function revertirOrdenSinPresupuestoActivo(
   descripcion: string,
   userId?: string | null
 ) {
-  await supabaseAdmin
-    .from("ordenes_servicio")
-    .update({
-      estado: "EN_DIAGNOSTICO",
+  // UPDATE atómico vía la máquina de estados: solo revierte desde PRESUPUESTADO
+  // (transición válida). Si la orden ya no está en ese estado —o es APROBADO—
+  // el helper devuelve no-ok y no tocamos nada: evita el regreso inválido #6a.
+  const resultado = await transicionarOrden(supabaseAdmin, {
+    ordenId,
+    organizationId,
+    esperado: "PRESUPUESTADO",
+    nuevo: "EN_DIAGNOSTICO",
+    camposExtra: {
       presupuesto: null,
       costo_final: null,
       presupuesto_aprobado_portal: false,
       presupuesto_firma_url: null,
       presupuesto_fecha_aprobacion: null,
-    })
-    .eq("id", ordenId)
+    },
+  })
+
+  if (!resultado.ok) return
 
   // Evento en el historial de la orden (fire-and-forget: un fallo acá no
   // debe hacer fallar la actualización/eliminación de la cotización)
@@ -127,7 +135,7 @@ async function recalcPresupuestoOrden(ordenId: string, organizationId: string, u
       .select("estado")
       .eq("id", ordenId)
       .single()
-    if (orden && (orden.estado === "PRESUPUESTADO" || orden.estado === "APROBADO")) {
+    if (orden && orden.estado === "PRESUPUESTADO") {
       await revertirOrdenSinPresupuestoActivo(
         ordenId,
         organizationId,
@@ -600,6 +608,35 @@ export async function DELETE(
       )
     }
 
+    // Bug #6a: no se puede borrar la última cotización activa de una orden
+    // APROBADA (dejaría la orden sin presupuesto y forzaría un regreso inválido
+    // APROBADO -> EN_DIAGNOSTICO). El staff debe cancelar o mover la orden primero.
+    if (cotizacion.orden_id) {
+      const { data: otrasCots } = await supabaseAdmin
+        .from("cotizaciones")
+        .select("id")
+        .eq("orden_id", cotizacion.orden_id)
+        .neq("id", id)
+        .is("deleted_at", null)
+        .neq("estado", "RECHAZADA")
+      if (!otrasCots || otrasCots.length === 0) {
+        const { data: ordenAprob } = await supabaseAdmin
+          .from("ordenes_servicio")
+          .select("estado")
+          .eq("id", cotizacion.orden_id)
+          .single()
+        if (ordenAprob?.estado === "APROBADO") {
+          return NextResponse.json(
+            {
+              error:
+                "No se puede borrar la última cotización de una orden aprobada. Cancelá o mové la orden primero.",
+            },
+            { status: 400 }
+          )
+        }
+      }
+    }
+
     // Soft-delete
     const { error: deleteError } = await supabaseAdmin
       .from("cotizaciones")
@@ -633,8 +670,9 @@ export async function DELETE(
             .from("ordenes_servicio")
             .update({ presupuesto: totalPresupuesto, costo_final: totalPresupuesto })
             .eq("id", cotizacion.orden_id)
-        } else if (orden.estado === "PRESUPUESTADO" || orden.estado === "APROBADO") {
-          // No quedan cotizaciones activas: revertir a EN_DIAGNOSTICO solo si la orden estaba en flujo de presupuesto
+        } else if (orden.estado === "PRESUPUESTADO") {
+          // No quedan cotizaciones activas: revertir a EN_DIAGNOSTICO solo desde
+          // PRESUPUESTADO (APROBADO ya fue bloqueado antes del borrado — bug #6a)
           await revertirOrdenSinPresupuestoActivo(
             cotizacion.orden_id,
             organizationId!,
