@@ -385,6 +385,10 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
 
     const fileArray = Array.from(files)
 
+    // Limpia el input que disparo el evento (no via ref: los refs de los
+    // <input type="file"> ahora viven dentro de FotosIngreso) para permitir
+    // volver a seleccionar el mismo archivo. Equivalente al reset original
+    // por refs: siempre se limpiaba el input que disparo el cambio.
     e.target.value = ""
 
     setComprimiendo(true)
