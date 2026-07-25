@@ -66,90 +66,91 @@ Crear `supabase/migrations/verify/277_probes.sql`:
 
 BEGIN;
 
--- Datos de prueba aislados. Se usa una organización real cualquiera para
--- satisfacer la FK; nada se commitea.
-CREATE TEMP TABLE _probe_ctx AS
-SELECT id AS org_id FROM organizations LIMIT 1;
+-- Se opera sobre una orden REAL en vez de insertar una sintética. ordenes_servicio
+-- tiene varios NOT NULL sin default —cliente_id (001_schema.sql:186), sucursal_id
+-- (207_sucursales_set_not_null.sql:25), dispositivo y tipo_dispositivo (001:189-190)—
+-- y armar una fila válida a mano es frágil: se rompe con cada columna nueva.
+-- Todo corre dentro de BEGIN/ROLLBACK, así que la orden elegida no queda modificada.
+CREATE TEMP TABLE _probe AS
+SELECT o.id, SUM(c.monto) AS cobrado
+FROM ordenes_servicio o
+JOIN cobros_orden c ON c.orden_id = o.id AND c.anulado = FALSE
+GROUP BY o.id
+HAVING SUM(c.monto) > 0
+LIMIT 1;
 
-INSERT INTO ordenes_servicio (
-  id, organization_id, cliente_id, numero_orden, dispositivo,
-  tipo_dispositivo, problema_reportado, estado, costo_final
-)
-SELECT
-  '_probe_orden_277', org_id, NULL, 999999, 'Equipo de prueba',
-  'OTRO', 'Probe de la migración 277', 'PENDIENTE', 20000
-FROM _probe_ctx;
+-- ---------------------------------------------------------------------------
+-- PROBE 0 — Setup
+-- ESPERADO: OK. Si dice ABORTAR, no hay datos con los que probar: correr esto
+-- en un entorno que tenga al menos una orden con cobros no anulados.
+-- ---------------------------------------------------------------------------
+SELECT CASE WHEN COUNT(*) = 0
+            THEN 'ABORTAR: no hay ordenes con cobros'
+            ELSE 'OK: orden de prueba seleccionada' END AS probe_0_setup
+FROM _probe;
 
-INSERT INTO cobros_orden (orden_id, monto, metodo, anulado)
-VALUES ('_probe_orden_277', 20000, 'EFECTIVO', FALSE);
+-- Punto de partida conocido: costo_final igual a lo cobrado, sin descuento.
+UPDATE ordenes_servicio o
+SET costo_final = p.cobrado, descuento_cobro = 0
+FROM _probe p WHERE o.id = p.id;
 
--- Dejar la orden en el estado consistente de partida.
-SELECT recalcular_estado_cobro('_probe_orden_277');
+SELECT recalcular_estado_cobro(id) FROM _probe;
 
 -- ---------------------------------------------------------------------------
 -- PROBE 1 — Estado inicial consistente
--- ESPERADO: OK  (pasa con y sin la migración; valida el setup del probe)
+-- ESPERADO: OK  (pasa con y sin la migración; valida el setup)
 -- ---------------------------------------------------------------------------
-SELECT
-  CASE WHEN estado_cobro = 'COBRADO' AND total_cobrado = 20000
-       THEN 'OK' ELSE 'FALLA: ' || estado_cobro || ' / ' || total_cobrado
-  END AS probe_1_estado_inicial
-FROM ordenes_servicio WHERE id = '_probe_orden_277';
+SELECT CASE WHEN o.estado_cobro = 'COBRADO'
+            THEN 'OK' ELSE 'FALLA: ' || o.estado_cobro END AS probe_1_estado_inicial
+FROM ordenes_servicio o JOIN _probe p ON p.id = o.id;
 
 -- ---------------------------------------------------------------------------
--- PROBE 2 — Subir costo_final debe degradar el estado a PARCIAL
--- ESPERADO SIN 277: FALLA (queda en COBRADO)
--- ESPERADO CON 277: OK
+-- PROBE 2 — Duplicar costo_final debe degradar el estado a PARCIAL
+-- ESPERADO SIN 277: FALLA (queda en COBRADO)   |   CON 277: OK
 -- ---------------------------------------------------------------------------
-UPDATE ordenes_servicio SET costo_final = 45000 WHERE id = '_probe_orden_277';
+UPDATE ordenes_servicio o SET costo_final = p.cobrado * 2
+FROM _probe p WHERE o.id = p.id;
 
-SELECT
-  CASE WHEN estado_cobro = 'PARCIAL'
-       THEN 'OK' ELSE 'FALLA: quedo en ' || estado_cobro
-  END AS probe_2_sube_costo_final
-FROM ordenes_servicio WHERE id = '_probe_orden_277';
+SELECT CASE WHEN o.estado_cobro = 'PARCIAL'
+            THEN 'OK' ELSE 'FALLA: quedo en ' || o.estado_cobro END AS probe_2_sube_costo_final
+FROM ordenes_servicio o JOIN _probe p ON p.id = o.id;
 
 -- ---------------------------------------------------------------------------
 -- PROBE 3 — Un descuento que cubre el saldo debe volver el estado a COBRADO
--- ESPERADO SIN 277: FALLA (queda en el estado anterior)
--- ESPERADO CON 277: OK
+-- ESPERADO SIN 277: FALLA   |   CON 277: OK
 -- ---------------------------------------------------------------------------
-UPDATE ordenes_servicio SET descuento_cobro = 25000 WHERE id = '_probe_orden_277';
+UPDATE ordenes_servicio o SET descuento_cobro = p.cobrado
+FROM _probe p WHERE o.id = p.id;
 
-SELECT
-  CASE WHEN estado_cobro = 'COBRADO'
-       THEN 'OK' ELSE 'FALLA: quedo en ' || estado_cobro
-  END AS probe_3_descuento_cubre_saldo
-FROM ordenes_servicio WHERE id = '_probe_orden_277';
+SELECT CASE WHEN o.estado_cobro = 'COBRADO'
+            THEN 'OK' ELSE 'FALLA: quedo en ' || o.estado_cobro END AS probe_3_descuento_cubre_saldo
+FROM ordenes_servicio o JOIN _probe p ON p.id = o.id;
 
 -- ---------------------------------------------------------------------------
 -- PROBE 4 — Anular el costo debe dejar el estado en PENDIENTE
--- ESPERADO SIN 277: FALLA
--- ESPERADO CON 277: OK
+-- ESPERADO SIN 277: FALLA   |   CON 277: OK
 -- ---------------------------------------------------------------------------
-UPDATE ordenes_servicio
-SET costo_final = NULL, descuento_cobro = 0
-WHERE id = '_probe_orden_277';
+UPDATE ordenes_servicio SET costo_final = NULL, descuento_cobro = 0
+WHERE id IN (SELECT id FROM _probe);
 
-SELECT
-  CASE WHEN estado_cobro = 'PENDIENTE'
-       THEN 'OK' ELSE 'FALLA: quedo en ' || estado_cobro
-  END AS probe_4_costo_nulo
-FROM ordenes_servicio WHERE id = '_probe_orden_277';
+SELECT CASE WHEN o.estado_cobro = 'PENDIENTE'
+            THEN 'OK' ELSE 'FALLA: quedo en ' || o.estado_cobro END AS probe_4_costo_nulo
+FROM ordenes_servicio o JOIN _probe p ON p.id = o.id;
 
 -- ---------------------------------------------------------------------------
--- PROBE 5 — Un update que no toca costo_final ni descuento_cobro
---           no debe disparar el trigger ni alterar el estado de cobro
--- ESPERADO: OK en ambos casos (guarda anti-regresión)
+-- PROBE 5 — Un update que NO toca costo_final ni descuento_cobro no debe
+--           disparar el trigger ni alterar el estado de cobro.
+-- ESPERADO CON 277: OK. Si falla, el UPDATE OF está listando de más.
 -- ---------------------------------------------------------------------------
-UPDATE ordenes_servicio SET costo_final = 30000 WHERE id = '_probe_orden_277';
-UPDATE ordenes_servicio SET observaciones = 'toque irrelevante' WHERE id = '_probe_orden_277';
+UPDATE ordenes_servicio o SET costo_final = p.cobrado * 2
+FROM _probe p WHERE o.id = p.id;
 
-SELECT
-  CASE WHEN estado_cobro = 'PARCIAL'
-       THEN 'OK' ELSE 'FALLA: quedo en ' || estado_cobro
-  END AS probe_5_update_irrelevante
-FROM ordenes_servicio WHERE id = '_probe_orden_277';
+UPDATE ordenes_servicio SET observaciones = COALESCE(observaciones, '')
+WHERE id IN (SELECT id FROM _probe);
+
+SELECT CASE WHEN o.estado_cobro = 'PARCIAL'
+            THEN 'OK' ELSE 'FALLA: quedo en ' || o.estado_cobro END AS probe_5_update_irrelevante
+FROM ordenes_servicio o JOIN _probe p ON p.id = o.id;
 
 ROLLBACK;
 ```
@@ -260,32 +261,9 @@ Si el probe 5 falla, el trigger está disparando de más: revisar que la cláusu
 
 - [ ] **Step 6: Confirmar que no hay recursión**
 
-En el SQL editor:
+No hace falta un probe aparte. Los probes 2, 3, 4 y 5 hacen cuatro `UPDATE` sobre `costo_final` o `descuento_cobro` con el trigger activo; si hubiera recursión, PostgreSQL habría abortado cualquiera de ellos con `stack depth limit exceeded` en vez de devolver `OK`.
 
-```sql
-BEGIN;
-SET LOCAL client_min_messages = 'notice';
-
-CREATE TEMP TABLE _probe_ctx AS
-SELECT id AS org_id FROM organizations LIMIT 1;
-
-INSERT INTO ordenes_servicio (
-  id, organization_id, cliente_id, numero_orden, dispositivo,
-  tipo_dispositivo, problema_reportado, estado, costo_final
-)
-SELECT '_probe_rec_277', org_id, NULL, 999998, 'Equipo de prueba',
-       'OTRO', 'Probe de recursión 277', 'PENDIENTE', 1000
-FROM _probe_ctx;
-
--- Si hubiera recursión, PostgreSQL aborta con "stack depth limit exceeded".
-UPDATE ordenes_servicio SET costo_final = 2000 WHERE id = '_probe_rec_277';
-
-SELECT 'OK: sin recursion' AS probe_6_recursion;
-
-ROLLBACK;
-```
-
-Esperado: `OK: sin recursion`. Si aparece `stack depth limit exceeded`, el trigger está mal definido.
+Criterio: si el Step 5 devolvió los cinco `OK`, no hay recursión. Si en cambio apareció `stack depth limit exceeded`, revisar que la lista de `AFTER UPDATE OF` sea exactamente `costo_final, descuento_cobro` y que la cláusula `WHEN` esté presente.
 
 - [ ] **Step 7: Commit**
 
