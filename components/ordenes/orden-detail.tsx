@@ -1212,6 +1212,9 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             totalCobrado: orden.totalCobrado || 0,
             descuentoCobro: orden.descuentoCobro || 0,
             clienteNombre: orden.cliente?.nombre,
+            dispositivo: orden.dispositivo,
+            problemaReportado: orden.problemaReportado,
+            publicToken: orden.publicToken,
           }}
           onSuccess={() => {
             fetchOrden()

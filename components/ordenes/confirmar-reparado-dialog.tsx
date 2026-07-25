@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Wrench, Loader2 } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
+import { printDeviceLabel } from "@/components/ordenes/print-label"
 import { toast } from "sonner"
 
 interface ConfirmarReparadoDialogProps {
@@ -27,6 +28,9 @@ interface ConfirmarReparadoDialogProps {
     totalCobrado?: number
     descuentoCobro?: number
     clienteNombre?: string
+    dispositivo?: string
+    problemaReportado?: string
+    publicToken?: string | null
   }
   onSuccess: () => void
 }
@@ -41,9 +45,10 @@ interface ConfirmarReparadoDialogProps {
  * sigue siendo un paso aparte (CobrarOrdenDialog).
  */
 export function ConfirmarReparadoDialog({ open, onOpenChange, orden, onSuccess }: ConfirmarReparadoDialogProps) {
-  const { formatPrice } = useCurrency()
+  const { formatPrice, timezone } = useCurrency()
   const [costo, setCosto] = useState<string>("")
   const [loading, setLoading] = useState(false)
+  const [imprimirEtiqueta, setImprimirEtiqueta] = useState(true)
 
   // Pre-carga al abrir: costo final existente o, si no hay, el presupuesto. En el
   // flujo con cotización costo_final ya viene sembrado; en el express arranca vacío.
@@ -71,6 +76,23 @@ export function ConfirmarReparadoDialog({ open, onOpenChange, orden, onSuccess }
         body: JSON.stringify({ estado: "REPARADO", costoFinal: costoNum }),
       })
       if (res.ok) {
+        if (imprimirEtiqueta) {
+          const fecha = new Date().toLocaleDateString("es-AR", { timeZone: timezone })
+          await printDeviceLabel(
+            {
+              codigoOrden: orden.codigoOrden || `#${orden.numeroOrden}`,
+              numeroOrden: orden.numeroOrden,
+              clienteNombre: orden.clienteNombre || "",
+              dispositivo: orden.dispositivo || "",
+              problemaReportado: orden.problemaReportado || "",
+              fechaIngreso: fecha,
+              publicToken: orden.publicToken,
+              variant: "reparado",
+              fechaReparacion: fecha,
+            },
+            window.location.origin,
+          )
+        }
         onSuccess()
         onOpenChange(false)
       } else {
@@ -147,6 +169,17 @@ export function ConfirmarReparadoDialog({ open, onOpenChange, orden, onSuccess }
               <span className="text-lg">{formatPrice(pendiente)}</span>
             </div>
           )}
+
+          <label className="flex items-center gap-2 cursor-pointer text-sm pt-1">
+            <input
+              type="checkbox"
+              checked={imprimirEtiqueta}
+              onChange={(e) => setImprimirEtiqueta(e.target.checked)}
+              disabled={loading}
+              className="rounded"
+            />
+            Imprimir etiqueta para el equipo
+          </label>
         </div>
 
         <div className="mt-4 flex gap-2">
