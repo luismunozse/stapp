@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
-import { calcularCostoFinalSincronizado } from "@/lib/servicios/sincronizar-costo-final"
-import { ESTADOS_COSTO_FINAL_BLOQUEADO } from "@/lib/orden-state-machine"
 import { z } from "zod"
 
 const lineaSchema = z.discriminatedUnion("tipo", [
@@ -31,63 +29,6 @@ function lineaDTO(l: any) {
   }
 }
 
-function sumar(lineas: any[]): number {
-  const total = (lineas || []).reduce(
-    (acc, l) => acc + Number(l.cantidad) * Number(l.precio_unitario),
-    0
-  )
-  return Math.round(total * 100) / 100
-}
-
-/**
- * Aplica la regla de sincronización y persiste costo_final si corresponde.
- * El recálculo de estado_cobro lo hace el trigger de la migración 277.
- */
-async function sincronizarCostoFinal(orden: any, sumaAnterior: number, sumaNueva: number) {
-  const decision = calcularCostoFinalSincronizado({
-    costoFinalActual: orden.costo_final,
-    totalCobrado: orden.total_cobrado,
-    sumaAnterior,
-    sumaNueva,
-  })
-
-  if (!decision.debeActualizar) return false
-
-  // La orden ya cruzó el gate de costo_final de REPARADO (ver
-  // ESTADOS_COSTO_FINAL_BLOQUEADO): no lo dejamos en null/0 en automático aunque
-  // la regla de sincronización lo pida, porque ahí ya es la base de la comisión
-  // del técnico y del saldo pendiente. Igual que cuando hay cobros o el costo
-  // fue editado a mano, el desajuste queda visible vía costoFinalActualizado:false
-  // en el banner de "Aplicar al total" (que ahora lo va a rechazar también).
-  if (
-    (decision.nuevoCostoFinal === null || decision.nuevoCostoFinal === 0) &&
-    ESTADOS_COSTO_FINAL_BLOQUEADO.includes(orden.estado)
-  ) {
-    return false
-  }
-
-  const { error } = await supabaseAdmin
-    .from("ordenes_servicio")
-    .update({ costo_final: decision.nuevoCostoFinal })
-    .eq("id", orden.id)
-
-  if (error) {
-    console.error("Error sincronizando costo_final:", error)
-    return false
-  }
-  return true
-}
-
-async function cargarOrden(ordenId: string, organizationId: string) {
-  const { data } = await supabaseAdmin
-    .from("ordenes_servicio")
-    .select("id, costo_final, total_cobrado, estado, organization_id")
-    .eq("id", ordenId)
-    .eq("organization_id", organizationId)
-    .single()
-  return data
-}
-
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -99,13 +40,10 @@ export async function POST(
     const { id: ordenId } = await params
     const parsed = lineaSchema.parse(await request.json())
 
-    const orden = await cargarOrden(ordenId, organizationId!)
-    if (!orden) {
-      return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
-    }
-
     // Snapshot de nombre y precio. Si viene del catálogo, se leen de ahí, pero
-    // el precio enviado gana: el catálogo es un default, no una atadura.
+    // el precio enviado gana: el catálogo es un default, no una atadura. Esta
+    // resolución queda fuera del RPC porque no es parte de la condición de
+    // carrera: solo lee el catálogo, no toca la orden.
     let nombre: string
     let precioUnitario: number
     let servicioId: string | null = null
@@ -131,32 +69,28 @@ export async function POST(
       precioUnitario = parsed.precioUnitario
     }
 
-    const { data: lineasPrevias } = await supabaseAdmin
-      .from("servicios_orden")
-      .select("cantidad, precio_unitario")
-      .eq("orden_id", ordenId)
+    // Insert + suma + sincronización de costo_final en una única transacción,
+    // con SELECT ... FOR UPDATE sobre la orden: ver migration 280. Antes esto
+    // era un SELECT-then-decide-then-UPDATE en JS (cada llamada de supabase-js
+    // es su propia transacción), lo que dejaba una condición de carrera entre
+    // altas concurrentes sobre la misma orden.
+    const { data: result, error: rpcError } = await supabaseAdmin.rpc(
+      "agregar_servicio_orden",
+      {
+        p_orden_id: ordenId,
+        p_organization_id: organizationId!,
+        p_servicio_id: servicioId,
+        p_nombre: nombre,
+        p_cantidad: parsed.cantidad,
+        p_precio_unitario: precioUnitario,
+      }
+    )
 
-    const sumaAnterior = sumar(lineasPrevias || [])
+    if (rpcError) throw rpcError
 
-    const { data: nueva, error: insertError } = await supabaseAdmin
-      .from("servicios_orden")
-      .insert({
-        orden_id: ordenId,
-        servicio_id: servicioId,
-        nombre,
-        cantidad: parsed.cantidad,
-        precio_unitario: precioUnitario,
-      })
-      .select("*")
-      .single()
-
-    if (insertError || !nueva) {
-      console.error("Error creating servicio_orden:", insertError)
-      return NextResponse.json({ error: "Error al agregar el servicio" }, { status: 500 })
+    if (result?.error) {
+      return NextResponse.json({ error: result.error }, { status: 404 })
     }
-
-    const sumaNueva = Math.round((sumaAnterior + parsed.cantidad * precioUnitario) * 100) / 100
-    const costoFinalActualizado = await sincronizarCostoFinal(orden, sumaAnterior, sumaNueva)
 
     // Alta oportunista en el catálogo: permite construirlo trabajando, sin
     // configuración previa. Un fallo acá no invalida la línea ya creada.
@@ -171,7 +105,17 @@ export async function POST(
     }
 
     return NextResponse.json(
-      { servicio: lineaDTO(nueva), costoFinalActualizado, sumaServicios: sumaNueva },
+      {
+        servicio: lineaDTO({
+          id: result.id,
+          servicio_id: servicioId,
+          nombre,
+          cantidad: parsed.cantidad,
+          precio_unitario: precioUnitario,
+        }),
+        costoFinalActualizado: result.costoFinalActualizado,
+        sumaServicios: result.sumaServicios,
+      },
       { status: 201 }
     )
   } catch (err) {
@@ -198,40 +142,27 @@ export async function DELETE(
       return NextResponse.json({ error: "Falta servicioOrdenId" }, { status: 400 })
     }
 
-    const orden = await cargarOrden(ordenId, organizationId!)
-    if (!orden) {
-      return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
+    // Delete + suma + sincronización de costo_final en una única transacción,
+    // con SELECT ... FOR UPDATE sobre la orden: ver migration 280.
+    const { data: result, error: rpcError } = await supabaseAdmin.rpc(
+      "eliminar_servicio_orden",
+      {
+        p_orden_id: ordenId,
+        p_organization_id: organizationId!,
+        p_servicio_orden_id: servicioOrdenId,
+      }
+    )
+
+    if (rpcError) throw rpcError
+
+    if (result?.error) {
+      return NextResponse.json({ error: result.error }, { status: 404 })
     }
 
-    const { data: lineasPrevias } = await supabaseAdmin
-      .from("servicios_orden")
-      .select("id, cantidad, precio_unitario")
-      .eq("orden_id", ordenId)
-
-    const sumaAnterior = sumar(lineasPrevias || [])
-    const eliminada = (lineasPrevias || []).find((l: any) => l.id === servicioOrdenId)
-
-    if (!eliminada) {
-      return NextResponse.json({ error: "Servicio no encontrado en la orden" }, { status: 404 })
-    }
-
-    const { error: deleteError } = await supabaseAdmin
-      .from("servicios_orden")
-      .delete()
-      .eq("id", servicioOrdenId)
-      .eq("orden_id", ordenId)
-
-    if (deleteError) {
-      console.error("Error deleting servicio_orden:", deleteError)
-      return NextResponse.json({ error: "Error al eliminar el servicio" }, { status: 500 })
-    }
-
-    const sumaNueva = Math.round(
-      (sumaAnterior - Number(eliminada.cantidad) * Number(eliminada.precio_unitario)) * 100
-    ) / 100
-    const costoFinalActualizado = await sincronizarCostoFinal(orden, sumaAnterior, sumaNueva)
-
-    return NextResponse.json({ costoFinalActualizado, sumaServicios: sumaNueva })
+    return NextResponse.json({
+      costoFinalActualizado: result.costoFinalActualizado,
+      sumaServicios: result.sumaServicios,
+    })
   } catch (err) {
     console.error("Error deleting servicio de orden:", err)
     return NextResponse.json({ error: "Error al eliminar el servicio" }, { status: 500 })

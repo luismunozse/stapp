@@ -5,9 +5,17 @@
  * en el medio. Si el cliente ya puso plata, mover el total en silencio cambia lo
  * que debe sin que nadie lo decida, así que ahí decide el humano desde la UI.
  *
- * costo_final sigue siendo la única fuente de ingreso de la orden. Esta función
- * solo decide si se actualiza; la escritura la hace el route handler, y el
- * recálculo de estado_cobro lo cubre el trigger de la migración 277.
+ * costo_final sigue siendo la única fuente de ingreso de la orden. El recálculo
+ * de estado_cobro lo cubre el trigger de la migración 277.
+ *
+ * ESPECIFICACIÓN NORMATIVA: esta función (junto con sus 8 tests en
+ * __tests__/lib/sincronizar-costo-final.test.ts) es la fuente de verdad de la
+ * regla. supabase/migrations/280_servicios_orden_atomico.sql la reimplementa en
+ * plpgsql dentro de agregar_servicio_orden y eliminar_servicio_orden, porque el
+ * lock (SELECT ... FOR UPDATE) que evita la condición de carrera solo existe
+ * dentro de la transacción del RPC, así que la decisión tiene que evaluarse ahí
+ * adentro y no acá. CUALQUIER cambio a esta función DEBE aplicarse también al
+ * bloque "SYNC RULE" de ambas funciones en la migración 280.
  */
 
 /** Tolerancia de comparación: costo_final es DECIMAL(10,2). */
