@@ -197,6 +197,31 @@ export interface RepuestoOrden {
   precio_unitario: number
 }
 
+export interface Servicio {
+  id: string
+  organization_id: string
+  codigo: string
+  nombre: string
+  descripcion: string | null
+  categoria: string | null
+  precio: number
+  duracion_estimada_min: number | null
+  activo: boolean
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ServicioOrden {
+  id: string
+  orden_id: string
+  servicio_id: string | null
+  nombre: string
+  cantidad: number
+  precio_unitario: number
+  created_at: string
+}
+
 export interface Factura {
   id: string
   orden_id: string
@@ -424,6 +449,16 @@ export interface Database {
         Row: RepuestoOrden
         Insert: Omit<RepuestoOrden, "id"> & { id?: string }
         Update: Partial<Omit<RepuestoOrden, "id">>
+      }
+      servicios: {
+        Row: Servicio
+        Insert: Omit<Servicio, "id"> & { id?: string }
+        Update: Partial<Omit<Servicio, "id">>
+      }
+      servicios_orden: {
+        Row: ServicioOrden
+        Insert: Omit<ServicioOrden, "id"> & { id?: string }
+        Update: Partial<Omit<ServicioOrden, "id">>
       }
       facturas: {
         Row: Factura
