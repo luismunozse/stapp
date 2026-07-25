@@ -20,7 +20,7 @@ import { useOffline } from "@/contexts/offline-context"
 import { useModal } from "@/contexts/modal-context"
 import { STORES } from "@/lib/offline/constants"
 import { FALLBACK_CONFIG } from "@/lib/tipos-dispositivo-defaults"
-import type { Cliente, CampoExtra, AccesorioConfig } from "@/types"
+import type { Cliente, CampoExtra, AccesorioConfig, TipoDispositivoCustom } from "@/types"
 import type { FotoPreview } from "./fotos-ingreso"
 import { RecepcionEquipoCard, equipoFormSchema, type EquipoFormValues } from "./recepcion-equipo-card"
 
@@ -34,7 +34,7 @@ const recepcionFormSchema = z.object({
 type RecepcionFormData = z.infer<typeof recepcionFormSchema>
 
 /** Estado por equipo que no vive en react-hook-form. */
-interface EquipoSideState {
+export interface EquipoSideState {
   accesoriosSeleccionados: string[]
   otroAccesorio: string
   camposExtraValues: Record<string, any>
@@ -57,6 +57,89 @@ const equipoVacio = (): EquipoFormValues => ({
   problemaReportado: "",
   codigoAccesoDispositivo: "",
 })
+
+/** Forma de un equipo en el payload que espera POST /api/recepciones (ver
+ *  equipoSchema en app/api/recepciones/route.ts). */
+export type EquipoPayload = EquipoFormValues & {
+  accesorios?: string
+  metadata?: Record<string, any>
+  fotos?: Array<{ data: string; mime: string; descripcion?: string }>
+}
+
+/**
+ * Resuelve los accesorios disponibles de un tipo de dispositivo sin usar el
+ * hook useTipoDispositivoConfig: ese hook usa useMemo y no se puede llamar
+ * fuera de un componente (ni en un loop de onSubmit, donde hace falta esto
+ * mismo por equipo). Replica solo la resolucion config -> accesorios que el
+ * hook usa internamente. Funcion pura: mismo input, mismo output, sin hooks.
+ */
+export function resolverAccesoriosDisponibles(
+  codigoTipo: string,
+  tiposDispositivo: TipoDispositivoCustom[]
+): AccesorioConfig[] {
+  const tipo = tiposDispositivo.find((t) => t.codigo === codigoTipo)
+  const config = tipo?.config && Object.keys(tipo.config).length > 0 ? tipo.config : FALLBACK_CONFIG
+  return config.accesorios || FALLBACK_CONFIG.accesorios || []
+}
+
+/**
+ * Arma el objeto de un equipo tal como lo espera el endpoint POST
+ * /api/recepciones. Funcion pura (sin hooks, sin contexto, sin componente):
+ * es la logica mas riesgosa del formulario -- las tres correcciones del
+ * dispatch original viven aca -- y la unica forma de testearla sin montar
+ * React (sin ModalProvider, sin canvas) es que no dependa de ninguno de
+ * los dos.
+ *
+ * - Los accesorios se serializan como LABELS ("Cargador, Cable USB"), no
+ *   como ids ("cargador, cable"): el alta clasica los guarda asi
+ *   (orden-form.tsx onSubmit) y el detalle de orden + el comprobante impreso
+ *   los muestran tal cual se guardaron. Un id no encontrado en
+ *   `accesoriosDisponibles` (por ejemplo, el texto libre agregado via "otro")
+ *   cae de vuelta al id mismo, que en ese caso ES el texto que el usuario
+ *   escribio.
+ * - Las fotos separan el prefijo "data:image/...;base64," del contenido:
+ *   base64ToBuffer (lib/storage.ts) hace un Buffer.from(base64, "base64")
+ *   liso, sin sacar ese prefijo. Si no se separa aca, la imagen sube
+ *   corrupta sin ningun error visible en ningun lado.
+ * - No se envia `tipo` en cada foto: el endpoint fija `tipo: "INGRESO"` el
+ *   mismo (ver app/api/recepciones/route.ts).
+ */
+export function construirEquipoPayload(
+  equipo: EquipoFormValues,
+  side: EquipoSideState,
+  tiposDispositivo: TipoDispositivoCustom[]
+): EquipoPayload {
+  const disponibles = resolverAccesoriosDisponibles(equipo.tipoDispositivo, tiposDispositivo)
+  const accesoriosLabels = side.accesoriosSeleccionados.map((id) => {
+    const acc = disponibles.find((a) => a.id === id)
+    return acc ? acc.label : id
+  })
+
+  const metadata: Record<string, any> = {}
+  for (const [key, val] of Object.entries(side.camposExtraValues)) {
+    if (val !== "" && val !== undefined && val !== null) {
+      metadata[key] = val
+    }
+  }
+
+  const fotos = side.fotos
+    .filter((f) => f.file)
+    .map((f) => {
+      const base64Match = f.preview.match(/^data:(image\/[a-z]+);base64,(.+)$/)
+      return {
+        data: base64Match ? base64Match[2] : "",
+        mime: base64Match ? base64Match[1] : "image/jpeg",
+        descripcion: f.descripcion || undefined,
+      }
+    })
+
+  return {
+    ...equipo,
+    accesorios: accesoriosLabels.length > 0 ? accesoriosLabels.join(", ") : undefined,
+    metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+    fotos: fotos.length > 0 ? fotos : undefined,
+  }
+}
 
 /** Resultado que devuelve POST /api/recepciones al crear el lote. */
 interface RecepcionCreadaResultado {
@@ -253,16 +336,6 @@ export function RecepcionForm() {
     })
   }
 
-  // Resuelve los accesorios disponibles de un tipo de dispositivo fuera de
-  // render: no puede usar el hook useTipoDispositivoConfig (viola las reglas
-  // de hooks si se llama en un loop de onSubmit), asi que replica solo la
-  // resolucion de config -> accesorios que ese hook usa internamente.
-  const resolverAccesoriosDisponibles = (codigoTipo: string): AccesorioConfig[] => {
-    const tipo = tiposDispositivo.find((t) => t.codigo === codigoTipo)
-    const config = tipo?.config && Object.keys(tipo.config).length > 0 ? tipo.config : FALLBACK_CONFIG
-    return config.accesorios || FALLBACK_CONFIG.accesorios || []
-  }
-
   const onSubmit = async (data: RecepcionFormData) => {
     if (!terminosAceptados) {
       await showError("El cliente tiene que aceptar los terminos de recepcion")
@@ -277,48 +350,12 @@ export function RecepcionForm() {
         firmaCliente: firma || undefined,
         firmaMime: firmaMime || undefined,
         terminosAceptados,
-        equipos: data.equipos.map((equipo, i) => {
-          // Los accesorios se serializan como LABELS ("Cargador, Cable USB"),
-          // no como ids ("cargador, cable"): el alta clasica los guarda asi
-          // (orden-form.tsx onSubmit) y el detalle de orden + el comprobante
-          // impreso los muestran tal cual se guardaron. Si esto guardara ids
-          // crudos, los dos flujos mostrarian el mismo accesorio distinto.
-          const disponibles = resolverAccesoriosDisponibles(equipo.tipoDispositivo)
-          const accesoriosLabels = sideState[i].accesoriosSeleccionados.map((id) => {
-            const acc = disponibles.find((a) => a.id === id)
-            return acc ? acc.label : id
-          })
-
-          const metadata: Record<string, any> = {}
-          for (const [key, val] of Object.entries(sideState[i].camposExtraValues)) {
-            if (val !== "" && val !== undefined && val !== null) {
-              metadata[key] = val
-            }
-          }
-
-          const fotos = sideState[i].fotos
-            .filter((f) => f.file)
-            .map((f) => {
-              // base64ToBuffer (lib/storage.ts) hace un Buffer.from(base64, "base64")
-              // liso: NO le saca el prefijo "data:image/png;base64,". Si se
-              // manda foto.preview completo como `data`, la imagen sube
-              // corrupta sin ningun error visible. Hay que separar el prefijo
-              // del contenido antes de mandarlo, igual que orden-form.tsx.
-              const base64Match = f.preview.match(/^data:(image\/[a-z]+);base64,(.+)$/)
-              return {
-                data: base64Match ? base64Match[2] : "",
-                mime: base64Match ? base64Match[1] : "image/jpeg",
-                descripcion: f.descripcion || undefined,
-              }
-            })
-
-          return {
-            ...equipo,
-            accesorios: accesoriosLabels.length > 0 ? accesoriosLabels.join(", ") : undefined,
-            metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
-            fotos: fotos.length > 0 ? fotos : undefined,
-          }
-        }),
+        // El armado de cada equipo (labels de accesorios, split de foto
+        // base64, etc.) vive en construirEquipoPayload -- funcion pura,
+        // testeada aparte en __tests__/components/recepcion-payload.test.ts.
+        equipos: data.equipos.map((equipo, i) =>
+          construirEquipoPayload(equipo, sideState[i], tiposDispositivo)
+        ),
       }
 
       const res = await offlineFetch(
