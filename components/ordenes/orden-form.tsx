@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, useMemo } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useSession } from "next-auth/react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { DatePicker } from "@/components/ui/date-picker"
 import { FormActionBar } from "@/components/ui/form-action-bar"
-import { X, Plus, Camera, Upload, Trash2, Loader2, Lock, Grid3X3, ClipboardCheck, ChevronDown, ChevronUp } from "lucide-react"
+import { X, Plus, Loader2, Lock, Grid3X3, ClipboardCheck, ChevronDown, ChevronUp } from "lucide-react"
 import { PatternLock } from "@/components/ui/pattern-lock"
 import { ClienteSelector } from "@/components/cotizaciones/cliente-selector"
 import { OrdenCreadaModal } from "./orden-creada-modal"
@@ -30,13 +30,7 @@ import { STORES } from "@/lib/offline/constants"
 import type { Cliente, CampoExtra } from "@/types"
 import { isValidImei, sanitizeImei } from "@/lib/imei"
 import { parseMoneyInput } from "@/lib/parse-money"
-
-interface FotoPreview {
-  id: string
-  preview: string
-  file?: File
-  descripcion: string
-}
+import { FotosIngreso, type FotoPreview } from "./fotos-ingreso"
 
 const ordenSchema = z.object({
   clienteId: z.string().min(1, "El cliente es requerido"),
@@ -143,8 +137,6 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     requiereCrearCliente: boolean
     clienteSnapshot: { nombre: string; telefono: string; email?: string | null } | null
   }>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const cameraInputRef = useRef<HTMLInputElement>(null)
   const { tipos: tiposDispositivo, loading: tiposLoading } = useTiposDispositivo()
 
   const {
@@ -392,8 +384,7 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
 
     const fileArray = Array.from(files)
 
-    if (fileInputRef.current) fileInputRef.current.value = ""
-    if (cameraInputRef.current) cameraInputRef.current.value = ""
+    e.target.value = ""
 
     setComprimiendo(true)
 
@@ -1436,89 +1427,14 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
 
           {currentStep === 3 && (<>
           {/* Fotos de ingreso */}
-          <div>
-            <Label>Fotos del {term("equipo")} (Ingreso)</Label>
-            <div className="mt-2 space-y-3">
-              <div className="flex gap-2">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={handleFileChange}
-                  className="hidden"
-                />
-                <input
-                  ref={cameraInputRef}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  onChange={handleFileChange}
-                  className="hidden"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex-1"
-                  disabled={comprimiendo}
-                >
-                  <Upload className="mr-2 h-4 w-4" />
-                  Seleccionar archivos
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => cameraInputRef.current?.click()}
-                  className="flex-1"
-                  disabled={comprimiendo}
-                >
-                  <Camera className="mr-2 h-4 w-4" />
-                  Tomar foto
-                </Button>
-              </div>
-
-              {comprimiendo && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Comprimiendo imagenes...
-                </div>
-              )}
-
-              {fotos.length > 0 && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {fotos.map((foto) => (
-                    <div key={foto.id} className="relative group">
-                      <img
-                        src={foto.preview}
-                        alt="Preview"
-                        className="w-full h-24 object-cover rounded-lg border"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeFoto(foto.id)}
-                        className="absolute top-1 right-1 p-1 bg-destructive text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
-                      <Input
-                        value={foto.descripcion}
-                        onChange={(e) => updateFotoDescripcion(foto.id, e.target.value)}
-                        placeholder="Descripcion..."
-                        className="mt-1 text-xs h-7"
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {fotos.length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-4 border-2 border-dashed rounded-lg">
-                  Agregar fotos del estado inicial del equipo
-                </p>
-              )}
-            </div>
-          </div>
+          <FotosIngreso
+            label={`Fotos del ${term("equipo")} (Ingreso)`}
+            fotos={fotos}
+            comprimiendo={comprimiendo}
+            onFileChange={handleFileChange}
+            onRemove={removeFoto}
+            onDescripcionChange={updateFotoDescripcion}
+          />
 
           {/* Checklist de Recepción inline */}
           {checklistTemplate && checklistTemplate.items && checklistTemplate.items.length > 0 && (
