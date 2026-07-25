@@ -59,7 +59,7 @@ Crear `supabase/migrations/verify/277_probes.sql`:
 --   1. Correr este archivo ANTES de aplicar 277. Los probes 2, 3 y 4 deben FALLAR
 --      (devuelven FALLA). Eso confirma que el bug existe y que el probe lo detecta.
 --   2. Aplicar 277_trigger_recalcular_estado_cobro.sql.
---   3. Volver a correr este archivo. Los cuatro probes deben devolver OK.
+--   3. Volver a correr este archivo. Todos los probes deben devolver OK.
 --
 -- Todo corre dentro de BEGIN/ROLLBACK: no persiste ningún dato.
 -- =============================================================================
@@ -138,9 +138,13 @@ SELECT CASE WHEN o.estado_cobro = 'PENDIENTE'
 FROM ordenes_servicio o JOIN _probe p ON p.id = o.id;
 
 -- ---------------------------------------------------------------------------
--- PROBE 5 — Un update que NO toca costo_final ni descuento_cobro no debe
---           disparar el trigger ni alterar el estado de cobro.
--- ESPERADO CON 277: OK. Si falla, el UPDATE OF está listando de más.
+-- PROBE 5 — Smoke test: un UPDATE que NO toca costo_final ni descuento_cobro
+--           (ej. observaciones) no debe alterar el estado de cobro ya calculado.
+--           No verifica la lista de columnas del trigger: si el UPDATE OF
+--           estuviera mal configurado y disparara igual, recalcular_estado_cobro
+--           volvería a calcular sobre el mismo costo_final/descuento_cobro sin
+--           cambios, y el resultado sería indistinguible. Ver PROBE 6.
+-- ESPERADO CON 277: OK
 -- ---------------------------------------------------------------------------
 UPDATE ordenes_servicio o SET costo_final = p.cobrado * 2
 FROM _probe p WHERE o.id = p.id;
@@ -151,6 +155,25 @@ WHERE id IN (SELECT id FROM _probe);
 SELECT CASE WHEN o.estado_cobro = 'PARCIAL'
             THEN 'OK' ELSE 'FALLA: quedo en ' || o.estado_cobro END AS probe_5_update_irrelevante
 FROM ordenes_servicio o JOIN _probe p ON p.id = o.id;
+
+-- ---------------------------------------------------------------------------
+-- PROBE 6 — El trigger debe estar registrado sobre EXACTAMENTE dos columnas:
+--           costo_final y descuento_cobro. Se verifica contra el catalogo,
+--           no por comportamiento: un disparo espurio recalcula el mismo valor
+--           y por lo tanto es invisible desde el estado de la fila.
+-- ESPERADO CON 277: OK
+-- ---------------------------------------------------------------------------
+SELECT CASE WHEN (
+         SELECT array_agg(a.attname::text ORDER BY a.attname)
+         FROM pg_trigger t
+         JOIN unnest(t.tgattr) AS col(attnum) ON TRUE
+         JOIN pg_attribute a ON a.attrelid = t.tgrelid AND a.attnum = col.attnum
+         WHERE t.tgname = 'ordenes_recalcular_cobro'
+           AND NOT t.tgisinternal
+       ) = ARRAY['costo_final', 'descuento_cobro']
+       THEN 'OK'
+       ELSE 'FALLA: el UPDATE OF no lista exactamente costo_final y descuento_cobro'
+       END AS probe_6_columnas_del_trigger;
 
 ROLLBACK;
 ```
@@ -255,9 +278,9 @@ Aplicar `supabase/migrations/277_trigger_recalcular_estado_cobro.sql` en Supabas
 
 Volver a pegar y correr `supabase/migrations/verify/277_probes.sql` completo.
 
-Esperado **después** de la migración: los cinco probes devuelven `OK`.
+Esperado **después** de la migración: todos los probes devuelven `OK`.
 
-Si el probe 5 falla, el trigger está disparando de más: revisar que la cláusula `UPDATE OF` liste exactamente `costo_final, descuento_cobro`.
+Si el probe 6 falla, el trigger está disparando de más: revisar que la cláusula `UPDATE OF` liste exactamente `costo_final, descuento_cobro`.
 
 - [ ] **Step 6: Confirmar que no hay recursión**
 
