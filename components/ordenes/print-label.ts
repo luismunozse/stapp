@@ -236,7 +236,16 @@ function rollBody(p: {
 // esperar imágenes (QR), y disparar el print del driver. Más confiable que
 // window.open y compatible con cualquier impresora que tenga driver en el SO.
 
-function printHtmlViaIframe(html: string): void {
+/**
+ * Resuelve recien cuando el print() del driver termino (triggerPrint()
+ * awaiteado en las dos ramas), no cuando el iframe se creo. Los llamadores
+ * (printDeviceLabel, y por extension un loop secuencial como el de
+ * recepcion-creada-modal.tsx) dependen de que este promise abarque el
+ * dialogo real: si resolviera antes, un `await` encadenado dispararia el
+ * siguiente print sin esperar a que el anterior termine, que es exactamente
+ * lo que la impresion secuencial de etiquetas necesita evitar.
+ */
+async function printHtmlViaIframe(html: string): Promise<void> {
   if (typeof document === "undefined") return
   const iframe = document.createElement("iframe")
   iframe.style.position = "fixed"
@@ -284,9 +293,13 @@ function printHtmlViaIframe(html: string): void {
   }
 
   if (doc.readyState === "complete") {
-    triggerPrint()
+    await triggerPrint()
   } else {
-    iframe.onload = () => triggerPrint()
+    await new Promise<void>((resolve) => {
+      iframe.onload = () => {
+        triggerPrint().then(resolve)
+      }
+    })
   }
 }
 
@@ -315,5 +328,5 @@ export async function printDeviceLabel(
   }
 
   const html = buildLabelHtml(data, size, qrDataUrl)
-  printHtmlViaIframe(html)
+  await printHtmlViaIframe(html)
 }
