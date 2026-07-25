@@ -1324,7 +1324,7 @@ export async function POST(
     if (parsed.tipo === "manual" && parsed.guardarEnCatalogo) {
       const { error: catalogoError } = await supabaseAdmin.from("servicios").insert({
         organization_id: organizationId!,
-        codigo: `SRV-${Date.now()}`,
+        codigo: `SRV-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         nombre,
         precio: precioUnitario,
       })
