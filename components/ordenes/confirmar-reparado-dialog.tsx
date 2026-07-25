@@ -77,21 +77,35 @@ export function ConfirmarReparadoDialog({ open, onOpenChange, orden, onSuccess }
       })
       if (res.ok) {
         if (imprimirEtiqueta) {
-          const fecha = new Date().toLocaleDateString("es-AR", { timeZone: timezone })
-          await printDeviceLabel(
-            {
-              codigoOrden: orden.codigoOrden || `#${orden.numeroOrden}`,
-              numeroOrden: orden.numeroOrden,
-              clienteNombre: orden.clienteNombre || "",
-              dispositivo: orden.dispositivo || "",
-              problemaReportado: orden.problemaReportado || "",
-              fechaIngreso: fecha,
-              publicToken: orden.publicToken,
-              variant: "reparado",
-              fechaReparacion: fecha,
-            },
-            window.location.origin,
-          )
+          // try/catch propio: el PUT de arriba YA pasó y la orden quedó en
+          // REPARADO. printDeviceLabel espera el diálogo real del driver y
+          // por lo tanto puede rechazar; si ese reject cayera en el catch de
+          // abajo, el operador leería "No se pudo marcar como reparado"
+          // sobre una orden que sí se marcó, y su reintento natural chocaría
+          // contra una transición REPARADO → REPARADO. Solo falló imprimir:
+          // se avisa eso y el flujo de éxito sigue igual.
+          try {
+            const fecha = new Date().toLocaleDateString("es-AR", { timeZone: timezone })
+            await printDeviceLabel(
+              {
+                codigoOrden: orden.codigoOrden || `#${orden.numeroOrden}`,
+                numeroOrden: orden.numeroOrden,
+                clienteNombre: orden.clienteNombre || "",
+                dispositivo: orden.dispositivo || "",
+                problemaReportado: orden.problemaReportado || "",
+                fechaIngreso: fecha,
+                publicToken: orden.publicToken,
+                variant: "reparado",
+                fechaReparacion: fecha,
+              },
+              window.location.origin,
+            )
+          } catch (printError) {
+            console.error("Error imprimiendo la etiqueta de reparado:", printError)
+            toast.error(
+              "La orden quedó marcada como reparada, pero no se pudo imprimir la etiqueta. Revisá la impresora y reimprimila desde el detalle.",
+            )
+          }
         }
         onSuccess()
         onOpenChange(false)
