@@ -19,6 +19,7 @@ import {
   CheckSquare,
   Printer,
   DollarSign,
+  Layers,
 } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
@@ -101,7 +102,11 @@ const SEARCH_PLACEHOLDERS = [
   "Buscar por N° de Serie: SN12345...",
 ]
 
-export function OrdenesList() {
+interface OrdenesListProps {
+  canRecepcionMultiple?: boolean
+}
+
+export function OrdenesList({ canRecepcionMultiple = false }: OrdenesListProps = {}) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const pathname = usePathname()
@@ -602,6 +607,14 @@ export function OrdenesList() {
               size="sm"
             />
           )}
+          {canRecepcionMultiple && (
+            <Button asChild variant="outline" size="sm" className="gap-1.5">
+              <Link href="/ordenes/recepcion">
+                <Layers className="h-4 w-4" />
+                Recibir varios equipos
+              </Link>
+            </Button>
+          )}
           <Button onClick={() => setShowForm(true)} size="sm" className="gap-1.5 ml-auto">
             <Plus className="h-4 w-4" />
             Nueva
@@ -1010,10 +1023,20 @@ export function OrdenesList() {
           <Card>
             <CardContent className="py-8 text-center">
               <p className="text-sm text-muted-foreground mb-3">No hay órdenes registradas</p>
-              <Button size="sm" onClick={() => setShowForm(true)} className="gap-1.5">
-                <Plus className="h-4 w-4" />
-                Crear primera orden
-              </Button>
+              <div className="flex flex-col items-center gap-2">
+                <Button size="sm" onClick={() => setShowForm(true)} className="gap-1.5">
+                  <Plus className="h-4 w-4" />
+                  Crear primera orden
+                </Button>
+                {canRecepcionMultiple && (
+                  <Button asChild variant="outline" size="sm" className="gap-1.5">
+                    <Link href="/ordenes/recepcion">
+                      <Layers className="h-4 w-4" />
+                      Recibir varios equipos
+                    </Link>
+                  </Button>
+                )}
+              </div>
             </CardContent>
           </Card>
         ) : (
