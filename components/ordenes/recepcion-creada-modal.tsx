@@ -17,6 +17,7 @@ import { ThermalPrintRecepcion, type RecepcionReceiptEquipo } from "./thermal-pr
 import { construirMensajeRecepcion } from "@/lib/recepcion-whatsapp"
 import { generateWhatsAppUrl } from "@/lib/notifications/whatsapp-templates"
 import { useCurrency } from "@/contexts/currency-context"
+import { useModal } from "@/contexts/modal-context"
 import { WhatsAppIcon } from "@/components/icons/whatsapp-icon"
 
 /**
@@ -77,6 +78,7 @@ export function RecepcionCreadaModal({
   firmaMime,
 }: RecepcionCreadaModalProps) {
   const { timezone } = useCurrency()
+  const { showError } = useModal()
   const [mensaje, setMensaje] = useState("")
   const [printingLabels, setPrintingLabels] = useState(false)
 
@@ -111,6 +113,9 @@ export function RecepcionCreadaModal({
 
   const handlePrintLabels = async () => {
     setPrintingLabels(true)
+    // Cuantas etiquetas terminaron de imprimirse antes de un posible fallo --
+    // el operador necesita saber si reimprimir una sola o el lote entero.
+    let impresas = 0
     try {
       const baseUrl = typeof window !== "undefined" ? window.location.origin : ""
       const fecha = new Date().toLocaleDateString("es-AR", {
@@ -137,7 +142,15 @@ export function RecepcionCreadaModal({
           },
           baseUrl,
         )
+        impresas++
       }
+    } catch (error) {
+      console.error("Error imprimiendo etiquetas de la recepcion:", error)
+      await showError(
+        impresas > 0
+          ? `Se imprimieron ${impresas} de ${resultado.ordenes.length} etiquetas. Revisa la impresora y reimprimi las que faltan.`
+          : `No se pudo imprimir ninguna de las ${resultado.ordenes.length} etiquetas. Revisa la impresora e intenta de nuevo.`,
+      )
     } finally {
       setPrintingLabels(false)
     }

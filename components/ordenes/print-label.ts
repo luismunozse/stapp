@@ -237,6 +237,55 @@ function rollBody(p: {
 // window.open y compatible con cualquier impresora que tenga driver en el SO.
 
 /**
+ * Tope de espera para que una imagen (el QR) termine de cargar antes de
+ * imprimir igual, y tope de espera para que el iframe dispare `onload` antes
+ * de imprimir igual. El QR es un data URI: en la practica ambas esperas
+ * resuelven casi instantaneo. Si alguna no lo hace, imprimir con el QR sin
+ * pintar (o disparar el print apenas se puede) es un resultado muchisimo
+ * mejor que congelar el mostrador: el operador puede reimprimir una
+ * etiqueta: no puede recuperarse de un modal trabado en medio de un lote.
+ * No "arreglar" esto de vuelta a una espera sin limite.
+ */
+const IMAGE_LOAD_TIMEOUT_MS = 3000
+const IFRAME_LOAD_TIMEOUT_MS = 3000
+
+/**
+ * Espera `promise`, pero nunca mas de `timeoutMs`. Si el timeout gana, avisa
+ * por consola (para que esto sea diagnosticable, no invisible) y resuelve
+ * igual -- nunca rechaza por timeout, ese es el punto: preferir seguir
+ * adelante antes que trabarse.
+ */
+function waitOrTimeout(promise: Promise<unknown>, timeoutMs: number, warning: string): Promise<void> {
+  return new Promise<void>((resolve) => {
+    let settled = false
+    const timer = setTimeout(() => {
+      if (settled) return
+      settled = true
+      console.warn(warning)
+      resolve()
+    }, timeoutMs)
+
+    promise.then(
+      () => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        resolve()
+      },
+      () => {
+        // Las promesas por imagen ya resuelven tanto en onload como en
+        // onerror (nunca rechazan), pero por las dudas: un reject
+        // inesperado tampoco debe colgar esto.
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        resolve()
+      },
+    )
+  })
+}
+
+/**
  * Resuelve recien cuando el print() del driver termino (triggerPrint()
  * awaiteado en las dos ramas), no cuando el iframe se creo. Los llamadores
  * (printDeviceLabel, y por extension un loop secuencial como el de
@@ -244,6 +293,12 @@ function rollBody(p: {
  * dialogo real: si resolviera antes, un `await` encadenado dispararia el
  * siguiente print sin esperar a que el anterior termine, que es exactamente
  * lo que la impresion secuencial de etiquetas necesita evitar.
+ *
+ * Tambien debe *rechazar* cuando triggerPrint() rechaza (por ejemplo si
+ * `print()` tira), en las dos ramas por igual -- si no, un error se pierde
+ * en vez de propagarse a quien llama, y peor: si la rama quedara sin
+ * resolver ni rechazar, printDeviceLabel (y todo lo que lo espera) se
+ * cuelga para siempre.
  */
 async function printHtmlViaIframe(html: string): Promise<void> {
   if (typeof document === "undefined") return
@@ -275,15 +330,19 @@ async function printHtmlViaIframe(html: string): Promise<void> {
   const triggerPrint = async () => {
     try {
       const imgs = Array.from(doc.images)
-      await Promise.all(
-        imgs.map((img) =>
-          img.complete && img.naturalWidth > 0
-            ? Promise.resolve()
-            : new Promise<void>((res) => {
-                img.onload = () => res()
-                img.onerror = () => res()
-              })
-        )
+      await waitOrTimeout(
+        Promise.all(
+          imgs.map((img) =>
+            img.complete && img.naturalWidth > 0
+              ? Promise.resolve()
+              : new Promise<void>((res) => {
+                  img.onload = () => res()
+                  img.onerror = () => res()
+                })
+          )
+        ),
+        IMAGE_LOAD_TIMEOUT_MS,
+        "printDeviceLabel: tiempo de espera agotado cargando una imagen (QR); se imprime igual.",
       )
       iframe.contentWindow?.focus()
       iframe.contentWindow?.print()
@@ -294,13 +353,31 @@ async function printHtmlViaIframe(html: string): Promise<void> {
 
   if (doc.readyState === "complete") {
     await triggerPrint()
-  } else {
-    await new Promise<void>((resolve) => {
-      iframe.onload = () => {
-        triggerPrint().then(resolve)
-      }
-    })
+    return
   }
+
+  // Disparar triggerPrint() una sola vez, sea porque onload llego a tiempo o
+  // porque se agoto el timeout y se decide seguir igual. `printed` evita que
+  // un onload tardio (despues de que el timeout ya disparo triggerPrint())
+  // dispare una segunda impresion.
+  await new Promise<void>((resolve, reject) => {
+    let printed = false
+    const runOnce = () => {
+      if (printed) return Promise.resolve()
+      printed = true
+      return triggerPrint()
+    }
+
+    const timer = setTimeout(() => {
+      console.warn("printDeviceLabel: tiempo de espera agotado esperando iframe.onload; se imprime igual.")
+      runOnce().then(resolve, reject)
+    }, IFRAME_LOAD_TIMEOUT_MS)
+
+    iframe.onload = () => {
+      clearTimeout(timer)
+      runOnce().then(resolve, reject)
+    }
+  })
 }
 
 /**
