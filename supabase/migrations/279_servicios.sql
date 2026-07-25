@@ -51,15 +51,25 @@ CREATE TRIGGER servicios_updated_at
   BEFORE UPDATE ON servicios
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
+-- RLS sigue la convención endurecida de 201_rls_hardening_phase1.sql (201:7-12):
+--   - El catch-all de service_role lleva TO service_role explícito. Sin rol,
+--     una policy FOR ALL USING(true) aplica a PUBLIC, y Postgres OR-combina
+--     policies permisivas, así que ese catch-all anularía el aislamiento por
+--     org del SELECT para cualquier rol sujeto a RLS.
+--   - El SELECT usa public.get_current_organization_id() en vez del GUC
+--     current_setting('app.organization_id', true), que nunca se setea en el
+--     flujo normal de requests y siempre resuelve a NULL.
 ALTER TABLE servicios ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS servicios_select ON servicios;
 CREATE POLICY servicios_select ON servicios
-  FOR SELECT USING (organization_id = current_setting('app.organization_id', true));
+  FOR SELECT TO authenticated
+  USING (organization_id = public.get_current_organization_id());
 
 DROP POLICY IF EXISTS servicios_all_service ON servicios;
 CREATE POLICY servicios_all_service ON servicios
-  FOR ALL USING (true) WITH CHECK (true);
+  FOR ALL TO service_role
+  USING (true) WITH CHECK (true);
 
 -- ========================================
 -- LÍNEAS DE SERVICIO EN UNA ORDEN
@@ -89,16 +99,21 @@ COMMENT ON COLUMN servicios_orden.servicio_id IS
 ALTER TABLE servicios_orden ENABLE ROW LEVEL SECURITY;
 
 -- Hereda acceso vía join con la orden, igual que items_factura (053:168-176).
+-- Mismo endurecimiento que en servicios más arriba (201:7-12): TO authenticated
+-- + TO service_role explícitos y public.get_current_organization_id() en vez
+-- del GUC roto.
 DROP POLICY IF EXISTS servicios_orden_select ON servicios_orden;
 CREATE POLICY servicios_orden_select ON servicios_orden
-  FOR SELECT USING (
+  FOR SELECT TO authenticated
+  USING (
     EXISTS (
       SELECT 1 FROM ordenes_servicio o
       WHERE o.id = servicios_orden.orden_id
-        AND o.organization_id = current_setting('app.organization_id', true)
+        AND o.organization_id = public.get_current_organization_id()
     )
   );
 
 DROP POLICY IF EXISTS servicios_orden_all_service ON servicios_orden;
 CREATE POLICY servicios_orden_all_service ON servicios_orden
-  FOR ALL USING (true) WITH CHECK (true);
+  FOR ALL TO service_role
+  USING (true) WITH CHECK (true);
