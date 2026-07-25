@@ -31,6 +31,30 @@ vi.mock("@/hooks/use-tipos-dispositivo", () => ({
           camposExtra: [],
         },
       },
+      {
+        // Tipo con un campo extra de cada `tipo` soportado por
+        // CamposExtraFields (text, select, buttons, counter), para poder
+        // ejercitar las cuatro ramas de renderCampoExtra.
+        codigo: "COMPUTADORA",
+        nombre: "Computadora",
+        config: {
+          campos: {
+            imei: { visible: false },
+            password: { visible: false },
+            color: { visible: true },
+            marca: { visible: true },
+          },
+          accesorios: [],
+          problemasComunes: [],
+          marcas: [],
+          camposExtra: [
+            { key: "procesador", label: "Procesador", tipo: "text", placeholder: "Ej: i5 10ma gen" },
+            { key: "tipoPc", label: "Tipo de PC", tipo: "select", opciones: ["Notebook", "Desktop"] },
+            { key: "ram", label: "RAM", tipo: "buttons", opciones: ["4GB", "8GB", "16GB"] },
+            { key: "puertosUsb", label: "Cantidad de puertos USB", tipo: "counter", min: 0, max: 3 },
+          ],
+        },
+      },
     ],
     loading: false,
     error: null,
@@ -105,6 +129,53 @@ describe("OrdenForm — componentes extraidos se renderizan al avanzar el wizard
       expect(
         screen.getByText("Agregar fotos del estado inicial del equipo"),
       ).toBeInTheDocument()
+    },
+    30000,
+  )
+
+  // CamposExtraFields solo renderiza cuando el tipo elegido tiene camposExtra
+  // (con !usarComoDispositivo). El fixture "Celular" de arriba usa
+  // camposExtra: [], asi que este test no la ejercita: hace falta un tipo
+  // aparte (Computadora, definido en el mock) con un campo de cada
+  // `campo.tipo` para probar las cuatro ramas de renderCampoExtra.
+  it(
+    "en un tipo con camposExtra, CamposExtraFields renderiza las 4 variantes: text, select, buttons y counter",
+    async () => {
+      const { OrdenForm } = await import("@/components/ordenes/orden-form")
+      render(
+        <ModalProvider>
+          <OrdenForm onClose={vi.fn()} onSuccess={vi.fn()} />
+        </ModalProvider>,
+      )
+
+      fireEvent.click(screen.getByRole("button", { name: "Elegir cliente de prueba" }))
+      fireEvent.click(screen.getByRole("button", { name: "Computadora" }))
+
+      // tipo: "text"
+      expect(screen.getByText("Procesador")).toBeInTheDocument()
+      const procesadorInput = screen.getByPlaceholderText("Ej: i5 10ma gen")
+      expect(procesadorInput).toBeInTheDocument()
+      fireEvent.change(procesadorInput, { target: { value: "i7 12va gen" } })
+      expect(procesadorInput).toHaveValue("i7 12va gen")
+
+      // tipo: "select" (no se abre el dropdown de Radix en jsdom; se
+      // verifica el label y el trigger con su placeholder visible).
+      expect(screen.getByText("Tipo de PC")).toBeInTheDocument()
+      expect(screen.getByText("Seleccionar...")).toBeInTheDocument()
+
+      // tipo: "buttons"
+      expect(screen.getByText("RAM")).toBeInTheDocument()
+      const ram8gb = screen.getByRole("button", { name: "8GB" })
+      expect(ram8gb).toBeInTheDocument()
+      expect(screen.getByRole("button", { name: "16GB" })).toBeInTheDocument()
+      fireEvent.click(ram8gb)
+
+      // tipo: "counter"
+      expect(screen.getByText("Cantidad de puertos USB")).toBeInTheDocument()
+      const contadorCero = screen.getByRole("button", { name: "0" })
+      expect(contadorCero).toBeInTheDocument()
+      expect(screen.getByRole("button", { name: "3" })).toBeInTheDocument()
+      fireEvent.click(contadorCero)
     },
     30000,
   )
