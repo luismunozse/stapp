@@ -66,6 +66,12 @@ test.describe("Recepción múltiple en mostrador", () => {
       test.skip(true, RAZON_FLAG_DESHABILITADO)
     }
 
+    // Probar la ausencia del botón de quitar sin probar antes que hay una
+    // card sería un pase vacío: si por una regresión no se renderizara
+    // ningún equipo, "no hay botón de quitar" también daría verde sin decir
+    // nada del invariante. Confirmamos primero que la card 2 existe.
+    await expect(page.getByRole("heading", { name: /^equipo 2$/i })).toBeVisible()
+
     // Arrancando en el mínimo (2), ninguna card ofrece la opción de quitar:
     // el lote no puede reducirse por debajo de dos equipos.
     await expect(page.getByRole("button", { name: /quitar equipo/i })).toHaveCount(0)
