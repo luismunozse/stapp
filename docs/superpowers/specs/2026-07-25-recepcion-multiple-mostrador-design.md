@@ -144,7 +144,14 @@ Feature key: **`recepcion_multiple`**. La misma migración prende el flag en los
 El primitivo ya existe y respeta trial vencido, período vencido, `CANCELED` y `PAST_DUE`: `hasPlanFeature(organizationId, featureKey)` (`lib/subscriptions.ts:360`), con override por organización vía `organization_feature_overrides` (`lib/subscriptions.ts:339`). Ese override es la escotilla para habilitárselo puntualmente a un taller Free desde el superadmin, sin cambiarle el plan y sin construir un toggle nuevo.
 
 - **Server:** `POST /api/recepciones` chequea `hasPlanFeature` y devuelve 403 `{ error, code: "FEATURE_REQUIRED", feature: "recepcion_multiple" }`, mismo shape que los gates de whatsapp, reportes y cotizaciones.
-- **Cliente:** `useHasFeature("recepcion_multiple")` (`hooks/use-subscription.ts`) esconde el punto de entrada.
+- **Cliente:** el flag efectivo se resuelve **en el servidor** y baja como prop. **No se usa `useHasFeature`.**
+
+**Por qué no `useHasFeature`:** ese hook lee `featureFlags` del payload de `/api/subscription/status`, que expone únicamente los flags **del plan** (`app/api/subscription/status/route.ts:29`) y **no** aplica los overrides por organización. Usarlo dejaría la escotilla del superadmin a medias: la API respondería 200 para un taller con override habilitado, pero el botón seguiría escondido. Corregir el endpoint compartido arreglaría de paso a whatsapp, reportes, cotizaciones y asistente, pero es un cambio en un camino que usan todas las features gateadas — fuera de alcance acá.
+
+El patrón correcto ya existe en el repo (`app/(dashboard)/configuracion/importaciones/page.tsx:9-22`): el server component llama `auth()`, resuelve `hasPlanFeature` —que sí aplica overrides— y decide. Se sigue ese patrón en los dos puntos:
+
+- `app/(dashboard)/ordenes/page.tsx` pasa a `async`, resuelve el flag y lo baja a `<OrdenesList canRecepcionMultiple={...} />` para mostrar u ocultar el botón.
+- `app/(dashboard)/ordenes/recepcion/page.tsx` resuelve el flag y devuelve `<FeatureLockedView />` (`components/billing/feature-locked-view.tsx`, props `featureName`, `description`, `benefits`) cuando está bloqueada, para que la URL directa no sea un bypass.
 
 Lección ya documentada en el repo que aplica de lleno (ver `docs/superpowers/specs/2026-07-05-rediseno-free-cotizaciones-gating-design.md:22`): en el rediseño de cotizaciones las rutas **nunca chequeaban** el flag, así que apagarlo en la DB no cambiaba el comportamiento. **El enforcement va en código desde el día uno**, no solo el flag en la migración.
 
@@ -198,12 +205,28 @@ Orden de operaciones:
 
 `components/ordenes/orden-form.tsx` tiene **1743 líneas**. Agregarle un modo "múltiple" con condicionales significa que cualquier bug introducido ahí lo comen **todos** los talleres, incluidos los que reciben un equipo por vez. Ese es el riesgo real de contaminación de esta feature, y no está en la base de datos.
 
-Se extraen dos componentes, consumidos por el form actual y por el flujo nuevo:
+**Restricción descubierta al planificar:** el form usa **react-hook-form** con un form plano (`register("marca")`, `watch("tipoDispositivo")`). Un flujo de N equipos necesita nombres tipo `equipos.0.marca` (`useFieldArray`). Por lo tanto **no existe** una extracción que sea a la vez un movimiento puro y reutilizable por los dos flujos: cualquier componente compartido que reciba `register` obligaría a introducir un prefijo de nombre y a reescribir el wiring del form que usan todos los talleres. Eso es exactamente el riesgo que este diseño evita.
 
-- `components/ordenes/dispositivo-fields.tsx` — selector de tipo, campos dinámicos del `config` del tipo (imei/color/marca/password), `camposExtra`, accesorios y problemas comunes.
-- `components/ordenes/fotos-ingreso.tsx` — captura y preview de fotos de ingreso.
+La línea de corte va por **acoplamiento a RHF**, no por sección visual:
 
-**Disciplina obligatoria:** la extracción es un **movimiento puro, sin un solo cambio de comportamiento**, y va en su **propio commit**, con los tests existentes en verde, **antes** de que exista una línea del flujo nuevo. Mezclar extracción y feature nueva en un commit destruye la capacidad de saber cuál de las dos rompió el mostrador de todos los talleres.
+| Sección de `orden-form.tsx` | Fuente de estado | Se extrae |
+|---|---|---|
+| Tipo de dispositivo (`:935`) | `watch` + `handleTipoChange` | Sí, como componente controlado (`value` / `onChange`) |
+| Campos extra del config (`:1044`) | `camposExtraValues` (estado local) | Sí |
+| Accesorios (`:1285`) | `accesoriosSeleccionados`, `otroAccesorio` (estado local) | Sí |
+| Fotos de ingreso (`:1462`) | `fotos`, refs de input (estado local) | Sí |
+| Marca, color, IMEI, problema, password | `register(...)` — atado a RHF plano | **No** |
+
+Componentes a extraer, todos **agnósticos de react-hook-form** (interfaz `value` / `onChange`):
+
+- `components/ordenes/tipo-dispositivo-picker.tsx`
+- `components/ordenes/campos-extra-fields.tsx`
+- `components/ordenes/accesorios-picker.tsx`
+- `components/ordenes/fotos-ingreso.tsx`
+
+Lo que **no** se extrae son inputs de texto triviales (label + `Input`). El flujo múltiple los reescribe en su propia versión compacta. Se acepta esa duplicación a conciencia: duplicar un `<Input>` con su label es barato y no drifta de forma peligrosa, mientras que la lógica valiosa y compleja —la que se deriva del `config` por tipo de dispositivo— queda compartida en un solo lugar.
+
+**Disciplina obligatoria:** la extracción va en su **propio commit**, con los tests existentes en verde, **antes** de que exista una línea del flujo nuevo. Para los cuatro componentes de arriba el cambio en `orden-form.tsx` es sustitución de JSX por una llamada con las mismas props que ya tenía en scope: sin tocar el schema de RHF, sin tocar `register`, sin tocar el submit. Mezclar extracción y feature nueva en un commit destruye la capacidad de saber cuál de las dos rompió el mostrador de todos los talleres.
 
 ### 6. UI del flujo
 
@@ -211,7 +234,7 @@ Se extraen dos componentes, consumidos por el form actual y por el flujo nuevo:
 
 El alta actual es un dialog dentro de `components/ordenes/ordenes-list.tsx:856`, controlado por el estado `showForm`. Para el flujo múltiple se elige una ruta por tres razones, y la tercera es la decisiva: N equipos con fotos y firma no entran cómodos en un modal sobre una tablet de mostrador; la ruta es deep-linkeable; y `ordenes-list.tsx` ya pasa las 1000 líneas — con una ruta aparte ese archivo recibe **+6 líneas** (un botón detrás del flag) en lugar de una rama de dialog completa.
 
-Punto de entrada: botón secundario junto al `Plus` existente (`components/ordenes/ordenes-list.tsx:605` en desktop y `:1013` en mobile), envuelto en `useHasFeature("recepcion_multiple")`.
+Punto de entrada: botón secundario junto al `Plus` existente (`components/ordenes/ordenes-list.tsx:605` en desktop y `:1013` en mobile), condicionado por la prop `canRecepcionMultiple` que resuelve el server component (ver punto 3).
 
 La página, en tres pasos:
 
@@ -275,3 +298,5 @@ Encontrada durante el relevamiento, **no** se arregla en este diseño:
 
 1. **El checklist del flujo clásico se traga los errores** (`components/ordenes/orden-form.tsx:710-714`): si el POST del checklist falla, la orden queda sin firma y el operador no se entera. El flujo nuevo no puede tener ese bug por construcción, pero el clásico sí lo tiene. Merece su propio slice, su propio test y su propio commit, precisamente porque tocar ese archivo es tocar el mostrador de todos los talleres.
 2. **`ordenes_servicio.firma_cliente_recepcion` y `firma_cliente_recepcion_mime` son columnas muertas** (`supabase/migrations/027_firma_recepcion_fields.sql:4-5`): sin lector ni escritor en todo el repo. Candidatas a limpieza en una migración de deuda, no acá.
+
+3. **`/api/subscription/status` no aplica los overrides por organización** (`app/api/subscription/status/route.ts:29` devuelve solo `subscription.featureFlags`, de nivel plan). Por lo tanto `useHasFeature` es **inconsistente con `hasPlanFeature`**: para un taller con override habilitado, la API autoriza pero la UI esconde. Afecta a todas las features gateadas que usan el hook, no solo a esta. Este diseño lo esquiva resolviendo el flag en el servidor; el arreglo de fondo es un slice propio, porque toca un endpoint compartido por whatsapp, reportes, cotizaciones y asistente.
