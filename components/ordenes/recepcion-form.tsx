@@ -1,6 +1,6 @@
 "use client"
 
-import { Component, useState, type ReactNode } from "react"
+import { useState } from "react"
 import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -58,64 +58,6 @@ const equipoVacio = (): EquipoFormValues => ({
   codigoAccesoDispositivo: "",
 })
 
-/**
- * useModal() explota si no hay un ModalProvider ancestro. En la app real
- * siempre lo hay (lo monta el layout de dashboard), pero
- * recepcion-gate.test.tsx renderiza la pagina server component sola, sin ese
- * layout, para probar el gate de plan — y ese test no puede tocarse desde
- * este task. Este wrapper evita que la ausencia del provider tire abajo el
- * render entero; en produccion se comporta igual que useModal().
- */
-function useModalSeguro(): Pick<ReturnType<typeof useModal>, "showError" | "showInfo"> {
-  try {
-    return useModal()
-  } catch {
-    return {
-      showError: async (msg: string) => {
-        console.error(msg)
-      },
-      showInfo: async (msg: string) => {
-        console.info(msg)
-      },
-    }
-  }
-}
-
-/**
- * Boundary local para subarboles que dependen de cosas fuera del control de
- * este archivo y que no estan pensadas para montarse sin el resto de la app:
- *
- * - ClienteSelector monta siempre ClienteForm (components/clientes/cliente-form.tsx),
- *   que llama a useModal() sin ninguna proteccion (a diferencia de useModalSeguro
- *   de arriba). Eso esta fuera del alcance de este archivo.
- * - SignaturePad monta react-signature-canvas, que en jsdom (sin un canvas 2D
- *   real) tira una excepcion en su componentDidMount.
- *
- * Un error boundary es el mecanismo que React ofrece para este caso exacto:
- * aisla el crash de un subarbol sin afectar el resto del formulario. En
- * produccion (con ModalProvider siempre presente via el layout de dashboard,
- * y un canvas real) nunca se activa; solo protege entornos de test que
- * renderizan la pagina sin ese contexto.
- */
-class MontajeSeguro extends Component<{ children: ReactNode; fallback: ReactNode }, { fallo: boolean }> {
-  state = { fallo: false }
-
-  static getDerivedStateFromError() {
-    return { fallo: true }
-  }
-
-  componentDidCatch(error: unknown) {
-    console.error("Un componente hijo no pudo montarse:", error)
-  }
-
-  render() {
-    if (this.state.fallo) {
-      return this.props.fallback
-    }
-    return this.props.children
-  }
-}
-
 /** Resultado que devuelve POST /api/recepciones al crear el lote. */
 interface RecepcionCreadaResultado {
   recepcion: { id: string; numero: number; codigo: string }
@@ -131,7 +73,7 @@ interface RecepcionCreadaResultado {
 export function RecepcionForm() {
   const term = useTerminologia()
   const { offlineFetch } = useOffline()
-  const { showError, showInfo } = useModalSeguro()
+  const { showError, showInfo } = useModal()
   const { tipos: tiposDispositivo, loading: tiposLoading } = useTiposDispositivo()
 
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null)
@@ -421,21 +363,13 @@ export function RecepcionForm() {
       <CardContent className="pt-6 space-y-4">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
-            <MontajeSeguro
-              fallback={
-                <p className="text-sm text-destructive">
-                  No se pudo cargar el selector de cliente. Recarga la pagina.
-                </p>
-              }
-            >
-              <ClienteSelector
-                value={clienteId || null}
-                onChange={(id, cliente) => {
-                  setValue("clienteId", id || "", { shouldValidate: !!id })
-                  setSelectedCliente(cliente as Cliente | null)
-                }}
-              />
-            </MontajeSeguro>
+            <ClienteSelector
+              value={clienteId || null}
+              onChange={(id, cliente) => {
+                setValue("clienteId", id || "", { shouldValidate: !!id })
+                setSelectedCliente(cliente as Cliente | null)
+              }}
+            />
             {errors.clienteId && (
               <p className="text-sm text-destructive mt-1">{errors.clienteId.message}</p>
             )}
@@ -509,22 +443,14 @@ export function RecepcionForm() {
               <p className="text-sm text-muted-foreground">
                 Una sola firma cubre los {fields.length} equipos de esta recepcion.
               </p>
-              <MontajeSeguro
-                fallback={
-                  <p className="text-sm text-destructive">
-                    No se pudo cargar el panel de firma. Recarga la pagina.
-                  </p>
-                }
-              >
-                <SignaturePad
-                  label="Firma del cliente (conformidad de recepcion)"
-                  onSignatureChange={(data, mime) => {
-                    setFirma(data)
-                    setFirmaMime(mime)
-                  }}
-                  disabled={submitting}
-                />
-              </MontajeSeguro>
+              <SignaturePad
+                label="Firma del cliente (conformidad de recepcion)"
+                onSignatureChange={(data, mime) => {
+                  setFirma(data)
+                  setFirmaMime(mime)
+                }}
+                disabled={submitting}
+              />
               <label className="flex items-start gap-2 text-sm">
                 <input
                   type="checkbox"

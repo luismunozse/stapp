@@ -20,6 +20,16 @@ vi.mock("@/lib/subscriptions", () => ({
   hasPlanFeature: vi.fn(),
 }))
 
+// Este archivo testea el gate de plan de la pagina, no el formulario. El
+// formulario real (Task 10) depende de ModalProvider/OfflineProvider/
+// CurrencyProvider (los monta el layout de dashboard) y de un canvas 2D real
+// para la firma — nada de eso esta presente cuando se renderiza la pagina
+// sola, como hace este test. Se mockea para que el gate siga siendo la unica
+// responsabilidad de este archivo.
+vi.mock("@/components/ordenes/recepcion-form", () => ({
+  RecepcionForm: () => <div data-testid="recepcion-form" />,
+}))
+
 // El redirect real de next/navigation interrumpe el render lanzando una
 // excepcion especial (NEXT_REDIRECT). Replicamos ese throw aca para que el
 // componente no siga ejecutando codigo que asume sesion (session.user...)
@@ -80,12 +90,13 @@ describe("RecepcionMultiplePage — gate de plan", () => {
     const ui = await RecepcionMultiplePage()
     render(ui)
 
-    // RecepcionForm todavia es un stub que retorna null (Task 10 lo completa),
-    // asi que no hay nada visible del formulario que assertar todavia. Lo
-    // real y verificable en este punto es que el locked view esta ausente y
-    // que la feature se consulto con la key exacta — un typo en la key
-    // dejaria la funcion abierta para todos silenciosamente.
+    // RecepcionForm esta mockeado arriba (este archivo testea el gate, no el
+    // formulario). Lo verificable aca es que el locked view esta ausente, que
+    // el stand-in del formulario se monta en su lugar, y que la feature se
+    // consulto con la key exacta — un typo en la key dejaria la funcion
+    // abierta para todos silenciosamente.
     expect(screen.queryByText(/es una funci.n Profesional/i)).not.toBeInTheDocument()
+    expect(screen.getByTestId("recepcion-form")).toBeInTheDocument()
     expect(hasPlanFeature).toHaveBeenCalledWith("org-1", "recepcion_multiple")
   })
 })
