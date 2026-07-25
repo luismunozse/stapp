@@ -33,6 +33,7 @@ import { parseMoneyInput } from "@/lib/parse-money"
 import { FotosIngreso, type FotoPreview } from "./fotos-ingreso"
 import { AccesoriosPicker } from "./accesorios-picker"
 import { TipoDispositivoPicker } from "./tipo-dispositivo-picker"
+import { CamposExtraFields } from "./campos-extra-fields"
 
 const ordenSchema = z.object({
   clienteId: z.string().min(1, "El cliente es requerido"),
@@ -466,98 +467,6 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     }
   }
 
-  // Render a dynamic extra field based on its config
-  const renderCampoExtra = (campo: CampoExtra) => {
-    const value = camposExtraValues[campo.key] ?? ""
-
-    switch (campo.tipo) {
-      case "text":
-        return (
-          <div key={campo.key}>
-            <Label className="text-xs">{campo.label}</Label>
-            <Input
-              value={value}
-              onChange={(e) => handleCampoExtraChange(campo, e.target.value)}
-              placeholder={campo.placeholder || ""}
-              className="h-9"
-            />
-          </div>
-        )
-
-      case "select":
-        return (
-          <div key={campo.key}>
-            <Label className="text-xs">{campo.label}</Label>
-            <Select
-              value={value || ""}
-              onValueChange={(v) => handleCampoExtraChange(campo, v)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccionar..." />
-              </SelectTrigger>
-              <SelectContent>
-                {(campo.opciones || []).map((op) => (
-                  <SelectItem key={op} value={op}>{op}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )
-
-      case "buttons":
-        return (
-          <div key={campo.key}>
-            <Label className="text-xs">{campo.label}</Label>
-            <div className="flex flex-wrap gap-1 mt-1">
-              {(campo.opciones || []).map((op) => (
-                <button
-                  key={op}
-                  type="button"
-                  onClick={() => handleCampoExtraChange(campo, op)}
-                  className={`px-2 py-1 text-xs rounded border transition-colors ${
-                    value === op
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "hover:bg-muted"
-                  }`}
-                >
-                  {op}
-                </button>
-              ))}
-            </div>
-          </div>
-        )
-
-      case "counter":
-        return (
-          <div key={campo.key}>
-            <Label className="text-xs">{campo.label}</Label>
-            <div className="flex gap-1 mt-1">
-              {Array.from(
-                { length: (campo.max ?? 4) - (campo.min ?? 0) + 1 },
-                (_, i) => (campo.min ?? 0) + i
-              ).map((num) => (
-                <button
-                  key={num}
-                  type="button"
-                  onClick={() => handleCampoExtraChange(campo, num)}
-                  className={`w-10 h-10 rounded border font-medium transition-colors ${
-                    value === num
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "hover:bg-muted"
-                  }`}
-                >
-                  {num}
-                </button>
-              ))}
-            </div>
-          </div>
-        )
-
-      default:
-        return null
-    }
-  }
-
   const handleCrearSector = async () => {
     if (!nuevoSectorNombre.trim() || !clienteId) return
     setCrearSectorLoading(true)
@@ -986,21 +895,12 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
           </div>
 
           {/* Dynamic extra fields from config */}
-          {camposExtra.filter((c) => !c.usarComoDispositivo).length > 0 && (
-            <div className={`border rounded-lg p-4 space-y-4 ${
-              config.infoSectionColor === "blue" ? "bg-blue-50/30 dark:bg-blue-950/20" :
-              config.infoSectionColor === "purple" ? "bg-purple-50/30 dark:bg-purple-950/20" :
-              "bg-muted/30"
-            }`}>
-              <h4 className="font-medium text-sm flex items-center gap-2">
-                {config.infoSectionIcon && <span>{config.infoSectionIcon}</span>}
-                {config.infoSectionTitle || "Informacion Adicional"}
-              </h4>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {camposExtra.filter((c) => !c.usarComoDispositivo).map(renderCampoExtra)}
-              </div>
-            </div>
-          )}
+          <CamposExtraFields
+            campos={camposExtra}
+            values={camposExtraValues}
+            config={config}
+            onChange={handleCampoExtraChange}
+          />
 
           {/* Color and IMEI/Serial - driven by config visibility */}
           {(showColor || showImei) && (
