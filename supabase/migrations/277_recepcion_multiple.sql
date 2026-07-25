@@ -75,6 +75,53 @@ CREATE INDEX IF NOT EXISTS ordenes_recepcion_idx
 COMMENT ON COLUMN ordenes_servicio.recepcion_id IS
   'Lote de recepción múltiple, NULL en el alta clásica. Nunca asumir que existe.';
 
+-- ============================================================================
+-- Contador atómico de `numero` para recepciones
+-- ============================================================================
+-- `recepciones.numero` tiene UNIQUE(organization_id, numero) pero ninguna
+-- forma segura de generarse: dos terminales de mostrador de la misma
+-- organización (nota: sucursal_id NO forma parte de la unicidad a propósito,
+-- así que dos sucursales de una misma org también compiten por el mismo
+-- número) que reciben equipos al mismo tiempo no pueden resolver el próximo
+-- número con un simple SELECT MAX(numero) + 1 sin pisarse. Se sigue el mismo
+-- mecanismo de contador atómico por organización que ya existe para órdenes,
+-- cotizaciones y facturas.
+
+ALTER TABLE organization_counters
+  ADD COLUMN IF NOT EXISTS next_recepcion_number INTEGER DEFAULT 1;
+
+CREATE OR REPLACE FUNCTION get_next_recepcion_number(org_id TEXT)
+RETURNS INTEGER AS $$
+DECLARE
+  next_num INTEGER;
+  max_existing INTEGER;
+BEGIN
+  -- Obtener el máximo numero existente para esta organización
+  SELECT COALESCE(MAX(numero), 0) INTO max_existing
+  FROM recepciones
+  WHERE organization_id = org_id;
+
+  -- Atomically increment and return: el UPDATE toma row lock sobre el
+  -- contador de la organización, así que llamadas concurrentes se
+  -- serializan en vez de competir por el mismo número.
+  UPDATE organization_counters
+  SET next_recepcion_number = GREATEST(next_recepcion_number, max_existing + 1) + 1
+  WHERE organization_id = org_id
+  RETURNING next_recepcion_number - 1 INTO next_num;
+
+  -- Si no existe el contador para esta organización, crearlo sincronizado
+  IF next_num IS NULL THEN
+    INSERT INTO organization_counters (organization_id, next_recepcion_number)
+    VALUES (org_id, max_existing + 2)
+    ON CONFLICT (organization_id) DO UPDATE
+    SET next_recepcion_number = GREATEST(organization_counters.next_recepcion_number, max_existing + 1) + 1
+    RETURNING next_recepcion_number - 1 INTO next_num;
+  END IF;
+
+  RETURN next_num;
+END;
+$$ LANGUAGE plpgsql;
+
 -- Feature flag: Profesional y Pro
 UPDATE plans SET
   feature_flags = COALESCE(feature_flags, '{}'::jsonb) || '{"recepcion_multiple": true}'::jsonb,
