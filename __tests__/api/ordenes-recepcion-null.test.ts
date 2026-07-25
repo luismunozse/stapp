@@ -12,6 +12,7 @@ import {
   createChainMock,
   mockSupabaseFrom,
   createPostRequest,
+  createGetRequest,
   parseResponse,
 } from "./helpers"
 
@@ -39,8 +40,15 @@ vi.mock("@/lib/audit", () => ({
 vi.mock("@/lib/tipos-dispositivo-config", () => ({
   tipoValidaImei: vi.fn().mockResolvedValue(false),
 }))
+// La generación real de PDF (pdf-lib + fontkit) es costosa y no aporta nada
+// a esta prueba: lo que se fija acá es que /pdf no consulta `recepciones`
+// cuando `recepcion_id` es null, no el contenido del PDF.
+vi.mock("@/lib/pdf", () => ({
+  generateOrdenPDF: vi.fn().mockResolvedValue(Buffer.from("fake-pdf")),
+}))
 
 import { POST } from "@/app/api/ordenes/route"
+import { GET as GET_PDF } from "@/app/api/ordenes/[id]/pdf/route"
 
 const validBody = {
   clienteId: "cli-1",
@@ -99,5 +107,28 @@ describe("POST /api/ordenes — regresión recepcion_id", () => {
 
     const payload = ordenesChain.insert.mock.calls[0][0] as Record<string, unknown>
     expect(payload.estado).toBe("RECIBIDO")
+  })
+})
+
+describe("GET /api/ordenes/[id]/pdf — sin lote no consulta recepciones", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockAuthSuccess()
+  })
+
+  it("no toca la tabla recepciones cuando recepcion_id es null", async () => {
+    const recepcionesChain = createChainMock(null, null)
+    mockSupabaseFrom({
+      ordenes_servicio: createChainMock({ ...ordenCreada, recepcion_id: null }, null),
+      checklist_recepcion: createChainMock(null, null),
+      fotos_orden: createChainMock([], null),
+      organizations: createChainMock({ nombre: "Taller", terminologia: null }, null),
+      recepciones: recepcionesChain,
+    })
+
+    const res = await GET_PDF(createGetRequest(), { params: Promise.resolve({ id: "ord-1" }) })
+
+    expect(res.status).toBe(200)
+    expect(recepcionesChain.select).not.toHaveBeenCalled()
   })
 })

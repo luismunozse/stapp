@@ -62,6 +62,18 @@ export async function GET(
       .eq("orden_id", id)
       .maybeSingle()
 
+    // Firma del lote solo cuando la orden vino de una recepcion multiple.
+    // Con recepcion_id en NULL (flujo clasico) no se hace ninguna query extra.
+    let firmaRecepcionLote: string | null = null
+    if (orden.recepcion_id) {
+      const { data: recepcion } = await supabaseAdmin
+        .from("recepciones")
+        .select("firma_cliente")
+        .eq("id", orden.recepcion_id)
+        .maybeSingle()
+      firmaRecepcionLote = recepcion?.firma_cliente ?? null
+    }
+
     // Fetch intake photos
     const { data: fotosData } = await supabaseAdmin
       .from("fotos_orden")
@@ -160,7 +172,7 @@ export async function GET(
       metodoPagoSena: safeString(orden.metodo_pago_sena),
       checklistItems,
       checklistNotas: checklistData?.notas || null,
-      firmaRecepcion: checklistData?.firma_cliente || null,
+      firmaRecepcion: checklistData?.firma_cliente ?? firmaRecepcionLote,
       firmaRecepcionMime: checklistData?.firma_mime || null,
       fotosIngreso: fotosData && fotosData.length > 0 ? fotosData : null,
     }
