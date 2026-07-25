@@ -143,7 +143,12 @@ export function construirEquipoPayload(
   }
 }
 
-/** Resultado que devuelve POST /api/recepciones al crear el lote. */
+/**
+ * Resultado que devuelve POST /api/recepciones al crear el lote. Los campos
+ * organization* vienen del mismo endpoint (igual que POST /api/ordenes ya
+ * hace para el alta clasica), no de un fetch aparte -- ver
+ * recepcion-creada-modal.tsx.
+ */
 interface RecepcionCreadaResultado {
   recepcion: { id: string; numero: number; codigo: string }
   ordenes: Array<{
@@ -153,6 +158,10 @@ interface RecepcionCreadaResultado {
     dispositivo: string
     publicToken: string
   }>
+  organizationName: string | null
+  organizationTelefono: string | null
+  organizationDireccion: string | null
+  organizationComprobanteTerminos: string | null
 }
 
 export function RecepcionForm() {

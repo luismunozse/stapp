@@ -69,6 +69,39 @@ describe("POST /api/recepciones — atomicidad", () => {
     expect(json.ordenes).toHaveLength(2)
   })
 
+  it("incluye los datos de la organizacion (telefono, direccion, terminos) en la respuesta", async () => {
+    // POST /api/ordenes ya devuelve estos campos en su propia respuesta (ver
+    // app/api/ordenes/route.ts:544-548); este endpoint hace lo mismo para que
+    // el comprobante y el WhatsApp agrupado del modal de exito no dependan de
+    // un segundo fetch a /api/configuracion (que ademas es ADMIN-only).
+    vi.mocked(supabaseAdmin.rpc).mockResolvedValue({ data: rpcOk, error: null } as any)
+    mockSupabaseFrom({
+      orden_eventos: createChainMock(null, null),
+      fotos_orden: createChainMock(null, null),
+      organizations: createChainMock(
+        {
+          nombre: "Taller SRL",
+          nombre_mostrar: "Taller Central",
+          telefono: "1122334455",
+          direccion: "Av. Siempre Viva 742",
+          comprobante_terminos: "El equipo se entrega contra presentacion de este comprobante.",
+        },
+        null,
+      ),
+    })
+
+    const res = await POST(createPostRequest(body))
+    const { status, body: json } = await parseResponse(res)
+
+    expect(status).toBe(201)
+    expect(json.organizationName).toBe("Taller Central")
+    expect(json.organizationTelefono).toBe("1122334455")
+    expect(json.organizationDireccion).toBe("Av. Siempre Viva 742")
+    expect(json.organizationComprobanteTerminos).toBe(
+      "El equipo se entrega contra presentacion de este comprobante.",
+    )
+  })
+
   it("devuelve 500 y no crea nada cuando la RPC falla", async () => {
     vi.mocked(supabaseAdmin.rpc).mockResolvedValue({
       data: null,

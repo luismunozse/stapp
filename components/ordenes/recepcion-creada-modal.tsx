@@ -34,7 +34,12 @@ export interface EquipoRecepcionEnviado {
   accesorios?: string | null
 }
 
-/** Resultado que devuelve POST /api/recepciones al crear el lote. */
+/**
+ * Resultado que devuelve POST /api/recepciones al crear el lote. Los campos
+ * organization* vienen del mismo endpoint (mirroring lo que POST /api/ordenes
+ * ya hace para el alta clasica: ver app/api/ordenes/route.ts:544-548) --
+ * ninguno depende de un segundo fetch ni de un rol especifico.
+ */
 export interface RecepcionCreadaResultado {
   recepcion: { id: string; numero: number; codigo: string }
   ordenes: Array<{
@@ -44,12 +49,10 @@ export interface RecepcionCreadaResultado {
     dispositivo: string
     publicToken: string
   }>
-}
-
-interface OrgConfigExtra {
-  telefono: string | null
-  direccion: string | null
-  comprobanteTerminos: string | null
+  organizationName: string | null
+  organizationTelefono: string | null
+  organizationDireccion: string | null
+  organizationComprobanteTerminos: string | null
 }
 
 interface RecepcionCreadaModalProps {
@@ -73,50 +76,16 @@ export function RecepcionCreadaModal({
   firma,
   firmaMime,
 }: RecepcionCreadaModalProps) {
-  const { organizationName, timezone } = useCurrency()
+  const { timezone } = useCurrency()
   const [mensaje, setMensaje] = useState("")
-  const [orgExtra, setOrgExtra] = useState<OrgConfigExtra>({
-    telefono: null,
-    direccion: null,
-    comprobanteTerminos: null,
-  })
   const [printingLabels, setPrintingLabels] = useState(false)
-
-  // Telefono, direccion y terminos de la organizacion no vienen en la
-  // respuesta de POST /api/recepciones (a diferencia de POST /api/ordenes,
-  // que si selecciona esas columnas para el modal de alta clasica). Se piden
-  // aca via /api/configuracion, el mismo endpoint que la pagina de ajustes
-  // usa -- igual que orden-creada-modal.tsx ya pide las plantillas de
-  // /api/notificaciones/config desde adentro del modal. Ambos son ADMIN-only:
-  // para un VENDEDOR la llamada devuelve 403 y estos campos quedan en null.
-  // ThermalPrintRecepcion los renderiza todos de forma condicional, asi que
-  // el comprobante igual se imprime, solo que sin esos datos extra.
-  useEffect(() => {
-    if (!open) return
-    let cancelled = false
-    fetch("/api/configuracion")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (!cancelled && data) {
-          setOrgExtra({
-            telefono: data.telefono || null,
-            direccion: data.direccion || null,
-            comprobanteTerminos: data.comprobanteTerminos || null,
-          })
-        }
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [open])
 
   useEffect(() => {
     if (!resultado) return
     const baseUrl = typeof window !== "undefined" ? window.location.origin : ""
     setMensaje(
       construirMensajeRecepcion({
-        organizationName,
+        organizationName: resultado.organizationName || "",
         clienteNombre: cliente.nombre,
         codigoRecepcion: resultado.recepcion.codigo,
         ordenes: resultado.ordenes.map((o) => ({
@@ -127,7 +96,7 @@ export function RecepcionCreadaModal({
         baseUrl,
       }),
     )
-  }, [resultado, organizationName, cliente.nombre])
+  }, [resultado, cliente.nombre])
 
   if (!resultado) return null
 
@@ -164,7 +133,7 @@ export function RecepcionCreadaModal({
             problemaReportado: equipos[i]?.problemaReportado ?? "",
             fechaIngreso: fecha,
             publicToken: orden.publicToken,
-            organizationName,
+            organizationName: resultado.organizationName || undefined,
           },
           baseUrl,
         )
@@ -218,10 +187,10 @@ export function RecepcionCreadaModal({
                   fecha: new Date().toLocaleString("es-AR", { timeZone: timezone }),
                   clienteNombre: cliente.nombre,
                   clienteTelefono: cliente.telefono || null,
-                  organizationName,
-                  organizationTelefono: orgExtra.telefono,
-                  organizationDireccion: orgExtra.direccion,
-                  organizationComprobanteTerminos: orgExtra.comprobanteTerminos,
+                  organizationName: resultado.organizationName,
+                  organizationTelefono: resultado.organizationTelefono,
+                  organizationDireccion: resultado.organizationDireccion,
+                  organizationComprobanteTerminos: resultado.organizationComprobanteTerminos,
                   firmaDataUrl: firma && firmaMime ? `data:${firmaMime};base64,${firma}` : null,
                   equipos: receiptEquipos,
                 }}

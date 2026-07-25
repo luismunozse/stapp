@@ -197,9 +197,30 @@ export async function POST(request: Request) {
       }
     })()
 
+    // Datos de la organizacion para el comprobante del lote y el WhatsApp
+    // agrupado (ver components/ordenes/recepcion-creada-modal.tsx). Misma
+    // consulta que app/api/ordenes/route.ts hace para el alta clasica,
+    // recortada a los campos que el comprobante de recepcion realmente
+    // renderiza (sin logo: ese comprobante no lo muestra).
+    const { data: org } = await supabaseAdmin
+      .from("organizations")
+      .select("nombre, nombre_mostrar, telefono, direccion, comprobante_terminos")
+      .eq("id", organizationId!)
+      .single()
+
     // Sin queueNotification a proposito: seria un mensaje por orden. El mensaje
     // agrupado lo dispara el modal de exito (ver el diseño, punto 8).
-    return NextResponse.json({ recepcion, ordenes }, { status: 201 })
+    return NextResponse.json(
+      {
+        recepcion,
+        ordenes,
+        organizationName: org?.nombre_mostrar || org?.nombre || null,
+        organizationTelefono: org?.telefono ?? null,
+        organizationDireccion: org?.direccion ?? null,
+        organizationComprobanteTerminos: org?.comprobante_terminos ?? null,
+      },
+      { status: 201 },
+    )
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.errors[0].message }, { status: 400 })
