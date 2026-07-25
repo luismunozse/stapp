@@ -27,6 +27,11 @@ interface OrdenServiciosTabProps {
    *  costo_final en silencio si la orden ya tiene cobros o si el costo fue
    *  editado a mano. */
   costoFinal: number | null
+  /** total_cobrado de la orden. Se muestra en el banner de "Aplicar al total"
+   *  y en su confirmación: el backend (PUT /api/ordenes/[id]) rechaza bajar
+   *  costo_final por debajo de este monto, así que el operador tiene que ver
+   *  el número antes de disparar el pedido. */
+  totalCobrado: number
   /** Puede devolver una promesa: el llamador espera a que el refetch del
    *  padre termine antes de reactivar los controles, para evitar la ventana
    *  en la que el panel muestra "sin servicios" mientras el padre aun no
@@ -34,7 +39,7 @@ interface OrdenServiciosTabProps {
   onServiciosChanged: () => void | Promise<void>
 }
 
-export function OrdenServiciosTab({ ordenId, servicios, costoFinal, onServiciosChanged }: OrdenServiciosTabProps) {
+export function OrdenServiciosTab({ ordenId, servicios, costoFinal, totalCobrado, onServiciosChanged }: OrdenServiciosTabProps) {
   const { formatPrice } = useCurrency()
   const { confirm, alert } = useModal()
   const [showAddServicio, setShowAddServicio] = useState(false)
@@ -180,6 +185,17 @@ export function OrdenServiciosTab({ ordenId, servicios, costoFinal, onServiciosC
   }
 
   const handleAplicarAlTotal = async () => {
+    const confirmed = await confirm({
+      title: "Aplicar al total",
+      description:
+        totalCobrado > 0
+          ? `El costo final va a pasar a ${formatPrice(subtotalServicios)}. Esta orden ya tiene ${formatPrice(totalCobrado)} cobrados.`
+          : `El costo final va a pasar a ${formatPrice(subtotalServicios)}.`,
+      confirmText: "Aplicar",
+      variant: totalCobrado > 0 ? "warning" : "info",
+    })
+    if (!confirmed) return
+
     setUpdating(true)
     try {
       const res = await fetch(`/api/ordenes/${ordenId}`, {
@@ -216,8 +232,9 @@ export function OrdenServiciosTab({ ordenId, servicios, costoFinal, onServiciosC
   // feature, asi que no hay nada que ofrecer reconciliar sin que el usuario
   // haya tocado esta tab. Pero ese mismo guard esconde el aviso justo cuando
   // hace falta: si se borra la ultima linea de una orden con cobros (o con el
-  // costo editado a mano), el backend no puede sincronizar costo_final, la
-  // orden queda en 0 lineas con un costo desactualizado, y sin
+  // costo editado a mano, o ya en REPARADO o un estado de entrega — ver
+  // ESTADOS_COSTO_FINAL_BLOQUEADO), el backend no puede sincronizar
+  // costo_final, la orden queda en 0 lineas con un costo desactualizado, y sin
   // costoFinalNoSincronizado el aviso nunca aparece.
   //
   // Por eso se combina con OR: costoFinalNoSincronizado solo se enciende
@@ -251,6 +268,7 @@ export function OrdenServiciosTab({ ordenId, servicios, costoFinal, onServiciosC
               <div className="font-medium mb-1">El costo final no coincide con el subtotal de servicios</div>
               <div>
                 Subtotal Servicios: {formatPrice(subtotalServicios)} — Costo final actual: {formatPrice(costoFinalNum)}
+                {totalCobrado > 0 && <> — Cobrado: {formatPrice(totalCobrado)}</>}
               </div>
             </div>
             <Button size="sm" variant="outline" className="shrink-0 bg-background" disabled={updating} onClick={handleAplicarAlTotal}>

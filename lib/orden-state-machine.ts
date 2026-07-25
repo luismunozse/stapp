@@ -117,6 +117,17 @@ export const ESTADOS_ENTREGA: EstadoOrden[] = [
 ]
 
 /**
+ * Estados en los que costo_final ya cruzó el gate de CAMPOS_REQUERIDOS_POR_ESTADO
+ * (ver REPARADO más arriba: exige costo_final > 0 para entrar) y por lo tanto no
+ * puede volver a quedar en null/0: la comisión del técnico (monto_comision =
+ * (costo_final - repuestos) * pct/100, migración 119), la cuenta corriente y la
+ * entrega ya asumen que hay un precio cargado. REPARADO es el propio gate;
+ * ESTADOS_ENTREGA son los estados terminales de entrega, siempre al mismo nivel
+ * o más allá en el flujo de reparación.
+ */
+export const ESTADOS_COSTO_FINAL_BLOQUEADO: EstadoOrden[] = ["REPARADO", ...ESTADOS_ENTREGA]
+
+/**
  * Deriva el estado de entrega a partir del estado actual y si la entrega es sin
  * cobro. Es la única fuente que traduce (estado, sinCobro) -> estado de entrega:
  * - sin cobro -> ENTREGADO_SIN_COBRO (tiene prioridad sobre el retiro)

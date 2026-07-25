@@ -328,6 +328,36 @@ describe("DELETE /api/ordenes/[id]/servicios", () => {
     )
   })
 
+  it("no vacía costo_final al eliminar la última línea si la orden ya está en REPARADO", async () => {
+    const ordenChain = createChainMock({
+      id: "ord-1", costo_final: 25000, total_cobrado: 0, estado: "REPARADO", organization_id: "org-1",
+    })
+    const lineasChain = createChainMock([
+      { id: "lin-1", cantidad: 1, precio_unitario: 25000 },
+    ])
+    const deleteChain = createChainMock(null)
+
+    let n = 0
+    vi.mocked(
+      (await import("@/lib/supabase")).supabaseAdmin.from
+    ).mockImplementation((tabla: string) => {
+      if (tabla === "ordenes_servicio") return ordenChain as any
+      if (tabla === "servicios_orden") { n += 1; return (n === 1 ? lineasChain : deleteChain) as any }
+      return createChainMock(null) as any
+    })
+
+    const res = await DELETE(
+      createDeleteRequest("http://localhost:3000/api/test?servicioOrdenId=lin-1"),
+      params("ord-1")
+    )
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    expect(body.costoFinalActualizado).toBe(false)
+    expect(body.sumaServicios).toBe(0)
+    expect(ordenChain.update).not.toHaveBeenCalled()
+  })
+
   it("sin servicioOrdenId en el query devuelve 400", async () => {
     mockSupabaseFrom({
       ordenes_servicio: createChainMock({

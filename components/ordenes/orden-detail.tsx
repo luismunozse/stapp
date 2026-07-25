@@ -983,12 +983,15 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             </TabsContent>
 
             <TabsContent value="servicios" className="mt-4">
-              <OrdenServiciosTab
-                ordenId={ordenId}
-                servicios={(orden as any).servicios || []}
-                costoFinal={orden.costoFinal ?? null}
-                onServiciosChanged={fetchOrden}
-              />
+              {isAdmin && (
+                <OrdenServiciosTab
+                  ordenId={ordenId}
+                  servicios={(orden as any).servicios || []}
+                  costoFinal={orden.costoFinal ?? null}
+                  totalCobrado={orden.totalCobrado || 0}
+                  onServiciosChanged={fetchOrden}
+                />
+              )}
             </TabsContent>
 
             <TabsContent value="fotos" className="mt-4">

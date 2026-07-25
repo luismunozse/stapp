@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { calcularCostoFinalSincronizado } from "@/lib/servicios/sincronizar-costo-final"
+import { ESTADOS_COSTO_FINAL_BLOQUEADO } from "@/lib/orden-state-machine"
 import { z } from "zod"
 
 const lineaSchema = z.discriminatedUnion("tipo", [
@@ -52,6 +53,19 @@ async function sincronizarCostoFinal(orden: any, sumaAnterior: number, sumaNueva
 
   if (!decision.debeActualizar) return false
 
+  // La orden ya cruzó el gate de costo_final de REPARADO (ver
+  // ESTADOS_COSTO_FINAL_BLOQUEADO): no lo dejamos en null/0 en automático aunque
+  // la regla de sincronización lo pida, porque ahí ya es la base de la comisión
+  // del técnico y del saldo pendiente. Igual que cuando hay cobros o el costo
+  // fue editado a mano, el desajuste queda visible vía costoFinalActualizado:false
+  // en el banner de "Aplicar al total" (que ahora lo va a rechazar también).
+  if (
+    (decision.nuevoCostoFinal === null || decision.nuevoCostoFinal === 0) &&
+    ESTADOS_COSTO_FINAL_BLOQUEADO.includes(orden.estado)
+  ) {
+    return false
+  }
+
   const { error } = await supabaseAdmin
     .from("ordenes_servicio")
     .update({ costo_final: decision.nuevoCostoFinal })
@@ -67,7 +81,7 @@ async function sincronizarCostoFinal(orden: any, sumaAnterior: number, sumaNueva
 async function cargarOrden(ordenId: string, organizationId: string) {
   const { data } = await supabaseAdmin
     .from("ordenes_servicio")
-    .select("id, costo_final, total_cobrado, organization_id")
+    .select("id, costo_final, total_cobrado, estado, organization_id")
     .eq("id", ordenId)
     .eq("organization_id", organizationId)
     .single()
