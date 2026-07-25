@@ -195,6 +195,7 @@ describe("POST /api/ordenes/[id]/servicios", () => {
     expect(insertChain.insert).toHaveBeenCalledWith(
       expect.objectContaining({ precio_unitario: 20000 })
     )
+    expect(servicioChain.eq).toHaveBeenCalledWith("organization_id", "org-1")
   })
 
   it("tipo catalogo con servicioId de otra organizacion devuelve 404", async () => {
@@ -218,6 +219,7 @@ describe("POST /api/ordenes/[id]/servicios", () => {
     const { status } = await parseResponse(res)
 
     expect(status).toBe(404)
+    expect(servicioChain.eq).toHaveBeenCalledWith("organization_id", "org-1")
   })
 })
 
