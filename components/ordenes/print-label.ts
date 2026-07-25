@@ -357,15 +357,28 @@ async function printHtmlViaIframe(html: string): Promise<void> {
   }
 
   // Disparar triggerPrint() una sola vez, sea porque onload llego a tiempo o
-  // porque se agoto el timeout y se decide seguir igual. `printed` evita que
-  // un onload tardio (despues de que el timeout ya disparo triggerPrint())
-  // dispare una segunda impresion.
+  // porque se agoto el timeout y se decide seguir igual.
+  //
+  // `printing` cachea la promesa del PRIMER disparo, y runOnce() devuelve esa
+  // misma promesa en cualquier llamada posterior. Los dos usos importan:
+  //  - una sola impresion fisica por etiqueta (nunca dos print()), y
+  //  - el `.then(resolve, reject)` de la segunda llamada observa el resultado
+  //    del print que YA esta en vuelo.
+  // Devolver ahi una promesa nueva (Promise.resolve()) cerraria el promise
+  // externo en el microtask siguiente, sin relacion con el print real: el
+  // caso concreto es un onload tardio que llega despues de que el timeout ya
+  // arranco triggerPrint() y mientras su espera de imagenes sigue pendiente.
+  // Eso resolveria printDeviceLabel antes de que se haya disparado el
+  // print(), y el loop secuencial arrancaria la etiqueta siguiente con la
+  // anterior en vuelo -- exactamente el pisado de dialogos que se quiere
+  // evitar --, y ademas un reject posterior del print en vuelo caeria sobre
+  // un promise ya cerrado y se perderia en silencio (el operador veria un
+  // contador de etiquetas impresas mas alto que el real).
   await new Promise<void>((resolve, reject) => {
-    let printed = false
-    const runOnce = () => {
-      if (printed) return Promise.resolve()
-      printed = true
-      return triggerPrint()
+    let printing: Promise<void> | null = null
+    const runOnce = (): Promise<void> => {
+      if (!printing) printing = triggerPrint()
+      return printing
     }
 
     const timer = setTimeout(() => {
