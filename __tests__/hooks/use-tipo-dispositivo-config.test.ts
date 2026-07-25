@@ -31,6 +31,9 @@ describe("useTipoDispositivoConfig", () => {
     const { result } = renderHook(() => useTipoDispositivoConfig(tipos as any, "CONSOLA"))
     expect(result.current.showImei).toBe(false)
     expect(result.current.showMarca).toBe(false)
+    // password y color no vienen en el config de CONSOLA: por defecto deben ser visibles
+    expect(result.current.showPassword).toBe(true)
+    expect(result.current.showColor).toBe(true)
   })
 
   it("cae al FALLBACK_CONFIG cuando el tipo tiene config vacio", () => {
