@@ -54,7 +54,14 @@ import { FotoGallery } from "@/components/fotos/foto-gallery"
 import { ChecklistCard } from "@/components/checklist/checklist-card"
 import { WhatsAppDialog } from "@/components/ordenes/whatsapp-dialog"
 import { EntregaDialog } from "@/components/ordenes/entrega-dialog"
-import { printDeviceLabel } from "@/components/ordenes/print-label"
+import {
+  printDeviceLabel,
+  readEtiquetaSize,
+  saveEtiquetaSize,
+  LABEL_SIZE_OPTIONS,
+  DEFAULT_LABEL_SIZE,
+  type LabelSize,
+} from "@/components/ordenes/print-label"
 import { ThermalPrintOrden } from "@/components/ordenes/thermal-print-orden"
 import { NotificationHistory } from "@/components/ordenes/notification-history"
 import { OrdenEstadoCard } from "@/components/ordenes/orden-estado-card"
@@ -112,6 +119,11 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
   const [showReparadoDialog, setShowReparadoDialog] = useState(false)
   const [showNCDialog, setShowNCDialog] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
+  const [etiquetaSize, setEtiquetaSize] = useState<LabelSize>(DEFAULT_LABEL_SIZE)
+
+  useEffect(() => {
+    setEtiquetaSize(readEtiquetaSize())
+  }, [])
 
   const isAdmin = session?.user?.role === "ADMIN"
   const userRole = session?.user?.role
@@ -670,6 +682,22 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             {printingPdf ? "..." : "Imprimir"}
           </Button>
           <ThermalPrintOrden orden={orden as any} />
+          <select
+            value={etiquetaSize}
+            onChange={(e) => {
+              const s = e.target.value as LabelSize
+              setEtiquetaSize(s)
+              saveEtiquetaSize(s)
+            }}
+            className="h-9 rounded-md border bg-background px-2 text-xs"
+            title="Tamaño de etiqueta (térmica): elegí según tu impresora"
+          >
+            {LABEL_SIZE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
           <Button
             variant="outline"
             size="sm"
@@ -687,7 +715,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                 fechaIngreso: fecha,
                 publicToken: orden.publicToken,
                 organizationName: undefined,
-              }, baseUrl)
+              }, baseUrl, { size: etiquetaSize })
             }}
             title="Imprimir etiqueta para el equipo"
           >
@@ -714,7 +742,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                   organizationName: undefined,
                   variant: "reparado",
                   fechaReparacion: fechaRep,
-                }, baseUrl)
+                }, baseUrl, { size: etiquetaSize })
               }}
               title="Imprimir etiqueta de reparado para pegar en el equipo"
             >
