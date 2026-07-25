@@ -21,12 +21,13 @@ import { UpgradeModal } from "@/components/billing/upgrade-modal"
 import { usePlanLimitError } from "@/lib/hooks/use-plan-limit-error"
 import { compressImage } from "@/lib/image-compression"
 import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
+import { useTipoDispositivoConfig } from "@/hooks/use-tipo-dispositivo-config"
 import { useTerminologia } from "@/contexts/currency-context"
 import { SignaturePad } from "@/components/firma/signature-pad"
 import { useOffline } from "@/contexts/offline-context"
 import { useModal } from "@/contexts/modal-context"
 import { STORES } from "@/lib/offline/constants"
-import type { Cliente, TipoDispositivoConfig, CampoExtra } from "@/types"
+import type { Cliente, CampoExtra } from "@/types"
 import { isValidImei, sanitizeImei } from "@/lib/imei"
 import { parseMoneyInput } from "@/lib/parse-money"
 
@@ -35,31 +36,6 @@ interface FotoPreview {
   preview: string
   file?: File
   descripcion: string
-}
-
-// Fallback config for types without config in DB
-const FALLBACK_CONFIG: TipoDispositivoConfig = {
-  campos: {
-    imei: { visible: true, label: "Numero de Serie", placeholder: "S/N del equipo" },
-    password: { visible: true },
-    color: { visible: true },
-    marca: { visible: true },
-  },
-  camposExtra: [],
-  accesorios: [
-    { id: "cable_poder", label: "Cable de poder" },
-    { id: "cargador", label: "Cargador/Fuente" },
-    { id: "cable_datos", label: "Cable de datos" },
-    { id: "control_remoto", label: "Control remoto" },
-    { id: "manual", label: "Manual" },
-    { id: "caja_original", label: "Caja original" },
-  ],
-  problemasComunes: [
-    "No enciende", "No funciona correctamente", "Hace ruido extrano",
-    "Se apaga solo", "Error en pantalla/display", "No conecta a red/WiFi",
-    "Mantenimiento preventivo", "Revision general",
-  ],
-  marcas: [],
 }
 
 const ordenSchema = z.object({
@@ -254,24 +230,24 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialClienteId])
 
-  // Get the selected tipo object and its config
+  // Get the selected tipo object (used below for the checklist template fetch by id)
   const tipoSeleccionado = useMemo(
     () => tiposDispositivo.find((t) => t.codigo === tipoDispositivo),
     [tiposDispositivo, tipoDispositivo]
   )
-  const config: TipoDispositivoConfig = tipoSeleccionado?.config && Object.keys(tipoSeleccionado.config).length > 0
-    ? tipoSeleccionado.config
-    : FALLBACK_CONFIG
 
-  // Derived from config
-  const accesoriosDisponibles = config.accesorios || FALLBACK_CONFIG.accesorios!
-  const problemasComunes = config.problemasComunes || FALLBACK_CONFIG.problemasComunes!
-  const marcasDisponibles = config.marcas || []
-  const camposExtra = config.camposExtra || []
-  const showImei = config.campos?.imei?.visible !== false
-  const showPassword = config.campos?.password?.visible !== false
-  const showColor = config.campos?.color?.visible !== false
-  const showMarca = config.campos?.marca?.visible !== false
+  // Get the selected tipo's effective config and its derived fields
+  const {
+    config,
+    accesoriosDisponibles,
+    problemasComunes,
+    marcasDisponibles,
+    camposExtra,
+    showImei,
+    showPassword,
+    showColor,
+    showMarca,
+  } = useTipoDispositivoConfig(tiposDispositivo, tipoDispositivo)
   const imeiLabel = config.campos?.imei?.label || "Numero de Serie"
   const imeiPlaceholder = config.campos?.imei?.placeholder || "S/N del equipo"
   const imeiMaxLength = config.campos?.imei?.maxLength
