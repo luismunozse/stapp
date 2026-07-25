@@ -18,6 +18,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, fireEvent } from "@testing-library/react"
 import { ModalProvider } from "@/contexts/modal-context"
 
+// RecepcionForm llama useRouter() (Task 11, para navegar a /ordenes al
+// cerrar el modal de exito) incondicionalmente en el cuerpo del componente.
+// next/navigation tira "invariant expected app router to be mounted" sin un
+// AppRouterContext real, y este test monta el componente fuera de uno.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}))
+
 vi.mock("@/hooks/use-tipos-dispositivo", () => ({
   useTiposDispositivo: () => ({
     tipos: [

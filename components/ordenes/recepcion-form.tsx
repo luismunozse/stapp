@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -23,6 +24,7 @@ import { FALLBACK_CONFIG } from "@/lib/tipos-dispositivo-defaults"
 import type { Cliente, CampoExtra, AccesorioConfig, TipoDispositivoCustom } from "@/types"
 import type { FotoPreview } from "./fotos-ingreso"
 import { RecepcionEquipoCard, equipoFormSchema, type EquipoFormValues } from "./recepcion-equipo-card"
+import { RecepcionCreadaModal, type EquipoRecepcionEnviado } from "./recepcion-creada-modal"
 
 const recepcionFormSchema = z.object({
   clienteId: z.string().min(1, "Elegi el cliente"),
@@ -155,6 +157,7 @@ interface RecepcionCreadaResultado {
 
 export function RecepcionForm() {
   const term = useTerminologia()
+  const router = useRouter()
   const { offlineFetch } = useOffline()
   const { showError, showInfo } = useModal()
   const { tipos: tiposDispositivo, loading: tiposLoading } = useTiposDispositivo()
@@ -166,9 +169,14 @@ export function RecepcionForm() {
   const [submitting, setSubmitting] = useState(false)
   const [comprimiendo, setComprimiendo] = useState(false)
 
-  // Al tener valor, el paso siguiente (Task 11) abre RecepcionCreadaModal con
-  // este resultado. Ver el seam marcado mas abajo, despues del submit.
+  // Al tener valor, se abre RecepcionCreadaModal con este resultado. Ver el
+  // seam mas abajo, despues del submit.
   const [resultado, setResultado] = useState<RecepcionCreadaResultado | null>(null)
+  // Datos por equipo tal como se enviaron en el submit -- POST /api/recepciones
+  // no los devuelve en su respuesta, asi que el modal de exito (etiquetas +
+  // comprobante) los necesita aparte. Alineado por indice con
+  // resultado.ordenes.
+  const [equiposEnviados, setEquiposEnviados] = useState<EquipoRecepcionEnviado[]>([])
 
   const {
     control,
@@ -343,6 +351,12 @@ export function RecepcionForm() {
     }
     setSubmitting(true)
     try {
+      // El armado de cada equipo (labels de accesorios, split de foto
+      // base64, etc.) vive en construirEquipoPayload -- funcion pura,
+      // testeada aparte en __tests__/components/recepcion-payload.test.ts.
+      const equiposPayload = data.equipos.map((equipo, i) =>
+        construirEquipoPayload(equipo, sideState[i], tiposDispositivo)
+      )
       const payload = {
         clienteId: data.clienteId,
         telefonoContacto: data.telefonoContacto || undefined,
@@ -350,12 +364,7 @@ export function RecepcionForm() {
         firmaCliente: firma || undefined,
         firmaMime: firmaMime || undefined,
         terminosAceptados,
-        // El armado de cada equipo (labels de accesorios, split de foto
-        // base64, etc.) vive en construirEquipoPayload -- funcion pura,
-        // testeada aparte en __tests__/components/recepcion-payload.test.ts.
-        equipos: data.equipos.map((equipo, i) =>
-          construirEquipoPayload(equipo, sideState[i], tiposDispositivo)
-        ),
+        equipos: equiposPayload,
       }
 
       const res = await offlineFetch(
@@ -383,9 +392,22 @@ export function RecepcionForm() {
       }
 
       const creada: RecepcionCreadaResultado = await res.json()
-      // Seam para Task 11: al setear `resultado`, RecepcionCreadaModal se
-      // abre con { recepcion, ordenes } y desde ahi salen impresion,
-      // etiquetas y WhatsApp agrupado. Nada de eso se construye aca.
+      // Snapshot de lo enviado: problemaReportado/tipoDispositivo/marca/
+      // accesorios no vuelven en la respuesta del endpoint (a diferencia de
+      // POST /api/ordenes), asi que el modal los necesita de aca, alineados
+      // por indice con creada.ordenes.
+      setEquiposEnviados(
+        equiposPayload.map((equipo) => ({
+          problemaReportado: equipo.problemaReportado,
+          tipoDispositivo: equipo.tipoDispositivo,
+          marca: equipo.marca || null,
+          color: equipo.color || null,
+          accesorios: equipo.accesorios ?? null,
+        }))
+      )
+      // Al setear `resultado`, RecepcionCreadaModal se abre con
+      // { recepcion, ordenes } y desde ahi salen impresion, etiquetas y
+      // WhatsApp agrupado.
       setResultado(creada)
     } catch (error) {
       console.error("Error creando recepcion:", error)
@@ -508,10 +530,21 @@ export function RecepcionForm() {
         </form>
 
         {resultado && (
-          // Seam para Task 11: aca va <RecepcionCreadaModal open resultado={resultado}
-          // onClose={() => setResultado(null)} /> con impresion, etiquetas y
-          // WhatsApp agrupado. No se implementa en este task a proposito.
-          null
+          <RecepcionCreadaModal
+            open
+            resultado={resultado}
+            equipos={equiposEnviados}
+            cliente={{
+              nombre: selectedCliente?.nombre || "",
+              telefono: watch("telefonoContacto") || selectedCliente?.telefono || "",
+            }}
+            firma={firma}
+            firmaMime={firmaMime}
+            onClose={() => {
+              setResultado(null)
+              router.push("/ordenes")
+            }}
+          />
         )}
       </CardContent>
     </Card>
