@@ -104,15 +104,13 @@ export async function POST(
       if (catalogoError) console.error("Error guardando en catalogo:", catalogoError)
     }
 
+    // El DTO se arma con la fila que devuelve el RPC (persistida), no con las
+    // variables locales del request: precio_unitario es DECIMAL(10,2) y
+    // Postgres redondea al guardar, asi que el request y la fila pueden
+    // divergir en los decimales (ver comentario en agregar_servicio_orden).
     return NextResponse.json(
       {
-        servicio: lineaDTO({
-          id: result.id,
-          servicio_id: servicioId,
-          nombre,
-          cantidad: parsed.cantidad,
-          precio_unitario: precioUnitario,
-        }),
+        servicio: lineaDTO(result),
         costoFinalActualizado: result.costoFinalActualizado,
         sumaServicios: result.sumaServicios,
       },

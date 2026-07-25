@@ -36,7 +36,10 @@ describe("POST /api/ordenes/[id]/servicios", () => {
   })
 
   it("agrega una linea ad-hoc y autocompleta costo_final", async () => {
-    mockRpc({ success: true, id: "lin-1", costoFinalActualizado: true, sumaServicios: 25000 })
+    mockRpc({
+      success: true, id: "lin-1", servicio_id: null, nombre: "Instalacion de Windows",
+      cantidad: 1, precio_unitario: 25000, costoFinalActualizado: true, sumaServicios: 25000,
+    })
 
     const res = await POST(
       createPostRequest({ tipo: "manual", nombre: "Instalacion de Windows", cantidad: 1, precioUnitario: 25000 }),
@@ -60,8 +63,39 @@ describe("POST /api/ordenes/[id]/servicios", () => {
     )
   })
 
-  it("no toca costo_final si la orden ya tiene cobros", async () => {
-    mockRpc({ success: true, id: "lin-1", costoFinalActualizado: false, sumaServicios: 15000 })
+  it("el servicio devuelto refleja la fila persistida por el RPC, no el precio enviado en el request", async () => {
+    // El RPC devuelve precio_unitario tal como quedo en la columna DECIMAL(10,2)
+    // (Postgres redondea al guardar), y la ruta debe construir la respuesta con
+    // ESE valor, no con el que mando el cliente. Mockeamos un mismatch
+    // deliberado (100.999 enviado vs. 101 persistido) para probarlo: si la ruta
+    // volviera a construir el DTO con las variables locales del request (el bug
+    // de Finding 3), este test fallaria con precioUnitario: 100.999.
+    mockRpc({
+      success: true, id: "lin-2", servicio_id: null, nombre: "Ajuste",
+      cantidad: 1, precio_unitario: 101, costoFinalActualizado: true, sumaServicios: 101,
+    })
+
+    const res = await POST(
+      createPostRequest({ tipo: "manual", nombre: "Ajuste", cantidad: 1, precioUnitario: 100.999 }),
+      params("ord-1")
+    )
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(201)
+    expect(body.servicio).toEqual({
+      id: "lin-2", servicioId: null, nombre: "Ajuste", cantidad: 1, precioUnitario: 101,
+    })
+  })
+
+  it("relaya costoFinalActualizado=false del RPC cuando la orden ya tiene cobros", async () => {
+    // La regla real (bloquear cuando total_cobrado > 0) vive en la migracion
+    // 280 (SQL) y no es alcanzable a traves de un supabaseAdmin.rpc mockeado.
+    // Esta cubierta por PROBE 3 de supabase/migrations/verify/280_probes.sql.
+    // Este test solo verifica que la ruta relaya fielmente el veredicto del RPC.
+    mockRpc({
+      success: true, id: "lin-1", servicio_id: null, nombre: "Extra",
+      cantidad: 1, precio_unitario: 5000, costoFinalActualizado: false, sumaServicios: 15000,
+    })
 
     const res = await POST(
       createPostRequest({ tipo: "manual", nombre: "Extra", cantidad: 1, precioUnitario: 5000 }),
@@ -109,7 +143,10 @@ describe("POST /api/ordenes/[id]/servicios", () => {
       id: "srv-9", nombre: "Cambio de pantalla", precio: 15000,
     })
     mockSupabaseFrom({ servicios: servicioChain })
-    mockRpc({ success: true, id: "lin-1", costoFinalActualizado: true, sumaServicios: 15000 })
+    mockRpc({
+      success: true, id: "lin-1", servicio_id: "srv-9", nombre: "Cambio de pantalla",
+      cantidad: 1, precio_unitario: 15000, costoFinalActualizado: true, sumaServicios: 15000,
+    })
 
     const res = await POST(
       createPostRequest({ tipo: "catalogo", servicioId: "srv-9", cantidad: 1 }),
@@ -130,7 +167,10 @@ describe("POST /api/ordenes/[id]/servicios", () => {
       id: "srv-9", nombre: "Cambio de pantalla", precio: 15000,
     })
     mockSupabaseFrom({ servicios: servicioChain })
-    mockRpc({ success: true, id: "lin-1", costoFinalActualizado: true, sumaServicios: 20000 })
+    mockRpc({
+      success: true, id: "lin-1", servicio_id: "srv-9", nombre: "Cambio de pantalla",
+      cantidad: 1, precio_unitario: 20000, costoFinalActualizado: true, sumaServicios: 20000,
+    })
 
     const res = await POST(
       createPostRequest({ tipo: "catalogo", servicioId: "srv-9", cantidad: 1, precioUnitario: 20000 }),
@@ -186,7 +226,10 @@ describe("DELETE /api/ordenes/[id]/servicios", () => {
     )
   })
 
-  it("no toca costo_final si la orden ya tiene cobros", async () => {
+  it("relaya costoFinalActualizado=false del RPC cuando la orden ya tiene cobros", async () => {
+    // Misma razon que la variante POST de este nombre: la regla real vive en
+    // la migracion 280 (SQL, PROBE 3 de 280_probes.sql) y no es alcanzable a
+    // traves de un mock de supabaseAdmin.rpc. Esto solo prueba el relay.
     mockRpc({ success: true, costoFinalActualizado: false, sumaServicios: 30000 })
 
     const res = await DELETE(
@@ -203,7 +246,11 @@ describe("DELETE /api/ordenes/[id]/servicios", () => {
     )
   })
 
-  it("al eliminar la ultima linea deja costo_final en null", async () => {
+  it("relaya costoFinalActualizado=true y sumaServicios=0 del RPC al eliminar la ultima linea", async () => {
+    // El NULL (no 0) que realmente queda en costo_final lo decide y persiste el
+    // RPC (SQL); esta cubierto por PROBE 4 de supabase/migrations/verify/280_probes.sql,
+    // que si puede leer el valor final de la columna. Este test solo prueba
+    // que la ruta relaya el veredicto del RPC mockeado sin alterarlo.
     mockRpc({ success: true, costoFinalActualizado: true, sumaServicios: 0 })
 
     const res = await DELETE(
@@ -221,11 +268,11 @@ describe("DELETE /api/ordenes/[id]/servicios", () => {
     )
   })
 
-  it("no vacía costo_final al eliminar la última línea si la orden ya está en REPARADO", async () => {
-    // El STATE GUARD que decide esto ahora vive en la migracion 280 (SQL), no en
-    // la ruta. Este test verifica que la ruta relaya fielmente lo que devuelve el
+  it("relaya costoFinalActualizado=false del RPC cuando la orden esta en REPARADO", async () => {
+    // El STATE GUARD que decide esto vive en la migracion 280 (SQL), no en la
+    // ruta. Este test verifica que la ruta relaya fielmente lo que devuelve el
     // RPC; el comportamiento del guard en si esta cubierto por
-    // supabase/migrations/verify/280_probes.sql (PROBE 4).
+    // supabase/migrations/verify/280_probes.sql (PROBE 5).
     mockRpc({ success: true, costoFinalActualizado: false, sumaServicios: 0 })
 
     const res = await DELETE(

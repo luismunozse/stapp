@@ -63,6 +63,10 @@ DECLARE
   v_suma_anterior NUMERIC;
   v_suma_nueva NUMERIC;
   v_linea_id TEXT;
+  v_linea_servicio_id TEXT;
+  v_linea_nombre TEXT;
+  v_linea_cantidad INTEGER;
+  v_linea_precio_unitario NUMERIC;
   v_nuevo_costo_final NUMERIC;
   v_costo_final_actualizado BOOLEAN := FALSE;
 BEGIN
@@ -84,9 +88,15 @@ BEGIN
   FROM servicios_orden
   WHERE orden_id = p_orden_id;
 
+  -- RETURNING captura el valor PERSISTIDO, no el parametro de entrada:
+  -- precio_unitario es DECIMAL(10,2) y Postgres redondea al guardar (ej.
+  -- 100.999 queda en 101.00). El caller (route.ts) arma la respuesta con estos
+  -- valores, no con los que mando en el request, para que la linea devuelta
+  -- describa lo que realmente quedo en la fila.
   INSERT INTO servicios_orden (orden_id, servicio_id, nombre, cantidad, precio_unitario)
   VALUES (p_orden_id, p_servicio_id, p_nombre, p_cantidad, p_precio_unitario)
-  RETURNING id INTO v_linea_id;
+  RETURNING id, servicio_id, nombre, cantidad, precio_unitario
+  INTO v_linea_id, v_linea_servicio_id, v_linea_nombre, v_linea_cantidad, v_linea_precio_unitario;
 
   v_suma_nueva := ROUND(v_suma_anterior + (p_cantidad * p_precio_unitario), 2);
 
@@ -120,6 +130,10 @@ BEGIN
   RETURN json_build_object(
     'success', true,
     'id', v_linea_id,
+    'servicio_id', v_linea_servicio_id,
+    'nombre', v_linea_nombre,
+    'cantidad', v_linea_cantidad,
+    'precio_unitario', v_linea_precio_unitario,
     'costoFinalActualizado', v_costo_final_actualizado,
     'sumaServicios', v_suma_nueva
   );
@@ -127,7 +141,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION agregar_servicio_orden(TEXT, TEXT, TEXT, TEXT, INTEGER, NUMERIC) IS
-  'Inserta una linea en servicios_orden y sincroniza costo_final atomicamente (FOR UPDATE sobre la orden). Espejo obligatorio de calcularCostoFinalSincronizado en lib/servicios/sincronizar-costo-final.ts y de ESTADOS_COSTO_FINAL_BLOQUEADO en lib/orden-state-machine.ts: ver comentario de acoplamiento al inicio de esta migracion (280).';
+  'Inserta una linea en servicios_orden y sincroniza costo_final atomicamente (FOR UPDATE sobre la orden). Devuelve la fila persistida (servicio_id/nombre/cantidad/precio_unitario) para que el caller no reconstruya la respuesta a partir del request. Espejo obligatorio de calcularCostoFinalSincronizado en lib/servicios/sincronizar-costo-final.ts y de ESTADOS_COSTO_FINAL_BLOQUEADO en lib/orden-state-machine.ts: ver comentario de acoplamiento al inicio de esta migracion (280).';
 
 CREATE OR REPLACE FUNCTION eliminar_servicio_orden(
   p_orden_id TEXT,
