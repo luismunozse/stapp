@@ -13,7 +13,9 @@ const nextConfig = {
     NEXT_PUBLIC_BUILD_ID: BUILD_ID,
   },
   generateBuildId: () => BUILD_ID,
-  serverExternalPackages: [],
+  // firebase-admin uses dynamic requires and optional native gRPC deps that the
+  // bundler cannot trace. Keep it external so it is resolved at runtime instead.
+  serverExternalPackages: ['firebase-admin'],
   outputFileTracingIncludes: {
     '/api/**': ['./lib/fonts/**/*'],
   },
