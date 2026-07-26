@@ -21,8 +21,17 @@ export default defineConfig({
     exclude: ['node_modules', '.next', 'dist', 'e2e', '.claude/**'],
     deps: {
       optimizer: {
-        web: {
+        // Vitest 4 usa las claves "client"/"ssr" (la clave vieja "web" es
+        // config muerta y se ignora en silencio).
+        client: {
+          enabled: true,
           exclude: ['firebase-admin', 'web-push'],
+          // react-day-picker v9 arrastra un grafo de ~950 modulos ESM chicos
+          // (incluye una copia anidada de date-fns@4 completa via su barrel).
+          // Sin prebundle, Node resuelve ~2000 specifiers por worker (~1.2ms
+          // c/u en Windows) y montar OrdenForm cuesta ~6s de puro import de
+          // ui/date-picker. esbuild los colapsa a un bundle cacheado.
+          include: ['react-day-picker', 'date-fns', 'date-fns/locale'],
         },
       },
     },
