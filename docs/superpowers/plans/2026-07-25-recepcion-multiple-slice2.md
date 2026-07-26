@@ -8,19 +8,19 @@
 
 **Tech Stack:** Next.js App Router, TypeScript, Supabase (Postgres + plpgsql), react-hook-form + zod, Vitest.
 
-**Depende de:** Slice 1 (`feat/recepcion-multiple`) mergeado y sus migraciones 277 y 278 aplicadas.
+**Depende de:** Slice 1 (`feat/recepcion-multiple`) mergeado y sus migraciones 278 y 279 aplicadas.
 
 ## Global Constraints
 
 - **`POST /api/ordenes` y `PUT /api/ordenes/[id]` no se modifican.** El `GET` del mismo archivo sí se toca, y es el camino caliente del listado de todos los talleres: cualquier cambio ahí necesita test.
 - **La feature sigue gateada** a `profesional` y `pro` con la key `recepcion_multiple`. Las rutas nuevas chequean `hasPlanFeature` en el server; **nunca `useHasFeature`**, que no aplica overrides por organización.
 - **RLS de tablas nuevas o modificadas**: la policy de servicio va **`FOR ALL TO service_role`**, y la de lectura `FOR SELECT TO authenticated USING (organization_id = public.get_current_organization_id())`. La convención es la de `201_rls_hardening_phase1.sql`, **no** la de `274_asistente_panel.sql`, que regresionó contra ella. Un `USING(true)` sin `TO service_role` expone la tabla a la anon key, que viaja en el bundle del browser.
-- **DDL sobre `ordenes_servicio`**: dentro de `BEGIN; SET LOCAL lock_timeout = '3s';` y los índices `CONCURRENTLY` fuera de la transacción, como quedó la 277.
+- **DDL sobre `ordenes_servicio`**: dentro de `BEGIN; SET LOCAL lock_timeout = '3s';` y los índices `CONCURRENTLY` fuera de la transacción, como quedó la 278.
 - **`ordenes_servicio.tipo_dispositivo` es `TEXT`**, no enum. Sin casts.
 - **Artefactos en castellano neutro.** Comentarios consistentes con el archivo vecino.
 - **Nunca `Co-Authored-By` ni atribución de IA en los commits.** Conventional commits, sin tildes en el subject.
 - Comandos: `npx vitest run --testTimeout=30000`, `npx tsc --noEmit`, `npm run lint`.
-- **Verificar el número de migración libre** antes de crear el archivo: el último de Slice 1 es `278`.
+- **Verificar el número de migración libre** antes de crear el archivo: el último de Slice 1 es `279`.
 
 ---
 
@@ -30,7 +30,7 @@
 
 | Archivo | Responsabilidad |
 |---|---|
-| `supabase/migrations/279_recepcion_idempotencia.sql` | `idempotency_key` + índice único parcial + RPC actualizada |
+| `supabase/migrations/280_recepcion_idempotencia.sql` | `idempotency_key` + índice único parcial + RPC actualizada |
 | `app/api/recepciones/[id]/route.ts` | `GET`: el lote completo para reimprimir |
 | `components/ordenes/recepcion-reimprimir-dialog.tsx` | Dialog que trae el lote y ofrece comprobante y etiquetas |
 
@@ -221,7 +221,7 @@ git commit -m "feat(ordenes): reimprimir comprobante y etiquetas de una recepcio
 ## Task 4: Idempotencia — migración
 
 **Files:**
-- Create: `supabase/migrations/279_recepcion_idempotencia.sql`
+- Create: `supabase/migrations/280_recepcion_idempotencia.sql`
 
 **Interfaces:**
 - Produces: `recepciones.idempotency_key`, su índice único parcial, y `crear_recepcion_multiple` aceptando `p_idempotency_key` y devolviendo el lote existente en vez de duplicar.
@@ -234,7 +234,7 @@ Run: `ls supabase/migrations/ | sort -t_ -k1 -n | tail -3`
 
 ```sql
 -- ============================================================================
--- 279: idempotencia de recepcion multiple
+-- 280: idempotencia de recepcion multiple
 -- ============================================================================
 -- El replay offline reenvia el mismo body. Sin una key estable, una respuesta
 -- perdida DESPUES del commit hace que el reintento cree una segunda recepcion
@@ -289,7 +289,7 @@ No se puede ejecutar: las migraciones se aplican a mano. Verificar que el índic
 - [ ] **Step 4: Commit**
 
 ```bash
-git add supabase/migrations/279_recepcion_idempotencia.sql
+git add supabase/migrations/280_recepcion_idempotencia.sql
 git commit -m "feat(ordenes): idempotencia de recepcion multiple"
 ```
 
@@ -342,7 +342,7 @@ git commit -m "feat(ordenes): key de idempotencia por submit en la recepcion"
 - [ ] `npx vitest run --testTimeout=30000` en verde (baseline de Slice 1: 265 archivos / 1976 tests)
 - [ ] `npx tsc --noEmit` sin errores
 - [ ] `npm run lint` sin errores (baseline: 173 warnings)
-- [ ] Migración 279 aplicada a mano, con el `CREATE UNIQUE INDEX CONCURRENTLY` como statement separado
+- [ ] Migración 280 aplicada a mano, con el `CREATE UNIQUE INDEX CONCURRENTLY` como statement separado
 - [ ] Buscar `REC001` en el listado devuelve las órdenes del lote
 - [ ] Reimprimir desde el detalle de una orden del lote produce el mismo comprobante y las mismas etiquetas
 - [ ] **Prueba de duplicado**: crear una recepción en modo avión, restaurar la conexión, y confirmar que entra **una** sola

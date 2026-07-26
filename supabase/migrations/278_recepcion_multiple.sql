@@ -1,5 +1,5 @@
 -- ============================================================================
--- 277: recepción múltiple en mostrador
+-- 278: recepción múltiple en mostrador
 -- ============================================================================
 -- Un cliente deja N equipos en una sola atención: se crea una orden por equipo
 -- agrupadas bajo un comprobante de recepción con UNA firma.

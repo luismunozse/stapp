@@ -23,7 +23,7 @@
 - **No usar `gen_random_bytes` en SQL** (depende de pgcrypto, no garantizado). Los `public_token` se generan en TypeScript con `randomBytes(16).toString("hex")` y entran a la RPC como dato.
 - **No usar `useHasFeature` para gatear esta feature.** No aplica overrides por organización (ver Task 9).
 - **Artefactos en castellano neutro** para strings de UI, siguiendo el resto del panel. Comentarios de código en castellano neutro, consistente con los archivos vecinos.
-- **Verificar el número de migración libre** antes de crear el archivo: en esta branch el último es `276_foto_borrador.sql`, pero hay un `276` reservado por la branch de facturación electrónica sin mergear.
+- **Verificar el número de migración libre contra `origin/main` recién fetcheado**, y volver a chequearlo justo antes de mergear — no solo al crear el archivo. Esto pasó de verdad en esta branch: se escribió como `277`, y mientras el trabajo avanzaba `origin/main` recibió `277_trigger_recalcular_estado_cobro.sql`. Git no marca la colisión (los nombres difieren), pero las migraciones acá se aplican a mano en orden numérico. Se renumeró a `278`/`279` al cerrar.
 - Comandos: `npm test` (Vitest, watch), `npx vitest run <path>` (una sola corrida), `npm run test:e2e` (Playwright), `npx tsc --noEmit` (typecheck), `npm run lint`.
 - **Nunca agregar `Co-Authored-By` ni atribución de IA a los commits.** Conventional commits.
 
@@ -35,8 +35,8 @@
 
 | Archivo | Responsabilidad |
 |---|---|
-| `supabase/migrations/277_recepcion_multiple.sql` | Tabla `recepciones`, FK + índice parcial en `ordenes_servicio`, RLS, feature flag en planes |
-| `supabase/migrations/278_crear_recepcion_multiple.sql` | RPC transaccional |
+| `supabase/migrations/278_recepcion_multiple.sql` | Tabla `recepciones`, FK + índice parcial en `ordenes_servicio`, RLS, feature flag en planes |
+| `supabase/migrations/279_crear_recepcion_multiple.sql` | RPC transaccional |
 | `app/api/recepciones/route.ts` | `POST`: gate de plan, validación, RPC, fotos, auditoría |
 | `hooks/use-tipo-dispositivo-config.ts` | Resolución del `config` por tipo (compartido por ambos flujos) |
 | `components/ordenes/fotos-ingreso.tsx` | Captura y preview de fotos, agnóstico de RHF |
@@ -947,7 +947,7 @@ git commit -m "refactor(ordenes): extraer TipoDispositivoPicker y CamposExtraFie
 ## Task 5: Migración — tabla `recepciones`, FK, RLS y feature flag
 
 **Files:**
-- Create: `supabase/migrations/277_recepcion_multiple.sql`
+- Create: `supabase/migrations/278_recepcion_multiple.sql`
 
 **Interfaces:**
 - Produces: tabla `recepciones`; columna `ordenes_servicio.recepcion_id`; feature flag `recepcion_multiple` en los planes `profesional` y `pro`. Lo consumen Tasks 6, 7, 8 y 9.
@@ -955,15 +955,15 @@ git commit -m "refactor(ordenes): extraer TipoDispositivoPicker y CamposExtraFie
 - [ ] **Step 1: Confirmar el número de migración libre**
 
 Run: `ls supabase/migrations/ | sort -t_ -k1 -n | tail -3`
-Si `277` ya existe (por ejemplo si se mergeó la branch de facturación electrónica), usar el siguiente libre y ajustar el nombre del archivo en los pasos siguientes.
+Chequear contra `origin/main` recién fetcheado, no solo contra el estado local: en esta branch el número se tuvo que correr de `277` a `278` al cerrar, porque `origin/main` recibió un `277` mientras el trabajo estaba en curso.
 
 - [ ] **Step 2: Escribir la migración**
 
-Crear `supabase/migrations/277_recepcion_multiple.sql`:
+Crear `supabase/migrations/278_recepcion_multiple.sql`:
 
 ```sql
 -- ============================================================================
--- 277: recepción múltiple en mostrador
+-- 278: recepción múltiple en mostrador
 -- ============================================================================
 -- Un cliente deja N equipos en una sola atención: se crea una orden por equipo
 -- agrupadas bajo un comprobante de recepción con UNA firma.
@@ -1059,7 +1059,7 @@ Expected: PASS. La columna ahora existe en la base, y el flujo clásico sigue si
 - [ ] **Step 6: Commit**
 
 ```bash
-git add supabase/migrations/277_recepcion_multiple.sql
+git add supabase/migrations/278_recepcion_multiple.sql
 git commit -m "feat(ordenes): migracion de recepcion multiple (tabla, FK, RLS, flag)"
 ```
 
@@ -1068,7 +1068,7 @@ git commit -m "feat(ordenes): migracion de recepcion multiple (tabla, FK, RLS, f
 ## Task 6: RPC `crear_recepcion_multiple`
 
 **Files:**
-- Create: `supabase/migrations/278_crear_recepcion_multiple.sql`
+- Create: `supabase/migrations/279_crear_recepcion_multiple.sql`
 
 **Interfaces:**
 - Consumes: tabla `recepciones` (Task 5), función `get_next_order_number(org_id TEXT)` (`048_fix_order_counter_resilient.sql:3`)
@@ -1087,11 +1087,11 @@ git commit -m "feat(ordenes): migracion de recepcion multiple (tabla, FK, RLS, f
 
 - [ ] **Step 1: Escribir la RPC**
 
-Crear `supabase/migrations/278_crear_recepcion_multiple.sql`:
+Crear `supabase/migrations/279_crear_recepcion_multiple.sql`:
 
 ```sql
 -- ============================================================================
--- 278: RPC transaccional para la recepción múltiple
+-- 279: RPC transaccional para la recepción múltiple
 -- ============================================================================
 -- Inserta la recepción y las N órdenes en UN commit. Si cualquier insert falla
 -- (incluido el trigger update_ordenes_count cuando se excede el límite del
@@ -1253,7 +1253,7 @@ SELECT COUNT(*) FROM recepciones WHERE organization_id = '<org_id>';
 - [ ] **Step 5: Commit**
 
 ```bash
-git add supabase/migrations/278_crear_recepcion_multiple.sql
+git add supabase/migrations/279_crear_recepcion_multiple.sql
 git commit -m "feat(ordenes): RPC transaccional crear_recepcion_multiple"
 ```
 
