@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { queueNotification } from "@/lib/notifications/queue"
 import { z } from "zod"
 import { getOrderByPublicToken } from "@/lib/public-token"
+import { transicionarOrden } from "@/lib/orden-transicion"
 
 const rejectSchema = z.object({
   motivo: z.string().max(500).optional(),
@@ -32,21 +33,26 @@ export async function POST(
       )
     }
 
-    // Revertir orden a EN_DIAGNOSTICO y limpiar presupuesto
-    const { error: updateError } = await supabaseAdmin
-      .from("ordenes_servicio")
-      .update({
-        estado: "EN_DIAGNOSTICO",
+    // Reversión atómica PRESUPUESTADO -> EN_DIAGNOSTICO (guarda de concurrencia).
+    const resultado = await transicionarOrden(supabaseAdmin, {
+      ordenId: orden.id,
+      organizationId: orden.organization_id,
+      esperado: "PRESUPUESTADO",
+      nuevo: "EN_DIAGNOSTICO",
+      camposExtra: {
         presupuesto: null,
         costo_final: null,
         presupuesto_aprobado_portal: false,
         presupuesto_firma_url: null,
         presupuesto_firma_path: null,
         presupuesto_fecha_aprobacion: null,
-      })
-      .eq("id", orden.id)
+      },
+    })
 
-    if (updateError) throw updateError
+    // Idempotente: si el estado ya cambió (otro request), no dupliquemos.
+    if (!resultado.ok) {
+      return NextResponse.json({ message: "Presupuesto rechazado", estado: "EN_DIAGNOSTICO" })
+    }
 
     // Si hay cotizaciones ENVIADA vinculadas, marcarlas como RECHAZADA
     await supabaseAdmin

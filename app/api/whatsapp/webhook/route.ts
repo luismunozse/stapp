@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createHmac, timingSafeEqual } from "crypto"
 import { supabaseAdmin } from "@/lib/supabase"
+import { transicionarOrden } from "@/lib/orden-transicion"
 
 // GET: Verificación del webhook por Meta
 export async function GET(request: Request) {
@@ -194,15 +195,21 @@ async function processIncomingMessage(
 
   if (!orden) return
 
-  // Auto-aprobar
-  await supabaseAdmin
-    .from("ordenes_servicio")
-    .update({
-      estado: "APROBADO",
+  // Auto-aprobar: transición atómica PRESUPUESTADO -> APROBADO. Si la orden ya
+  // no está en ese estado (race), no-op silencioso — el bot no tiene una UX de
+  // error que mostrar, así que no emitimos evento.
+  const resultado = await transicionarOrden(supabaseAdmin, {
+    ordenId: orden.id,
+    organizationId: config.organization_id,
+    esperado: "PRESUPUESTADO",
+    nuevo: "APROBADO",
+    camposExtra: {
       presupuesto_aprobado_portal: true,
       presupuesto_fecha_aprobacion: new Date().toISOString(),
-    })
-    .eq("id", orden.id)
+    },
+  })
+
+  if (!resultado.ok) return
 
   // Registrar evento
   await supabaseAdmin.from("orden_eventos").insert({
