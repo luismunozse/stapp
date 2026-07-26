@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
+import { transicionarOrden } from "@/lib/orden-transicion"
 
 export async function POST(
   request: Request,
@@ -68,13 +69,15 @@ export async function POST(
         .single()
 
       if (orden && orden.estado === "PRESUPUESTADO") {
-        await supabaseAdmin
-          .from("ordenes_servicio")
-          .update({ estado: "EN_DIAGNOSTICO" })
-          .eq("id", cotizacion.orden_id)
+        const resultado = await transicionarOrden(supabaseAdmin, {
+          ordenId: cotizacion.orden_id,
+          organizationId: cotizacion.organization_id,
+          esperado: "PRESUPUESTADO",
+          nuevo: "EN_DIAGNOSTICO",
+        })
 
-        // Registrar evento
-        await supabaseAdmin.from("orden_eventos").insert({
+        // Registrar evento solo si la reversión se aplicó (no en race).
+        if (resultado.ok) await supabaseAdmin.from("orden_eventos").insert({
           orden_id: cotizacion.orden_id,
           organization_id: cotizacion.organization_id,
           tipo: "PRESUPUESTO_RECHAZADO",
