@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { createAuditLogger } from "@/lib/audit"
 import { transicionarOrden } from "@/lib/orden-transicion"
+import type { EstadoOrden } from "@/types"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { dateOnlyToNoonUtcISO } from "@/lib/timezone"
 import { z } from "zod"
@@ -507,24 +508,25 @@ export async function PUT(
             .is("deleted_at", null)
             .neq("estado", "RECHAZADA")
           const totalPresupuesto = (allCots || []).reduce((sum, c) => sum + Number(c.total), 0)
-          await supabaseAdmin
-            .from("ordenes_servicio")
-            .update({
-              estado: "PRESUPUESTADO",
-              presupuesto: totalPresupuesto,
-              costo_final: totalPresupuesto,
-            })
-            .eq("id", ordenActual.id)
-
-          await supabaseAdmin.from("orden_eventos").insert({
-            orden_id: ordenActual.id,
-            organization_id: organizationId,
-            tipo: "CAMBIO_ESTADO",
-            estado_anterior: estadoAnterior,
-            estado_nuevo: "PRESUPUESTADO",
-            descripcion: "Cotización compartida con el cliente",
-            metadata: { cotizacionId: id },
+          const resultado = await transicionarOrden(supabaseAdmin, {
+            ordenId: ordenActual.id,
+            organizationId: organizationId!,
+            esperado: estadoAnterior as EstadoOrden,
+            nuevo: "PRESUPUESTADO",
+            camposExtra: { presupuesto: totalPresupuesto, costo_final: totalPresupuesto },
           })
+
+          if (resultado.ok) {
+            await supabaseAdmin.from("orden_eventos").insert({
+              orden_id: ordenActual.id,
+              organization_id: organizationId,
+              tipo: "CAMBIO_ESTADO",
+              estado_anterior: estadoAnterior,
+              estado_nuevo: "PRESUPUESTADO",
+              descripcion: "Cotización compartida con el cliente",
+              metadata: { cotizacionId: id },
+            })
+          }
         }
       }
     }
