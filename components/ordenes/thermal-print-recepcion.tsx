@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -12,6 +12,14 @@ import {
 import { Receipt, Printer } from "lucide-react"
 import { useTerminologia } from "@/contexts/currency-context"
 import { fitPrintPageToContent } from "@/lib/print-fit-page"
+import {
+  readAncho,
+  saveAncho,
+  anchoToPx,
+  ANCHOS_TERMICOS,
+  DEFAULT_ANCHO,
+  type AnchoTermico,
+} from "@/lib/thermal-paper"
 
 export interface RecepcionReceiptEquipo {
   codigoOrden: string
@@ -59,6 +67,11 @@ interface ThermalPrintRecepcionProps {
  */
 export function ThermalPrintRecepcion({ data }: ThermalPrintRecepcionProps) {
   const [open, setOpen] = useState(false)
+  const [ancho, setAncho] = useState<AnchoTermico>(DEFAULT_ANCHO)
+
+  useEffect(() => {
+    setAncho(readAncho())
+  }, [])
 
   const handleBrowserPrint = async () => {
     const source = document.getElementById("recepcion-receipt-print-area")
@@ -96,10 +109,10 @@ export function ThermalPrintRecepcion({ data }: ThermalPrintRecepcionProps) {
 <meta charset="utf-8" />
 ${styles}
 <style>
-  @page { size: 80mm auto; margin: 0; }
+  @page { size: ${ancho}mm auto; margin: 0; }
   html, body { margin: 0; padding: 0; background: #fff; }
-  body { width: 80mm; }
-  #recepcion-receipt-print-area { width: 80mm !important; padding: 2mm; box-sizing: border-box; }
+  body { width: ${ancho}mm; }
+  #recepcion-receipt-print-area { width: ${ancho}mm !important; padding: 2mm; box-sizing: border-box; }
   img { max-width: 100%; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 </style>
 </head>
@@ -135,7 +148,7 @@ ${styles}
         } catch {
           /* measurement falls back to current metrics */
         }
-        fitPrintPageToContent(doc, doc.getElementById("recepcion-receipt-print-area"), 80)
+        fitPrintPageToContent(doc, doc.getElementById("recepcion-receipt-print-area"), ancho)
         iframe.contentWindow?.focus()
         iframe.contentWindow?.print()
       } finally {
@@ -156,7 +169,7 @@ ${styles}
         variant="outline"
         size="sm"
         onClick={() => setOpen(true)}
-        title="Comprobante de recepcion 80mm"
+        title={`Comprobante de recepcion ${ancho}mm`}
       >
         <Receipt className="h-4 w-4 mr-2" />
         Comprobante
@@ -167,13 +180,34 @@ ${styles}
           <DialogHeader>
             <DialogTitle>Comprobante de recepcion</DialogTitle>
             <DialogDescription>
-              Vista previa del comprobante 80mm con los {data.equipos.length} equipos del lote.
+              Vista previa del comprobante {ancho}mm con los {data.equipos.length} equipos del lote.
               Imprimi por navegador en la impresora termica.
             </DialogDescription>
           </DialogHeader>
 
+          <div className="flex items-center justify-center gap-2 text-sm">
+            <span className="text-muted-foreground">Ancho del rollo:</span>
+            {ANCHOS_TERMICOS.map((a) => (
+              <button
+                key={a}
+                type="button"
+                onClick={() => {
+                  setAncho(a)
+                  saveAncho(a)
+                }}
+                className={`px-3 py-1 rounded-md border text-xs transition-colors ${
+                  ancho === a
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-background hover:bg-muted"
+                }`}
+              >
+                {a}mm
+              </button>
+            ))}
+          </div>
+
           <div className="flex justify-center bg-muted/40 rounded-md p-4 max-h-[60vh] overflow-y-auto">
-            <RecepcionReceiptPreview data={data} />
+            <RecepcionReceiptPreview data={data} ancho={ancho} />
           </div>
 
           <Button variant="outline" className="w-full" onClick={handleBrowserPrint}>
@@ -190,14 +224,14 @@ function Sep({ char = "-" }: { char?: string }) {
   return <div className="overflow-hidden whitespace-nowrap">{char.repeat(48)}</div>
 }
 
-function RecepcionReceiptPreview({ data }: { data: RecepcionReceiptData }) {
+function RecepcionReceiptPreview({ data, ancho }: { data: RecepcionReceiptData; ancho: AnchoTermico }) {
   const term = useTerminologia()
 
   return (
     <div
       id="recepcion-receipt-print-area"
       className="bg-white text-black font-mono text-[11px] leading-tight p-3 text-center"
-      style={{ width: "302px" }}
+      style={{ width: anchoToPx(ancho) + "px" }}
     >
       {data.organizationName && (
         <div className="text-center font-bold text-base">{data.organizationName}</div>
