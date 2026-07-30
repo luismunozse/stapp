@@ -12,6 +12,7 @@ import { GET as trialManagementCron } from "@/app/api/cron/trial-management/rout
 import { GET as recordatoriosCron } from "@/app/api/cron/recordatorios/route"
 import { GET as lifecycleEmailsCron } from "@/app/api/cron/lifecycle-emails/route"
 import { GET as subscriptionSweepCron } from "@/app/api/cron/subscription-sweep/route"
+import { GET as whatsappHealthCron } from "@/app/api/cron/whatsapp-health/route"
 
 const CRON_HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "/api/cron/engagement": engagementCron,
@@ -20,6 +21,7 @@ const CRON_HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "/api/cron/recordatorios": recordatoriosCron,
   "/api/cron/lifecycle-emails": lifecycleEmailsCron,
   "/api/cron/subscription-sweep": subscriptionSweepCron,
+  "/api/cron/whatsapp-health": whatsappHealthCron,
 }
 
 export const maxDuration = 60
@@ -38,9 +40,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Ruta de cron no válida" }, { status: 400 })
     }
 
-    // Crear un request fake con el CRON_SECRET para pasar la autenticación
+    // Crear un request fake con el CRON_SECRET para pasar la autenticación.
+    // `force=1`: una corrida manual debe ejecutarse ahora, sin importar la hora
+    // local de cada org (recordatorios sólo procesa las orgs donde son las 10).
     const cronSecret = process.env.CRON_SECRET
-    const fakeRequest = new Request(request.url, {
+    const fakeUrl = new URL(request.url)
+    fakeUrl.searchParams.set("force", "1")
+    const fakeRequest = new Request(fakeUrl, {
       headers: {
         ...(cronSecret ? { authorization: `Bearer ${cronSecret}` } : {}),
       },
