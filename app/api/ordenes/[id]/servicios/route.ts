@@ -70,7 +70,7 @@ export async function POST(
     }
 
     // Insert + suma + sincronización de costo_final en una única transacción,
-    // con SELECT ... FOR UPDATE sobre la orden: ver migration 280. Antes esto
+    // con SELECT ... FOR UPDATE sobre la orden: ver migration 284. Antes esto
     // era un SELECT-then-decide-then-UPDATE en JS (cada llamada de supabase-js
     // es su propia transacción), lo que dejaba una condición de carrera entre
     // altas concurrentes sobre la misma orden.
@@ -141,7 +141,7 @@ export async function DELETE(
     }
 
     // Delete + suma + sincronización de costo_final en una única transacción,
-    // con SELECT ... FOR UPDATE sobre la orden: ver migration 280.
+    // con SELECT ... FOR UPDATE sobre la orden: ver migration 284.
     const { data: result, error: rpcError } = await supabaseAdmin.rpc(
       "eliminar_servicio_orden",
       {

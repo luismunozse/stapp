@@ -1,7 +1,7 @@
 -- =============================================================================
--- Verificación de la migración 280 — RPCs atómicos agregar_servicio_orden /
+-- Verificación de la migración 284 — RPCs atómicos agregar_servicio_orden /
 -- eliminar_servicio_orden.
--- Correr en el SQL editor de Supabase Studio, DESPUES de aplicar 280.
+-- Correr en el SQL editor de Supabase Studio, DESPUES de aplicar 284.
 --
 -- Todo corre dentro de BEGIN/ROLLBACK: no persiste ningún dato.
 -- =============================================================================

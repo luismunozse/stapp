@@ -18,7 +18,7 @@ function createDeleteRequest(url: string = "http://localhost:3000/api/test"): Re
   return new Request(url, { method: "DELETE" })
 }
 
-// Desde la migracion 280, agregar/eliminar una linea de servicio corre atomicamente
+// Desde la migracion 284, agregar/eliminar una linea de servicio corre atomicamente
 // dentro de agregar_servicio_orden / eliminar_servicio_orden (SELECT ... FOR UPDATE
 // + suma + sincronizacion de costo_final, todo en la misma transaccion de Postgres).
 // La ruta ya no hace SELECT-then-decide-then-UPDATE en JS, asi que estos tests mockean
@@ -89,8 +89,8 @@ describe("POST /api/ordenes/[id]/servicios", () => {
 
   it("relaya costoFinalActualizado=false del RPC cuando la orden ya tiene cobros", async () => {
     // La regla real (bloquear cuando total_cobrado > 0) vive en la migracion
-    // 280 (SQL) y no es alcanzable a traves de un supabaseAdmin.rpc mockeado.
-    // Esta cubierta por PROBE 3 de supabase/migrations/verify/280_probes.sql.
+    // 284 (SQL) y no es alcanzable a traves de un supabaseAdmin.rpc mockeado.
+    // Esta cubierta por PROBE 3 de supabase/migrations/verify/284_probes.sql.
     // Este test solo verifica que la ruta relaya fielmente el veredicto del RPC.
     mockRpc({
       success: true, id: "lin-1", servicio_id: null, nombre: "Extra",
@@ -228,7 +228,7 @@ describe("DELETE /api/ordenes/[id]/servicios", () => {
 
   it("relaya costoFinalActualizado=false del RPC cuando la orden ya tiene cobros", async () => {
     // Misma razon que la variante POST de este nombre: la regla real vive en
-    // la migracion 280 (SQL, PROBE 3 de 280_probes.sql) y no es alcanzable a
+    // la migracion 284 (SQL, PROBE 3 de 284_probes.sql) y no es alcanzable a
     // traves de un mock de supabaseAdmin.rpc. Esto solo prueba el relay.
     mockRpc({ success: true, costoFinalActualizado: false, sumaServicios: 30000 })
 
@@ -248,7 +248,7 @@ describe("DELETE /api/ordenes/[id]/servicios", () => {
 
   it("relaya costoFinalActualizado=true y sumaServicios=0 del RPC al eliminar la ultima linea", async () => {
     // El NULL (no 0) que realmente queda en costo_final lo decide y persiste el
-    // RPC (SQL); esta cubierto por PROBE 4 de supabase/migrations/verify/280_probes.sql,
+    // RPC (SQL); esta cubierto por PROBE 4 de supabase/migrations/verify/284_probes.sql,
     // que si puede leer el valor final de la columna. Este test solo prueba
     // que la ruta relaya el veredicto del RPC mockeado sin alterarlo.
     mockRpc({ success: true, costoFinalActualizado: true, sumaServicios: 0 })
@@ -269,10 +269,10 @@ describe("DELETE /api/ordenes/[id]/servicios", () => {
   })
 
   it("relaya costoFinalActualizado=false del RPC cuando la orden esta en REPARADO", async () => {
-    // El STATE GUARD que decide esto vive en la migracion 280 (SQL), no en la
+    // El STATE GUARD que decide esto vive en la migracion 284 (SQL), no en la
     // ruta. Este test verifica que la ruta relaya fielmente lo que devuelve el
     // RPC; el comportamiento del guard en si esta cubierto por
-    // supabase/migrations/verify/280_probes.sql (PROBE 5).
+    // supabase/migrations/verify/284_probes.sql (PROBE 5).
     mockRpc({ success: true, costoFinalActualizado: false, sumaServicios: 0 })
 
     const res = await DELETE(

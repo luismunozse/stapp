@@ -19,7 +19,7 @@
 - **Sin `sucursal_id`.** Consistente con `inventario`, que es catálogo a nivel organización.
 - **Sin `tipo_dispositivo`.** Un servicio es transversal.
 - **Precio fijo únicamente.** Sin `precio_hasta` ni tarifa por hora.
-- **Numeración de migración:** 279. La 277 es el trigger (PR 1) y la 278 está reservada para el backfill (PR 2).
+- **Numeración de migración:** 283 y 284 (renumeradas desde 279 y 280). La 277 ya está en `main`, 278-280 quedan como huecos permanentes reservados por otras branches abiertas, y la 281 ya está aplicada en producción. Con aplicación manual, la única propiedad que sirve es "número mayor = aplicada después", así que se salta en vez de rellenar.
 - **Identificadores de base de datos en español**, extendiendo el esquema existente (`ordenes_servicio`, `repuestos_orden`, `costo_final`). Comentarios SQL en español neutro. Copy de UI en español, como el resto de la app.
 - **Comando de test:** `npm run test:run`.
 
@@ -27,8 +27,8 @@
 
 | Archivo | Responsabilidad |
 |---|---|
-| `supabase/migrations/279_servicios.sql` | Tablas `servicios` y `servicios_orden`, índices, RLS, trigger de `updated_at`. |
-| `supabase/migrations/rollback/279_rollback.sql` | Revertir la migración. |
+| `supabase/migrations/283_servicios.sql` | Tablas `servicios` y `servicios_orden`, índices, RLS, trigger de `updated_at`. |
+| `supabase/migrations/rollback/283_rollback.sql` | Revertir la migración. |
 | `types/database.ts` | Tipos `Servicio` y `ServicioOrden` + entradas en el mapa de tablas. |
 | `lib/servicios/sincronizar-costo-final.ts` | **Única** implementación de la regla de sincronización de `costo_final`. Función pura, testeable sin base de datos. |
 | `app/api/servicios/route.ts` | GET (listado) y POST (alta) del catálogo. |
@@ -43,21 +43,21 @@ La regla de sincronización vive en `lib/servicios/sincronizar-costo-final.ts` y
 
 ---
 
-### Task 1: Migración 279 — tablas `servicios` y `servicios_orden`
+### Task 1: Migración 283 — tablas `servicios` y `servicios_orden`
 
 **Files:**
-- Create: `supabase/migrations/279_servicios.sql`
-- Create: `supabase/migrations/rollback/279_rollback.sql`
+- Create: `supabase/migrations/283_servicios.sql`
+- Create: `supabase/migrations/rollback/283_rollback.sql`
 
 **Interfaces:**
 - Produces: tablas `servicios` y `servicios_orden` con las columnas que consumen todas las tasks siguientes.
 
 - [ ] **Step 1: Escribir la migración**
 
-Crear `supabase/migrations/279_servicios.sql`:
+Crear `supabase/migrations/283_servicios.sql`:
 
 ```sql
--- 279: Servicios asignables a órdenes
+-- 283: Servicios asignables a órdenes
 --
 -- CONTEXTO
 -- Un taller tiene servicios con precio prefijado (ej. instalación de Windows).
@@ -180,10 +180,10 @@ CREATE POLICY servicios_orden_all_service ON servicios_orden
 
 - [ ] **Step 2: Escribir el rollback**
 
-Crear `supabase/migrations/rollback/279_rollback.sql`:
+Crear `supabase/migrations/rollback/283_rollback.sql`:
 
 ```sql
--- Rollback de 279_servicios.sql
+-- Rollback de 283_servicios.sql
 -- Destructivo: elimina el catálogo de servicios y todas las líneas asignadas.
 
 DROP TABLE IF EXISTS servicios_orden;
@@ -234,7 +234,7 @@ ROLLBACK;
 - [ ] **Step 4: Commit**
 
 ```bash
-git add supabase/migrations/279_servicios.sql supabase/migrations/rollback/279_rollback.sql
+git add supabase/migrations/283_servicios.sql supabase/migrations/rollback/283_rollback.sql
 git commit -m "feat(servicios): tablas de catalogo y lineas de orden"
 ```
 
@@ -1532,7 +1532,7 @@ git commit -m "feat(servicios): tab de servicios en el detalle de orden"
 
 ## Definition of Done
 
-- [ ] Migración 279 aplicada; los dos probes de la Task 1 dan el resultado esperado.
+- [ ] Migración 283 aplicada; los dos probes de la Task 1 dan el resultado esperado.
 - [ ] `npm run test:run` en verde, con los 20 tests nuevos (8 de sincronización, 5 + 3 de catálogo, 4 de líneas de orden).
 - [ ] `npx tsc --noEmit` sin errores.
 - [ ] Los cuatro escenarios manuales de la Task 8 Step 3 verificados en el navegador.

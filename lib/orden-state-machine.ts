@@ -125,7 +125,7 @@ export const ESTADOS_ENTREGA: EstadoOrden[] = [
  * ESTADOS_ENTREGA son los estados terminales de entrega, siempre al mismo nivel
  * o más allá en el flujo de reparación.
  *
- * ESPECIFICACIÓN NORMATIVA de esta lista: supabase/migrations/280_servicios_orden_atomico.sql
+ * ESPECIFICACIÓN NORMATIVA de esta lista: supabase/migrations/284_servicios_orden_atomico.sql
  * hardcodea los mismos cuatro valores ('REPARADO', 'ENTREGADO', 'ENTREGADO_SIN_REPARACION',
  * 'ENTREGADO_SIN_COBRO') en el bloque "STATE GUARD" de agregar_servicio_orden y
  * eliminar_servicio_orden, porque esa migración corre en plpgsql y no puede importar
