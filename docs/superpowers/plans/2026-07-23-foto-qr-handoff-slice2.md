@@ -13,7 +13,7 @@
 
 ## Global Constraints
 
-- Migration number is **277** (276 shipped in slice 1).
+- Migration number is **282** (276 shipped in slice 1). Renumbered from 277: `main` merged `277_trigger_recalcular_estado_cobro.sql` first, and 278-280 are reserved for other open branches while 281 is already applied in production.
 - The bucket is created **by migration**, following `160_proveedores_extras.sql`: `INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)` with `ON CONFLICT DO UPDATE`.
 - Bucket is `foto-borrador`, `public = false`, limit `2097152` (2 MB), `allowed_mime_types = ARRAY['image/jpeg']`. `reencodeFoto` always emits JPEG, so the storage layer itself rejects anything else.
 - **No signed URLs.** The authenticated GET returns base64. This supersedes the spec's "short-lived signed URLs" wording — the PC needs base64 for the existing `fotos` state, so a URL would be extra attack surface for zero benefit.
@@ -30,16 +30,16 @@ Every failure on `/api/public/carga-foto/[token]` returns the **same** generic b
 
 ---
 
-### Task 1: Migration 277 — private bucket
+### Task 1: Migration 282 — private bucket
 
 **Files:**
-- Create: `supabase/migrations/277_foto_borrador_bucket.sql`
+- Create: `supabase/migrations/282_foto_borrador_bucket.sql`
 
 - [ ] **Step 1: Write the migration**
 
 ```sql
 -- ============================================================================
--- 277: bucket privado para las fotos en staging del handoff por QR
+-- 282: bucket privado para las fotos en staging del handoff por QR
 -- ============================================================================
 -- public=false: a diferencia de fotos-ordenes, estos objetos no se sirven por
 -- URL. La PC los pide por un endpoint autenticado que devuelve base64, así que
@@ -61,7 +61,7 @@ ON CONFLICT (id) DO UPDATE SET
 - [ ] **Step 2: Commit**
 
 ```bash
-git add supabase/migrations/277_foto_borrador_bucket.sql
+git add supabase/migrations/282_foto_borrador_bucket.sql
 git commit -m "feat(ordenes): bucket privado para las fotos en staging del QR"
 ```
 
@@ -676,7 +676,7 @@ Expected: tsc exit 0, eslint exit 0, all tests pass, build "Compiled successfull
 
 - [ ] **Step 2: Open the PR**
 
-Body must state: migrations **276 and 277 both need manual application** before anything works, that the only unauthenticated surface is `/api/public/carga-foto/[token]`, that all its failures are indistinguishable by design, and that nothing is user-visible yet (the QR panel and phone page are slice 3).
+Body must state: migrations **276 and 282 both need manual application** before anything works, that the only unauthenticated surface is `/api/public/carga-foto/[token]`, that all its failures are indistinguishable by design, and that nothing is user-visible yet (the QR panel and phone page are slice 3).
 
 If GitHub Actions does not fire on PR creation, close and reopen the PR — that re-emits the `pull_request` event. This happened on #239.
 

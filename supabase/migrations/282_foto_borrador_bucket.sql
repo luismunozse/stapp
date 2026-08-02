@@ -1,5 +1,5 @@
 -- ============================================================================
--- 277: bucket privado para las fotos en staging del handoff por QR
+-- 282: bucket privado para las fotos en staging del handoff por QR
 -- ============================================================================
 -- public=false: a diferencia de fotos-ordenes, estos objetos no se sirven por
 -- URL. La PC los pide por un endpoint autenticado que devuelve base64, así que
