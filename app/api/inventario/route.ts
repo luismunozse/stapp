@@ -60,70 +60,92 @@ export async function GET(request: Request) {
 
     const includeArchived = searchParams.get("includeArchived") === "true"
 
-    let query = supabaseAdmin
-      .from("inventario")
-      .select(
-        "id, codigo, nombre, descripcion, categoria, tipo_dispositivo, stock, stock_reservado, precio_compra, precio_venta, proveedor, proveedor_id, imagen_url, imagen_path, stock_minimo, stock_maximo, punto_reorden, ubicacion, deleted_at, deleted_by, created_at, proveedores:proveedor_id(id, nombre)",
-        { count: "exact" }
-      )
-      .eq("organization_id", organizationId!)
-      .order(sortBy, { ascending: sortOrder })
-
-    if (!includeArchived) {
-      query = query.is("deleted_at", null)
-    }
-
-    if (search) {
-      if (search.trim().length >= 3) {
-        query = query.textSearch("search_vector", search, { type: "plain", config: "spanish" })
-      } else {
-        // Escape PostgREST .or() metacharacters: una coma sin escapar separa
-        // expresiones, paréntesis abren grupos. Sin esto, búsquedas como
-        // "Smith, John" o "(15)" rompen el parser y devuelven 0 filas o error.
-        // Los comodines % y _ del ILIKE quedan deliberadamente intactos
-        // (no son inyectables: solo afectan el patrón de match).
-        const safeSearch = search.replace(/[,()\\]/g, "\\$&")
-        query = query.or(
-          `nombre.ilike.%${safeSearch}%,codigo.ilike.%${safeSearch}%`
-        )
-      }
-    }
-
-    if (categoria) {
-      query = query.eq("categoria", categoria)
-    }
-
-    if (tipoDispositivo) {
-      query = query.eq("tipo_dispositivo", tipoDispositivo)
-    }
-
-    if (proveedorId) {
-      if (proveedorId === "none") {
-        query = query.is("proveedor_id", null)
-      } else {
-        query = query.eq("proveedor_id", proveedorId)
-      }
-    }
-
+    // bajoStock necesita el umbral de la org antes de armar la query.
+    let stockThreshold: number | null = null
     if (bajoStock) {
       const { data: org } = await supabaseAdmin
         .from("organizations")
         .select("umbral_stock_bajo")
         .eq("id", organizationId!)
         .single()
-      const globalThreshold = org?.umbral_stock_bajo ?? 5
       // Use global threshold as server filter. Items with custom stock_minimo
       // are also highlighted on the frontend via per-item comparison.
-      query = query.lte("stock", globalThreshold)
+      stockThreshold = org?.umbral_stock_bajo ?? 5
     }
 
-    // Aplicar paginación
-    query = query.range(offset, offset + limit - 1)
+    // Escape PostgREST .or() metacharacters: una coma sin escapar separa
+    // expresiones, paréntesis abren grupos. Sin esto, búsquedas como
+    // "Smith, John" o "(15)" rompen el parser y devuelven 0 filas o error.
+    // Los comodines % y _ del ILIKE quedan deliberadamente intactos
+    // (no son inyectables: solo afectan el patrón de match).
+    const safeSearch = search.replace(/[,()\\]/g, "\\$&")
 
-    const { data: inventario, error: dbError, count } = await query
+    const buildQuery = (mode: "fts" | "ilike") => {
+      let q = supabaseAdmin
+        .from("inventario")
+        .select(
+          "id, codigo, nombre, descripcion, categoria, tipo_dispositivo, stock, stock_reservado, precio_compra, precio_venta, proveedor, proveedor_id, imagen_url, imagen_path, stock_minimo, stock_maximo, punto_reorden, ubicacion, barcode, deleted_at, deleted_by, created_at, proveedores:proveedor_id(id, nombre)",
+          { count: "exact" }
+        )
+        .eq("organization_id", organizationId!)
+        .order(sortBy, { ascending: sortOrder })
+
+      if (!includeArchived) {
+        q = q.is("deleted_at", null)
+      }
+
+      if (search) {
+        if (mode === "fts") {
+          q = q.textSearch("search_vector", search, { type: "plain", config: "spanish" })
+        } else {
+          q = q.or(
+            `nombre.ilike.%${safeSearch}%,codigo.ilike.%${safeSearch}%,barcode.ilike.%${safeSearch}%,descripcion.ilike.%${safeSearch}%`
+          )
+        }
+      }
+
+      if (categoria) {
+        q = q.eq("categoria", categoria)
+      }
+
+      if (tipoDispositivo) {
+        q = q.eq("tipo_dispositivo", tipoDispositivo)
+      }
+
+      if (proveedorId) {
+        if (proveedorId === "none") {
+          q = q.is("proveedor_id", null)
+        } else {
+          q = q.eq("proveedor_id", proveedorId)
+        }
+      }
+
+      if (stockThreshold !== null) {
+        q = q.lte("stock", stockThreshold)
+      }
+
+      return q.range(offset, offset + limit - 1)
+    }
+
+    // El full-text index (search_vector) matchea palabras COMPLETAS ya
+    // stemmeadas: escribir "panta" no encuentra "Pantalla". Para que la
+    // busqueda incremental (type-ahead) sirva, si FTS no devuelve nada
+    // reintentamos con ILIKE, que si matchea substrings. El costo extra
+    // solo se paga cuando FTS ya fallo.
+    const useFts = search.trim().length >= 3
+    let { data: inventario, error: dbError, count } = await buildQuery(useFts ? "fts" : "ilike")
 
     if (dbError) {
       throw dbError
+    }
+
+    if (useFts && !count) {
+      const fallback = await buildQuery("ilike")
+      if (fallback.error) {
+        throw fallback.error
+      }
+      inventario = fallback.data
+      count = fallback.count
     }
 
     return NextResponse.json({
