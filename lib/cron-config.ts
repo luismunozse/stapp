@@ -2,6 +2,15 @@
  * Definición centralizada de cron jobs.
  * Usado por: cron-panel.tsx (dashboard) y run-cron/route.ts (API).
  */
+/**
+ * Hora LOCAL de cada organización a la que salen los recordatorios de retiro.
+ * El cron corre cada hora (UTC, como todos los cron de Vercel) y sólo procesa
+ * las orgs cuya hora local coincide con este valor. Antes corría una única vez
+ * a las 10:00 UTC para todas, lo que en UTC-6 (Costa Rica, Guatemala,
+ * Nicaragua) caía 04:00 de la madrugada.
+ */
+export const HORA_RECORDATORIOS_LOCAL = 10
+
 export interface CronJobDefinition {
   id: string
   name: string
@@ -36,7 +45,7 @@ export const CRON_JOBS: CronJobDefinition[] = [
     id: "recordatorios",
     name: "Recordatorios",
     path: "/api/cron/recordatorios",
-    schedule: "10:00 AM",
+    schedule: "10:00 AM (hora local de cada taller)",
     description: "Recuerda a clientes retirar equipos",
   },
   {
@@ -52,6 +61,13 @@ export const CRON_JOBS: CronJobDefinition[] = [
     path: "/api/cron/subscription-sweep",
     schedule: "6:00 AM",
     description: "Downgradea MANUAL vencidas y marca externas PAST_DUE",
+  },
+  {
+    id: "whatsapp-health",
+    name: "WhatsApp Health",
+    path: "/api/cron/whatsapp-health",
+    schedule: "Cada hora",
+    description: "Refresca el estado real de las instancias y alerta si se caen",
   },
   {
     id: "catalogo-pii-purge",

@@ -163,6 +163,85 @@ export async function connectInstance(
   }
 }
 
+export interface EvolutionInstanceInfo {
+  name: string
+  state: EvolutionConnectionState["state"]
+  /** 401 = el teléfono cerró la sesión: no se recupera sin reescanear el QR. */
+  disconnectionReasonCode: number | null
+  /** Última modificación de la fila en Evolution. */
+  updatedAt: string | null
+}
+
+/**
+ * Lista todas las instancias del servidor en UNA llamada, con su estado.
+ *
+ * Sirve de doble propósito para el health check: es el probe de plataforma
+ * (si esto falla, el servidor está caído o la api key ya no vale) y a la vez la
+ * fuente de estados, evitando N llamadas a /instance/connectionState.
+ *
+ * Shape verificado contra Evolution v2.1.1: array plano de objetos con
+ * `name`, `connectionStatus`, `disconnectionReasonCode`, `updatedAt`.
+ */
+export async function fetchInstances(
+  creds: Pick<EvolutionCredentials, "baseUrl" | "apiKey">
+): Promise<{ ok: boolean; instances: EvolutionInstanceInfo[]; error?: string }> {
+  try {
+    const res = await fetch(buildUrl(creds.baseUrl, "/instance/fetchInstances"), {
+      method: "GET",
+      headers: { apikey: creds.apiKey, "Content-Type": "application/json" },
+    })
+
+    if (!res.ok) return { ok: false, instances: [], error: `HTTP ${res.status}` }
+
+    const raw = await res.text()
+    let parsed: unknown
+    try {
+      parsed = raw ? JSON.parse(raw) : null
+    } catch {
+      return { ok: false, instances: [], error: "Respuesta no es JSON" }
+    }
+
+    // Toleramos tanto el array plano como un objeto { instances: [...] }.
+    const lista = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray((parsed as { instances?: unknown[] } | null)?.instances)
+        ? (parsed as { instances: unknown[] }).instances
+        : null
+
+    if (!lista) return { ok: false, instances: [], error: "Shape inesperado en fetchInstances" }
+
+    const instances: EvolutionInstanceInfo[] = []
+    for (const item of lista) {
+      if (!item || typeof item !== "object") continue
+      const i = item as Record<string, unknown>
+      const nested = (i.instance && typeof i.instance === "object" ? i.instance : i) as Record<string, unknown>
+      const name = typeof nested.name === "string" ? nested.name
+        : typeof nested.instanceName === "string" ? nested.instanceName
+        : null
+      if (!name) continue
+
+      const rawState = String(nested.connectionStatus ?? nested.status ?? nested.state ?? "unknown").toLowerCase()
+      const state: EvolutionConnectionState["state"] =
+        rawState === "open" ? "open"
+        : rawState === "connecting" ? "connecting"
+        : rawState === "close" || rawState === "closed" ? "close"
+        : "unknown"
+
+      const code = Number(nested.disconnectionReasonCode)
+      instances.push({
+        name,
+        state,
+        disconnectionReasonCode: Number.isFinite(code) ? code : null,
+        updatedAt: typeof nested.updatedAt === "string" ? nested.updatedAt : null,
+      })
+    }
+
+    return { ok: true, instances }
+  } catch (err) {
+    return { ok: false, instances: [], error: err instanceof Error ? err.message : "Error de conexion" }
+  }
+}
+
 export async function getConnectionState(
   creds: EvolutionCredentials
 ): Promise<EvolutionConnectionState> {
