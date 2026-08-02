@@ -1,14 +1,18 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Trash2 } from "lucide-react"
+import { AlertTriangle, Plus, Trash2 } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { useModal } from "@/contexts/modal-context"
+import {
+  InventarioSearchCombobox,
+  disponibleDe,
+  type InventarioOption,
+} from "./inventario-search-combobox"
 
 interface Repuesto {
   id: string
@@ -34,11 +38,11 @@ export function OrdenRepuestosTab({ ordenId, repuestos, onRepuestosChanged }: Or
   const { confirm, alert } = useModal()
   const [showAddRepuesto, setShowAddRepuesto] = useState(false)
   const [tipoRepuesto, setTipoRepuesto] = useState<"inventario" | "manual">("inventario")
-  const [inventario, setInventario] = useState<any[]>([])
-  const [inventarioLoaded, setInventarioLoaded] = useState(false)
+  const [itemSeleccionado, setItemSeleccionado] = useState<InventarioOption | null>(null)
+  // Bump para que el combobox vuelva a consultar el stock tras alta/baja.
+  const [inventarioRefreshKey, setInventarioRefreshKey] = useState(0)
   const [updating, setUpdating] = useState(false)
   const [nuevoRepuesto, setNuevoRepuesto] = useState({
-    inventarioId: "",
     cantidad: 1,
     nombre: "",
     precioUnitario: 0,
@@ -47,26 +51,35 @@ export function OrdenRepuestosTab({ ordenId, repuestos, onRepuestosChanged }: Or
   const [cantidadDraft, setCantidadDraft] = useState("1")
   const [precioDraft, setPrecioDraft] = useState("")
 
-  // Lazy load inventario only when add form is opened
-  useEffect(() => {
-    if (showAddRepuesto && !inventarioLoaded) {
-      fetch("/api/inventario?limit=100", { cache: "no-store" })
-        .then((res) => res.json())
-        .then((data) => {
-          const items = data.data ?? (Array.isArray(data) ? data : [])
-          setInventario(items)
-          setInventarioLoaded(true)
-        })
-        .catch((err) => console.error("Error fetching inventario:", err))
-    }
-  }, [showAddRepuesto, inventarioLoaded])
+  const disponibleSeleccionado = itemSeleccionado ? disponibleDe(itemSeleccionado) : 0
+  // Mismo criterio que el RPC add_repuesto_inventario (stock - reservado):
+  // avisamos antes de mandar el POST en vez de esperar el 400 del servidor.
+  const excedeStock =
+    tipoRepuesto === "inventario" &&
+    !!itemSeleccionado &&
+    nuevoRepuesto.cantidad > disponibleSeleccionado
+
+  const resetForm = () => {
+    setItemSeleccionado(null)
+    setNuevoRepuesto({ cantidad: 1, nombre: "", precioUnitario: 0 })
+    setCantidadDraft("1")
+    setPrecioDraft("")
+  }
 
   const handleAddRepuesto = async () => {
     if (tipoRepuesto === "inventario") {
-      if (!nuevoRepuesto.inventarioId || nuevoRepuesto.cantidad < 1) {
+      if (!itemSeleccionado || nuevoRepuesto.cantidad < 1) {
         await alert({
           title: "Datos incompletos",
-          description: "Selecciona un item y cantidad",
+          description: "Buscá y seleccioná un repuesto del inventario, e indicá la cantidad.",
+          variant: "warning",
+        })
+        return
+      }
+      if (excedeStock) {
+        await alert({
+          title: "Stock insuficiente",
+          description: `Solo hay ${disponibleSeleccionado} unidad(es) disponibles de ${itemSeleccionado.nombre}.`,
           variant: "warning",
         })
         return
@@ -87,7 +100,7 @@ export function OrdenRepuestosTab({ ordenId, repuestos, onRepuestosChanged }: Or
       const payload = tipoRepuesto === "inventario"
         ? {
             tipo: "inventario",
-            inventarioId: nuevoRepuesto.inventarioId,
+            inventarioId: itemSeleccionado!.id,
             cantidad: nuevoRepuesto.cantidad,
           }
         : {
@@ -108,11 +121,9 @@ export function OrdenRepuestosTab({ ordenId, repuestos, onRepuestosChanged }: Or
         // el panel muestra brevemente "no hay repuestos agregados" sin ningun
         // indicador de carga, lo que invita a reintentar y duplicar el alta.
         await onRepuestosChanged?.()
-        setNuevoRepuesto({ inventarioId: "", cantidad: 1, nombre: "", precioUnitario: 0 })
-        setCantidadDraft("1")
-        setPrecioDraft("")
+        resetForm()
         setShowAddRepuesto(false)
-        setInventarioLoaded(false) // Refresh inventory stock on next open
+        setInventarioRefreshKey((k) => k + 1) // Refresh inventory stock on next open
       } else {
         const error = await res.json()
         await alert({
@@ -147,7 +158,7 @@ export function OrdenRepuestosTab({ ordenId, repuestos, onRepuestosChanged }: Or
         // Mismo tratamiento que al agregar: esperar el refetch antes de
         // reactivar los controles evita la ventana de estado enganoso.
         await onRepuestosChanged?.()
-        setInventarioLoaded(false) // Refresh inventory stock on next open
+        setInventarioRefreshKey((k) => k + 1) // Refresh inventory stock on next open
       } else {
         const error = await res.json()
         await alert({ title: "Error", description: error.error || "Error al eliminar repuesto", variant: "error" })
@@ -207,38 +218,46 @@ export function OrdenRepuestosTab({ ordenId, repuestos, onRepuestosChanged }: Or
             </div>
 
             {tipoRepuesto === "inventario" ? (
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-3">
                 <div>
-                  <Label className="text-xs">Item</Label>
-                  <Select
-                    value={nuevoRepuesto.inventarioId || "none"}
-                    onValueChange={(value) => setNuevoRepuesto({ ...nuevoRepuesto, inventarioId: value === "none" ? "" : value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Seleccionar...</SelectItem>
-                      {inventario.map((item) => (
-                        <SelectItem key={item.id} value={item.id}>
-                          {item.nombre} (Stock: {item.stock})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-xs">Cantidad</Label>
-                  <Input
-                    type="number"
-                    min="1"
-                    value={cantidadDraft}
-                    onChange={(e) => {
-                      setCantidadDraft(e.target.value)
-                      setNuevoRepuesto({ ...nuevoRepuesto, cantidad: parseInt(e.target.value, 10) || 1 })
-                    }}
+                  <Label className="text-xs">Repuesto</Label>
+                  <InventarioSearchCombobox
+                    value={itemSeleccionado}
+                    onChange={setItemSeleccionado}
+                    disabled={updating}
+                    refreshKey={inventarioRefreshKey}
                   />
                 </div>
+                {itemSeleccionado && (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <Label className="text-xs">Cantidad</Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        max={disponibleSeleccionado}
+                        aria-invalid={excedeStock}
+                        value={cantidadDraft}
+                        onChange={(e) => {
+                          setCantidadDraft(e.target.value)
+                          setNuevoRepuesto({ ...nuevoRepuesto, cantidad: parseInt(e.target.value, 10) || 1 })
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Subtotal</Label>
+                      <div className="flex h-10 items-center rounded-md border border-dashed px-3 text-sm font-medium">
+                        {formatPrice(itemSeleccionado.precioCompra * nuevoRepuesto.cantidad)}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {excedeStock && (
+                  <p className="flex items-center gap-1.5 text-xs text-destructive">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                    Solo hay {disponibleSeleccionado} disponible(s) de este repuesto.
+                  </p>
+                )}
               </div>
             ) : (
               <div className="grid gap-3 sm:grid-cols-3">
@@ -280,7 +299,7 @@ export function OrdenRepuestosTab({ ordenId, repuestos, onRepuestosChanged }: Or
             )}
 
             <div className="flex gap-2">
-              <Button size="sm" onClick={handleAddRepuesto} disabled={updating}>
+              <Button size="sm" onClick={handleAddRepuesto} disabled={updating || excedeStock}>
                 Agregar
               </Button>
               <Button
@@ -289,9 +308,7 @@ export function OrdenRepuestosTab({ ordenId, repuestos, onRepuestosChanged }: Or
                 onClick={() => {
                   setShowAddRepuesto(false)
                   setTipoRepuesto("inventario")
-                  setNuevoRepuesto({ inventarioId: "", cantidad: 1, nombre: "", precioUnitario: 0 })
-                  setCantidadDraft("1")
-                  setPrecioDraft("")
+                  resetForm()
                 }}
               >
                 Cancelar
