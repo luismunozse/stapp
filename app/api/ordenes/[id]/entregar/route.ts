@@ -184,13 +184,41 @@ export async function POST(
         })
     }
 
-    // Consume reserved stock: deduct from physical stock + release reservation
+    // Consume reserved stock: deduct from physical stock + release reservation.
+    //
+    // supabaseAdmin.rpc() NO lanza ante un error de Postgres: resuelve con
+    // { data, error }. El try/catch solo no alcanzaba — hay que leer `error`,
+    // si no un fallo del consumo deja el stock reservado para siempre sin que
+    // nadie se entere (era el caso cuando el descuento por deposito abortaba).
+    //
+    // El fallo NO cancela la entrega: el equipo ya se le dio al cliente y
+    // bloquear el cierre por un problema de inventario seria peor. Se registra
+    // y se devuelve como advertencia para que quede visible.
+    let stockWarning: string | null = null
     try {
-      await supabaseAdmin.rpc("consumir_reservas_orden", {
-        p_orden_id: id,
-        p_user_id: userId,
-      })
+      const { data: consumoResult, error: consumoError } = await supabaseAdmin.rpc(
+        "consumir_reservas_orden",
+        { p_orden_id: id, p_user_id: userId }
+      )
+
+      if (consumoError) {
+        stockWarning =
+          "La orden se entregó, pero no se pudo descontar el stock de los repuestos. Revisá el inventario."
+        console.error(
+          `[entregar] consumir_reservas_orden falló para la orden ${id}:`,
+          consumoError
+        )
+      } else if (consumoResult && (consumoResult as any).success !== true) {
+        stockWarning =
+          "La orden se entregó, pero el descuento de stock de los repuestos quedó incompleto."
+        console.error(
+          `[entregar] consumir_reservas_orden devolvió un resultado inesperado para la orden ${id}:`,
+          consumoResult
+        )
+      }
     } catch (consumeErr) {
+      stockWarning =
+        "La orden se entregó, pero no se pudo descontar el stock de los repuestos. Revisá el inventario."
       console.error("Error consuming order reservations on delivery:", consumeErr)
     }
 
@@ -239,6 +267,9 @@ export async function POST(
       fechaEntrega: updatedOrden.fecha_entrega,
       notasEntrega: updatedOrden.notas_entrega,
       entregadoPor: updatedOrden.users,
+      // Presente solo si el descuento de stock fallo: la entrega se completo
+      // igual, pero el inventario quedo sin ajustar y hay que revisarlo.
+      ...(stockWarning ? { warning: stockWarning } : {}),
     })
   } catch (error) {
     if (error instanceof z.ZodError) {
