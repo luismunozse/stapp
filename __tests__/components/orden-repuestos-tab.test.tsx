@@ -41,7 +41,7 @@ describe("OrdenRepuestosTab — espera el refetch del padre antes de reactivar e
     fireEvent.change(screen.getByPlaceholderText("Ej: Flex de carga iPhone 12"), {
       target: { value: "Pantalla" },
     })
-    fireEvent.change(screen.getByPlaceholderText("0.00"), {
+    fireEvent.change(screen.getByLabelText("Costo unitario"), {
       target: { value: "100" },
     })
 
@@ -210,6 +210,102 @@ describe("OrdenRepuestosTab — busqueda de repuestos del inventario", () => {
     // El buscador sigue montado y aparece la confirmacion del alta anterior.
     expect(await screen.findByText(/Agregado: Pantalla iPhone 12/)).toBeInTheDocument()
     expect(screen.getByRole("combobox")).toBeInTheDocument()
+  })
+})
+
+describe("OrdenRepuestosTab — costo y precio de venta en repuestos manuales", () => {
+  const setupFetch = () => {
+    const mockFetch = vi.fn(() =>
+      Promise.resolve({ ok: true, json: async () => ({ data: [] }) } as Response),
+    )
+    vi.stubGlobal("fetch", mockFetch)
+    return mockFetch
+  }
+
+  const abrirManual = () => {
+    fireEvent.click(screen.getByRole("button", { name: "Agregar" }))
+    fireEvent.click(screen.getByRole("button", { name: "Manual" }))
+  }
+
+  const postBody = (mockFetch: ReturnType<typeof vi.fn>) => {
+    const call = mockFetch.mock.calls.find(
+      ([, opts]) => (opts as RequestInit | undefined)?.method === "POST",
+    )
+    return call ? JSON.parse((call[1] as RequestInit).body as string) : null
+  }
+
+  beforeEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it("manda los dos precios por separado", async () => {
+    const mockFetch = setupFetch()
+
+    render(
+      <ModalProvider>
+        <OrdenRepuestosTab
+          ordenId="orden-1"
+          repuestos={[]}
+          onRepuestosChanged={vi.fn().mockResolvedValue(undefined)}
+        />
+      </ModalProvider>,
+    )
+
+    abrirManual()
+    fireEvent.change(screen.getByLabelText("Nombre del repuesto"), { target: { value: "Flex" } })
+    fireEvent.change(screen.getByLabelText("Costo unitario"), { target: { value: "3000" } })
+    fireEvent.change(screen.getByLabelText("Precio de venta"), { target: { value: "8000" } })
+    fireEvent.click(screen.getByRole("button", { name: "Agregar" }))
+
+    await waitFor(() => {
+      expect(postBody(mockFetch)).toMatchObject({
+        tipo: "manual",
+        nombre: "Flex",
+        precioUnitario: 3000,
+        precioVentaUnitario: 8000,
+      })
+    })
+  })
+
+  it("avisa cuando el precio de venta queda por debajo del costo", () => {
+    setupFetch()
+
+    render(
+      <ModalProvider>
+        <OrdenRepuestosTab ordenId="orden-1" repuestos={[]} onRepuestosChanged={vi.fn()} />
+      </ModalProvider>,
+    )
+
+    abrirManual()
+    fireEvent.change(screen.getByLabelText("Costo unitario"), { target: { value: "5000" } })
+    fireEvent.change(screen.getByLabelText("Precio de venta"), { target: { value: "3000" } })
+
+    expect(screen.getByText(/por debajo del costo/i)).toBeInTheDocument()
+  })
+
+  it("omite el precio de venta si no se completa: el servidor usa el costo", async () => {
+    const mockFetch = setupFetch()
+
+    render(
+      <ModalProvider>
+        <OrdenRepuestosTab
+          ordenId="orden-1"
+          repuestos={[]}
+          onRepuestosChanged={vi.fn().mockResolvedValue(undefined)}
+        />
+      </ModalProvider>,
+    )
+
+    abrirManual()
+    fireEvent.change(screen.getByLabelText("Nombre del repuesto"), { target: { value: "Tornillo" } })
+    fireEvent.change(screen.getByLabelText("Costo unitario"), { target: { value: "500" } })
+    fireEvent.click(screen.getByRole("button", { name: "Agregar" }))
+
+    await waitFor(() => {
+      const body = postBody(mockFetch)
+      expect(body).toMatchObject({ precioUnitario: 500 })
+      expect(body.precioVentaUnitario).toBeUndefined()
+    })
   })
 })
 

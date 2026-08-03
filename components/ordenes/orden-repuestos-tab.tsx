@@ -9,6 +9,7 @@ import { AlertTriangle, Check, Minus, Plus, Trash2 } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { useModal } from "@/contexts/modal-context"
 import { ESTADOS_ENTREGA } from "@/lib/orden-state-machine"
+import { precioVentaRepuesto } from "@/lib/db-utils"
 import type { EstadoOrden } from "@/types"
 import {
   InventarioSearchCombobox,
@@ -22,7 +23,11 @@ interface Repuesto {
   inventario?: { id: string; nombre: string; stock: number } | null
   nombre?: string
   cantidad: number
+  /** COSTO unitario: lo que pagó el taller. Lo usan los reportes de rentabilidad. */
   precioUnitario: number
+  /** Precio de VENTA unitario: lo que se le cobra al cliente.
+   *  NULL en repuestos cargados antes de la migración 286. */
+  precioVentaUnitario?: number | null
 }
 
 interface OrdenRepuestosTabProps {
@@ -55,10 +60,12 @@ export function OrdenRepuestosTab({ ordenId, repuestos, ordenEstado, onRepuestos
     cantidad: 1,
     nombre: "",
     precioUnitario: 0,
+    precioVentaUnitario: 0,
   })
   // Raw editing strings so the inputs can show empty while a valid numeric stays in nuevoRepuesto.
   const [cantidadDraft, setCantidadDraft] = useState("1")
   const [precioDraft, setPrecioDraft] = useState("")
+  const [precioVentaDraft, setPrecioVentaDraft] = useState("")
   // Carga en lote: tras agregar, el form queda abierto y el foco vuelve al buscador.
   const [focusSignal, setFocusSignal] = useState(0)
   const [ultimoAgregado, setUltimoAgregado] = useState<string | null>(null)
@@ -90,11 +97,19 @@ export function OrdenRepuestosTab({ ordenId, repuestos, ordenEstado, onRepuestos
     !!itemSeleccionado &&
     nuevoRepuesto.cantidad > disponibleSeleccionado
 
+  // Margen del repuesto manual: solo se muestra si el operador cargó ambos
+  // números, para no gritar "margen negativo" mientras todavía está tipeando.
+  const margenManual =
+    tipoRepuesto === "manual" && precioDraft.trim() && precioVentaDraft.trim()
+      ? nuevoRepuesto.precioVentaUnitario - nuevoRepuesto.precioUnitario
+      : null
+
   const resetForm = () => {
     setItemSeleccionado(null)
-    setNuevoRepuesto({ cantidad: 1, nombre: "", precioUnitario: 0 })
+    setNuevoRepuesto({ cantidad: 1, nombre: "", precioUnitario: 0, precioVentaUnitario: 0 })
     setCantidadDraft("1")
     setPrecioDraft("")
+    setPrecioVentaDraft("")
   }
 
   const handleAddRepuesto = async () => {
@@ -139,6 +154,10 @@ export function OrdenRepuestosTab({ ordenId, repuestos, ordenEstado, onRepuestos
             nombre: nuevoRepuesto.nombre.trim(),
             cantidad: nuevoRepuesto.cantidad,
             precioUnitario: nuevoRepuesto.precioUnitario,
+            // Si no se completó, el servidor usa el costo como precio de venta.
+            ...(precioVentaDraft.trim()
+              ? { precioVentaUnitario: nuevoRepuesto.precioVentaUnitario }
+              : {}),
           }
 
       const res = await fetch(`/api/ordenes/${ordenId}/repuestos`, {
@@ -265,8 +284,15 @@ export function OrdenRepuestosTab({ ordenId, repuestos, ordenEstado, onRepuestos
     }, 500)
   }
 
+  // Los importes que se muestran son los de VENTA: son los que se le cobran al
+  // cliente y los que se suman al total en la entrega. El costo se muestra
+  // aparte, como referencia de margen.
   const subtotalRepuestos = repuestos?.reduce(
-    (sum, r) => sum + cantidadDe(r) * r.precioUnitario,
+    (sum, r) => sum + cantidadDe(r) * precioVentaRepuesto(r),
+    0
+  ) || 0
+  const subtotalCosto = repuestos?.reduce(
+    (sum, r) => sum + cantidadDe(r) * Number(r.precioUnitario ?? 0),
     0
   ) || 0
 
@@ -357,16 +383,18 @@ export function OrdenRepuestosTab({ ordenId, repuestos, ordenEstado, onRepuestos
             ) : (
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="sm:col-span-3">
-                  <Label className="text-xs">Nombre del repuesto</Label>
+                  <Label htmlFor="repuesto-manual-nombre" className="text-xs">Nombre del repuesto</Label>
                   <Input
+                    id="repuesto-manual-nombre"
                     placeholder="Ej: Flex de carga iPhone 12"
                     value={nuevoRepuesto.nombre}
                     onChange={(e) => setNuevoRepuesto({ ...nuevoRepuesto, nombre: e.target.value })}
                   />
                 </div>
                 <div>
-                  <Label className="text-xs">Cantidad</Label>
+                  <Label htmlFor="repuesto-manual-cantidad" className="text-xs">Cantidad</Label>
                   <Input
+                    id="repuesto-manual-cantidad"
                     type="number"
                     min="1"
                     value={cantidadDraft}
@@ -376,9 +404,10 @@ export function OrdenRepuestosTab({ ordenId, repuestos, ordenEstado, onRepuestos
                     }}
                   />
                 </div>
-                <div className="sm:col-span-2">
-                  <Label className="text-xs">Costo unitario</Label>
+                <div>
+                  <Label htmlFor="repuesto-manual-costo" className="text-xs">Costo unitario</Label>
                   <Input
+                    id="repuesto-manual-costo"
                     type="number"
                     min="0"
                     step="0.01"
@@ -389,7 +418,38 @@ export function OrdenRepuestosTab({ ordenId, repuestos, ordenEstado, onRepuestos
                       setNuevoRepuesto({ ...nuevoRepuesto, precioUnitario: parseFloat(e.target.value) || 0 })
                     }}
                   />
+                  <p className="mt-1 text-[11px] text-muted-foreground">Lo que pagaste</p>
                 </div>
+                <div>
+                  <Label htmlFor="repuesto-manual-venta" className="text-xs">Precio de venta</Label>
+                  <Input
+                    id="repuesto-manual-venta"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={precioVentaDraft}
+                    onChange={(e) => {
+                      setPrecioVentaDraft(e.target.value)
+                      setNuevoRepuesto({
+                        ...nuevoRepuesto,
+                        precioVentaUnitario: parseFloat(e.target.value) || 0,
+                      })
+                    }}
+                  />
+                  <p className="mt-1 text-[11px] text-muted-foreground">Lo que le cobrás</p>
+                </div>
+                {margenManual !== null && (
+                  <div className="sm:col-span-3">
+                    <p className="text-xs text-muted-foreground">
+                      Margen por unidad:{" "}
+                      <span className={margenManual < 0 ? "text-destructive font-medium" : "font-medium"}>
+                        {formatPrice(margenManual)}
+                      </span>
+                      {margenManual < 0 && " — estarías vendiendo por debajo del costo"}
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -436,7 +496,10 @@ export function OrdenRepuestosTab({ ordenId, repuestos, ordenEstado, onRepuestos
                     )}
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    {cantidadDe(repuesto)} × {formatPrice(repuesto.precioUnitario)}
+                    {cantidadDe(repuesto)} × {formatPrice(precioVentaRepuesto(repuesto))}
+                    <span className="ml-2 text-xs">
+                      (costo {formatPrice(Number(repuesto.precioUnitario ?? 0))})
+                    </span>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -473,7 +536,7 @@ export function OrdenRepuestosTab({ ordenId, repuestos, ordenEstado, onRepuestos
                     </div>
                   )}
                   <span className="font-semibold">
-                    {formatPrice(cantidadDe(repuesto) * repuesto.precioUnitario)}
+                    {formatPrice(cantidadDe(repuesto) * precioVentaRepuesto(repuesto))}
                   </span>
                   <Button variant="ghost" size="icon" className="h-8 w-8" disabled={updating} onClick={() => handleRemoveRepuesto(repuesto.id)}>
                     <Trash2 className="h-4 w-4 text-destructive" />
@@ -481,9 +544,20 @@ export function OrdenRepuestosTab({ ordenId, repuestos, ordenEstado, onRepuestos
                 </div>
               </div>
             ))}
-            <div className="flex justify-between pt-3 border-t font-semibold">
-              <span>Subtotal Repuestos</span>
-              <span>{formatPrice(subtotalRepuestos)}</span>
+            <div className="pt-3 border-t space-y-1">
+              <div className="flex justify-between font-semibold">
+                <span>Subtotal Repuestos</span>
+                <span>{formatPrice(subtotalRepuestos)}</span>
+              </div>
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Costo · margen</span>
+                <span>
+                  {formatPrice(subtotalCosto)} ·{" "}
+                  <span className={subtotalRepuestos - subtotalCosto < 0 ? "text-destructive" : ""}>
+                    {formatPrice(subtotalRepuestos - subtotalCosto)}
+                  </span>
+                </span>
+              </div>
             </div>
           </div>
         ) : (

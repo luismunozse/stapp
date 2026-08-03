@@ -1280,6 +1280,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             },
             estadoCobro: orden.estadoCobro,
             pendienteCobro: (orden.costoFinal || 0) - (orden.descuentoCobro || 0) - (orden.totalCobrado || 0),
+            costoFinal: orden.costoFinal,
+            repuestos: (orden as any).repuestos || [],
           }}
           encargadoNombre={session?.user?.name || "Usuario"}
           esRetiro={orden.estado === "SIN_REPARACION" && !sinCobroEntrega}
