@@ -131,6 +131,27 @@ describe("EntregaDialog — resumen de repuestos y total a cobrar", () => {
     expect(screen.getByRole("checkbox", { name: /ya incluye/i })).toBeChecked()
   })
 
+  it("pasa el pendiente devuelto por el servidor para encadenar el cobro", async () => {
+    mockFetch.mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        json: async () => ({ estado: "ENTREGADO", pendienteCobro: 75000 }),
+      } as Response)
+    )
+    const { onSuccess } = renderDialog()
+
+    fireEvent.click(screen.getByRole("button", { name: /confirmar/i }))
+
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledWith(75000))
+  })
+
+  it("anticipa que se va a abrir el cobro en vez de mandar a buscarlo", () => {
+    renderDialog({ estadoCobro: "PENDIENTE", pendienteCobro: 75000 })
+
+    expect(screen.getByText(/Al confirmar se abre la pantalla de cobro/i)).toBeInTheDocument()
+    expect(screen.queryByText(/despu[eé]s de la entrega desde el detalle/i)).not.toBeInTheDocument()
+  })
+
   it("no muestra el bloque de cobro en una entrega sin cobro", () => {
     render(
       <EntregaDialog

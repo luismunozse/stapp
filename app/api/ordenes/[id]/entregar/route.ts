@@ -169,13 +169,20 @@ export async function POST(
       } catch (err) { console.error("Error inserting orden_evento:", err) }
     })()
 
+    // Saldo que queda tras la entrega. Se devuelve en la respuesta para que la
+    // UI pueda encadenar el cobro sin recalcularlo por su cuenta (el cliente no
+    // conoce el costo_final que se acaba de confirmar).
+    const costoFinal = parseFloat(updatedOrden.costo_final || "0")
+    const descuento = parseFloat(updatedOrden.descuento_cobro || "0")
+    const cobrado = parseFloat(updatedOrden.total_cobrado || "0")
+    const pendienteCobro = sinCobro
+      ? 0
+      : Math.round((costoFinal - descuento - cobrado) * 100) / 100
+
     // Fiado: si se entrega con saldo pendiente (y no es entrega sin cobro),
     // debitar la cuenta corriente del cliente.
     if (!sinCobro && orden.cliente_id) {
-      const costoFinal = parseFloat(updatedOrden.costo_final || "0")
-      const descuento = parseFloat(updatedOrden.descuento_cobro || "0")
-      const cobrado = parseFloat(updatedOrden.total_cobrado || "0")
-      const pendiente = Math.round((costoFinal - descuento - cobrado) * 100) / 100
+      const pendiente = pendienteCobro
       if (pendiente > 0) {
         const { error: fiadoError } = await supabaseAdmin.rpc("cargar_deuda_cuenta_corriente", {
           p_org_id: organizationId!,
@@ -302,6 +309,8 @@ export async function POST(
       fechaEntrega: updatedOrden.fecha_entrega,
       notasEntrega: updatedOrden.notas_entrega,
       entregadoPor: updatedOrden.users,
+      // Lo usa la UI para encadenar el cobro apenas se cierra la entrega.
+      pendienteCobro,
       // Presente solo si el descuento de stock fallo: la entrega se completo
       // igual, pero el inventario quedo sin ajustar y hay que revisarlo.
       ...(stockWarning ? { warning: stockWarning } : {}),

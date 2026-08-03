@@ -43,7 +43,10 @@ const MOTIVO_OPTIONS: Array<{ value: MotivoSinCobro; label: string; hint: string
 interface EntregaDialogProps {
   open: boolean
   onClose: () => void
-  onSuccess: () => void
+  /** Recibe el saldo que quedó pendiente para que el llamador encadene el
+   *  cobro. Es el valor calculado por el servidor sobre el costo_final recién
+   *  confirmado, no una cuenta hecha en el cliente. */
+  onSuccess: (pendienteCobro?: number) => void
   orden: {
     id: string
     numeroOrden: number
@@ -185,7 +188,7 @@ export function EntregaDialog({
         toast.warning(data.warning, { duration: 10000 })
       }
 
-      onSuccess()
+      onSuccess(typeof data.pendienteCobro === "number" ? data.pendienteCobro : undefined)
       onClose()
     } catch (err) {
       console.error("Error:", err)
@@ -281,16 +284,19 @@ export function EntregaDialog({
             </div>
           )}
 
-          {/* Aviso informativo si hay cobro pendiente (solo para entregas normales) */}
+          {/* Cobro pendiente (solo entregas normales). Antes este cartel mandaba
+              al operador a buscar el cobro en otra pantalla; ahora anticipa que
+              la pantalla de cobro se abre sola al confirmar. */}
           {tienePendiente && (
             <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-sm">
-              <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+              <HandCoins className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
               <div>
                 <p className="font-medium text-amber-800 dark:text-amber-300">
-                  Cobro pendiente: {orden.pendienteCobro?.toLocaleString("es-AR", { style: "currency", currency: "ARS" })}
+                  Queda un saldo de {formatPrice(orden.pendienteCobro || 0)}
                 </p>
                 <p className="text-amber-700 dark:text-amber-400 text-xs mt-0.5">
-                  Puede cobrar después de la entrega desde el detalle de la orden.
+                  Al confirmar se abre la pantalla de cobro. Si el cliente no paga
+                  ahora, cerrala y el saldo queda en su cuenta corriente.
                 </p>
               </div>
             </div>
