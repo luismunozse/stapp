@@ -57,16 +57,18 @@ describe("OrdenRepuestosTab — espera el refetch del padre antes de reactivar e
     expect(submitButton).toBeDisabled()
     expect(screen.getByPlaceholderText("Ej: Flex de carga iPhone 12")).toBeInTheDocument()
 
-    // Resolver el refetch del padre: recien ahi se cierra el formulario.
+    // Resolver el refetch del padre: recien ahi se reactivan los controles.
     await act(async () => {
       resolveOrdenChanged()
       await Promise.resolve()
     })
 
+    // El formulario NO se cierra (carga en lote), pero queda limpio y operable
+    // para el siguiente repuesto.
     await waitFor(() =>
-      expect(screen.queryByPlaceholderText("Ej: Flex de carga iPhone 12")).not.toBeInTheDocument(),
+      expect(screen.getByRole("button", { name: "Agregar" })).not.toBeDisabled(),
     )
-    expect(screen.getByRole("button", { name: "Agregar" })).not.toBeDisabled()
+    expect(screen.getByPlaceholderText("Ej: Flex de carga iPhone 12")).toHaveValue("")
   })
 })
 
@@ -189,5 +191,159 @@ describe("OrdenRepuestosTab — busqueda de repuestos del inventario", () => {
 
     expect(await screen.findByText(/Solo hay 4 disponible/)).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Agregar" })).toBeDisabled()
+  })
+
+  it("deja el formulario abierto tras agregar, para cargar varios seguidos", async () => {
+    setupFetch([item()])
+    const onRepuestosChanged = vi.fn().mockResolvedValue(undefined)
+
+    render(
+      <ModalProvider>
+        <OrdenRepuestosTab ordenId="orden-1" repuestos={[]} onRepuestosChanged={onRepuestosChanged} />
+      </ModalProvider>,
+    )
+
+    abrirBuscador()
+    fireEvent.click(await screen.findByText("Pantalla iPhone 12"))
+    fireEvent.click(screen.getByRole("button", { name: "Agregar" }))
+
+    // El buscador sigue montado y aparece la confirmacion del alta anterior.
+    expect(await screen.findByText(/Agregado: Pantalla iPhone 12/)).toBeInTheDocument()
+    expect(screen.getByRole("combobox")).toBeInTheDocument()
+  })
+})
+
+describe("OrdenRepuestosTab — stepper de cantidad", () => {
+  const repuestoCargado = {
+    id: "rep-1",
+    inventarioId: "inv-1",
+    inventario: { id: "inv-1", nombre: "Pantalla iPhone 12", stock: 5 },
+    cantidad: 2,
+    precioUnitario: 100,
+  }
+
+  const setupFetch = () => {
+    const mockFetch = vi.fn(() =>
+      Promise.resolve({ ok: true, json: async () => ({ data: [] }) } as Response),
+    )
+    vi.stubGlobal("fetch", mockFetch)
+    return mockFetch
+  }
+
+  const patchCalls = (mockFetch: ReturnType<typeof vi.fn>) =>
+    mockFetch.mock.calls.filter(
+      ([, opts]) => (opts as RequestInit | undefined)?.method === "PATCH",
+    )
+
+  beforeEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it("manda un PATCH con la cantidad nueva al tocar +", async () => {
+    const mockFetch = setupFetch()
+    const onRepuestosChanged = vi.fn().mockResolvedValue(undefined)
+
+    render(
+      <ModalProvider>
+        <OrdenRepuestosTab
+          ordenId="orden-1"
+          repuestos={[repuestoCargado]}
+          ordenEstado="EN_REPARACION"
+          onRepuestosChanged={onRepuestosChanged}
+        />
+      </ModalProvider>,
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: /Agregar una unidad/ }))
+
+    await waitFor(
+      () => {
+        const calls = patchCalls(mockFetch)
+        expect(calls.length).toBe(1)
+        expect(JSON.parse((calls[0][1] as RequestInit).body as string)).toEqual({ cantidad: 3 })
+      },
+      { timeout: 3000 },
+    )
+  })
+
+  it("agrupa clicks rapidos en un unico PATCH con la cantidad final", async () => {
+    const mockFetch = setupFetch()
+
+    render(
+      <ModalProvider>
+        <OrdenRepuestosTab
+          ordenId="orden-1"
+          repuestos={[repuestoCargado]}
+          ordenEstado="EN_REPARACION"
+          onRepuestosChanged={vi.fn().mockResolvedValue(undefined)}
+        />
+      </ModalProvider>,
+    )
+
+    const mas = screen.getByRole("button", { name: /Agregar una unidad/ })
+    fireEvent.click(mas)
+    fireEvent.click(mas)
+    fireEvent.click(mas)
+
+    await waitFor(
+      () => {
+        const calls = patchCalls(mockFetch)
+        expect(calls.length).toBe(1)
+        expect(JSON.parse((calls[0][1] as RequestInit).body as string)).toEqual({ cantidad: 5 })
+      },
+      { timeout: 3000 },
+    )
+  })
+
+  it("no permite bajar de 1", () => {
+    setupFetch()
+
+    render(
+      <ModalProvider>
+        <OrdenRepuestosTab
+          ordenId="orden-1"
+          repuestos={[{ ...repuestoCargado, cantidad: 1 }]}
+          ordenEstado="EN_REPARACION"
+          onRepuestosChanged={vi.fn()}
+        />
+      </ModalProvider>,
+    )
+
+    expect(screen.getByRole("button", { name: /Quitar una unidad/ })).toBeDisabled()
+  })
+
+  it("oculta el stepper en una orden entregada (la reserva ya se consumio)", () => {
+    setupFetch()
+
+    render(
+      <ModalProvider>
+        <OrdenRepuestosTab
+          ordenId="orden-1"
+          repuestos={[repuestoCargado]}
+          ordenEstado="ENTREGADO"
+          onRepuestosChanged={vi.fn()}
+        />
+      </ModalProvider>,
+    )
+
+    expect(screen.queryByRole("button", { name: /Agregar una unidad/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /Quitar una unidad/ })).not.toBeInTheDocument()
+  })
+
+  it("oculta el stepper en una orden cancelada", () => {
+    setupFetch()
+
+    render(
+      <ModalProvider>
+        <OrdenRepuestosTab
+          ordenId="orden-1"
+          repuestos={[repuestoCargado]}
+          ordenEstado="CANCELADO"
+          onRepuestosChanged={vi.fn()}
+        />
+      </ModalProvider>,
+    )
+
+    expect(screen.queryByRole("button", { name: /Agregar una unidad/ })).not.toBeInTheDocument()
   })
 })

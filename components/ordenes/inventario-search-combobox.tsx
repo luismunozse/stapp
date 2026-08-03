@@ -26,6 +26,9 @@ interface InventarioSearchComboboxProps {
   limit?: number
   /** Bump this number to force a refetch (p.ej. despues de mover stock). */
   refreshKey?: number
+  /** Bump this number para devolverle el foco al input desde el padre
+   *  (carga en lote: tras agregar uno, el cursor vuelve al buscador). */
+  focusSignal?: number
   placeholder?: string
   emptyHint?: string
 }
@@ -49,6 +52,7 @@ export function InventarioSearchCombobox({
   disabled = false,
   limit = 20,
   refreshKey = 0,
+  focusSignal = 0,
   placeholder = "Buscar por nombre, código o código de barras...",
   emptyHint = "Probá con otro término o cargalo como repuesto manual.",
 }: InventarioSearchComboboxProps) {
@@ -172,11 +176,21 @@ export function InventarioSearchCombobox({
   }
 
   // Mantener visible el item resaltado al navegar con el teclado.
+  // scrollIntoView no existe en todos los entornos de render (jsdom, algunos
+  // webviews), y es puro confort visual: si no está, no debe romper la lista.
   useEffect(() => {
     if (!open) return
     const node = listRef.current?.children[highlight] as HTMLElement | undefined
-    node?.scrollIntoView({ block: "nearest" })
+    if (typeof node?.scrollIntoView === "function") {
+      node.scrollIntoView({ block: "nearest" })
+    }
   }, [highlight, open])
+
+  // El padre pide el foco (carga en lote). No corre en el montaje inicial:
+  // abrir el panel no debe robarle el foco al resto de la pantalla.
+  useEffect(() => {
+    if (focusSignal > 0) inputRef.current?.focus()
+  }, [focusSignal])
 
   if (value) {
     const disponible = disponibleDe(value)

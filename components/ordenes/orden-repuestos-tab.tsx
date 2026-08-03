@@ -1,13 +1,15 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { AlertTriangle, Plus, Trash2 } from "lucide-react"
+import { AlertTriangle, Check, Minus, Plus, Trash2 } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { useModal } from "@/contexts/modal-context"
+import { ESTADOS_ENTREGA } from "@/lib/orden-state-machine"
+import type { EstadoOrden } from "@/types"
 import {
   InventarioSearchCombobox,
   disponibleDe,
@@ -26,6 +28,10 @@ interface Repuesto {
 interface OrdenRepuestosTabProps {
   ordenId: string
   repuestos: Repuesto[]
+  /** Estado de la orden. En una orden cerrada la reserva de stock ya se
+   *  consumió (entregada) o se liberó (cancelada), así que la cantidad no se
+   *  puede reajustar: el servidor rechaza el PATCH con 409. */
+  ordenEstado?: EstadoOrden | string | null
   /** Puede devolver una promesa: el llamador espera a que el refetch del
    *  padre termine antes de reactivar los controles, para evitar la ventana
    *  en la que el panel muestra "sin repuestos" mientras el padre aun no
@@ -33,9 +39,12 @@ interface OrdenRepuestosTabProps {
   onRepuestosChanged: () => void | Promise<void>
 }
 
-export function OrdenRepuestosTab({ ordenId, repuestos, onRepuestosChanged }: OrdenRepuestosTabProps) {
+const ESTADOS_CERRADOS: string[] = [...ESTADOS_ENTREGA, "CANCELADO"]
+
+export function OrdenRepuestosTab({ ordenId, repuestos, ordenEstado, onRepuestosChanged }: OrdenRepuestosTabProps) {
   const { formatPrice } = useCurrency()
   const { confirm, alert } = useModal()
+  const ordenCerrada = !!ordenEstado && ESTADOS_CERRADOS.includes(ordenEstado)
   const [showAddRepuesto, setShowAddRepuesto] = useState(false)
   const [tipoRepuesto, setTipoRepuesto] = useState<"inventario" | "manual">("inventario")
   const [itemSeleccionado, setItemSeleccionado] = useState<InventarioOption | null>(null)
@@ -50,6 +59,28 @@ export function OrdenRepuestosTab({ ordenId, repuestos, onRepuestosChanged }: Or
   // Raw editing strings so the inputs can show empty while a valid numeric stays in nuevoRepuesto.
   const [cantidadDraft, setCantidadDraft] = useState("1")
   const [precioDraft, setPrecioDraft] = useState("")
+  // Carga en lote: tras agregar, el form queda abierto y el foco vuelve al buscador.
+  const [focusSignal, setFocusSignal] = useState(0)
+  const [ultimoAgregado, setUltimoAgregado] = useState<string | null>(null)
+  // Cantidades optimistas por repuesto mientras el PATCH viaja.
+  const [cantidadPendiente, setCantidadPendiente] = useState<Record<string, number>>({})
+  const [ajustando, setAjustando] = useState<string | null>(null)
+  const patchTimers = useRef<Record<string, number>>({})
+
+  // Limpiar timers pendientes al desmontar para no patchear sobre un componente muerto.
+  useEffect(() => {
+    const timers = patchTimers.current
+    return () => {
+      Object.values(timers).forEach((t) => window.clearTimeout(t))
+    }
+  }, [])
+
+  // El aviso de "agregado" se desvanece solo: es confirmacion, no un estado.
+  useEffect(() => {
+    if (!ultimoAgregado) return
+    const t = window.setTimeout(() => setUltimoAgregado(null), 2500)
+    return () => window.clearTimeout(t)
+  }, [ultimoAgregado])
 
   const disponibleSeleccionado = itemSeleccionado ? disponibleDe(itemSeleccionado) : 0
   // Mismo criterio que el RPC add_repuesto_inventario (stock - reservado):
@@ -117,13 +148,19 @@ export function OrdenRepuestosTab({ ordenId, repuestos, onRepuestosChanged }: Or
       })
 
       if (res.ok) {
-        // Esperamos el refetch del padre antes de cerrar el formulario: si no,
+        const nombreAgregado = tipoRepuesto === "inventario"
+          ? itemSeleccionado!.nombre
+          : nuevoRepuesto.nombre.trim()
+        // Esperamos el refetch del padre antes de limpiar el formulario: si no,
         // el panel muestra brevemente "no hay repuestos agregados" sin ningun
         // indicador de carga, lo que invita a reintentar y duplicar el alta.
         await onRepuestosChanged?.()
         resetForm()
-        setShowAddRepuesto(false)
+        // Carga en lote: el formulario NO se cierra. Una reparacion tipica lleva
+        // varios repuestos y cerrar el panel obligaba a reabrirlo cada vez.
         setInventarioRefreshKey((k) => k + 1) // Refresh inventory stock on next open
+        setUltimoAgregado(nombreAgregado)
+        if (tipoRepuesto === "inventario") setFocusSignal((k) => k + 1)
       } else {
         const error = await res.json()
         await alert({
@@ -171,8 +208,65 @@ export function OrdenRepuestosTab({ ordenId, repuestos, onRepuestosChanged }: Or
     }
   }
 
+  /** Cantidad a mostrar: la optimista si hay un PATCH en vuelo, si no la del servidor. */
+  const cantidadDe = (repuesto: Repuesto) =>
+    cantidadPendiente[repuesto.id] ?? repuesto.cantidad
+
+  /**
+   * Stepper de cantidad. Pinta el cambio al instante y agrupa los clicks
+   * rapidos en un solo PATCH: tocar "+" cuatro veces manda una peticion con 5,
+   * no cuatro peticiones que compiten por la misma reserva de stock.
+   */
+  const handleCantidadChange = (repuesto: Repuesto, nuevaCantidad: number) => {
+    if (nuevaCantidad < 1 || ordenCerrada) return
+
+    setCantidadPendiente((prev) => ({ ...prev, [repuesto.id]: nuevaCantidad }))
+
+    if (patchTimers.current[repuesto.id]) {
+      window.clearTimeout(patchTimers.current[repuesto.id])
+    }
+
+    patchTimers.current[repuesto.id] = window.setTimeout(async () => {
+      delete patchTimers.current[repuesto.id]
+      setAjustando(repuesto.id)
+      try {
+        const res = await fetch(
+          `/api/ordenes/${ordenId}/repuestos?repuestoId=${repuesto.id}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ cantidad: nuevaCantidad }),
+          }
+        )
+
+        if (!res.ok) {
+          const error = await res.json().catch(() => ({}))
+          await alert({
+            title: "No se pudo cambiar la cantidad",
+            description: error.error || "Error al actualizar la cantidad",
+            variant: "error",
+          })
+        }
+        // Tanto en exito como en error refrescamos: el servidor es la verdad y
+        // asi la cantidad optimista no queda pegada si el PATCH fue rechazado.
+        await onRepuestosChanged?.()
+        setInventarioRefreshKey((k) => k + 1)
+      } catch (error) {
+        console.error("Error updating repuesto cantidad:", error)
+        await onRepuestosChanged?.()
+      } finally {
+        setAjustando(null)
+        setCantidadPendiente((prev) => {
+          const next = { ...prev }
+          delete next[repuesto.id]
+          return next
+        })
+      }
+    }, 500)
+  }
+
   const subtotalRepuestos = repuestos?.reduce(
-    (sum, r) => sum + r.cantidad * r.precioUnitario,
+    (sum, r) => sum + cantidadDe(r) * r.precioUnitario,
     0
   ) || 0
 
@@ -226,6 +320,7 @@ export function OrdenRepuestosTab({ ordenId, repuestos, onRepuestosChanged }: Or
                     onChange={setItemSeleccionado}
                     disabled={updating}
                     refreshKey={inventarioRefreshKey}
+                    focusSignal={focusSignal}
                   />
                 </div>
                 {itemSeleccionado && (
@@ -298,7 +393,7 @@ export function OrdenRepuestosTab({ ordenId, repuestos, onRepuestosChanged }: Or
               </div>
             )}
 
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
               <Button size="sm" onClick={handleAddRepuesto} disabled={updating || excedeStock}>
                 Agregar
               </Button>
@@ -308,11 +403,18 @@ export function OrdenRepuestosTab({ ordenId, repuestos, onRepuestosChanged }: Or
                 onClick={() => {
                   setShowAddRepuesto(false)
                   setTipoRepuesto("inventario")
+                  setUltimoAgregado(null)
                   resetForm()
                 }}
               >
-                Cancelar
+                Listo
               </Button>
+              {ultimoAgregado && (
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-500" />
+                  Agregado: {ultimoAgregado}
+                </span>
+              )}
             </div>
           </div>
         )}
@@ -324,22 +426,54 @@ export function OrdenRepuestosTab({ ordenId, repuestos, onRepuestosChanged }: Or
                 key={repuesto.id}
                 className="flex items-center justify-between p-3 border rounded-lg"
               >
-                <div>
+                <div className="min-w-0">
                   <div className="font-medium flex items-center gap-2">
-                    {repuesto.inventario?.nombre || repuesto.nombre}
+                    <span className="truncate">{repuesto.inventario?.nombre || repuesto.nombre}</span>
                     {!repuesto.inventario && (
-                      <span className="text-xs bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
+                      <span className="text-xs bg-muted px-1.5 py-0.5 rounded text-muted-foreground shrink-0">
                         Manual
                       </span>
                     )}
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    {repuesto.cantidad} × {formatPrice(repuesto.precioUnitario)}
+                    {cantidadDe(repuesto)} × {formatPrice(repuesto.precioUnitario)}
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
+                  {!ordenCerrada && (
+                    <div className="flex items-center rounded-md border">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 rounded-r-none"
+                        aria-label={`Quitar una unidad de ${repuesto.inventario?.nombre || repuesto.nombre}`}
+                        disabled={updating || cantidadDe(repuesto) <= 1}
+                        onClick={() => handleCantidadChange(repuesto, cantidadDe(repuesto) - 1)}
+                      >
+                        <Minus className="h-3.5 w-3.5" />
+                      </Button>
+                      <span
+                        aria-live="polite"
+                        className={`min-w-8 text-center text-sm tabular-nums ${
+                          ajustando === repuesto.id ? "text-muted-foreground" : ""
+                        }`}
+                      >
+                        {cantidadDe(repuesto)}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 rounded-l-none"
+                        aria-label={`Agregar una unidad de ${repuesto.inventario?.nombre || repuesto.nombre}`}
+                        disabled={updating}
+                        onClick={() => handleCantidadChange(repuesto, cantidadDe(repuesto) + 1)}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  )}
                   <span className="font-semibold">
-                    {formatPrice(repuesto.cantidad * repuesto.precioUnitario)}
+                    {formatPrice(cantidadDe(repuesto) * repuesto.precioUnitario)}
                   </span>
                   <Button variant="ghost" size="icon" className="h-8 w-8" disabled={updating} onClick={() => handleRemoveRepuesto(repuesto.id)}>
                     <Trash2 className="h-4 w-4 text-destructive" />
