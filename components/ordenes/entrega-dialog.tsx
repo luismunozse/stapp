@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label"
 import { SignaturePad } from "@/components/firma/signature-pad"
 import { Input } from "@/components/ui/input"
 import { Loader2, PackageCheck, PackageX, AlertTriangle, Shield, HandCoins } from "lucide-react"
+import { toast } from "sonner"
 import {
   defaultMotivoSinCobro,
   MOTIVOS_SIN_COBRO,
@@ -128,10 +129,18 @@ export function EntregaDialog({
         }),
       })
 
+      const data = await res.json().catch(() => ({}))
+
       if (!res.ok) {
-        const data = await res.json()
         setError(data.error || "Error al registrar entrega")
         return
+      }
+
+      // La entrega pudo completarse con el descuento de stock fallado: el
+      // servidor lo devuelve como `warning` en vez de fallar la operacion.
+      // Mostrarlo es lo unico que evita que el desajuste pase inadvertido.
+      if (data.warning) {
+        toast.warning(data.warning, { duration: 10000 })
       }
 
       onSuccess()
