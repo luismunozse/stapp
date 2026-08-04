@@ -60,11 +60,12 @@ const round2 = (n: number) => Math.round(n * 100) / 100
  * porque el POST redondeaba recién al armar el body.
  *
  * El clamp a 0 sigue el mismo criterio silencioso que el resto de la app usa
- * para montos que no pueden ser negativos (ver Math.max(0, ...) en
- * lib/lote-utils.ts, cotizaciones/item-row.tsx, cobrar-orden-dialog.tsx,
- * cart-drawer.tsx): no hay ningún input de "costo" en la app que bloquee el
- * envío con un mensaje de validación en su lugar, así que un dialog nuevo no
- * es el lugar para introducir ese patrón.
+ * para montos que no pueden ser negativos (ver el Math.max(0, ...) de
+ * calcularTotalLote en lib/lote-utils.ts, cotizaciones/item-row.tsx y
+ * ordenes/cobrar-orden-dialog.tsx): no hay
+ * ningún input de "costo" en la app que bloquee el envío con un mensaje de
+ * validación en su lugar, así que un dialog nuevo no es el lugar para
+ * introducir ese patrón.
  */
 const normalizeCosto = (raw: string): number => {
   const parsed = parseFloat(raw)
