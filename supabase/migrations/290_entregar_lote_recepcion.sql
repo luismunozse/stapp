@@ -6,12 +6,32 @@
 -- UNA sola transaccion. O se entrega y cobra el lote completo, o no se
 -- mueve nada.
 --
+-- SIN BEGIN/COMMIT propio a proposito. scripts/db-run.mjs detecta si un
+-- archivo "trae su propia transaccion" con
+-- `/^\s*BEGIN\s*;/im.test(sql.split("\n").slice(0, 40).join("\n"))` — solo
+-- mira las primeras 40 LINEAS. Un header largo (como el de este archivo)
+-- empuja un `BEGIN;` de apertura mas alla de esa ventana: el script no lo
+-- detecta, abre su propia transaccion de dry-run, el `BEGIN;` del archivo
+-- queda anidado (Postgres NO crea subtransacciones, sigue en la misma
+-- transaccion externa) y el `COMMIT;` del archivo termina confirmando esa
+-- transaccion externa — un dry-run sin --apply aplicaria el cambio de
+-- verdad. Se leyo el runner completo (existe en la rama
+-- feat/servicios-en-ordenes, commit 74aa49e9, no en esta) para confirmar
+-- este comportamiento exacto antes de decidir sacar el wrapper. Mismo
+-- criterio que `288_crear_recepcion_multiple.sql` (tampoco lo usa):
+-- CREATE OR REPLACE FUNCTION, COMMENT ON FUNCTION y los REVOKE/GRANT de
+-- abajo son cada uno una sentencia atomica de por si; no necesitan una
+-- transaccion explicita, y asi el runner decide la ejecucion.
+--
+-- rollback: DROP FUNCTION entregar_lote_recepcion(TEXT,TEXT,TEXT,JSONB,TEXT,TEXT,TEXT,TEXT);
+--
 -- El UPDATE sobre ordenes_servicio replica exactamente las columnas que
 -- escribe POST /api/ordenes/[id]/entregar (app/api/ordenes/[id]/entregar/route.ts)
 -- en el camino simple REPARADO -> ENTREGADO, verificado linea por linea:
 --   - estado                       (route.ts:132, nuevoEstado)
 --   - fecha_entrega                (route.ts:133, siempre se pisa con NOW())
---   - costo_final                  (route.ts:134, solo si hay total confirmado)
+--   - costo_final                  (route.ts:134, solo si hay total confirmado;
+--                                    redondeado a 2 decimales como hace la ruta)
 --   - firma_cliente_entrega(+mime) (route.ts:135-136, siempre se fuerza a NULL
 --                                    si no viene del body — el lote no captura
 --                                    firma por equipo, asi que siempre es NULL)
@@ -22,8 +42,12 @@
 -- lo asigna sin fallback (`data.notasEntrega`), asi que si no viene en el
 -- request el campo queda SIN TOCAR (JSON.stringify descarta claves
 -- `undefined`). El payload de este RPC no trae una nota por orden, asi que
--- "no tocar la columna" es el mirror correcto — no hay equivalente a NULL
--- forzado como con las firmas.
+-- "no tocar la columna" es el mirror correcto.
+-- `fecha_completado` NO se escribe: /entregar nunca la toca. La escribe el
+-- PUT generico (app/api/ordenes/[id]/route.ts:309-312) la primera vez que la
+-- orden llega a REPARADO o a un estado ENTREGADO*, guardado con
+-- `!orden.fecha_completado`. Como esta funcion exige estado REPARADO de
+-- origen, fecha_completado ya deberia estar seteada por esa via.
 -- `updated_at` NO existe en ordenes_servicio (confirmado en
 -- 179_backfill_fecha_completado.sql: "ordenes_servicio no tiene updated_at").
 --
@@ -34,15 +58,6 @@
 -- ruta HTTP, aceptable porque en este RPC nunca deberia fallar: mismos valores
 -- fijos siempre validos).
 --
--- fecha_completado NO la escribe /entregar: la escribe el PUT generico
--- (app/api/ordenes/[id]/route.ts:309-312) la primera vez que la orden llega a
--- REPARADO o a un estado ENTREGADO*, guardado con `!orden.fecha_completado`.
--- Como esta funcion exige estado REPARADO de origen, fecha_completado ya
--- deberia estar seteada. Igual se refuerza con COALESCE(fecha_completado, NOW())
--- como red de seguridad — mismo criterio que el backfill de la migracion 179 —
--- para no dejar ordenes entregadas sin fecha_completado si alguna vía atípica
--- (ej. un update masivo) dejó el REPARADO sin pasar por esa ruta.
---
 -- Fuera de alcance de este RPC (se resuelven en la ruta HTTP de Tarea 6, igual
 -- que ya hace /entregar con sus propios efectos "best effort"): garantia
 -- (requiere diasGarantia, que no forma parte del payload de lote), debito a
@@ -52,15 +67,47 @@
 -- replicarlos aca adentro de una transaccion atomica los volveria bloqueantes
 -- para las N ordenes del lote, cambiando su semantica actual.
 --
+-- DESCUENTO POR ORDEN: costo_final se escribe siempre entero (el total real
+-- del equipo), pero solo se cobra el share prorateado (montoCobro, ya neto
+-- del descuento de lote). La diferencia (costoFinal - montoCobro) se pasa
+-- como p_descuento a registrar_cobros_orden_atomica para que quede como
+-- descuento_cobro de ESA orden — si no, recalcular_estado_cobro ve
+-- pendiente = costo_final - 0 - montoCobro > 0 y la orden queda PARCIAL para
+-- siempre con un saldo fantasma que ademas alimenta las pantallas de deuda de
+-- cliente (migracion 273). Se llama a registrar_cobros_orden_atomica SIEMPRE,
+-- incluso con montoCobro = 0 (orden 100% bonificada por el descuento del
+-- lote): 242 soporta p_pagos vacio ('[]'::jsonb) sin error — el loop de pagos
+-- simplemente no itera y el SUM de validacion usa COALESCE(...,0) — asi que
+-- ese caso solo aplica el descuento_cobro completo y recalcula el estado de
+-- cobro, sin insertar ningun cobro. Confirmado leyendo 242 completo antes de
+-- decidir esto (no hizo falta escribir descuento_cobro a mano).
+--
+-- SEÑAS/PAGOS PREVIOS: si una orden del lote ya tiene un cobro parcial previo
+-- (deposito tomado antes de entrar al lote), el pendiente real es menor al
+-- costo_final y el share prorateado (calculado sobre el costo_final completo)
+-- puede superarlo. 242 lo detecta y hace
+-- `RAISE EXCEPTION 'El monto total (%) excede el pendiente (%)'` (mensaje
+-- plano, sin prefijo LOTE_ERROR:), lo que abortaria el lote entero con un 500
+-- generico e inmapeable para la Tarea 6. Se envuelve el PERFORM en un bloque
+-- BEGIN/EXCEPTION que reconoce ese mensaje puntual y lo relanza como
+-- LOTE_ERROR:COBRO_EXCEDE_PENDIENTE:<id> (409 mapeable); cualquier otra
+-- excepcion se re-lanza sin tocar. En v1, un lote con una orden que ya tiene
+-- seña queda sin soportar: el operador recibe un error accionable y entrega
+-- esa orden individualmente por /api/ordenes/[id]/entregar.
+--
 -- registrar_cobros_orden_atomica (242_cobros_orden_atomico.sql) NO tiene
 -- SECURITY DEFINER, ni tampoco crear_recepcion_multiple (288). Esta funcion
--- sigue esa misma convencion (se omite SECURITY DEFINER del template de la
--- tarea): agregarlo sin `SET search_path` es un antipatron de seguridad
--- conocido (schema injection), y el service role ya bypassea RLS, asi que no
--- aporta nada en este flujo.
+-- sigue esa misma convencion: agregarlo sin `SET search_path` es un
+-- antipatron de seguridad conocido (schema injection), y el service role ya
+-- bypassea RLS, asi que no aporta nada en este flujo.
+--
+-- HARDENING: PostgREST expone toda funcion en `public` con GRANT EXECUTE a
+-- `anon`/`authenticated` por default. Esta funcion cobra dinero y cambia
+-- estado de ordenes — invocable directo con la anon key (viaja en el bundle
+-- del browser) o con un JWT de cualquier usuario autenticado seria un agujero
+-- serio. Mismo patron que `267_deuda_cliente_sucursal_rpc.sql` (REVOKE de
+-- PUBLIC + anon + authenticated, GRANT solo a service_role).
 -- ============================================================================
-
-BEGIN;
 
 CREATE OR REPLACE FUNCTION entregar_lote_recepcion(
   p_organization_id TEXT,
@@ -77,6 +124,8 @@ DECLARE
   v_orden       RECORD;
   v_costo_final NUMERIC;
   v_monto       NUMERIC;
+  v_descuento   NUMERIC;
+  v_pagos       JSONB;
   v_entregadas  JSONB := '[]'::jsonb;
   v_pendientes  INTEGER;
 BEGIN
@@ -113,7 +162,11 @@ BEGIN
     IF NOT FOUND THEN
       RAISE EXCEPTION 'LOTE_ERROR:ORDEN_FUERA_DE_LOTE:%', v_item->>'id';
     END IF;
-    IF v_orden.estado <> 'REPARADO' THEN
+    -- IS DISTINCT FROM (no <>): un estado NULL debe rechazar la entrega, no
+    -- colarse. `NULL <> 'REPARADO'` evalua a NULL, y plpgsql trata un IF con
+    -- condicion NULL como falso — dejaria pasar una fila con estado NULL sin
+    -- levantar la excepcion.
+    IF v_orden.estado IS DISTINCT FROM 'REPARADO' THEN
       RAISE EXCEPTION 'LOTE_ERROR:ORDEN_NO_REPARADA:%:%', v_orden.id, v_orden.estado;
     END IF;
 
@@ -125,13 +178,15 @@ BEGIN
     IF v_costo_final IS NULL OR v_costo_final < 0 THEN
       RAISE EXCEPTION 'LOTE_ERROR:COSTO_FINAL_INVALIDO:%', v_orden.id;
     END IF;
+    -- Redondeo a 2 decimales, mismo criterio que route.ts:126 aplica sobre
+    -- costoFinalConfirmado antes de persistirlo.
+    v_costo_final := ROUND(v_costo_final, 2);
 
     -- Mirror de las columnas que escribe POST /api/ordenes/[id]/entregar en
     -- el camino REPARADO -> ENTREGADO con cobro (ver header de este archivo).
     UPDATE ordenes_servicio
       SET estado = 'ENTREGADO',
           fecha_entrega = NOW(),
-          fecha_completado = COALESCE(fecha_completado, NOW()),
           costo_final = v_costo_final,
           entregado_por_user_id = p_usuario_id,
           firma_cliente_entrega = NULL,
@@ -153,28 +208,53 @@ BEGIN
 
     -- NULL-safety: si montoCobro no viene en el item, tratarlo como "no cobrar
     -- nada de esta orden ahora" (0) en vez de dejar que `NULL > 0` se evalue
-    -- como falso de forma implicita. Tambien se rechaza un monto negativo.
+    -- como falso de forma implicita. Tambien se rechaza un monto negativo, y
+    -- se redondea por la misma razon que costo_final.
     v_monto := COALESCE((v_item->>'montoCobro')::numeric, 0);
     IF v_monto < 0 THEN
       RAISE EXCEPTION 'LOTE_ERROR:MONTO_COBRO_INVALIDO:%', v_orden.id;
     END IF;
+    v_monto := ROUND(v_monto, 2);
 
-    IF v_monto > 0 THEN
+    -- Descuento de lote que le toca a ESTA orden: la diferencia entre su
+    -- costo real y lo que efectivamente se cobra ahora. GREATEST(...,0) es
+    -- una red de seguridad — el invariante de prorrateo (share_i <= costoFinal_i,
+    -- porque totalCobrado <= subtotal por construccion de calcularTotalLote)
+    -- ya garantiza que nunca deberia ser negativo.
+    v_descuento := GREATEST(ROUND(v_costo_final - v_monto, 2), 0);
+
+    v_pagos := CASE WHEN v_monto > 0
+      THEN jsonb_build_array(jsonb_build_object(
+        'monto', v_monto, 'metodo', p_metodo_pago, 'referencia', p_referencia
+      ))
+      ELSE '[]'::jsonb
+    END;
+
+    -- Se llama siempre (incluso con v_pagos vacio): es la unica via que deja
+    -- descuento_cobro y estado_cobro consistentes con lo que se acaba de
+    -- cobrar (ver nota "DESCUENTO POR ORDEN" arriba).
+    BEGIN
       PERFORM registrar_cobros_orden_atomica(
         p_organization_id,
         v_orden.id,
         p_usuario_id,
-        jsonb_build_array(jsonb_build_object(
-          'monto', v_monto,
-          'metodo', p_metodo_pago,
-          'referencia', p_referencia
-        )),
+        v_pagos,
         p_observaciones,
-        NULL,
+        v_descuento,
         CASE WHEN p_idempotency_key IS NULL THEN NULL
              ELSE p_idempotency_key || ':' || v_orden.id END
       );
-    END IF;
+    EXCEPTION
+      WHEN raise_exception THEN
+        -- Mapear el unico error de negocio de 242 que puede disparar una
+        -- orden con seña previa (ver nota "SEÑAS/PAGOS PREVIOS" arriba) a un
+        -- codigo LOTE_ERROR: mapeable; cualquier otra excepcion se relanza tal cual.
+        IF SQLERRM LIKE 'El monto total%excede el pendiente%' THEN
+          RAISE EXCEPTION 'LOTE_ERROR:COBRO_EXCEDE_PENDIENTE:%', v_orden.id;
+        ELSE
+          RAISE;
+        END IF;
+    END;
 
     v_entregadas := v_entregadas || jsonb_build_object(
       'id', v_orden.id, 'numeroOrden', v_orden.numero_orden, 'montoCobrado', v_monto
@@ -187,10 +267,14 @@ $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION entregar_lote_recepcion(TEXT,TEXT,TEXT,JSONB,TEXT,TEXT,TEXT,TEXT) IS
   'Entrega atomica de todas las ordenes REPARADO de una recepcion multiple, '
-  'con cobro prorateado por orden via registrar_cobros_orden_atomica (242). '
-  'Columnas de ordenes_servicio espejadas de POST /api/ordenes/[id]/entregar '
+  'con descuento y cobro prorateado por orden via registrar_cobros_orden_atomica '
+  '(242). Columnas de ordenes_servicio espejadas de POST /api/ordenes/[id]/entregar '
   '(camino REPARADO->ENTREGADO con cobro). Excepciones con prefijo '
   'LOTE_ERROR: para que la ruta HTTP (Tarea 6) las mapee a status codes. '
   'Migracion 290.';
 
-COMMIT;
+-- Invocable solo por service_role — ver nota HARDENING arriba.
+REVOKE EXECUTE ON FUNCTION entregar_lote_recepcion(TEXT,TEXT,TEXT,JSONB,TEXT,TEXT,TEXT,TEXT) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION entregar_lote_recepcion(TEXT,TEXT,TEXT,JSONB,TEXT,TEXT,TEXT,TEXT) FROM anon;
+REVOKE EXECUTE ON FUNCTION entregar_lote_recepcion(TEXT,TEXT,TEXT,JSONB,TEXT,TEXT,TEXT,TEXT) FROM authenticated;
+GRANT EXECUTE ON FUNCTION entregar_lote_recepcion(TEXT,TEXT,TEXT,JSONB,TEXT,TEXT,TEXT,TEXT) TO service_role;
