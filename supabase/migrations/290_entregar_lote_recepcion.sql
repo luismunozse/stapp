@@ -95,6 +95,21 @@
 -- seña queda sin soportar: el operador recibe un error accionable y entrega
 -- esa orden individualmente por /api/ordenes/[id]/entregar.
 --
+-- ORDEN DE LAS OPERACIONES (invariante, no reordenar): dentro del loop, cada
+-- orden se cobra ANTES de que su estado pase a ENTREGADO.
+--   1. UPDATE costo_final           (la orden sigue en REPARADO)
+--   2. PERFORM registrar_cobros_orden_atomica
+--   3. UPDATE estado = 'ENTREGADO' + fecha_entrega + resto de columnas
+--   4. INSERT orden_eventos
+-- El paso 6 de 242 (fiado) acredita el cobro no-CC a la cuenta corriente del
+-- cliente si `v_orden.estado IN ('ENTREGADO','ENTREGADO_SIN_REPARACION')` —
+-- y 242 lee ese estado de la fila EN LA MISMA TRANSACCION (paso 1, SELECT ...
+-- FOR UPDATE). En el flujo de una sola orden eso esta balanceado por el CARGO
+-- previo que deja el debito a cuenta corriente de la ruta HTTP; el lote NUNCA
+-- emite ese cargo, asi que si la orden ya estuviera en ENTREGADO al cobrar, el
+-- cliente terminaria con un saldo a favor fantasma por el total del lote. Con
+-- estado 'REPARADO' la condicion del paso 6 es falsa y el fiado ni se evalua.
+--
 -- registrar_cobros_orden_atomica (242_cobros_orden_atomico.sql) NO tiene
 -- SECURITY DEFINER, ni tampoco crear_recepcion_multiple (288). Esta funcion
 -- sigue esa misma convencion: agregarlo sin `SET search_path` es un
@@ -140,12 +155,20 @@ BEGIN
     RAISE EXCEPTION 'LOTE_ERROR:SIN_ORDENES';
   END IF;
 
-  -- Toda orden miembro no entregada tiene que venir en el payload.
+  -- Toda orden miembro ELEGIBLE (no excluida del lote) tiene que venir en el
+  -- payload. La lista NOT IN espeja ESTADOS_EXCLUIDOS_LOTE de lib/lote-estados.ts:
+  -- las entregadas ya salieron por su propio flujo, y CANCELADO /
+  -- SIN_REPARACION / SIN_FALLA_DETECTADA quedaron cerradas sin entrega con
+  -- cobro. Ninguna de ellas se exige aca, y si igual llegara en el payload el
+  -- guard por orden (ORDEN_NO_REPARADA) la rechaza.
   SELECT COUNT(*) INTO v_pendientes
     FROM ordenes_servicio o
     WHERE o.recepcion_id = p_recepcion_id
       AND o.organization_id = p_organization_id
-      AND o.estado NOT IN ('ENTREGADO','ENTREGADO_SIN_REPARACION','ENTREGADO_SIN_COBRO','CANCELADO')
+      AND o.estado NOT IN (
+        'ENTREGADO','ENTREGADO_SIN_REPARACION','ENTREGADO_SIN_COBRO',
+        'CANCELADO','SIN_REPARACION','SIN_FALLA_DETECTADA'
+      )
       AND NOT EXISTS (
         SELECT 1 FROM jsonb_array_elements(p_ordenes) e WHERE e->>'id' = o.id
       );
@@ -182,29 +205,13 @@ BEGIN
     -- costoFinalConfirmado antes de persistirlo.
     v_costo_final := ROUND(v_costo_final, 2);
 
-    -- Mirror de las columnas que escribe POST /api/ordenes/[id]/entregar en
-    -- el camino REPARADO -> ENTREGADO con cobro (ver header de este archivo).
+    -- PASO 1 — costo_final ANTES del cobro: registrar_cobros_orden_atomica
+    -- valida el monto contra `costo_final - descuento_cobro - total_cobrado`
+    -- (242, paso 2), asi que la columna tiene que tener ya el costo confirmado
+    -- del lote. El estado sigue siendo REPARADO a proposito (ver PASO 3).
     UPDATE ordenes_servicio
-      SET estado = 'ENTREGADO',
-          fecha_entrega = NOW(),
-          costo_final = v_costo_final,
-          entregado_por_user_id = p_usuario_id,
-          firma_cliente_entrega = NULL,
-          firma_cliente_entrega_mime = NULL,
-          firma_encargado_entrega = NULL,
-          firma_encargado_entrega_mime = NULL,
-          motivo_sin_cobro = NULL
+      SET costo_final = v_costo_final
       WHERE id = v_orden.id;
-
-    -- Mirror del insert a orden_eventos que hace la ruta HTTP para el
-    -- timeline publico (route.ts:153-170), version atomica.
-    INSERT INTO orden_eventos (
-      orden_id, organization_id, tipo, estado_anterior, estado_nuevo, descripcion, created_by
-    ) VALUES (
-      v_orden.id, p_organization_id, 'CAMBIO_ESTADO', v_orden.estado::text, 'ENTREGADO',
-      'Estado cambiado de ' || v_orden.estado::text || ' a ENTREGADO (entrega en lote)',
-      p_usuario_id
-    );
 
     -- NULL-safety: si montoCobro no viene en el item, tratarlo como "no cobrar
     -- nada de esta orden ahora" (0) en vez de dejar que `NULL > 0` se evalue
@@ -230,6 +237,7 @@ BEGIN
       ELSE '[]'::jsonb
     END;
 
+    -- PASO 2 — cobrar CON LA ORDEN TODAVIA EN 'REPARADO'.
     -- Se llama siempre (incluso con v_pagos vacio): es la unica via que deja
     -- descuento_cobro y estado_cobro consistentes con lo que se acaba de
     -- cobrar (ver nota "DESCUENTO POR ORDEN" arriba).
@@ -255,6 +263,35 @@ BEGIN
           RAISE;
         END IF;
     END;
+
+    -- PASO 3 — recien ahora el estado pasa a ENTREGADO, dentro de la MISMA
+    -- transaccion. Ver nota "ORDEN DE LAS OPERACIONES" en el header: hacerlo
+    -- antes del PASO 2 dispara el paso 6 de 242 (fiado) y le acredita al
+    -- cliente el cobro completo como saldo a favor.
+    -- Mirror de las columnas que escribe POST /api/ordenes/[id]/entregar en
+    -- el camino REPARADO -> ENTREGADO con cobro (ver header de este archivo).
+    UPDATE ordenes_servicio
+      SET estado = 'ENTREGADO',
+          fecha_entrega = NOW(),
+          entregado_por_user_id = p_usuario_id,
+          firma_cliente_entrega = NULL,
+          firma_cliente_entrega_mime = NULL,
+          firma_encargado_entrega = NULL,
+          firma_encargado_entrega_mime = NULL,
+          motivo_sin_cobro = NULL
+      WHERE id = v_orden.id;
+
+    -- PASO 4 — mirror del insert a orden_eventos que hace la ruta HTTP para el
+    -- timeline publico (route.ts:153-170), version atomica. v_orden.estado es
+    -- la foto previa al PASO 3 ('REPARADO'), que es justo el estado anterior
+    -- que corresponde registrar.
+    INSERT INTO orden_eventos (
+      orden_id, organization_id, tipo, estado_anterior, estado_nuevo, descripcion, created_by
+    ) VALUES (
+      v_orden.id, p_organization_id, 'CAMBIO_ESTADO', v_orden.estado::text, 'ENTREGADO',
+      'Estado cambiado de ' || v_orden.estado::text || ' a ENTREGADO (entrega en lote)',
+      p_usuario_id
+    );
 
     v_entregadas := v_entregadas || jsonb_build_object(
       'id', v_orden.id, 'numeroOrden', v_orden.numero_orden, 'montoCobrado', v_monto
