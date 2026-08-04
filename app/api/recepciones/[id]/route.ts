@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { z } from "zod"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
@@ -6,6 +7,22 @@ import { calcularTotalLote, type DescuentoTipo } from "@/lib/lote-utils"
 
 const FEATURE_KEY = "recepcion_multiple"
 const ESTADOS_ENTREGADOS = ["ENTREGADO", "ENTREGADO_SIN_REPARACION", "ENTREGADO_SIN_COBRO"]
+
+// Mirrors the DB CHECK constraint (migration 289_recepcion_descuento.sql), which is
+// NULL-safe and rejects half-specified pairs.
+const descuentoSchema = z
+  .object({
+    descuentoTipo: z.enum(["porcentaje", "monto"]).nullable(),
+    descuentoValor: z.number().positive().nullable(),
+  })
+  .refine(
+    (d) =>
+      (d.descuentoTipo === null && d.descuentoValor === null) ||
+      (d.descuentoTipo !== null &&
+        d.descuentoValor !== null &&
+        (d.descuentoTipo !== "porcentaje" || d.descuentoValor <= 100)),
+    { message: "Descuento invalido" },
+  )
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -95,5 +112,82 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   } catch (error) {
     console.error("Error fetching recepcion:", error)
     return NextResponse.json({ error: "Error al obtener la recepcion" }, { status: 500 })
+  }
+}
+
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params
+    const { error, organizationId, role } = await requireAuth()
+    if (error) return error
+
+    // Gate de plan. hasPlanFeature aplica los overrides por organizacion.
+    const hasFeature = await hasPlanFeature(organizationId!, FEATURE_KEY)
+    if (!hasFeature) {
+      return NextResponse.json(
+        {
+          error: "La recepcion de varios equipos esta disponible en el plan Profesional",
+          code: "FEATURE_REQUIRED",
+          feature: FEATURE_KEY,
+        },
+        { status: 403 },
+      )
+    }
+
+    // Editar el descuento es editar precios: solo un administrador puede hacerlo.
+    if (role !== "ADMIN") {
+      return NextResponse.json(
+        { error: "Solo un administrador puede modificar el descuento" },
+        { status: 403 },
+      )
+    }
+
+    const parsed = descuentoSchema.safeParse(await request.json())
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: parsed.error.issues[0]?.message ?? "Datos invalidos" },
+        { status: 400 },
+      )
+    }
+
+    const { data: entregadas, error: entregadasError } = await supabaseAdmin
+      .from("ordenes_servicio")
+      .select("id")
+      .eq("recepcion_id", id)
+      .eq("organization_id", organizationId!)
+      .in("estado", ESTADOS_ENTREGADOS)
+      .limit(1)
+
+    if (entregadasError) {
+      throw entregadasError
+    }
+    if (entregadas && entregadas.length > 0) {
+      return NextResponse.json(
+        { error: "No se puede modificar el descuento: el lote ya tiene equipos entregados" },
+        { status: 409 },
+      )
+    }
+
+    const { data: updated, error: updateError } = await supabaseAdmin
+      .from("recepciones")
+      .update({
+        descuento_tipo: parsed.data.descuentoTipo,
+        descuento_valor: parsed.data.descuentoValor,
+      })
+      .eq("id", id)
+      .eq("organization_id", organizationId!)
+      .select("id")
+
+    if (updateError) {
+      throw updateError
+    }
+    if (!updated?.length) {
+      return NextResponse.json({ error: "Recepcion no encontrada" }, { status: 404 })
+    }
+
+    return NextResponse.json({ ok: true })
+  } catch (error) {
+    console.error("Error updating recepcion discount:", error)
+    return NextResponse.json({ error: "Error al modificar el descuento" }, { status: 500 })
   }
 }
