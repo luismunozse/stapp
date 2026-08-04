@@ -122,6 +122,11 @@ export function formatOrden(orden: any) {
     ordenOrigenId: orden.orden_origen_id || null,
     esReingreso: orden.es_reingreso || false,
     garantiaOrigenId: orden.garantia_origen_id || null,
+    // Recepcion multiple (lote mayorista): presente solo si la orden se creo
+    // como parte de un lote. recepciones viene del join recepcion_id -> recepciones
+    // en app/api/ordenes/[id]/route.ts; ausente en el select de listado (GET /api/ordenes).
+    recepcionId: orden.recepcion_id || null,
+    recepcionCodigo: orden.recepciones?.codigo || null,
     metadata: orden.metadata || {},
     sectorId: orden.sector_id,
     sector: orden.sectores_cliente ? {

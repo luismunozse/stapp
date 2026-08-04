@@ -38,6 +38,7 @@ import {
   HandCoins,
   Lock,
   AlertTriangle,
+  Layers,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -614,6 +615,15 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
             <p className="text-sm text-muted-foreground">
               Ingresado el {formatDate(orden.fechaIngreso)}
             </p>
+            {orden.recepcionId && (
+              <Link
+                href={`/ordenes/recepcion/${orden.recepcionId}`}
+                className="inline-flex items-center gap-1.5 mt-1 text-xs font-medium text-primary hover:underline"
+              >
+                <Layers className="h-3 w-3" />
+                Parte del lote {orden.recepcionCodigo || ""}
+              </Link>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">

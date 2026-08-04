@@ -102,6 +102,9 @@ export async function GET(
           moneda,
           zona_horaria,
           garantia_dias_default
+        ),
+        recepciones:recepcion_id (
+          codigo
         )
       `)
       .eq("id", id)
