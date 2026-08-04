@@ -17,6 +17,7 @@ import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { Eye, EyeOff, AlertTriangle } from "lucide-react"
 import { STAppLogo } from "@/components/shared/stapp-logo"
 import { TwoFactorVerify } from "@/components/auth/two-factor-verify"
+import { extractAuthCode } from "@/lib/auth-client"
 
 function LoginForm() {
   const router = useRouter()
@@ -44,13 +45,6 @@ function LoginForm() {
       return "Tu cuenta superadmin requiere 2FA. Pedile al sysadmin que lo configure."
     }
     return "Credenciales incorrectas"
-  }
-
-  // En NextAuth v5 los errores customizados viajan en `result.code` (no en
-  // `result.error`, que siempre es "CredentialsSignin"). Ver lib/auth.ts →
-  // AuthSigninError. Mantenemos fallback a `error` por si algún día cambia.
-  const extractAuthCode = (r: { error?: string; code?: string } | undefined): string => {
-    return r?.code || r?.error || ""
   }
 
   const handle2FAVerified = async (totpCode: string) => {
