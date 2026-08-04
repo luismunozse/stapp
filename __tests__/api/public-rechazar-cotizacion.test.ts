@@ -83,8 +83,8 @@ describe("POST /api/public/cotizaciones/[token]/rechazar", () => {
     cotizacionChain.update = vi.fn().mockReturnValue(cotizacionUpdateChain)
 
     const ordenChain = createChainMock({ id: "ord-1", estado: "PRESUPUESTADO" })
-    const ordenUpdateChain = createChainMock(null)
-    ordenUpdateChain.then = (resolve: any) => resolve({ data: null, error: null })
+    // El UPDATE atómico devuelve 1 fila afectada → transicionarOrden es ok.
+    const ordenUpdateChain = createChainMock([{ id: "ord-1" }])
     const ordenUpdateSpy = vi.fn().mockReturnValue(ordenUpdateChain)
 
     const eventosChain = createChainMock(null)
@@ -106,6 +106,8 @@ describe("POST /api/public/cotizaciones/[token]/rechazar", () => {
 
     expect(status).toBe(200)
     expect(ordenUpdateSpy).toHaveBeenCalledWith({ estado: "EN_DIAGNOSTICO" })
+    // Guarda de concurrencia: la reversión está condicionada al estado esperado.
+    expect(ordenUpdateChain.eq).toHaveBeenCalledWith("estado", "PRESUPUESTADO")
     expect(insertSpy).toHaveBeenCalledTimes(1)
 
     const payload = insertSpy.mock.calls[0][0]

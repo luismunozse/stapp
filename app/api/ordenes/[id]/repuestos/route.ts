@@ -24,6 +24,11 @@ const repuestoSchema = z.discriminatedUnion("tipo", [
   repuestoManualSchema,
 ])
 
+// Edición de cantidad de un repuesto ya cargado
+const cantidadPatchSchema = z.object({
+  cantidad: z.number().int().min(1, "La cantidad debe ser al menos 1"),
+})
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -100,6 +105,82 @@ export async function POST(
     console.error("Error adding repuesto:", error)
     return NextResponse.json(
       { error: "Error al agregar repuesto" },
+      { status: 500 }
+    )
+  }
+}
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { error, organizationId, userId } = await requireAuth()
+    if (error) return error
+
+    const { id: ordenId } = await params
+    const { searchParams } = new URL(request.url)
+    const repuestoId = searchParams.get("repuestoId")
+
+    if (!repuestoId) {
+      return NextResponse.json({ error: "ID de repuesto requerido" }, { status: 400 })
+    }
+
+    const body = await request.json()
+    const data = cantidadPatchSchema.parse(body)
+
+    // Verificar que la orden pertenece a la org
+    const { data: orden, error: ordenError } = await supabaseAdmin
+      .from("ordenes_servicio")
+      .select("id")
+      .eq("id", ordenId)
+      .eq("organization_id", organizationId!)
+      .single()
+
+    if (ordenError || !orden) {
+      return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 })
+    }
+
+    // Verificar que el repuesto es de ESTA orden: sin esto, un repuestoId de
+    // otra orden de la misma org pasaría el chequeo anterior.
+    const { data: repuesto } = await supabaseAdmin
+      .from("repuestos_orden")
+      .select("id, orden_id")
+      .eq("id", repuestoId)
+      .single()
+
+    if (!repuesto || repuesto.orden_id !== ordenId) {
+      return NextResponse.json({ error: "Repuesto no encontrado" }, { status: 404 })
+    }
+
+    // El RPC ajusta sólo el delta de reserva y valida el estado de la orden.
+    const { data: result, error: rpcError } = await supabaseAdmin.rpc(
+      "update_repuesto_cantidad",
+      {
+        p_repuesto_id: repuestoId,
+        p_cantidad_nueva: data.cantidad,
+        p_user_id: userId,
+      }
+    )
+
+    if (rpcError) throw rpcError
+
+    if (result?.error) {
+      const status =
+        result.code === "ORDEN_CERRADA" ? 409 :
+        result.code === "STOCK_INSUFICIENTE" ? 400 :
+        404
+      return NextResponse.json({ error: result.error, code: result.code }, { status })
+    }
+
+    return NextResponse.json({ success: true, cantidad: data.cantidad })
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: error.errors[0].message }, { status: 400 })
+    }
+    console.error("Error updating repuesto cantidad:", error)
+    return NextResponse.json(
+      { error: "Error al actualizar la cantidad" },
       { status: 500 }
     )
   }
