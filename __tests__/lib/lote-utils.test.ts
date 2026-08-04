@@ -28,14 +28,24 @@ describe("prorratearLote", () => {
     expect(shares).toEqual([90, 180, 270])
     expect(shares.reduce((a, b) => a + b, 0)).toBe(540)
   })
-  it("assigns rounding remainder to the last order", () => {
+  it("assigns rounding remainder to the largest share (first index on ties)", () => {
     const shares = prorratearLote([100, 100, 100], 100)
     expect(shares.reduce((a, b) => a + b, 0)).toBeCloseTo(100, 2)
-    expect(shares[0]).toBe(33.33)
+    expect(shares[0]).toBe(33.34)
     expect(shares[1]).toBe(33.33)
-    expect(shares[2]).toBe(33.34)
+    expect(shares[2]).toBe(33.33)
   })
   it("returns zeros when subtotal is zero", () => {
     expect(prorratearLote([0, 0], 0)).toEqual([0, 0])
+  })
+  it("applies the rounding residual to the largest share, never the last one blindly", () => {
+    // costos [10, 10, 0], 33.33% discount -> totalCobrado = 13.33 (round2(20 - 20*0.3333)).
+    // Naive last-index residual assignment lands on the zero-cost order and can go
+    // negative (e.g. -0.01), which is nonsensical for a montoCobro. The residual must
+    // land on the largest underlying monto instead (first max on ties).
+    const shares = prorratearLote([10, 10, 0], 13.33)
+    expect(shares.every((s) => s >= 0)).toBe(true)
+    expect(shares[2]).toBe(0)
+    expect(shares.reduce((a, b) => a + b, 0)).toBeCloseTo(13.33, 2)
   })
 })
