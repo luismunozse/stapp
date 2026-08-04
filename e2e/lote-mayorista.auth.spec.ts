@@ -195,7 +195,7 @@ test.describe("Lote mayorista — recepción a entrega", () => {
     await expect(page.getByText(/2 de 2 entregados/i)).toBeVisible({ timeout: 15_000 })
 
     // El agregado "2 de 2 entregados" cuenta cualquier variante ENTREGADO_*
-    // (ver ESTADOS_ENTREGADOS en components/ordenes/recepcion-detail.tsx),
+    // (ver ESTADOS_ENTREGADOS en lib/lote-estados.ts),
     // pero el flujo de este test entrega con cobro (no "sin cobro" ni
     // "retiro sin reparación") y el RPC entregar_lote_recepcion hardcodea
     // el estado ENTREGADO para ese camino — así que además se verifica el

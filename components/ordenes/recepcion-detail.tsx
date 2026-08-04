@@ -13,11 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { ArrowLeft, Truck } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { EntregaLoteDialog } from "@/components/ordenes/entrega-lote-dialog"
-
-// Estados que ya cuentan como entrega, igual que ESTADOS_ENTREGADOS en
-// app/api/recepciones/[id]/route.ts -- mantenido en sync a mano porque el
-// front necesita filtrar por-orden (el backend solo manda el conteo).
-const ESTADOS_ENTREGADOS = ["ENTREGADO", "ENTREGADO_SIN_REPARACION", "ENTREGADO_SIN_COBRO"]
+import { esEstadoExcluidoDeLote } from "@/lib/lote-estados"
 
 type DescuentoTipo = "porcentaje" | "monto"
 
@@ -48,6 +44,10 @@ export interface RecepcionDetalleResponse {
   totales: {
     subtotal: number
     totalLote: number
+    /** Neto ya facturado en los equipos que ya salieron del taller. */
+    yaCobrado: number
+    /** Lo que falta para llegar al total del lote (nunca negativo). */
+    pendienteCobro: number
     entregadas: number
     pendientes: number
   }
@@ -134,23 +134,20 @@ export function RecepcionDetail({ recepcionId, onEntregarLote }: RecepcionDetail
   }
 
   const { recepcion, ordenes, totales } = data
-  // Pendientes (no entregados) que todavia no llegaron a REPARADO: mientras
-  // alguno quede asi, no se puede confirmar el total y entregar el lote entero
-  // en una sola operacion.
-  const pendientesSinReparar = ordenes.filter(
-    (o) => !ESTADOS_ENTREGADOS.includes(o.estado) && o.estado !== "REPARADO"
-  )
-  const puedeEntregar = totales.pendientes > 0 && pendientesSinReparar.length === 0
+  // Elegibles = los que todavía pueden salir por la acción de lote. Un equipo
+  // cancelado o sin reparación ya salió del lote por otra vía: no entra al
+  // cobro único y tampoco puede bloquear el botón (ver lib/lote-estados.ts).
+  const ordenesPendientes = ordenes.filter((o) => !esEstadoExcluidoDeLote(o.estado))
+  // Mientras algún elegible no llegue a REPARADO no se puede confirmar el
+  // total y entregar el lote entero en una sola operación.
+  const pendientesSinReparar = ordenesPendientes.filter((o) => o.estado !== "REPARADO")
+  const puedeEntregar = ordenesPendientes.length > 0 && pendientesSinReparar.length === 0
   const motivoDeshabilitado =
-    totales.pendientes === 0
+    ordenesPendientes.length === 0
       ? "No quedan equipos pendientes de entrega en este lote."
       : "Todos los equipos pendientes deben estar en estado Reparado para poder entregar el lote."
 
   const descuentoAplicado = recepcion.descuentoTipo && recepcion.descuentoValor ? totales.subtotal - totales.totalLote : 0
-
-  // Solo los equipos todavia no entregados entran al dialogo de cobro único:
-  // los ya entregados no tienen costo final para renegociar acá.
-  const ordenesPendientes = ordenes.filter((o) => !ESTADOS_ENTREGADOS.includes(o.estado))
 
   const handleEntregaLoteSuccess = () => {
     fetchRecepcion()
@@ -270,21 +267,41 @@ export function RecepcionDetail({ recepcionId, onEntregarLote }: RecepcionDetail
             <span className="font-semibold">Total del lote</span>
             <span className="text-xl font-bold">{formatPrice(totales.totalLote)}</span>
           </div>
+
+          {/* Con equipos ya retirados individualmente, el total del lote no es
+              lo que queda por cobrar: el flujo individual cobra el precio
+              individual entero y la entrega del lote liquida la diferencia. */}
+          {totales.entregadas > 0 && (
+            <>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Ya cobrado</span>
+                <span>{formatPrice(totales.yaCobrado)}</span>
+              </div>
+              <div className="flex justify-between text-sm font-medium">
+                <span>Pendiente de cobro</span>
+                <span>{formatPrice(totales.pendienteCobro)}</span>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
-      <div className="flex flex-col items-end gap-1.5">
-        <Button
-          size="lg"
-          disabled={!puedeEntregar}
-          onClick={() => setEntregaLoteOpen(true)}
-          title={!puedeEntregar ? motivoDeshabilitado : undefined}
-        >
-          <Truck className="h-4 w-4 mr-2" />
-          Entregar lote
-        </Button>
-        {!puedeEntregar && <p className="text-xs text-muted-foreground text-right max-w-xs">{motivoDeshabilitado}</p>}
-      </div>
+      {/* Entregar y cobrar el lote cambia precios y estado de varias órdenes:
+          solo ADMIN, igual que el gate de POST /api/recepciones/[id]/entregar. */}
+      {isAdmin && (
+        <div className="flex flex-col items-end gap-1.5">
+          <Button
+            size="lg"
+            disabled={!puedeEntregar}
+            onClick={() => setEntregaLoteOpen(true)}
+            title={!puedeEntregar ? motivoDeshabilitado : undefined}
+          >
+            <Truck className="h-4 w-4 mr-2" />
+            Entregar lote
+          </Button>
+          {!puedeEntregar && <p className="text-xs text-muted-foreground text-right max-w-xs">{motivoDeshabilitado}</p>}
+        </div>
+      )}
 
       <EntregaLoteDialog
         open={entregaLoteOpen}

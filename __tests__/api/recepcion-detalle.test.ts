@@ -34,9 +34,9 @@ function createMockRecepcion(overrides: Record<string, any> = {}) {
 }
 
 const mockOrdenes = [
-  { id: "o1", numero_orden: 1, codigo_orden: "CEL-001", dispositivo: "iPhone 13", marca: "Apple", estado: "ENTREGADO", presupuesto: null, costo_final: 200 },
-  { id: "o2", numero_orden: 2, codigo_orden: "CEL-002", dispositivo: "Notebook HP", marca: "HP", estado: "RECIBIDO", presupuesto: 150, costo_final: null },
-  { id: "o3", numero_orden: 3, codigo_orden: "CEL-003", dispositivo: "Tablet Samsung", marca: "Samsung", estado: "ENTREGADO_SIN_COBRO", presupuesto: null, costo_final: 250 },
+  { id: "o1", numero_orden: 1, codigo_orden: "CEL-001", dispositivo: "iPhone 13", marca: "Apple", estado: "ENTREGADO", presupuesto: null, costo_final: 200, descuento_cobro: 20 },
+  { id: "o2", numero_orden: 2, codigo_orden: "CEL-002", dispositivo: "Notebook HP", marca: "HP", estado: "RECIBIDO", presupuesto: 150, costo_final: null, descuento_cobro: null },
+  { id: "o3", numero_orden: 3, codigo_orden: "CEL-003", dispositivo: "Tablet Samsung", marca: "Samsung", estado: "ENTREGADO_SIN_COBRO", presupuesto: null, costo_final: 250, descuento_cobro: null },
 ]
 
 describe("GET /api/recepciones/[id] — detalle del lote", () => {
@@ -135,5 +135,50 @@ describe("GET /api/recepciones/[id] — detalle del lote", () => {
     // ENTREGADO + ENTREGADO_SIN_COBRO = 2, pendiente (RECIBIDO) = 1
     expect(body.totales.entregadas).toBe(2)
     expect(body.totales.pendientes).toBe(1)
+    // Ya cobrado neto sobre los entregados: (200 - 20) + (250 - 0) = 430
+    expect(body.totales.yaCobrado).toBe(430)
+    // Pendiente de cobro = total del lote - ya cobrado = 540 - 430 = 110
+    expect(body.totales.pendienteCobro).toBe(110)
+  })
+
+  it("sin equipos entregados, ya cobrado es 0 y el pendiente de cobro es el total del lote", async () => {
+    vi.mocked(hasPlanFeature).mockResolvedValue(true)
+    mockSupabaseFrom({
+      recepciones: createChainMock(createMockRecepcion({ descuento_tipo: "monto", descuento_valor: 100 })),
+      ordenes_servicio: createChainMock([
+        { id: "o1", numero_orden: 1, codigo_orden: "CEL-001", dispositivo: "iPhone 13", marca: "Apple", estado: "REPARADO", presupuesto: null, costo_final: 200, descuento_cobro: null },
+        { id: "o2", numero_orden: 2, codigo_orden: "CEL-002", dispositivo: "Notebook HP", marca: "HP", estado: "RECIBIDO", presupuesto: 150, costo_final: null, descuento_cobro: null },
+      ]),
+    })
+
+    const res = await GET(createGetRequest(), createParams("rec-1"))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    expect(body.totales.subtotal).toBe(350)
+    expect(body.totales.totalLote).toBe(250)
+    expect(body.totales.yaCobrado).toBe(0)
+    expect(body.totales.pendienteCobro).toBe(250)
+    expect(body.totales.entregadas).toBe(0)
+  })
+
+  it("el pendiente de cobro nunca es negativo cuando lo ya cobrado supera el total del lote", async () => {
+    vi.mocked(hasPlanFeature).mockResolvedValue(true)
+    mockSupabaseFrom({
+      recepciones: createChainMock(createMockRecepcion({ descuento_tipo: "porcentaje", descuento_valor: 50 })),
+      ordenes_servicio: createChainMock([
+        { id: "o1", numero_orden: 1, codigo_orden: "CEL-001", dispositivo: "iPhone 13", marca: "Apple", estado: "ENTREGADO", presupuesto: null, costo_final: 200, descuento_cobro: null },
+        { id: "o2", numero_orden: 2, codigo_orden: "CEL-002", dispositivo: "Notebook HP", marca: "HP", estado: "REPARADO", presupuesto: null, costo_final: 100, descuento_cobro: null },
+      ]),
+    })
+
+    const res = await GET(createGetRequest(), createParams("rec-1"))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    // subtotal 300, total 150, ya cobrado 200 -> el pendiente se pisa a 0
+    expect(body.totales.totalLote).toBe(150)
+    expect(body.totales.yaCobrado).toBe(200)
+    expect(body.totales.pendienteCobro).toBe(0)
   })
 })

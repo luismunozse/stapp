@@ -8,10 +8,27 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, fireEvent, waitFor } from "@testing-library/react"
 import { RecepcionDetail } from "@/components/ordenes/recepcion-detail"
 
+// Rol mutable: la entrega de lote y el editor de descuento son solo para
+// ADMIN, asi que hace falta poder renderizar el mismo componente como VENDEDOR.
+const sessionMock = vi.hoisted(() => ({ role: "ADMIN" }))
 vi.mock("next-auth/react", () => ({
-  useSession: () => ({ data: { user: { role: "ADMIN" } } }),
+  useSession: () => ({ data: { user: { role: sessionMock.role } } }),
 }))
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+
+function orden(overrides: Record<string, any> = {}) {
+  return {
+    id: "o1",
+    numeroOrden: 1,
+    codigoOrden: "CEL-001",
+    dispositivo: "iPhone 13",
+    marca: "Apple",
+    estado: "REPARADO",
+    presupuesto: null,
+    costoFinal: 200,
+    ...overrides,
+  }
+}
 
 function buildResponse(overrides: Record<string, any> = {}) {
   return {
@@ -51,6 +68,8 @@ function buildResponse(overrides: Record<string, any> = {}) {
     totales: {
       subtotal: 350,
       totalLote: 315,
+      yaCobrado: 0,
+      pendienteCobro: 315,
       entregadas: 0,
       pendientes: 2,
     },
@@ -65,6 +84,7 @@ function mockFetchOnce(body: any, ok = true) {
 describe("RecepcionDetail", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    sessionMock.role = "ADMIN"
   })
 
   it("renderiza una fila por orden con badge de estado y presupuesto/costo formateado", async () => {
@@ -131,7 +151,7 @@ describe("RecepcionDetail", () => {
               costoFinal: 150,
             },
           ],
-          totales: { subtotal: 350, totalLote: 315, entregadas: 0, pendientes: 2 },
+          totales: { subtotal: 350, totalLote: 315, yaCobrado: 0, pendienteCobro: 315, entregadas: 0, pendientes: 2 },
         }),
       ),
     )
@@ -145,7 +165,11 @@ describe("RecepcionDetail", () => {
   it("oculta el editor de descuento cuando totales.entregadas > 0", async () => {
     vi.stubGlobal(
       "fetch",
-      mockFetchOnce(buildResponse({ totales: { subtotal: 350, totalLote: 315, entregadas: 1, pendientes: 1 } })),
+      mockFetchOnce(
+        buildResponse({
+          totales: { subtotal: 350, totalLote: 315, yaCobrado: 200, pendienteCobro: 115, entregadas: 1, pendientes: 1 },
+        }),
+      ),
     )
 
     render(<RecepcionDetail recepcionId="rec-1" />)
@@ -211,7 +235,7 @@ describe("RecepcionDetail", () => {
               costoFinal: 150,
             },
           ],
-          totales: { subtotal: 350, totalLote: 315, entregadas: 0, pendientes: 2 },
+          totales: { subtotal: 350, totalLote: 315, yaCobrado: 0, pendienteCobro: 315, entregadas: 0, pendientes: 2 },
         }),
       ),
     )
@@ -248,7 +272,7 @@ describe("RecepcionDetail", () => {
           costoFinal: 150,
         },
       ],
-      totales: { subtotal: 350, totalLote: 315, entregadas: 0, pendientes: 2 },
+      totales: { subtotal: 350, totalLote: 315, yaCobrado: 0, pendienteCobro: 315, entregadas: 0, pendientes: 2 },
     })
     const fetchMock = vi.fn((url: string) => {
       if (typeof url === "string" && url.includes("/entregar")) {
@@ -276,5 +300,81 @@ describe("RecepcionDetail", () => {
       // Inicial + refetch post-entrega
       expect(getCalls.length).toBeGreaterThanOrEqual(2)
     })
+  })
+
+  it('habilita "Entregar lote" aunque un equipo del lote este CANCELADO (queda fuera del lote, no lo bloquea)', async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetchOnce(
+        buildResponse({
+          ordenes: [
+            orden({ id: "o1", numeroOrden: 1, codigoOrden: "CEL-001", estado: "REPARADO" }),
+            orden({ id: "o2", numeroOrden: 2, codigoOrden: "CEL-002", estado: "CANCELADO", costoFinal: null, presupuesto: 150 }),
+          ],
+          totales: { subtotal: 350, totalLote: 315, yaCobrado: 0, pendienteCobro: 315, entregadas: 0, pendientes: 2 },
+        }),
+      ),
+    )
+
+    render(<RecepcionDetail recepcionId="rec-1" />)
+
+    const btn = await screen.findByRole("button", { name: /entregar lote/i })
+    expect(btn).not.toBeDisabled()
+  })
+
+  it('deshabilita "Entregar lote" cuando todos los pendientes quedaron excluidos del lote', async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetchOnce(
+        buildResponse({
+          ordenes: [
+            orden({ id: "o1", numeroOrden: 1, codigoOrden: "CEL-001", estado: "CANCELADO" }),
+            orden({ id: "o2", numeroOrden: 2, codigoOrden: "CEL-002", estado: "SIN_REPARACION" }),
+          ],
+          totales: { subtotal: 350, totalLote: 315, yaCobrado: 0, pendienteCobro: 315, entregadas: 0, pendientes: 2 },
+        }),
+      ),
+    )
+
+    render(<RecepcionDetail recepcionId="rec-1" />)
+
+    const btn = await screen.findByRole("button", { name: /entregar lote/i })
+    expect(btn).toBeDisabled()
+    expect(screen.getByText(/no quedan equipos pendientes/i)).toBeInTheDocument()
+  })
+
+  it('oculta "Entregar lote" para un usuario que no es ADMIN', async () => {
+    sessionMock.role = "VENDEDOR"
+    vi.stubGlobal("fetch", mockFetchOnce(buildResponse()))
+
+    render(<RecepcionDetail recepcionId="rec-1" />)
+
+    await screen.findByText("CEL-001")
+    expect(screen.queryByRole("button", { name: /entregar lote/i })).not.toBeInTheDocument()
+  })
+
+  it("muestra ya cobrado y pendiente de cobro solo cuando hay equipos entregados", async () => {
+    vi.stubGlobal("fetch", mockFetchOnce(buildResponse()))
+
+    const { unmount } = render(<RecepcionDetail recepcionId="rec-1" />)
+    await screen.findByText("CEL-001")
+    expect(screen.queryByText(/ya cobrado/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/pendiente de cobro/i)).not.toBeInTheDocument()
+    unmount()
+
+    vi.stubGlobal(
+      "fetch",
+      mockFetchOnce(
+        buildResponse({
+          totales: { subtotal: 350, totalLote: 315, yaCobrado: 200, pendienteCobro: 115, entregadas: 1, pendientes: 1 },
+        }),
+      ),
+    )
+
+    render(<RecepcionDetail recepcionId="rec-1" />)
+    await screen.findByText("CEL-001")
+    expect(screen.getByText(/ya cobrado/i)).toBeInTheDocument()
+    expect(screen.getByText(/pendiente de cobro/i)).toBeInTheDocument()
+    expect(screen.getByText(/115/)).toBeInTheDocument()
   })
 })

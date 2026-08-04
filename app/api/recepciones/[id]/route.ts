@@ -3,17 +3,17 @@ import { z } from "zod"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
-import { calcularTotalLote, type DescuentoTipo } from "@/lib/lote-utils"
+import { calcularTotalLote, round2, type DescuentoTipo } from "@/lib/lote-utils"
+import { ESTADOS_ENTREGADOS, esEstadoEntregado } from "@/lib/lote-estados"
 
 const FEATURE_KEY = "recepcion_multiple"
-const ESTADOS_ENTREGADOS = ["ENTREGADO", "ENTREGADO_SIN_REPARACION", "ENTREGADO_SIN_COBRO"]
 
 // Mirrors the DB CHECK constraint (migration 289_recepcion_descuento.sql), which is
 // NULL-safe and rejects half-specified pairs.
 const descuentoSchema = z
   .object({
     descuentoTipo: z.enum(["porcentaje", "monto"]).nullable(),
-    descuentoValor: z.number().positive().nullable(),
+    descuentoValor: z.number().positive("El valor del descuento debe ser mayor a 0").nullable(),
   })
   .refine(
     (d) =>
@@ -62,7 +62,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
     const { data: ordenes, error: ordenesError } = await supabaseAdmin
       .from("ordenes_servicio")
-      .select("id, numero_orden, codigo_orden, dispositivo, marca, estado, presupuesto, costo_final")
+      .select("id, numero_orden, codigo_orden, dispositivo, marca, estado, presupuesto, costo_final, descuento_cobro")
       .eq("recepcion_id", id)
       .eq("organization_id", organizationId!)
       .order("numero_orden", { ascending: true })
@@ -78,7 +78,15 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       (recepcion.descuento_tipo as DescuentoTipo | null) ?? null,
       recepcion.descuento_valor != null ? Number(recepcion.descuento_valor) : null,
     )
-    const entregadas = lista.filter((o) => ESTADOS_ENTREGADOS.includes(o.estado)).length
+    // Ya cobrado = neto facturado en los equipos que ya salieron (por el flujo
+    // individual o por una entrega de lote previa). Pendiente de cobro = lo que
+    // falta para llegar al total negociado del lote, nunca negativo.
+    const entregados = lista.filter((o) => esEstadoEntregado(o.estado))
+    const entregadas = entregados.length
+    const yaCobrado = round2(
+      entregados.reduce((acc, o) => acc + round2(Number(o.costo_final ?? 0) - Number(o.descuento_cobro ?? 0)), 0),
+    )
+    const pendienteCobro = Math.max(0, round2(totalLote - yaCobrado))
 
     return NextResponse.json({
       recepcion: {
@@ -105,6 +113,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       totales: {
         subtotal,
         totalLote,
+        yaCobrado,
+        pendienteCobro,
         entregadas,
         pendientes: lista.length - entregadas,
       },
@@ -155,7 +165,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       .select("id")
       .eq("recepcion_id", id)
       .eq("organization_id", organizationId!)
-      .in("estado", ESTADOS_ENTREGADOS)
+      .in("estado", [...ESTADOS_ENTREGADOS])
       .limit(1)
 
     if (entregadasError) {
