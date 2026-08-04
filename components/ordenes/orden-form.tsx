@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, useMemo } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useSession } from "next-auth/react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { DatePicker } from "@/components/ui/date-picker"
 import { FormActionBar } from "@/components/ui/form-action-bar"
-import { X, Plus, Camera, Upload, Trash2, Loader2, Lock, Grid3X3, ClipboardCheck, ChevronDown, ChevronUp } from "lucide-react"
+import { X, Plus, Loader2, Lock, Grid3X3, ClipboardCheck, ChevronDown, ChevronUp } from "lucide-react"
 import { PatternLock } from "@/components/ui/pattern-lock"
 import { ClienteSelector } from "@/components/cotizaciones/cliente-selector"
 import { OrdenCreadaModal } from "./orden-creada-modal"
@@ -21,46 +21,19 @@ import { UpgradeModal } from "@/components/billing/upgrade-modal"
 import { usePlanLimitError } from "@/lib/hooks/use-plan-limit-error"
 import { compressImage } from "@/lib/image-compression"
 import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
+import { useTipoDispositivoConfig } from "@/hooks/use-tipo-dispositivo-config"
 import { useTerminologia } from "@/contexts/currency-context"
 import { SignaturePad } from "@/components/firma/signature-pad"
 import { useOffline } from "@/contexts/offline-context"
 import { useModal } from "@/contexts/modal-context"
 import { STORES } from "@/lib/offline/constants"
-import type { Cliente, TipoDispositivoConfig, CampoExtra } from "@/types"
+import type { Cliente, CampoExtra } from "@/types"
 import { isValidImei, sanitizeImei } from "@/lib/imei"
 import { parseMoneyInput } from "@/lib/parse-money"
-
-interface FotoPreview {
-  id: string
-  preview: string
-  file?: File
-  descripcion: string
-}
-
-// Fallback config for types without config in DB
-const FALLBACK_CONFIG: TipoDispositivoConfig = {
-  campos: {
-    imei: { visible: true, label: "Numero de Serie", placeholder: "S/N del equipo" },
-    password: { visible: true },
-    color: { visible: true },
-    marca: { visible: true },
-  },
-  camposExtra: [],
-  accesorios: [
-    { id: "cable_poder", label: "Cable de poder" },
-    { id: "cargador", label: "Cargador/Fuente" },
-    { id: "cable_datos", label: "Cable de datos" },
-    { id: "control_remoto", label: "Control remoto" },
-    { id: "manual", label: "Manual" },
-    { id: "caja_original", label: "Caja original" },
-  ],
-  problemasComunes: [
-    "No enciende", "No funciona correctamente", "Hace ruido extrano",
-    "Se apaga solo", "Error en pantalla/display", "No conecta a red/WiFi",
-    "Mantenimiento preventivo", "Revision general",
-  ],
-  marcas: [],
-}
+import { FotosIngreso, type FotoPreview } from "./fotos-ingreso"
+import { AccesoriosPicker } from "./accesorios-picker"
+import { TipoDispositivoPicker } from "./tipo-dispositivo-picker"
+import { CamposExtraFields } from "./campos-extra-fields"
 
 const ordenSchema = z.object({
   clienteId: z.string().min(1, "El cliente es requerido"),
@@ -167,8 +140,6 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     requiereCrearCliente: boolean
     clienteSnapshot: { nombre: string; telefono: string; email?: string | null } | null
   }>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const cameraInputRef = useRef<HTMLInputElement>(null)
   const { tipos: tiposDispositivo, loading: tiposLoading } = useTiposDispositivo()
 
   const {
@@ -254,24 +225,24 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialClienteId])
 
-  // Get the selected tipo object and its config
+  // Get the selected tipo object (used below for the checklist template fetch by id)
   const tipoSeleccionado = useMemo(
     () => tiposDispositivo.find((t) => t.codigo === tipoDispositivo),
     [tiposDispositivo, tipoDispositivo]
   )
-  const config: TipoDispositivoConfig = tipoSeleccionado?.config && Object.keys(tipoSeleccionado.config).length > 0
-    ? tipoSeleccionado.config
-    : FALLBACK_CONFIG
 
-  // Derived from config
-  const accesoriosDisponibles = config.accesorios || FALLBACK_CONFIG.accesorios!
-  const problemasComunes = config.problemasComunes || FALLBACK_CONFIG.problemasComunes!
-  const marcasDisponibles = config.marcas || []
-  const camposExtra = config.camposExtra || []
-  const showImei = config.campos?.imei?.visible !== false
-  const showPassword = config.campos?.password?.visible !== false
-  const showColor = config.campos?.color?.visible !== false
-  const showMarca = config.campos?.marca?.visible !== false
+  // Get the selected tipo's effective config and its derived fields
+  const {
+    config,
+    accesoriosDisponibles,
+    problemasComunes,
+    marcasDisponibles,
+    camposExtra,
+    showImei,
+    showPassword,
+    showColor,
+    showMarca,
+  } = useTipoDispositivoConfig(tiposDispositivo, tipoDispositivo)
   const imeiLabel = config.campos?.imei?.label || "Numero de Serie"
   const imeiPlaceholder = config.campos?.imei?.placeholder || "S/N del equipo"
   const imeiMaxLength = config.campos?.imei?.maxLength
@@ -416,8 +387,11 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
 
     const fileArray = Array.from(files)
 
-    if (fileInputRef.current) fileInputRef.current.value = ""
-    if (cameraInputRef.current) cameraInputRef.current.value = ""
+    // Limpia el input que disparo el evento (no via ref: los refs de los
+    // <input type="file"> ahora viven dentro de FotosIngreso) para permitir
+    // volver a seleccionar el mismo archivo. Equivalente al reset original
+    // por refs: siempre se limpiaba el input que disparo el cambio.
+    e.target.value = ""
 
     setComprimiendo(true)
 
@@ -490,98 +464,6 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
     if (otroAccesorio.trim()) {
       setAccesoriosSeleccionados((prev) => [...prev, otroAccesorio.trim()])
       setOtroAccesorio("")
-    }
-  }
-
-  // Render a dynamic extra field based on its config
-  const renderCampoExtra = (campo: CampoExtra) => {
-    const value = camposExtraValues[campo.key] ?? ""
-
-    switch (campo.tipo) {
-      case "text":
-        return (
-          <div key={campo.key}>
-            <Label className="text-xs">{campo.label}</Label>
-            <Input
-              value={value}
-              onChange={(e) => handleCampoExtraChange(campo, e.target.value)}
-              placeholder={campo.placeholder || ""}
-              className="h-9"
-            />
-          </div>
-        )
-
-      case "select":
-        return (
-          <div key={campo.key}>
-            <Label className="text-xs">{campo.label}</Label>
-            <Select
-              value={value || ""}
-              onValueChange={(v) => handleCampoExtraChange(campo, v)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccionar..." />
-              </SelectTrigger>
-              <SelectContent>
-                {(campo.opciones || []).map((op) => (
-                  <SelectItem key={op} value={op}>{op}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )
-
-      case "buttons":
-        return (
-          <div key={campo.key}>
-            <Label className="text-xs">{campo.label}</Label>
-            <div className="flex flex-wrap gap-1 mt-1">
-              {(campo.opciones || []).map((op) => (
-                <button
-                  key={op}
-                  type="button"
-                  onClick={() => handleCampoExtraChange(campo, op)}
-                  className={`px-2 py-1 text-xs rounded border transition-colors ${
-                    value === op
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "hover:bg-muted"
-                  }`}
-                >
-                  {op}
-                </button>
-              ))}
-            </div>
-          </div>
-        )
-
-      case "counter":
-        return (
-          <div key={campo.key}>
-            <Label className="text-xs">{campo.label}</Label>
-            <div className="flex gap-1 mt-1">
-              {Array.from(
-                { length: (campo.max ?? 4) - (campo.min ?? 0) + 1 },
-                (_, i) => (campo.min ?? 0) + i
-              ).map((num) => (
-                <button
-                  key={num}
-                  type="button"
-                  onClick={() => handleCampoExtraChange(campo, num)}
-                  className={`w-10 h-10 rounded border font-medium transition-colors ${
-                    value === num
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "hover:bg-muted"
-                  }`}
-                >
-                  {num}
-                </button>
-              ))}
-            </div>
-          </div>
-        )
-
-      default:
-        return null
     }
   }
 
@@ -933,42 +815,13 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
           )}
 
           {/* Tipo de dispositivo con selector visual */}
-          <div>
-            <Label>Tipo de Dispositivo *</Label>
-            {tiposLoading ? (
-              <div className="flex items-center justify-center py-4">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              </div>
-            ) : (
-              <div className={`grid gap-2 mt-2 ${
-                tiposDispositivo.length <= 5
-                  ? "grid-cols-3 sm:grid-cols-5"
-                  : tiposDispositivo.length <= 8
-                  ? "grid-cols-3 sm:grid-cols-4"
-                  : "grid-cols-3 sm:grid-cols-4 lg:grid-cols-5"
-              }`}>
-                {tiposDispositivo.map((tipo) => (
-                  <button
-                    key={tipo.codigo}
-                    type="button"
-                    onClick={() => handleTipoChange(tipo.codigo)}
-                    className={`flex flex-col items-center justify-center p-3 border rounded-lg transition-all ${
-                      tipoDispositivo === tipo.codigo
-                        ? "bg-primary text-primary-foreground border-primary shadow-md scale-105"
-                        : "hover:bg-muted hover:border-primary/50"
-                    }`}
-                  >
-                    <span className="text-xs font-medium truncate w-full text-center">{tipo.nombre}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-            {errors.tipoDispositivo && (
-              <p className="text-sm text-destructive mt-1">
-                {errors.tipoDispositivo.message}
-              </p>
-            )}
-          </div>
+          <TipoDispositivoPicker
+            tipos={tiposDispositivo}
+            value={tipoDispositivo}
+            onChange={handleTipoChange}
+            loading={tiposLoading}
+            error={errors.tipoDispositivo?.message}
+          />
 
           {/* Marca y Dispositivo */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1042,21 +895,12 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
           </div>
 
           {/* Dynamic extra fields from config */}
-          {camposExtra.filter((c) => !c.usarComoDispositivo).length > 0 && (
-            <div className={`border rounded-lg p-4 space-y-4 ${
-              config.infoSectionColor === "blue" ? "bg-blue-50/30 dark:bg-blue-950/20" :
-              config.infoSectionColor === "purple" ? "bg-purple-50/30 dark:bg-purple-950/20" :
-              "bg-muted/30"
-            }`}>
-              <h4 className="font-medium text-sm flex items-center gap-2">
-                {config.infoSectionIcon && <span>{config.infoSectionIcon}</span>}
-                {config.infoSectionTitle || "Informacion Adicional"}
-              </h4>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {camposExtra.filter((c) => !c.usarComoDispositivo).map(renderCampoExtra)}
-              </div>
-            </div>
-          )}
+          <CamposExtraFields
+            campos={camposExtra}
+            values={camposExtraValues}
+            config={config}
+            onChange={handleCampoExtraChange}
+          />
 
           {/* Color and IMEI/Serial - driven by config visibility */}
           {(showColor || showImei) && (
@@ -1283,84 +1127,14 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
           )}
 
           {/* Accesorios recibidos - dynamic from config */}
-          <div>
-            <Label>Accesorios Recibidos</Label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
-              {accesoriosDisponibles.map((acc) => (
-                <label
-                  key={acc.id}
-                  className={`flex items-center gap-2 p-2 border rounded cursor-pointer transition-colors ${
-                    accesoriosSeleccionados.includes(acc.id)
-                      ? "bg-primary/10 border-primary"
-                      : "hover:bg-muted"
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={accesoriosSeleccionados.includes(acc.id)}
-                    onChange={() => toggleAccesorio(acc.id)}
-                    className="sr-only"
-                  />
-                  <div
-                    className={`w-4 h-4 border rounded flex items-center justify-center ${
-                      accesoriosSeleccionados.includes(acc.id)
-                        ? "bg-primary border-primary text-white"
-                        : "border-gray-300"
-                    }`}
-                  >
-                    {accesoriosSeleccionados.includes(acc.id) && (
-                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                        <path
-                          fillRule="evenodd"
-                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                    )}
-                  </div>
-                  <span className="text-sm">{acc.label}</span>
-                </label>
-              ))}
-            </div>
-            <div className="flex gap-2 mt-2">
-              <Input
-                value={otroAccesorio}
-                onChange={(e) => setOtroAccesorio(e.target.value)}
-                placeholder="Otro accesorio..."
-                className="flex-1"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault()
-                    addOtroAccesorio()
-                  }
-                }}
-              />
-              <Button type="button" variant="outline" onClick={addOtroAccesorio}>
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
-            {accesoriosSeleccionados.filter((a) => !accesoriosDisponibles.find((c) => c.id === a)).length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-2">
-                {accesoriosSeleccionados
-                  .filter((a) => !accesoriosDisponibles.find((c) => c.id === a))
-                  .map((acc) => (
-                    <span
-                      key={acc}
-                      className="inline-flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded text-sm"
-                    >
-                      {acc}
-                      <button
-                        type="button"
-                        onClick={() => toggleAccesorio(acc)}
-                        className="hover:text-destructive"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </span>
-                  ))}
-              </div>
-            )}
-          </div>
+          <AccesoriosPicker
+            disponibles={accesoriosDisponibles}
+            seleccionados={accesoriosSeleccionados}
+            onToggle={toggleAccesorio}
+            otro={otroAccesorio}
+            onOtroChange={setOtroAccesorio}
+            onOtroAdd={addOtroAccesorio}
+          />
 
           {/* Password - driven by config visibility */}
           {showPassword && <div>
@@ -1460,89 +1234,14 @@ export function OrdenForm({ onClose, onSuccess, fromTurnoId, initialClienteId, i
 
           {currentStep === 3 && (<>
           {/* Fotos de ingreso */}
-          <div>
-            <Label>Fotos del {term("equipo")} (Ingreso)</Label>
-            <div className="mt-2 space-y-3">
-              <div className="flex gap-2">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={handleFileChange}
-                  className="hidden"
-                />
-                <input
-                  ref={cameraInputRef}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  onChange={handleFileChange}
-                  className="hidden"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex-1"
-                  disabled={comprimiendo}
-                >
-                  <Upload className="mr-2 h-4 w-4" />
-                  Seleccionar archivos
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => cameraInputRef.current?.click()}
-                  className="flex-1"
-                  disabled={comprimiendo}
-                >
-                  <Camera className="mr-2 h-4 w-4" />
-                  Tomar foto
-                </Button>
-              </div>
-
-              {comprimiendo && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Comprimiendo imagenes...
-                </div>
-              )}
-
-              {fotos.length > 0 && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {fotos.map((foto) => (
-                    <div key={foto.id} className="relative group">
-                      <img
-                        src={foto.preview}
-                        alt="Preview"
-                        className="w-full h-24 object-cover rounded-lg border"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeFoto(foto.id)}
-                        className="absolute top-1 right-1 p-1 bg-destructive text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
-                      <Input
-                        value={foto.descripcion}
-                        onChange={(e) => updateFotoDescripcion(foto.id, e.target.value)}
-                        placeholder="Descripcion..."
-                        className="mt-1 text-xs h-7"
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {fotos.length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-4 border-2 border-dashed rounded-lg">
-                  Agregar fotos del estado inicial del equipo
-                </p>
-              )}
-            </div>
-          </div>
+          <FotosIngreso
+            label={`Fotos del ${term("equipo")} (Ingreso)`}
+            fotos={fotos}
+            comprimiendo={comprimiendo}
+            onFileChange={handleFileChange}
+            onRemove={removeFoto}
+            onDescripcionChange={updateFotoDescripcion}
+          />
 
           {/* Checklist de Recepción inline */}
           {checklistTemplate && checklistTemplate.items && checklistTemplate.items.length > 0 && (

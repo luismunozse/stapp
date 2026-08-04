@@ -228,16 +228,25 @@ export function OrdenCreadaModal({ open, onClose, orden }: OrdenCreadaModalProps
       day: "2-digit", month: "2-digit", year: "numeric",
       timeZone: timezone,
     })
-    await printDeviceLabel({
-      codigoOrden: orden.codigoOrden || `#${orden.numeroOrden}`,
-      numeroOrden: orden.numeroOrden,
-      clienteNombre: orden.cliente.nombre,
-      dispositivo: orden.dispositivo,
-      problemaReportado: orden.problemaReportado,
-      fechaIngreso: fecha,
-      publicToken: orden.publicToken,
-      organizationName: orden.organizationName,
-    }, baseUrl)
+    // printDeviceLabel espera el diálogo real del driver y puede rechazar.
+    // Sin este try/catch el reject queda sin manejar dentro de un onClick y
+    // el operador no se entera de nada: la orden ya está creada, lo único
+    // que falló es la impresión y eso es lo que hay que decirle.
+    try {
+      await printDeviceLabel({
+        codigoOrden: orden.codigoOrden || `#${orden.numeroOrden}`,
+        numeroOrden: orden.numeroOrden,
+        clienteNombre: orden.cliente.nombre,
+        dispositivo: orden.dispositivo,
+        problemaReportado: orden.problemaReportado,
+        fechaIngreso: fecha,
+        publicToken: orden.publicToken,
+        organizationName: orden.organizationName,
+      }, baseUrl)
+    } catch (error) {
+      console.error("Error imprimiendo la etiqueta:", error)
+      await showError("No se pudo imprimir la etiqueta. La orden ya está creada: revisá la impresora e intentá de nuevo.")
+    }
   }
 
   const handleOpenWhatsApp = () => {
