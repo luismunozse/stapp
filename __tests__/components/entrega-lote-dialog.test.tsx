@@ -113,6 +113,53 @@ describe("EntregaLoteDialog", () => {
     await waitFor(() => expect(onSuccess).toHaveBeenCalled())
   })
 
+  it("normaliza el costo una sola vez: el total mostrado y el costoFinal enviado coinciden", async () => {
+    renderDialog()
+
+    const input1 = screen.getByDisplayValue("200")
+    fireEvent.change(input1, { target: { value: "100.015" } })
+
+    // 100.015 -> redondeado a 100.02. Subtotal: 100.02 + 150 = 250.02.
+    // Descuento 10%: 25.002 -> total 225.018 -> redondeado a 225.02.
+    //
+    // Si el resumen sumara el valor SIN redondear (100.015 + 150 = 250.015)
+    // y recién aplicara el redondeo al final, el total mostrado daría 225,01
+    // — un centavo menos de lo que el servidor realmente cobra a partir de
+    // los costoFinal ya redondeados que viajan en el POST. Este caso puntual
+    // hace explícito ese desfase de un centavo.
+    expect(await screen.findByText(/225,02/)).toBeInTheDocument()
+    expect(screen.queryByText(/225,01/)).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole("radio", { name: /efectivo/i }))
+    fireEvent.click(screen.getByRole("button", { name: /confirmar entrega/i }))
+
+    await waitFor(() => {
+      const body = entregarBody(mockFetch)
+      const o1 = body.ordenes.find((o: { id: string }) => o.id === "o1")
+      // Mismo número que se ve en pantalla: 100.02, no 100.015 sin redondear.
+      expect(o1.costoFinal).toBe(100.02)
+    })
+  })
+
+  it("clampea un costo negativo a 0 tanto en el resumen como en lo enviado", async () => {
+    renderDialog()
+
+    const input1 = screen.getByDisplayValue("200")
+    fireEvent.change(input1, { target: { value: "-50" } })
+
+    // Subtotal: 0 (clampeado) + 150 = 150. Descuento 10% -> total 135.
+    expect(await screen.findByText(/135,00/)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole("radio", { name: /efectivo/i }))
+    fireEvent.click(screen.getByRole("button", { name: /confirmar entrega/i }))
+
+    await waitFor(() => {
+      const body = entregarBody(mockFetch)
+      const o1 = body.ordenes.find((o: { id: string }) => o.id === "o1")
+      expect(o1.costoFinal).toBe(0)
+    })
+  })
+
   it("muestra el mensaje de error de la API (409 no reparado) sin cerrar el dialogo", async () => {
     mockFetch.mockImplementation(() =>
       Promise.resolve({

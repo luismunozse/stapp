@@ -51,6 +51,27 @@ interface EntregaLoteDialogProps {
 
 const round2 = (n: number) => Math.round(n * 100) / 100
 
+/**
+ * Único punto donde un costo tipeado se convierte en número: redondea a 2
+ * decimales y clampea negativos a 0. Se usa tanto para el resumen en
+ * pantalla (subtotal/descuento/total) como para el payload del POST, así
+ * nunca pueden divergir — sin esto, un costo con más de 2 decimales podía
+ * mostrar un total en pantalla distinto del que terminaba cobrándose,
+ * porque el POST redondeaba recién al armar el body.
+ *
+ * El clamp a 0 sigue el mismo criterio silencioso que el resto de la app usa
+ * para montos que no pueden ser negativos (ver Math.max(0, ...) en
+ * lib/lote-utils.ts, cotizaciones/item-row.tsx, cobrar-orden-dialog.tsx,
+ * cart-drawer.tsx): no hay ningún input de "costo" en la app que bloquee el
+ * envío con un mensaje de validación en su lugar, así que un dialog nuevo no
+ * es el lugar para introducir ese patrón.
+ */
+const normalizeCosto = (raw: string): number => {
+  const parsed = parseFloat(raw)
+  const safe = Number.isFinite(parsed) ? parsed : 0
+  return Math.max(0, round2(safe))
+}
+
 export function EntregaLoteDialog({
   open,
   onClose,
@@ -85,7 +106,7 @@ export function EntregaLoteDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
-  const subtotal = ordenes.reduce((sum, orden) => sum + (parseFloat(costos[orden.id]) || 0), 0)
+  const subtotal = ordenes.reduce((sum, orden) => sum + normalizeCosto(costos[orden.id]), 0)
   const total = calcularTotalLote(subtotal, descuentoTipo, descuentoValor)
   const descuentoAplicado = round2(subtotal - total)
 
@@ -101,7 +122,7 @@ export function EntregaLoteDialog({
         body: JSON.stringify({
           ordenes: ordenes.map((orden) => ({
             id: orden.id,
-            costoFinal: round2(parseFloat(costos[orden.id]) || 0),
+            costoFinal: normalizeCosto(costos[orden.id]),
           })),
           metodoPago,
           referencia: referencia || null,
