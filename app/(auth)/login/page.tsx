@@ -13,7 +13,7 @@ import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { Eye, EyeOff, CheckCircle, Mail } from "lucide-react"
 import { BusinessLogo } from "@/components/shared/business-logo"
 import { savePWATokens } from "@/components/auth/session-refresher"
-import { extractAuthCode } from "@/lib/auth-client"
+import { extractAuthCode, parseRequires2FA } from "@/lib/auth-client"
 import { isNativePlatform } from "@/lib/capacitor"
 import { TwoFactorVerify } from "@/components/auth/two-factor-verify"
 
@@ -271,13 +271,15 @@ function LoginForm() {
 
       if (result?.error) {
         const code = extractAuthCode(result)
-        if (code.includes("REQUIRES_2FA")) {
-          // Extraer userId del código
-          const userId = code.split("REQUIRES_2FA:")[1]
-          setPending2FAUserId(userId)
+        const userId2FA = parseRequires2FA(code)
+        if (userId2FA) {
+          setPending2FAUserId(userId2FA)
           setRequires2FA(true)
           setLoading(false)
           return
+        } else if (code.includes("SUPERADMIN_REQUIRES_2FA_SETUP")) {
+          setError("Tu cuenta requiere tener 2FA configurado. Contactá al administrador del sistema.")
+          setShowResendOption(false)
         } else if (code.includes("EMAIL_NOT_VERIFIED")) {
           setError("Tu email no ha sido verificado. Revisá tu bandeja de entrada y la carpeta de spam/correo no deseado.")
           setShowResendOption(true)

@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { Loader2 } from "lucide-react"
 import { BusinessLogo } from "@/components/shared/business-logo"
-import { extractAuthCode } from "@/lib/auth-client"
+import { extractAuthCode, parseRequires2FA } from "@/lib/auth-client"
 
 /**
  * Página de autenticación con Google en el dominio raíz.
@@ -112,7 +112,9 @@ function GoogleAuthContent() {
           const code = extractAuthCode(result)
           if (code.includes("GOOGLE_NO_ACCOUNT")) {
             setError("No existe una cuenta con este email de Google. Registrate primero.")
-          } else if (code.includes("REQUIRES_2FA")) {
+          } else if (code.includes("SUPERADMIN_REQUIRES_2FA_SETUP")) {
+            setError("Tu cuenta requiere tener 2FA configurado. Contactá al administrador del sistema.")
+          } else if (parseRequires2FA(code)) {
             // 2FA requerido - redirigir al login del tenant con indicación
             const targetUrl = tenant
               ? `https://${tenant}.${rootDomain}/login?needs2fa=true`

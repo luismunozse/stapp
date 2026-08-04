@@ -17,7 +17,7 @@ import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { Eye, EyeOff, AlertTriangle } from "lucide-react"
 import { STAppLogo } from "@/components/shared/stapp-logo"
 import { TwoFactorVerify } from "@/components/auth/two-factor-verify"
-import { extractAuthCode } from "@/lib/auth-client"
+import { extractAuthCode, parseRequires2FA } from "@/lib/auth-client"
 
 function LoginForm() {
   const router = useRouter()
@@ -97,9 +97,9 @@ function LoginForm() {
 
       if (result?.error) {
         const code = extractAuthCode(result)
-        if (code.includes("REQUIRES_2FA")) {
-          const userId = code.split("REQUIRES_2FA:")[1]
-          setPending2FAUserId(userId)
+        const userId2FA = parseRequires2FA(code)
+        if (userId2FA) {
+          setPending2FAUserId(userId2FA)
           setRequires2FA(true)
           setLoading(false)
           return
