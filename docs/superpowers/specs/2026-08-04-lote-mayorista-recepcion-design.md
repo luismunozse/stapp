@@ -35,7 +35,7 @@ Derived values (never stored):
 
 - `subtotal` = sum of the linked orders' `presupuesto` (quote stage) or `costo_final` (delivery stage).
 - `total lote` = `subtotal − descuento` (floored at 0).
-- Per-order prorated share = order amount × (total / subtotal), used for cash-register attribution, commissions, and partial pickup. Rounding remainder is assigned to the last order so shares always sum exactly to the charged total.
+- Per-order prorated share = order amount × (total / subtotal), used for cash-register attribution, commissions, and partial pickup. Rounding remainder is assigned to the largest share (first index on ties) so shares always sum exactly to the charged total and no share can go negative. *(Amended: the original "last order" rule could drive a small/zero share negative.)*
 
 A `CHECK` constraint enforces the tipo/valor pairing at the DB level.
 
@@ -53,11 +53,14 @@ New page `app/(dashboard)/ordenes/recepcion/[id]` (or equivalent under the exist
 
 Button **"Entregar lote"** on the batch view:
 
-- Enabled only when **all** linked orders are in `REPARADO` (orders already delivered individually are excluded from the batch action and its totals).
+- Enabled only when every **eligible** linked order is in `REPARADO`. Excluded from the batch action (they exit the lote through the individual flow or stay closed): orders already delivered (`ENTREGADO`, `ENTREGADO_SIN_REPARACION`, `ENTREGADO_SIN_COBRO`) and orders in `CANCELADO`, `SIN_REPARACION`, or `SIN_FALLA_DETECTADA`. One shared exclusion list (single module) is consumed by the batch view, the API, and the RPC — no hand-synced copies.
+- The batch view's totals card shows: subtotal (all members), discount, **total del lote** (all members, discounted), **ya cobrado** (net amount already charged on individually-delivered members), and **pendiente de cobro** (what the batch action will charge).
 - Opens the existing delivery+charge dialog semantics once for the whole batch: confirm final costs per device, apply the discount, charge `sum(costo_final) − descuento` in one operation.
 - On confirm, each order transitions to `ENTREGADO` through the existing state machine (no direct status writes — same rule as #241/#242).
-- **One cash-register movement**, linked to the reception, for the discounted total. Internally the amount is stored prorated per order so per-order reporting and commissions keep working.
-- **Partial pickup fallback:** the existing single-order delivery flow keeps working for a batch member; it charges that order's prorated share. No new UI is needed for this.
+- **One charge operation for the operator.** Internally the amount is persisted as prorated `cobros_orden` rows per order (the cash-register day view shows one line per device, summing to the charged total) so per-order reporting, commissions, and estado_cobro keep working. Each order's discount share is recorded as `descuento_cobro` so no phantom receivable remains. *(Amended: the original "one cash-register movement" wording described the UX, not the storage.)*
+- **Partial pickup fallback (amended):** the existing single-order delivery flow keeps working for a batch member and charges that order's **full individual price** (it is batch-unaware). The subsequent batch delivery settles the difference: the lote total is always computed over **all** members' costs, the net amount already charged on delivered members is subtracted, and only the remainder (floored at 0) is charged, prorated across the pending orders. The negotiated lote total therefore holds regardless of pickup order; per-order discount attribution skews toward the later-delivered orders, which is accepted.
+- **Batch delivery ordering invariant:** each order's charge is registered while the order is still `REPARADO`, and the estado flips to `ENTREGADO` afterwards inside the same transaction — otherwise the charge RPC's fiado auto-settlement credits the customer's account with the full charged amount (phantom store credit).
+- **Stock:** batch delivery consumes each order's stock reservations (`consumir_reservas_orden`) exactly like the individual flow, best-effort with surfaced warnings.
 
 Failure handling: creation already runs in one transaction (`crear_recepcion_multiple` RPC pattern); batch delivery must be equally atomic — one RPC/transaction that validates states, records the payment, and transitions all orders, or rolls back entirely.
 
