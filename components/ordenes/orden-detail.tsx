@@ -334,10 +334,20 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
     }
   }
 
-  const handleEntregaSuccess = () => {
+  const handleEntregaSuccess = async (pendienteCobro?: number) => {
     setShowEntregaDialog(false)
-    fetchOrden()
+    // Refrescar ANTES de abrir el cobro: el diálogo lee costoFinal del estado,
+    // y en la entrega puede haberse confirmado un total distinto al que tenía.
+    await fetchOrden()
     toast.success("Estado actualizado")
+
+    // El cobro es parte del flujo de entrega, no un trámite aparte: si quedó
+    // saldo, se abre solo. Sigue siendo opcional — cerrarlo deja el saldo en
+    // la cuenta corriente del cliente, igual que antes.
+    if (!sinCobroEntrega && (pendienteCobro ?? 0) > 0) {
+      setShowCobrarDialog(true)
+    }
+    setSinCobroEntrega(false)
   }
 
   const handleReingreso = async () => {
@@ -1029,6 +1039,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
               <OrdenRepuestosTab
                 ordenId={ordenId}
                 repuestos={(orden as any).repuestos || []}
+                mostrarCostos={isAdmin}
                 ordenEstado={orden.estado}
                 onRepuestosChanged={fetchOrden}
               />

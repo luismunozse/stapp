@@ -33,6 +33,9 @@ interface Repuesto {
 interface OrdenRepuestosTabProps {
   ordenId: string
   repuestos: Repuesto[]
+  /** Costo y margen son datos sensibles: solo se muestran cuando el
+   *  llamador lo habilita explicitamente (rol ADMIN). */
+  mostrarCostos?: boolean
   /** Estado de la orden. En una orden cerrada la reserva de stock ya se
    *  consumió (entregada) o se liberó (cancelada), así que la cantidad no se
    *  puede reajustar: el servidor rechaza el PATCH con 409. */
@@ -46,7 +49,7 @@ interface OrdenRepuestosTabProps {
 
 const ESTADOS_CERRADOS: string[] = [...ESTADOS_ENTREGA, "CANCELADO"]
 
-export function OrdenRepuestosTab({ ordenId, repuestos, ordenEstado, onRepuestosChanged }: OrdenRepuestosTabProps) {
+export function OrdenRepuestosTab({ ordenId, repuestos, mostrarCostos = false, ordenEstado, onRepuestosChanged }: OrdenRepuestosTabProps) {
   const { formatPrice } = useCurrency()
   const { confirm, alert } = useModal()
   const ordenCerrada = !!ordenEstado && ESTADOS_CERRADOS.includes(ordenEstado)
@@ -497,9 +500,11 @@ export function OrdenRepuestosTab({ ordenId, repuestos, ordenEstado, onRepuestos
                   </div>
                   <div className="text-sm text-muted-foreground">
                     {cantidadDe(repuesto)} × {formatPrice(precioVentaRepuesto(repuesto))}
-                    <span className="ml-2 text-xs">
-                      (costo {formatPrice(Number(repuesto.precioUnitario ?? 0))})
-                    </span>
+                    {mostrarCostos && (
+                      <span className="ml-2 text-xs">
+                        (costo {formatPrice(Number(repuesto.precioUnitario ?? 0))})
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -549,15 +554,17 @@ export function OrdenRepuestosTab({ ordenId, repuestos, ordenEstado, onRepuestos
                 <span>Subtotal Repuestos</span>
                 <span>{formatPrice(subtotalRepuestos)}</span>
               </div>
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>Costo · margen</span>
-                <span>
-                  {formatPrice(subtotalCosto)} ·{" "}
-                  <span className={subtotalRepuestos - subtotalCosto < 0 ? "text-destructive" : ""}>
-                    {formatPrice(subtotalRepuestos - subtotalCosto)}
+              {mostrarCostos && (
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Costo · margen</span>
+                  <span>
+                    {formatPrice(subtotalCosto)} ·{" "}
+                    <span className={subtotalRepuestos - subtotalCosto < 0 ? "text-destructive" : ""}>
+                      {formatPrice(subtotalRepuestos - subtotalCosto)}
+                    </span>
                   </span>
-                </span>
-              </div>
+                </div>
+              )}
             </div>
           </div>
         ) : (
