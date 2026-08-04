@@ -54,9 +54,9 @@ Tomadas durante el brainstorming y cerradas:
 
 ### 1. Modelo de datos
 
-Migración nueva: `278_recepcion_multiple.sql`.
+Migración nueva: `287_recepcion_multiple.sql`.
 
-**Nota de numeración, resuelta al cerrar la branch.** Se escribió originalmente como `277`, pero mientras el trabajo estaba en curso `origin/main` avanzó 13 commits y uno de ellos trajo `277_trigger_recalcular_estado_cobro.sql` (con su `rollback/` y sus `verify/` probes). Git no marca esa colisión porque los nombres de archivo difieren, pero las migraciones de este repo se aplican **a mano en orden numérico**, y dos `277` conviviendo vuelven ambiguo el registro de qué se aplicó. Se renumeró a `278`/`279`. El riesgo que el plan había anticipado era otro —un `276` reservado por la branch de facturación electrónica— así que la lección no es "revisá esa branch" sino **volver a chequear el número libre contra `origin/main` recién fetcheado justo antes de mergear, no solo al crear el archivo**.
+**Nota de numeración, resuelta al cerrar la branch.** Se escribió originalmente como `277`, pero mientras el trabajo estaba en curso `origin/main` avanzó 13 commits y uno de ellos trajo `277_trigger_recalcular_estado_cobro.sql` (con su `rollback/` y sus `verify/` probes). Git no marca esa colisión porque los nombres de archivo difieren, pero las migraciones de este repo se aplican **a mano en orden numérico**, y dos `277` conviviendo vuelven ambiguo el registro de qué se aplicó. Se renumeró a `278`/`279`. El riesgo que el plan había anticipado era otro —un `276` reservado por la branch de facturación electrónica— así que la lección no es "revisá esa branch" sino **volver a chequear el número libre contra `origin/main` recién fetcheado justo antes de mergear, no solo al crear el archivo**. Colisionó de nuevo antes del merge final: `origin/main` había avanzado a `281`/`284`/`285` y otra branch ya tenía reservado `286`, así que se renumeró otra vez, a `287`/`288`.
 
 ```sql
 CREATE TABLE recepciones (

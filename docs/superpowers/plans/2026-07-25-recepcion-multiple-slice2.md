@@ -8,19 +8,19 @@
 
 **Tech Stack:** Next.js App Router, TypeScript, Supabase (Postgres + plpgsql), react-hook-form + zod, Vitest.
 
-**Depende de:** Slice 1 (`feat/recepcion-multiple`) mergeado y sus migraciones 278 y 279 aplicadas.
+**Depende de:** Slice 1 (`feat/recepcion-multiple`) mergeado y sus migraciones 287 y 288 aplicadas.
 
 ## Global Constraints
 
 - **`POST /api/ordenes` y `PUT /api/ordenes/[id]` no se modifican.** El `GET` del mismo archivo sí se toca, y es el camino caliente del listado de todos los talleres: cualquier cambio ahí necesita test.
 - **La feature sigue gateada** a `profesional` y `pro` con la key `recepcion_multiple`. Las rutas nuevas chequean `hasPlanFeature` en el server; **nunca `useHasFeature`**, que no aplica overrides por organización.
 - **RLS de tablas nuevas o modificadas**: la policy de servicio va **`FOR ALL TO service_role`**, y la de lectura `FOR SELECT TO authenticated USING (organization_id = public.get_current_organization_id())`. La convención es la de `201_rls_hardening_phase1.sql`, **no** la de `274_asistente_panel.sql`, que regresionó contra ella. Un `USING(true)` sin `TO service_role` expone la tabla a la anon key, que viaja en el bundle del browser.
-- **DDL sobre `ordenes_servicio`**: dentro de `BEGIN; SET LOCAL lock_timeout = '3s';` y los índices `CONCURRENTLY` fuera de la transacción, como quedó la 278.
+- **DDL sobre `ordenes_servicio`**: dentro de `BEGIN; SET LOCAL lock_timeout = '3s';` y los índices `CONCURRENTLY` fuera de la transacción, como quedó la 287.
 - **`ordenes_servicio.tipo_dispositivo` es `TEXT`**, no enum. Sin casts.
 - **Artefactos en castellano neutro.** Comentarios consistentes con el archivo vecino.
 - **Nunca `Co-Authored-By` ni atribución de IA en los commits.** Conventional commits, sin tildes en el subject.
 - Comandos: `npx vitest run --testTimeout=30000`, `npx tsc --noEmit`, `npm run lint`.
-- **Verificar el número de migración libre** antes de crear el archivo: el último de Slice 1 es `279`.
+- **Verificar el número de migración libre** antes de crear el archivo: el último de Slice 1 es `288`.
 
 ---
 

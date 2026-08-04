@@ -7,7 +7,7 @@ import { settle } from "./helpers/utils"
  *
  * El feature vive detrás del flag de plan `recepcion_multiple` (ver
  * lib/subscriptions.ts + hasPlanFeature). Ese flag sólo existe una vez que
- * las migraciones 278_recepcion_multiple.sql y 279_crear_recepcion_multiple.sql
+ * las migraciones 287_recepcion_multiple.sql y 288_crear_recepcion_multiple.sql
  * corrieron a mano en el tenant — este repo no tiene runner de migraciones
  * automático. Mientras no corran, ningún plan del tenant QA trae el flag: el
  * botón "Recibir varios equipos" no aparece y /ordenes/recepcion muestra el
@@ -18,7 +18,7 @@ import { settle } from "./helpers/utils"
 
 const RAZON_FLAG_DESHABILITADO =
   "La organización de prueba no tiene el flag de plan recepcion_multiple habilitado " +
-  "(migraciones 278_recepcion_multiple.sql / 279_crear_recepcion_multiple.sql sin aplicar en el tenant QA)"
+  "(migraciones 287_recepcion_multiple.sql / 288_crear_recepcion_multiple.sql sin aplicar en el tenant QA)"
 
 test.describe("Recepción múltiple en mostrador", () => {
   test("el botón del listado lleva al formulario, que arranca con dos equipos", async ({

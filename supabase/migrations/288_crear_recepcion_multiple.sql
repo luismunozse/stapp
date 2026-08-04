@@ -1,5 +1,5 @@
 -- ============================================================================
--- 279: RPC transaccional para la recepción múltiple
+-- 288: RPC transaccional para la recepción múltiple
 -- ============================================================================
 -- Inserta la recepción y las N órdenes en UN commit. Si cualquier insert falla
 -- (incluido el trigger update_ordenes_count cuando se excede el límite del
@@ -25,7 +25,7 @@
 -- tipo_dispositivo es TEXT desde la migración 033 (dejó de ser enum): no se
 -- castea acá.
 --
--- El número de recepción usa get_next_recepcion_number (278_recepcion_multiple.sql),
+-- El número de recepción usa get_next_recepcion_number (287_recepcion_multiple.sql),
 -- NO un SELECT MAX(numero)+1: dos terminales de mostrador de la misma
 -- organización insertando a la vez leerían el mismo máximo y colisionarían
 -- contra UNIQUE(organization_id, numero), mostrando un error crudo de base
