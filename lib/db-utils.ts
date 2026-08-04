@@ -182,9 +182,24 @@ export function formatRepuesto(repuesto: any) {
     inventarioId: repuesto.inventario_id,
     nombre: repuesto.nombre, // Para repuestos manuales
     cantidad: repuesto.cantidad,
+    // precioUnitario es el COSTO (precio_compra congelado al cargar el
+    // repuesto); precioVentaUnitario es lo que se le cobra al cliente.
+    // Este último es NULL en filas anteriores a la migración 286.
     precioUnitario: repuesto.precio_unitario,
+    precioVentaUnitario: repuesto.precio_venta_unitario ?? null,
     inventario: repuesto.inventario ? formatInventario(repuesto.inventario) : undefined,
   }
+}
+
+/** Lo que se le cobra al cliente por un repuesto. Cae al costo cuando la fila
+ *  es anterior a la migración 286 y no tiene precio de venta registrado. */
+export function precioVentaRepuesto(repuesto: {
+  precioVentaUnitario?: number | string | null
+  precioUnitario?: number | string | null
+}) {
+  const venta = repuesto.precioVentaUnitario
+  if (venta !== null && venta !== undefined && venta !== "") return Number(venta)
+  return Number(repuesto.precioUnitario ?? 0)
 }
 
 export function formatInventario(item: any) {

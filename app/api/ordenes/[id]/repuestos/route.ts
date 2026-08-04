@@ -10,12 +10,19 @@ const repuestoInventarioSchema = z.object({
   cantidad: z.number().int().min(1),
 })
 
-// Schema para repuesto manual
+// Schema para repuesto manual.
+// precioUnitario es el COSTO (lo que pagó el taller) y precioVentaUnitario lo
+// que se le cobra al cliente. Sin los dos números el reporte de rentabilidad
+// muestra margen cero para todo repuesto cargado a mano.
 const repuestoManualSchema = z.object({
   tipo: z.literal("manual"),
   nombre: z.string().min(1, "El nombre es requerido"),
   cantidad: z.number().int().min(1),
-  precioUnitario: z.number().min(0, "El precio debe ser mayor o igual a 0"),
+  precioUnitario: z.number().min(0, "El costo debe ser mayor o igual a 0"),
+  precioVentaUnitario: z
+    .number()
+    .min(0, "El precio de venta debe ser mayor o igual a 0")
+    .optional(),
 })
 
 // Schema combinado
@@ -85,12 +92,15 @@ export async function POST(
         )
       }
     } else {
-      // Repuesto manual (sin inventario)
+      // Repuesto manual (sin inventario). Si no se informa precio de venta, se
+      // usa el costo: es lo que hacía el sistema antes de la migración 286 y
+      // evita cobrar 0 por un repuesto real.
       await supabaseAdmin.from("repuestos_orden").insert({
         orden_id: ordenId,
         nombre: data.nombre,
         cantidad: data.cantidad,
         precio_unitario: data.precioUnitario,
+        precio_venta_unitario: data.precioVentaUnitario ?? data.precioUnitario,
       })
     }
 

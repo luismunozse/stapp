@@ -15,6 +15,7 @@ import { SignaturePad } from "@/components/firma/signature-pad"
 import { Input } from "@/components/ui/input"
 import { Loader2, PackageCheck, PackageX, AlertTriangle, Shield, HandCoins } from "lucide-react"
 import { toast } from "sonner"
+import { useCurrency } from "@/contexts/currency-context"
 import {
   defaultMotivoSinCobro,
   MOTIVOS_SIN_COBRO,
@@ -42,7 +43,10 @@ const MOTIVO_OPTIONS: Array<{ value: MotivoSinCobro; label: string; hint: string
 interface EntregaDialogProps {
   open: boolean
   onClose: () => void
-  onSuccess: () => void
+  /** Recibe el saldo que quedó pendiente para que el llamador encadene el
+   *  cobro. Es el valor calculado por el servidor sobre el costo_final recién
+   *  confirmado, no una cuenta hecha en el cliente. */
+  onSuccess: (pendienteCobro?: number) => void
   orden: {
     id: string
     numeroOrden: number
@@ -55,11 +59,22 @@ interface EntregaDialogProps {
     }
     estadoCobro?: string
     pendienteCobro?: number
+    costoFinal?: number | null
+    repuestos?: RepuestoEntrega[]
   }
   encargadoNombre: string
   esRetiro?: boolean
   sinCobro?: boolean
   garantiaDiasDefault?: number
+}
+
+interface RepuestoEntrega {
+  id: string
+  nombre?: string
+  cantidad: number
+  precioUnitario: number
+  precioVentaUnitario?: number | null
+  inventario?: { nombre: string } | null
 }
 
 export function EntregaDialog({
@@ -72,6 +87,7 @@ export function EntregaDialog({
   sinCobro = false,
   garantiaDiasDefault = 30,
 }: EntregaDialogProps) {
+  const { formatPrice } = useCurrency()
   const [loading, setLoading] = useState(false)
   const [firmaCliente, setFirmaCliente] = useState<string | null>(null)
   const [firmaClienteMime, setFirmaClienteMime] = useState<string | null>(null)
@@ -85,6 +101,11 @@ export function EntregaDialog({
   const [motivoSinCobro, setMotivoSinCobro] = useState<MotivoSinCobro>(
     () => defaultMotivoSinCobro(orden.estado)
   )
+  // Confirmación del total al entregar. Arranca en "ya incluye los repuestos"
+  // porque es como se venía trabajando: el costo final se tipeaba a mano
+  // contemplándolos. Así, quien no toque nada obtiene el comportamiento previo.
+  const [totalDraft, setTotalDraft] = useState("")
+  const [incluyeRepuestos, setIncluyeRepuestos] = useState(true)
 
   useEffect(() => {
     if (open && sinCobro) {
@@ -92,7 +113,26 @@ export function EntregaDialog({
     }
   }, [open, sinCobro, orden.estado])
 
+  useEffect(() => {
+    if (open) {
+      setTotalDraft(orden.costoFinal ? String(orden.costoFinal) : "")
+      setIncluyeRepuestos(true)
+    }
+  }, [open, orden.costoFinal])
+
   const tienePendiente = !esRetiro && !sinCobro && orden.estadoCobro && orden.estadoCobro !== "COBRADO" && (orden.pendienteCobro || 0) > 0
+
+  const repuestos = orden.repuestos || []
+  // Fallback al costo en repuestos anteriores a la migración 286, que no
+  // tienen precio de venta registrado.
+  const precioVentaDe = (r: RepuestoEntrega) =>
+    r.precioVentaUnitario !== null && r.precioVentaUnitario !== undefined
+      ? Number(r.precioVentaUnitario)
+      : Number(r.precioUnitario || 0)
+  const totalRepuestos = repuestos.reduce((sum, r) => sum + r.cantidad * precioVentaDe(r), 0)
+  const mostrarCobro = !sinCobro
+  const totalIngresado = parseFloat(totalDraft) || 0
+  const totalACobrarFinal = incluyeRepuestos ? totalIngresado : totalIngresado + totalRepuestos
 
   const handleFirmaClienteChange = (data: string | null, mime: string | null) => {
     setFirmaCliente(data)
@@ -122,6 +162,11 @@ export function EntregaDialog({
           notasEntrega: notasEntrega || null,
           sinCobro: sinCobro || undefined,
           motivoSinCobro: sinCobro ? motivoSinCobro : undefined,
+          // Solo se manda si el operador confirmó un total: si lo deja vacío,
+          // el servidor no toca costo_final y la orden conserva el que tenía.
+          ...(mostrarCobro && totalDraft.trim()
+            ? { totalACobrar: totalIngresado, incluyeRepuestos }
+            : {}),
           ...(conGarantia && !esRetiro && !sinCobro ? {
             diasGarantia: Math.max(1, parseInt(diasGarantia, 10) || 30),
             notasGarantia: notasGarantia || null,
@@ -143,7 +188,7 @@ export function EntregaDialog({
         toast.warning(data.warning, { duration: 10000 })
       }
 
-      onSuccess()
+      onSuccess(typeof data.pendienteCobro === "number" ? data.pendienteCobro : undefined)
       onClose()
     } catch (err) {
       console.error("Error:", err)
@@ -239,16 +284,19 @@ export function EntregaDialog({
             </div>
           )}
 
-          {/* Aviso informativo si hay cobro pendiente (solo para entregas normales) */}
+          {/* Cobro pendiente (solo entregas normales). Antes este cartel mandaba
+              al operador a buscar el cobro en otra pantalla; ahora anticipa que
+              la pantalla de cobro se abre sola al confirmar. */}
           {tienePendiente && (
             <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-sm">
-              <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+              <HandCoins className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
               <div>
                 <p className="font-medium text-amber-800 dark:text-amber-300">
-                  Cobro pendiente: {orden.pendienteCobro?.toLocaleString("es-AR", { style: "currency", currency: "ARS" })}
+                  Queda un saldo de {formatPrice(orden.pendienteCobro || 0)}
                 </p>
                 <p className="text-amber-700 dark:text-amber-400 text-xs mt-0.5">
-                  Puede cobrar después de la entrega desde el detalle de la orden.
+                  Al confirmar se abre la pantalla de cobro. Si el cliente no paga
+                  ahora, cerrala y el saldo queda en su cuenta corriente.
                 </p>
               </div>
             </div>
@@ -258,6 +306,82 @@ export function EntregaDialog({
             <p><strong>Cliente:</strong> {orden.cliente.nombre}</p>
             <p><strong>Telefono:</strong> {orden.cliente.telefono}</p>
           </div>
+
+          {mostrarCobro && (
+            <div className="rounded-lg border p-3 space-y-3">
+              {repuestos.length > 0 && (
+                <div>
+                  <Label className="text-sm font-medium">Repuestos utilizados</Label>
+                  <ul className="mt-2 space-y-1">
+                    {repuestos.map((r) => (
+                      <li key={r.id} className="flex items-baseline justify-between gap-3 text-sm">
+                        <span className="min-w-0 truncate text-muted-foreground">
+                          {r.inventario?.nombre || r.nombre}
+                          <span className="ml-1 text-xs">
+                            {r.cantidad} × {formatPrice(precioVentaDe(r))}
+                          </span>
+                        </span>
+                        <span className="shrink-0 tabular-nums">
+                          {formatPrice(r.cantidad * precioVentaDe(r))}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="mt-2 flex justify-between border-t pt-2 text-sm font-medium">
+                    <span>Total repuestos</span>
+                    <span className="tabular-nums">{formatPrice(totalRepuestos)}</span>
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <Label htmlFor="total-cobrar" className="text-sm font-medium">
+                  Total a cobrar
+                </Label>
+                <Input
+                  id="total-cobrar"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                  className="mt-1"
+                  value={totalDraft}
+                  onChange={(e) => setTotalDraft(e.target.value)}
+                />
+              </div>
+
+              {repuestos.length > 0 && (
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4"
+                    checked={incluyeRepuestos}
+                    onChange={(e) => setIncluyeRepuestos(e.target.checked)}
+                  />
+                  <span>
+                    El total que ingresé <strong>ya incluye</strong> los repuestos
+                    <span className="block text-xs text-muted-foreground">
+                      Destildá esta opción si el monto es solo la mano de obra.
+                    </span>
+                  </span>
+                </label>
+              )}
+
+              {totalDraft.trim() && (
+                <div className="flex items-baseline justify-between rounded-md bg-muted/60 px-3 py-2 text-sm">
+                  <span className="font-medium">Se cobrará</span>
+                  <span className="font-semibold tabular-nums">
+                    {formatPrice(totalACobrarFinal)}
+                    {!incluyeRepuestos && repuestos.length > 0 && (
+                      <span className="ml-2 text-xs font-normal text-muted-foreground">
+                        ({formatPrice(totalIngresado)} + {formatPrice(totalRepuestos)})
+                      </span>
+                    )}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="space-y-4">
             <div>
