@@ -59,7 +59,7 @@ describe("GET /api/recepciones/[id] — detalle del lote", () => {
   it("devuelve 404 cuando la recepcion no pertenece a la organizacion", async () => {
     vi.mocked(hasPlanFeature).mockResolvedValue(true)
     mockSupabaseFrom({
-      recepciones: createChainMock(null, { message: "not found" }),
+      recepciones: createChainMock(null, { code: "PGRST116", message: "not found" }),
     })
 
     const res = await GET(createGetRequest(), createParams("rec-ajena"))
@@ -67,6 +67,34 @@ describe("GET /api/recepciones/[id] — detalle del lote", () => {
 
     expect(status).toBe(404)
     expect(body.error).toBeTruthy()
+  })
+
+  it("devuelve 500 cuando la consulta de recepcion falla por un error real de DB (no not-found)", async () => {
+    vi.mocked(hasPlanFeature).mockResolvedValue(true)
+    mockSupabaseFrom({
+      recepciones: createChainMock(null, { code: "500", message: "connection reset" }),
+    })
+
+    const res = await GET(createGetRequest(), createParams("rec-1"))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(500)
+    expect(body.error).toBeTruthy()
+  })
+
+  it("devuelve 500 (no un lote vacio con subtotal 0) cuando la consulta de ordenes falla", async () => {
+    vi.mocked(hasPlanFeature).mockResolvedValue(true)
+    mockSupabaseFrom({
+      recepciones: createChainMock(createMockRecepcion()),
+      ordenes_servicio: createChainMock(null, { message: "connection reset" }),
+    })
+
+    const res = await GET(createGetRequest(), createParams("rec-1"))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(500)
+    expect(body.error).toBeTruthy()
+    expect(status).not.toBe(200)
   })
 
   it("devuelve recepcion + ordenes + totales con descuento porcentual y conteo de entregadas/pendientes", async () => {
