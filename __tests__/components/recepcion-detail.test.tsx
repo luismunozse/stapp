@@ -183,4 +183,98 @@ describe("RecepcionDetail", () => {
     const getCalls = fetchMock.mock.calls.filter(([, init]) => !init || (init as RequestInit)?.method === undefined)
     expect(getCalls.length).toBeGreaterThanOrEqual(2)
   })
+
+  it('"Entregar lote" abre el dialogo de entrega con los equipos pendientes', async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetchOnce(
+        buildResponse({
+          ordenes: [
+            {
+              id: "o1",
+              numeroOrden: 1,
+              codigoOrden: "CEL-001",
+              dispositivo: "iPhone 13",
+              marca: "Apple",
+              estado: "REPARADO",
+              presupuesto: null,
+              costoFinal: 200,
+            },
+            {
+              id: "o2",
+              numeroOrden: 2,
+              codigoOrden: "CEL-002",
+              dispositivo: "Notebook HP",
+              marca: "HP",
+              estado: "REPARADO",
+              presupuesto: 150,
+              costoFinal: 150,
+            },
+          ],
+          totales: { subtotal: 350, totalLote: 315, entregadas: 0, pendientes: 2 },
+        }),
+      ),
+    )
+
+    render(<RecepcionDetail recepcionId="rec-1" />)
+
+    const btn = await screen.findByRole("button", { name: /entregar lote/i })
+    fireEvent.click(btn)
+
+    expect(await screen.findByRole("button", { name: /confirmar entrega/i })).toBeInTheDocument()
+  })
+
+  it("al confirmar la entrega del lote desde el dialogo, refresca el detalle", async () => {
+    const getResponse = buildResponse({
+      ordenes: [
+        {
+          id: "o1",
+          numeroOrden: 1,
+          codigoOrden: "CEL-001",
+          dispositivo: "iPhone 13",
+          marca: "Apple",
+          estado: "REPARADO",
+          presupuesto: null,
+          costoFinal: 200,
+        },
+        {
+          id: "o2",
+          numeroOrden: 2,
+          codigoOrden: "CEL-002",
+          dispositivo: "Notebook HP",
+          marca: "HP",
+          estado: "REPARADO",
+          presupuesto: 150,
+          costoFinal: 150,
+        },
+      ],
+      totales: { subtotal: 350, totalLote: 315, entregadas: 0, pendientes: 2 },
+    })
+    const fetchMock = vi.fn((url: string) => {
+      if (typeof url === "string" && url.includes("/entregar")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ recepcionId: "rec-1", totalCobrado: 315, ordenes: [] }),
+        } as Response)
+      }
+      return Promise.resolve({ ok: true, json: async () => getResponse } as Response)
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    render(<RecepcionDetail recepcionId="rec-1" />)
+
+    const btn = await screen.findByRole("button", { name: /entregar lote/i })
+    fireEvent.click(btn)
+
+    fireEvent.click(await screen.findByRole("radio", { name: /efectivo/i }))
+    fireEvent.click(screen.getByRole("button", { name: /confirmar entrega/i }))
+
+    await waitFor(() => {
+      const getCalls = fetchMock.mock.calls.filter(
+        ([url]) => typeof url === "string" && url.includes("/api/recepciones/rec-1") && !url.includes("/entregar"),
+      )
+      // Inicial + refetch post-entrega
+      expect(getCalls.length).toBeGreaterThanOrEqual(2)
+    })
+  })
 })

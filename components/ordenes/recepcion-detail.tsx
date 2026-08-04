@@ -12,6 +12,7 @@ import { OrderStatusBadge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ArrowLeft, Truck } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
+import { EntregaLoteDialog } from "@/components/ordenes/entrega-lote-dialog"
 
 // Estados que ya cuentan como entrega, igual que ESTADOS_ENTREGADOS en
 // app/api/recepciones/[id]/route.ts -- mantenido en sync a mano porque el
@@ -54,7 +55,8 @@ export interface RecepcionDetalleResponse {
 
 interface RecepcionDetailProps {
   recepcionId: string
-  /** Task 8 monta el dialogo de entrega del lote acá. */
+  /** Permite al llamador reaccionar además de lo que ya hace este componente
+   *  (refrescar) — por ejemplo, para navegar o mostrar un toast propio. */
   onEntregarLote?: () => void
 }
 
@@ -68,6 +70,7 @@ export function RecepcionDetail({ recepcionId, onEntregarLote }: RecepcionDetail
   const [descuentoTipo, setDescuentoTipo] = useState<DescuentoTipo>("porcentaje")
   const [descuentoValor, setDescuentoValor] = useState("")
   const [savingDescuento, setSavingDescuento] = useState(false)
+  const [entregaLoteOpen, setEntregaLoteOpen] = useState(false)
 
   const fetchRecepcion = useCallback(async () => {
     try {
@@ -144,6 +147,15 @@ export function RecepcionDetail({ recepcionId, onEntregarLote }: RecepcionDetail
       : "Todos los equipos pendientes deben estar en estado Reparado para poder entregar el lote."
 
   const descuentoAplicado = recepcion.descuentoTipo && recepcion.descuentoValor ? totales.subtotal - totales.totalLote : 0
+
+  // Solo los equipos todavia no entregados entran al dialogo de cobro único:
+  // los ya entregados no tienen costo final para renegociar acá.
+  const ordenesPendientes = ordenes.filter((o) => !ESTADOS_ENTREGADOS.includes(o.estado))
+
+  const handleEntregaLoteSuccess = () => {
+    fetchRecepcion()
+    onEntregarLote?.()
+  }
 
   return (
     <div className="space-y-6">
@@ -262,12 +274,27 @@ export function RecepcionDetail({ recepcionId, onEntregarLote }: RecepcionDetail
       </Card>
 
       <div className="flex flex-col items-end gap-1.5">
-        <Button size="lg" disabled={!puedeEntregar} onClick={onEntregarLote} title={!puedeEntregar ? motivoDeshabilitado : undefined}>
+        <Button
+          size="lg"
+          disabled={!puedeEntregar}
+          onClick={() => setEntregaLoteOpen(true)}
+          title={!puedeEntregar ? motivoDeshabilitado : undefined}
+        >
           <Truck className="h-4 w-4 mr-2" />
           Entregar lote
         </Button>
         {!puedeEntregar && <p className="text-xs text-muted-foreground text-right max-w-xs">{motivoDeshabilitado}</p>}
       </div>
+
+      <EntregaLoteDialog
+        open={entregaLoteOpen}
+        onClose={() => setEntregaLoteOpen(false)}
+        onSuccess={handleEntregaLoteSuccess}
+        recepcionId={recepcionId}
+        ordenes={ordenesPendientes}
+        descuentoTipo={recepcion.descuentoTipo}
+        descuentoValor={recepcion.descuentoValor}
+      />
     </div>
   )
 }
