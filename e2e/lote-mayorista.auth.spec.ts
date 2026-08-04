@@ -12,8 +12,8 @@ import { settle, uniqueSuffix } from "./helpers/utils"
  *   3. aplicar un descuento del 10% (ADMIN) y verificar que se refleje
  *   4. reparar ambas órdenes con costo final, vía API (ver nota más abajo)
  *   5. "Entregar lote": EFECTIVO, confirmar
- *   6. verificar "2 de 2 entregados" y que el total cobrado sea la suma de
- *      costos menos el 10%
+ *   6. verificar "2 de 2 entregados", el estado ENTREGADO puntual de cada
+ *      orden, y que el total cobrado sea la suma de costos menos el 10%
  *
  * Depende de CUATRO migraciones manuales aplicadas al tenant (este repo no
  * tiene runner de migraciones automático — ver scripts/db-run.mjs):
@@ -27,9 +27,12 @@ import { settle, uniqueSuffix } from "./helpers/utils"
  *     descuento_tipo/descuento_valor a `recepciones` y el RPC
  *     entregar_lote_recepcion. Si el flag ya está pero estas dos no corrieron,
  *     GET /api/recepciones/[id] devuelve 500 (columna inexistente). Este test
- *     también SALTA ahí (probing directo a la API antes de asumir que el
- *     detalle del lote funciona), para no bloquear CI con un rojo falso antes
- *     de que esas migraciones corran en el tenant QA.
+ *     SALTA únicamente ante ese 500 puntual (probing directo a la API antes
+ *     de asumir que el detalle del lote funciona), para no bloquear CI con un
+ *     rojo falso antes de que esas migraciones corran en el tenant QA. Un
+ *     status no-ok distinto de 500 (404, 403, etc.) hace fallar el test: un
+ *     guard `!ok()` genérico enmascararía regresiones reales para siempre,
+ *     incluso después de que 289/290 ya estén aplicadas.
  *
  * Mover las dos órdenes a REPARADO se hace por API (request fixture), no por
  * UI: la máquina de estados (lib/orden-state-machine.ts) permite
@@ -46,7 +49,7 @@ const RAZON_FLAG_DESHABILITADO =
   "(migraciones 287_recepcion_multiple.sql / 288_crear_recepcion_multiple.sql sin aplicar en el tenant QA)"
 
 const RAZON_MIGRACION_LOTE_PENDIENTE =
-  "El flag recepcion_multiple está activo pero GET /api/recepciones/[id] respondió con error " +
+  "El flag recepcion_multiple está activo pero GET /api/recepciones/[id] respondió 500 " +
   "(migraciones 289_recepcion_descuento.sql / 290_entregar_lote_recepcion.sql sin aplicar en el tenant QA)"
 
 const RAZON_NO_ADMIN =
@@ -119,14 +122,21 @@ test.describe("Lote mayorista — recepción a entrega", () => {
     }
 
     // Probe directo a la API del lote: si 289/290 no corrieron, este
-    // endpoint responde 500 (columna descuento_tipo/descuento_valor
-    // inexistente en `recepciones`) — saltamos en vez de fallar en rojo,
-    // con el mismo criterio que la guarda del flag más arriba. De paso,
-    // esta misma llamada nos da los ids de las 2 órdenes del lote.
+    // endpoint responde específicamente 500 (columna descuento_tipo/
+    // descuento_valor inexistente en `recepciones`, ver
+    // app/api/recepciones/[id]/route.ts) — sólo ESE status se trata como
+    // "migración pendiente" y saltamos en vez de fallar en rojo. Cualquier
+    // otro status no-ok (404 por un recepcionId mal extraído de la URL, 403,
+    // o un 500 genuino ya con las migraciones aplicadas) tiene que fallar el
+    // test en lugar de quedar enmascarado como skip: si el guard fuera
+    // `!detalleRes.ok()` a secas, una regresión real después de que 289/290
+    // corran en el tenant seguiría saltando en silencio para siempre. De
+    // paso, esta misma llamada nos da los ids de las 2 órdenes del lote.
     const detalleRes = await request.get(`/api/recepciones/${recepcionId}`)
-    if (!detalleRes.ok()) {
+    if (detalleRes.status() === 500) {
       test.skip(true, RAZON_MIGRACION_LOTE_PENDIENTE)
     }
+    expect(detalleRes.ok(), `GET recepcion detalle falló con ${detalleRes.status()}`).toBeTruthy()
     const detalle = await detalleRes.json()
     const [orden1, orden2] = detalle.ordenes as Array<{ id: string; numeroOrden: number }>
     expect(orden1?.id, "el lote debe tener 2 órdenes").toBeTruthy()
@@ -183,6 +193,21 @@ test.describe("Lote mayorista — recepción a entrega", () => {
 
     // --- 6) Ambos equipos entregados, lote completo -------------------------
     await expect(page.getByText(/2 de 2 entregados/i)).toBeVisible({ timeout: 15_000 })
+
+    // El agregado "2 de 2 entregados" cuenta cualquier variante ENTREGADO_*
+    // (ver ESTADOS_ENTREGADOS en components/ordenes/recepcion-detail.tsx),
+    // pero el flujo de este test entrega con cobro (no "sin cobro" ni
+    // "retiro sin reparación") y el RPC entregar_lote_recepcion hardcodea
+    // el estado ENTREGADO para ese camino — así que además se verifica el
+    // estado puntual, no sólo el conteo agregado. Cada fila de la card
+    // "Equipos del lote" muestra un OrderStatusBadge cuyo texto es
+    // exactamente "Entregado" (ver getOrderStatusLabel en
+    // components/ui/badge.tsx); el regex anclado evita matchear variantes
+    // como "Entregado sin Cobro".
+    const equiposDelLoteCard = page
+      .getByRole("heading", { name: /equipos del lote/i })
+      .locator("xpath=ancestor::div[contains(concat(' ', normalize-space(@class), ' '), ' rounded-lg ')][1]")
+    await expect(equiposDelLoteCard.getByText(/^Entregado$/)).toHaveCount(2)
 
     await settle(page)
     expect(serverErrors.failures, serverErrors.failures.join("\n")).toEqual([])
