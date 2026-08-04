@@ -1,10 +1,10 @@
-# Wholesale Batch (Lote) on Multi-Device Reception — Implementation Plan
+﻿# Wholesale Batch (Lote) on Multi-Device Reception â€” Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add batch discount, a batch detail view, and single-charge batch delivery on top of the existing multi-device reception (`recepciones`) model.
 
-**Architecture:** The reception stays a document; batch totals are always derived from member orders. A discount (`descuento_tipo`/`descuento_valor`) lives on `recepciones`. Batch delivery is one atomic Postgres RPC that transitions every member order `REPARADO → ENTREGADO` and records prorated `cobros_orden` rows per order (so caja reconciliation and comisiones keep working untouched), driven by one API call from a single dialog.
+**Architecture:** The reception stays a document; batch totals are always derived from member orders. A discount (`descuento_tipo`/`descuento_valor`) lives on `recepciones`. Batch delivery is one atomic Postgres RPC that transitions every member order `REPARADO â†’ ENTREGADO` and records prorated `cobros_orden` rows per order (so caja reconciliation and comisiones keep working untouched), driven by one API call from a single dialog.
 
 **Tech Stack:** Next.js App Router (route handlers), Supabase/Postgres (plpgsql RPCs), Zod, Vitest (`__tests__/`), Playwright (`e2e/`).
 
@@ -12,14 +12,14 @@
 
 ## Global Constraints
 
-- **Sequencing gate:** `feat/recepcion-multiple` (migrations 278–279) and `feat/cobro-en-entrega` MUST be merged to `main` and their migrations applied before starting. Verify with `git log main --oneline` and stop if missing.
+- **Sequencing gate:** `feat/recepcion-multiple` (migrations 278â€“279) and `feat/cobro-en-entrega` MUST be merged to `main` and their migrations applied before starting. Verify with `git log main --oneline` and stop if missing.
 - Work on a new branch off fresh `main`: `feat/lote-mayorista`.
-- Migration numbers are assigned at merge time (project convention). This plan uses `280_recepcion_descuento.sql` and `281_entregar_lote_recepcion.sql`; before opening the PR, renumber to the next free numbers above every already-applied migration.
+- Migration numbers are assigned at merge time (project convention). This plan uses `289_recepcion_descuento.sql` and `290_entregar_lote_recepcion.sql` (renumbered from 280/281: 287/288 were taken by recepcion-multiple at merge); before opening the PR, re-verify they are still the next free numbers.
 - Migrations are applied manually: `node scripts/db-run.mjs supabase/migrations/<file>` (dry-run by default; pass its apply flag after reviewing output). Never assume a CI runner applies them.
-- Feature gating reuses the existing flag key `recepcion_multiple` — no new flag, no org toggle. Server: `hasPlanFeature(organizationId, "recepcion_multiple")` → 403 `{ error, code: "FEATURE_REQUIRED", feature: "recepcion_multiple" }`. Client: `useHasFeature("recepcion_multiple")`.
+- Feature gating reuses the existing flag key `recepcion_multiple` â€” no new flag, no org toggle. Server: `hasPlanFeature(organizationId, "recepcion_multiple")` â†’ 403 `{ error, code: "FEATURE_REQUIRED", feature: "recepcion_multiple" }`. Client: `useHasFeature("recepcion_multiple")`.
 - Payments/charges require `role === "ADMIN"` (same as `POST /api/ordenes/[id]/cobros`).
 - All estado changes go through the state machine (`lib/orden-state-machine.ts`); the batch RPC enforces `estado = 'REPARADO'` before setting `ENTREGADO` (mirrors `esTransicionValida`).
-- Batch delivery v1 accepts ONE payment method for the whole batch. Multi-method split, sin-cobro flows, cuenta corriente, garantía capture, and delivery signatures stay on the existing per-order flow (spec: out of scope).
+- Batch delivery v1 accepts ONE payment method for the whole batch. Multi-method split, sin-cobro flows, cuenta corriente, garantÃ­a capture, and delivery signatures stay on the existing per-order flow (spec: out of scope).
 - UI copy in neutral Spanish (project convention); code identifiers and comments in English.
 - Strict TDD: every task writes the failing test first. Unit/API: `npx vitest run <file>`. E2E: `npm run test:e2e`.
 - Conventional commits, no AI attribution.
@@ -89,7 +89,7 @@ describe("prorratearLote", () => {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run __tests__/lib/lote-utils.test.ts`
-Expected: FAIL — cannot resolve `@/lib/lote-utils`.
+Expected: FAIL â€” cannot resolve `@/lib/lote-utils`.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -137,7 +137,7 @@ git commit -m "feat(lotes): batch total and proration math for reception batches
 ### Task 2: Discount columns on `recepciones`
 
 **Files:**
-- Create: `supabase/migrations/280_recepcion_descuento.sql`
+- Create: `supabase/migrations/289_recepcion_descuento.sql`
 
 **Interfaces:**
 - Consumes: `recepciones` table (migration 278).
@@ -146,7 +146,7 @@ git commit -m "feat(lotes): batch total and proration math for reception batches
 - [ ] **Step 1: Write the migration**
 
 ```sql
--- 280_recepcion_descuento.sql
+-- 289_recepcion_descuento.sql
 -- Batch discount negotiated for a multi-device reception.
 -- Totals are always derived from member orders; only the discount is stored.
 BEGIN;
@@ -169,19 +169,19 @@ COMMIT;
 
 - [ ] **Step 2: Dry-run and apply**
 
-Run: `node scripts/db-run.mjs supabase/migrations/280_recepcion_descuento.sql` (review dry-run output, then re-run with the apply flag the script prints).
+Run: `node scripts/db-run.mjs supabase/migrations/289_recepcion_descuento.sql` (review dry-run output, then re-run with the apply flag the script prints).
 Expected: `ALTER TABLE` succeeds; verify with a follow-up dry-run showing no pending changes.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add supabase/migrations/280_recepcion_descuento.sql
+git add supabase/migrations/289_recepcion_descuento.sql
 git commit -m "feat(db): batch discount columns on recepciones"
 ```
 
 ---
 
-### Task 3: `GET /api/recepciones/[id]` — batch detail with derived totals
+### Task 3: `GET /api/recepciones/[id]` â€” batch detail with derived totals
 
 **Files:**
 - Create: `app/api/recepciones/[id]/route.ts`
@@ -219,19 +219,19 @@ type RecepcionDetalleResponse = {
 Follow the structure of `__tests__/api/recepcion-multiple-gate.test.ts` (same mocks: `vi.mock("@/lib/subscriptions")`, `vi.mock("@/lib/auth-utils")`, shared `mockAuthSuccess` / `parseResponse` helpers from `__tests__/api/helpers`; mock the Supabase admin client's chained `.from().select()` calls to return fixture rows). Cases:
 
 ```ts
-// __tests__/api/recepcion-detalle.test.ts — test cases (adapt mocks to helpers file):
+// __tests__/api/recepcion-detalle.test.ts â€” test cases (adapt mocks to helpers file):
 // 1. returns 403 FEATURE_REQUIRED when hasPlanFeature resolves false
 // 2. returns 404 when recepcion does not belong to the org
 // 3. returns recepcion + ordenes + totales with:
 //    - subtotal = sum(costo_final ?? presupuesto ?? 0) over member orders
-//    - totalLote honoring descuento_tipo/valor ("porcentaje" 10 over 600 → 540)
+//    - totalLote honoring descuento_tipo/valor ("porcentaje" 10 over 600 â†’ 540)
 //    - entregadas/pendientes counts split by ENTREGADO* estados
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run __tests__/api/recepcion-detalle.test.ts`
-Expected: FAIL — route module does not exist.
+Expected: FAIL â€” route module does not exist.
 
 - [ ] **Step 3: Implement the route**
 
@@ -322,7 +322,7 @@ git commit -m "feat(api): reception batch detail with derived totals"
 
 ---
 
-### Task 4: `PATCH /api/recepciones/[id]` — edit batch discount
+### Task 4: `PATCH /api/recepciones/[id]` â€” edit batch discount
 
 **Files:**
 - Modify: `app/api/recepciones/[id]/route.ts` (add `PATCH` export)
@@ -330,12 +330,12 @@ git commit -m "feat(api): reception batch detail with derived totals"
 
 **Interfaces:**
 - Consumes: Task 3's route file, `ESTADOS_ENTREGADOS` const.
-- Produces (consumed by Task 7): `PATCH` body `{ descuentoTipo: "porcentaje" | "monto" | null, descuentoValor: number | null }` → 200 `{ ok: true }`.
+- Produces (consumed by Task 7): `PATCH` body `{ descuentoTipo: "porcentaje" | "monto" | null, descuentoValor: number | null }` â†’ 200 `{ ok: true }`.
 
 - [ ] **Step 1: Write the failing test**
 
 ```ts
-// __tests__/api/recepcion-descuento.test.ts — test cases (same mock style as Task 3):
+// __tests__/api/recepcion-descuento.test.ts â€” test cases (same mock style as Task 3):
 // 1. 403 FEATURE_REQUIRED when plan lacks the feature
 // 2. 403 when role !== "ADMIN" (discount edits are pricing edits)
 // 3. 400 on invalid pairing (tipo set without valor; porcentaje > 100; valor <= 0)
@@ -346,7 +346,7 @@ git commit -m "feat(api): reception batch detail with derived totals"
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run __tests__/api/recepcion-descuento.test.ts`
-Expected: FAIL — `PATCH` is not exported.
+Expected: FAIL â€” `PATCH` is not exported.
 
 - [ ] **Step 3: Implement PATCH**
 
@@ -431,20 +431,20 @@ git commit -m "feat(api): edit batch discount on undelivered receptions"
 ### Task 5: Atomic batch-delivery RPC
 
 **Files:**
-- Create: `supabase/migrations/281_entregar_lote_recepcion.sql`
+- Create: `supabase/migrations/290_entregar_lote_recepcion.sql`
 
 **Interfaces:**
 - Consumes: `registrar_cobros_orden_atomica(p_org_id, p_orden_id, p_usuario_id, p_pagos, p_observaciones, p_descuento, p_idempotency_key)` (migration `242_cobros_orden_atomico.sql`); `recepciones`, `ordenes_servicio`.
-- Produces (called by Task 6): RPC `entregar_lote_recepcion(...) RETURNS JSONB` — see signature below.
+- Produces (called by Task 6): RPC `entregar_lote_recepcion(...) RETURNS JSONB` â€” see signature below.
 
 - [ ] **Step 1: Read the single-order delivery route and list its DB side effects**
 
-Read `app/api/ordenes/[id]/entregar/route.ts` end to end. Write down every column it writes on `ordenes_servicio` when transitioning to `ENTREGADO` (e.g. `estado`, `costo_final`, `fecha_completado`, `notas_entrega`, `updated_at` — plus any estado-history insert it performs). The RPC below MUST mirror that exact set for the plain `REPARADO → ENTREGADO` path; extend the `UPDATE` if the route writes more columns.
+Read `app/api/ordenes/[id]/entregar/route.ts` end to end. Write down every column it writes on `ordenes_servicio` when transitioning to `ENTREGADO` (e.g. `estado`, `costo_final`, `fecha_completado`, `notas_entrega`, `updated_at` â€” plus any estado-history insert it performs). The RPC below MUST mirror that exact set for the plain `REPARADO â†’ ENTREGADO` path; extend the `UPDATE` if the route writes more columns.
 
 - [ ] **Step 2: Write the migration**
 
 ```sql
--- 281_entregar_lote_recepcion.sql
+-- 290_entregar_lote_recepcion.sql
 -- Atomic batch delivery: all member orders REPARADO -> ENTREGADO plus prorated
 -- charges in one transaction. Prorated amounts are computed app-side (lib/lote-utils)
 -- and passed in; this function validates and persists.
@@ -546,26 +546,26 @@ If Step 1 found an estado-history insert or extra columns in the route, replicat
 
 - [ ] **Step 3: Dry-run and apply**
 
-Run: `node scripts/db-run.mjs supabase/migrations/281_entregar_lote_recepcion.sql` (dry-run, then apply).
+Run: `node scripts/db-run.mjs supabase/migrations/290_entregar_lote_recepcion.sql` (dry-run, then apply).
 Expected: `CREATE FUNCTION` succeeds.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add supabase/migrations/281_entregar_lote_recepcion.sql
+git add supabase/migrations/290_entregar_lote_recepcion.sql
 git commit -m "feat(db): atomic batch delivery RPC for reception batches"
 ```
 
 ---
 
-### Task 6: `POST /api/recepciones/[id]/entregar` — batch delivery endpoint
+### Task 6: `POST /api/recepciones/[id]/entregar` â€” batch delivery endpoint
 
 **Files:**
 - Create: `app/api/recepciones/[id]/entregar/route.ts`
 - Test: `__tests__/api/entregar-lote.test.ts`
 
 **Interfaces:**
-- Consumes: Task 5 RPC; `calcularTotalLote`, `prorratearLote` (Task 1); `requireAuth`, `hasPlanFeature`; payment method enum values from `app/api/ordenes/[id]/cobros/route.ts` (`EFECTIVO`, `TRANSFERENCIA`, `TARJETA_DEBITO`, `TARJETA_CREDITO`, `MERCADOPAGO`, `OTRO` — exclude `CUENTA_CORRIENTE`, out of scope for batches).
+- Consumes: Task 5 RPC; `calcularTotalLote`, `prorratearLote` (Task 1); `requireAuth`, `hasPlanFeature`; payment method enum values from `app/api/ordenes/[id]/cobros/route.ts` (`EFECTIVO`, `TRANSFERENCIA`, `TARJETA_DEBITO`, `TARJETA_CREDITO`, `MERCADOPAGO`, `OTRO` â€” exclude `CUENTA_CORRIENTE`, out of scope for batches).
 - Produces (called by Task 8's dialog): request/response
 
 ```ts
@@ -583,7 +583,7 @@ git commit -m "feat(db): atomic batch delivery RPC for reception batches"
 - [ ] **Step 1: Write the failing test**
 
 ```ts
-// __tests__/api/entregar-lote.test.ts — test cases (same mock style as Tasks 3-4;
+// __tests__/api/entregar-lote.test.ts â€” test cases (same mock style as Tasks 3-4;
 // mock supabaseAdmin.rpc to capture arguments):
 // 1. 403 FEATURE_REQUIRED when plan lacks the feature
 // 2. 403 when role !== "ADMIN"
@@ -598,7 +598,7 @@ git commit -m "feat(db): atomic batch delivery RPC for reception batches"
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run __tests__/api/entregar-lote.test.ts`
-Expected: FAIL — route module does not exist.
+Expected: FAIL â€” route module does not exist.
 
 - [ ] **Step 3: Implement the route**
 
@@ -707,7 +707,7 @@ git commit -m "feat(api): batch delivery with single prorated charge"
 ### Task 7: Batch detail page (list, totals, discount editor)
 
 **Files:**
-- Create: `app/(dashboard)/ordenes/recepcion/[id]/page.tsx` (server component, mirrors the gating of `app/(dashboard)/ordenes/recepcion/page.tsx`: `hasPlanFeature` → `FeatureLockedView` fallback)
+- Create: `app/(dashboard)/ordenes/recepcion/[id]/page.tsx` (server component, mirrors the gating of `app/(dashboard)/ordenes/recepcion/page.tsx`: `hasPlanFeature` â†’ `FeatureLockedView` fallback)
 - Create: `components/ordenes/recepcion-detail.tsx` (client component)
 - Test: `__tests__/components/recepcion-detail.test.tsx`
 
@@ -718,7 +718,7 @@ git commit -m "feat(api): batch delivery with single prorated charge"
 - [ ] **Step 1: Write the failing test**
 
 ```tsx
-// __tests__/components/recepcion-detail.test.tsx — test cases (jsdom, mock fetch):
+// __tests__/components/recepcion-detail.test.tsx â€” test cases (jsdom, mock fetch):
 // 1. renders one row per order with estado badge and formatted presupuesto/costo
 // 2. shows subtotal, descuento and total lote from the API payload
 // 3. "Entregar lote" button disabled when any pending order is not REPARADO
@@ -730,17 +730,17 @@ git commit -m "feat(api): batch delivery with single prorated charge"
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run __tests__/components/recepcion-detail.test.tsx`
-Expected: FAIL — component does not exist.
+Expected: FAIL â€” component does not exist.
 
 - [ ] **Step 3: Implement page + component**
 
-Component structure (follow the visual conventions of `components/ordenes/orden-detail.tsx` — cards, badges, `useCurrency` for money formatting):
+Component structure (follow the visual conventions of `components/ordenes/orden-detail.tsx` â€” cards, badges, `useCurrency` for money formatting):
 
 - Header card: `codigo`, `clienteNombre`, `createdAt`, progress line "X de N entregados".
 - Orders table/cards: link each row to `/ordenes/{id}` (reuse the estado badge component used by `ordenes-list.tsx`).
 - Totals card: `subtotal`, discount row (inline editor: select `porcentaje`/`monto` + numeric input + save button, ADMIN only, hidden when `entregadas > 0`), `totalLote` highlighted.
 - Footer: "Entregar lote" button (renders Task 8's dialog; until Task 8 lands, gate it behind a `disabled` state with no dialog).
-- Page server component: resolve org, `hasPlanFeature(orgId, "recepcion_multiple")`; on false render `<FeatureLockedView featureName="Recepción múltiple" description="Gestioná lotes de equipos con precio mayorista" benefits={["Carga N equipos en una sola recepción", "Descuento sobre el total del lote", "Entrega y cobro del lote en una sola operación"]} />`.
+- Page server component: resolve org, `hasPlanFeature(orgId, "recepcion_multiple")`; on false render `<FeatureLockedView featureName="RecepciÃ³n mÃºltiple" description="GestionÃ¡ lotes de equipos con precio mayorista" benefits={["Carga N equipos en una sola recepciÃ³n", "Descuento sobre el total del lote", "Entrega y cobro del lote en una sola operaciÃ³n"]} />`.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -750,12 +750,12 @@ Expected: PASS.
 - [ ] **Step 5: Wire entry points**
 
 - `components/ordenes/recepcion-creada-modal.tsx`: add a "Ver lote" link/button to `/ordenes/recepcion/{recepcion.id}`.
-- `components/ordenes/orden-detail.tsx`: when the fetched orden has `recepcion_id`, render a small badge/link "Parte del lote {codigo}" → `/ordenes/recepcion/{recepcion_id}` (requires adding `recepcion_id` to the order-detail fetch/select if absent).
+- `components/ordenes/orden-detail.tsx`: when the fetched orden has `recepcion_id`, render a small badge/link "Parte del lote {codigo}" â†’ `/ordenes/recepcion/{recepcion_id}` (requires adding `recepcion_id` to the order-detail fetch/select if absent).
 
 - [ ] **Step 6: Run the full unit suite**
 
 Run: `npx vitest run`
-Expected: PASS — no regressions in existing component tests.
+Expected: PASS â€” no regressions in existing component tests.
 
 - [ ] **Step 7: Commit**
 
@@ -792,11 +792,11 @@ interface EntregaLoteDialogProps {
 - [ ] **Step 1: Write the failing test**
 
 ```tsx
-// __tests__/components/entrega-lote-dialog.test.tsx — test cases (jsdom, mock fetch):
+// __tests__/components/entrega-lote-dialog.test.tsx â€” test cases (jsdom, mock fetch):
 // 1. lists each device with an editable costo final input,
 //    prefilled with costoFinal ?? presupuesto ?? 0
 // 2. recomputes subtotal / descuento / total live as costs are edited
-//    (mirror calcularTotalLote — import it, do not duplicate the math)
+//    (mirror calcularTotalLote â€” import it, do not duplicate the math)
 // 3. confirm button disabled until a metodoPago is selected
 // 4. on confirm POSTs { ordenes: [{id, costoFinal}], metodoPago, idempotencyKey }
 //    to /api/recepciones/{id}/entregar and calls onSuccess on 200
@@ -806,17 +806,17 @@ interface EntregaLoteDialogProps {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `npx vitest run __tests__/components/entrega-lote-dialog.test.tsx`
-Expected: FAIL — component does not exist.
+Expected: FAIL â€” component does not exist.
 
 - [ ] **Step 3: Implement the dialog**
 
-Structure (reuse patterns from `entrega-dialog.tsx`: dialog scaffold, currency formatting, payment-method options list — same labels as the single-order cobro UI):
+Structure (reuse patterns from `entrega-dialog.tsx`: dialog scaffold, currency formatting, payment-method options list â€” same labels as the single-order cobro UI):
 
 - Per-device rows: `#numeroOrden dispositivo` + numeric input for final cost.
-- Summary block: `Subtotal`, `Descuento (10% / $500)`, `Total a cobrar` — computed with `calcularTotalLote` from `lib/lote-utils`.
+- Summary block: `Subtotal`, `Descuento (10% / $500)`, `Total a cobrar` â€” computed with `calcularTotalLote` from `lib/lote-utils`.
 - Payment method radio/select (EFECTIVO, TRANSFERENCIA, TARJETA_DEBITO, TARJETA_CREDITO, MERCADOPAGO, OTRO) + optional `referencia` and `observaciones`.
 - `idempotencyKey`: generate once per dialog open (`crypto.randomUUID()`).
-- Confirm → POST; on success `onSuccess()` + `onClose()`; on error keep open and show message.
+- Confirm â†’ POST; on success `onSuccess()` + `onClose()`; on error keep open and show message.
 
 Mount in `recepcion-detail.tsx`: "Entregar lote" opens it with the pending (non-delivered) orders only; after success, refetch.
 
@@ -847,13 +847,13 @@ git commit -m "feat(ordenes): single-charge batch delivery dialog"
 Follow `e2e/recepcion-multiple.auth.spec.ts` exactly for setup/skip conventions (`test.skip(true, ...)` when the QA tenant lacks the `recepcion_multiple` flag). Flow:
 
 ```ts
-// e2e/lote-mayorista.auth.spec.ts — scenario:
+// e2e/lote-mayorista.auth.spec.ts â€” scenario:
 // 1. create a multi-device reception (2 devices) through the existing reception form
 // 2. open the batch detail view from the success modal ("Ver lote")
 // 3. set a 10% discount, verify totals update
 // 4. via UI (or API request fixture if the UI path is slow): move both orders to REPARADO
 //    with a costo final each
-// 5. "Entregar lote": select EFECTIVO, confirm — assert success
+// 5. "Entregar lote": select EFECTIVO, confirm â€” assert success
 // 6. assert both orders show ENTREGADO and the batch view shows "2 de 2 entregados"
 //    and the charged total equals sum of costs minus 10%
 ```
@@ -861,7 +861,7 @@ Follow `e2e/recepcion-multiple.auth.spec.ts` exactly for setup/skip conventions 
 - [ ] **Step 2: Run it**
 
 Run: `npx playwright test e2e/lote-mayorista.auth.spec.ts`
-Expected: PASS (or graceful skip without credentials — must PASS in the credentialed environment before the PR).
+Expected: PASS (or graceful skip without credentials â€” must PASS in the credentialed environment before the PR).
 
 - [ ] **Step 3: Run the full suites**
 
@@ -880,5 +880,6 @@ git commit -m "test(e2e): wholesale batch flow from reception to single-charge d
 ## PR checklist (after Task 9)
 
 - Renumber migrations if `280`/`281` were taken at merge time; re-apply under the final names.
-- Fresh-context review before the PR (project rule), then PR against `main` titled `feat(ordenes): lotes mayoristas con descuento y entrega con cobro único`.
+- Fresh-context review before the PR (project rule), then PR against `main` titled `feat(ordenes): lotes mayoristas con descuento y entrega con cobro Ãºnico`.
 - PR body: note the two manual migrations and that batch delivery requires `registrar_cobros_orden_atomica` (migration 242) to exist in prod.
+
