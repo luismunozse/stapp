@@ -432,6 +432,8 @@ git commit -m "feat(api): edit batch discount on undelivered receptions"
 
 ### Task 5: Atomic batch-delivery RPC
 
+> **POST-REVIEW NOTE:** the shipped migration `supabase/migrations/290_entregar_lote_recepcion.sql` is canonical and diverges from the template below in reviewed, deliberate ways: no BEGIN/COMMIT wrapper (db-run.mjs 40-line detection footgun), mirrors `fecha_entrega`/`entregado_por_user_id`/firmas/`motivo_sin_cobro` and the `orden_eventos` insert instead of the template's column set (`updated_at` does not exist), records the per-order discount share via `p_descuento` (phantom-receivable fix), maps 242's ceiling raise to `LOTE_ERROR:COBRO_EXCEDE_PENDIENTE:<id>`, adds `COSTO_FINAL_INVALIDO`/`MONTO_COBRO_INVALIDO` payload guards, and REVOKEs EXECUTE from PUBLIC/anon/authenticated (service_role only).
+
 **Files:**
 - Create: `supabase/migrations/290_entregar_lote_recepcion.sql`
 
@@ -595,6 +597,8 @@ git commit -m "feat(db): atomic batch delivery RPC for reception batches"
 //    rpc called once with montoCobro shares [90, 180, 270] and totalCobrado 540;
 //    per-order costoFinal passed through verbatim
 // 6. discount larger than subtotal -> shares all 0, RPC still called (delivery without charge)
+// 7. RPC error LOTE_ERROR:COBRO_EXCEDE_PENDIENTE -> 409 with the pagos-previos message;
+//    LOTE_ERROR:COSTO_FINAL_INVALIDO -> 400; LOTE_ERROR:ORDEN_FUERA_DE_LOTE -> 404 lote message
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -682,8 +686,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         { status: 409 }
       )
     }
-    if (msg.includes("LOTE_ERROR:RECEPCION_NOT_FOUND") || msg.includes("LOTE_ERROR:ORDEN_FUERA_DE_LOTE")) {
+    if (msg.includes("LOTE_ERROR:COBRO_EXCEDE_PENDIENTE")) {
+      return NextResponse.json(
+        { error: "Un equipo del lote tiene pagos o descuentos previos que superan su parte del total. Entregalo individualmente." },
+        { status: 409 }
+      )
+    }
+    if (msg.includes("LOTE_ERROR:COSTO_FINAL_INVALIDO") || msg.includes("LOTE_ERROR:MONTO_COBRO_INVALIDO")) {
+      return NextResponse.json({ error: "Datos de cobro invalidos para el lote" }, { status: 400 })
+    }
+    if (msg.includes("LOTE_ERROR:RECEPCION_NOT_FOUND")) {
       return NextResponse.json({ error: "Recepcion no encontrada" }, { status: 404 })
+    }
+    if (msg.includes("LOTE_ERROR:ORDEN_FUERA_DE_LOTE")) {
+      return NextResponse.json({ error: "Una de las ordenes no pertenece a este lote" }, { status: 404 })
     }
     return NextResponse.json({ error: "No se pudo entregar el lote" }, { status: 500 })
   }
