@@ -21,6 +21,12 @@ const entregarSchema = z.object({
     .enum(["NO_REPARABLE", "CORTESIA", "GARANTIA", "CLIENTE_DESISTIO", "OTRO"])
     .optional()
     .nullable(),
+  // Confirmación del total en el momento de entregar. El operador ve el
+  // resumen de repuestos e indica cuánto cobra y si ese número ya los incluye:
+  // sin ese dato no se puede saber si sumarlos duplicaría el cobro, porque
+  // hasta ahora el total se tipeaba a mano incluyéndolos.
+  totalACobrar: z.number().min(0).optional(),
+  incluyeRepuestos: z.boolean().optional(),
 })
 
 export async function POST(
@@ -91,12 +97,41 @@ export async function POST(
       }
     }
 
-    // Actualizar orden con datos de entrega
+    // Total confirmado en la entrega. Si el operador dijo que su número NO
+    // incluye los repuestos, se los sumamos a precio de VENTA (no al costo que
+    // guarda precio_unitario). Se resuelve acá, antes del UPDATE, para que el
+    // cargo a cuenta corriente de más abajo use el costo_final definitivo.
+    let costoFinalConfirmado: number | null = null
+    if (!sinCobro && data.totalACobrar !== undefined) {
+      if (data.incluyeRepuestos) {
+        costoFinalConfirmado = data.totalACobrar
+      } else {
+        const { data: repuestos } = await supabaseAdmin
+          .from("repuestos_orden")
+          .select("cantidad, precio_unitario, precio_venta_unitario")
+          .eq("orden_id", id)
+
+        const totalRepuestos = (repuestos || []).reduce((sum, r: any) => {
+          // Fallback al costo en filas anteriores a la migración 286, que no
+          // tienen precio de venta registrado.
+          const precio =
+            r.precio_venta_unitario !== null && r.precio_venta_unitario !== undefined
+              ? parseFloat(r.precio_venta_unitario)
+              : parseFloat(r.precio_unitario || "0")
+          return sum + (r.cantidad || 0) * (precio || 0)
+        }, 0)
+
+        costoFinalConfirmado = data.totalACobrar + totalRepuestos
+      }
+      costoFinalConfirmado = Math.round(costoFinalConfirmado * 100) / 100
+    }
+
     const { data: updatedOrden, error: updateError } = await supabaseAdmin
       .from("ordenes_servicio")
       .update({
         estado: nuevoEstado,
         fecha_entrega: new Date().toISOString(),
+        ...(costoFinalConfirmado !== null ? { costo_final: costoFinalConfirmado } : {}),
         firma_cliente_entrega: data.firmaClienteEntrega || null,
         firma_cliente_entrega_mime: data.firmaClienteMime || null,
         firma_encargado_entrega: data.firmaEncargadoEntrega || null,
@@ -134,13 +169,20 @@ export async function POST(
       } catch (err) { console.error("Error inserting orden_evento:", err) }
     })()
 
+    // Saldo que queda tras la entrega. Se devuelve en la respuesta para que la
+    // UI pueda encadenar el cobro sin recalcularlo por su cuenta (el cliente no
+    // conoce el costo_final que se acaba de confirmar).
+    const costoFinal = parseFloat(updatedOrden.costo_final || "0")
+    const descuento = parseFloat(updatedOrden.descuento_cobro || "0")
+    const cobrado = parseFloat(updatedOrden.total_cobrado || "0")
+    const pendienteCobro = sinCobro
+      ? 0
+      : Math.round((costoFinal - descuento - cobrado) * 100) / 100
+
     // Fiado: si se entrega con saldo pendiente (y no es entrega sin cobro),
     // debitar la cuenta corriente del cliente.
     if (!sinCobro && orden.cliente_id) {
-      const costoFinal = parseFloat(updatedOrden.costo_final || "0")
-      const descuento = parseFloat(updatedOrden.descuento_cobro || "0")
-      const cobrado = parseFloat(updatedOrden.total_cobrado || "0")
-      const pendiente = Math.round((costoFinal - descuento - cobrado) * 100) / 100
+      const pendiente = pendienteCobro
       if (pendiente > 0) {
         const { error: fiadoError } = await supabaseAdmin.rpc("cargar_deuda_cuenta_corriente", {
           p_org_id: organizationId!,
@@ -267,6 +309,8 @@ export async function POST(
       fechaEntrega: updatedOrden.fecha_entrega,
       notasEntrega: updatedOrden.notas_entrega,
       entregadoPor: updatedOrden.users,
+      // Lo usa la UI para encadenar el cobro apenas se cierra la entrega.
+      pendienteCobro,
       // Presente solo si el descuento de stock fallo: la entrega se completo
       // igual, pero el inventario quedo sin ajustar y hay que revisarlo.
       ...(stockWarning ? { warning: stockWarning } : {}),
