@@ -1039,6 +1039,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
               <OrdenRepuestosTab
                 ordenId={ordenId}
                 repuestos={(orden as any).repuestos || []}
+                mostrarCostos={isAdmin}
                 ordenEstado={orden.estado}
                 onRepuestosChanged={fetchOrden}
               />

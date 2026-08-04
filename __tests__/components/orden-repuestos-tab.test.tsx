@@ -309,6 +309,61 @@ describe("OrdenRepuestosTab — costo y precio de venta en repuestos manuales", 
   })
 })
 
+describe("OrdenRepuestosTab — costo y margen visibles solo con mostrarCostos", () => {
+  const repuestoConVenta = {
+    id: "rep-1",
+    inventarioId: "inv-1",
+    inventario: { id: "inv-1", nombre: "Pantalla iPhone 12", stock: 5 },
+    cantidad: 1,
+    precioUnitario: 100,
+    precioVentaUnitario: 250,
+  }
+
+  const setupFetch = () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve({ ok: true, json: async () => ({ data: [] }) } as Response)),
+    )
+  }
+
+  beforeEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it("oculta costo unitario y linea de margen por defecto (roles no admin)", () => {
+    setupFetch()
+
+    render(
+      <ModalProvider>
+        <OrdenRepuestosTab ordenId="orden-1" repuestos={[repuestoConVenta]} onRepuestosChanged={vi.fn()} />
+      </ModalProvider>,
+    )
+
+    expect(screen.queryByText(/costo/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/margen/i)).not.toBeInTheDocument()
+    // El precio de venta sigue visible.
+    expect(screen.getByText("Subtotal Repuestos")).toBeInTheDocument()
+  })
+
+  it("muestra costo y margen cuando mostrarCostos esta activo (admin)", () => {
+    setupFetch()
+
+    render(
+      <ModalProvider>
+        <OrdenRepuestosTab
+          ordenId="orden-1"
+          repuestos={[repuestoConVenta]}
+          mostrarCostos
+          onRepuestosChanged={vi.fn()}
+        />
+      </ModalProvider>,
+    )
+
+    expect(screen.getByText(/\(costo/)).toBeInTheDocument()
+    expect(screen.getByText("Costo · margen")).toBeInTheDocument()
+  })
+})
+
 describe("OrdenRepuestosTab — stepper de cantidad", () => {
   const repuestoCargado = {
     id: "rep-1",
