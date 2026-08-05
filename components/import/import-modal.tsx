@@ -51,6 +51,9 @@ export function ImportModal({ entityType, onClose, onSuccess }: ImportModalProps
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
+    // El input conserva el value: si no lo limpiamos, re-elegir el MISMO
+    // archivo no dispara change y el reintento queda en silencio total.
+    e.target.value = ""
     if (!selectedFile) return
 
     setError("")
@@ -82,10 +85,21 @@ export function ImportModal({ entityType, onClose, onSuccess }: ImportModalProps
     const reader = new FileReader()
     reader.onload = async () => {
       const base64 = reader.result?.toString().split(',')[1] || ''
+      if (!base64) {
+        setError('No se pudo leer el archivo. Verificá que no esté abierto en Excel y volvé a intentarlo.')
+        setFile(null)
+        return
+      }
       setFileBase64(base64)
 
       // Get preview
       await getPreview(base64, selectedFile.type, selectedFile.name)
+    }
+    // Sin este handler, un archivo ilegible (abierto en Excel, unidad de red
+    // desconectada, permisos) fallaba en silencio: sin error y sin request.
+    reader.onerror = () => {
+      setError('No se pudo leer el archivo. Verificá que no esté abierto en Excel y volvé a intentarlo.')
+      setFile(null)
     }
     reader.readAsDataURL(selectedFile)
   }
