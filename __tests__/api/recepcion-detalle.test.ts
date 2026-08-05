@@ -162,6 +162,36 @@ describe("GET /api/recepciones/[id] — detalle del lote", () => {
     expect(body.totales.entregadas).toBe(0)
   })
 
+  it("los montos excluyen a los equipos cerrados sin entrega, pero la lista los sigue mostrando", async () => {
+    vi.mocked(hasPlanFeature).mockResolvedValue(true)
+    mockSupabaseFrom({
+      recepciones: createChainMock(createMockRecepcion({ descuento_tipo: "porcentaje", descuento_valor: 10 })),
+      ordenes_servicio: createChainMock([
+        { id: "o1", numero_orden: 1, codigo_orden: "CEL-001", dispositivo: "iPhone 13", marca: "Apple", estado: "ENTREGADO", presupuesto: null, costo_final: 200, descuento_cobro: 20 },
+        { id: "o2", numero_orden: 2, codigo_orden: "CEL-002", dispositivo: "Notebook HP", marca: "HP", estado: "REPARADO", presupuesto: null, costo_final: 100, descuento_cobro: null },
+        // Cancelado con presupuesto: no se cobra ni se negocia, no puede
+        // inflar el total del lote que se muestra en pantalla.
+        { id: "o3", numero_orden: 3, codigo_orden: "CEL-003", dispositivo: "Tablet", marca: "Samsung", estado: "CANCELADO", presupuesto: 500, costo_final: null, descuento_cobro: null },
+      ]),
+    })
+
+    const res = await GET(createGetRequest(), createParams("rec-1"))
+    const { status, body } = await parseResponse(res)
+
+    expect(status).toBe(200)
+    // El equipo cancelado sigue apareciendo en la lista de equipos del lote...
+    expect(body.ordenes).toHaveLength(3)
+    expect(body.ordenes.map((o: { id: string }) => o.id)).toContain("o3")
+    // ...pero sus 500 quedan fuera de todas las lineas de dinero.
+    expect(body.totales.subtotal).toBe(300)
+    expect(body.totales.totalLote).toBe(270)
+    expect(body.totales.yaCobrado).toBe(180)
+    expect(body.totales.pendienteCobro).toBe(90)
+    expect(body.totales.entregadas).toBe(1)
+    // Pendientes = elegibles pendientes (el cancelado no cuenta)
+    expect(body.totales.pendientes).toBe(1)
+  })
+
   it("el pendiente de cobro nunca es negativo cuando lo ya cobrado supera el total del lote", async () => {
     vi.mocked(hasPlanFeature).mockResolvedValue(true)
     mockSupabaseFrom({

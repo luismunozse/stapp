@@ -25,12 +25,16 @@ export const ESTADOS_ENTREGADOS = [
   "ENTREGADO_SIN_COBRO",
 ] as const
 
-export const ESTADOS_EXCLUIDOS_LOTE = [
-  ...ESTADOS_ENTREGADOS,
-  "CANCELADO",
-  "SIN_REPARACION",
-  "SIN_FALLA_DETECTADA",
-] as const
+/**
+ * Cerradas sin entrega con cobro. Ademas de no poder entregarse en lote, estas
+ * salen de TODAS las lineas de dinero del lote (subtotal, total, ya cobrado,
+ * pendiente): no se cobran ni se negociaron, asi que su presupuesto no puede
+ * inflar el total que ve el operador. Siguen apareciendo en la lista de
+ * equipos.
+ */
+export const ESTADOS_CERRADOS_SIN_ENTREGA = ["CANCELADO", "SIN_REPARACION", "SIN_FALLA_DETECTADA"] as const
+
+export const ESTADOS_EXCLUIDOS_LOTE = [...ESTADOS_ENTREGADOS, ...ESTADOS_CERRADOS_SIN_ENTREGA] as const
 
 /** El estado ya cuenta como entrega (el equipo salio del taller). */
 export function esEstadoEntregado(estado: string | null | undefined): boolean {
@@ -40,4 +44,9 @@ export function esEstadoEntregado(estado: string | null | undefined): boolean {
 /** El estado saca a la orden de la accion de lote (entregada o cerrada). */
 export function esEstadoExcluidoDeLote(estado: string | null | undefined): boolean {
   return estado != null && (ESTADOS_EXCLUIDOS_LOTE as readonly string[]).includes(estado)
+}
+
+/** La orden se cerro sin entrega con cobro: no entra en los montos del lote. */
+export function esEstadoCerradoSinEntrega(estado: string | null | undefined): boolean {
+  return estado != null && (ESTADOS_CERRADOS_SIN_ENTREGA as readonly string[]).includes(estado)
 }

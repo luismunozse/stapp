@@ -4,8 +4,9 @@
 // Mockea fetch, igual que entrega-dialog-total.test.tsx hace para diálogos
 // de entrega que no dependen del SessionProvider real.
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen, fireEvent, waitFor } from "@testing-library/react"
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react"
 import { EntregaLoteDialog } from "@/components/ordenes/entrega-lote-dialog"
+import { toast } from "sonner"
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }))
 
@@ -158,6 +159,74 @@ describe("EntregaLoteDialog", () => {
       const o1 = body.ordenes.find((o: { id: string }) => o.id === "o1")
       expect(o1.costoFinal).toBe(0)
     })
+  })
+
+  it("con equipos ya entregados, el total a cobrar espeja la liquidacion del servidor", async () => {
+    // Mismo caso que el fixture mixto de __tests__/api/entregar-lote.test.ts:
+    // pendientes 100 + 200 + 300, ya entregados por 300 de costo, 280 netos ya
+    // cobrados, 10% de descuento sobre el lote completo.
+    //   subtotal del lote = 600 + 300 = 900
+    //   total del lote    = 810
+    //   a cobrar ahora    = 810 - 280 = 530  <- lo que el servidor cobra
+    // Sin conciencia de lo ya cobrado, el dialogo mostraba 540 (10% sobre los
+    // 600 pendientes) y el operador cobraba de mas.
+    renderDialog({
+      ordenes: [
+        { id: "o1", numeroOrden: 1, dispositivo: "iPhone 13", costoFinal: 100, presupuesto: null },
+        { id: "o2", numeroOrden: 2, dispositivo: "Notebook HP", costoFinal: 200, presupuesto: null },
+        { id: "o3", numeroOrden: 3, dispositivo: "Tablet", costoFinal: 300, presupuesto: null },
+      ],
+      subtotalEntregados: 300,
+      yaCobrado: 280,
+    })
+
+    expect(screen.getByText(/530,00/)).toBeInTheDocument()
+    expect(screen.queryByText(/540,00/)).not.toBeInTheDocument()
+    // Lineas intermedias para que el numero sea entendible.
+    expect(screen.getByText(/total del lote/i)).toBeInTheDocument()
+    expect(screen.getByText(/810,00/)).toBeInTheDocument()
+    expect(screen.getByText(/ya cobrado/i)).toBeInTheDocument()
+    expect(screen.getByText(/280,00/)).toBeInTheDocument()
+  })
+
+  it("sin equipos ya entregados no muestra las lineas intermedias (el total del lote ES lo que se cobra)", () => {
+    renderDialog()
+
+    expect(screen.queryByText(/ya cobrado/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/total del lote/i)).not.toBeInTheDocument()
+    expect(screen.getByText(/315/)).toBeInTheDocument()
+  })
+
+  it("nunca muestra un total negativo cuando lo ya cobrado supera el total del lote", () => {
+    renderDialog({ subtotalEntregados: 1000, yaCobrado: 1000, descuentoTipo: "monto", descuentoValor: 900 })
+
+    // subtotal 350 + 1000 = 1350, total 450, ya cobrado 1000 -> piso en 0
+    const filaTotal = screen.getByText("Total a cobrar").parentElement as HTMLElement
+    expect(within(filaTotal).getByText(/^\$\s*0,00$/)).toBeInTheDocument()
+  })
+
+  it("muestra como toast los warnings de stock que devuelve la entrega", async () => {
+    mockFetch.mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        json: async () => ({
+          recepcionId: "rec-1",
+          totalCobrado: 315,
+          ordenes: [],
+          warnings: ["Se entrego la orden 1, pero no se pudo descontar el stock de sus repuestos."],
+        }),
+      } as Response)
+    )
+    const { onSuccess } = renderDialog()
+
+    fireEvent.click(screen.getByRole("radio", { name: /efectivo/i }))
+    fireEvent.click(screen.getByRole("button", { name: /confirmar entrega/i }))
+
+    await waitFor(() => expect(onSuccess).toHaveBeenCalled())
+    expect(toast.warning).toHaveBeenCalledWith(
+      "Se entrego la orden 1, pero no se pudo descontar el stock de sus repuestos.",
+      { duration: 10000 }
+    )
   })
 
   it("muestra el mensaje de error de la API (409 no reparado) sin cerrar el dialogo", async () => {

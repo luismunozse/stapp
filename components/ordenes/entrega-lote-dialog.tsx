@@ -14,7 +14,8 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Loader2, PackageCheck } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
-import { calcularTotalLote, type DescuentoTipo } from "@/lib/lote-utils"
+import { toast } from "sonner"
+import { calcularTotalLote, round2, type DescuentoTipo } from "@/lib/lote-utils"
 
 // Copiado (no importado) de components/pagos/multi-pago-input.tsx: esa lista
 // vive inline en un componente, no en un módulo de lib, así que no hay nada
@@ -47,9 +48,12 @@ interface EntregaLoteDialogProps {
   ordenes: EntregaLoteOrden[]
   descuentoTipo: DescuentoTipo | null
   descuentoValor: number | null
+  /** Suma de los costos finales ya persistidos de los equipos que se
+   *  retiraron individualmente. Entra en la base del descuento del lote. */
+  subtotalEntregados?: number
+  /** Neto ya facturado en esos equipos. Se resta de lo que se cobra ahora. */
+  yaCobrado?: number
 }
-
-const round2 = (n: number) => Math.round(n * 100) / 100
 
 /**
  * Único punto donde un costo tipeado se convierte en número: redondea a 2
@@ -81,6 +85,8 @@ export function EntregaLoteDialog({
   ordenes,
   descuentoTipo,
   descuentoValor,
+  subtotalEntregados = 0,
+  yaCobrado = 0,
 }: EntregaLoteDialogProps) {
   const { formatPrice } = useCurrency()
   const [loading, setLoading] = useState(false)
@@ -107,9 +113,20 @@ export function EntregaLoteDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
-  const subtotal = ordenes.reduce((sum, orden) => sum + normalizeCosto(costos[orden.id]), 0)
-  const total = calcularTotalLote(subtotal, descuentoTipo, descuentoValor)
-  const descuentoAplicado = round2(subtotal - total)
+  // Espejo exacto de la liquidacion del servidor (ver
+  // app/api/recepciones/[id]/entregar/route.ts): el descuento se aplica sobre
+  // el lote COMPLETO — incluidos los equipos ya retirados individualmente — y
+  // recien despues se resta lo que ya se les cobro. Calcular el total solo
+  // sobre los pendientes mostraba un numero mayor al que el servidor cobra y
+  // el operador terminaba pidiendo plata de mas.
+  const subtotalPendientes = ordenes.reduce((sum, orden) => sum + normalizeCosto(costos[orden.id]), 0)
+  const subtotal = round2(subtotalPendientes + subtotalEntregados)
+  const totalLote = calcularTotalLote(subtotal, descuentoTipo, descuentoValor)
+  const descuentoAplicado = round2(subtotal - totalLote)
+  const total = Math.max(0, round2(totalLote - yaCobrado))
+  // Sin cobros previos, total del lote y total a cobrar son el mismo numero:
+  // mostrar las lineas intermedias solo agregaria ruido.
+  const hayCobrosPrevios = yaCobrado > 0
 
   const handleConfirmar = async () => {
     if (!metodoPago) return
@@ -137,6 +154,16 @@ export function EntregaLoteDialog({
       if (!res.ok) {
         setError(data.error || "Error al entregar el lote")
         return
+      }
+
+      // La entrega pudo completarse con el descuento de stock fallado en una o
+      // mas ordenes: el servidor lo devuelve como `warnings` en vez de fallar
+      // la operacion. Mostrarlos es lo unico que evita que el desajuste de
+      // inventario pase inadvertido (mismo criterio que entrega-dialog.tsx).
+      if (Array.isArray(data.warnings)) {
+        for (const warning of data.warnings as string[]) {
+          toast.warning(warning, { duration: 10000 })
+        }
       }
 
       onSuccess()
@@ -206,6 +233,18 @@ export function EntregaLoteDialog({
                 <span className="text-muted-foreground">-{formatPrice(descuentoAplicado)}</span>
               </div>
             ) : null}
+            {hayCobrosPrevios && (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Total del lote</span>
+                  <span className="tabular-nums">{formatPrice(totalLote)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Ya cobrado (equipos entregados)</span>
+                  <span className="tabular-nums text-muted-foreground">-{formatPrice(yaCobrado)}</span>
+                </div>
+              </>
+            )}
             <div className="flex justify-between font-semibold pt-2 border-t">
               <span>Total a cobrar</span>
               <span className="tabular-nums">{formatPrice(total)}</span>

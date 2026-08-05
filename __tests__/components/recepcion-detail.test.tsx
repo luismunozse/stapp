@@ -5,7 +5,7 @@
 // que entrega-dialog-total.test.tsx hace para componentes que dependen de
 // next-auth sin montar el SessionProvider real.
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen, fireEvent, waitFor } from "@testing-library/react"
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react"
 import { RecepcionDetail } from "@/components/ordenes/recepcion-detail"
 
 // Rol mutable: la entrega de lote y el editor de descuento son solo para
@@ -311,7 +311,7 @@ describe("RecepcionDetail", () => {
             orden({ id: "o1", numeroOrden: 1, codigoOrden: "CEL-001", estado: "REPARADO" }),
             orden({ id: "o2", numeroOrden: 2, codigoOrden: "CEL-002", estado: "CANCELADO", costoFinal: null, presupuesto: 150 }),
           ],
-          totales: { subtotal: 350, totalLote: 315, yaCobrado: 0, pendienteCobro: 315, entregadas: 0, pendientes: 2 },
+          totales: { subtotal: 200, totalLote: 180, yaCobrado: 0, pendienteCobro: 180, entregadas: 0, pendientes: 1 },
         }),
       ),
     )
@@ -320,6 +320,8 @@ describe("RecepcionDetail", () => {
 
     const btn = await screen.findByRole("button", { name: /entregar lote/i })
     expect(btn).not.toBeDisabled()
+    // El cancelado no cuenta como equipo del lote en el progreso.
+    expect(screen.getByText(/0 de 1 entregados/i)).toBeInTheDocument()
   })
 
   it('deshabilita "Entregar lote" cuando todos los pendientes quedaron excluidos del lote', async () => {
@@ -331,7 +333,7 @@ describe("RecepcionDetail", () => {
             orden({ id: "o1", numeroOrden: 1, codigoOrden: "CEL-001", estado: "CANCELADO" }),
             orden({ id: "o2", numeroOrden: 2, codigoOrden: "CEL-002", estado: "SIN_REPARACION" }),
           ],
-          totales: { subtotal: 350, totalLote: 315, yaCobrado: 0, pendienteCobro: 315, entregadas: 0, pendientes: 2 },
+          totales: { subtotal: 0, totalLote: 0, yaCobrado: 0, pendienteCobro: 0, entregadas: 0, pendientes: 0 },
         }),
       ),
     )
@@ -341,6 +343,34 @@ describe("RecepcionDetail", () => {
     const btn = await screen.findByRole("button", { name: /entregar lote/i })
     expect(btn).toBeDisabled()
     expect(screen.getByText(/no quedan equipos pendientes/i)).toBeInTheDocument()
+  })
+
+  it("el dialogo de entrega recibe lo ya cobrado: muestra el mismo total que va a cobrar el servidor", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetchOnce(
+        buildResponse({
+          ordenes: [
+            orden({ id: "o1", numeroOrden: 1, codigoOrden: "CEL-001", estado: "ENTREGADO", costoFinal: 300 }),
+            orden({ id: "o2", numeroOrden: 2, codigoOrden: "CEL-002", estado: "REPARADO", costoFinal: 100 }),
+            orden({ id: "o3", numeroOrden: 3, codigoOrden: "CEL-003", estado: "REPARADO", costoFinal: 200 }),
+            orden({ id: "o4", numeroOrden: 4, codigoOrden: "CEL-004", estado: "REPARADO", costoFinal: 300 }),
+          ],
+          totales: { subtotal: 900, totalLote: 810, yaCobrado: 280, pendienteCobro: 530, entregadas: 1, pendientes: 3 },
+        }),
+      ),
+    )
+
+    render(<RecepcionDetail recepcionId="rec-1" />)
+
+    fireEvent.click(await screen.findByRole("button", { name: /entregar lote/i }))
+
+    // Acotado al dialogo: la card de totales de la pantalla ya muestra el
+    // pendiente, y sin acotar el assert pasaria sin que el dialogo se entere.
+    const dialogo = within(await screen.findByRole("dialog"))
+    // 600 pendientes + 300 ya entregados = 900, -10% = 810, -280 ya cobrados = 530
+    expect(dialogo.getByText(/530,00/)).toBeInTheDocument()
+    expect(dialogo.queryByText(/540,00/)).not.toBeInTheDocument()
   })
 
   it('oculta "Entregar lote" para un usuario que no es ADMIN', async () => {

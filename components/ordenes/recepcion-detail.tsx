@@ -13,7 +13,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { ArrowLeft, Truck } from "lucide-react"
 import { useCurrency } from "@/contexts/currency-context"
 import { EntregaLoteDialog } from "@/components/ordenes/entrega-lote-dialog"
-import { esEstadoExcluidoDeLote } from "@/lib/lote-estados"
+import { esEstadoEntregado, esEstadoExcluidoDeLote } from "@/lib/lote-estados"
+import { round2 } from "@/lib/lote-utils"
 
 type DescuentoTipo = "porcentaje" | "monto"
 
@@ -149,6 +150,15 @@ export function RecepcionDetail({ recepcionId, onEntregarLote }: RecepcionDetail
 
   const descuentoAplicado = recepcion.descuentoTipo && recepcion.descuentoValor ? totales.subtotal - totales.totalLote : 0
 
+  // Base que el servidor usa para el total del lote: los costos ya
+  // persistidos de los equipos que se retiraron individualmente. El diálogo
+  // los necesita para mostrar el mismo número que se va a cobrar.
+  const subtotalEntregados = round2(
+    ordenes.filter((o) => esEstadoEntregado(o.estado)).reduce((acc, o) => acc + (o.costoFinal ?? 0), 0),
+  )
+  // Equipos que siguen dentro del lote: entregados + elegibles pendientes.
+  const equiposEnLote = totales.entregadas + totales.pendientes
+
   const handleEntregaLoteSuccess = () => {
     fetchRecepcion()
     onEntregarLote?.()
@@ -173,7 +183,7 @@ export function RecepcionDetail({ recepcionId, onEntregarLote }: RecepcionDetail
       <Card>
         <CardContent className="p-4">
           <p className="text-sm font-medium">
-            {totales.entregadas} de {ordenes.length} entregados
+            {totales.entregadas} de {equiposEnLote} entregados
           </p>
         </CardContent>
       </Card>
@@ -311,6 +321,8 @@ export function RecepcionDetail({ recepcionId, onEntregarLote }: RecepcionDetail
         ordenes={ordenesPendientes}
         descuentoTipo={recepcion.descuentoTipo}
         descuentoValor={recepcion.descuentoValor}
+        subtotalEntregados={subtotalEntregados}
+        yaCobrado={totales.yaCobrado}
       />
     </div>
   )

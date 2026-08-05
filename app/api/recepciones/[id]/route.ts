@@ -4,7 +4,7 @@ import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { calcularTotalLote, round2, type DescuentoTipo } from "@/lib/lote-utils"
-import { ESTADOS_ENTREGADOS, esEstadoEntregado } from "@/lib/lote-estados"
+import { ESTADOS_ENTREGADOS, esEstadoEntregado, esEstadoCerradoSinEntrega } from "@/lib/lote-estados"
 
 const FEATURE_KEY = "recepcion_multiple"
 
@@ -72,7 +72,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     }
 
     const lista = ordenes ?? []
-    const subtotal = lista.reduce((acc, o) => acc + Number(o.costo_final ?? o.presupuesto ?? 0), 0)
+    // Base de las lineas de dinero: los miembros que siguen dentro del lote.
+    // Las entregadas se quedan (su costo forma parte del total negociado); las
+    // cerradas sin entrega salen — un cancelado con presupuesto no puede
+    // inflar el total del lote. La lista de equipos igual las devuelve todas.
+    const enElLote = lista.filter((o) => !esEstadoCerradoSinEntrega(o.estado))
+    const subtotal = enElLote.reduce((acc, o) => acc + Number(o.costo_final ?? o.presupuesto ?? 0), 0)
     const totalLote = calcularTotalLote(
       subtotal,
       (recepcion.descuento_tipo as DescuentoTipo | null) ?? null,
@@ -81,7 +86,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     // Ya cobrado = neto facturado en los equipos que ya salieron (por el flujo
     // individual o por una entrega de lote previa). Pendiente de cobro = lo que
     // falta para llegar al total negociado del lote, nunca negativo.
-    const entregados = lista.filter((o) => esEstadoEntregado(o.estado))
+    const entregados = enElLote.filter((o) => esEstadoEntregado(o.estado))
     const entregadas = entregados.length
     const yaCobrado = round2(
       entregados.reduce((acc, o) => acc + round2(Number(o.costo_final ?? 0) - Number(o.descuento_cobro ?? 0)), 0),
@@ -116,7 +121,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
         yaCobrado,
         pendienteCobro,
         entregadas,
-        pendientes: lista.length - entregadas,
+        // Elegibles todavia por entregar (los cerrados sin entrega no cuentan).
+        pendientes: enElLote.length - entregadas,
       },
     })
   } catch (error) {
