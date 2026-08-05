@@ -486,7 +486,6 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
           entityType="CLIENTES"
           onClose={() => setShowImport(false)}
           onSuccess={() => {
-            setShowImport(false)
             mutate()
           }}
         />

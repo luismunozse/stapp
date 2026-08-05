@@ -39,15 +39,18 @@ function buildInventarioPayload(d: any, codigo: string, organizationId: string) 
 async function batchInsert(
   client: typeof supabaseAdmin,
   table: 'clientes' | 'inventario',
-  items: Array<{ rowNumber: number; row: any; payload: any }>,
-  results: { success: any[]; skipped: any[]; errors: any[] }
+  items: Array<{ rowNumber: number; row: any; payload: any; sinPrecio?: boolean }>,
+  results: { success: any[]; skipped: any[]; errors: any[]; sinPrecio: number }
 ) {
   for (let start = 0; start < items.length; start += BATCH_SIZE) {
     const chunk = items.slice(start, start + BATCH_SIZE)
     const payloads = chunk.map(c => c.payload)
     const { error } = await client.from(table).insert(payloads)
     if (!error) {
-      for (const c of chunk) results.success.push({ row: c.rowNumber, data: c.row })
+      for (const c of chunk) {
+        results.success.push({ row: c.rowNumber, data: c.row })
+        if (c.sinPrecio) results.sinPrecio++
+      }
       continue
     }
     // Insert fallido: reintentar item por item para aislar la fila mala.
@@ -57,6 +60,7 @@ async function batchInsert(
         results.errors.push({ row: c.rowNumber, error: rowErr.message, data: c.row })
       } else {
         results.success.push({ row: c.rowNumber, data: c.row })
+        if (c.sinPrecio) results.sinPrecio++
       }
     }
   }
@@ -140,8 +144,9 @@ export async function POST(request: Request) {
       success: [] as any[],
       skipped: [] as any[],
       errors: [] as any[],
+      sinPrecio: 0,
     }
-    const validRows: Array<{ rowNumber: number; row: any; data: any }> = []
+    const validRows: Array<{ rowNumber: number; row: any; data: any; sinPrecio?: boolean }> = []
 
     for (let i = 0; i < parseResult.data.length; i++) {
       const row = parseResult.data[i]
@@ -153,7 +158,7 @@ export async function POST(request: Request) {
         results.errors.push({ row: rowNumber, error: validation.error!, data: row })
         continue
       }
-      validRows.push({ rowNumber, row, data: validation.data })
+      validRows.push({ rowNumber, row, data: validation.data, sinPrecio: validation.sinPrecio })
     }
 
     if (data.entityType === 'CLIENTES') {
@@ -227,7 +232,7 @@ export async function POST(request: Request) {
       }
 
       const seenInBatch = new Set<string>()
-      const toInsert: Array<{ rowNumber: number; row: any; payload: any }> = []
+      const toInsert: Array<{ rowNumber: number; row: any; payload: any; sinPrecio?: boolean }> = []
 
       for (const v of withCodigo) {
         if (existingSet.has(v.data.codigo)) {
@@ -243,6 +248,7 @@ export async function POST(request: Request) {
           rowNumber: v.rowNumber,
           row: v.row,
           payload: buildInventarioPayload(v.data, v.data.codigo, organizationId!),
+          sinPrecio: v.sinPrecio,
         })
       }
 
@@ -254,6 +260,7 @@ export async function POST(request: Request) {
           rowNumber: v.rowNumber,
           row: v.row,
           payload: buildInventarioPayload(v.data, codigo, organizationId!),
+          sinPrecio: v.sinPrecio,
         })
       }
 
@@ -291,6 +298,7 @@ export async function POST(request: Request) {
         success: results.success.length,
         skipped: results.skipped.length,
         errors: results.errors.length,
+        sinPrecio: results.sinPrecio,
         errorDetails: results.errors,
         skippedDetails: results.skipped,
       },

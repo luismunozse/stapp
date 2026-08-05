@@ -99,11 +99,27 @@ export async function POST(request: Request) {
       }
     })
 
+    // Validar TODAS las filas (sync, sin I/O) para contar errores y filas sin precio.
+    let invalidRows = 0
+    let sinPrecio = 0
+    for (let index = 0; index < normalizedRows.length; index++) {
+      const validation = data.entityType === 'CLIENTES'
+        ? validateClienteRow(normalizedRows[index], index)
+        : validateInventarioRow(normalizedRows[index], index)
+      if (!validation.valid) {
+        invalidRows++
+      } else if (validation.sinPrecio) {
+        sinPrecio++
+      }
+    }
+
     return NextResponse.json({
       totalRows: parseResult.totalRows,
       preview: validatedPreview,
       headers: canonicalHeaders,
       unmappedColumns: unmapped,
+      invalidRows,
+      sinPrecio,
     })
   } catch (error) {
     if (error instanceof z.ZodError) {

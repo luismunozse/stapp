@@ -45,9 +45,7 @@ const inventarioRowSchema = z.object({
   }, z.number().int().min(0, 'El stock debe ser mayor o igual a 0')),
   precioCompra: optionalNonNegNumber('Precio de compra'),
   precioVenta: z.preprocess((val) => {
-    if (val === null || val === undefined || val === '') {
-      throw new Error('Precio de venta es requerido')
-    }
+    if (val === null || val === undefined || (typeof val === 'string' && val.trim() === '')) return 0
     if (typeof val === 'number') return val
     if (typeof val === 'string') {
       const cleaned = val.replace(/[^\d.,-]/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.')
@@ -89,6 +87,7 @@ export interface ValidationResult {
   valid: boolean
   data?: any
   error?: string
+  sinPrecio?: boolean
 }
 
 export function validateClienteRow(row: ParsedRow, rowIndex: number): ValidationResult {
@@ -104,7 +103,7 @@ export function validateClienteRow(row: ParsedRow, rowIndex: number): Validation
     }
     return {
       valid: false,
-      error: `Fila ${rowIndex + 2}: Error de validación`,
+      error: `Fila ${rowIndex + 2}: ${error instanceof Error ? error.message : 'Error de validación'}`,
     }
   }
 }
@@ -112,7 +111,9 @@ export function validateClienteRow(row: ParsedRow, rowIndex: number): Validation
 export function validateInventarioRow(row: ParsedRow, rowIndex: number): ValidationResult {
   try {
     const data = inventarioRowSchema.parse(row)
-    return { valid: true, data }
+    const sinPrecio = row.precioVenta === null || row.precioVenta === undefined ||
+      (typeof row.precioVenta === 'string' && row.precioVenta.trim() === '')
+    return { valid: true, data, sinPrecio }
   } catch (error) {
     if (error instanceof z.ZodError) {
       return {
@@ -122,7 +123,7 @@ export function validateInventarioRow(row: ParsedRow, rowIndex: number): Validat
     }
     return {
       valid: false,
-      error: `Fila ${rowIndex + 2}: Error de validación`,
+      error: `Fila ${rowIndex + 2}: ${error instanceof Error ? error.message : 'Error de validación'}`,
     }
   }
 }
