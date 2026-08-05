@@ -945,7 +945,6 @@ export function InventarioList({ allowImport = true }: InventarioListProps) {
           entityType="INVENTARIO"
           onClose={() => setShowImport(false)}
           onSuccess={() => {
-            setShowImport(false)
             setRefreshKey(k => k + 1)
           }}
         />
