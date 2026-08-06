@@ -62,7 +62,13 @@ VAPID_SUBJECT=mailto:soporte@stapp.com.ar
 FCM_SERVICE_ACCOUNT={"type":"service_account","project_id":"stapp-...","private_key_id":"...","private_key":"-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n","client_email":"...","client_id":"...",...}
 ```
 
-3. The Capacitor app needs `google-services.json` placed in `android/app/`. Get it from Firebase console → Project settings → General → "Your apps" → Android app → google-services.json. (This file is gitignored under `android/`.)
+3. The Capacitor app needs `google-services.json` placed in `android/app/`. Get it from Firebase console → Project settings → General → "Your apps" → Android app → google-services.json.
+
+   Register the Android app under the package name **`ar.com.stapp.app`** — it must match `applicationId` in `android/app/build.gradle` exactly, or FCM rejects the registration. A SHA-1 fingerprint is not required for FCM (only for Google Sign-In and Dynamic Links).
+
+   Commit this file. It is **not** gitignored (`android/.gitignore` leaves the entry commented out) and it is not a secret — it ships inside the APK. The build picks it up automatically: `android/app/build.gradle` applies the `com.google.gms.google-services` plugin only when the file is present, otherwise it logs `"Push Notifications won't work"` and carries on.
+
+   The service account JSON from step 2 is the opposite: it **is** a secret and must never be committed — it belongs only in `FCM_SERVICE_ACCOUNT`.
 
 ---
 
