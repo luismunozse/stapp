@@ -7,6 +7,7 @@
  */
 
 import { resolveTerminologia, t, type Terminologia } from "@/lib/terminologia"
+import type { Codepage, Corte } from "@/lib/thermal-paper"
 
 const CHARS_PER_LINE_58 = 32
 const CHARS_PER_LINE_80 = 48
@@ -35,37 +36,68 @@ const CMD = {
   FEED_5: [ESC, 0x64, 0x05], // Feed 5 lines
 }
 
-// Mapa Unicode → byte de code page 858 (la page en la que se inicializa la
-// impresora, ver CMD.CHARSET_LATIN). Antes se emitían los code points Latin-1
-// crudos (á=0xE1…), que en CP858 son otros glifos (0xE1='ß'), así que los
-// acentos salían garabateados. CP858 = CP850 + € en 0xD5.
-const CP858: Record<string, number> = {
+// Mapa base compartido CP437/CP850/CP858 (idéntico en 0x80-0xAF para el set
+// español). CP850 agrega Á Í Ó Ú; CP858 = CP850 + € en 0xD5.
+const MAP_BASE: Record<string, number> = {
   "á": 0xa0, "é": 0x82, "í": 0xa1, "ó": 0xa2, "ú": 0xa3, "ñ": 0xa4, "Ñ": 0xa5,
-  "Á": 0xb5, "É": 0x90, "Í": 0xd6, "Ó": 0xe0, "Ú": 0xe9,
+  "É": 0x90,
   "ü": 0x81, "Ü": 0x9a, "ç": 0x87, "Ç": 0x80,
-  "¿": 0xa8, "¡": 0xad, "°": 0xf8, "º": 0xa7, "ª": 0xa6, "€": 0xd5,
+  "¿": 0xa8, "¡": 0xad, "°": 0xf8, "º": 0xa7, "ª": 0xa6,
   "à": 0x85, "è": 0x8a, "ì": 0x8d, "ò": 0x95, "ù": 0x97,
   "â": 0x83, "ê": 0x88, "î": 0x8c, "ô": 0x93, "û": 0x96,
   "ä": 0x84, "ë": 0x89, "ï": 0x8b, "ö": 0x94,
   "«": 0xae, "»": 0xaf,
 }
+const MAP_CP850: Record<string, number> = {
+  ...MAP_BASE,
+  "Á": 0xb5, "Í": 0xd6, "Ó": 0xe0, "Ú": 0xe9,
+}
+const MAP_CP858: Record<string, number> = { ...MAP_CP850, "€": 0xd5 }
+// CP437 no tiene estas: caen a un reemplazo legible, no a '?'.
+const CP437_FALLBACK: Record<string, string> = {
+  "Á": "A", "Í": "I", "Ó": "O", "Ú": "U", "€": "E",
+}
 
-// Convierte texto a bytes de code page 858 (los acentos españoles mapean a su
-// byte de CP858; el ASCII pasa igual; lo no mapeado se reemplaza por '?').
-export function textToBytes(text: string): number[] {
+// Número de tabla de ESC t según el estándar Epson. Si un firmware mapea
+// distinto, el wizard de calibración igual encuentra el par que funciona
+// porque cada línea del test se imprime tras seleccionar SU tabla.
+const CODEPAGE_TABLE: Record<Codepage, number> = {
+  cp437: 0, cp850: 2, cp858: 19, win1252: 16,
+}
+
+export function charsetCommand(cp: Codepage): number[] {
+  return [ESC, 0x74, CODEPAGE_TABLE[cp]]
+}
+
+export function cutCommands(corte: Corte): number[] {
+  switch (corte) {
+    case "gsv": return [GS, 0x56, 0x41, 0x03] // corte parcial con feed de despeje
+    case "esci": return [ESC, 0x64, 0x03, ESC, 0x69] // legacy: ESC i no alimenta, feed manual antes
+    case "none": return [ESC, 0x64, 0x05] // sin cortador: feed largo para poder rasgar
+  }
+}
+
+// Convierte texto a bytes del codepage indicado (default cp858, compat con
+// call sites viejos). Los acentos españoles mapean a su byte de la tabla;
+// el ASCII pasa igual; lo no mapeado se reemplaza por '?'.
+export function textToBytes(text: string, codepage: Codepage = "cp858"): number[] {
   const bytes: number[] = []
   for (const ch of text) {
-    const mapped = CP858[ch]
-    if (mapped !== undefined) {
-      bytes.push(mapped)
+    if (codepage === "win1252") {
+      if (ch === "€") { bytes.push(0x80); continue }
+      const code = ch.charCodeAt(0)
+      bytes.push(code <= 0xff ? code : 0x3f)
+      continue
+    }
+    const map = codepage === "cp437" ? MAP_BASE : codepage === "cp850" ? MAP_CP850 : MAP_CP858
+    const mapped = map[ch]
+    if (mapped !== undefined) { bytes.push(mapped); continue }
+    if (codepage === "cp437" && CP437_FALLBACK[ch]) {
+      bytes.push(CP437_FALLBACK[ch].charCodeAt(0))
       continue
     }
     const code = ch.charCodeAt(0)
-    if (code <= 0x7f) {
-      bytes.push(code) // ASCII == CP858
-    } else {
-      bytes.push(0x3f) // '?' para lo no mapeado
-    }
+    bytes.push(code <= 0x7f ? code : 0x3f)
   }
   return bytes
 }
