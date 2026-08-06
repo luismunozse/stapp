@@ -7,6 +7,11 @@ import { usePathname, useRouter } from "next/navigation"
 // Intervalo de verificación de sesión (cada 5 minutos)
 const SESSION_CHECK_INTERVAL = 5 * 60 * 1000
 
+// Mínimo entre refrescos de sesión. Foco y visibilitychange se disparan juntos
+// (y varias veces al volver de un diálogo del sistema); refrescar en cada uno
+// deja el status en "loading" una y otra vez.
+const SESSION_CHECK_THROTTLE = 60 * 1000
+
 // Rutas públicas que no requieren sesión
 const PUBLIC_PATHS = [
   "/login",
@@ -158,6 +163,7 @@ export function SessionRefresher({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const lastActivityRef = useRef(Date.now())
+  const lastCheckRef = useRef(0)
   const [isRestoring, setIsRestoring] = useState(false)
   const isRestoringRef = useRef(false)
 
@@ -258,9 +264,16 @@ export function SessionRefresher({ children }: { children: React.ReactNode }) {
     router.push("/login?expired=true")
   }, [router])
 
-  // Verificar y refrescar sesión
+  // Verificar y refrescar sesión.
+  // Throttle: update() deja el status en "loading" mientras revalida, y foco +
+  // visibilitychange llegan juntos (varias veces por interacción). Sin este
+  // freno, cada vuelta a la ventana disparaba una ráfaga de refrescos.
   const checkSession = useCallback(async () => {
     if (status !== "authenticated" || isPublicPath) return
+
+    const ahora = Date.now()
+    if (ahora - lastCheckRef.current < SESSION_CHECK_THROTTLE) return
+    lastCheckRef.current = ahora
 
     try {
       // Forzar actualización del token
