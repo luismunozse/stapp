@@ -17,8 +17,8 @@ export default function InventarioPage() {
   const [sesionConocida, setSesionConocida] = useState(false)
 
   useEffect(() => {
-    if (session || status === "authenticated") setSesionConocida(true)
-  }, [session, status])
+    if (status === "authenticated") setSesionConocida(true)
+  }, [status])
 
   useEffect(() => {
     if (session?.user?.role !== "VENDEDOR") return
