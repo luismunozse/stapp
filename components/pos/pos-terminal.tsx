@@ -37,6 +37,7 @@ import { useCurrency } from "@/contexts/currency-context"
 import { generateTicketCommands } from "@/lib/escpos"
 import { readProfile, saveAncho, defaultProfile, type PrinterProfile } from "@/lib/thermal-paper"
 import { fitPrintPageToContent } from "@/lib/print-fit-page"
+import { PrinterCalibrationWizard } from "@/components/impresora/printer-calibration-wizard"
 import type {
   PosCartItem,
   PosCliente,
@@ -201,6 +202,7 @@ export function PosTerminal() {
     saveAncho(w)
     setProfile(readProfile())
   }
+  const [wizardOpen, setWizardOpen] = useState(false)
 
   // Computed values
   const cartCount = cartItems.reduce((sum, i) => sum + i.cantidad, 0)
@@ -719,6 +721,14 @@ export function PosTerminal() {
             </button>
           </div>
 
+          <button
+            type="button"
+            className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+            onClick={() => setWizardOpen(true)}
+          >
+            ¿Salió mal? Calibrar impresora
+          </button>
+
           {/* Item 3: Reprint last ticket button — only shown when a sale was made */}
           {lastSaleData && (
             <Button
@@ -937,6 +947,14 @@ export function PosTerminal() {
       )}
 
       {/* ===== Dialogs ===== */}
+      <PrinterCalibrationWizard
+        open={wizardOpen}
+        onOpenChange={(o) => {
+          setWizardOpen(o)
+          if (!o) setProfile(readProfile())
+        }}
+      />
+
       <PosCheckoutDialog
         open={checkoutOpen}
         onClose={() => setCheckoutOpen(false)}

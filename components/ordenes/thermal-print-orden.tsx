@@ -11,6 +11,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog"
 import { Receipt, Loader2, Usb, Printer, Eye } from "lucide-react"
+import { PrinterCalibrationWizard } from "@/components/impresora/printer-calibration-wizard"
 import { useThermalPrinter } from "@/components/pos/use-thermal-printer"
 import { useTerminologia } from "@/contexts/currency-context"
 import { fitPrintPageToContent } from "@/lib/print-fit-page"
@@ -76,6 +77,7 @@ export function ThermalPrintOrden({ orden }: ThermalPrintOrdenProps) {
   const [open, setOpen] = useState(false)
   const [printingThermal, setPrintingThermal] = useState(false)
   const [profile, setProfile] = useState<PrinterProfile>(defaultProfile())
+  const [wizardOpen, setWizardOpen] = useState(false)
 
   useEffect(() => {
     setProfile(readProfile())
@@ -344,8 +346,24 @@ ${styles}
               </Button>
             )}
           </div>
+
+          <button
+            type="button"
+            className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+            onClick={() => setWizardOpen(true)}
+          >
+            ¿Salió mal? Calibrar impresora
+          </button>
         </DialogContent>
       </Dialog>
+
+      <PrinterCalibrationWizard
+        open={wizardOpen}
+        onOpenChange={(o) => {
+          setWizardOpen(o)
+          if (!o) setProfile(readProfile())
+        }}
+      />
     </>
   )
 }
