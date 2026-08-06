@@ -1,16 +1,13 @@
 /**
- * ESC/POS command generator for 58mm thermal printers
+ * ESC/POS command generator for thermal printers
  * Generates raw byte commands for silent printing via WebUSB
  *
- * 58mm printer = ~32 chars per line (normal font)
- * 80mm printer = ~48 chars per line (normal font)
+ * Ancho de columnas variable segun el perfil de la impresora: 58mm ronda 32
+ * columnas, 80mm entre 42 y 48 segun el firmware (ver lib/thermal-paper.ts).
  */
 
 import { resolveTerminologia, t, type Terminologia } from "@/lib/terminologia"
-import type { Codepage, Corte } from "@/lib/thermal-paper"
-
-const CHARS_PER_LINE_58 = 32
-const CHARS_PER_LINE_80 = 48
+import type { Codepage, Corte, PrinterProfile } from "@/lib/thermal-paper"
 
 // ESC/POS command constants
 const ESC = 0x1b
@@ -19,7 +16,6 @@ const LF = 0x0a
 
 const CMD = {
   INIT: [ESC, 0x40], // Initialize printer
-  CHARSET_LATIN: [ESC, 0x74, 0x13], // Code page 858 (Latin with €)
   ALIGN_LEFT: [ESC, 0x61, 0x00],
   ALIGN_CENTER: [ESC, 0x61, 0x01],
   ALIGN_RIGHT: [ESC, 0x61, 0x02],
@@ -29,7 +25,6 @@ const CMD = {
   DOUBLE_OFF: [ESC, 0x21, 0x00],
   UNDERLINE_ON: [ESC, 0x2d, 0x01],
   UNDERLINE_OFF: [ESC, 0x2d, 0x00],
-  CUT: [GS, 0x56, 0x41, 0x03], // Partial cut with minimal feed for cutter clearance
   FEED_1: [ESC, 0x64, 0x01], // Feed 1 line
   FEED_2: [ESC, 0x64, 0x02], // Feed 2 lines
   FEED_3: [ESC, 0x64, 0x03], // Feed 3 lines
@@ -100,6 +95,22 @@ export function textToBytes(text: string, codepage: Codepage = "cp858"): number[
     bytes.push(code <= 0x7f ? code : 0x3f)
   }
   return bytes
+}
+
+// Helpers de texto ligados a una codepage. Dentro de los generadores SHADOWEAN
+// a los module-level homónimos, así el cuerpo de los generadores no cambia.
+function makeTextHelpers(cp: Codepage) {
+  const line = (text: string): number[] => [...textToBytes(text, cp), LF]
+  const columns = (left: string, right: string, width: number): number[] => {
+    const gap = width - left.length - right.length
+    if (gap <= 0) return line(left.substring(0, width - right.length - 1) + " " + right)
+    return line(left + " ".repeat(gap) + right)
+  }
+  const rightAlign = (text: string, width: number): number[] => {
+    const pad = Math.max(0, width - text.length)
+    return line(" ".repeat(pad) + text)
+  }
+  return { line, columns, rightAlign }
 }
 
 function line(text: string): number[] {
@@ -241,16 +252,17 @@ export interface OrdenTicketData {
 
 export function generateOrdenTicketCommands(
   data: OrdenTicketData,
-  printerWidth: 58 | 80 = 80,
+  profile: PrinterProfile,
   terminologia?: Terminologia,
 ): Uint8Array {
   const term = terminologia ?? resolveTerminologia(null)
-  const W = printerWidth === 58 ? CHARS_PER_LINE_58 : CHARS_PER_LINE_80
+  const W = profile.columnas
+  const { line, columns } = makeTextHelpers(profile.codepage)
   const buf: number[] = []
 
   const add = (...cmds: number[][]) => { for (const cmd of cmds) buf.push(...cmd) }
 
-  add(CMD.INIT, CMD.CHARSET_LATIN)
+  add(CMD.INIT, charsetCommand(profile.codepage))
 
   // === LOGO (optional) ===
   if (data.logoRaster && data.logoRaster.length > 0) {
@@ -374,12 +386,13 @@ export function generateOrdenTicketCommands(
   add(CMD.BOLD_OFF)
   if (data.telefonoEmpresa) add(line(`Consultas: ${data.telefonoEmpresa}`))
 
-  add(CMD.CUT)
+  add(cutCommands(profile.corte))
   return new Uint8Array(buf)
 }
 
-export function generateTicketCommands(data: TicketData, printerWidth: 58 | 80 = 58): Uint8Array {
-  const W = printerWidth === 58 ? CHARS_PER_LINE_58 : CHARS_PER_LINE_80
+export function generateTicketCommands(data: TicketData, profile: PrinterProfile): Uint8Array {
+  const W = profile.columnas
+  const { line, columns } = makeTextHelpers(profile.codepage)
   const buf: number[] = []
 
   const add = (...cmds: number[][]) => {
@@ -387,7 +400,7 @@ export function generateTicketCommands(data: TicketData, printerWidth: 58 | 80 =
   }
 
   // Initialize
-  add(CMD.INIT, CMD.CHARSET_LATIN)
+  add(CMD.INIT, charsetCommand(profile.codepage))
 
   // === HEADER: Empresa ===
   add(CMD.ALIGN_CENTER, CMD.BOLD_ON, CMD.DOUBLE_ON)
@@ -473,8 +486,8 @@ export function generateTicketCommands(data: TicketData, printerWidth: 58 | 80 =
   add(line("Conserve este ticket"))
   add(line("como comprobante"))
 
-  // Cut (cut command provides minimal feed for cutter clearance)
-  add(CMD.CUT)
+  // Corte segun el perfil de la impresora
+  add(cutCommands(profile.corte))
 
   return new Uint8Array(buf)
 }

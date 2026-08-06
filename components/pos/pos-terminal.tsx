@@ -35,6 +35,7 @@ import { useThermalPrinter } from "./use-thermal-printer"
 import { BarcodeScanner } from "@/components/inventario/barcode-scanner"
 import { useCurrency } from "@/contexts/currency-context"
 import { generateTicketCommands } from "@/lib/escpos"
+import { readProfile, saveAncho, defaultProfile, type PrinterProfile } from "@/lib/thermal-paper"
 import { fitPrintPageToContent } from "@/lib/print-fit-page"
 import type {
   PosCartItem,
@@ -190,16 +191,15 @@ export function PosTerminal() {
   const printer = useThermalPrinter()
   const [printing, setPrinting] = useState(false)
 
-  // Printer width setting (58mm or 80mm)
-  type PrinterWidth = 58 | 80
-  const [printerWidth, setPrinterWidth] = useState<PrinterWidth>(() => {
-    if (typeof window === "undefined") return 58
-    const saved = localStorage.getItem("pos_printer_width")
-    return saved === "80" ? 80 : 58
-  })
-  const handleSetPrinterWidth = (w: PrinterWidth) => {
-    setPrinterWidth(w)
-    localStorage.setItem("pos_printer_width", String(w))
+  // Printer profile setting (ancho, columnas, codepage, corte)
+  const [profile, setProfile] = useState<PrinterProfile>(defaultProfile())
+  useEffect(() => {
+    setProfile(readProfile())
+  }, [])
+  const printerWidth = profile.ancho // las ~6 referencias de layout siguen funcionando
+  const handleSetPrinterWidth = (w: 58 | 80) => {
+    saveAncho(w)
+    setProfile(readProfile())
   }
 
   // Computed values
@@ -447,7 +447,7 @@ export function PosTerminal() {
         metodoPago: ventaData.metodoPago,
         nombreEmpresa: ventaData.organizationName,
       }
-      const commands = generateTicketCommands(ticketData, printerWidth)
+      const commands = generateTicketCommands(ticketData, profile)
       await printer.print(commands)
       return true
     } catch (err) {
@@ -456,7 +456,7 @@ export function PosTerminal() {
     } finally {
       setPrinting(false)
     }
-  }, [printer])
+  }, [printer, profile])
 
   // --- Print ticket via browser print dialog (fallback when no USB printer) ---
   const printTicketHTML = useCallback((ventaData: any) => {
