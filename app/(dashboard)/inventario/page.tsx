@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { InventarioList } from "@/components/inventario/inventario-list"
@@ -14,6 +14,7 @@ export default function InventarioPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [accesoVendedor, setAccesoVendedor] = useState<boolean | null>(null)
+  const sesionConocidaRef = useRef(false)
 
   useEffect(() => {
     if (session?.user?.role !== "VENDEDOR") return
@@ -26,7 +27,11 @@ export default function InventarioPage() {
       .catch(() => router.replace("/dashboard"))
   }, [session, router])
 
-  if (status === "loading") return null
+  // Solo ocultamos la página en la carga inicial. Un refresco de sesión deja
+  // status en "loading" un instante, y desmontar acá tiraba abajo todo el
+  // subárbol: se perdía el modal de importación con el archivo ya elegido.
+  if (session || status === "authenticated") sesionConocidaRef.current = true
+  if (status === "loading" && !sesionConocidaRef.current) return null
   if (session?.user?.role === "VENDEDOR" && accesoVendedor !== true) return null
 
   return (
