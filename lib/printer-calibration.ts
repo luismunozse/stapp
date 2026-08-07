@@ -82,6 +82,7 @@ export type WizardAction =
   | { type: "codepage"; codepage: Codepage }
   | { type: "corte"; corte: Corte }
   | { type: "reiniciar" }
+  | { type: "sync"; profile: PrinterProfile }
 
 export interface WizardState {
   step: WizardStep
@@ -102,5 +103,7 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
       return { step: "final", profile: { ...state.profile, corte: action.corte } }
     case "reiniciar":
       return { ...state, step: "conexion" }
+    case "sync":
+      return { step: "conexion", profile: action.profile }
   }
 }

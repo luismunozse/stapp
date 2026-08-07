@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useReducer, useState } from "react"
+import { useEffect, useReducer, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -8,7 +8,7 @@ import {
 import { Loader2, Printer, Usb } from "lucide-react"
 import { useThermalPrinter } from "@/components/pos/use-thermal-printer"
 import { fitPrintPageToContent } from "@/lib/print-fit-page"
-import { readProfile, saveProfile, type AnchoTermico } from "@/lib/thermal-paper"
+import { readProfile, saveProfile, columnasDefault, type AnchoTermico } from "@/lib/thermal-paper"
 import {
   wizardReducer,
   generateColumnsTest, generateCodepageTest, generateCutTest, generateSampleTicket,
@@ -39,6 +39,17 @@ export function PrinterCalibrationWizard({ open, onOpenChange }: Props) {
   }))
   const [printing, setPrinting] = useState(false)
 
+  // El wizard queda montado en sus hosts: si se reabre después de que otro
+  // control (ej. el toggle 58/80 del host) haya escrito un perfil nuevo, hay
+  // que releer el perfil actual en vez de arrastrar el que había al montar.
+  const wasOpenRef = useRef(open)
+  useEffect(() => {
+    if (open && !wasOpenRef.current) {
+      dispatch({ type: "sync", profile: readProfile() })
+    }
+    wasOpenRef.current = open
+  }, [open])
+
   // Con impresora ya conectada (o al conectarse) se saltea el paso de conexión.
   useEffect(() => {
     if (open && printer.connected && state.step === "conexion") dispatch({ type: "conectado" })
@@ -46,7 +57,10 @@ export function PrinterCalibrationWizard({ open, onOpenChange }: Props) {
 
   const apply = (action: Parameters<typeof wizardReducer>[1]) => {
     const next = wizardReducer(state, action)
-    saveProfile(next.profile)
+    // "reiniciar" solo navega de vuelta a conexión; no debe persistir el
+    // perfil vigente en el estado (podría estar stale frente a cambios
+    // hechos por el host mientras el wizard estaba en el paso final).
+    if (action.type !== "reiniciar") saveProfile(next.profile)
     dispatch(action)
   }
 
@@ -255,7 +269,7 @@ function printDriverTestPage(ancho: AnchoTermico) {
   <div><strong>PÁGINA DE PRUEBA</strong></div>
   <div>Ancho configurado: ${ancho}mm</div>
   <div>áéíóúñÑ ¿¡°</div>
-  <div>${"1234567890".repeat(5).slice(0, 48)}</div>
+  <div>${"1234567890".repeat(5).slice(0, columnasDefault(ancho))}</div>
   <div>Si este texto llega de borde a borde sin cortarse, el driver está bien configurado.</div>
   </div></body></html>`)
   doc.close()

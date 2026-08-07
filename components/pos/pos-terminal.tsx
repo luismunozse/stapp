@@ -458,7 +458,7 @@ export function PosTerminal() {
     } finally {
       setPrinting(false)
     }
-  }, [printer, profile])
+  }, [printer, profile, timezone])
 
   // --- Print ticket via browser print dialog (fallback when no USB printer) ---
   const printTicketHTML = useCallback((ventaData: any) => {
