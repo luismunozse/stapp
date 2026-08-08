@@ -8,7 +8,7 @@ import { ESTADOS_ENTREGADOS, esEstadoEntregado, esEstadoCerradoSinEntrega } from
 
 const FEATURE_KEY = "recepcion_multiple"
 
-// Mirrors the DB CHECK constraint (migration 289_recepcion_descuento.sql), which is
+// Mirrors the DB CHECK constraint (migration 293_recepcion_descuento.sql), which is
 // NULL-safe and rejects half-specified pairs.
 const descuentoSchema = z
   .object({

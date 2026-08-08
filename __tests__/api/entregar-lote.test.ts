@@ -5,7 +5,7 @@
  * Mismo mock style que Tasks 3-4 (recepcion-descuento.test.ts,
  * recepcion-multiple-atomica.test.ts): se mockea supabaseAdmin.rpc para
  * capturar los argumentos exactos que la ruta le pasa a
- * entregar_lote_recepcion (migracion 290).
+ * entregar_lote_recepcion (migracion 294).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { mockAuthSuccess, createChainMock, mockSupabaseFrom, createPostRequest, parseResponse } from "./helpers"

@@ -14,7 +14,7 @@
 
 - **Sequencing gate:** `feat/recepcion-multiple` (migrations 278â€“279) and `feat/cobro-en-entrega` MUST be merged to `main` and their migrations applied before starting. Verify with `git log main --oneline` and stop if missing.
 - Work on a new branch off fresh `main`: `feat/lote-mayorista`.
-- Migration numbers are assigned at merge time (project convention). This plan uses `289_recepcion_descuento.sql` and `290_entregar_lote_recepcion.sql` (renumbered from 280/281: 287/288 were taken by recepcion-multiple at merge); before opening the PR, re-verify they are still the next free numbers.
+- Migration numbers are assigned at merge time (project convention). This plan uses `293_recepcion_descuento.sql` and `294_entregar_lote_recepcion.sql` (renumbered twice: 280/281 → 289/290 once 287/288 went to recepcion-multiple, then → 293/294 once 291/292 landed in main and were applied); before opening the PR, re-verify they are still the next free numbers.
 - Migrations are applied manually: `node scripts/db-run.mjs supabase/migrations/<file>` (dry-run by default; pass its apply flag after reviewing output). Never assume a CI runner applies them.
 - Feature gating reuses the existing flag key `recepcion_multiple` â€” no new flag, no org toggle. Server: `hasPlanFeature(organizationId, "recepcion_multiple")` â†’ 403 `{ error, code: "FEATURE_REQUIRED", feature: "recepcion_multiple" }`. Client: `useHasFeature("recepcion_multiple")`.
 - Payments/charges require `role === "ADMIN"` (same as `POST /api/ordenes/[id]/cobros`).
@@ -137,7 +137,7 @@ git commit -m "feat(lotes): batch total and proration math for reception batches
 ### Task 2: Discount columns on `recepciones`
 
 **Files:**
-- Create: `supabase/migrations/289_recepcion_descuento.sql`
+- Create: `supabase/migrations/293_recepcion_descuento.sql`
 
 **Interfaces:**
 - Consumes: `recepciones` table (migration 278).
@@ -146,7 +146,7 @@ git commit -m "feat(lotes): batch total and proration math for reception batches
 - [ ] **Step 1: Write the migration**
 
 ```sql
--- 289_recepcion_descuento.sql
+-- 293_recepcion_descuento.sql
 -- Batch discount negotiated for a multi-device reception.
 -- Totals are always derived from member orders; only the discount is stored.
 BEGIN;
@@ -171,13 +171,13 @@ COMMIT;
 
 - [ ] **Step 2: Dry-run and apply**
 
-Run: `node scripts/db-run.mjs supabase/migrations/289_recepcion_descuento.sql` (review dry-run output, then re-run with the apply flag the script prints).
+Run: `node scripts/db-run.mjs supabase/migrations/293_recepcion_descuento.sql` (review dry-run output, then re-run with the apply flag the script prints).
 Expected: `ALTER TABLE` succeeds; verify with a follow-up dry-run showing no pending changes.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add supabase/migrations/289_recepcion_descuento.sql
+git add supabase/migrations/293_recepcion_descuento.sql
 git commit -m "feat(db): batch discount columns on recepciones"
 ```
 
@@ -432,10 +432,10 @@ git commit -m "feat(api): edit batch discount on undelivered receptions"
 
 ### Task 5: Atomic batch-delivery RPC
 
-> **POST-REVIEW NOTE:** the shipped migration `supabase/migrations/290_entregar_lote_recepcion.sql` is canonical and diverges from the template below in reviewed, deliberate ways: no BEGIN/COMMIT wrapper (db-run.mjs 40-line detection footgun), mirrors `fecha_entrega`/`entregado_por_user_id`/firmas/`motivo_sin_cobro` and the `orden_eventos` insert instead of the template's column set (`updated_at` does not exist), records the per-order discount share via `p_descuento` (phantom-receivable fix), maps 242's ceiling raise to `LOTE_ERROR:COBRO_EXCEDE_PENDIENTE:<id>`, adds `COSTO_FINAL_INVALIDO`/`MONTO_COBRO_INVALIDO` payload guards, and REVOKEs EXECUTE from PUBLIC/anon/authenticated (service_role only).
+> **POST-REVIEW NOTE:** the shipped migration `supabase/migrations/294_entregar_lote_recepcion.sql` is canonical and diverges from the template below in reviewed, deliberate ways: no BEGIN/COMMIT wrapper (db-run.mjs 40-line detection footgun), mirrors `fecha_entrega`/`entregado_por_user_id`/firmas/`motivo_sin_cobro` and the `orden_eventos` insert instead of the template's column set (`updated_at` does not exist), records the per-order discount share via `p_descuento` (phantom-receivable fix), maps 242's ceiling raise to `LOTE_ERROR:COBRO_EXCEDE_PENDIENTE:<id>`, adds `COSTO_FINAL_INVALIDO`/`MONTO_COBRO_INVALIDO` payload guards, and REVOKEs EXECUTE from PUBLIC/anon/authenticated (service_role only).
 
 **Files:**
-- Create: `supabase/migrations/290_entregar_lote_recepcion.sql`
+- Create: `supabase/migrations/294_entregar_lote_recepcion.sql`
 
 **Interfaces:**
 - Consumes: `registrar_cobros_orden_atomica(p_org_id, p_orden_id, p_usuario_id, p_pagos, p_observaciones, p_descuento, p_idempotency_key)` (migration `242_cobros_orden_atomico.sql`); `recepciones`, `ordenes_servicio`.
@@ -448,7 +448,7 @@ Read `app/api/ordenes/[id]/entregar/route.ts` end to end. Write down every colum
 - [ ] **Step 2: Write the migration**
 
 ```sql
--- 290_entregar_lote_recepcion.sql
+-- 294_entregar_lote_recepcion.sql
 -- Atomic batch delivery: all member orders REPARADO -> ENTREGADO plus prorated
 -- charges in one transaction. Prorated amounts are computed app-side (lib/lote-utils)
 -- and passed in; this function validates and persists.
@@ -550,13 +550,13 @@ If Step 1 found an estado-history insert or extra columns in the route, replicat
 
 - [ ] **Step 3: Dry-run and apply**
 
-Run: `node scripts/db-run.mjs supabase/migrations/290_entregar_lote_recepcion.sql` (dry-run, then apply).
+Run: `node scripts/db-run.mjs supabase/migrations/294_entregar_lote_recepcion.sql` (dry-run, then apply).
 Expected: `CREATE FUNCTION` succeeds.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add supabase/migrations/290_entregar_lote_recepcion.sql
+git add supabase/migrations/294_entregar_lote_recepcion.sql
 git commit -m "feat(db): atomic batch delivery RPC for reception batches"
 ```
 

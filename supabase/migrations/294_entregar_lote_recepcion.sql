@@ -1,5 +1,5 @@
 -- ============================================================================
--- 290: entrega atomica de lote (recepcion multiple)
+-- 294: entrega atomica de lote (recepcion multiple)
 -- ============================================================================
 -- Transiciona todas las ordenes REPARADO -> ENTREGADO de una recepcion y
 -- registra el cobro prorateado (calculado app-side por lib/lote-utils) en

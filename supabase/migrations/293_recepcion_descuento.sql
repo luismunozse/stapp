@@ -1,4 +1,4 @@
--- 289_recepcion_descuento.sql
+-- 293_recepcion_descuento.sql
 -- Batch discount negotiated for a multi-device reception.
 -- Totals are always derived from member orders; only the discount is stored.
 BEGIN;
