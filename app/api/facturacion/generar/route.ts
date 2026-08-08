@@ -4,9 +4,10 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { getNextInvoiceNumber } from "@/lib/counters"
 import { z } from "zod"
 
-const generarFacturaSchema = z.object({
-  ordenId: z.string().min(1, "La orden es requerida"),
-})
+const generarFacturaSchema = z.union([
+  z.object({ ordenId: z.string().min(1, "La orden es requerida") }).strict(),
+  z.object({ ventaId: z.string().min(1, "La venta es requerida") }).strict(),
+])
 
 // Returns true when the RPC error indicates the function does not exist yet.
 function isFunctionMissingError(err: unknown): boolean {
@@ -36,7 +37,16 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { ordenId } = generarFacturaSchema.parse(body)
+    const parsedBody = generarFacturaSchema.parse(body)
+
+    if ("ventaId" in parsedBody) {
+      return await generarFacturaDesdeVenta({
+        ventaId: parsedBody.ventaId,
+        organizationId: organizationId!,
+      })
+    }
+
+    const { ordenId } = parsedBody
 
     // Verificar que la orden existe, está completada y pertenece a la org
     const { data: orden, error: ordenError } = await supabaseAdmin
@@ -465,6 +475,248 @@ async function crearFacturaJsFallback(opts: {
         numeroOrden: orden.numero_orden,
         dispositivo: orden.dispositivo,
         cliente: orden.clientes,
+      },
+    },
+    { status: 201 }
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Venta path — POST /api/facturacion/generar { ventaId }
+// ---------------------------------------------------------------------------
+async function generarFacturaDesdeVenta(opts: {
+  ventaId: string
+  organizationId: string
+}): Promise<NextResponse> {
+  const { ventaId, organizationId } = opts
+
+  const { data: venta, error: ventaError } = await supabaseAdmin
+    .from("ventas")
+    .select(`
+      id,
+      estado,
+      numero_venta,
+      subtotal,
+      total,
+      iva_neto,
+      iva_monto,
+      monto_abonado,
+      estado_pago,
+      organization_id,
+      cliente_nombre,
+      items_venta (
+        inventario_id,
+        descripcion,
+        cantidad,
+        precio_unitario,
+        subtotal
+      ),
+      facturas (id)
+    `)
+    .eq("id", ventaId)
+    .eq("organization_id", organizationId)
+    .single()
+
+  if (ventaError || !venta) {
+    return NextResponse.json({ error: "Venta no encontrada" }, { status: 404 })
+  }
+
+  if (venta.estado === "ANULADA") {
+    return NextResponse.json({ error: "La venta está anulada" }, { status: 400 })
+  }
+
+  if (venta.facturas && venta.facturas.length > 0) {
+    return NextResponse.json(
+      { error: "Ya existe una factura para esta venta" },
+      { status: 400 }
+    )
+  }
+
+  const iva = Number(venta.iva_monto ?? 0)
+  const subtotal = venta.iva_neto != null ? Number(venta.iva_neto) : Number(venta.subtotal)
+  const total = Number(venta.total)
+  const montoAbonado = Number(venta.monto_abonado ?? 0)
+  const estadoPago = venta.estado_pago || "PENDIENTE"
+
+  const itemsJsonb = (venta.items_venta || []).map((item: any) => ({
+    descripcion: item.descripcion,
+    cantidad: item.cantidad,
+    precio_unitario: item.precio_unitario,
+    subtotal: item.subtotal,
+    tipo: item.inventario_id ? "REPUESTO" : "OTRO",
+  }))
+
+  const numeroFactura = await getNextInvoiceNumber(organizationId)
+
+  const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc(
+    "crear_factura_venta_atomica",
+    {
+      p_venta_id: ventaId,
+      p_numero_factura: numeroFactura,
+      p_subtotal: subtotal,
+      p_iva: iva,
+      p_total: total,
+      p_monto_abonado: montoAbonado,
+      p_estado_pago: estadoPago,
+      p_items: itemsJsonb,
+    }
+  )
+
+  if (!rpcError) {
+    const facturaId = (rpcResult as { id: string }).id
+
+    const { data: itemsFactura } = await supabaseAdmin
+      .from("items_factura")
+      .select("*")
+      .eq("factura_id", facturaId)
+
+    return NextResponse.json(
+      {
+        id: facturaId,
+        ventaId,
+        numeroFactura,
+        fecha: null,
+        subtotal,
+        iva,
+        total,
+        estadoPago,
+        items: (itemsFactura || []).map((i: any) => ({
+          id: i.id,
+          descripcion: i.descripcion,
+          cantidad: i.cantidad,
+          precioUnitario: i.precio_unitario,
+          subtotal: i.subtotal,
+          tipo: i.tipo,
+        })),
+        venta: {
+          id: venta.id,
+          numeroVenta: venta.numero_venta,
+          cliente: { nombre: venta.cliente_nombre },
+        },
+      },
+      { status: 201 }
+    )
+  }
+
+  if (isFunctionMissingError(rpcError)) {
+    console.warn("[facturacion] crear_factura_venta_atomica not found; falling back to JS path")
+    return await crearFacturaVentaJsFallback({
+      ventaId,
+      organizationId,
+      venta,
+      numeroFactura,
+      subtotal,
+      iva,
+      total,
+      montoAbonado,
+      estadoPago,
+      itemsJsonb,
+    })
+  }
+
+  console.error("[facturacion] Unexpected RPC error (crear venta):", rpcError)
+  return NextResponse.json({ error: "Error al generar factura" }, { status: 500 })
+}
+
+// JS fallback — used when migration 292 is not yet applied.
+async function crearFacturaVentaJsFallback(opts: {
+  ventaId: string
+  organizationId: string
+  venta: any
+  numeroFactura: string | number
+  subtotal: number
+  iva: number
+  total: number
+  montoAbonado: number
+  estadoPago: string
+  itemsJsonb: Array<{
+    descripcion: string
+    cantidad: number
+    precio_unitario: number
+    subtotal: number
+    tipo: string
+  }>
+}): Promise<NextResponse> {
+  const {
+    ventaId,
+    organizationId,
+    venta,
+    numeroFactura,
+    subtotal,
+    iva,
+    total,
+    montoAbonado,
+    estadoPago,
+    itemsJsonb,
+  } = opts
+
+  const { data: factura, error: createError } = await supabaseAdmin
+    .from("facturas")
+    .insert({
+      venta_id: ventaId,
+      organization_id: organizationId,
+      numero_factura: numeroFactura,
+      subtotal,
+      iva,
+      total,
+      monto_abonado: montoAbonado,
+      estado_pago: estadoPago,
+    })
+    .select()
+    .single()
+
+  if (createError) {
+    throw createError
+  }
+
+  if (itemsJsonb.length > 0) {
+    const { error: itemsError } = await supabaseAdmin
+      .from("items_factura")
+      .insert(
+        itemsJsonb.map((item) => ({
+          factura_id: factura.id,
+          descripcion: item.descripcion,
+          cantidad: item.cantidad,
+          precio_unitario: item.precio_unitario,
+          subtotal: item.subtotal,
+          tipo: item.tipo,
+        }))
+      )
+
+    if (itemsError) {
+      console.error("[facturacion] items_factura insert failed (venta); rolling back factura:", itemsError)
+      await supabaseAdmin.from("facturas").delete().eq("id", factura.id)
+      return NextResponse.json({ error: "Error al crear items de factura" }, { status: 500 })
+    }
+  }
+
+  const { data: itemsFactura } = await supabaseAdmin
+    .from("items_factura")
+    .select("*")
+    .eq("factura_id", factura.id)
+
+  return NextResponse.json(
+    {
+      id: factura.id,
+      ventaId: factura.venta_id,
+      numeroFactura: factura.numero_factura,
+      fecha: factura.fecha,
+      subtotal: factura.subtotal,
+      iva: factura.iva,
+      total: factura.total,
+      estadoPago: factura.estado_pago,
+      items: (itemsFactura || []).map((i: any) => ({
+        id: i.id,
+        descripcion: i.descripcion,
+        cantidad: i.cantidad,
+        precioUnitario: i.precio_unitario,
+        subtotal: i.subtotal,
+        tipo: i.tipo,
+      })),
+      venta: {
+        id: venta.id,
+        numeroVenta: venta.numero_venta,
+        cliente: { nombre: venta.cliente_nombre },
       },
     },
     { status: 201 }
