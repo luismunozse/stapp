@@ -278,6 +278,7 @@ export function formatVenta(venta: any) {
       (a: any, b: any) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
     ) || [],
     devoluciones: venta.devoluciones_venta?.map(formatDevolucion) || [],
+    facturaId: venta.facturas?.[0]?.id ?? null,
   }
 }
 
