@@ -888,18 +888,16 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const { regular: helvetica, bold: helveticaBold } = await embedCustomFonts(pdfDoc)
   const courier = await pdfDoc.embedFont(StandardFonts.Courier)
 
-  // Colores modernos (Indigo theme)
+  // Colores (Indigo theme) — usados solo por el bloque "copia local / fotos /
+  // entrega" más abajo en esta misma función (Task 5 los restyleará y
+  // eliminará entonces). La copia cliente (arriba) es puro escala de grises,
+  // ver lib/pdf-style.ts (MONO).
   const primaryColor = rgb(0.388, 0.400, 0.945) // #6366f1
   const textColor = rgb(0.118, 0.161, 0.231) // #1e293b
   const grayColor = rgb(0.392, 0.455, 0.545) // #64748b
   const lightGray = rgb(0.886, 0.910, 0.941) // #e2e8f0
   const bgGray = rgb(0.973, 0.980, 0.988) // #f8fafc
-  const slateLight = rgb(0.945, 0.953, 0.965) // #f1f5f9
-  const yellowBg = rgb(0.996, 0.953, 0.780) // #fef3c7
-  const yellowBorder = rgb(0.961, 0.620, 0.043) // #f59e0b
-  const brownColor = rgb(0.573, 0.251, 0.055) // #92400e
   const greenColor = rgb(0.134, 0.545, 0.373) // #22c55e
-  const greenBg = rgb(0.863, 0.949, 0.898) // #dcfce7
   const white = rgb(1, 1, 1)
 
   // Margenes
@@ -907,9 +905,6 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const contentWidth = width - (margin * 2)
   const cardGap = 10
   const halfWidth = (contentWidth - cardGap) / 2
-
-  // === BARRA DE ACENTO SUPERIOR ===
-  page.drawRectangle({ x: 0, y: height - 4, width, height: 4, color: primaryColor })
 
   let y = height - margin + 6
 
@@ -966,21 +961,20 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const textStartY = y - (headerH / 2) + (headerTextH / 2)
 
   // Línea 1: Nombre empresa | # Orden
-  page.drawText(empresaNombre, { x: margin, y: textStartY, size: 12, font: helveticaBold, color: textColor })
+  page.drawText(empresaNombre, { x: margin, y: textStartY, size: 12, font: helveticaBold, color: MONO.ink })
 
   const ordenText = `#${String(numeroOrden).padStart(4, "0")}`
-  const ordenTextWidth = helveticaBold.widthOfTextAtSize(ordenText, 16)
-  page.drawText(ordenText, { x: width - margin - ordenTextWidth, y: textStartY + 1, size: 16, font: helveticaBold, color: textColor })
+  const ordenTextWidth = helveticaBold.widthOfTextAtSize(ordenText, TYPE.docNumber)
+  page.drawText(ordenText, { x: width - margin - ordenTextWidth, y: textStartY + 1, size: TYPE.docNumber, font: helveticaBold, color: MONO.ink })
 
-  // Línea 2: Teléfono | Badge RECEPCIÓN
+  // Línea 2: Teléfono | Badge RECEPCIÓN (outlined, sin relleno)
   const line2Y = textStartY - 13
   if (telefonoEmpresa) {
-    page.drawText(`Tel: ${telefonoEmpresa}`, { x: margin, y: line2Y, size: 7.5, font: helvetica, color: grayColor })
+    page.drawText(`Tel: ${telefonoEmpresa}`, { x: margin, y: line2Y, size: TYPE.small, font: helvetica, color: MONO.label })
   }
   const badgeText = "RECEPCIÓN"
-  const badgeWidth = helveticaBold.widthOfTextAtSize(badgeText, 6) + 12
-  page.drawRectangle({ x: width - margin - badgeWidth, y: line2Y - 2, width: badgeWidth, height: 12, color: primaryColor })
-  page.drawText(badgeText, { x: width - margin - badgeWidth + 6, y: line2Y + 1.5, size: 6, font: helveticaBold, color: white })
+  const badgeWidth = measureBadgeWidth(helveticaBold, badgeText)
+  drawOutlinedBadge(page, helveticaBold, badgeText, width - margin - badgeWidth, line2Y + 10)
 
   // Línea 3: Dirección completa | Fechas
   const line3Y = line2Y - 12
@@ -990,20 +984,20 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   if (codigoPostalEmpresa) locationParts.push(`CP ${codigoPostalEmpresa}`)
   if (provinciaEmpresa) locationParts.push(provinciaEmpresa)
   if (locationParts.length > 0) {
-    page.drawText(locationParts.join(", "), { x: margin, y: line3Y, size: 7.5, font: helvetica, color: grayColor })
+    page.drawText(locationParts.join(", "), { x: margin, y: line3Y, size: TYPE.small, font: helvetica, color: MONO.label })
   }
 
   const fechasText = `Ingreso: ${fechaIngreso}` + (fechaPrometida ? `  |  Entrega est.: ${fechaPrometida}` : "")
-  const fechasW = helvetica.widthOfTextAtSize(fechasText, 6.5)
-  page.drawText(fechasText, { x: width - margin - fechasW, y: line3Y, size: 6.5, font: helvetica, color: grayColor })
+  const fechasW = helvetica.widthOfTextAtSize(fechasText, TYPE.fine)
+  page.drawText(fechasText, { x: width - margin - fechasW, y: line3Y, size: TYPE.fine, font: helvetica, color: MONO.faint })
 
   y -= headerH + 4
   // Línea separadora + título
-  page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 0.75, color: primaryColor })
-  y -= 11
+  drawRule(page, margin, width - margin, y)
+  y -= 12
   const titleText = "COMPROBANTE DE RECEPCIÓN"
-  const titleWidth = helveticaBold.widthOfTextAtSize(titleText, 9)
-  page.drawText(titleText, { x: (width - titleWidth) / 2, y, size: 9, font: helveticaBold, color: primaryColor })
+  const titleWidth = helveticaBold.widthOfTextAtSize(titleText, TYPE.docTitle)
+  page.drawText(titleText, { x: (width - titleWidth) / 2, y, size: TYPE.docTitle, font: helveticaBold, color: MONO.ink })
   y -= 10
 
   // === GRID: CLIENTE | DISPOSITIVO (compacto) ===
@@ -1032,71 +1026,64 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const labelCol = 50
   const valueMaxWidth = halfWidth - labelCol - 20
 
-  // Card Cliente
-  page.drawRectangle({ x: margin, y: y - cardHeight, width: halfWidth, height: cardHeight, color: white, borderColor: lightGray, borderWidth: 0.5 })
-  page.drawRectangle({ x: margin, y: y - cardHeight, width: 3, height: cardHeight, color: primaryColor })
-  page.drawRectangle({ x: margin + 3, y: y - 17, width: halfWidth - 3, height: 17, color: bgGray })
-  page.drawText("CLIENTE", { x: margin + 10, y: y - 12, size: 8, font: helveticaBold, color: primaryColor })
+  // Card Cliente (sin caja: heading tipográfico + columnas planas)
+  drawSectionLabel(page, helveticaBold, "CLIENTE", margin + 10, y - 12)
 
   let clienteInfoY = y - 30
-  page.drawText("Nombre:", { x: margin + 10, y: clienteInfoY, size: 7, font: helvetica, color: grayColor })
-  page.drawText(truncateToWidth(clienteNombre, valueMaxWidth, helveticaBold, 8), { x: margin + labelCol + 10, y: clienteInfoY, size: 8, font: helveticaBold, color: textColor })
+  page.drawText("Nombre:", { x: margin + 10, y: clienteInfoY, size: TYPE.small, font: helvetica, color: MONO.label })
+  page.drawText(truncateToWidth(clienteNombre, valueMaxWidth, helveticaBold, TYPE.body), { x: margin + labelCol + 10, y: clienteInfoY, size: TYPE.body, font: helveticaBold, color: MONO.ink })
   clienteInfoY -= rowH
   if (sector) {
-    page.drawText("Sector:", { x: margin + 10, y: clienteInfoY, size: 7, font: helvetica, color: grayColor })
-    page.drawText(truncateToWidth(sector, valueMaxWidth, helveticaBold, 8), { x: margin + labelCol + 10, y: clienteInfoY, size: 8, font: helveticaBold, color: primaryColor })
+    page.drawText("Sector:", { x: margin + 10, y: clienteInfoY, size: TYPE.small, font: helvetica, color: MONO.label })
+    page.drawText(truncateToWidth(sector, valueMaxWidth, helveticaBold, TYPE.body), { x: margin + labelCol + 10, y: clienteInfoY, size: TYPE.body, font: helveticaBold, color: MONO.ink })
     clienteInfoY -= rowH
   }
-  page.drawText("Teléfono:", { x: margin + 10, y: clienteInfoY, size: 7, font: helvetica, color: grayColor })
-  page.drawText(truncateToWidth(clienteTelefono, valueMaxWidth, helvetica, 8), { x: margin + labelCol + 10, y: clienteInfoY, size: 8, font: helvetica, color: textColor })
+  page.drawText("Teléfono:", { x: margin + 10, y: clienteInfoY, size: TYPE.small, font: helvetica, color: MONO.label })
+  page.drawText(truncateToWidth(clienteTelefono, valueMaxWidth, helvetica, TYPE.body), { x: margin + labelCol + 10, y: clienteInfoY, size: TYPE.body, font: helvetica, color: MONO.ink })
   clienteInfoY -= rowH
   if (clienteEmail) {
-    page.drawText("Email:", { x: margin + 10, y: clienteInfoY, size: 7, font: helvetica, color: grayColor })
-    page.drawText(truncateToWidth(clienteEmail, valueMaxWidth, helvetica, 7), { x: margin + labelCol + 10, y: clienteInfoY, size: 7, font: helvetica, color: textColor })
+    page.drawText("Email:", { x: margin + 10, y: clienteInfoY, size: TYPE.small, font: helvetica, color: MONO.label })
+    page.drawText(truncateToWidth(clienteEmail, valueMaxWidth, helvetica, TYPE.small), { x: margin + labelCol + 10, y: clienteInfoY, size: TYPE.small, font: helvetica, color: MONO.ink })
     clienteInfoY -= rowH
   }
   if (clienteDireccion) {
-    page.drawText("Dir:", { x: margin + 10, y: clienteInfoY, size: 7, font: helvetica, color: grayColor })
-    page.drawText(truncateToWidth(clienteDireccion, valueMaxWidth, helvetica, 7), { x: margin + labelCol + 10, y: clienteInfoY, size: 7, font: helvetica, color: textColor })
+    page.drawText("Dir:", { x: margin + 10, y: clienteInfoY, size: TYPE.small, font: helvetica, color: MONO.label })
+    page.drawText(truncateToWidth(clienteDireccion, valueMaxWidth, helvetica, TYPE.small), { x: margin + labelCol + 10, y: clienteInfoY, size: TYPE.small, font: helvetica, color: MONO.ink })
   }
 
-  // Card Dispositivo
+  // Card Dispositivo (misma columna derecha, sin caja)
   const cardX2 = margin + halfWidth + cardGap
-  page.drawRectangle({ x: cardX2, y: y - cardHeight, width: halfWidth, height: cardHeight, color: white, borderColor: lightGray, borderWidth: 0.5 })
-  page.drawRectangle({ x: cardX2, y: y - cardHeight, width: 3, height: cardHeight, color: primaryColor })
-  page.drawRectangle({ x: cardX2 + 3, y: y - 17, width: halfWidth - 3, height: 17, color: bgGray })
-  page.drawText(t(term, "equipo").toUpperCase(), { x: cardX2 + 10, y: y - 12, size: 8, font: helveticaBold, color: primaryColor })
+  drawSectionLabel(page, helveticaBold, t(term, "equipo"), cardX2 + 10, y - 12)
 
   const tipoBadgeText = tipoDispositivo.toUpperCase()
-  const tipoBadgeWidth = helveticaBold.widthOfTextAtSize(tipoBadgeText, 6) + 10
-  const tipoBadgeX = cardX2 + halfWidth - tipoBadgeWidth - 8
-  page.drawRectangle({ x: tipoBadgeX, y: y - 16, width: tipoBadgeWidth, height: 14, color: primaryColor })
-  page.drawText(tipoBadgeText, { x: tipoBadgeX + 5, y: y - 12, size: 6, font: helveticaBold, color: white })
+  const tipoBadgeWidth = helveticaBold.widthOfTextAtSize(tipoBadgeText, TYPE.small)
+  page.drawText(tipoBadgeText, { x: cardX2 + halfWidth - tipoBadgeWidth, y: y - 12, size: TYPE.small, font: helveticaBold, color: MONO.ink })
 
   let deviceInfoY = y - 30
-  page.drawText(t(term, "equipo") + ":", { x: cardX2 + 10, y: deviceInfoY, size: 7, font: helvetica, color: grayColor })
-  page.drawText(truncateToWidth(dispositivo, valueMaxWidth, helveticaBold, 8), { x: cardX2 + labelCol + 10, y: deviceInfoY, size: 8, font: helveticaBold, color: textColor })
+  page.drawText(t(term, "equipo") + ":", { x: cardX2 + 10, y: deviceInfoY, size: TYPE.small, font: helvetica, color: MONO.label })
+  page.drawText(truncateToWidth(dispositivo, valueMaxWidth, helveticaBold, TYPE.body), { x: cardX2 + labelCol + 10, y: deviceInfoY, size: TYPE.body, font: helveticaBold, color: MONO.ink })
   deviceInfoY -= rowH
   if (marca) {
-    page.drawText("Marca:", { x: cardX2 + 10, y: deviceInfoY, size: 7, font: helvetica, color: grayColor })
-    const marcaText = truncateToWidth(marca, colorDisp ? valueMaxWidth * 0.55 : valueMaxWidth, helvetica, 7)
-    page.drawText(marcaText, { x: cardX2 + labelCol + 10, y: deviceInfoY, size: 7, font: helvetica, color: textColor })
+    page.drawText("Marca:", { x: cardX2 + 10, y: deviceInfoY, size: TYPE.small, font: helvetica, color: MONO.label })
+    const marcaText = truncateToWidth(marca, colorDisp ? valueMaxWidth * 0.55 : valueMaxWidth, helvetica, TYPE.small)
+    page.drawText(marcaText, { x: cardX2 + labelCol + 10, y: deviceInfoY, size: TYPE.small, font: helvetica, color: MONO.ink })
     if (colorDisp) {
       const colorLabelX = cardX2 + halfWidth * 0.6
-      page.drawText("Color:", { x: colorLabelX, y: deviceInfoY, size: 7, font: helvetica, color: grayColor })
-      page.drawText(truncateToWidth(colorDisp, halfWidth - (halfWidth * 0.6) - 42, helvetica, 7), { x: colorLabelX + 32, y: deviceInfoY, size: 7, font: helvetica, color: textColor })
+      page.drawText("Color:", { x: colorLabelX, y: deviceInfoY, size: TYPE.small, font: helvetica, color: MONO.label })
+      page.drawText(truncateToWidth(colorDisp, halfWidth - (halfWidth * 0.6) - 42, helvetica, TYPE.small), { x: colorLabelX + 32, y: deviceInfoY, size: TYPE.small, font: helvetica, color: MONO.ink })
     }
     deviceInfoY -= rowH
   } else if (colorDisp) {
-    page.drawText("Color:", { x: cardX2 + 10, y: deviceInfoY, size: 7, font: helvetica, color: grayColor })
-    page.drawText(truncateToWidth(colorDisp, valueMaxWidth, helvetica, 7), { x: cardX2 + labelCol + 10, y: deviceInfoY, size: 7, font: helvetica, color: textColor })
+    page.drawText("Color:", { x: cardX2 + 10, y: deviceInfoY, size: TYPE.small, font: helvetica, color: MONO.label })
+    page.drawText(truncateToWidth(colorDisp, valueMaxWidth, helvetica, TYPE.small), { x: cardX2 + labelCol + 10, y: deviceInfoY, size: TYPE.small, font: helvetica, color: MONO.ink })
     deviceInfoY -= rowH
   }
   if (imei) {
-    page.drawText(t(term, "serie") + ":", { x: cardX2 + 10, y: deviceInfoY, size: 7, font: helvetica, color: grayColor })
-    page.drawText(truncateToWidth(imei, valueMaxWidth, courier, 7), { x: cardX2 + labelCol + 10, y: deviceInfoY, size: 7, font: courier, color: textColor })
+    page.drawText(t(term, "serie") + ":", { x: cardX2 + 10, y: deviceInfoY, size: TYPE.small, font: helvetica, color: MONO.label })
+    page.drawText(truncateToWidth(imei, valueMaxWidth, courier, TYPE.small), { x: cardX2 + labelCol + 10, y: deviceInfoY, size: TYPE.small, font: courier, color: MONO.ink })
   }
 
+  drawRule(page, margin, width - margin, y - cardHeight + 4, { dotted: true })
   y -= cardHeight + 6
 
   // === PROBLEMA REPORTADO (compacto) ===
@@ -1115,16 +1102,14 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const displayedProblemaLines = problemaLines.slice(0, 3)
   const problemaHeight = 16 + displayedProblemaLines.length * 12 + 4
 
-  page.drawRectangle({ x: margin, y: y - problemaHeight, width: contentWidth, height: problemaHeight, color: white, borderColor: lightGray, borderWidth: 0.5 })
-  page.drawRectangle({ x: margin, y: y - problemaHeight, width: 3, height: problemaHeight, color: rgb(0.918, 0.306, 0.306) })
-  page.drawRectangle({ x: margin + 3, y: y - 15, width: contentWidth - 3, height: 15, color: bgGray })
-  page.drawText("PROBLEMA REPORTADO", { x: margin + 10, y: y - 11, size: 8, font: helveticaBold, color: rgb(0.918, 0.306, 0.306) })
+  drawSectionLabel(page, helveticaBold, "PROBLEMA REPORTADO", margin + 10, y - 11)
 
   let problemaY = y - 28
   for (const line of displayedProblemaLines) {
-    page.drawText(line, { x: margin + 10, y: problemaY, size: 9, font: helvetica, color: textColor })
+    page.drawText(line, { x: margin + 10, y: problemaY, size: TYPE.body, font: helvetica, color: MONO.ink })
     problemaY -= 12
   }
+  drawRule(page, margin, width - margin, y - problemaHeight + 4, { dotted: true })
   y -= problemaHeight + 4
 
   // === ACCESORIOS + CÓDIGO DE ACCESO (lado a lado si hay patrón) ===
@@ -1136,9 +1121,8 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   if (accesorios) {
     const accWidth = isPatternCode ? halfWidth : contentWidth
     const accHeight = 18
-    page.drawRectangle({ x: margin, y: y - accHeight, width: accWidth, height: accHeight, color: yellowBg, borderColor: yellowBorder, borderWidth: 0.5 })
-    page.drawText("ACCESORIOS:", { x: margin + 8, y: y - 12, size: 7, font: helveticaBold, color: brownColor })
-    page.drawText(truncateToWidth(accesorios, accWidth - 85, helvetica, 7), { x: margin + 75, y: y - 12, size: 7, font: helvetica, color: brownColor })
+    drawSectionLabel(page, helveticaBold, "Accesorios", margin + 8, y - 12)
+    page.drawText(truncateToWidth(accesorios, accWidth - 85, helvetica, TYPE.small), { x: margin + 75, y: y - 12, size: TYPE.small, font: helvetica, color: MONO.ink })
     if (!isPatternCode) y -= accHeight + 4
   }
 
@@ -1153,10 +1137,8 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
       const patBoxX = margin + halfWidth + cardGap
       const patBoxW = halfWidth
       const patBoxH = 60
-      page.drawRectangle({ x: patBoxX, y: y - patBoxH, width: patBoxW, height: patBoxH, color: white, borderColor: lightGray, borderWidth: 0.5 })
-      page.drawRectangle({ x: patBoxX, y: y - patBoxH, width: 3, height: patBoxH, color: grayColor })
-      page.drawText("CÓDIGO DE ACCESO", { x: patBoxX + 10, y: y - 10, size: 7, font: helveticaBold, color: grayColor })
-      page.drawText("Patrón", { x: patBoxX + patBoxW - 40, y: y - 10, size: 6, font: helvetica, color: grayColor })
+      drawSectionLabel(page, helveticaBold, "Código de acceso", patBoxX + 10, y - 10)
+      page.drawText("Patrón", { x: patBoxX + patBoxW - 40, y: y - 10, size: TYPE.fine, font: helvetica, color: MONO.label })
 
       const gridCenterX = patBoxX + patBoxW / 2
       const gridStartY = y - 22
@@ -1172,24 +1154,23 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
         for (let i = 0; i < patternNumbers.length - 1; i++) {
           const start = getPointPosition(patternNumbers[i])
           const end = getPointPosition(patternNumbers[i + 1])
-          page.drawLine({ start, end, thickness: 1.2, color: primaryColor })
+          page.drawLine({ start, end, thickness: 1.2, color: MONO.ink })
         }
       }
       for (let num = 1; num <= 9; num++) {
         const pos = getPointPosition(num)
         const inPat = patternNumbers.includes(num)
-        page.drawCircle({ x: pos.x, y: pos.y, size: dotRadius, color: inPat ? primaryColor : lightGray, borderWidth: 0 })
-        if (inPat) page.drawCircle({ x: pos.x, y: pos.y, size: dotRadius - 1.2, color: white, borderWidth: 0 })
+        page.drawCircle({ x: pos.x, y: pos.y, size: dotRadius, color: inPat ? MONO.ink : MONO.rule, borderWidth: 0 })
+        if (inPat) page.drawCircle({ x: pos.x, y: pos.y, size: dotRadius - 1.2, color: MONO.white, borderWidth: 0 })
       }
 
       y -= Math.max(patBoxH, accesorios ? 18 : 0) + 4
     } else {
-      // PIN/Contraseña en línea compacta
+      // PIN/Contraseña en línea compacta — el marco es una tabla, no un fill
       const codeH = 28
-      page.drawRectangle({ x: margin, y: y - codeH, width: halfWidth, height: codeH, color: white, borderColor: lightGray, borderWidth: 0.5 })
-      page.drawRectangle({ x: margin, y: y - codeH, width: 3, height: codeH, color: grayColor })
-      page.drawText("CÓDIGO DE ACCESO", { x: margin + 10, y: y - 10, size: 7, font: helveticaBold, color: grayColor })
-      page.drawText(codigoAccesoDispositivo, { x: margin + 10, y: y - 23, size: 10, font: courier, color: textColor })
+      page.drawRectangle({ x: margin, y: y - codeH, width: halfWidth, height: codeH, borderColor: MONO.rule, borderWidth: RULE_WIDTH })
+      drawSectionLabel(page, helveticaBold, "Código de acceso", margin + 10, y - 10)
+      page.drawText(codigoAccesoDispositivo, { x: margin + 10, y: y - 23, size: 10, font: courier, color: MONO.ink })
       y -= codeH + 4
     }
   }
@@ -1198,19 +1179,22 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   if (presupuesto || data.sena) {
     const hasSena = data.sena && data.sena > 0
     const presupuestoHeight = hasSena ? 48 : 36
-    page.drawRectangle({ x: margin, y: y - presupuestoHeight, width: contentWidth, height: presupuestoHeight, color: greenBg, borderColor: greenColor, borderWidth: 1 })
-    page.drawRectangle({ x: margin, y: y - presupuestoHeight, width: 4, height: presupuestoHeight, color: greenColor })
+    page.drawRectangle({ x: margin, y: y - presupuestoHeight, width: contentWidth, height: presupuestoHeight, color: MONO.totalBg })
     if (presupuesto) {
-      page.drawText("PRESUPUESTO ESTIMADO", { x: margin + 14, y: y - 13, size: 8, font: helveticaBold, color: greenColor })
-      page.drawText(presupuesto, { x: margin + 14, y: y - 30, size: 16, font: helveticaBold, color: greenColor })
-      page.drawText("* Puede variar según diagnóstico", { x: margin + 180, y: y - 30, size: 7, font: helvetica, color: grayColor })
+      drawSectionLabel(page, helveticaBold, "Presupuesto estimado", margin + 14, y - 13)
+      const presupuestoAmtWidth = helveticaBold.widthOfTextAtSize(presupuesto, TYPE.total)
+      page.drawText(presupuesto, { x: width - margin - 14 - presupuestoAmtWidth, y: y - 30, size: TYPE.total, font: helveticaBold, color: MONO.ink })
+      page.drawText("* Puede variar según diagnóstico", { x: margin + 14, y: y - 30, size: TYPE.fine, font: helvetica, color: MONO.faint })
     }
     if (hasSena) {
       const senaFormatted = formatCurrencyPDF(data.sena!)
       const senaY = presupuesto ? y - 44 : y - 13
       const metodoPago = data.metodoPagoSena || "EFECTIVO"
-      page.drawText(`SEÑA ABONADA: ${senaFormatted}`, { x: margin + 14, y: senaY, size: 9, font: helveticaBold, color: greenColor })
-      page.drawText(`(${metodoPago})`, { x: margin + 14 + helveticaBold.widthOfTextAtSize(`SEÑA ABONADA: ${senaFormatted}`, 9) + 6, y: senaY, size: 8, font: helvetica, color: grayColor })
+      drawSectionLabel(page, helveticaBold, "Seña abonada", margin + 14, senaY)
+      const senaLabelWidth = helveticaBold.widthOfTextAtSize("SEÑA ABONADA", TYPE.sectionLabel)
+      page.drawText(`(${metodoPago})`, { x: margin + 14 + senaLabelWidth + 6, y: senaY, size: TYPE.fine, font: helvetica, color: MONO.label })
+      const senaAmtWidth = helveticaBold.widthOfTextAtSize(senaFormatted, TYPE.total)
+      page.drawText(senaFormatted, { x: width - margin - 14 - senaAmtWidth, y: senaY, size: TYPE.total, font: helveticaBold, color: MONO.ink })
     }
     y -= presupuestoHeight + 8
   }
@@ -1232,13 +1216,13 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     const displayedObsLines = obsLines.slice(0, 3)
     const obsHeight = 22 + displayedObsLines.length * 13 + 6
 
-    page.drawRectangle({ x: margin, y: y - obsHeight, width: contentWidth, height: obsHeight, color: bgGray, borderColor: lightGray, borderWidth: 1 })
-    page.drawText("OBSERVACIONES", { x: margin + 12, y: y - 14, size: 8, font: helveticaBold, color: grayColor })
+    drawSectionLabel(page, helveticaBold, "OBSERVACIONES", margin + 12, y - 14)
     let obsY = y - 30
     for (const line of displayedObsLines) {
-      page.drawText(line, { x: margin + 12, y: obsY, size: 9, font: helvetica, color: textColor })
+      page.drawText(line, { x: margin + 12, y: obsY, size: TYPE.body, font: helvetica, color: MONO.ink })
       obsY -= 13
     }
+    drawRule(page, margin, width - margin, y - obsHeight + 4, { dotted: true })
     y -= obsHeight + 8
   }
 
@@ -1258,10 +1242,8 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
       const checklistHeight = 24 + Math.min(itemsPerCol, 8) * checklistRowHeight + 6
 
       if (y - checklistHeight >= 60) {
-        page.drawRectangle({ x: margin, y: y - checklistHeight, width: contentWidth, height: checklistHeight, color: white, borderColor: lightGray, borderWidth: 1 })
-        page.drawRectangle({ x: margin, y: y - checklistHeight, width: 4, height: checklistHeight, color: primaryColor })
-        page.drawRectangle({ x: margin + 4, y: y - 22, width: contentWidth - 4, height: 22, color: bgGray })
-        page.drawText("CHECKLIST DE RECEPCION", { x: margin + 14, y: y - 15, size: 9, font: helveticaBold, color: primaryColor })
+        drawRule(page, margin, width - margin, y)
+        drawSectionLabel(page, helveticaBold, "Checklist de recepcion", margin + 14, y - 15)
 
         for (let col = 0; col < cols; col++) {
           const startIdx = col * itemsPerCol
@@ -1274,11 +1256,10 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
 
           for (const item of colItems) {
             const symbol = item.valor === true ? "SI" : "NO"
-            const symbolColor = item.valor === true ? greenColor : rgb(0.918, 0.306, 0.306)
             const availableW = colRightEdge - colX
 
-            page.drawText(truncateToWidth(item.label, availableW - 30, helvetica, 7), { x: colX, y: itemY, size: 7, font: helvetica, color: grayColor })
-            page.drawText(symbol, { x: colRightEdge - helveticaBold.widthOfTextAtSize(symbol, 7), y: itemY, size: 7, font: helveticaBold, color: symbolColor })
+            page.drawText(truncateToWidth(item.label, availableW - 30, helvetica, TYPE.small), { x: colX, y: itemY, size: TYPE.small, font: helvetica, color: MONO.ink })
+            page.drawText(symbol, { x: colRightEdge - helveticaBold.widthOfTextAtSize(symbol, TYPE.small), y: itemY, size: TYPE.small, font: helveticaBold, color: MONO.ink })
             itemY -= checklistRowHeight
           }
         }
@@ -1295,21 +1276,19 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
       const maxTextW = contentWidth - 28
 
       if (y - textBlockHeight >= 60) {
-        page.drawRectangle({ x: margin, y: y - textBlockHeight, width: contentWidth, height: textBlockHeight, color: bgGray, borderColor: lightGray, borderWidth: 0.5 })
-
         let tY = y - 12
         for (const item of textItems) {
           const labelText = item.label + ":"
-          const labelW = helveticaBold.widthOfTextAtSize(labelText, 7)
-          page.drawText(labelText, { x: margin + 14, y: tY, size: 7, font: helveticaBold, color: grayColor })
-          page.drawText(truncateToWidth(String(item.valor), maxTextW - labelW - 8, helvetica, 7), { x: margin + 14 + labelW + 6, y: tY, size: 7, font: helvetica, color: textColor })
+          const labelW = helveticaBold.widthOfTextAtSize(labelText, TYPE.small)
+          page.drawText(labelText, { x: margin + 14, y: tY, size: TYPE.small, font: helveticaBold, color: MONO.ink })
+          page.drawText(truncateToWidth(String(item.valor), maxTextW - labelW - 8, helvetica, TYPE.small), { x: margin + 14 + labelW + 6, y: tY, size: TYPE.small, font: helvetica, color: MONO.ink })
           tY -= textRowHeight
         }
         if (notasText) {
           const notasLabel = "Notas:"
-          const notasLabelW = helveticaBold.widthOfTextAtSize(notasLabel, 7)
-          page.drawText(notasLabel, { x: margin + 14, y: tY, size: 7, font: helveticaBold, color: grayColor })
-          page.drawText(truncateToWidth(notasText, maxTextW - notasLabelW - 8, helvetica, 7), { x: margin + 14 + notasLabelW + 6, y: tY, size: 7, font: helvetica, color: textColor })
+          const notasLabelW = helveticaBold.widthOfTextAtSize(notasLabel, TYPE.small)
+          page.drawText(notasLabel, { x: margin + 14, y: tY, size: TYPE.small, font: helveticaBold, color: MONO.ink })
+          page.drawText(truncateToWidth(notasText, maxTextW - notasLabelW - 8, helvetica, TYPE.small), { x: margin + 14 + notasLabelW + 6, y: tY, size: TYPE.small, font: helvetica, color: MONO.ink })
         }
         y -= textBlockHeight + 8
       }
@@ -1326,6 +1305,8 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     const firmaHeight = 80
     const qrSize = 60
 
+    drawRule(page, margin, width - margin, y)
+
     if (hasQR && hasFirma) {
       // QR a la izquierda, firma a la derecha
       try {
@@ -1339,8 +1320,8 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
         const qrBytes = Uint8Array.from(atob(qrBase64), c => c.charCodeAt(0))
         const qrImage = await pdfDoc.embedPng(qrBytes)
         page.drawImage(qrImage, { x: margin, y: y - qrSize, width: qrSize, height: qrSize })
-        page.drawText("Escanea para ver el estado", { x: margin, y: y - qrSize - 10, size: 6, font: helvetica, color: grayColor })
-        page.drawText("de tu reparación", { x: margin, y: y - qrSize - 18, size: 6, font: helvetica, color: grayColor })
+        page.drawText("Escanea para ver el estado", { x: margin, y: y - qrSize - 10, size: TYPE.fine, font: helvetica, color: MONO.label })
+        page.drawText("de tu reparación", { x: margin, y: y - qrSize - 18, size: TYPE.fine, font: helvetica, color: MONO.label })
       } catch (qrError) {
         console.error("Error generating QR:", qrError)
       }
@@ -1349,8 +1330,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
         const firmaX = margin + 90
         const firmaBoxWidth = contentWidth - 90
 
-        page.drawRectangle({ x: firmaX, y: y - firmaHeight, width: firmaBoxWidth, height: firmaHeight, color: bgGray, borderColor: lightGray, borderWidth: 0.5 })
-        page.drawText("FIRMA DEL CLIENTE AL ENTREGAR EQUIPO", { x: firmaX + 10, y: y - 12, size: 7, font: helveticaBold, color: grayColor })
+        drawSectionLabel(page, helveticaBold, "Firma del cliente al entregar equipo", firmaX + 10, y - 12)
 
         const firmaBytes = Uint8Array.from(atob(data.firmaRecepcion!), c => c.charCodeAt(0))
         const firmaImg = await pdfDoc.embedPng(firmaBytes)
@@ -1363,8 +1343,8 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
           height: firmaDims.height * firmaScale,
         })
 
-        page.drawLine({ start: { x: firmaX + 20, y: y - firmaHeight + 12 }, end: { x: firmaX + firmaBoxWidth - 20, y: y - firmaHeight + 12 }, thickness: 0.5, color: grayColor })
-        page.drawText(clienteNombre, { x: firmaX + 20, y: y - firmaHeight + 4, size: 7, font: helvetica, color: grayColor })
+        page.drawLine({ start: { x: firmaX + 20, y: y - firmaHeight + 12 }, end: { x: firmaX + firmaBoxWidth - 20, y: y - firmaHeight + 12 }, thickness: 0.5, color: MONO.ink })
+        page.drawText("Firma del cliente", { x: firmaX + 20, y: y - firmaHeight + 4, size: TYPE.fine, font: helvetica, color: MONO.label })
       } catch (firmaError) {
         console.error("Error embedding reception signature:", firmaError)
       }
@@ -1382,16 +1362,15 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
         const qrBytes = Uint8Array.from(atob(qrBase64), c => c.charCodeAt(0))
         const qrImage = await pdfDoc.embedPng(qrBytes)
         page.drawImage(qrImage, { x: margin, y: y - qrSize, width: qrSize, height: qrSize })
-        page.drawText("Escanea para ver el estado", { x: margin + qrSize + 10, y: y - 20, size: 7, font: helvetica, color: grayColor })
-        page.drawText("de tu reparación", { x: margin + qrSize + 10, y: y - 30, size: 7, font: helvetica, color: grayColor })
+        page.drawText("Escanea para ver el estado", { x: margin + qrSize + 10, y: y - 20, size: TYPE.small, font: helvetica, color: MONO.label })
+        page.drawText("de tu reparación", { x: margin + qrSize + 10, y: y - 30, size: TYPE.small, font: helvetica, color: MONO.label })
       } catch (qrError) {
         console.error("Error generating QR:", qrError)
       }
       y -= qrSize + 8
     } else if (hasFirma) {
       try {
-        page.drawRectangle({ x: margin, y: y - firmaHeight, width: contentWidth, height: firmaHeight, color: bgGray, borderColor: lightGray, borderWidth: 0.5 })
-        page.drawText("FIRMA DEL CLIENTE AL ENTREGAR EQUIPO", { x: margin + 10, y: y - 12, size: 7, font: helveticaBold, color: grayColor })
+        drawSectionLabel(page, helveticaBold, "Firma del cliente al entregar equipo", margin + 10, y - 12)
 
         const firmaBytes = Uint8Array.from(atob(data.firmaRecepcion!), c => c.charCodeAt(0))
         const firmaImg = await pdfDoc.embedPng(firmaBytes)
@@ -1404,8 +1383,8 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
           height: firmaDims.height * firmaScale,
         })
 
-        page.drawLine({ start: { x: margin + 20, y: y - firmaHeight + 12 }, end: { x: width - margin - 20, y: y - firmaHeight + 12 }, thickness: 0.5, color: grayColor })
-        page.drawText(clienteNombre, { x: margin + 20, y: y - firmaHeight + 4, size: 7, font: helvetica, color: grayColor })
+        page.drawLine({ start: { x: margin + 20, y: y - firmaHeight + 12 }, end: { x: width - margin - 20, y: y - firmaHeight + 12 }, thickness: 0.5, color: MONO.ink })
+        page.drawText("Firma del cliente", { x: margin + 20, y: y - firmaHeight + 4, size: TYPE.fine, font: helvetica, color: MONO.label })
       } catch (firmaError) {
         console.error("Error embedding reception signature:", firmaError)
       }
@@ -1437,22 +1416,12 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const displayedTerminos = terminosWrapped.slice(0, 8)
   const terminosBoxHeight = 14 + displayedTerminos.length * 10 + 4
 
-  // Terminos fluye directamente desde y
-  page.drawRectangle({
-    x: margin,
-    y: y - terminosBoxHeight,
-    width: contentWidth,
-    height: terminosBoxHeight,
-    color: rgb(0.98, 0.98, 0.98),
-    borderColor: lightGray,
-    borderWidth: 0.5
-  })
-
-  page.drawText("TÉRMINOS Y CONDICIONES", { x: margin + 10, y: y - 11, size: 6.5, font: helveticaBold, color: grayColor })
+  // Terminos fluye directamente desde y — sin caja, mismos tamaños que antes
+  drawSectionLabel(page, helveticaBold, "Términos y condiciones", margin + 10, y - 11)
 
   let termY = y - 23
   displayedTerminos.forEach(t => {
-    page.drawText(t, { x: margin + 10, y: termY, size: 6.5, font: helvetica, color: grayColor })
+    page.drawText(t, { x: margin + 10, y: termY, size: TYPE.fine, font: helvetica, color: MONO.faint })
     termY -= 10
   })
 
@@ -1460,13 +1429,14 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
 
   // === FOOTER (fluye desde y) ===
   const footerY = y - 10
-  page.drawLine({ start: { x: margin, y: footerY + 10 }, end: { x: width - margin, y: footerY + 10 }, thickness: 0.5, color: lightGray })
-  page.drawText(`Orden #${numeroOrden}`, { x: margin, y: footerY, size: 8, font: helveticaBold, color: primaryColor })
-  page.drawText(`Impreso: ${fechaImpresion}`, { x: width - margin - 120, y: footerY, size: 7, font: helvetica, color: grayColor })
+  drawRule(page, margin, width - margin, footerY + 10)
+  page.drawText(`Orden #${numeroOrden}`, { x: margin, y: footerY, size: TYPE.small, font: helveticaBold, color: MONO.ink })
+  page.drawText(`Impreso: ${fechaImpresion}`, { x: width - margin - 120, y: footerY, size: TYPE.fine, font: helvetica, color: MONO.faint })
 
-  // === BARRA INFERIOR (justo debajo del footer) ===
+  // barraY se conserva únicamente como referencia para el recorte dinámico de
+  // altura de página (ver más abajo): la barra inferior indigo se eliminó
+  // del diseño monocromático, pero el cálculo de contentBottom no cambia.
   const barraY = footerY - 12
-  page.drawRectangle({ x: 0, y: barraY, width, height: 6, color: primaryColor })
 
   // === AJUSTAR ALTURA DE PAGINA AL CONTENIDO ===
   // Minimo: ancho de pagina para mantener orientacion vertical en impresion
