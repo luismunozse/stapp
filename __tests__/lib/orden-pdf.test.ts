@@ -41,4 +41,27 @@ describe("generateOrdenPDF", () => {
     const buffer = await generateOrdenPDF(buildOrdenFixture())
     expect(buffer.length).toBeGreaterThan(1000)
   })
+
+  it("renders the ENTREGADO variant with fotos and firmas", async () => {
+    // Minimal 1x1 PNG, embedded as a data: URL so the fotos-de-ingreso fetch
+    // works offline (fetch() resolves data: URLs in Node 18+), and reused as
+    // a stand-in signature image — same trick as pdf-samples.test.ts.
+    const pngBase64 =
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+
+    const buffer = await generateOrdenPDF({
+      ...buildOrdenFixture(),
+      estado: "ENTREGADO",
+      fotosIngreso: [
+        { url: `data:image/png;base64,${pngBase64}`, descripcion: "Pantalla con manchas de humedad" },
+        { url: `data:image/png;base64,${pngBase64}`, descripcion: "Puerto de carga oxidado" },
+      ],
+      fechaEntrega: new Date(),
+      firmaClienteEntrega: pngBase64,
+      firmaEncargadoEntrega: pngBase64,
+      entregadoPor: "María Gómez",
+      notasEntrega: "Se entrega el equipo funcionando correctamente. Cliente conforme.",
+    })
+    expect(buffer.length).toBeGreaterThan(1000)
+  })
 })
