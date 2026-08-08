@@ -3188,10 +3188,13 @@ interface FacturaPDFData {
     email?: string | null
     direccion?: string | null
   }
-  orden: {
+  orden?: {
     numeroOrden: number
     codigoOrden?: string | null
     dispositivo: string
+  }
+  venta?: {
+    numeroVenta: number
   }
   subtotal: number
   iva: number
@@ -3247,8 +3250,10 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   const clienteTelefono = safe(data.cliente?.telefono)
   const clienteEmail = safe(data.cliente?.email)
   const clienteDireccion = safe(data.cliente?.direccion)
-  const ordenDisplay = data.orden.codigoOrden || `#${String(data.orden.numeroOrden).padStart(4, "0")}`
-  const dispositivo = safe(data.orden.dispositivo)
+  const ordenDisplay = data.orden
+    ? data.orden.codigoOrden || `#${String(data.orden.numeroOrden).padStart(4, "0")}`
+    : ""
+  const dispositivo = data.orden ? safe(data.orden.dispositivo) : ""
   const pendiente = data.total - (data.montoAbonado || 0)
 
   // Crear documento PDF
@@ -3382,11 +3387,16 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     page.drawText(clienteEmail, { x: margin + 10, y: clientY, size: 9, font: helvetica, color: grayColor })
   }
 
-  // === DATOS DE LA ORDEN ===
+  // === DATOS DE LA ORDEN / VENTA ===
   page.drawRectangle({ x: margin + contentWidth / 2 + 10, y: y - clientBoxHeight + 10, width: contentWidth / 2 - 10, height: clientBoxHeight, color: bgGray })
-  page.drawText("ORDEN DE SERVICIO", { x: margin + contentWidth / 2 + 20, y: y - 5, size: 9, font: helveticaBold, color: primaryColor })
-  page.drawText(`Orden: ${ordenDisplay}`, { x: margin + contentWidth / 2 + 20, y: y - 20, size: 10, font: helvetica, color: textColor })
-  page.drawText(`Dispositivo: ${dispositivo}`, { x: margin + contentWidth / 2 + 20, y: y - 33, size: 9, font: helvetica, color: grayColor })
+  if (data.venta) {
+    page.drawText("VENTA", { x: margin + contentWidth / 2 + 20, y: y - 5, size: 9, font: helveticaBold, color: primaryColor })
+    page.drawText(`Venta: V${String(data.venta.numeroVenta).padStart(4, "0")}`, { x: margin + contentWidth / 2 + 20, y: y - 20, size: 10, font: helvetica, color: textColor })
+  } else {
+    page.drawText("ORDEN DE SERVICIO", { x: margin + contentWidth / 2 + 20, y: y - 5, size: 9, font: helveticaBold, color: primaryColor })
+    page.drawText(`Orden: ${ordenDisplay}`, { x: margin + contentWidth / 2 + 20, y: y - 20, size: 10, font: helvetica, color: textColor })
+    page.drawText(`Dispositivo: ${dispositivo}`, { x: margin + contentWidth / 2 + 20, y: y - 33, size: 9, font: helvetica, color: grayColor })
+  }
 
   y -= clientBoxHeight + 15
 
