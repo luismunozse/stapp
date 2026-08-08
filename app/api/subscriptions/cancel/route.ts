@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { cancelPreApproval } from "@/lib/mercadopago"
 import { cancelRebillSubscription } from "@/lib/rebill"
+import { cancelCreemSubscription } from "@/lib/creem"
 
 export async function POST() {
   try {
@@ -23,13 +24,44 @@ export async function POST() {
       )
     }
 
-    // Cancelar en el proveedor correspondiente
+    // Cancelar en cada proveedor con id registrado, aislando fallos: un id
+    // viejo de un proveedor anterior no debe impedir cancelar en el que
+    // realmente está cobrando.
+    const cancelaciones: Array<[string, () => Promise<unknown>]> = []
     if (subscription.mercadopago_preapproval_id) {
-      await cancelPreApproval(subscription.mercadopago_preapproval_id)
+      cancelaciones.push([
+        "MERCADOPAGO",
+        () => cancelPreApproval(subscription.mercadopago_preapproval_id),
+      ])
+    }
+    if (subscription.rebill_subscription_id) {
+      cancelaciones.push([
+        "REBILL",
+        () => cancelRebillSubscription(subscription.rebill_subscription_id),
+      ])
+    }
+    if (subscription.creem_subscription_id) {
+      cancelaciones.push([
+        "CREEM",
+        () => cancelCreemSubscription(subscription.creem_subscription_id),
+      ])
     }
 
-    if (subscription.rebill_subscription_id) {
-      await cancelRebillSubscription(subscription.rebill_subscription_id)
+    const proveedoresFallidos: string[] = []
+    for (const [proveedor, cancelar] of cancelaciones) {
+      try {
+        await cancelar()
+      } catch (err) {
+        console.error(`Error canceling subscription in ${proveedor}:`, err)
+        proveedoresFallidos.push(proveedor)
+      }
+    }
+
+    if (proveedoresFallidos.length > 0) {
+      return NextResponse.json(
+        { error: "Error al cancelar suscripción", providers: proveedoresFallidos },
+        { status: 500 }
+      )
     }
 
     // Actualizar en base de datos
