@@ -3397,8 +3397,8 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   // caller didn't fetch them) — skip the table entirely and keep the
   // aggregate-only layout below, exactly as before this section existed.
   if (data.items && data.items.length > 0) {
-    page.drawText("DETALLE DE ITEMS", { x: margin, y, size: 10, font: helveticaBold, color: MONO.label })
-    y -= 5
+    drawSectionLabel(page, helveticaBold, "DETALLE DE ITEMS", margin, y)
+    y -= 4
     drawRule(page, margin, width - margin, y)
     y -= 20
 
@@ -3432,8 +3432,8 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   }
 
   // === DETALLE DE MONTOS ===
-  page.drawText("DETALLE", { x: margin, y, size: 10, font: helveticaBold, color: MONO.label })
-  y -= 5
+  drawSectionLabel(page, helveticaBold, "DETALLE", margin, y)
+  y -= 4
   drawRule(page, margin, width - margin, y) // hairline above the label:value block
   y -= 20
 
@@ -3483,8 +3483,8 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   // === ESTADO DE PAGO ===
   const estadoLabel = estadoPagoLabels[data.estadoPago] || data.estadoPago
 
-  page.drawText("ESTADO DE PAGO", { x: margin, y, size: 10, font: helveticaBold, color: MONO.label })
-  y -= 5
+  drawSectionLabel(page, helveticaBold, "ESTADO DE PAGO", margin, y)
+  y -= 4
   drawRule(page, margin, width - margin, y)
   y -= 20
 
@@ -3502,8 +3502,8 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
 
   // === HISTORIAL DE PAGOS ===
   if (data.pagos && data.pagos.length > 0) {
-    page.drawText("HISTORIAL DE PAGOS", { x: margin, y, size: 10, font: helveticaBold, color: MONO.label })
-    y -= 5
+    drawSectionLabel(page, helveticaBold, "HISTORIAL DE PAGOS", margin, y)
+    y -= 4
     drawRule(page, margin, width - margin, y)
     y -= 20
 
