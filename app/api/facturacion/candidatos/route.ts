@@ -1,27 +1,43 @@
 import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { sucursalParaLectura } from "@/lib/sucursal"
 
 export async function GET(request: Request) {
   try {
-    const { error, organizationId } = await requireAdmin()
+    const { error, organizationId, session, role } = await requireAdmin()
     if (error) return error
 
-    const { data: ordenes, error: ordenesError } = await supabaseAdmin
+    const filtro = await sucursalParaLectura({
+      role,
+      userSucursalId: session!.user.sucursalId ?? null,
+    })
+    const sid = filtro.verTodas ? null : filtro.sucursalId
+
+    let ordenesQuery = supabaseAdmin
       .from("ordenes_servicio")
       .select("id, numero_orden, codigo_orden, dispositivo, clientes (nombre), facturas (id)")
       .eq("organization_id", organizationId!)
       .in("estado", ["REPARADO", "ENTREGADO"])
+
+    let ventasQuery = supabaseAdmin
+      .from("ventas")
+      .select("id, numero_venta, cliente_nombre, total, facturas (id)")
+      .eq("organization_id", organizationId!)
+      .eq("estado", "COMPLETADA")
+
+    if (sid) {
+      ordenesQuery = ordenesQuery.eq("sucursal_id", sid)
+      ventasQuery = ventasQuery.eq("sucursal_id", sid)
+    }
+
+    const { data: ordenes, error: ordenesError } = await ordenesQuery
       .order("fecha_ingreso", { ascending: false })
       .limit(200)
 
     if (ordenesError) throw ordenesError
 
-    const { data: ventas, error: ventasError } = await supabaseAdmin
-      .from("ventas")
-      .select("id, numero_venta, cliente_nombre, total, facturas (id)")
-      .eq("organization_id", organizationId!)
-      .eq("estado", "COMPLETADA")
+    const { data: ventas, error: ventasError } = await ventasQuery
       .order("created_at", { ascending: false })
       .limit(200)
 
