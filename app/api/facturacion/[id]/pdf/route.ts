@@ -118,7 +118,7 @@ export async function GET(
         .select(`
           *,
           ventas!inner (
-            id, numero_venta, cliente_nombre, organization_id, sucursal_id,
+            id, numero_venta, cliente_nombre, descuento, redondeo_monto, organization_id, sucursal_id,
             organizations (nombre, nombre_mostrar, telefono, direccion, logo_url, moneda, zona_horaria)
           ),
           pagos_parciales (*)
@@ -138,6 +138,8 @@ export async function GET(
         estadoPago: factura.estado_pago,
         cliente: { nombre: factura.ventas.cliente_nombre || "Consumidor Final" },
         venta: { numeroVenta: factura.ventas.numero_venta },
+        descuento: parseFloat(factura.ventas.descuento || "0"),
+        redondeo: parseFloat(factura.ventas.redondeo_monto || "0"),
         items,
         subtotal: parseFloat(factura.subtotal),
         iva: parseFloat(factura.iva),

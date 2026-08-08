@@ -3196,6 +3196,9 @@ interface FacturaPDFData {
   venta?: {
     numeroVenta: number
   }
+  // venta-sourced only — orden-sourced facturas have no discount concept.
+  descuento?: number
+  redondeo?: number
   items?: Array<{
     descripcion: string
     cantidad: number
@@ -3466,6 +3469,25 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   if (data.iva > 0) {
     page.drawText("IVA", { x: margin + 10, y, size: 10, font: helvetica, color: textColor })
     page.drawText(formatCurrencyPDF(data.iva), { x: width - margin - 100, y, size: 10, font: helvetica, color: textColor })
+    y -= 18
+    page.drawLine({ start: { x: margin, y: y + 5 }, end: { x: width - margin, y: y + 5 }, thickness: 0.5, color: lightGray })
+  }
+
+  // Descuento (venta-sourced only; PDF-display only, never recomputed —
+  // data.total already has it baked in). Matches the "-amount" / red
+  // convention used by the venta ticket, see components/pos/pos-ticket-share.tsx.
+  if (data.descuento && data.descuento > 0) {
+    page.drawText("Descuento", { x: margin + 10, y, size: 10, font: helvetica, color: redColor })
+    page.drawText(`-${formatCurrencyPDF(data.descuento)}`, { x: width - margin - 100, y, size: 10, font: helvetica, color: redColor })
+    y -= 18
+    page.drawLine({ start: { x: margin, y: y + 5 }, end: { x: width - margin, y: y + 5 }, thickness: 0.5, color: lightGray })
+  }
+
+  // Redondeo (venta-sourced only; can be positive or negative). Matches the
+  // "+/-amount" / muted-gray convention from components/pos/pos-ticket-share.tsx.
+  if (data.redondeo && data.redondeo !== 0) {
+    page.drawText("Redondeo", { x: margin + 10, y, size: 10, font: helvetica, color: grayColor })
+    page.drawText(`${data.redondeo >= 0 ? "+" : ""}${formatCurrencyPDF(data.redondeo)}`, { x: width - margin - 100, y, size: 10, font: helvetica, color: grayColor })
     y -= 18
     page.drawLine({ start: { x: margin, y: y + 5 }, end: { x: width - margin, y: y + 5 }, thickness: 0.5, color: lightGray })
   }

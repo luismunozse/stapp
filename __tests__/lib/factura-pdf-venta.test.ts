@@ -97,4 +97,56 @@ describe("generateFacturaPDF — venta origin", () => {
     expect(text).toContain("BATERIA GALAXYX10")
     expect(text).toContain("SERVICIO DIAGNOSTICO")
   })
+
+  it("shows Descuento and Redondeo lines for a venta invoice with a discount, and the numbers reconcile", async () => {
+    const subtotal = 200
+    const descuento = 20
+    const redondeo = 0.5
+    const iva = 0
+    const total = subtotal - descuento + redondeo + iva
+    // Sanity check on the fixture itself: subtotal - descuento + redondeo + iva == total.
+    expect(total).toBe(180.5)
+
+    const buffer = await generateFacturaPDF({
+      numeroFactura: "0001-00000005",
+      fecha: new Date("2026-01-05"),
+      estadoPago: "PAGADO",
+      cliente: { nombre: "Consumidor Final" },
+      venta: { numeroVenta: 7 },
+      descuento,
+      redondeo,
+      subtotal,
+      iva,
+      total,
+      montoAbonado: total,
+      pagos: [],
+    } as any)
+
+    expect(buffer.length).toBeGreaterThan(0)
+    const text = await extractPdfText(buffer)
+    expect(text).toContain("Descuento")
+    expect(text).toContain("Redondeo")
+  })
+
+  it("does not show a Descuento line for a venta invoice without a discount", async () => {
+    const buffer = await generateFacturaPDF({
+      numeroFactura: "0001-00000006",
+      fecha: new Date("2026-01-06"),
+      estadoPago: "PAGADO",
+      cliente: { nombre: "Consumidor Final" },
+      venta: { numeroVenta: 8 },
+      descuento: 0,
+      redondeo: 0,
+      subtotal: 200,
+      iva: 0,
+      total: 200,
+      montoAbonado: 200,
+      pagos: [],
+    } as any)
+
+    expect(buffer.length).toBeGreaterThan(0)
+    const text = await extractPdfText(buffer)
+    expect(text).not.toContain("Descuento")
+    expect(text).not.toContain("Redondeo")
+  })
 })
