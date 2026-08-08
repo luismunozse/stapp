@@ -485,6 +485,10 @@ export function RecepcionForm() {
                 onRemoveFoto={(id) => removeFoto(index, id)}
                 onFotoDescripcionChange={(id, value) => updateFotoDescripcion(index, id, value)}
                 labelFotos={`Fotos del ${term("equipo")} (Ingreso)`}
+                codigoAcceso={watch(`equipos.${index}.codigoAccesoDispositivo`) || ""}
+                onCodigoAccesoChange={(value) =>
+                  setValue(`equipos.${index}.codigoAccesoDispositivo`, value)
+                }
               />
             ))}
           </div>
