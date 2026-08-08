@@ -98,3 +98,61 @@ describe("DELETE /api/facturacion/[id] — venta origin", () => {
     expect(body.success).toBe(true)
   })
 })
+
+// ─── Org scoping enforced inside fetchFacturaConOrigen ─────────────────────
+//
+// supabaseAdmin is service-role (RLS bypassed), so the org filter must be
+// baked into the branch query itself, not just checked by the caller after
+// the fact. These tests assert the filter actually reaches each branch
+// query's `.eq(...)` calls (same style as facturacion-listado-mixto.test.ts)
+// and that a cross-org id resolves to 404 rather than leaking the row.
+describe("GET /api/facturacion/[id] — org scoping enforced inside the helper", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("applies the org filter to the orden branch query and 404s on a cross-org id", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+
+    const baseChain = createChainMock({ id: "f-orden-1", orden_id: "o1", venta_id: null })
+    // Simulates PostgREST excluding the row because the org filter doesn't
+    // match — a cross-org access attempt never resolves a row at all.
+    const branchChain = createChainMock(null, { message: "not found" })
+
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "facturas") {
+        const callIndex = vi.mocked(supabaseAdmin.from).mock.calls.length
+        return (callIndex === 1 ? baseChain : branchChain) as any
+      }
+      return createChainMock(null, { message: `No mock for table: ${table}` }) as any
+    })
+
+    const res = await facturaGet(
+      createGetRequest("http://localhost:3000/api/facturacion/f-orden-1"),
+      { params: Promise.resolve({ id: "f-orden-1" }) }
+    )
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(404)
+    expect(branchChain.eq.mock.calls).toContainEqual(["ordenes_servicio.organization_id", "org-1"])
+  })
+
+  it("applies the org filter to the venta branch query and 404s on a cross-org id", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+
+    const baseChain = createChainMock({ id: "f-venta-1", orden_id: null, venta_id: "v1" })
+    const branchChain = createChainMock(null, { message: "not found" })
+
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "facturas") {
+        const callIndex = vi.mocked(supabaseAdmin.from).mock.calls.length
+        return (callIndex === 1 ? baseChain : branchChain) as any
+      }
+      return createChainMock(null, { message: `No mock for table: ${table}` }) as any
+    })
+
+    const res = await facturaGet(createGetRequest("http://localhost:3000/api/facturacion/f-venta-1"), { params })
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(404)
+    expect(branchChain.eq.mock.calls).toContainEqual(["ventas.organization_id", "org-1"])
+  })
+})

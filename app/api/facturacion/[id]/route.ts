@@ -29,9 +29,17 @@ function isFunctionMissingError(err: unknown): boolean {
 // branch-specific `!inner` fetch) instead of a single dual-left-join query,
 // for the same reason as GET /api/facturacion (see Task 3): embedded filters
 // don't turn a left-embed into an inner join on the parent row.
+//
+// `organizationId` is mandatory and is enforced INSIDE both branch queries
+// (`.eq("ordenes_servicio.organization_id", ...)` / `.eq("ventas.organization_id", ...)`),
+// mirroring app/api/facturacion/route.ts. supabaseAdmin is service-role and
+// bypasses RLS, so this is the only backstop against a cross-org row — a
+// caller-side comparison after the fact is not enough, since it's easy for a
+// future caller to forget it.
 // ---------------------------------------------------------------------------
 async function fetchFacturaConOrigen(
   id: string,
+  organizationId: string,
   opts?: { sid?: string | null }
 ): Promise<{ origen: "orden" | "venta"; organizationId: string; factura: any } | null> {
   const { data: base, error: baseError } = await supabaseAdmin
@@ -59,6 +67,7 @@ async function fetchFacturaConOrigen(
         pagos_parciales (*)
       `)
       .eq("id", id)
+      .eq("ordenes_servicio.organization_id", organizationId)
     if (opts?.sid) query = query.eq("ordenes_servicio.sucursal_id", opts.sid)
     const { data, error } = await query.single()
     if (error || !data) return null
@@ -80,6 +89,7 @@ async function fetchFacturaConOrigen(
       pagos_parciales (*)
     `)
     .eq("id", id)
+    .eq("ventas.organization_id", organizationId)
   if (opts?.sid) query = query.eq("ventas.sucursal_id", opts.sid)
   const { data, error } = await query.single()
   if (error || !data) return null
@@ -153,7 +163,7 @@ export async function GET(
     const sid = filtro.verTodas ? null : filtro.sucursalId
 
     const { id } = await params
-    const result = await fetchFacturaConOrigen(id, { sid })
+    const result = await fetchFacturaConOrigen(id, organizationId!, { sid })
 
     if (!result || result.organizationId !== organizationId) {
       return NextResponse.json({ error: "Factura no encontrada" }, { status: 404 })
@@ -243,7 +253,7 @@ async function handleAnularFactura(opts: {
 
   if (!rpcError) {
     // Fetch and return the updated factura (same shape as before)
-    return await fetchAndReturnFactura(id)
+    return await fetchAndReturnFactura(id, organizationId)
   }
 
   if (isFunctionMissingError(rpcError)) {
@@ -341,14 +351,14 @@ async function anularFacturaJsFallback(opts: {
     return NextResponse.json({ error: "Error al anular factura" }, { status: 500 })
   }
 
-  return await fetchAndReturnFactura(id)
+  return await fetchAndReturnFactura(id, organizationId)
 }
 
 // ---------------------------------------------------------------------------
 // fetchAndReturnFactura — re-reads the factura and returns the standard shape
 // ---------------------------------------------------------------------------
-async function fetchAndReturnFactura(id: string): Promise<NextResponse> {
-  const result = await fetchFacturaConOrigen(id)
+async function fetchAndReturnFactura(id: string, organizationId: string): Promise<NextResponse> {
+  const result = await fetchFacturaConOrigen(id, organizationId)
   if (!result) {
     return NextResponse.json({ error: "Factura no encontrada" }, { status: 404 })
   }
@@ -372,7 +382,7 @@ export async function DELETE(
 
     const { id } = await params
 
-    const result = await fetchFacturaConOrigen(id)
+    const result = await fetchFacturaConOrigen(id, organizationId!)
     if (!result) {
       return NextResponse.json({ error: "Factura no encontrada" }, { status: 404 })
     }
