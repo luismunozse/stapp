@@ -10,6 +10,7 @@
 import { describe, it, expect } from "vitest"
 import { mkdirSync, writeFileSync } from "node:fs"
 import { generateOrdenPDF, generateFacturaPDF } from "@/lib/pdf"
+import { buildOrdenFixture } from "./lib/orden-fixture"
 
 const OUT_DIR = ".tmp-preview/pdf-samples"
 const TAG = process.env.PDF_SAMPLES_TAG ?? "after"
@@ -18,46 +19,7 @@ describe.runIf(process.env.PDF_SAMPLES === "1")("pdf visual samples", () => {
   it("writes orden and remito sample PDFs", async () => {
     mkdirSync(OUT_DIR, { recursive: true })
 
-    const orden = await generateOrdenPDF({
-      numeroOrden: 1042,
-      fechaIngreso: new Date(),
-      cliente: {
-        nombre: "Juan Pérez",
-        telefono: "+54 9 11 2345-6789",
-        email: "juan.perez@example.com",
-        direccion: "Av. Corrientes 1234, CABA",
-      },
-      dispositivo: "iPhone 13",
-      tipoDispositivo: "CELULAR",
-      marca: "Apple",
-      color: "Negro",
-      imei: "358400123456789",
-      problemaReportado:
-        "El equipo no enciende desde que se mojó levemente con la lluvia. Además, la pantalla parpadea de forma intermitente cada vez que se intenta reiniciarlo.",
-      accesorios: "Cargador, funda, chip claro",
-      codigoAccesoDispositivo: "Patrón: 1-2-5-8-9",
-      presupuesto: 45000,
-      sena: 10000,
-      metodoPagoSena: "EFECTIVO",
-      observaciones: "El cliente solicita que se lo contacte únicamente por WhatsApp.",
-      nombreEmpresa: "Servicio Técnico Demo",
-      telefonoEmpresa: "+54 11 4000-1234",
-      direccionEmpresa: "Av. Rivadavia 5000, CABA",
-      moneda: "ARS",
-      zonaHoraria: "America/Argentina/Buenos_Aires",
-      estado: "RECIBIDO",
-      publicToken: "sample-public-token-1234",
-      baseUrl: "https://demo.stapp.com.ar",
-      checklistItems: [
-        { label: "Pantalla táctil funciona", valor: true },
-        { label: "Botón de encendido funciona", valor: true },
-        { label: "Cámara trasera funciona", valor: false },
-        { label: "Puerto de carga funciona", valor: false },
-        { label: "Estado de la carcasa", valor: "Rayones leves en el borde superior" },
-        { label: "Accesorios entregados por el cliente", valor: "Cargador original, funda transparente" },
-      ],
-      checklistNotas: "El cliente indica que el equipo se reinicia solo al usar la cámara.",
-    })
+    const orden = await generateOrdenPDF(buildOrdenFixture())
     writeFileSync(`${OUT_DIR}/${TAG}-orden.pdf`, orden)
     expect(orden.length).toBeGreaterThan(1000)
 
