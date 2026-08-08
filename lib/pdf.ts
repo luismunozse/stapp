@@ -1416,8 +1416,10 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const displayedTerminos = terminosWrapped.slice(0, 8)
   const terminosBoxHeight = 14 + displayedTerminos.length * 10 + 4
 
-  // Terminos fluye directamente desde y — sin caja, mismos tamaños que antes
-  drawSectionLabel(page, helveticaBold, "Términos y condiciones", margin + 10, y - 11)
+  // Terminos fluye directamente desde y — sin caja, mismos tamaños que antes.
+  // No usa drawSectionLabel porque esa fine-print entera (heading + líneas) va
+  // en MONO.faint, no en MONO.label (que drawSectionLabel no permite anular).
+  page.drawText("TÉRMINOS Y CONDICIONES", { x: margin + 10, y: y - 11, size: TYPE.sectionLabel, font: helveticaBold, color: MONO.faint })
 
   let termY = y - 23
   displayedTerminos.forEach(t => {
