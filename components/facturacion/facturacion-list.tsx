@@ -414,7 +414,7 @@ export function FacturacionList() {
                         onClick={() => window.open(`/api/facturacion/${factura.id}/pdf`, "_blank")}
                       >
                         <Eye className="mr-2 h-4 w-4" />
-                        Ver Factura
+                        Ver PDF
                       </Button>
                       <PaymentStatusBadge status={factura.estadoPago} showIcon />
                     </div>
