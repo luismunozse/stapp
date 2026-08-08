@@ -53,7 +53,7 @@ Replace the `ordenes_servicio!inner` join with left joins to both `ordenes_servi
 
 ### `GET /api/facturacion/[id]/pdf`
 
-`generateFacturaPDF` learns to render venta invoices: client block from `ventas.cliente_nombre` (may be "Consumidor Final"), items from the snapshot, same layout and title otherwise.
+`generateFacturaPDF` learns to render venta invoices: client block from `ventas.cliente_nombre` (may be "Consumidor Final"), same title and totals layout. Line items: implementation revealed the existing factura PDF never itemized (aggregate totals only, for orden invoices too); decision during execution (2026-08-08) — the PDF now renders `items_factura` rows for BOTH origins, skipping the table when a factura has no items (legacy rows). Totals keep coming from the `facturas` row, never recomputed.
 
 ## UI
 

@@ -26,7 +26,8 @@ export async function GET(
         items_venta (*, inventario (*)),
         garantias_venta (*),
         pagos_venta (*),
-        devoluciones_venta (*, items_devolucion(*))
+        devoluciones_venta (*, items_devolucion(*)),
+        facturas (id)
       `)
       .eq("id", id)
       .eq("organization_id", organizationId!)

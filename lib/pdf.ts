@@ -3188,11 +3188,23 @@ interface FacturaPDFData {
     email?: string | null
     direccion?: string | null
   }
-  orden: {
+  orden?: {
     numeroOrden: number
     codigoOrden?: string | null
     dispositivo: string
   }
+  venta?: {
+    numeroVenta: number
+  }
+  // venta-sourced only — orden-sourced facturas have no discount concept.
+  descuento?: number
+  redondeo?: number
+  items?: Array<{
+    descripcion: string
+    cantidad: number
+    precioUnitario: number
+    subtotal: number
+  }>
   subtotal: number
   iva: number
   total: number
@@ -3247,8 +3259,10 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   const clienteTelefono = safe(data.cliente?.telefono)
   const clienteEmail = safe(data.cliente?.email)
   const clienteDireccion = safe(data.cliente?.direccion)
-  const ordenDisplay = data.orden.codigoOrden || `#${String(data.orden.numeroOrden).padStart(4, "0")}`
-  const dispositivo = safe(data.orden.dispositivo)
+  const ordenDisplay = data.orden
+    ? data.orden.codigoOrden || `#${String(data.orden.numeroOrden).padStart(4, "0")}`
+    : ""
+  const dispositivo = data.orden ? safe(data.orden.dispositivo) : ""
   const pendiente = data.total - (data.montoAbonado || 0)
 
   // Crear documento PDF
@@ -3382,13 +3396,56 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     page.drawText(clienteEmail, { x: margin + 10, y: clientY, size: 9, font: helvetica, color: grayColor })
   }
 
-  // === DATOS DE LA ORDEN ===
+  // === DATOS DE LA ORDEN / VENTA ===
   page.drawRectangle({ x: margin + contentWidth / 2 + 10, y: y - clientBoxHeight + 10, width: contentWidth / 2 - 10, height: clientBoxHeight, color: bgGray })
-  page.drawText("ORDEN DE SERVICIO", { x: margin + contentWidth / 2 + 20, y: y - 5, size: 9, font: helveticaBold, color: primaryColor })
-  page.drawText(`Orden: ${ordenDisplay}`, { x: margin + contentWidth / 2 + 20, y: y - 20, size: 10, font: helvetica, color: textColor })
-  page.drawText(`Dispositivo: ${dispositivo}`, { x: margin + contentWidth / 2 + 20, y: y - 33, size: 9, font: helvetica, color: grayColor })
+  if (data.venta) {
+    page.drawText("VENTA", { x: margin + contentWidth / 2 + 20, y: y - 5, size: 9, font: helveticaBold, color: primaryColor })
+    page.drawText(`Venta: V${String(data.venta.numeroVenta).padStart(4, "0")}`, { x: margin + contentWidth / 2 + 20, y: y - 20, size: 10, font: helvetica, color: textColor })
+  } else {
+    page.drawText("ORDEN DE SERVICIO", { x: margin + contentWidth / 2 + 20, y: y - 5, size: 9, font: helveticaBold, color: primaryColor })
+    page.drawText(`Orden: ${ordenDisplay}`, { x: margin + contentWidth / 2 + 20, y: y - 20, size: 10, font: helvetica, color: textColor })
+    page.drawText(`Dispositivo: ${dispositivo}`, { x: margin + contentWidth / 2 + 20, y: y - 33, size: 9, font: helvetica, color: grayColor })
+  }
 
   y -= clientBoxHeight + 15
+
+  // === TABLA DE ITEMS ===
+  // Old facturas may have no items_factura rows (pre-dates this table, or the
+  // caller didn't fetch them) — skip the table entirely and keep the
+  // aggregate-only layout below, exactly as before this section existed.
+  if (data.items && data.items.length > 0) {
+    page.drawText("DETALLE DE ITEMS", { x: margin, y, size: 10, font: helveticaBold, color: primaryColor })
+    y -= 5
+    page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 1, color: lightGray })
+    y -= 20
+
+    // Header de tabla
+    page.drawRectangle({ x: margin, y: y - 5, width: contentWidth, height: 22, color: primaryColor })
+    page.drawText("Descripción", { x: margin + 10, y, size: 9, font: helveticaBold, color: white })
+    page.drawText("Cant.", { x: margin + 280, y, size: 9, font: helveticaBold, color: white })
+    page.drawText("Precio", { x: margin + 330, y, size: 9, font: helveticaBold, color: white })
+    page.drawText("Subtotal", { x: margin + 410, y, size: 9, font: helveticaBold, color: white })
+    y -= 25
+
+    // Filas de items
+    for (const item of data.items) {
+      page.drawText(safe(item.descripcion).substring(0, 40), { x: margin + 10, y, size: 9, font: helvetica, color: textColor })
+      page.drawText(String(item.cantidad), { x: margin + 285, y, size: 9, font: helvetica, color: textColor })
+      page.drawText(formatCurrencyPDF(item.precioUnitario), { x: margin + 330, y, size: 9, font: helvetica, color: textColor })
+      page.drawText(formatCurrencyPDF(item.subtotal), { x: margin + 410, y, size: 9, font: helvetica, color: textColor })
+      y -= 18
+      page.drawLine({ start: { x: margin, y: y + 5 }, end: { x: width - margin, y: y + 5 }, thickness: 0.5, color: lightGray })
+
+      // Same overflow guard as HISTORIAL DE PAGOS below: this is a single,
+      // fixed A4 page — stop drawing rows rather than overlapping the totals
+      // block once we run low on vertical space.
+      if (y < margin + 80) {
+        break
+      }
+    }
+
+    y -= 15
+  }
 
   // === DETALLE DE MONTOS ===
   page.drawText("DETALLE", { x: margin, y, size: 10, font: helveticaBold, color: primaryColor })
@@ -3412,6 +3469,25 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   if (data.iva > 0) {
     page.drawText("IVA", { x: margin + 10, y, size: 10, font: helvetica, color: textColor })
     page.drawText(formatCurrencyPDF(data.iva), { x: width - margin - 100, y, size: 10, font: helvetica, color: textColor })
+    y -= 18
+    page.drawLine({ start: { x: margin, y: y + 5 }, end: { x: width - margin, y: y + 5 }, thickness: 0.5, color: lightGray })
+  }
+
+  // Descuento (venta-sourced only; PDF-display only, never recomputed —
+  // data.total already has it baked in). Matches the "-amount" / red
+  // convention used by the venta ticket, see components/pos/pos-ticket-share.tsx.
+  if (data.descuento && data.descuento > 0) {
+    page.drawText("Descuento", { x: margin + 10, y, size: 10, font: helvetica, color: redColor })
+    page.drawText(`-${formatCurrencyPDF(data.descuento)}`, { x: width - margin - 100, y, size: 10, font: helvetica, color: redColor })
+    y -= 18
+    page.drawLine({ start: { x: margin, y: y + 5 }, end: { x: width - margin, y: y + 5 }, thickness: 0.5, color: lightGray })
+  }
+
+  // Redondeo (venta-sourced only; can be positive or negative). Matches the
+  // "+/-amount" / muted-gray convention from components/pos/pos-ticket-share.tsx.
+  if (data.redondeo && data.redondeo !== 0) {
+    page.drawText("Redondeo", { x: margin + 10, y, size: 10, font: helvetica, color: grayColor })
+    page.drawText(`${data.redondeo >= 0 ? "+" : ""}${formatCurrencyPDF(data.redondeo)}`, { x: width - margin - 100, y, size: 10, font: helvetica, color: grayColor })
     y -= 18
     page.drawLine({ start: { x: margin, y: y + 5 }, end: { x: width - margin, y: y + 5 }, thickness: 0.5, color: lightGray })
   }

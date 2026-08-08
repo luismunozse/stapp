@@ -40,6 +40,15 @@ export function transformToSnakeCase<T extends Record<string, any>>(obj: T): any
   return result
 }
 
+// PostgREST returns a reverse embed over a UNIQUE FK (one-to-one relationship
+// detection, e.g. `facturas (id)` embedded via `facturas.venta_id`/`orden_id`)
+// as a single object instead of an array. Normalize either shape to an array
+// so callers can safely use `.length` / `[0]` regardless of which shape came
+// back.
+export function toArray<T>(value: T | T[] | null | undefined): T[] {
+  return Array.isArray(value) ? value : value ? [value] : []
+}
+
 // Mapeo específico para órdenes (incluye relaciones)
 export function formatOrden(orden: any) {
   if (!orden) return null
@@ -278,6 +287,7 @@ export function formatVenta(venta: any) {
       (a: any, b: any) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
     ) || [],
     devoluciones: venta.devoluciones_venta?.map(formatDevolucion) || [],
+    facturaId: toArray(venta.facturas)[0]?.id ?? null,
   }
 }
 

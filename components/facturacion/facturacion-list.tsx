@@ -3,10 +3,11 @@
 import { useState, useMemo } from "react"
 import useSWR from "swr"
 import { useSession } from "next-auth/react"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { PaymentStatusBadge } from "@/components/ui/badge"
+import { Badge, PaymentStatusBadge } from "@/components/ui/badge"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import {
   FileText,
@@ -29,6 +30,7 @@ import {
 import { useCurrency } from "@/contexts/currency-context"
 import { PagoForm } from "./pago-form"
 import { PagosHistorial } from "./pagos-historial"
+import { GenerarFacturaModal } from "./generar-factura-modal"
 
 type EstadoPagoType = "PENDIENTE" | "PAGADO_PARCIAL" | "PAGADO" | "ANULADA" | ""
 
@@ -45,6 +47,7 @@ export function FacturacionList() {
   const [selectedFactura, setSelectedFactura] = useState<any>(null)
   const [actionLoading, setActionLoading] = useState(false)
   const [viewMode, setViewMode] = useState<"detail" | "list">("detail")
+  const [showGenerarModal, setShowGenerarModal] = useState(false)
 
   const fetcher = (url: string) => fetch(url).then(res => res.json())
   const apiUrl = useMemo(() => {
@@ -151,6 +154,10 @@ export function FacturacionList() {
             <SelectItem value="ANULADA">Anulada</SelectItem>
           </SelectContent>
         </Select>
+        <Button onClick={() => setShowGenerarModal(true)}>
+          <Plus className="mr-2 h-4 w-4" />
+          Generar factura
+        </Button>
         <div className="flex border rounded-lg overflow-hidden ml-auto">
           <Button
             variant={viewMode === "detail" ? "default" : "ghost"}
@@ -185,7 +192,7 @@ export function FacturacionList() {
               <thead className="sticky top-[calc(3.5rem+env(safe-area-inset-top,0px))] sm:top-0 z-10 bg-background">
                 <tr className="border-b bg-muted/50">
                   <th className="text-left p-3 font-medium">Factura</th>
-                  <th className="text-left p-3 font-medium">Orden</th>
+                  <th className="text-left p-3 font-medium">Origen</th>
                   <th className="text-left p-3 font-medium hidden sm:table-cell">Cliente</th>
                   <th className="text-left p-3 font-medium hidden md:table-cell">Fecha</th>
                   <th className="text-right p-3 font-medium">Total</th>
@@ -205,9 +212,24 @@ export function FacturacionList() {
                       <tr key={factura.id} className="border-b hover:bg-muted/30 transition-colors">
                         <td className="p-3 font-medium">{factura.numeroFactura}</td>
                         <td className="p-3 text-muted-foreground">
-                          {factura.orden.codigoOrden || `#${factura.orden.numeroOrden}`}
+                          <div className="flex items-center gap-2">
+                            <Badge variant={factura.origen === "venta" ? "infoSoft" : "outline"}>
+                              {factura.origen === "venta" ? "Venta" : "Orden"}
+                            </Badge>
+                            {factura.origen === "venta" ? (
+                              <Link href={`/ventas/${factura.venta.id}`} className="hover:underline">
+                                V{String(factura.venta.numeroVenta).padStart(4, "0")}
+                              </Link>
+                            ) : (
+                              <Link href={`/ordenes/${factura.orden.id}`} className="hover:underline">
+                                {factura.orden.codigoOrden || `#${factura.orden.numeroOrden}`}
+                              </Link>
+                            )}
+                          </div>
                         </td>
-                        <td className="p-3 hidden sm:table-cell">{factura.orden.cliente.nombre}</td>
+                        <td className="p-3 hidden sm:table-cell">
+                          {factura.origen === "venta" ? factura.venta.clienteNombre : factura.orden.cliente.nombre}
+                        </td>
                         <td className="p-3 hidden md:table-cell text-muted-foreground">{formatDate(factura.fecha)}</td>
                         <td className="p-3 text-right font-medium">{formatPrice(factura.total)}</td>
                         <td className="p-3 text-right hidden sm:table-cell">
@@ -234,7 +256,7 @@ export function FacturacionList() {
                                   <Eye className="h-4 w-4 mr-2" />
                                   Ver PDF
                                 </DropdownMenuItem>
-                                {factura.estadoPago !== "PAGADO" && factura.estadoPago !== "ANULADA" && (
+                                {factura.origen !== "venta" && factura.estadoPago !== "PAGADO" && factura.estadoPago !== "ANULADA" && (
                                   <DropdownMenuItem
                                     onClick={() => setShowPagoForm(showingPagoForm ? null : factura.id)}
                                   >
@@ -242,7 +264,7 @@ export function FacturacionList() {
                                     Registrar pago
                                   </DropdownMenuItem>
                                 )}
-                                {factura.pagos && factura.pagos.length > 0 && (
+                                {factura.origen !== "venta" && factura.pagos && factura.pagos.length > 0 && (
                                   <DropdownMenuItem
                                     onClick={() => toggleExpanded(factura.id)}
                                   >
@@ -282,7 +304,7 @@ export function FacturacionList() {
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
-                            {factura.estadoPago !== "PAGADO" && factura.estadoPago !== "ANULADA" && (
+                            {factura.origen !== "venta" && factura.estadoPago !== "PAGADO" && factura.estadoPago !== "ANULADA" && (
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -292,7 +314,7 @@ export function FacturacionList() {
                                 <Plus className="h-4 w-4" />
                               </Button>
                             )}
-                            {factura.pagos && factura.pagos.length > 0 && (
+                            {factura.origen !== "venta" && factura.pagos && factura.pagos.length > 0 && (
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -370,8 +392,19 @@ export function FacturacionList() {
                         <FileText className="h-5 w-5" />
                         Factura {factura.numeroFactura}
                       </CardTitle>
-                      <div className="text-sm text-muted-foreground mt-1">
-                        Orden {factura.orden.codigoOrden || `#${factura.orden.numeroOrden}`} - {factura.orden.cliente.nombre}
+                      <div className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
+                        <Badge variant={factura.origen === "venta" ? "infoSoft" : "outline"}>
+                          {factura.origen === "venta" ? "Venta" : "Orden"}
+                        </Badge>
+                        {factura.origen === "venta" ? (
+                          <Link href={`/ventas/${factura.venta.id}`} className="hover:underline">
+                            V{String(factura.venta.numeroVenta).padStart(4, "0")} - {factura.venta.clienteNombre}
+                          </Link>
+                        ) : (
+                          <Link href={`/ordenes/${factura.orden.id}`} className="hover:underline">
+                            {factura.orden.codigoOrden || `#${factura.orden.numeroOrden}`} - {factura.orden.cliente.nombre}
+                          </Link>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -414,7 +447,7 @@ export function FacturacionList() {
                   </div>
 
                   {/* Balance pendiente */}
-                  {factura.estadoPago !== "PAGADO" && factura.estadoPago !== "ANULADA" && (
+                  {factura.origen !== "venta" && factura.estadoPago !== "PAGADO" && factura.estadoPago !== "ANULADA" && (
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 border border-dashed rounded-lg">
                       <div>
                         <div className="text-sm text-muted-foreground">Pendiente de pago</div>
@@ -449,7 +482,7 @@ export function FacturacionList() {
                   )}
 
                   {/* Historial de pagos */}
-                  {factura.pagos && factura.pagos.length > 0 && (
+                  {factura.origen !== "venta" && factura.pagos && factura.pagos.length > 0 && (
                     <div>
                       <Button
                         variant="ghost"
@@ -519,6 +552,12 @@ export function FacturacionList() {
         variant="warning"
         loading={actionLoading}
         onConfirm={handleVoid}
+      />
+
+      <GenerarFacturaModal
+        open={showGenerarModal}
+        onOpenChange={setShowGenerarModal}
+        onSuccess={() => mutate()}
       />
     </div>
   )
