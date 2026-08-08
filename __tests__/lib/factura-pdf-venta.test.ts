@@ -149,4 +149,50 @@ describe("generateFacturaPDF — venta origin", () => {
     expect(text).not.toContain("Descuento")
     expect(text).not.toContain("Redondeo")
   })
+
+  it("titles the document REMITO and drops the FACTURA name", async () => {
+    const buffer = await generateFacturaPDF({
+      numeroFactura: "0001-00000002",
+      fecha: new Date("2026-01-02"),
+      estadoPago: "PAGADO",
+      cliente: { nombre: "Consumidor Final" },
+      venta: { numeroVenta: 5 },
+      subtotal: 200,
+      iva: 0,
+      total: 200,
+      montoAbonado: 200,
+      pagos: [],
+    } as any)
+
+    const text = await extractPdfText(buffer)
+    expect(text).toContain("REMITO")
+    expect(text).not.toContain("FACTURA") // uppercase check: lowercase "facturación" elsewhere is fine
+  })
+
+  it("keeps key sections after the restyle", async () => {
+    const buffer = await generateFacturaPDF({
+      numeroFactura: "0001-00000003",
+      fecha: new Date("2026-01-03"),
+      estadoPago: "PAGADO",
+      cliente: { nombre: "Consumidor Final" },
+      venta: { numeroVenta: 6 },
+      items: [
+        { descripcion: "PANTALLA XPHONE12", cantidad: 1, precioUnitario: 150, subtotal: 150 },
+        { descripcion: "MANO DE OBRA REPARACION", cantidad: 1, precioUnitario: 50, subtotal: 50 },
+      ],
+      subtotal: 200,
+      iva: 0,
+      total: 200,
+      montoAbonado: 200,
+      pagos: [
+        { monto: 200, metodoPago: "EFECTIVO", fecha: new Date("2026-01-03") },
+      ],
+    } as any)
+
+    const text = await extractPdfText(buffer)
+    expect(text).toContain("CLIENTE")
+    expect(text).toContain("TOTAL")
+    expect(text).toContain("ESTADO DE PAGO")
+    expect(text).toContain("Remito interno — no válido como comprobante fiscal.")
+  })
 })
