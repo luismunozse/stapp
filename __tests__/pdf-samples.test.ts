@@ -35,7 +35,7 @@ describe.runIf(process.env.PDF_SAMPLES === "1")("pdf visual samples", () => {
       problemaReportado:
         "El equipo no enciende desde que se mojó levemente con la lluvia. Además, la pantalla parpadea de forma intermitente cada vez que se intenta reiniciarlo.",
       accesorios: "Cargador, funda, chip claro",
-      codigoAccesoDispositivo: "Patrón: 0-1-2-5-8",
+      codigoAccesoDispositivo: "Patrón: 1-2-5-8-9",
       presupuesto: 45000,
       sena: 10000,
       metodoPagoSena: "EFECTIVO",
