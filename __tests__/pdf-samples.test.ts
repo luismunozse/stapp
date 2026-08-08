@@ -56,4 +56,29 @@ describe.runIf(process.env.PDF_SAMPLES === "1")("pdf visual samples", () => {
     writeFileSync(`${OUT_DIR}/${TAG}-remito.pdf`, remito)
     expect(remito.length).toBeGreaterThan(1000)
   }, 60_000)
+
+  it("writes an ENTREGADO orden sample (local copy, fotos, entrega pages)", async () => {
+    mkdirSync(OUT_DIR, { recursive: true })
+
+    // Minimal 1x1 PNG, embedded as a data: URL so the fotos-de-ingreso fetch
+    // works offline, and reused as a stand-in signature image.
+    const pngBase64 =
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+
+    const orden = await generateOrdenPDF({
+      ...buildOrdenFixture(),
+      estado: "ENTREGADO",
+      fotosIngreso: [
+        { url: `data:image/png;base64,${pngBase64}`, descripcion: "Pantalla con manchas de humedad" },
+        { url: `data:image/png;base64,${pngBase64}`, descripcion: "Puerto de carga oxidado" },
+      ],
+      fechaEntrega: new Date(),
+      firmaClienteEntrega: pngBase64,
+      firmaEncargadoEntrega: pngBase64,
+      entregadoPor: "María Gómez",
+      notasEntrega: "Se entrega el equipo funcionando correctamente. Cliente conforme.",
+    })
+    writeFileSync(`${OUT_DIR}/${TAG}-orden-entregada.pdf`, orden)
+    expect(orden.length).toBeGreaterThan(1000)
+  }, 60_000)
 })

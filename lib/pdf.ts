@@ -888,18 +888,6 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const { regular: helvetica, bold: helveticaBold } = await embedCustomFonts(pdfDoc)
   const courier = await pdfDoc.embedFont(StandardFonts.Courier)
 
-  // Colores (Indigo theme) — usados solo por el bloque "copia local / fotos /
-  // entrega" más abajo en esta misma función (Task 5 los restyleará y
-  // eliminará entonces). La copia cliente (arriba) es puro escala de grises,
-  // ver lib/pdf-style.ts (MONO).
-  const primaryColor = rgb(0.388, 0.400, 0.945) // #6366f1
-  const textColor = rgb(0.118, 0.161, 0.231) // #1e293b
-  const grayColor = rgb(0.392, 0.455, 0.545) // #64748b
-  const lightGray = rgb(0.886, 0.910, 0.941) // #e2e8f0
-  const bgGray = rgb(0.973, 0.980, 0.988) // #f8fafc
-  const greenColor = rgb(0.134, 0.545, 0.373) // #22c55e
-  const white = rgb(1, 1, 1)
-
   // Margenes
   const margin = 40
   const contentWidth = width - (margin * 2)
@@ -1458,19 +1446,15 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const lContentW = 595 - lm * 2
   const lHalf = (lContentW - 8) / 2
   let ly = 842 - 20
-  const redColor = rgb(0.918, 0.306, 0.306)
 
-  // Barra superior fina
-  localPage.drawRectangle({ x: 0, y: 842 - 4, width: 595, height: 4, color: primaryColor })
-
-  // Header: Orden # + fechas en misma línea
-  const lOrdenText = `ORDEN #${String(numeroOrden).padStart(4, "0")}`
-  localPage.drawText(lOrdenText, { x: lm, y: ly, size: 14, font: helveticaBold, color: primaryColor })
+  // Header: heading "COPIA LOCAL" + fechas en misma línea
+  const lHeadingText = `COPIA LOCAL — Orden #${String(numeroOrden).padStart(4, "0")}`
+  localPage.drawText(lHeadingText, { x: lm, y: ly, size: TYPE.docTitle, font: helveticaBold, color: MONO.ink })
   const fechasText = `Ingreso: ${fechaIngreso}` + (fechaPrometida ? `  |  Entrega est.: ${fechaPrometida}` : "")
-  const fechasW = helvetica.widthOfTextAtSize(fechasText, 7)
-  localPage.drawText(fechasText, { x: 595 - lm - fechasW, y: ly + 2, size: 7, font: helvetica, color: grayColor })
+  const fechasW = helvetica.widthOfTextAtSize(fechasText, TYPE.fine)
+  localPage.drawText(fechasText, { x: 595 - lm - fechasW, y: ly + 2, size: TYPE.fine, font: helvetica, color: MONO.faint })
   ly -= 12
-  localPage.drawLine({ start: { x: lm, y: ly }, end: { x: 595 - lm, y: ly }, thickness: 1, color: primaryColor })
+  drawRule(localPage, lm, 595 - lm, ly)
   ly -= 10
 
   // Detectar si hay patrón para reservar espacio a la derecha
@@ -1495,7 +1479,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     const patDotR = 3
     const patCenterX = rightX + rightColW / 2
 
-    localPage.drawText("ACCESO", { x: rightX, y: patGridY, size: 6, font: helveticaBold, color: grayColor })
+    drawSectionLabel(localPage, helveticaBold, "Acceso", rightX, patGridY)
 
     const getPatPos = (num: number) => ({
       x: patCenterX + ((num - 1) % 3 - 1) * patCellSize,
@@ -1506,36 +1490,35 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     for (let i = 0; i < patternNumbers.length - 1; i++) {
       const s = getPatPos(patternNumbers[i])
       const e = getPatPos(patternNumbers[i + 1])
-      localPage.drawLine({ start: s, end: e, thickness: 1.2, color: primaryColor })
+      localPage.drawLine({ start: s, end: e, thickness: 1.2, color: MONO.ink })
     }
     // Puntos
     for (let num = 1; num <= 9; num++) {
       const pos = getPatPos(num)
       const inPat = patternNumbers.includes(num)
-      localPage.drawCircle({ x: pos.x, y: pos.y, size: patDotR, color: inPat ? primaryColor : lightGray, borderWidth: 0 })
-      if (inPat) localPage.drawCircle({ x: pos.x, y: pos.y, size: patDotR - 1.5, color: white, borderWidth: 0 })
+      localPage.drawCircle({ x: pos.x, y: pos.y, size: patDotR, color: inPat ? MONO.ink : MONO.rule, borderWidth: 0 })
+      if (inPat) localPage.drawCircle({ x: pos.x, y: pos.y, size: patDotR - 1.5, color: MONO.white, borderWidth: 0 })
     }
   } else if (codigoAccesoDispositivo) {
     // Código de acceso como texto a la derecha
-    localPage.drawText("ACCESO", { x: rightX, y: ly, size: 6, font: helveticaBold, color: grayColor })
-    localPage.drawText(codigoAccesoDispositivo.substring(0, 20), { x: rightX, y: ly - 12, size: 9, font: courier, color: textColor })
+    drawSectionLabel(localPage, helveticaBold, "Acceso", rightX, ly)
+    localPage.drawText(codigoAccesoDispositivo.substring(0, 20), { x: rightX, y: ly - 12, size: 9, font: courier, color: MONO.ink })
   }
 
   // === Columna izquierda: datos compactos ===
   // Fila: Cliente + Dispositivo
-  localPage.drawText("CLIENTE", { x: lm, y: ly, size: 6, font: helveticaBold, color: primaryColor })
-  localPage.drawText(`${clienteNombre.substring(0, 25)}  ·  Tel: ${clienteTelefono}`, { x: lm + 45, y: ly, size: 8, font: helvetica, color: textColor })
+  drawSectionLabel(localPage, helveticaBold, "Cliente", lm, ly)
+  localPage.drawText(`${clienteNombre.substring(0, 25)}  ·  Tel: ${clienteTelefono}`, { x: lm + 45, y: ly, size: 8, font: helvetica, color: MONO.ink })
   ly -= 12
 
-  localPage.drawText("EQUIPO", { x: lm, y: ly, size: 6, font: helveticaBold, color: primaryColor })
+  drawSectionLabel(localPage, helveticaBold, "Equipo", lm, ly)
   const devInfo = [dispositivo, marca, colorDisp].filter(Boolean).join(" - ") + (imei ? `  ·  ${imei}` : "")
-  localPage.drawText(devInfo.substring(0, 55), { x: lm + 45, y: ly, size: 8, font: helvetica, color: textColor })
+  localPage.drawText(devInfo.substring(0, 55), { x: lm + 45, y: ly, size: 8, font: helvetica, color: MONO.ink })
   ly -= 14
 
-  // Problema (destacado)
-  localPage.drawRectangle({ x: lm, y: ly - 3, width: 3, height: 12, color: redColor })
-  localPage.drawText("PROBLEMA", { x: lm + 8, y: ly, size: 6, font: helveticaBold, color: redColor })
-  localPage.drawText(problemaReportado.substring(0, 60), { x: lm + 55, y: ly, size: 8, font: helvetica, color: textColor })
+  // Problema
+  drawSectionLabel(localPage, helveticaBold, "Problema", lm, ly)
+  localPage.drawText(problemaReportado.substring(0, 60), { x: lm + 45, y: ly, size: 8, font: helvetica, color: MONO.ink })
   ly -= 13
 
   // Accesorios + Presupuesto en misma línea si caben
@@ -1544,27 +1527,26 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   if (presupuesto) infoLine.push(`Presup: ${presupuesto}`)
   if (data.sena && data.sena > 0) infoLine.push(`Seña: ${formatCurrencyPDF(data.sena)}`)
   if (infoLine.length > 0) {
-    localPage.drawText(infoLine.join("  |  "), { x: lm + 8, y: ly, size: 7, font: helvetica, color: grayColor })
+    localPage.drawText(infoLine.join("  |  "), { x: lm + 8, y: ly, size: 7, font: helvetica, color: MONO.label })
     ly -= 12
   }
 
   // Observaciones
   if (observaciones) {
-    localPage.drawText(`OBS: ${observaciones.substring(0, 70)}`, { x: lm + 8, y: ly, size: 6, font: helvetica, color: grayColor })
+    localPage.drawText(`OBS: ${observaciones.substring(0, 70)}`, { x: lm + 8, y: ly, size: 6, font: helvetica, color: MONO.label })
     ly -= 11
   }
 
   // Checklist compacto en línea
   if (data.checklistItems && data.checklistItems.length > 0) {
-    localPage.drawLine({ start: { x: lm, y: ly + 4 }, end: { x: lm + leftColW, y: ly + 4 }, thickness: 0.5, color: lightGray })
+    drawRule(localPage, lm, lm + leftColW, ly + 4, { dotted: true })
     const colW = leftColW / 3
     let cx = lm
     let cy = ly - 2
     for (const item of data.checklistItems) {
       const val = item.valor === true ? "SI" : item.valor === false ? "NO" : String(item.valor || "").substring(0, 12)
-      const valColor = item.valor === true ? greenColor : item.valor === false ? redColor : grayColor
-      localPage.drawText(`${item.label}:`, { x: cx, y: cy, size: 5.5, font: helvetica, color: grayColor })
-      localPage.drawText(val, { x: cx + helvetica.widthOfTextAtSize(`${item.label}: `, 5.5), y: cy, size: 5.5, font: helveticaBold, color: valColor })
+      localPage.drawText(`${item.label}:`, { x: cx, y: cy, size: 5.5, font: helvetica, color: MONO.label })
+      localPage.drawText(val, { x: cx + helvetica.widthOfTextAtSize(`${item.label}: `, 5.5), y: cy, size: 5.5, font: helveticaBold, color: MONO.ink })
       cx += colW
       if (cx + colW > lm + leftColW) { cx = lm; cy -= 10 }
     }
@@ -1572,9 +1554,9 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   }
 
   // Footer compacto
-  localPage.drawLine({ start: { x: lm, y: ly }, end: { x: 595 - lm, y: ly }, thickness: 0.5, color: lightGray })
-  localPage.drawText(`Orden #${numeroOrden} - COPIA LOCAL`, { x: lm, y: ly - 9, size: 6, font: helveticaBold, color: primaryColor })
-  localPage.drawText(`Impreso: ${fechaImpresion}`, { x: 595 - lm - 100, y: ly - 9, size: 5.5, font: helvetica, color: grayColor })
+  drawRule(localPage, lm, 595 - lm, ly)
+  localPage.drawText(`Orden #${numeroOrden} - COPIA LOCAL`, { x: lm, y: ly - 9, size: 6, font: helveticaBold, color: MONO.ink })
+  localPage.drawText(`Impreso: ${fechaImpresion}`, { x: 595 - lm - 100, y: ly - 9, size: 5.5, font: helvetica, color: MONO.faint })
 
   const localBottom = ly - 16
   const localDynH = 842 - localBottom
@@ -1589,13 +1571,12 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     const photosPage = pdfDoc.addPage([width, height])
     let py = height - margin
 
-    photosPage.drawRectangle({ x: 0, y: height - 8, width, height: 8, color: primaryColor })
     py -= 10
 
-    photosPage.drawText("FOTOS DE INGRESO", { x: margin, y: py, size: 14, font: helveticaBold, color: primaryColor })
-    photosPage.drawText(`Orden #${numeroOrden}`, { x: width - margin - 80, y: py, size: 10, font: helveticaBold, color: grayColor })
+    photosPage.drawText("FOTOS DE INGRESO", { x: margin, y: py, size: TYPE.docTitle, font: helveticaBold, color: MONO.ink })
+    photosPage.drawText(`Orden #${numeroOrden}`, { x: width - margin - 80, y: py, size: 10, font: helveticaBold, color: MONO.label })
     py -= 8
-    photosPage.drawLine({ start: { x: margin, y: py }, end: { x: width - margin, y: py }, thickness: 1, color: primaryColor })
+    drawRule(photosPage, margin, width - margin, py)
     py -= 20
 
     const photoSize = (contentWidth - 15) / 2
@@ -1624,7 +1605,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
           const scaledH = dims.height * scale
 
           // Border
-          photosPage.drawRectangle({ x: photoX - 2, y: py - photoHeight - 2, width: photoSize + 4, height: photoHeight + 4, borderColor: lightGray, borderWidth: 1, color: white })
+          photosPage.drawRectangle({ x: photoX - 2, y: py - photoHeight - 2, width: photoSize + 4, height: photoHeight + 4, borderColor: MONO.rule, borderWidth: RULE_WIDTH })
           // Image centered in box
           photosPage.drawImage(photoImage, {
             x: photoX + (photoSize - scaledW) / 2,
@@ -1634,7 +1615,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
           })
 
           if (foto.descripcion) {
-            photosPage.drawText(safe(foto.descripcion).substring(0, 40), { x: photoX, y: py - photoHeight - 12, size: 7, font: helvetica, color: grayColor })
+            photosPage.drawText(safe(foto.descripcion).substring(0, 40), { x: photoX, y: py - photoHeight - 12, size: TYPE.fine, font: helvetica, color: MONO.label })
           }
 
           photoCount++
@@ -1651,9 +1632,8 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     }
 
     // Footer
-    photosPage.drawText(`Orden #${numeroOrden} - Fotos de Ingreso`, { x: margin, y: 25, size: 8, font: helveticaBold, color: primaryColor })
-    photosPage.drawText(`Impreso: ${fechaImpresion}`, { x: width - margin - 120, y: 25, size: 7, font: helvetica, color: grayColor })
-    photosPage.drawRectangle({ x: 0, y: 0, width, height: 6, color: primaryColor })
+    photosPage.drawText(`Orden #${numeroOrden} - Fotos de Ingreso`, { x: margin, y: 25, size: 8, font: helveticaBold, color: MONO.ink })
+    photosPage.drawText(`Impreso: ${fechaImpresion}`, { x: width - margin - 120, y: 25, size: 7, font: helvetica, color: MONO.faint })
   }
 
   // === SECCION DE ENTREGA (segunda pagina, solo si fue entregado) ===
@@ -1661,43 +1641,41 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     const page2 = pdfDoc.addPage([width, height])
     let ey = height - margin
 
-    // Barra superior
-    page2.drawRectangle({ x: 0, y: height - 8, width, height: 8, color: primaryColor })
     ey -= 10
 
     // Titulo
-    page2.drawText("COMPROBANTE DE ENTREGA", { x: margin, y: ey, size: 14, font: helveticaBold, color: primaryColor })
-    page2.drawText(`Orden #${numeroOrden}`, { x: width - margin - 80, y: ey, size: 10, font: helveticaBold, color: grayColor })
+    page2.drawText("COMPROBANTE DE ENTREGA", { x: margin, y: ey, size: TYPE.docTitle, font: helveticaBold, color: MONO.ink })
+    page2.drawText(`Orden #${numeroOrden}`, { x: width - margin - 80, y: ey, size: 10, font: helveticaBold, color: MONO.label })
     ey -= 25
 
     // Linea separadora
-    page2.drawLine({ start: { x: margin, y: ey }, end: { x: width - margin, y: ey }, thickness: 1, color: primaryColor })
+    drawRule(page2, margin, width - margin, ey)
     ey -= 20
 
     // Info de entrega
-    page2.drawText("Fecha de entrega:", { x: margin, y: ey, size: 9, font: helveticaBold, color: textColor })
-    page2.drawText(data.fechaEntrega ? formatDatePDF(data.fechaEntrega) : "-", { x: margin + 110, y: ey, size: 9, font: helvetica, color: textColor })
+    page2.drawText("Fecha de entrega:", { x: margin, y: ey, size: TYPE.small, font: helvetica, color: MONO.label })
+    page2.drawText(data.fechaEntrega ? formatDatePDF(data.fechaEntrega) : "-", { x: margin + 110, y: ey, size: TYPE.body, font: helveticaBold, color: MONO.ink })
     ey -= 16
 
-    page2.drawText("Dispositivo:", { x: margin, y: ey, size: 9, font: helveticaBold, color: textColor })
-    page2.drawText(safe(data.dispositivo), { x: margin + 110, y: ey, size: 9, font: helvetica, color: textColor })
+    page2.drawText("Dispositivo:", { x: margin, y: ey, size: TYPE.small, font: helvetica, color: MONO.label })
+    page2.drawText(safe(data.dispositivo), { x: margin + 110, y: ey, size: TYPE.body, font: helveticaBold, color: MONO.ink })
     ey -= 16
 
-    page2.drawText("Cliente:", { x: margin, y: ey, size: 9, font: helveticaBold, color: textColor })
-    page2.drawText(safe(data.cliente.nombre), { x: margin + 110, y: ey, size: 9, font: helvetica, color: textColor })
+    page2.drawText("Cliente:", { x: margin, y: ey, size: TYPE.small, font: helvetica, color: MONO.label })
+    page2.drawText(safe(data.cliente.nombre), { x: margin + 110, y: ey, size: TYPE.body, font: helveticaBold, color: MONO.ink })
     ey -= 16
 
     if (data.entregadoPor) {
-      page2.drawText("Entregado por:", { x: margin, y: ey, size: 9, font: helveticaBold, color: textColor })
-      page2.drawText(safe(data.entregadoPor), { x: margin + 110, y: ey, size: 9, font: helvetica, color: textColor })
+      page2.drawText("Entregado por:", { x: margin, y: ey, size: TYPE.small, font: helvetica, color: MONO.label })
+      page2.drawText(safe(data.entregadoPor), { x: margin + 110, y: ey, size: TYPE.body, font: helveticaBold, color: MONO.ink })
       ey -= 16
     }
 
     if (data.notasEntrega) {
       ey -= 5
-      page2.drawText("Notas de entrega:", { x: margin, y: ey, size: 9, font: helveticaBold, color: textColor })
+      page2.drawText("Notas de entrega:", { x: margin, y: ey, size: TYPE.small, font: helvetica, color: MONO.label })
       ey -= 14
-      page2.drawText(safe(data.notasEntrega).substring(0, 200), { x: margin, y: ey, size: 9, font: helvetica, color: textColor })
+      page2.drawText(safe(data.notasEntrega).substring(0, 200), { x: margin, y: ey, size: TYPE.body, font: helvetica, color: MONO.ink })
       ey -= 16
     }
 
@@ -1708,9 +1686,8 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     const entregaCardX2 = margin + entregaHalfWidth + 20
 
     // Firma Cliente Entrega
-    page2.drawRectangle({ x: margin, y: ey - 85, width: entregaHalfWidth, height: 100, color: bgGray, borderColor: lightGray, borderWidth: 1 })
-    page2.drawRectangle({ x: margin, y: ey + 5, width: entregaHalfWidth, height: 18, color: rgb(0.95, 0.95, 0.95) })
-    page2.drawText("CLIENTE (quien recibe)", { x: margin + 12, y: ey + 10, size: 8, font: helveticaBold, color: grayColor })
+    page2.drawRectangle({ x: margin, y: ey - 85, width: entregaHalfWidth, height: 100, borderColor: MONO.rule, borderWidth: RULE_WIDTH })
+    drawSectionLabel(page2, helveticaBold, "Cliente (quien recibe)", margin + 12, ey + 5)
 
     try {
       const firmaClienteEntregaBytes = Uint8Array.from(atob(data.firmaClienteEntrega), c => c.charCodeAt(0))
@@ -1727,13 +1704,12 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
       console.error("Error embedding client delivery signature:", e)
     }
 
-    page2.drawLine({ start: { x: margin + 20, y: ey - 55 }, end: { x: margin + entregaHalfWidth - 20, y: ey - 55 }, thickness: 1, color: grayColor })
-    page2.drawText(safe(data.cliente.nombre).substring(0, 25), { x: margin + 30, y: ey - 70, size: 8, font: helvetica, color: textColor })
+    page2.drawLine({ start: { x: margin + 20, y: ey - 55 }, end: { x: margin + entregaHalfWidth - 20, y: ey - 55 }, thickness: 0.5, color: MONO.ink })
+    page2.drawText(safe(data.cliente.nombre).substring(0, 25), { x: margin + 30, y: ey - 70, size: 8, font: helvetica, color: MONO.ink })
 
     // Firma Encargado Entrega
-    page2.drawRectangle({ x: entregaCardX2, y: ey - 85, width: entregaHalfWidth, height: 100, color: bgGray, borderColor: lightGray, borderWidth: 1 })
-    page2.drawRectangle({ x: entregaCardX2, y: ey + 5, width: entregaHalfWidth, height: 18, color: rgb(0.95, 0.95, 0.95) })
-    page2.drawText("ENCARGADO (quien entrega)", { x: entregaCardX2 + 12, y: ey + 10, size: 8, font: helveticaBold, color: grayColor })
+    page2.drawRectangle({ x: entregaCardX2, y: ey - 85, width: entregaHalfWidth, height: 100, borderColor: MONO.rule, borderWidth: RULE_WIDTH })
+    drawSectionLabel(page2, helveticaBold, "Encargado (quien entrega)", entregaCardX2 + 12, ey + 5)
 
     if (data.firmaEncargadoEntrega) {
       try {
@@ -1752,13 +1728,12 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
       }
     }
 
-    page2.drawLine({ start: { x: entregaCardX2 + 20, y: ey - 55 }, end: { x: entregaCardX2 + entregaHalfWidth - 20, y: ey - 55 }, thickness: 1, color: grayColor })
-    page2.drawText(safe(data.entregadoPor).substring(0, 25), { x: entregaCardX2 + 30, y: ey - 70, size: 8, font: helvetica, color: textColor })
+    page2.drawLine({ start: { x: entregaCardX2 + 20, y: ey - 55 }, end: { x: entregaCardX2 + entregaHalfWidth - 20, y: ey - 55 }, thickness: 0.5, color: MONO.ink })
+    page2.drawText(safe(data.entregadoPor).substring(0, 25), { x: entregaCardX2 + 30, y: ey - 70, size: 8, font: helvetica, color: MONO.ink })
 
     // Footer pagina 2
-    page2.drawText(`Orden #${numeroOrden} - Comprobante de Entrega`, { x: margin, y: 25, size: 8, font: helveticaBold, color: primaryColor })
-    page2.drawText(`Impreso: ${fechaImpresion}`, { x: width - margin - 100, y: 25, size: 7, font: helvetica, color: grayColor })
-    page2.drawRectangle({ x: 0, y: 0, width, height: 8, color: primaryColor })
+    page2.drawText(`Orden #${numeroOrden} - Comprobante de Entrega`, { x: margin, y: 25, size: 8, font: helveticaBold, color: MONO.ink })
+    page2.drawText(`Impreso: ${fechaImpresion}`, { x: width - margin - 100, y: 25, size: 7, font: helvetica, color: MONO.faint })
   }
 
   } // fin if (!data.soloCliente)
@@ -1808,7 +1783,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const ox = (pageW - scaledW) / 2
 
   const combinedPage = finalDoc.addPage([pageW, a4H])
-  const labelColor = rgb(0.5, 0.5, 0.5)
+  const labelColor = MONO.label
 
   // --- Copia cliente arriba (pegada al tope) ---
   const clientY = a4H - scaledClientH
