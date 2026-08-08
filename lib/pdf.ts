@@ -1079,7 +1079,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   let tempLine = ""
   const words = problemaReportado.split(" ")
   for (const word of words) {
-    if (helvetica.widthOfTextAtSize(tempLine + " " + word, 9) < contentWidth - 20) {
+    if (helvetica.widthOfTextAtSize(tempLine + " " + word, TYPE.body) < contentWidth - 20) {
       tempLine += (tempLine ? " " : "") + word
     } else {
       problemaLines.push(tempLine)
@@ -1178,8 +1178,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
       const senaFormatted = formatCurrencyPDF(data.sena!)
       const senaY = presupuesto ? y - 44 : y - 13
       const metodoPago = data.metodoPagoSena || "EFECTIVO"
-      drawSectionLabel(page, helveticaBold, "Seña abonada", margin + 14, senaY)
-      const senaLabelWidth = helveticaBold.widthOfTextAtSize("SEÑA ABONADA", TYPE.sectionLabel)
+      const senaLabelWidth = drawSectionLabel(page, helveticaBold, "Seña abonada", margin + 14, senaY)
       page.drawText(`(${metodoPago})`, { x: margin + 14 + senaLabelWidth + 6, y: senaY, size: TYPE.fine, font: helvetica, color: MONO.label })
       const senaAmtWidth = helveticaBold.widthOfTextAtSize(senaFormatted, TYPE.total)
       page.drawText(senaFormatted, { x: width - margin - 14 - senaAmtWidth, y: senaY, size: TYPE.total, font: helveticaBold, color: MONO.ink })
@@ -1193,7 +1192,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     let obsTempLine = ""
     const obsWords = observaciones.split(" ")
     for (const word of obsWords) {
-      if (helvetica.widthOfTextAtSize(obsTempLine + " " + word, 9) < contentWidth - 28) {
+      if (helvetica.widthOfTextAtSize(obsTempLine + " " + word, TYPE.body) < contentWidth - 28) {
         obsTempLine += (obsTempLine ? " " : "") + word
       } else {
         obsLines.push(obsTempLine)
@@ -1302,7 +1301,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
         const qrDataUrl = await QRCode.toDataURL(trackingUrl, {
           width: 200,
           margin: 1,
-          color: { dark: "#1e293b", light: "#ffffff" }
+          color: { dark: "#111111", light: "#ffffff" }
         })
         const qrBase64 = qrDataUrl.split(",")[1]
         const qrBytes = Uint8Array.from(atob(qrBase64), c => c.charCodeAt(0))
@@ -1331,7 +1330,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
           height: firmaDims.height * firmaScale,
         })
 
-        page.drawLine({ start: { x: firmaX + 20, y: y - firmaHeight + 12 }, end: { x: firmaX + firmaBoxWidth - 20, y: y - firmaHeight + 12 }, thickness: 0.5, color: MONO.ink })
+        drawRule(page, firmaX + 20, firmaX + firmaBoxWidth - 20, y - firmaHeight + 12, { color: MONO.ink })
         page.drawText("Firma del cliente", { x: firmaX + 20, y: y - firmaHeight + 4, size: TYPE.fine, font: helvetica, color: MONO.label })
       } catch (firmaError) {
         console.error("Error embedding reception signature:", firmaError)
@@ -1344,7 +1343,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
         const qrDataUrl = await QRCode.toDataURL(trackingUrl, {
           width: 200,
           margin: 1,
-          color: { dark: "#1e293b", light: "#ffffff" }
+          color: { dark: "#111111", light: "#ffffff" }
         })
         const qrBase64 = qrDataUrl.split(",")[1]
         const qrBytes = Uint8Array.from(atob(qrBase64), c => c.charCodeAt(0))
@@ -1371,7 +1370,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
           height: firmaDims.height * firmaScale,
         })
 
-        page.drawLine({ start: { x: margin + 20, y: y - firmaHeight + 12 }, end: { x: width - margin - 20, y: y - firmaHeight + 12 }, thickness: 0.5, color: MONO.ink })
+        drawRule(page, margin + 20, width - margin - 20, y - firmaHeight + 12, { color: MONO.ink })
         page.drawText("Firma del cliente", { x: margin + 20, y: y - firmaHeight + 4, size: TYPE.fine, font: helvetica, color: MONO.label })
       } catch (firmaError) {
         console.error("Error embedding reception signature:", firmaError)
@@ -1704,7 +1703,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
       console.error("Error embedding client delivery signature:", e)
     }
 
-    page2.drawLine({ start: { x: margin + 20, y: ey - 55 }, end: { x: margin + entregaHalfWidth - 20, y: ey - 55 }, thickness: 0.5, color: MONO.ink })
+    drawRule(page2, margin + 20, margin + entregaHalfWidth - 20, ey - 55, { color: MONO.ink })
     page2.drawText(safe(data.cliente.nombre).substring(0, 25), { x: margin + 30, y: ey - 70, size: 8, font: helvetica, color: MONO.ink })
 
     // Firma Encargado Entrega
@@ -1728,7 +1727,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
       }
     }
 
-    page2.drawLine({ start: { x: entregaCardX2 + 20, y: ey - 55 }, end: { x: entregaCardX2 + entregaHalfWidth - 20, y: ey - 55 }, thickness: 0.5, color: MONO.ink })
+    drawRule(page2, entregaCardX2 + 20, entregaCardX2 + entregaHalfWidth - 20, ey - 55, { color: MONO.ink })
     page2.drawText(safe(data.entregadoPor).substring(0, 25), { x: entregaCardX2 + 30, y: ey - 70, size: 8, font: helvetica, color: MONO.ink })
 
     // Footer pagina 2

@@ -23,7 +23,9 @@ describe("pdf-style", () => {
     const bold = await doc.embedFont(StandardFonts.HelveticaBold);
     drawRule(page, 40, 555, 800);
     drawRule(page, 40, 555, 790, { dotted: true });
-    drawSectionLabel(page, bold, "Cliente", 40, 780);
+    const labelWidth = drawSectionLabel(page, bold, "Cliente", 40, 780);
+    expect(labelWidth).toBeGreaterThan(0);
+    expect(labelWidth).toBe(bold.widthOfTextAtSize("CLIENTE", TYPE.sectionLabel));
     const badge = drawOutlinedBadge(page, bold, "Recepción", 40, 770);
     expect(badge.width).toBeGreaterThan(20);
     expect(badge.height).toBeGreaterThan(10);

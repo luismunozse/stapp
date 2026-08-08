@@ -32,13 +32,13 @@ export function drawRule(
   x1: number,
   x2: number,
   y: number,
-  opts?: { dotted?: boolean }
+  opts?: { dotted?: boolean; color?: RGB; thickness?: number }
 ): void {
   page.drawLine({
     start: { x: x1, y },
     end: { x: x2, y },
-    thickness: RULE_WIDTH,
-    color: MONO.rule,
+    thickness: opts?.thickness ?? RULE_WIDTH,
+    color: opts?.color ?? MONO.rule,
     ...(opts?.dotted ? { dashArray: [1, 3] } : {}),
   });
 }
@@ -49,14 +49,16 @@ export function drawSectionLabel(
   text: string,
   x: number,
   y: number
-): void {
-  page.drawText(text.toUpperCase(), {
+): number {
+  const label = text.toUpperCase();
+  page.drawText(label, {
     x,
     y,
     size: TYPE.sectionLabel,
     font: fontBold,
     color: MONO.label,
   });
+  return fontBold.widthOfTextAtSize(label, TYPE.sectionLabel);
 }
 
 export function measureBadgeWidth(
