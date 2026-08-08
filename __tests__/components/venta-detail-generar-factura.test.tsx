@@ -84,4 +84,18 @@ describe("VentaDetail — Generar factura button", () => {
     })
     expect(screen.queryByRole("button", { name: /Generar factura/i })).not.toBeInTheDocument()
   })
+
+  it("hides the button for an ANULADA venta even without a factura", async () => {
+    mockFetch
+      .mockResolvedValueOnce({ ok: true, json: async () => ventaResponse({ estado: "ANULADA", facturaId: null }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ organization: { id: "org-1", slug: "demo", nombre: "Demo" } }) })
+
+    const { VentaDetail } = await import("@/components/ventas/venta-detail")
+    render(<VentaDetail ventaId="v1" />)
+
+    await waitFor(() => {
+      expect(screen.getByText("Venta V0005")).toBeInTheDocument()
+    })
+    expect(screen.queryByRole("button", { name: /Generar factura/i })).not.toBeInTheDocument()
+  })
 })
