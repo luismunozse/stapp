@@ -192,7 +192,7 @@ export function FacturacionList() {
               <thead className="sticky top-[calc(3.5rem+env(safe-area-inset-top,0px))] sm:top-0 z-10 bg-background">
                 <tr className="border-b bg-muted/50">
                   <th className="text-left p-3 font-medium">Factura</th>
-                  <th className="text-left p-3 font-medium">Orden</th>
+                  <th className="text-left p-3 font-medium">Origen</th>
                   <th className="text-left p-3 font-medium hidden sm:table-cell">Cliente</th>
                   <th className="text-left p-3 font-medium hidden md:table-cell">Fecha</th>
                   <th className="text-right p-3 font-medium">Total</th>

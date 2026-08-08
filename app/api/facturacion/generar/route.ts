@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
 import { getNextInvoiceNumber } from "@/lib/counters"
+import { toArray } from "@/lib/db-utils"
 import { z } from "zod"
 
 const generarFacturaSchema = z.union([
@@ -101,7 +102,9 @@ export async function POST(request: Request) {
     }
 
     // Verificar si ya existe una factura
-    if (orden.facturas && orden.facturas.length > 0) {
+    // (facturas (id) is a reverse embed over the UNIQUE orden_id FK — PostgREST
+    // may return it as an object instead of an array; normalize before checking)
+    if (toArray(orden.facturas).length > 0) {
       return NextResponse.json(
         { error: "Ya existe una factura para esta orden" },
         { status: 400 }
@@ -525,7 +528,9 @@ async function generarFacturaDesdeVenta(opts: {
     return NextResponse.json({ error: "La venta está anulada" }, { status: 400 })
   }
 
-  if (venta.facturas && venta.facturas.length > 0) {
+  // facturas (id) is a reverse embed over the UNIQUE venta_id FK — PostgREST
+  // may return it as an object instead of an array; normalize before checking.
+  if (toArray(venta.facturas).length > 0) {
     return NextResponse.json(
       { error: "Ya existe una factura para esta venta" },
       { status: 400 }
@@ -618,7 +623,10 @@ async function generarFacturaDesdeVenta(opts: {
   return NextResponse.json({ error: "Error al generar factura" }, { status: 500 })
 }
 
-// JS fallback — used when migration 292 is not yet applied.
+// JS fallback — used when the schema (migration 292) is applied but the RPC
+// function itself is missing (partial apply). Note this does NOT cover a
+// venta pre-292: without the migration, this insert fails too, since
+// `facturas.venta_id` doesn't exist yet and `orden_id` is still NOT NULL.
 async function crearFacturaVentaJsFallback(opts: {
   ventaId: string
   organizationId: string

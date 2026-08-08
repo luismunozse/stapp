@@ -106,6 +106,22 @@ describe("POST /api/facturacion/generar — venta gates (V2-V4)", () => {
     expect(status).toBe(400)
     expect(body.error).toBe("Ya existe una factura para esta venta")
   })
+
+  it("400 when venta already has a factura (PostgREST one-to-one object embed, not array)", async () => {
+    // facturas (id) is a reverse embed over the UNIQUE venta_id FK — PostgREST
+    // one-to-one detection can return it as a bare object instead of an
+    // array. The duplicate gate must still catch it, not silently pass.
+    mockAuthSuccess({ role: "ADMIN" })
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "ventas") return createChainMock(ventaBase({ facturas: { id: "f-existing" } })) as any
+      return createChainMock(null, { message: `No mock for table: ${table}` }) as any
+    })
+
+    const res = await generarPost(createPostRequest({ ventaId: "v1" }))
+    const { status, body } = await parseResponse(res)
+    expect(status).toBe(400)
+    expect(body.error).toBe("Ya existe una factura para esta venta")
+  })
 })
 
 describe("POST /api/facturacion/generar — venta happy path (V5-V6)", () => {
