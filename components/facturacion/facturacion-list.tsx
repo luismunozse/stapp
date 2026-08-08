@@ -29,6 +29,7 @@ import {
 import { useCurrency } from "@/contexts/currency-context"
 import { PagoForm } from "./pago-form"
 import { PagosHistorial } from "./pagos-historial"
+import { GenerarFacturaModal } from "./generar-factura-modal"
 
 type EstadoPagoType = "PENDIENTE" | "PAGADO_PARCIAL" | "PAGADO" | "ANULADA" | ""
 
@@ -45,6 +46,7 @@ export function FacturacionList() {
   const [selectedFactura, setSelectedFactura] = useState<any>(null)
   const [actionLoading, setActionLoading] = useState(false)
   const [viewMode, setViewMode] = useState<"detail" | "list">("detail")
+  const [showGenerarModal, setShowGenerarModal] = useState(false)
 
   const fetcher = (url: string) => fetch(url).then(res => res.json())
   const apiUrl = useMemo(() => {
@@ -151,6 +153,10 @@ export function FacturacionList() {
             <SelectItem value="ANULADA">Anulada</SelectItem>
           </SelectContent>
         </Select>
+        <Button onClick={() => setShowGenerarModal(true)}>
+          <Plus className="mr-2 h-4 w-4" />
+          Generar factura
+        </Button>
         <div className="flex border rounded-lg overflow-hidden ml-auto">
           <Button
             variant={viewMode === "detail" ? "default" : "ghost"}
@@ -519,6 +525,12 @@ export function FacturacionList() {
         variant="warning"
         loading={actionLoading}
         onConfirm={handleVoid}
+      />
+
+      <GenerarFacturaModal
+        open={showGenerarModal}
+        onOpenChange={setShowGenerarModal}
+        onSuccess={() => mutate()}
       />
     </div>
   )
