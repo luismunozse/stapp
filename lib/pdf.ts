@@ -3196,6 +3196,12 @@ interface FacturaPDFData {
   venta?: {
     numeroVenta: number
   }
+  items?: Array<{
+    descripcion: string
+    cantidad: number
+    precioUnitario: number
+    subtotal: number
+  }>
   subtotal: number
   iva: number
   total: number
@@ -3399,6 +3405,44 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   }
 
   y -= clientBoxHeight + 15
+
+  // === TABLA DE ITEMS ===
+  // Old facturas may have no items_factura rows (pre-dates this table, or the
+  // caller didn't fetch them) — skip the table entirely and keep the
+  // aggregate-only layout below, exactly as before this section existed.
+  if (data.items && data.items.length > 0) {
+    page.drawText("DETALLE DE ITEMS", { x: margin, y, size: 10, font: helveticaBold, color: primaryColor })
+    y -= 5
+    page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 1, color: lightGray })
+    y -= 20
+
+    // Header de tabla
+    page.drawRectangle({ x: margin, y: y - 5, width: contentWidth, height: 22, color: primaryColor })
+    page.drawText("Descripción", { x: margin + 10, y, size: 9, font: helveticaBold, color: white })
+    page.drawText("Cant.", { x: margin + 280, y, size: 9, font: helveticaBold, color: white })
+    page.drawText("Precio", { x: margin + 330, y, size: 9, font: helveticaBold, color: white })
+    page.drawText("Subtotal", { x: margin + 410, y, size: 9, font: helveticaBold, color: white })
+    y -= 25
+
+    // Filas de items
+    for (const item of data.items) {
+      page.drawText(safe(item.descripcion).substring(0, 40), { x: margin + 10, y, size: 9, font: helvetica, color: textColor })
+      page.drawText(String(item.cantidad), { x: margin + 285, y, size: 9, font: helvetica, color: textColor })
+      page.drawText(formatCurrencyPDF(item.precioUnitario), { x: margin + 330, y, size: 9, font: helvetica, color: textColor })
+      page.drawText(formatCurrencyPDF(item.subtotal), { x: margin + 410, y, size: 9, font: helvetica, color: textColor })
+      y -= 18
+      page.drawLine({ start: { x: margin, y: y + 5 }, end: { x: width - margin, y: y + 5 }, thickness: 0.5, color: lightGray })
+
+      // Same overflow guard as HISTORIAL DE PAGOS below: this is a single,
+      // fixed A4 page — stop drawing rows rather than overlapping the totals
+      // block once we run low on vertical space.
+      if (y < margin + 80) {
+        break
+      }
+    }
+
+    y -= 15
+  }
 
   // === DETALLE DE MONTOS ===
   page.drawText("DETALLE", { x: margin, y, size: 10, font: helveticaBold, color: primaryColor })

@@ -4,6 +4,25 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { generateFacturaPDF } from "@/lib/pdf"
 
+// Fetches items_factura for a factura already confirmed to belong to the
+// caller's org (called only after the org-scoped branch query above
+// succeeds — supabaseAdmin is service-role and bypasses RLS, so this must
+// not run before that check).
+async function fetchItemsFactura(facturaId: string) {
+  const { data } = await supabaseAdmin
+    .from("items_factura")
+    .select("descripcion, cantidad, precio_unitario, subtotal, tipo")
+    .eq("factura_id", facturaId)
+    .order("created_at", { ascending: true })
+
+  return (data || []).map((i: any) => ({
+    descripcion: i.descripcion,
+    cantidad: i.cantidad,
+    precioUnitario: parseFloat(i.precio_unitario),
+    subtotal: parseFloat(i.subtotal),
+  }))
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -54,6 +73,7 @@ export async function GET(
       }
       const org = factura.ordenes_servicio.organizations
       const cliente = factura.ordenes_servicio.clientes
+      const items = await fetchItemsFactura(id)
       pdfData = {
         numeroFactura: factura.numero_factura,
         fecha: new Date(factura.fecha),
@@ -69,6 +89,7 @@ export async function GET(
           codigoOrden: factura.ordenes_servicio.codigo_orden,
           dispositivo: factura.ordenes_servicio.dispositivo,
         },
+        items,
         subtotal: parseFloat(factura.subtotal),
         iva: parseFloat(factura.iva),
         total: parseFloat(factura.total),
@@ -110,12 +131,14 @@ export async function GET(
         return NextResponse.json({ error: "Factura no encontrada" }, { status: 404 })
       }
       const org = factura.ventas.organizations
+      const items = await fetchItemsFactura(id)
       pdfData = {
         numeroFactura: factura.numero_factura,
         fecha: new Date(factura.fecha),
         estadoPago: factura.estado_pago,
         cliente: { nombre: factura.ventas.cliente_nombre || "Consumidor Final" },
         venta: { numeroVenta: factura.ventas.numero_venta },
+        items,
         subtotal: parseFloat(factura.subtotal),
         iva: parseFloat(factura.iva),
         total: parseFloat(factura.total),
