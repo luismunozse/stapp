@@ -4,7 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { hasPlanFeature } from "@/lib/subscriptions"
 import { getPlatformEvolutionConfig, buildSucursalInstanceName } from "@/lib/whatsapp/platform-config"
 import { connectInstance, getConnectionState } from "@/lib/whatsapp/providers/evolution"
-import { upsertSucursalWhatsAppState } from "@/lib/whatsapp/sucursal-config"
+import { updateSucursalWhatsAppState } from "@/lib/whatsapp/sucursal-config"
 
 async function guard(sucursalId: string) {
   const { error, organizationId } = await requireAdmin()
@@ -33,7 +33,7 @@ async function guard(sucursalId: string) {
     }
   }
   const instanceName = buildSucursalInstanceName(organizationId!, sucursalId)
-  return { organizationId: organizationId!, creds: { baseUrl: platform.baseUrl, instanceName, apiKey: platform.apiKey }, instanceName }
+  return { organizationId: organizationId!, creds: { baseUrl: platform.baseUrl, instanceName, apiKey: platform.apiKey } }
 }
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -42,7 +42,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     const g = await guard(id)
     if (g.error) return g.error
     const result = await connectInstance(g.creds!)
-    await upsertSucursalWhatsAppState(g.organizationId!, id, g.instanceName!, result.state, { qr: !!result.qrBase64 })
+    // Update-only: crear filas es trabajo exclusivo del POST /connect.
+    await updateSucursalWhatsAppState(g.organizationId!, id, result.state, { qr: !!result.qrBase64 })
     return NextResponse.json({
       state: result.state,
       qrBase64: result.qrBase64 || null,
@@ -61,7 +62,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     const g = await guard(id)
     if (g.error) return g.error
     const state = await getConnectionState(g.creds!)
-    await upsertSucursalWhatsAppState(g.organizationId!, id, g.instanceName!, state.state)
+    await updateSucursalWhatsAppState(g.organizationId!, id, state.state)
     return NextResponse.json({ state: state.state, error: state.error || null })
   } catch (err) {
     console.error("Error poll Evolution sucursal:", err)
