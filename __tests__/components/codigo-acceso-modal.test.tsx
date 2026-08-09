@@ -146,6 +146,14 @@ describe("CodigoAccesoModal", () => {
     expect(input).toHaveAttribute("type", "password")
   })
 
+  it("el canvas de la pestana Patron renderiza en 240px (180 es finger-hostile en mostrador)", () => {
+    render(<CodigoAccesoModal open onOpenChange={vi.fn()} value="" onChange={vi.fn()} />)
+    fireEvent.click(screen.getByRole("tab", { name: /Patrón/i }))
+    const canvas = document.querySelector("canvas") as HTMLCanvasElement
+    expect(canvas.width).toBe(240)
+    expect(canvas.height).toBe(240)
+  })
+
   it("la pestana Patron renderiza PatternLock y Guardar commitea el string con prefijo", () => {
     const onChange = vi.fn()
     const onOpenChange = vi.fn()
