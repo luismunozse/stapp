@@ -3,13 +3,14 @@
  * Manual visual-sample generator. Skipped unless PDF_SAMPLES=1.
  * Usage: PDF_SAMPLES=1 PDF_SAMPLES_TAG=before npx vitest run __tests__/pdf-samples.test.ts
  *
- * Writes fully-populated orden and remito (factura) PDFs to
- * .tmp-preview/pdf-samples/{TAG}-orden.pdf and {TAG}-remito.pdf so the
- * monochrome redesign can be compared visually against a baseline.
+ * Writes fully-populated orden, remito (factura), venta and devolucion PDFs
+ * to .tmp-preview/pdf-samples/{TAG}-orden.pdf, {TAG}-remito.pdf,
+ * {TAG}-venta.pdf and {TAG}-devolucion.pdf so the monochrome redesign can be
+ * compared visually against a baseline.
  */
 import { describe, it, expect } from "vitest"
 import { mkdirSync, writeFileSync } from "node:fs"
-import { generateOrdenPDF, generateFacturaPDF } from "@/lib/pdf"
+import { generateOrdenPDF, generateFacturaPDF, generateVentaPDF, generateDevolucionPDF } from "@/lib/pdf"
 import { buildOrdenFixture } from "./lib/orden-fixture"
 
 const OUT_DIR = ".tmp-preview/pdf-samples"
@@ -80,5 +81,53 @@ describe.runIf(process.env.PDF_SAMPLES === "1")("pdf visual samples", () => {
     })
     writeFileSync(`${OUT_DIR}/${TAG}-orden-entregada.pdf`, orden)
     expect(orden.length).toBeGreaterThan(1000)
+  }, 60_000)
+
+  it("writes venta and devolucion sample PDFs", async () => {
+    mkdirSync(OUT_DIR, { recursive: true })
+
+    const venta = await generateVentaPDF({
+      numeroVenta: 128,
+      fecha: new Date("2026-08-08"),
+      cliente: { nombre: "Marcos Iglesias", telefono: "+54 9 11 6789-0123" },
+      vendedor: "Sofía Herrera",
+      items: [
+        { descripcion: "IPHONE 13 128GB NEGRO", cantidad: 1, precioUnitario: 620000, subtotal: 620000, diasGarantia: 180 },
+        { descripcion: "FUNDA SILICONA TRANSPARENTE", cantidad: 1, precioUnitario: 8000, subtotal: 8000, diasGarantia: 30 },
+        { descripcion: "VIDRIO TEMPLADO PREMIUM", cantidad: 2, precioUnitario: 4500, subtotal: 9000, diasGarantia: 0 },
+      ],
+      subtotal: 637000,
+      descuento: 12000,
+      total: 625000,
+      metodoPago: "TRANSFERENCIA",
+      nombreEmpresa: "Servicio Técnico Demo",
+      telefonoEmpresa: "+54 11 4000-1234",
+      direccionEmpresa: "Av. Rivadavia 5000, CABA",
+      moneda: "ARS",
+      zonaHoraria: "America/Argentina/Buenos_Aires",
+    })
+    writeFileSync(`${OUT_DIR}/${TAG}-venta.pdf`, venta)
+    expect(venta.length).toBeGreaterThan(1000)
+
+    const devolucion = await generateDevolucionPDF({
+      numeroDevolucion: "DEV-0042",
+      fecha: new Date("2026-08-08"),
+      ventaNumero: 128,
+      motivo: "Producto con falla de fábrica",
+      tipo: "REEMBOLSO",
+      observaciones: "Cliente devuelve el vidrio templado por burbujas de aire visibles a los 2 días de uso.",
+      items: [
+        { descripcion: "VIDRIO TEMPLADO PREMIUM", cantidad: 2, precioUnitario: 4500, subtotal: 9000 },
+      ],
+      montoDevolucion: 9000,
+      cliente: { nombre: "Marcos Iglesias", telefono: "+54 9 11 6789-0123" },
+      nombreEmpresa: "Servicio Técnico Demo",
+      telefonoEmpresa: "+54 11 4000-1234",
+      direccionEmpresa: "Av. Rivadavia 5000, CABA",
+      moneda: "ARS",
+      zonaHoraria: "America/Argentina/Buenos_Aires",
+    })
+    writeFileSync(`${OUT_DIR}/${TAG}-devolucion.pdf`, devolucion)
+    expect(devolucion.length).toBeGreaterThan(1000)
   }, 60_000)
 })
