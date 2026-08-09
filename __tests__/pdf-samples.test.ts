@@ -10,8 +10,9 @@
  */
 import { describe, it, expect } from "vitest"
 import { mkdirSync, writeFileSync } from "node:fs"
-import { generateOrdenPDF, generateFacturaPDF, generateVentaPDF, generateDevolucionPDF } from "@/lib/pdf"
+import { generateOrdenPDF, generateFacturaPDF, generateVentaPDF, generateDevolucionPDF, generateCotizacionPDF } from "@/lib/pdf"
 import { buildOrdenFixture } from "./lib/orden-fixture"
+import { buildCotizacionOrdenFixture, buildCotizacionPresupuestoFixture } from "./lib/cotizacion-fixture"
 
 const OUT_DIR = ".tmp-preview/pdf-samples"
 const TAG = process.env.PDF_SAMPLES_TAG ?? "after"
@@ -129,5 +130,17 @@ describe.runIf(process.env.PDF_SAMPLES === "1")("pdf visual samples", () => {
     })
     writeFileSync(`${OUT_DIR}/${TAG}-devolucion.pdf`, devolucion)
     expect(devolucion.length).toBeGreaterThan(1000)
+  }, 60_000)
+
+  it("writes cotizacion sample PDFs (both tipo variants)", async () => {
+    mkdirSync(OUT_DIR, { recursive: true })
+
+    const cotizacionOrden = await generateCotizacionPDF(buildCotizacionOrdenFixture())
+    writeFileSync(`${OUT_DIR}/${TAG}-cotizacion-orden.pdf`, cotizacionOrden)
+    expect(cotizacionOrden.length).toBeGreaterThan(1000)
+
+    const cotizacionPresupuesto = await generateCotizacionPDF(buildCotizacionPresupuestoFixture())
+    writeFileSync(`${OUT_DIR}/${TAG}-cotizacion-presupuesto.pdf`, cotizacionPresupuesto)
+    expect(cotizacionPresupuesto.length).toBeGreaterThan(1000)
   }, 60_000)
 })
