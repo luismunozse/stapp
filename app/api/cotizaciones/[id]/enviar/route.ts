@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth-utils"
 import { supabaseAdmin } from "@/lib/supabase"
+import { transicionarOrden } from "@/lib/orden-transicion"
+import type { EstadoOrden } from "@/types"
 import { generateCotizacionPDF } from "@/lib/pdf"
 import { buildCotizacionPdfExtras } from "@/lib/cotizacion-pdf"
 import { sendCotizacionEmail } from "@/lib/email"
@@ -147,25 +149,26 @@ export async function POST(
           .is("deleted_at", null)
           .neq("estado", "RECHAZADA")
         const totalPresupuesto = (allCots || []).reduce((sum, c) => sum + Number(c.total), 0)
-        await supabaseAdmin
-          .from("ordenes_servicio")
-          .update({
-            estado: "PRESUPUESTADO",
-            presupuesto: totalPresupuesto,
-            costo_final: totalPresupuesto,
-          })
-          .eq("id", orden.id)
-
-        // Registrar evento
-        await supabaseAdmin.from("orden_eventos").insert({
-          orden_id: orden.id,
-          organization_id: organizationId,
-          tipo: "CAMBIO_ESTADO",
-          estado_anterior: estadoAnterior,
-          estado_nuevo: "PRESUPUESTADO",
-          descripcion: `Cotización ${cotizacion.numero_cotizacion} enviada al cliente`,
-          metadata: { cotizacionId: id },
+        const resultado = await transicionarOrden(supabaseAdmin, {
+          ordenId: orden.id,
+          organizationId: organizationId!,
+          esperado: estadoAnterior as EstadoOrden,
+          nuevo: "PRESUPUESTADO",
+          camposExtra: { presupuesto: totalPresupuesto, costo_final: totalPresupuesto },
         })
+
+        if (resultado.ok) {
+          // Registrar evento
+          await supabaseAdmin.from("orden_eventos").insert({
+            orden_id: orden.id,
+            organization_id: organizationId,
+            tipo: "CAMBIO_ESTADO",
+            estado_anterior: estadoAnterior,
+            estado_nuevo: "PRESUPUESTADO",
+            descripcion: `Cotización ${cotizacion.numero_cotizacion} enviada al cliente`,
+            metadata: { cotizacionId: id },
+          })
+        }
       }
     }
 
