@@ -3,14 +3,16 @@
  * Manual visual-sample generator. Skipped unless PDF_SAMPLES=1.
  * Usage: PDF_SAMPLES=1 PDF_SAMPLES_TAG=before npx vitest run __tests__/pdf-samples.test.ts
  *
- * Writes fully-populated orden, remito (factura), venta and devolucion PDFs
- * to .tmp-preview/pdf-samples/{TAG}-orden.pdf, {TAG}-remito.pdf,
- * {TAG}-venta.pdf and {TAG}-devolucion.pdf so the monochrome redesign can be
- * compared visually against a baseline.
+ * Writes fully-populated orden, remito (factura), venta, devolucion,
+ * cotizacion, garantia and standalone entrega PDFs to
+ * .tmp-preview/pdf-samples/{TAG}-orden.pdf, {TAG}-remito.pdf,
+ * {TAG}-venta.pdf, {TAG}-devolucion.pdf, {TAG}-garantia.pdf and
+ * {TAG}-entrega-standalone.pdf so the monochrome redesign can be compared
+ * visually against a baseline.
  */
 import { describe, it, expect } from "vitest"
 import { mkdirSync, writeFileSync } from "node:fs"
-import { generateOrdenPDF, generateFacturaPDF, generateVentaPDF, generateDevolucionPDF, generateCotizacionPDF } from "@/lib/pdf"
+import { generateOrdenPDF, generateFacturaPDF, generateVentaPDF, generateDevolucionPDF, generateCotizacionPDF, generateGarantiaVentaPDF, generateComprobanteEntregaPDF } from "@/lib/pdf"
 import { buildOrdenFixture } from "./lib/orden-fixture"
 import { buildCotizacionOrdenFixture, buildCotizacionPresupuestoFixture } from "./lib/cotizacion-fixture"
 
@@ -142,5 +144,61 @@ describe.runIf(process.env.PDF_SAMPLES === "1")("pdf visual samples", () => {
     const cotizacionPresupuesto = await generateCotizacionPDF(buildCotizacionPresupuestoFixture())
     writeFileSync(`${OUT_DIR}/${TAG}-cotizacion-presupuesto.pdf`, cotizacionPresupuesto)
     expect(cotizacionPresupuesto.length).toBeGreaterThan(1000)
+  }, 60_000)
+
+  it("writes garantia and standalone entrega sample PDFs", async () => {
+    mkdirSync(OUT_DIR, { recursive: true })
+
+    // Minimal 1x1 PNG, reused as a stand-in signature image (same trick as
+    // the ENTREGADO orden sample above).
+    const pngBase64 =
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+
+    const garantia = await generateGarantiaVentaPDF({
+      numeroGarantia: "GAR-0089",
+      venta: { numeroVenta: 128, fecha: new Date("2026-08-08") },
+      cliente: { nombre: "Marcos Iglesias", telefono: "+54 9 11 6789-0123" },
+      item: { descripcion: "IPHONE 13 128GB NEGRO", cantidad: 1, marca: "Apple" },
+      diasValidez: 180,
+      fechaInicio: new Date("2026-08-08"),
+      fechaVencimiento: new Date("2027-02-04"),
+      nombreEmpresa: "Servicio Técnico Demo",
+      telefonoEmpresa: "+54 11 4000-1234",
+      direccionEmpresa: "Av. Rivadavia 5000, CABA",
+      moneda: "ARS",
+      zonaHoraria: "America/Argentina/Buenos_Aires",
+      firmaEncargado: pngBase64,
+      firmaEncargadoMime: "image/png",
+      nombreEncargado: "Sofía Herrera",
+    })
+    writeFileSync(`${OUT_DIR}/${TAG}-garantia.pdf`, garantia)
+    expect(garantia.length).toBeGreaterThan(1000)
+
+    const entregaStandalone = await generateComprobanteEntregaPDF({
+      numeroOrden: 1042,
+      fechaIngreso: new Date("2026-07-28"),
+      fechaEntrega: new Date("2026-08-08"),
+      cliente: { nombre: "Juan Pérez", telefono: "+54 9 11 2345-6789", email: "juan.perez@example.com" },
+      dispositivo: "iPhone 13",
+      tipoDispositivo: "CELULAR",
+      marca: "Apple",
+      problemaReportado: "El equipo no enciende desde que se mojó levemente con la lluvia.",
+      diagnostico: "Oxidación en el conector de carga. Se reemplazó la placa base.",
+      firmaClienteEntrega: pngBase64,
+      firmaClienteMime: "image/png",
+      firmaEncargadoEntrega: pngBase64,
+      firmaEncargadoMime: "image/png",
+      entregadoPor: "María Gómez",
+      notasEntrega: "Se entrega el equipo funcionando correctamente. Cliente conforme.",
+      nombreEmpresa: "Servicio Técnico Demo",
+      telefonoEmpresa: "+54 11 4000-1234",
+      direccionEmpresa: "Av. Rivadavia 5000, CABA",
+      ciudadEmpresa: "CABA",
+      provinciaEmpresa: "Buenos Aires",
+      moneda: "ARS",
+      zonaHoraria: "America/Argentina/Buenos_Aires",
+    })
+    writeFileSync(`${OUT_DIR}/${TAG}-entrega-standalone.pdf`, entregaStandalone)
+    expect(entregaStandalone.length).toBeGreaterThan(1000)
   }, 60_000)
 })
