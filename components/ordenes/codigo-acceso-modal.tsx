@@ -2,19 +2,20 @@
 
 import { useEffect, useState } from "react"
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog"
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+} from "@/components/ui/responsive-dialog"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { PatternLock } from "@/components/ui/pattern-lock"
 import { Hash, KeyRound, Grid3X3, Eye, EyeOff } from "lucide-react"
+import { useIsMobileViewport } from "@/hooks/use-is-mobile-viewport"
 
 export type TipoCodigoAcceso = "codigo" | "contrasena" | "patron"
 
@@ -50,6 +51,12 @@ export function CodigoAccesoModal({ open, onOpenChange, value, onChange }: Codig
   const [tab, setTab] = useState<TipoCodigoAcceso>(() => inferirTipoAcceso(value))
   const [draft, setDraft] = useState(value)
   const [mostrarContrasena, setMostrarContrasena] = useState(false)
+  // Gatea autoFocus: en mobile la hoja queda anclada al fondo y el proyecto
+  // no maneja visualViewport/keyboard-avoidance (ni dvh se achica con el
+  // teclado en varios WebView de Android/PWA instalada), asi que un input
+  // autofocado puede terminar renderizado debajo del teclado. En desktop no
+  // hay teclado tactil que lo tape, asi que ahi si autofocamos como siempre.
+  const isMobile = useIsMobileViewport()
 
   // Solo debe resincronizar el borrador en la transicion cerrado -> abierto,
   // no en cada render mientras esta abierto (onChange solo se dispara al
@@ -79,12 +86,20 @@ export function CodigoAccesoModal({ open, onOpenChange, value, onChange }: Codig
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle>Código de acceso</DialogTitle>
-          <DialogDescription>Solo si es necesario para realizar pruebas</DialogDescription>
-        </DialogHeader>
+    // Bottom-sheet en mobile / dialogo centrado en desktop: usa el primitivo
+    // compartido ResponsiveDialog (components/ui/responsive-dialog.tsx), ya
+    // usado por ConfirmarReparadoDialog, CobrarOrdenDialog,
+    // PosCheckoutDialog y PosDevolucionSearch -- mismo grab handle,
+    // reduced-motion y estrategia de safe-area/max-height que esos cuatro,
+    // en vez de reimplementar el mismo patron a mano con overrides max-sm:
+    // sobre <Dialog>. sm:max-w-sm preserva el ancho de desktop de siempre
+    // (Dialog base trae sm:max-w-lg).
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+      <ResponsiveDialogContent className="sm:max-w-sm">
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>Código de acceso</ResponsiveDialogTitle>
+          <ResponsiveDialogDescription>Solo si es necesario para realizar pruebas</ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
 
         <Tabs value={tab} onValueChange={cambiarTab}>
           <TabsList className="grid w-full grid-cols-3">
@@ -104,8 +119,11 @@ export function CodigoAccesoModal({ open, onOpenChange, value, onChange }: Codig
 
           {/* Alto minimo compartido por las tres pestanas para que el
               dialogo no salte al cambiar entre el input y el canvas del
-              patron. */}
-          <div className="min-h-[240px] flex flex-col justify-center">
+              patron. Deliberadamente el mismo en mobile y desktop: PatternLock
+              se renderiza a 240px en las dos (mas abajo), no solo en mobile,
+              asi que un unico valor alcanza -- 240px de canvas + ~8px de gap
+              + ~24px de la fila de estado/Limpiar debajo. */}
+          <div className="min-h-[280px] flex flex-col justify-center">
             <TabsContent value="codigo" className="mt-4">
               <Label htmlFor="codigo-acceso-input">Código numérico</Label>
               <Input
@@ -116,7 +134,7 @@ export function CodigoAccesoModal({ open, onOpenChange, value, onChange }: Codig
                 onChange={(e) => setDraft(e.target.value.replace(/\D/g, ""))}
                 placeholder="Ej: 1234"
                 className="mt-2 h-14 text-center text-2xl tracking-[0.3em]"
-                autoFocus
+                autoFocus={!isMobile}
               />
             </TabsContent>
 
@@ -131,7 +149,7 @@ export function CodigoAccesoModal({ open, onOpenChange, value, onChange }: Codig
                   onChange={(e) => setDraft(e.target.value)}
                   placeholder="Contraseña para pruebas"
                   className="h-14 pr-10 text-lg"
-                  autoFocus
+                  autoFocus={!isMobile}
                 />
                 <Button
                   type="button"
@@ -151,20 +169,25 @@ export function CodigoAccesoModal({ open, onOpenChange, value, onChange }: Codig
             </TabsContent>
 
             <TabsContent value="patron" className="mt-4 flex justify-center">
-              <PatternLock value={draft} onChange={setDraft} />
+              {/* 240px en vez del default (180): 180 es finger-hostile para
+                  dibujar el patron con el dedo en mostrador. getEventPosition
+                  en pattern-lock.tsx ya rescala por getBoundingClientRect, asi
+                  que este tamano funciona igual en mobile y desktop sin tocar
+                  ese componente. */}
+              <PatternLock value={draft} onChange={setDraft} size={240} />
             </TabsContent>
           </div>
         </Tabs>
 
-        <DialogFooter>
+        <ResponsiveDialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
           <Button type="button" onClick={guardar}>
             Guardar
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </ResponsiveDialogFooter>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   )
 }

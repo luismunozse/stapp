@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -16,6 +16,7 @@ import { ClienteSelector } from "@/components/cotizaciones/cliente-selector"
 import { SignaturePad } from "@/components/firma/signature-pad"
 import { compressImage } from "@/lib/image-compression"
 import { useTiposDispositivo } from "@/hooks/use-tipos-dispositivo"
+import { useIsMobileViewport } from "@/hooks/use-is-mobile-viewport"
 import { useTerminologia } from "@/contexts/currency-context"
 import { useOffline } from "@/contexts/offline-context"
 import { useModal } from "@/contexts/modal-context"
@@ -170,6 +171,30 @@ export function RecepcionForm() {
   const { offlineFetch } = useOffline()
   const { showError, showInfo } = useModal()
   const { tipos: tiposDispositivo, loading: tiposLoading } = useTiposDispositivo()
+  const isMobile = useIsMobileViewport()
+
+  // Alto REAL de la barra sticky (mobile), medido con ResizeObserver -- no un
+  // numero fijo. La barra puede ocupar 1 o 2 filas segun cuanto entren
+  // "N equipos" + "Agregar otro equipo" + el submit en el ancho disponible
+  // (flex-wrap en el FormActionBar de mas abajo), asi que un alto fijo
+  // (h-24) se quedaba corto en pantallas angostas: el checkbox "El cliente
+  // acepta los terminos", que onSubmit exige, quedaba tapado por la barra
+  // incluso scrolleando hasta el final. 130 es solo el valor del primer
+  // frame, antes de que el observer reporte la medida real -- la garantia
+  // de correctitud es barHeight, no este default.
+  const barWrapperRef = useRef<HTMLDivElement>(null)
+  const [barHeight, setBarHeight] = useState(130)
+
+  useEffect(() => {
+    const el = barWrapperRef.current
+    if (!el || typeof ResizeObserver === "undefined") return
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0]
+      if (entry) setBarHeight(Math.ceil(entry.contentRect.height))
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null)
   const [firma, setFirma] = useState<string | null>(null)
@@ -493,10 +518,17 @@ export function RecepcionForm() {
             ))}
           </div>
 
-          <Button type="button" variant="outline" onClick={agregarEquipo} className="w-full">
-            <Plus className="mr-2 h-4 w-4" />
-            Agregar otro equipo
-          </Button>
+          {/* En mobile este boton vive en la barra sticky de abajo (junto al
+              contador y "Crear recepcion"): con dos tarjetas largas arriba
+              quedaba fuera de pantalla y un mostrador real penso que el
+              limite era 2 equipos. isMobile decide cual de los dos se monta
+              -- nunca los dos a la vez, mismo agregarEquipo en ambos. */}
+          {!isMobile && (
+            <Button type="button" variant="outline" onClick={agregarEquipo} className="w-full">
+              <Plus className="mr-2 h-4 w-4" />
+              Agregar otro equipo
+            </Button>
+          )}
 
           <div>
             <Label htmlFor="observaciones">Observaciones</Label>
@@ -536,11 +568,46 @@ export function RecepcionForm() {
             </CardContent>
           </Card>
 
-          <FormActionBar className="justify-end">
-            <Button type="submit" disabled={submitting}>
-              {submitting ? "Creando..." : `Crear recepcion (${fields.length} equipos)`}
-            </Button>
-          </FormActionBar>
+          {/* Despeje para que la barra sticky de abajo (mobile) no tape el
+              final de la tarjeta de conformidad mientras se scrollea --
+              position: sticky solo reserva su propio alto al final del
+              flujo, asi que sin este espacio el checkbox de conformidad
+              queda debajo de la barra hasta llegar al final del todo. Alto
+              MEDIDO (barHeight), no fijo -- ver comentario junto al
+              ResizeObserver mas arriba. */}
+          <div className="sm:hidden" style={{ height: barHeight }} aria-hidden="true" />
+
+          <div ref={barWrapperRef}>
+            <FormActionBar className="flex-wrap justify-end">
+              {isMobile && (
+                <span
+                  className="mr-auto text-sm font-medium text-muted-foreground"
+                  aria-live="polite"
+                  data-testid="equipo-counter"
+                >
+                  {fields.length} equipos
+                </span>
+              )}
+              {isMobile && (
+                <Button type="button" variant="outline" size="sm" onClick={agregarEquipo}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Agregar otro equipo
+                </Button>
+              )}
+              <Button type="submit" disabled={submitting}>
+                {/* Label mas corto en mobile: el contador ya muestra la
+                    cantidad de equipos, no hace falta repetirla y asi el
+                    boton entra en la fila junto a "Agregar otro equipo" en
+                    mas pantallas (menos filas = menos alto de barra). En
+                    desktop el label completo queda igual que siempre. */}
+                {submitting
+                  ? "Creando..."
+                  : isMobile
+                    ? "Crear recepcion"
+                    : `Crear recepcion (${fields.length} equipos)`}
+              </Button>
+            </FormActionBar>
+          </div>
         </form>
 
         {resultado && (
