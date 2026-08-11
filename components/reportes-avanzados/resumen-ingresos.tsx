@@ -172,7 +172,7 @@ export function ResumenIngresos({ desde, hasta }: ResumenIngresosProps = {}) {
         <StatCard
           title="Reparaciones"
           value={formatPrice(data.resumen.totalServicios)}
-          description={`${data.resumen.cantidadServicios} facturas · ${porcentajeServicios}%`}
+          description={`${data.resumen.cantidadServicios} remitos · ${porcentajeServicios}%`}
           icon={Wrench}
           tone="info"
         />

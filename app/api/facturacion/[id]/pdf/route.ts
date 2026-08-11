@@ -47,7 +47,7 @@ export async function GET(
       .single()
 
     if (baseError || !base) {
-      return NextResponse.json({ error: "Factura no encontrada" }, { status: 404 })
+      return NextResponse.json({ error: "Remito no encontrado" }, { status: 404 })
     }
 
     let pdfData: Record<string, any>
@@ -69,7 +69,7 @@ export async function GET(
       if (!verTodas && sid) query = query.eq("ordenes_servicio.sucursal_id", sid)
       const { data: factura, error: dbError } = await query.single()
       if (dbError || !factura) {
-        return NextResponse.json({ error: "Factura no encontrada" }, { status: 404 })
+        return NextResponse.json({ error: "Remito no encontrado" }, { status: 404 })
       }
       const org = factura.ordenes_servicio.organizations
       const cliente = factura.ordenes_servicio.clientes
@@ -128,7 +128,7 @@ export async function GET(
       if (!verTodas && sid) query = query.eq("ventas.sucursal_id", sid)
       const { data: factura, error: dbError } = await query.single()
       if (dbError || !factura) {
-        return NextResponse.json({ error: "Factura no encontrada" }, { status: 404 })
+        return NextResponse.json({ error: "Remito no encontrado" }, { status: 404 })
       }
       const org = factura.ventas.organizations
       const items = await fetchItemsFactura(id)
@@ -169,7 +169,7 @@ export async function GET(
   } catch (error) {
     console.error("Error generating factura PDF:", error)
     return NextResponse.json(
-      { error: "Error al generar PDF de factura" },
+      { error: "Error al generar PDF de remito" },
       { status: 500 }
     )
   }

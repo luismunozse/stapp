@@ -137,7 +137,7 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error("Error fetching facturas:", error)
     return NextResponse.json(
-      { error: "Error al obtener facturas" },
+      { error: "Error al obtener remitos" },
       { status: 500 }
     )
   }

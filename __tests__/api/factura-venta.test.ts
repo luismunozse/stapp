@@ -104,7 +104,7 @@ describe("POST /api/facturacion/generar — venta gates (V2-V4)", () => {
     const res = await generarPost(createPostRequest({ ventaId: "v1" }))
     const { status, body } = await parseResponse(res)
     expect(status).toBe(400)
-    expect(body.error).toBe("Ya existe una factura para esta venta")
+    expect(body.error).toBe("Ya existe un remito para esta venta")
   })
 
   it("400 when venta already has a factura (PostgREST one-to-one object embed, not array)", async () => {
@@ -120,7 +120,7 @@ describe("POST /api/facturacion/generar — venta gates (V2-V4)", () => {
     const res = await generarPost(createPostRequest({ ventaId: "v1" }))
     const { status, body } = await parseResponse(res)
     expect(status).toBe(400)
-    expect(body.error).toBe("Ya existe una factura para esta venta")
+    expect(body.error).toBe("Ya existe un remito para esta venta")
   })
 })
 

@@ -428,7 +428,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
         <CardHeader className="p-4 sm:p-6">
           <CardTitle className="text-base sm:text-lg">Moneda</CardTitle>
           <CardDescription className="text-xs sm:text-sm">
-            Moneda utilizada para montos, facturas y comprobantes.
+            Moneda utilizada para montos, remitos y comprobantes.
           </CardDescription>
         </CardHeader>
         <CardContent className="p-4 sm:p-6 pt-0">
