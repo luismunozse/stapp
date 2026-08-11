@@ -1,6 +1,6 @@
 // __tests__/components/venta-detail-generar-factura.test.tsx
 /**
- * Tests: VentaDetail shows "Generar factura" for ADMIN on an uninvoiced
+ * Tests: VentaDetail shows "Generar remito" for ADMIN on an uninvoiced
  * COMPLETADA venta, hides it once facturaId is set, and posts { ventaId }.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
@@ -48,7 +48,7 @@ function ventaResponse(over: Partial<any> = {}) {
   }
 }
 
-describe("VentaDetail — Generar factura button", () => {
+describe("VentaDetail — Generar remito button", () => {
   beforeEach(() => vi.clearAllMocks())
 
   it("shows the button for an uninvoiced COMPLETADA venta and posts { ventaId }", async () => {
@@ -60,7 +60,7 @@ describe("VentaDetail — Generar factura button", () => {
     const { VentaDetail } = await import("@/components/ventas/venta-detail")
     render(<VentaDetail ventaId="v1" />)
 
-    const boton = await screen.findByRole("button", { name: /Generar factura/i })
+    const boton = await screen.findByRole("button", { name: /Generar remito/i })
     fireEvent.click(boton)
 
     await waitFor(() => {
@@ -82,7 +82,7 @@ describe("VentaDetail — Generar factura button", () => {
     await waitFor(() => {
       expect(screen.getByText("Venta V0005")).toBeInTheDocument()
     })
-    expect(screen.queryByRole("button", { name: /Generar factura/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /Generar remito/i })).not.toBeInTheDocument()
   })
 
   it("hides the button for an ANULADA venta even without a factura", async () => {
@@ -96,6 +96,6 @@ describe("VentaDetail — Generar factura button", () => {
     await waitFor(() => {
       expect(screen.getByText("Venta V0005")).toBeInTheDocument()
     })
-    expect(screen.queryByRole("button", { name: /Generar factura/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /Generar remito/i })).not.toBeInTheDocument()
   })
 })

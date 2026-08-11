@@ -247,14 +247,14 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
       })
       if (!res.ok) {
         const data = await res.json()
-        await showError(data.error || "Error al generar la factura")
+        await showError(data.error || "Error al generar el remito")
         return
       }
-      await showSuccess("Factura generada correctamente")
+      await showSuccess("Remito generado correctamente")
       fetchVenta()
     } catch (error) {
       console.error("Error:", error)
-      await showError("Error al generar la factura")
+      await showError("Error al generar el remito")
     } finally {
       setGenerandoFactura(false)
     }
@@ -353,7 +353,7 @@ export function VentaDetail({ ventaId }: VentaDetailProps) {
                 disabled={generandoFactura}
               >
                 <FileText className="mr-2 h-4 w-4" />
-                {generandoFactura ? "Generando..." : "Generar factura"}
+                {generandoFactura ? "Generando..." : "Generar remito"}
               </Button>
             )}
             <Button

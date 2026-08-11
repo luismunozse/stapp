@@ -42,7 +42,7 @@ const ENTITY_DISPLAY: Record<string, string> = {
   inventario: "producto",
   proveedores: "proveedor",
   cotizaciones: "cotización",
-  facturas: "factura",
+  facturas: "remito",
   garantias: "garantía",
   users: "usuario",
   checklist_templates: "checklist",

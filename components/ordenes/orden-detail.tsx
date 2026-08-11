@@ -435,8 +435,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
 
   const handleGenerarFactura = async () => {
     const confirmed = await confirm({
-      title: "Generar factura",
-      description: "¿Generar factura para esta orden?",
+      title: "Generar remito",
+      description: "¿Generar remito para esta orden?",
       confirmText: "Generar",
       variant: "info",
     })
@@ -452,8 +452,8 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
 
       if (res.ok) {
         await alert({
-          title: "Factura generada",
-          description: "La factura se generó correctamente",
+          title: "Remito generado",
+          description: "El remito se generó correctamente",
           variant: "success",
         })
         router.push("/facturacion")
@@ -461,14 +461,14 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
         const error = await res.json()
         await alert({
           title: "Error",
-          description: error.error || "Error al generar factura",
+          description: error.error || "Error al generar remito",
           variant: "error",
         })
       }
     } catch (error) {
       await alert({
         title: "Error",
-        description: "Error al generar factura",
+        description: "Error al generar remito",
         variant: "error",
       })
     } finally {
@@ -771,7 +771,7 @@ export function OrdenDetail({ ordenId }: OrdenDetailProps) {
                 {(orden.estado === "REPARADO" || orden.estado === "ENTREGADO") && (
                   <DropdownMenuItem onClick={handleGenerarFactura} disabled={updating}>
                     <Receipt className="h-4 w-4 mr-2" />
-                    Generar Factura
+                    Generar Remito
                   </DropdownMenuItem>
                 )}
                 {(orden.estado === "ENTREGADO" || orden.estado === "REPARADO") && !orden.esReingreso && (
