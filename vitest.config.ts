@@ -18,7 +18,11 @@ export default defineConfig({
     testTimeout: 30000,
     setupFiles: ['./vitest.setup.ts'],
     include: ['**/*.{test,spec}.{ts,tsx}'],
-    exclude: ['node_modules', '.next', 'dist', 'e2e', '.claude/**'],
+    // Custom `exclude` REPLACES vitest's defaults, and bare names like
+    // 'node_modules' only match at the root: a stray worktree (.worktrees/,
+    // .claude/worktrees/) re-introduces its whole node_modules into discovery
+    // and a plain `npx vitest run` hangs for 15-30 min. Globstar everything.
+    exclude: ['**/node_modules/**', '**/.next/**', '**/dist/**', 'e2e/**', '.claude/**', '.worktrees/**'],
     deps: {
       optimizer: {
         // Vitest 4 usa las claves "client"/"ssr" (la clave vieja "web" es
@@ -38,7 +42,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],
-      exclude: ['node_modules', '.next', '**/*.d.ts', 'vitest.config.ts']
+      exclude: ['**/node_modules/**', '**/.next/**', '**/*.d.ts', 'vitest.config.ts']
     }
   },
   resolve: {
