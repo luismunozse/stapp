@@ -12,7 +12,7 @@
  */
 import { describe, it, expect } from "vitest"
 import { mkdirSync, writeFileSync } from "node:fs"
-import { generateOrdenPDF, generateFacturaPDF, generateVentaPDF, generateDevolucionPDF, generateCotizacionPDF, generateGarantiaVentaPDF, generateComprobanteEntregaPDF } from "@/lib/pdf"
+import { generateOrdenPDF, generateFacturaPDF, generateVentaPDF, generateVentaTicketPDF, generateDevolucionPDF, generateCotizacionPDF, generateGarantiaVentaPDF, generateComprobanteEntregaPDF } from "@/lib/pdf"
 import { buildOrdenFixture } from "./lib/orden-fixture"
 import { buildCotizacionOrdenFixture, buildCotizacionPresupuestoFixture } from "./lib/cotizacion-fixture"
 
@@ -132,6 +132,36 @@ describe.runIf(process.env.PDF_SAMPLES === "1")("pdf visual samples", () => {
     })
     writeFileSync(`${OUT_DIR}/${TAG}-devolucion.pdf`, devolucion)
     expect(devolucion.length).toBeGreaterThan(1000)
+  }, 60_000)
+
+  it("writes a thermal ticket sample PDF (58mm)", async () => {
+    mkdirSync(OUT_DIR, { recursive: true })
+
+    const ticket = await generateVentaTicketPDF(
+      {
+        numeroVenta: 128,
+        fecha: new Date("2026-08-08"),
+        cliente: { nombre: "Marcos Iglesias", telefono: "+54 9 11 6789-0123" },
+        vendedor: "Sofía Herrera",
+        items: [
+          { descripcion: "IPHONE 13 128GB NEGRO", cantidad: 1, precioUnitario: 620000, subtotal: 620000, diasGarantia: 180 },
+          { descripcion: "FUNDA SILICONA TRANSPARENTE", cantidad: 1, precioUnitario: 8000, subtotal: 8000, diasGarantia: 30 },
+          { descripcion: "VIDRIO TEMPLADO PREMIUM", cantidad: 2, precioUnitario: 4500, subtotal: 9000, diasGarantia: 0 },
+        ],
+        subtotal: 637000,
+        descuento: 12000,
+        total: 625000,
+        metodoPago: "TRANSFERENCIA",
+        nombreEmpresa: "Servicio Técnico Demo",
+        telefonoEmpresa: "+54 11 4000-1234",
+        direccionEmpresa: "Av. Rivadavia 5000, CABA",
+        moneda: "ARS",
+        zonaHoraria: "America/Argentina/Buenos_Aires",
+      },
+      58
+    )
+    writeFileSync(`${OUT_DIR}/${TAG}-ticket.pdf`, ticket)
+    expect(ticket.length).toBeGreaterThan(500)
   }, 60_000)
 
   it("writes cotizacion sample PDFs (both tipo variants)", async () => {

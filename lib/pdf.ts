@@ -2088,9 +2088,9 @@ export async function generateVentaTicketPDF(data: VentaPDFData, paperWidth: 58 
 
   const { regular: font, bold: fontBold } = await embedCustomFonts(pdfDoc)
 
-  const black = rgb(0, 0, 0)
-  const gray = rgb(0.35, 0.35, 0.35)
-  const lightGray = rgb(0.7, 0.7, 0.7)
+  const black = MONO.ink
+  const gray = MONO.label
+  const lightGray = MONO.rule
 
   // Helper: draw centered text
   const drawCenter = (text: string, yPos: number, size: number, f = font, color = black) => {
@@ -2203,7 +2203,7 @@ export async function generateVentaTicketPDF(data: VentaPDFData, paperWidth: 58 
 
   // Total line (bigger, bold)
   y -= 2
-  page.drawRectangle({ x: margin, y: y - 3, width: contentWidth, height: 14, color: rgb(0.95, 0.95, 0.95) })
+  page.drawRectangle({ x: margin, y: y - 3, width: contentWidth, height: 14, color: MONO.totalBg })
   page.drawText("TOTAL:", { x: margin + 3, y, size: 9, font: fontBold, color: black })
   drawRight(formatCurrencyPDF(data.total), y, 9, fontBold, black)
   y -= 18
