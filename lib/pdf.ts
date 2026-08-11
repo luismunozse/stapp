@@ -3099,7 +3099,7 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
       page.drawText(formatCurrencyPDF(item.precioUnitario), { x: margin + 330, y, size: TYPE.body, font: helvetica, color: MONO.ink })
       page.drawText(formatCurrencyPDF(item.subtotal), { x: margin + 410, y, size: TYPE.body, font: helvetica, color: MONO.ink })
       y -= 18
-      drawRule(page, margin, width - margin, y + 5)
+      drawRule(page, margin, width - margin, y + 10)
 
       // Same overflow guard as HISTORIAL DE PAGOS below: this is a single,
       // fixed A4 page — stop drawing rows rather than overlapping the totals
@@ -3122,14 +3122,14 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   page.drawText("Subtotal", { x: margin + 10, y, size: TYPE.body, font: helvetica, color: MONO.label })
   page.drawText(formatCurrencyPDF(data.subtotal), { x: width - margin - 100, y, size: TYPE.body, font: helvetica, color: MONO.ink })
   y -= 18
-  drawRule(page, margin, width - margin, y + 5)
+  drawRule(page, margin, width - margin, y + 10)
 
   // IVA
   if (data.iva > 0) {
     page.drawText("IVA", { x: margin + 10, y, size: TYPE.body, font: helvetica, color: MONO.label })
     page.drawText(formatCurrencyPDF(data.iva), { x: width - margin - 100, y, size: TYPE.body, font: helvetica, color: MONO.ink })
     y -= 18
-    drawRule(page, margin, width - margin, y + 5)
+    drawRule(page, margin, width - margin, y + 10)
   }
 
   // Descuento (venta-sourced only; PDF-display only, never recomputed —
@@ -3139,7 +3139,7 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     page.drawText("Descuento", { x: margin + 10, y, size: TYPE.body, font: helvetica, color: MONO.label })
     page.drawText(`-${formatCurrencyPDF(data.descuento)}`, { x: width - margin - 100, y, size: TYPE.body, font: helvetica, color: MONO.ink })
     y -= 18
-    drawRule(page, margin, width - margin, y + 5)
+    drawRule(page, margin, width - margin, y + 10)
   }
 
   // Redondeo (venta-sourced only; can be positive or negative).
@@ -3147,7 +3147,7 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     page.drawText("Redondeo", { x: margin + 10, y, size: TYPE.body, font: helvetica, color: MONO.label })
     page.drawText(`${data.redondeo >= 0 ? "+" : ""}${formatCurrencyPDF(data.redondeo)}`, { x: width - margin - 100, y, size: TYPE.body, font: helvetica, color: MONO.ink })
     y -= 18
-    drawRule(page, margin, width - margin, y + 5)
+    drawRule(page, margin, width - margin, y + 10)
   }
 
   // Linea antes del total
@@ -3209,7 +3209,7 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
       }
       page.drawText(formatCurrencyPDF(pago.monto), { x: width - margin - 90, y, size: TYPE.body, font: helveticaBold, color: MONO.ink })
       y -= 18
-      drawRule(page, margin, width - margin, y + 5)
+      drawRule(page, margin, width - margin, y + 10)
 
       // Check if we need a new page
       if (y < margin + 80) {
