@@ -395,7 +395,7 @@ export const manualSections: ManualSection[] = [
         subtitle: "Crear un remito",
         body: "El módulo de Comprobantes te permite generar remitos internos asociados a órdenes de servicio o independientes. Importante: STApp emite documentos no fiscales (comprobantes internos para tu control), no facturas electrónicas AFIP. Los precios se cargan finales (sin discriminación de IVA).",
         steps: [
-          "Andá a \"Comprobantes\" y hacé clic en \"Nuevo Remito\"",
+          "Andá a \"Comprobantes\" y hacé clic en \"Generar remito\"",
           "Seleccioná el cliente",
           "Agregá los conceptos con descripción, cantidad y precio final",
           "Asigná un número de remito (manual)",
