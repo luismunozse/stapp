@@ -81,7 +81,7 @@ const navItems: NavItem[] = [
   { href: "/ordenes-compra", label: "Compras", icon: Truck, roles: ["ADMIN"] },
   { href: "/caja", label: "Caja", icon: Landmark, roles: ["ADMIN"] },
   { href: "/finanzas", label: "Finanzas", icon: Wallet, roles: ["ADMIN"] },
-  { href: "/facturacion", label: "Facturación", icon: FileText, roles: ["ADMIN"] },
+  { href: "/facturacion", label: "Comprobantes", icon: FileText, roles: ["ADMIN"] },
   { href: "/reportes", label: "Reportes", icon: BarChart3, roles: ["ADMIN", "VENDEDOR"] },
   { href: "/emails", label: "Emails", icon: Mail, roles: ["ADMIN"] },
   { href: "/soporte", label: "Soporte", icon: Headset },
@@ -115,7 +115,7 @@ const navSections: NavSection[] = [
     label: "Finanzas",
     items: [
       { href: "/caja", label: "Caja", icon: Landmark, roles: ["ADMIN"] },
-      { href: "/facturacion", label: "Facturación", icon: FileText, roles: ["ADMIN"] },
+      { href: "/facturacion", label: "Comprobantes", icon: FileText, roles: ["ADMIN"] },
       { href: "/reportes", label: "Reportes", icon: BarChart3, roles: ["ADMIN", "VENDEDOR"] },
     ],
   },

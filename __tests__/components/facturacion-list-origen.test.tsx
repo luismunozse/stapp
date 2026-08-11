@@ -62,10 +62,10 @@ describe("FacturacionList — origen badge", () => {
     })
 
     const ordenCard = screen
-      .getByRole("heading", { name: "Factura 0001-00000001" })
+      .getByRole("heading", { name: "Remito 0001-00000001" })
       .closest("div.rounded-lg.border.bg-card") as HTMLElement
     const ventaCard = screen
-      .getByRole("heading", { name: "Factura 0001-00000002" })
+      .getByRole("heading", { name: "Remito 0001-00000002" })
       .closest("div.rounded-lg.border.bg-card") as HTMLElement
     expect(ordenCard).toBeTruthy()
     expect(ventaCard).toBeTruthy()

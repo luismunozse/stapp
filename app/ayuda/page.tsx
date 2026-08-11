@@ -158,9 +158,9 @@ const faqs = [
           "STApp soporta efectivo, transferencia, tarjeta de débito, tarjeta de crédito, MercadoPago, cuenta corriente del cliente y otros. Todos los cobros quedan vinculados a la orden o venta correspondiente.",
       },
       {
-        question: "¿Puedo emitir presupuestos y facturas?",
+        question: "¿Puedo emitir presupuestos y remitos?",
         answer:
-          "Sí. Podés generar presupuestos (cotizaciones) desde una orden o desde cero, enviarlos al cliente por WhatsApp o email y convertirlos en orden o venta cuando sean aprobados. La sección de Facturación te permite registrar y consultar los comprobantes emitidos.",
+          "Sí. Podés generar presupuestos (cotizaciones) desde una orden o desde cero, enviarlos al cliente por WhatsApp o email y convertirlos en orden o venta cuando sean aprobados. La sección de Comprobantes te permite registrar y consultar los remitos emitidos.",
       },
     ],
   },

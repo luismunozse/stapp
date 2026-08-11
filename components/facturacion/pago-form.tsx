@@ -103,7 +103,7 @@ export function PagoForm({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-      }, { store: STORES.PAYMENTS, description: `Pago factura` })
+      }, { store: STORES.PAYMENTS, description: `Pago remito` })
 
       if (res.status === 202) {
         await showInfo("Pago guardado offline. Se sincronizará automáticamente.")
