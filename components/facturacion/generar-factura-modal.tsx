@@ -91,12 +91,12 @@ export function GenerarFacturaModal({ open, onOpenChange, onSuccess }: GenerarFa
       })
       if (!res.ok) {
         const data = await res.json()
-        throw new Error(data.error || "Error al generar la factura")
+        throw new Error(data.error || "Error al generar el remito")
       }
       onOpenChange(false)
       onSuccess()
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al generar la factura")
+      setError(err instanceof Error ? err.message : "Error al generar el remito")
     } finally {
       setGenerandoId(null)
     }
@@ -106,9 +106,9 @@ export function GenerarFacturaModal({ open, onOpenChange, onSuccess }: GenerarFa
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>Generar factura</DialogTitle>
+          <DialogTitle>Generar remito</DialogTitle>
           <DialogDescription>
-            Elegí una orden reparada o una venta completada sin factura.
+            Elegí una orden reparada o una venta completada sin remito.
           </DialogDescription>
         </DialogHeader>
 
@@ -136,7 +136,7 @@ export function GenerarFacturaModal({ open, onOpenChange, onSuccess }: GenerarFa
                 <p className="py-6 text-center text-sm text-muted-foreground">Cargando...</p>
               ) : ordenesFiltradas.length === 0 ? (
                 <p className="py-6 text-center text-sm text-muted-foreground">
-                  No hay órdenes sin facturar
+                  No hay órdenes sin remito
                 </p>
               ) : (
                 ordenesFiltradas.map((o) => (
@@ -169,7 +169,7 @@ export function GenerarFacturaModal({ open, onOpenChange, onSuccess }: GenerarFa
                 <p className="py-6 text-center text-sm text-muted-foreground">Cargando...</p>
               ) : ventasFiltradas.length === 0 ? (
                 <p className="py-6 text-center text-sm text-muted-foreground">
-                  No hay ventas sin facturar
+                  No hay ventas sin remito
                 </p>
               ) : (
                 ventasFiltradas.map((v) => (
