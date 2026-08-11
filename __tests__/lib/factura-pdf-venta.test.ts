@@ -259,3 +259,62 @@ describe("generateFacturaPDF — pagination", () => {
     expect(text).not.toContain("continuación")
   })
 })
+
+describe("generateFacturaPDF — money block (saldo protagonist) & dual dates", () => {
+  it("makes saldo pendiente the highlighted figure for partial payments", async () => {
+    const buffer = await generateFacturaPDF({
+      numeroFactura: "0001-00000010",
+      fecha: new Date("2026-01-10"),
+      estadoPago: "PAGADO_PARCIAL",
+      cliente: { nombre: "Consumidor Final" },
+      venta: { numeroVenta: 10 },
+      subtotal: 1000,
+      iva: 0,
+      total: 1000,
+      montoAbonado: 400,
+      pagos: [],
+    } as any)
+
+    const text = await extractPdfText(buffer)
+    expect(text).toContain("SALDO PENDIENTE")
+    expect(text).toContain("Pagado a cuenta")
+  })
+
+  it("shows saldo 0 when fully paid", async () => {
+    const buffer = await generateFacturaPDF({
+      numeroFactura: "0001-00000011",
+      fecha: new Date("2026-01-11"),
+      estadoPago: "PAGADO",
+      cliente: { nombre: "Consumidor Final" },
+      venta: { numeroVenta: 11 },
+      subtotal: 500,
+      iva: 0,
+      total: 500,
+      montoAbonado: 500,
+      pagos: [],
+    } as any)
+
+    const text = await extractPdfText(buffer)
+    expect(text).toContain("SALDO")
+  })
+
+  it("renders emission and operation dates when fechaOperacion is provided", async () => {
+    const buffer = await generateFacturaPDF({
+      numeroFactura: "0001-00000012",
+      fecha: new Date("2026-01-12"),
+      fechaOperacion: new Date("2026-08-01"),
+      estadoPago: "PAGADO",
+      cliente: { nombre: "Consumidor Final" },
+      venta: { numeroVenta: 12 },
+      subtotal: 300,
+      iva: 0,
+      total: 300,
+      montoAbonado: 300,
+      pagos: [],
+    } as any)
+
+    const text = await extractPdfText(buffer)
+    expect(text).toContain("Emisión")
+    expect(text).toContain("Operación")
+  })
+})

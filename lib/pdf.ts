@@ -2863,12 +2863,17 @@ interface FacturaPago {
 interface FacturaPDFData {
   numeroFactura: string
   fecha: Date | string
+  // Accounting-grade remito: when present, drawn as a second "Operación:"
+  // line below "Emisión:" — the date the goods/service actually moved,
+  // which can differ from the document's emission date.
+  fechaOperacion?: Date | string
   estadoPago: string
   cliente: {
     nombre: string
     telefono?: string | null
     email?: string | null
     direccion?: string | null
+    dni?: string | null
   }
   orden?: {
     numeroOrden: number
@@ -2895,6 +2900,16 @@ interface FacturaPDFData {
   nombreEmpresa?: string
   telefonoEmpresa?: string | null
   direccionEmpresa?: string | null
+  // Fiscal emitter data — consumed starting with the accounting-grade
+  // remito follow-up tasks (not drawn by this task).
+  cuitEmpresa?: string | null
+  condicionIvaEmpresa?: string | null
+  domicilioFiscalEmpresa?: string | null
+  // Payment terms — consumed starting with the accounting-grade remito
+  // follow-up tasks (not drawn by this task).
+  vencimiento?: Date | string | null
+  mediosPago?: string | null
+  cbuAlias?: string | null
   logoUrl?: string | null
   moneda?: string
   zonaHoraria?: string
@@ -3031,15 +3046,28 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     font: helveticaBold,
     color: MONO.ink,
   })
-  const fechaLabel = `Fecha: ${fecha}`
-  const fechaLabelWidth = helvetica.widthOfTextAtSize(fechaLabel, TYPE.small)
-  page.drawText(fechaLabel, {
-    x: width - margin - fechaLabelWidth,
+  const emisionLabel = `Emisión: ${fecha}`
+  const emisionLabelWidth = helvetica.widthOfTextAtSize(emisionLabel, TYPE.small)
+  page.drawText(emisionLabel, {
+    x: width - margin - emisionLabelWidth,
     y: height - margin - 50,
     size: TYPE.small,
     font: helvetica,
     color: MONO.label,
   })
+  // Accounting-grade remito: the date the goods/service actually moved can
+  // differ from the emission date above — shown only when supplied.
+  if (data.fechaOperacion) {
+    const operacionLabel = `Operación: ${formatDatePDF(data.fechaOperacion)}`
+    const operacionLabelWidth = helvetica.widthOfTextAtSize(operacionLabel, TYPE.small)
+    page.drawText(operacionLabel, {
+      x: width - margin - operacionLabelWidth,
+      y: height - margin - 62,
+      size: TYPE.small,
+      font: helvetica,
+      color: MONO.label,
+    })
+  }
 
   y = height - margin - 90
 
@@ -3152,7 +3180,11 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     (data.iva > 0 ? 1 : 0) +
     (data.descuento && data.descuento > 0 ? 1 : 0) +
     (data.redondeo && data.redondeo !== 0 ? 1 : 0)
-  const totalsBlockH = 141 + 18 * detalleOptionalRows // DETALLE + TOTAL + ESTADO DE PAGO
+  // 177 = DETALLE label+rule (24) + Subtotal row+rule (18) + pre-total rule
+  // (10) + TOTAL row (18) + Pagado a cuenta row (18) + SALDO bar (35) +
+  // ESTADO DE PAGO label+rule (24) + badge/montos row (30), plus 18 for
+  // each optional Subtotal-block row (IVA / Descuento / Redondeo).
+  const totalsBlockH = 177 + 18 * detalleOptionalRows // DETALLE + TOTAL + PAGADO A CUENTA + SALDO + ESTADO DE PAGO
   if (y - totalsBlockH < floorY) {
     startContinuationPage()
   }
@@ -3199,10 +3231,27 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   drawRule(page, margin, width - margin, y + 5)
   y -= 5
 
-  // Total
-  page.drawRectangle({ x: margin, y: y - 8, width: contentWidth, height: 28, color: MONO.totalBg })
+  // Total — plain bold row, no fill. The money block's visual weight now
+  // goes to SALDO PENDIENTE below: TOTAL is what was billed, not what's
+  // still owed.
   page.drawText("TOTAL", { x: margin + 10, y, size: TYPE.total, font: helveticaBold, color: MONO.ink })
   page.drawText(formatCurrencyPDF(data.total), { x: width - margin - 100, y, size: TYPE.total, font: helveticaBold, color: MONO.ink })
+  y -= 18
+  drawRule(page, margin, width - margin, y + 10)
+
+  // Pagado a cuenta — always rendered, even when nothing has been paid yet.
+  page.drawText("Pagado a cuenta", { x: margin + 10, y, size: TYPE.body, font: helvetica, color: MONO.label })
+  page.drawText(formatCurrencyPDF(data.montoAbonado), { x: width - margin - 100, y, size: TYPE.body, font: helvetica, color: MONO.ink })
+  y -= 18
+
+  // Saldo pendiente — the MONO.totalBg fill (the only allowed area fill)
+  // moves here from TOTAL: this is the accounting-grade remito's
+  // protagonist figure, what the client still owes.
+  const saldo = Math.max(0, pendiente)
+  const saldoLabel = saldo === 0 ? "SALDO" : "SALDO PENDIENTE"
+  page.drawRectangle({ x: margin, y: y - 8, width: contentWidth, height: 28, color: MONO.totalBg })
+  page.drawText(saldoLabel, { x: margin + 10, y, size: TYPE.total, font: helveticaBold, color: MONO.ink })
+  page.drawText(formatCurrencyPDF(saldo), { x: width - margin - 100, y, size: TYPE.total, font: helveticaBold, color: MONO.ink })
   y -= 35
 
   // === ESTADO DE PAGO ===
