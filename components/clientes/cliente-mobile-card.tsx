@@ -9,6 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import type { Cliente } from "@/types"
 import { useCurrency } from "@/contexts/currency-context"
 import { useHasFeature } from "@/hooks/use-subscription"
+import { TipoPrecioBadge } from "./tipo-precio-badge"
 
 interface ClienteMobileCardProps {
   cliente: Cliente
@@ -49,6 +50,7 @@ export function ClienteMobileCard({ cliente, onEdit, onDelete, onWhatsApp, onCue
                     Empresa
                   </span>
                 )}
+                <TipoPrecioBadge tipoPrecio={cliente.tipoPrecio} />
                 {cliente.dni && (
                   <span className="text-xs text-muted-foreground">DNI: {cliente.dni}</span>
                 )}

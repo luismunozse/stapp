@@ -17,6 +17,7 @@ import { CobrarMultipleDialog } from "@/components/ordenes/cobrar-multiple-dialo
 import { ImportModal } from "@/components/import/import-modal"
 import { ExportButton } from "@/components/export/export-button"
 import { ClienteMobileCard } from "./cliente-mobile-card"
+import { TipoPrecioBadge } from "./tipo-precio-badge"
 import { ClienteWhatsAppDialog } from "./cliente-whatsapp-dialog"
 import { Card, CardContent } from "@/components/ui/card"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -180,6 +181,7 @@ export function ClientesList({ allowImport = true }: ClientesListProps) {
                   Empresa
                 </span>
               )}
+              <TipoPrecioBadge tipoPrecio={cliente.tipoPrecio} />
             </div>
             {cliente.razonSocial && (
               <div className="text-xs text-muted-foreground">{cliente.razonSocial}</div>
