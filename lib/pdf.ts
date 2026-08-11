@@ -2949,7 +2949,8 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
 
   // Crear documento PDF
   const pdfDoc = await PDFLib.create()
-  const page = pdfDoc.addPage([595, 842]) // A4
+  let page = pdfDoc.addPage([595, 842]) // A4 — reassigned by startContinuationPage() below
+  const pages: (typeof page)[] = [page] // every page, so the footer can be drawn on each one
   const { width, height } = page.getSize()
 
   const { regular: helvetica, bold: helveticaBold } = await embedCustomFonts(pdfDoc)
@@ -3077,42 +3078,85 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   // Old facturas may have no items_factura rows (pre-dates this table, or the
   // caller didn't fetch them) — skip the table entirely and keep the
   // aggregate-only layout below, exactly as before this section existed.
+  const floorY = margin + 80 // clearance kept above the fixed-position footer
+
+  // Column header rows, factored out because they get re-drawn at the top
+  // of every continuation page for their respective table.
+  const drawItemsTableHeader = (pg: typeof page, yPos: number) => {
+    pg.drawText("DESCRIPCIÓN", { x: margin + 10, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
+    pg.drawText("CANT.", { x: margin + 280, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
+    pg.drawText("PRECIO", { x: margin + 330, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
+    pg.drawText("SUBTOTAL", { x: margin + 410, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
+  }
+  const drawPagosTableHeader = (pg: typeof page, yPos: number) => {
+    pg.drawText("FECHA", { x: margin + 10, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
+    pg.drawText("MÉTODO", { x: margin + 140, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
+    pg.drawText("REFERENCIA", { x: margin + 280, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
+    pg.drawText("MONTO", { x: width - margin - 90, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
+  }
+
+  // Starts a fresh A4 page for a table (or block) that ran out of room on
+  // the current one: draws the "REMITO {numero} — continuación" marker,
+  // resets the cursor, and — when given a table header drawer — re-draws
+  // that table's column header row so the continued rows stay legible.
+  const startContinuationPage = (drawTableHeader?: (pg: typeof page, yPos: number) => void): void => {
+    page = pdfDoc.addPage([width, height])
+    pages.push(page)
+    const contTitle = `REMITO ${numeroFactura} — continuación`
+    page.drawText(contTitle, { x: margin, y: height - margin - 12, size: TYPE.docTitle, font: helveticaBold, color: MONO.ink })
+    drawRule(page, margin, width - margin, height - margin - 24)
+    y = height - margin - 44
+    if (drawTableHeader) {
+      drawTableHeader(page, y)
+      y -= 8
+      drawRule(page, margin, width - margin, y)
+      y -= 17
+    }
+  }
+
   if (data.items && data.items.length > 0) {
     drawSectionLabel(page, helveticaBold, "DETALLE DE ITEMS", margin, y)
     y -= 4
     drawRule(page, margin, width - margin, y)
     y -= 20
 
-    // Header de tabla (sin fill, mayusculas, MONO.label)
-    page.drawText("DESCRIPCIÓN", { x: margin + 10, y, size: TYPE.small, font: helveticaBold, color: MONO.label })
-    page.drawText("CANT.", { x: margin + 280, y, size: TYPE.small, font: helveticaBold, color: MONO.label })
-    page.drawText("PRECIO", { x: margin + 330, y, size: TYPE.small, font: helveticaBold, color: MONO.label })
-    page.drawText("SUBTOTAL", { x: margin + 410, y, size: TYPE.small, font: helveticaBold, color: MONO.label })
+    drawItemsTableHeader(page, y)
     y -= 8
     drawRule(page, margin, width - margin, y)
     y -= 17
 
-    // Filas de items
+    // Filas de items — a row that would land below the footer's clearance
+    // line now flows onto a fresh continuation page instead of being
+    // silently dropped (the old `break` truncated long lists here).
     for (const item of data.items) {
+      if (y - 18 < floorY) {
+        startContinuationPage(drawItemsTableHeader)
+      }
+
       page.drawText(safe(item.descripcion).substring(0, 40), { x: margin + 10, y, size: TYPE.body, font: helvetica, color: MONO.ink })
       page.drawText(String(item.cantidad), { x: margin + 285, y, size: TYPE.body, font: helvetica, color: MONO.ink })
       page.drawText(formatCurrencyPDF(item.precioUnitario), { x: margin + 330, y, size: TYPE.body, font: helvetica, color: MONO.ink })
       page.drawText(formatCurrencyPDF(item.subtotal), { x: margin + 410, y, size: TYPE.body, font: helvetica, color: MONO.ink })
       y -= 18
       drawRule(page, margin, width - margin, y + 10)
-
-      // Same overflow guard as HISTORIAL DE PAGOS below: this is a single,
-      // fixed A4 page — stop drawing rows rather than overlapping the totals
-      // block once we run low on vertical space.
-      if (y < margin + 80) {
-        break
-      }
     }
 
     y -= 15
   }
 
   // === DETALLE DE MONTOS ===
+  // Kept together with ESTADO DE PAGO below: if the combined block doesn't
+  // fit above the footer's clearance line, it moves to a continuation page
+  // as a unit rather than splitting across the page boundary.
+  const detalleOptionalRows =
+    (data.iva > 0 ? 1 : 0) +
+    (data.descuento && data.descuento > 0 ? 1 : 0) +
+    (data.redondeo && data.redondeo !== 0 ? 1 : 0)
+  const totalsBlockH = 141 + 18 * detalleOptionalRows // DETALLE + TOTAL + ESTADO DE PAGO
+  if (y - totalsBlockH < floorY) {
+    startContinuationPage()
+  }
+
   drawSectionLabel(page, helveticaBold, "DETALLE", margin, y)
   y -= 4
   drawRule(page, margin, width - margin, y) // hairline above the label:value block
@@ -3183,21 +3227,33 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
 
   // === HISTORIAL DE PAGOS ===
   if (data.pagos && data.pagos.length > 0) {
+    // Keep the section label + column header together: a dangling header
+    // with zero rows below it is worse than starting the whole section on
+    // a fresh page.
+    const pagosHeaderH = 4 + 20 + 8 + 17 + 18
+    if (y - pagosHeaderH < floorY) {
+      startContinuationPage()
+    }
+
     drawSectionLabel(page, helveticaBold, "HISTORIAL DE PAGOS", margin, y)
     y -= 4
     drawRule(page, margin, width - margin, y)
     y -= 20
 
     // Header (mismo tratamiento que DETALLE DE ITEMS: sin fill, mayusculas)
-    page.drawText("FECHA", { x: margin + 10, y, size: TYPE.small, font: helveticaBold, color: MONO.label })
-    page.drawText("MÉTODO", { x: margin + 140, y, size: TYPE.small, font: helveticaBold, color: MONO.label })
-    page.drawText("REFERENCIA", { x: margin + 280, y, size: TYPE.small, font: helveticaBold, color: MONO.label })
-    page.drawText("MONTO", { x: width - margin - 90, y, size: TYPE.small, font: helveticaBold, color: MONO.label })
+    drawPagosTableHeader(page, y)
     y -= 8
     drawRule(page, margin, width - margin, y)
     y -= 17
 
+    // Same continuation treatment as the items table above — long payment
+    // histories now flow onto extra pages instead of the old `break`
+    // truncation.
     for (const pago of data.pagos) {
+      if (y - 18 < floorY) {
+        startContinuationPage(drawPagosTableHeader)
+      }
+
       const pagoFecha = formatDatePDF(pago.fecha)
       const pagoMetodo = metodoPagoFacturaLabels[pago.metodoPago] || pago.metodoPago
       const pagoRef = safe(pago.referencia)
@@ -3210,23 +3266,26 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
       page.drawText(formatCurrencyPDF(pago.monto), { x: width - margin - 90, y, size: TYPE.body, font: helveticaBold, color: MONO.ink })
       y -= 18
       drawRule(page, margin, width - margin, y + 10)
-
-      // Check if we need a new page
-      if (y < margin + 80) {
-        break
-      }
     }
   }
 
-  // === FOOTER ===
+  // === FOOTER (drawn on every page, so a multi-page remito never leaves a
+  // continuation page blank at the bottom) ===
   const footerY = margin + 50
-
-  drawRule(page, margin, width - margin, footerY)
-
-  page.drawText("Remito interno — no válido como comprobante fiscal.", { x: margin, y: footerY - 15, size: TYPE.fine, font: helvetica, color: MONO.faint })
-
   const fechaImpresion = formatDateTimeValue(new Date(), data.zonaHoraria || DEFAULT_TIMEZONE)
-  page.drawText(`Impreso: ${fechaImpresion}`, { x: width - margin - 110, y: footerY - 27, size: 7, font: helvetica, color: MONO.faint })
+  const totalPages = pages.length
+
+  for (let i = 0; i < pages.length; i++) {
+    const pg = pages[i]
+    drawRule(pg, margin, width - margin, footerY)
+    pg.drawText("Remito interno — no válido como comprobante fiscal.", { x: margin, y: footerY - 15, size: TYPE.fine, font: helvetica, color: MONO.faint })
+    pg.drawText(`Impreso: ${fechaImpresion}`, { x: width - margin - 110, y: footerY - 27, size: 7, font: helvetica, color: MONO.faint })
+    if (totalPages > 1) {
+      const pgText = `Página ${String(i + 1)} de ${String(totalPages)}`
+      const pgW = helvetica.widthOfTextAtSize(pgText, TYPE.small)
+      pg.drawText(pgText, { x: width - margin - pgW, y: footerY - 15, size: TYPE.small, font: helvetica, color: MONO.faint })
+    }
+  }
 
   const pdfBytes = await pdfDoc.save()
   return Buffer.from(pdfBytes)
