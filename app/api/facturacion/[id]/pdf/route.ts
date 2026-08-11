@@ -58,8 +58,8 @@ export async function GET(
         .select(`
           *,
           ordenes_servicio!inner (
-            id, numero_orden, codigo_orden, dispositivo, organization_id, sucursal_id,
-            clientes (nombre, telefono, email, direccion),
+            id, numero_orden, codigo_orden, dispositivo, organization_id, sucursal_id, fecha_ingreso,
+            clientes (nombre, telefono, email, direccion, dni),
             organizations (nombre, nombre_mostrar, telefono, direccion, logo_url, moneda, zona_horaria)
           ),
           pagos_parciales (*)
@@ -77,12 +77,20 @@ export async function GET(
       pdfData = {
         numeroFactura: factura.numero_factura,
         fecha: new Date(factura.fecha),
+        // Accounting-grade remito: the date the goods/service actually
+        // moved (order intake), which can differ from `fecha` (emission).
+        // Guarded because fecha_ingreso has no NOT NULL constraint —
+        // `new Date(null)` would silently become the 1970 epoch otherwise.
+        fechaOperacion: factura.ordenes_servicio.fecha_ingreso
+          ? new Date(factura.ordenes_servicio.fecha_ingreso)
+          : undefined,
         estadoPago: factura.estado_pago,
         cliente: {
           nombre: cliente?.nombre || "Consumidor Final",
           telefono: cliente?.telefono,
           email: cliente?.email,
           direccion: cliente?.direccion,
+          dni: cliente?.dni,
         },
         orden: {
           numeroOrden: factura.ordenes_servicio.numero_orden,
@@ -118,7 +126,7 @@ export async function GET(
         .select(`
           *,
           ventas!inner (
-            id, numero_venta, cliente_nombre, descuento, redondeo_monto, organization_id, sucursal_id,
+            id, numero_venta, cliente_nombre, descuento, redondeo_monto, organization_id, sucursal_id, created_at,
             organizations (nombre, nombre_mostrar, telefono, direccion, logo_url, moneda, zona_horaria)
           ),
           pagos_parciales (*)
@@ -135,6 +143,12 @@ export async function GET(
       pdfData = {
         numeroFactura: factura.numero_factura,
         fecha: new Date(factura.fecha),
+        // Accounting-grade remito: the date the sale actually happened,
+        // which can differ from `fecha` (emission). Guarded the same way
+        // as the orden branch above.
+        fechaOperacion: factura.ventas.created_at
+          ? new Date(factura.ventas.created_at)
+          : undefined,
         estadoPago: factura.estado_pago,
         cliente: { nombre: factura.ventas.cliente_nombre || "Consumidor Final" },
         venta: { numeroVenta: factura.ventas.numero_venta },

@@ -2900,13 +2900,11 @@ interface FacturaPDFData {
   nombreEmpresa?: string
   telefonoEmpresa?: string | null
   direccionEmpresa?: string | null
-  // Fiscal emitter data — consumed starting with the accounting-grade
-  // remito follow-up tasks (not drawn by this task).
+  // Fiscal emitter identity — drawn in the EMISOR header block below.
   cuitEmpresa?: string | null
   condicionIvaEmpresa?: string | null
   domicilioFiscalEmpresa?: string | null
-  // Payment terms — consumed starting with the accounting-grade remito
-  // follow-up tasks (not drawn by this task).
+  // Payment terms — drawn in the CONDICIONES DE PAGO block below.
   vencimiento?: Date | string | null
   mediosPago?: string | null
   cbuAlias?: string | null
@@ -3159,11 +3157,32 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     pg.drawText("PRECIO", { x: margin + 330, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
     pg.drawText("SUBTOTAL", { x: margin + 410, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
   }
+  // Right-aligns text to xRight by measuring its width first — needed for
+  // the HISTORIAL DE PAGOS money columns below, which sit side by side
+  // (MONTO then the running-balance SALDO) and must never collide
+  // regardless of how many digits either amount has.
+  const drawTextRight = (pg: typeof page, text: string, xRight: number, yPos: number, size: number, font: typeof helvetica, color: ReturnType<typeof rgb>) => {
+    pg.drawText(text, { x: xRight - font.widthOfTextAtSize(text, size), y: yPos, size, font, color })
+  }
+
+  // HISTORIAL DE PAGOS column layout. FECHA/MÉTODO/REFERENCIA stay
+  // left-aligned; MONTO and the new running-balance SALDO column are
+  // right-aligned to their own slots so multi-digit amounts never overlap.
+  // Widths were sized against the longest realistic content at 9pt: dates
+  // (~50pt), "Tarjeta Credito" (~75pt), and currency strings up to
+  // "$ 1.234.567,89" (~66pt) — all comfortably inside their slots, with
+  // colMontoR to colSaldoR alone leaving 130pt of breathing room.
+  const colFechaX = margin + 10 // 50
+  const colMetodoX = margin + 90 // 130
+  const colRefX = margin + 175 // 215
+  const colMontoR = margin + 385 // 425 — right edge of the MONTO column
+  const colSaldoR = width - margin // 555 — right edge of the SALDO column, flush with the table's right border
   const drawPagosTableHeader = (pg: typeof page, yPos: number) => {
-    pg.drawText("FECHA", { x: margin + 10, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
-    pg.drawText("MÉTODO", { x: margin + 140, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
-    pg.drawText("REFERENCIA", { x: margin + 280, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
-    pg.drawText("MONTO", { x: width - margin - 90, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
+    pg.drawText("FECHA", { x: colFechaX, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
+    pg.drawText("MÉTODO", { x: colMetodoX, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
+    pg.drawText("REFERENCIA", { x: colRefX, y: yPos, size: TYPE.small, font: helveticaBold, color: MONO.label })
+    drawTextRight(pg, "MONTO", colMontoR, yPos, TYPE.small, helveticaBold, MONO.label)
+    drawTextRight(pg, "SALDO", colSaldoR, yPos, TYPE.small, helveticaBold, MONO.label)
   }
 
   // Starts a fresh A4 page for a table (or block) that ran out of room on
@@ -3381,6 +3400,11 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     // Same continuation treatment as the items table above — long payment
     // histories now flow onto extra pages instead of the old `break`
     // truncation.
+    // Running balance for the SALDO column: starts at the document total
+    // and subtracts each pago's monto in the same order the rows are
+    // drawn (data.pagos' own order — this is a display running total, not
+    // a chronological reconciliation).
+    let saldoCorrido = data.total
     for (const pago of data.pagos) {
       if (y - 18 < floorY) {
         startContinuationPage(drawPagosTableHeader)
@@ -3389,16 +3413,58 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
       const pagoFecha = formatDatePDF(pago.fecha)
       const pagoMetodo = metodoPagoFacturaLabels[pago.metodoPago] || pago.metodoPago
       const pagoRef = safe(pago.referencia)
+      saldoCorrido -= pago.monto
 
-      page.drawText(pagoFecha, { x: margin + 10, y, size: TYPE.body, font: helvetica, color: MONO.ink })
-      page.drawText(pagoMetodo, { x: margin + 140, y, size: TYPE.body, font: helvetica, color: MONO.ink })
+      page.drawText(pagoFecha, { x: colFechaX, y, size: TYPE.body, font: helvetica, color: MONO.ink })
+      page.drawText(pagoMetodo, { x: colMetodoX, y, size: TYPE.body, font: helvetica, color: MONO.ink })
       if (pagoRef) {
-        page.drawText(pagoRef.substring(0, 25), { x: margin + 280, y, size: TYPE.body, font: helvetica, color: MONO.label })
+        page.drawText(pagoRef.substring(0, 16), { x: colRefX, y, size: TYPE.body, font: helvetica, color: MONO.label })
       }
-      page.drawText(formatCurrencyPDF(pago.monto), { x: width - margin - 90, y, size: TYPE.body, font: helveticaBold, color: MONO.ink })
+      drawTextRight(page, formatCurrencyPDF(pago.monto), colMontoR, y, TYPE.body, helveticaBold, MONO.ink)
+      drawTextRight(page, formatCurrencyPDF(saldoCorrido), colSaldoR, y, TYPE.body, helveticaBold, MONO.ink)
       y -= 18
       drawRule(page, margin, width - margin, y + 10)
     }
+  }
+
+  // === RECIBÍ CONFORME (orden-sourced only) ===
+  // Physical signature block confirming the client received the repaired
+  // device/service — a venta-sourced remito is a POS sale receipt with no
+  // handoff signature workflow, so this is drawn only when data.orden is
+  // present. Follows the same "kept together" discipline as CONDICIONES DE
+  // PAGO above: its full height is checked against the remaining page
+  // space right before drawing, so it never gets split across a page
+  // break.
+  if (data.orden) {
+    // 24 = section label+rule (4 + 20), same cost as CONDICIONES DE PAGO's
+    // header; 30 = blank space left above each underline for the physical
+    // signature; 10 = gap between the underline and its caption; 12 =
+    // trailing clearance before the footer.
+    const recibiConformeBlockH = 24 + 30 + 10 + 12
+    if (y - recibiConformeBlockH < floorY) {
+      startContinuationPage()
+    }
+
+    drawSectionLabel(page, helveticaBold, "Recibí conforme", margin, y)
+    y -= 4
+    drawRule(page, margin, width - margin, y)
+    y -= 20
+
+    // Two signature columns side by side within contentWidth, symmetric
+    // 10pt padding on both outer edges (matches the 10pt inset used by
+    // CLIENTE/EQUIPO above) with a 20pt gap between them.
+    const sigLineY = y - 30
+    const sigColW = (contentWidth - 40) / 2
+    const sigCol1X = margin + 10
+    const sigCol2X = sigCol1X + sigColW + 20
+
+    drawRule(page, sigCol1X, sigCol1X + sigColW, sigLineY, { color: MONO.ink })
+    page.drawText("Firma", { x: sigCol1X, y: sigLineY - 10, size: TYPE.fine, font: helvetica, color: MONO.label })
+
+    drawRule(page, sigCol2X, sigCol2X + sigColW, sigLineY, { color: MONO.ink })
+    page.drawText("Aclaración", { x: sigCol2X, y: sigLineY - 10, size: TYPE.fine, font: helvetica, color: MONO.label })
+
+    y = sigLineY - 10 - 12
   }
 
   // === FOOTER (drawn on every page, so a multi-page remito never leaves a
