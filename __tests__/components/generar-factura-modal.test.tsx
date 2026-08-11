@@ -62,4 +62,16 @@ describe("GenerarFacturaModal", () => {
       expect(onSuccess).toHaveBeenCalled()
     })
   })
+
+  it("renders 'Generar remito' as the dialog title (Comprobantes section renaming)", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ ordenes: [], ventas: [] }),
+    })
+
+    const { GenerarFacturaModal } = await import("@/components/facturacion/generar-factura-modal")
+    render(<GenerarFacturaModal open={true} onOpenChange={() => {}} onSuccess={() => {}} />)
+
+    expect(screen.getByText("Generar remito")).toBeInTheDocument()
+  })
 })

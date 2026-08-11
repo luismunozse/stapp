@@ -84,14 +84,14 @@ export function FacturacionList() {
       })
       if (!res.ok) {
         const data = await res.json()
-        throw new Error(data.error || "Error al eliminar factura")
+        throw new Error(data.error || "Error al eliminar remito")
       }
       setDeleteDialogOpen(false)
       setSelectedFactura(null)
       mutate()
     } catch (error) {
       console.error("Error deleting factura:", error)
-      alert(error instanceof Error ? error.message : "Error al eliminar factura")
+      alert(error instanceof Error ? error.message : "Error al eliminar remito")
     } finally {
       setActionLoading(false)
     }
@@ -108,14 +108,14 @@ export function FacturacionList() {
       })
       if (!res.ok) {
         const data = await res.json()
-        throw new Error(data.error || "Error al anular factura")
+        throw new Error(data.error || "Error al anular remito")
       }
       setVoidDialogOpen(false)
       setSelectedFactura(null)
       mutate()
     } catch (error) {
       console.error("Error voiding factura:", error)
-      alert(error instanceof Error ? error.message : "Error al anular factura")
+      alert(error instanceof Error ? error.message : "Error al anular remito")
     } finally {
       setActionLoading(false)
     }
@@ -156,7 +156,7 @@ export function FacturacionList() {
         </Select>
         <Button onClick={() => setShowGenerarModal(true)}>
           <Plus className="mr-2 h-4 w-4" />
-          Generar factura
+          Generar remito
         </Button>
         <div className="flex border rounded-lg overflow-hidden ml-auto">
           <Button
@@ -181,7 +181,7 @@ export function FacturacionList() {
       {facturas.length === 0 ? (
         <Card>
           <CardContent className="py-8 text-center text-muted-foreground">
-            No hay facturas registradas
+            No hay remitos registrados
           </CardContent>
         </Card>
       ) : viewMode === "list" ? (
@@ -191,7 +191,7 @@ export function FacturacionList() {
             <table className="w-full text-sm">
               <thead className="sticky top-[calc(3.5rem+env(safe-area-inset-top,0px))] sm:top-0 z-10 bg-background">
                 <tr className="border-b bg-muted/50">
-                  <th className="text-left p-3 font-medium">Factura</th>
+                  <th className="text-left p-3 font-medium">Remito</th>
                   <th className="text-left p-3 font-medium">Origen</th>
                   <th className="text-left p-3 font-medium hidden sm:table-cell">Cliente</th>
                   <th className="text-left p-3 font-medium hidden md:table-cell">Fecha</th>
@@ -390,7 +390,7 @@ export function FacturacionList() {
                     <div>
                       <CardTitle className="text-lg flex items-center gap-2">
                         <FileText className="h-5 w-5" />
-                        Factura {factura.numeroFactura}
+                        Remito {factura.numeroFactura}
                       </CardTitle>
                       <div className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
                         <Badge variant={factura.origen === "venta" ? "infoSoft" : "outline"}>
@@ -532,8 +532,8 @@ export function FacturacionList() {
       <ConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
-        title="Eliminar Factura"
-        description={`¿Estás seguro de que deseas eliminar la factura ${selectedFactura?.numeroFactura}? Esta acción eliminará también todos los pagos asociados y no se puede deshacer.`}
+        title="Eliminar Remito"
+        description={`¿Estás seguro de que deseas eliminar el remito ${selectedFactura?.numeroFactura}? Esta acción eliminará también todos los pagos asociados y no se puede deshacer.`}
         confirmText="Eliminar"
         cancelText="Cancelar"
         variant="danger"
@@ -545,8 +545,8 @@ export function FacturacionList() {
       <ConfirmDialog
         open={voidDialogOpen}
         onOpenChange={setVoidDialogOpen}
-        title="Anular Factura"
-        description={`¿Estás seguro de que deseas anular la factura ${selectedFactura?.numeroFactura}? La factura quedará registrada como anulada pero no se eliminará del sistema.`}
+        title="Anular Remito"
+        description={`¿Estás seguro de que deseas anular el remito ${selectedFactura?.numeroFactura}? El remito quedará registrado como anulado pero no se eliminará del sistema.`}
         confirmText="Anular"
         cancelText="Cancelar"
         variant="warning"

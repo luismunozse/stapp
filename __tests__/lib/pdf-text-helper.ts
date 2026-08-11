@@ -20,7 +20,18 @@ import zlib from "zlib"
 // font was last selected.
 export async function extractPdfText(buffer: Buffer): Promise<string> {
   const loaded = await PDFDocument.load(buffer)
-  const page = loaded.getPage(0)
+  let decodedText = ""
+  for (let pageIndex = 0; pageIndex < loaded.getPageCount(); pageIndex++) {
+    decodedText += extractPageText(loaded, pageIndex)
+  }
+  return decodedText
+}
+
+// Decodes a single page's own content stream via its own Resources/Font
+// dict — an embedded Form XObject (see orden-pdf.test.ts) carries separate
+// Resources and is intentionally NOT walked here, only genuine PDF pages.
+function extractPageText(loaded: PDFDocument, pageIndex: number): string {
+  const page = loaded.getPage(pageIndex)
   const resources = page.node.Resources()
   const fontDict = resources?.lookup(PDFName.of("Font"), PDFDict)
 
