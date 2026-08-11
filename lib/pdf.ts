@@ -2950,6 +2950,7 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   // Crear documento PDF
   const pdfDoc = await PDFLib.create()
   let page = pdfDoc.addPage([595, 842]) // A4 — reassigned by startContinuationPage() below
+  const pages: (typeof page)[] = [page] // every page, so the footer can be drawn on each one
   const { width, height } = page.getSize()
 
   const { regular: helvetica, bold: helveticaBold } = await embedCustomFonts(pdfDoc)
@@ -3100,6 +3101,7 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
   // that table's column header row so the continued rows stay legible.
   const startContinuationPage = (drawTableHeader?: (pg: typeof page, yPos: number) => void): void => {
     page = pdfDoc.addPage([width, height])
+    pages.push(page)
     const contTitle = `REMITO ${numeroFactura} — continuación`
     page.drawText(contTitle, { x: margin, y: height - margin - 12, size: TYPE.docTitle, font: helveticaBold, color: MONO.ink })
     drawRule(page, margin, width - margin, height - margin - 24)
@@ -3228,7 +3230,7 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     // Keep the section label + column header together: a dangling header
     // with zero rows below it is worse than starting the whole section on
     // a fresh page.
-    const pagosHeaderH = 4 + 20 + 8 + 17
+    const pagosHeaderH = 4 + 20 + 8 + 17 + 18
     if (y - pagosHeaderH < floorY) {
       startContinuationPage()
     }
@@ -3267,15 +3269,23 @@ export async function generateFacturaPDF(data: FacturaPDFData): Promise<Buffer> 
     }
   }
 
-  // === FOOTER ===
+  // === FOOTER (drawn on every page, so a multi-page remito never leaves a
+  // continuation page blank at the bottom) ===
   const footerY = margin + 50
-
-  drawRule(page, margin, width - margin, footerY)
-
-  page.drawText("Remito interno — no válido como comprobante fiscal.", { x: margin, y: footerY - 15, size: TYPE.fine, font: helvetica, color: MONO.faint })
-
   const fechaImpresion = formatDateTimeValue(new Date(), data.zonaHoraria || DEFAULT_TIMEZONE)
-  page.drawText(`Impreso: ${fechaImpresion}`, { x: width - margin - 110, y: footerY - 27, size: 7, font: helvetica, color: MONO.faint })
+  const totalPages = pages.length
+
+  for (let i = 0; i < pages.length; i++) {
+    const pg = pages[i]
+    drawRule(pg, margin, width - margin, footerY)
+    pg.drawText("Remito interno — no válido como comprobante fiscal.", { x: margin, y: footerY - 15, size: TYPE.fine, font: helvetica, color: MONO.faint })
+    pg.drawText(`Impreso: ${fechaImpresion}`, { x: width - margin - 110, y: footerY - 27, size: 7, font: helvetica, color: MONO.faint })
+    if (totalPages > 1) {
+      const pgText = `Página ${String(i + 1)} de ${String(totalPages)}`
+      const pgW = helvetica.widthOfTextAtSize(pgText, TYPE.small)
+      pg.drawText(pgText, { x: width - margin - pgW, y: footerY - 15, size: TYPE.small, font: helvetica, color: MONO.faint })
+    }
+  }
 
   const pdfBytes = await pdfDoc.save()
   return Buffer.from(pdfBytes)

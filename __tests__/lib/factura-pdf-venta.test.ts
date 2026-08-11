@@ -5,7 +5,7 @@
  * Also covers items_factura itemization for both origins (venta and orden),
  * and the zero-items fallback to the aggregate-only layout.
  */
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, beforeAll } from "vitest"
 import { PDFDocument } from "pdf-lib"
 import { generateFacturaPDF } from "@/lib/pdf"
 import { extractPdfText } from "./pdf-text-helper"
@@ -229,21 +229,23 @@ describe("generateFacturaPDF — venta origin", () => {
 })
 
 describe("generateFacturaPDF — pagination", () => {
-  it("keeps the last item and last pago visible across continuation pages instead of truncating them", async () => {
+  // Both tests below only read from the same 40-item/15-pago PDF, so it's
+  // generated once here instead of once per test.
+  let paginatedText: string
+
+  beforeAll(async () => {
     const fixture = buildFacturaPaginadaFixture(40, 15)
     const buffer = await generateFacturaPDF(fixture)
-    const text = await extractPdfText(buffer)
-
-    expect(text).toContain("ITEM-040")
-    expect(text).toContain("REF-PAGO-015")
+    paginatedText = await extractPdfText(buffer)
   })
 
-  it("marks continuation pages with a 'continuación' header", async () => {
-    const fixture = buildFacturaPaginadaFixture(40, 15)
-    const buffer = await generateFacturaPDF(fixture)
-    const text = await extractPdfText(buffer)
+  it("keeps the last item and last pago visible across continuation pages instead of truncating them", () => {
+    expect(paginatedText).toContain("ITEM-040")
+    expect(paginatedText).toContain("REF-PAGO-015")
+  })
 
-    expect(text).toContain("continuación")
+  it("marks continuation pages with a 'continuación' header", () => {
+    expect(paginatedText).toContain("continuación")
   })
 
   it("stays on a single page with no continuation header for a small item/pago list", async () => {
