@@ -318,3 +318,49 @@ describe("generateFacturaPDF — money block (saldo protagonist) & dual dates", 
     expect(text).toContain("Operación")
   })
 })
+
+// Base fixture for the fiscal identity / payment conditions tests below:
+// every optional accounting-grade field (cuitEmpresa, condicionIvaEmpresa,
+// domicilioFiscalEmpresa, cliente.dni, vencimiento, mediosPago, cbuAlias) is
+// absent, so `baseFixture()` alone must never draw any of the conditional
+// blocks this task adds.
+function baseFixture() {
+  return {
+    numeroFactura: "0001-00000020",
+    fecha: new Date("2026-01-20"),
+    estadoPago: "PAGADO",
+    cliente: { nombre: "Consumidor Final" },
+    venta: { numeroVenta: 20 },
+    subtotal: 100,
+    iva: 0,
+    total: 100,
+    montoAbonado: 100,
+    pagos: [],
+  } as any
+}
+
+const fixture = baseFixture()
+
+describe("generateFacturaPDF — fiscal identity & payment conditions", () => {
+  it("renders fiscal identity and payment conditions when provided", async () => {
+    const buffer = await generateFacturaPDF({
+      ...fixture,
+      cuitEmpresa: "30-71234567-8",
+      condicionIvaEmpresa: "Responsable Inscripto",
+      cliente: { ...fixture.cliente, dni: "28.456.789" },
+      vencimiento: new Date("2026-09-10"),
+      mediosPago: "Efectivo, transferencia",
+      cbuAlias: "stapp.taller.mp",
+    } as any)
+    const text = await extractPdfText(buffer)
+    for (const s of ["CUIT: 30-71234567-8", "Responsable Inscripto", "DNI/CUIT: 28.456.789",
+                     "CONDICIONES DE PAGO", "Vencimiento", "stapp.taller.mp"]) expect(text).toContain(s)
+  })
+
+  it("omits the conditional blocks when data is absent", async () => {
+    const buffer = await generateFacturaPDF(baseFixture())
+    const text = await extractPdfText(buffer)
+    expect(text).not.toContain("CONDICIONES DE PAGO")
+    expect(text).not.toContain("CUIT:")
+  })
+})
