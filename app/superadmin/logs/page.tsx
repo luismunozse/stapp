@@ -127,7 +127,7 @@ const ENTITY_LABELS: Record<string, string> = {
   inventario: "Inventario",
   proveedores: "Proveedores",
   cotizaciones: "Cotizaciones",
-  facturas: "Facturas",
+  facturas: "Remitos",
   garantias: "Garantías",
   ventas: "Ventas",
   checklist_templates: "Checklists",

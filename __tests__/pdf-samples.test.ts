@@ -59,6 +59,35 @@ describe.runIf(process.env.PDF_SAMPLES === "1")("pdf visual samples", () => {
     })
     writeFileSync(`${OUT_DIR}/${TAG}-remito.pdf`, remito)
     expect(remito.length).toBeGreaterThan(1000)
+
+    // Long remito: overflows both the items table and the payment history
+    // onto continuation pages (Task 7 — pagination replaced the old
+    // single-page truncation for these two tables).
+    const remitoLargo = await generateFacturaPDF({
+      numeroFactura: "0001-00000008",
+      fecha: new Date("2026-08-08"),
+      estadoPago: "PAGADO_PARCIAL",
+      cliente: { nombre: "Consumidor Final" },
+      venta: { numeroVenta: 130 },
+      items: Array.from({ length: 40 }, (_, i) => ({
+        descripcion: `REPUESTO DE PRUEBA ${String(i + 1).padStart(3, "0")}`,
+        cantidad: 1,
+        precioUnitario: 1000,
+        subtotal: 1000,
+      })),
+      subtotal: 40000,
+      iva: 0,
+      total: 40000,
+      montoAbonado: 15 * 500,
+      pagos: Array.from({ length: 15 }, (_, i) => ({
+        monto: 500,
+        metodoPago: "EFECTIVO",
+        fecha: new Date("2026-08-08"),
+        referencia: `REF-PAGO-${String(i + 1).padStart(3, "0")}`,
+      })),
+    })
+    writeFileSync(`${OUT_DIR}/${TAG}-remito-largo.pdf`, remitoLargo)
+    expect(remitoLargo.length).toBeGreaterThan(1000)
   }, 60_000)
 
   it("writes an ENTREGADO orden sample (local copy, fotos, entrega pages)", async () => {
