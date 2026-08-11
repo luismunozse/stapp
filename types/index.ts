@@ -83,6 +83,8 @@ export interface User {
 
 export type TipoCliente = "INDIVIDUAL" | "EMPRESA"
 
+export type TipoPrecio = "MINORISTA" | "MAYORISTA"
+
 export interface SectorCliente {
   id: string
   clienteId: string
@@ -104,6 +106,8 @@ export interface Cliente {
   razonSocial?: string | null
   cuit?: string | null
   aceptaWhatsapp?: boolean
+  tipoPrecio?: TipoPrecio
+  descuentoPct?: number | null
   sectores?: SectorCliente[]
   saldoCuenta?: number
   deudaPendiente?: number
