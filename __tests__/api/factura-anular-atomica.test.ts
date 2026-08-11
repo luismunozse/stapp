@@ -140,18 +140,21 @@ describe("PUT /api/facturacion/[id] — estadoPago=ANULADA", () => {
     expect(anularCall![1]).toMatchObject({ p_factura_id: "f1" })
   })
 
-  it("rpc 'ya esta anulada' → 400", async () => {
+  it("rpc 'ya esta anulado' → 400", async () => {
     mockAuthSuccess({ role: "ADMIN" })
 
     mockSupabaseFrom({
       facturas: createChainMock(facturaFullRow()),
     })
 
+    // Migration 295: anular_factura_atomica now raises "El remito ya esta
+    // anulado" (masculine, remito wording) instead of "La factura ya esta
+    // anulada". eliminar_factura_atomica is untouched and keeps the old wording.
     vi.mocked(supabaseAdmin.rpc).mockImplementation(((fn: string) => {
       if (fn === "anular_factura_atomica") {
         return Promise.resolve({
           data: null,
-          error: { code: "P0001", message: "La factura ya esta anulada" },
+          error: { code: "P0001", message: "El remito ya esta anulado" },
         })
       }
       return Promise.resolve({ data: null, error: null })
@@ -163,18 +166,20 @@ describe("PUT /api/facturacion/[id] — estadoPago=ANULADA", () => {
     expect(status).toBe(400)
   })
 
-  it("rpc 'no encontrada' → 404", async () => {
+  it("rpc 'no encontrado' → 404", async () => {
     mockAuthSuccess({ role: "ADMIN" })
 
     mockSupabaseFrom({
       facturas: createChainMock(facturaFullRow()),
     })
 
+    // Migration 295: anular_factura_atomica now raises "Remito no encontrado"
+    // (masculine, remito wording) instead of "Factura no encontrada".
     vi.mocked(supabaseAdmin.rpc).mockImplementation(((fn: string) => {
       if (fn === "anular_factura_atomica") {
         return Promise.resolve({
           data: null,
-          error: { code: "P0001", message: "Factura no encontrada" },
+          error: { code: "P0001", message: "Remito no encontrado" },
         })
       }
       return Promise.resolve({ data: null, error: null })

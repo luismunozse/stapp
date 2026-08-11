@@ -261,15 +261,21 @@ async function handleAnularFactura(opts: {
     return await anularFacturaJsFallback({ id, organizationId, userId })
   }
 
-  // Map known business errors
+  // Map known business errors.
+  // Migration 295 changed anular_factura_atomica's RAISE EXCEPTION wording to
+  // "remito" (masculine): "Remito no encontrado" / "El remito ya esta anulado".
+  // The old feminine substrings ("no encontrada" / "ya esta anulada") no
+  // longer match that RPC's messages, so these checks use the new wording.
+  // eliminar_factura_atomica is untouched by migration 295 and still raises
+  // "Factura no encontrada" — its own match (below, in DELETE) keeps the old wording.
   const msg = rpcError.message ?? ""
-  if (msg.includes("no encontrada")) {
+  if (msg.includes("no encontrado")) {
     return NextResponse.json({ error: "Remito no encontrado" }, { status: 404 })
   }
   if (msg.includes("No autorizado")) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 })
   }
-  if (msg.includes("ya esta anulada")) {
+  if (msg.includes("ya esta anulado")) {
     return NextResponse.json({ error: msg }, { status: 400 })
   }
 
@@ -444,7 +450,11 @@ export async function DELETE(
       })
     }
 
-    // Map known business errors
+    // Map known business errors.
+    // eliminar_factura_atomica is untouched by migration 295 — it still raises
+    // "Factura no encontrada" (feminine), unlike anular_factura_atomica above
+    // which migration 295 reworded to "Remito no encontrado". Keep this
+    // matching the old wording; do not "fix" it to match the anular handler.
     const msg = rpcError.message ?? ""
     if (msg.includes("no encontrada")) {
       return NextResponse.json({ error: "Remito no encontrado" }, { status: 404 })
