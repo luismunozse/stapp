@@ -6,8 +6,39 @@
  * and the zero-items fallback to the aggregate-only layout.
  */
 import { describe, it, expect } from "vitest"
+import { PDFDocument } from "pdf-lib"
 import { generateFacturaPDF } from "@/lib/pdf"
 import { extractPdfText } from "./pdf-text-helper"
+
+// Fixture builder for the pagination tests below: N items + M pagos, each
+// tagged with a distinguishable, zero-padded index so a substring check on
+// the LAST one can never accidentally match an earlier one (e.g. "ITEM-004"
+// is not a substring of "ITEM-040").
+function buildFacturaPaginadaFixture(itemCount: number, pagoCount: number) {
+  return {
+    numeroFactura: "0001-00000099",
+    fecha: new Date("2026-08-08"),
+    estadoPago: "PAGADO_PARCIAL",
+    cliente: { nombre: "Consumidor Final" },
+    venta: { numeroVenta: 42 },
+    items: Array.from({ length: itemCount }, (_, i) => ({
+      descripcion: `ITEM-${String(i + 1).padStart(3, "0")}`,
+      cantidad: 1,
+      precioUnitario: 100,
+      subtotal: 100,
+    })),
+    subtotal: itemCount * 100,
+    iva: 0,
+    total: itemCount * 100,
+    montoAbonado: itemCount * 50,
+    pagos: Array.from({ length: pagoCount }, (_, i) => ({
+      monto: 50,
+      metodoPago: "EFECTIVO",
+      fecha: new Date("2026-08-08"),
+      referencia: `REF-PAGO-${String(i + 1).padStart(3, "0")}`,
+    })),
+  } as any
+}
 
 describe("generateFacturaPDF — venta origin", () => {
   it("renders successfully with data.venta instead of data.orden, no item table when items is omitted", async () => {
@@ -194,5 +225,35 @@ describe("generateFacturaPDF — venta origin", () => {
     expect(text).toContain("TOTAL")
     expect(text).toContain("ESTADO DE PAGO")
     expect(text).toContain("Remito interno — no válido como comprobante fiscal.")
+  })
+})
+
+describe("generateFacturaPDF — pagination", () => {
+  it("keeps the last item and last pago visible across continuation pages instead of truncating them", async () => {
+    const fixture = buildFacturaPaginadaFixture(40, 15)
+    const buffer = await generateFacturaPDF(fixture)
+    const text = await extractPdfText(buffer)
+
+    expect(text).toContain("ITEM-040")
+    expect(text).toContain("REF-PAGO-015")
+  })
+
+  it("marks continuation pages with a 'continuación' header", async () => {
+    const fixture = buildFacturaPaginadaFixture(40, 15)
+    const buffer = await generateFacturaPDF(fixture)
+    const text = await extractPdfText(buffer)
+
+    expect(text).toContain("continuación")
+  })
+
+  it("stays on a single page with no continuation header for a small item/pago list", async () => {
+    const fixture = buildFacturaPaginadaFixture(3, 2)
+    const buffer = await generateFacturaPDF(fixture)
+
+    const pdf = await PDFDocument.load(buffer)
+    expect(pdf.getPageCount()).toBe(1)
+
+    const text = await extractPdfText(buffer)
+    expect(text).not.toContain("continuación")
   })
 })
