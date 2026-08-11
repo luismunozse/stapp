@@ -166,7 +166,7 @@ export async function GET(
     const result = await fetchFacturaConOrigen(id, organizationId!, { sid })
 
     if (!result || result.organizationId !== organizationId) {
-      return NextResponse.json({ error: "Factura no encontrada" }, { status: 404 })
+      return NextResponse.json({ error: "Remito no encontrado" }, { status: 404 })
     }
 
     return NextResponse.json(formatFacturaResponse(result), {
@@ -175,7 +175,7 @@ export async function GET(
   } catch (error) {
     console.error("Error fetching factura:", error)
     return NextResponse.json(
-      { error: "Error al obtener factura" },
+      { error: "Error al obtener remito" },
       { status: 500 }
     )
   }
@@ -191,7 +191,7 @@ export async function PUT(
 
     if (role !== "ADMIN") {
       return NextResponse.json(
-        { error: "Solo administradores pueden modificar facturas" },
+        { error: "Solo administradores pueden modificar remitos" },
         { status: 403 }
       )
     }
@@ -205,7 +205,7 @@ export async function PUT(
     // payments and must not be set manually.
     if (data.estadoPago !== undefined && data.estadoPago !== "ANULADA") {
       return NextResponse.json(
-        { error: "El estado de pago se deriva de los pagos; la factura solo puede anularse." },
+        { error: "El estado de pago se deriva de los pagos; el remito solo puede anularse." },
         { status: 400 }
       )
     }
@@ -226,7 +226,7 @@ export async function PUT(
     }
     console.error("Error updating factura:", error)
     return NextResponse.json(
-      { error: "Error al actualizar factura" },
+      { error: "Error al actualizar remito" },
       { status: 500 }
     )
   }
@@ -264,7 +264,7 @@ async function handleAnularFactura(opts: {
   // Map known business errors
   const msg = rpcError.message ?? ""
   if (msg.includes("no encontrada")) {
-    return NextResponse.json({ error: "Factura no encontrada" }, { status: 404 })
+    return NextResponse.json({ error: "Remito no encontrado" }, { status: 404 })
   }
   if (msg.includes("No autorizado")) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 })
@@ -274,7 +274,7 @@ async function handleAnularFactura(opts: {
   }
 
   console.error("[facturacion] Unexpected RPC error (anular):", rpcError)
-  return NextResponse.json({ error: "Error al anular factura" }, { status: 500 })
+  return NextResponse.json({ error: "Error al anular remito" }, { status: 500 })
 }
 
 // ---------------------------------------------------------------------------
@@ -299,7 +299,7 @@ async function anularFacturaJsFallback(opts: {
     .single()
 
   if (fetchError || !factura) {
-    return NextResponse.json({ error: "Factura no encontrada" }, { status: 404 })
+    return NextResponse.json({ error: "Remito no encontrado" }, { status: 404 })
   }
 
   const ordenOrgId = (factura.ordenes_servicio as any)?.organization_id
@@ -308,7 +308,7 @@ async function anularFacturaJsFallback(opts: {
   }
 
   if ((factura as any).estado_pago === "ANULADA") {
-    return NextResponse.json({ error: "La factura ya esta anulada" }, { status: 400 })
+    return NextResponse.json({ error: "El remito ya está anulado" }, { status: 400 })
   }
 
   const clienteId = (factura.ordenes_servicio as any)?.cliente_id
@@ -326,7 +326,7 @@ async function anularFacturaJsFallback(opts: {
         p_referencia_tipo: "FACTURA",
         p_referencia_id: id,
         p_usuario_id: userId,
-        p_observaciones: `Anulacion factura ${(factura as any).numero_factura}`,
+        p_observaciones: `Anulacion remito ${(factura as any).numero_factura}`,
         // Derived from the parent orden's sucursal_id, not the current
         // operator's active cookie.
         p_sucursal_id: sucursalId,
@@ -348,7 +348,7 @@ async function anularFacturaJsFallback(opts: {
 
   if (updateError) {
     console.error("[facturacion] Error updating estado_pago to ANULADA:", updateError)
-    return NextResponse.json({ error: "Error al anular factura" }, { status: 500 })
+    return NextResponse.json({ error: "Error al anular remito" }, { status: 500 })
   }
 
   return await fetchAndReturnFactura(id, organizationId)
@@ -360,7 +360,7 @@ async function anularFacturaJsFallback(opts: {
 async function fetchAndReturnFactura(id: string, organizationId: string): Promise<NextResponse> {
   const result = await fetchFacturaConOrigen(id, organizationId)
   if (!result) {
-    return NextResponse.json({ error: "Factura no encontrada" }, { status: 404 })
+    return NextResponse.json({ error: "Remito no encontrado" }, { status: 404 })
   }
   return NextResponse.json(formatFacturaResponse(result))
 }
@@ -375,7 +375,7 @@ export async function DELETE(
 
     if (role !== "ADMIN") {
       return NextResponse.json(
-        { error: "Solo administradores pueden eliminar facturas" },
+        { error: "Solo administradores pueden eliminar remitos" },
         { status: 403 }
       )
     }
@@ -384,7 +384,7 @@ export async function DELETE(
 
     const result = await fetchFacturaConOrigen(id, organizationId!)
     if (!result) {
-      return NextResponse.json({ error: "Factura no encontrada" }, { status: 404 })
+      return NextResponse.json({ error: "Remito no encontrado" }, { status: 404 })
     }
     if (result.organizationId !== organizationId) {
       return NextResponse.json({ error: "No autorizado" }, { status: 403 })
@@ -426,7 +426,7 @@ export async function DELETE(
         // migration 292 is applied, so this path is unreachable in practice.
         console.error("[facturacion] eliminar_factura_atomica missing; venta-origin fallback not supported")
         return NextResponse.json(
-          { error: "No se pudo eliminar la factura: falta aplicar una migración pendiente" },
+          { error: "No se pudo eliminar el remito: falta aplicar una migración pendiente" },
           { status: 500 }
         )
       }
@@ -447,19 +447,19 @@ export async function DELETE(
     // Map known business errors
     const msg = rpcError.message ?? ""
     if (msg.includes("no encontrada")) {
-      return NextResponse.json({ error: "Factura no encontrada" }, { status: 404 })
+      return NextResponse.json({ error: "Remito no encontrado" }, { status: 404 })
     }
     if (msg.includes("No autorizado")) {
       return NextResponse.json({ error: "No autorizado" }, { status: 403 })
     }
 
     console.error("[facturacion] Unexpected RPC error (eliminar):", rpcError)
-    return NextResponse.json({ error: "Error al eliminar factura" }, { status: 500 })
+    return NextResponse.json({ error: "Error al eliminar remito" }, { status: 500 })
 
   } catch (error) {
     console.error("Error deleting factura:", error)
     return NextResponse.json(
-      { error: "Error al eliminar factura" },
+      { error: "Error al eliminar remito" },
       { status: 500 }
     )
   }
@@ -484,7 +484,7 @@ async function eliminarFacturaJsFallback(opts: {
 
   if (pagosError) {
     console.error("[facturacion] Error loading pagos for CC re-credit:", pagosError)
-    return NextResponse.json({ error: "Error al eliminar factura" }, { status: 500 })
+    return NextResponse.json({ error: "Error al eliminar remito" }, { status: 500 })
   }
 
   // Load cliente_id + sucursal_id from orden
@@ -507,7 +507,7 @@ async function eliminarFacturaJsFallback(opts: {
         p_referencia_tipo: "FACTURA",
         p_referencia_id: id,
         p_usuario_id: userId,
-        p_observaciones: `Eliminacion factura ${factura.numero_factura}`,
+        p_observaciones: `Eliminacion remito ${factura.numero_factura}`,
         // Derived from the parent orden's sucursal_id, not the current
         // operator's active cookie.
         p_sucursal_id: sucursalId,
@@ -530,7 +530,7 @@ async function eliminarFacturaJsFallback(opts: {
 
   if (deletePagosError) {
     console.error("[facturacion] Error deleting pagos:", deletePagosError)
-    return NextResponse.json({ error: "Error al eliminar factura" }, { status: 500 })
+    return NextResponse.json({ error: "Error al eliminar remito" }, { status: 500 })
   }
 
   const { error: deleteError } = await supabaseAdmin
@@ -540,7 +540,7 @@ async function eliminarFacturaJsFallback(opts: {
 
   if (deleteError) {
     console.error("[facturacion] Error deleting factura:", deleteError)
-    return NextResponse.json({ error: "Error al eliminar factura" }, { status: 500 })
+    return NextResponse.json({ error: "Error al eliminar remito" }, { status: 500 })
   }
 
   // Audit log

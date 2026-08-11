@@ -127,7 +127,7 @@ describe("POST /api/facturacion/generar", () => {
     const { status, body } = await parseResponse(response)
 
     expect(status).toBe(400)
-    expect(body.error).toContain("Ya existe una factura")
+    expect(body.error).toContain("Ya existe un remito")
   })
 
   it("returns 400 when factura already exists (PostgREST one-to-one object embed, not array)", async () => {
@@ -157,7 +157,7 @@ describe("POST /api/facturacion/generar", () => {
     const { status, body } = await parseResponse(response)
 
     expect(status).toBe(400)
-    expect(body.error).toContain("Ya existe una factura")
+    expect(body.error).toContain("Ya existe un remito")
   })
 
   it("creates factura successfully with seña consideration", async () => {

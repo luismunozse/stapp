@@ -194,7 +194,7 @@ describe("GET /api/facturacion — error propagation", () => {
     const { status, body } = await parseResponse(res)
 
     expect(status).toBe(500)
-    expect(body.error).toBe("Error al obtener facturas")
+    expect(body.error).toBe("Error al obtener remitos")
   })
 
   it("returns 500 when the venta query errors", async () => {
@@ -210,6 +210,6 @@ describe("GET /api/facturacion — error propagation", () => {
     const { status, body } = await parseResponse(res)
 
     expect(status).toBe(500)
-    expect(body.error).toBe("Error al obtener facturas")
+    expect(body.error).toBe("Error al obtener remitos")
   })
 })

@@ -556,7 +556,7 @@ describe("POST /api/pagos — runJsFallback guards (function missing forces fall
     const { status, body } = await parseResponse(res)
 
     expect(status).toBe(400)
-    expect(body.error).toMatch(/anulada/i)
+    expect(body.error).toMatch(/anulado/i)
   })
 
   it("fallback: overpayment → 400", async () => {

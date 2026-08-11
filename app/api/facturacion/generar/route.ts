@@ -32,7 +32,7 @@ export async function POST(request: Request) {
 
     if (role !== "ADMIN") {
       return NextResponse.json(
-        { error: "Solo administradores pueden generar facturas" },
+        { error: "Solo administradores pueden generar remitos" },
         { status: 403 }
       )
     }
@@ -96,7 +96,7 @@ export async function POST(request: Request) {
 
     if (orden.estado !== "REPARADO" && orden.estado !== "ENTREGADO") {
       return NextResponse.json(
-        { error: "La orden debe estar reparada para generar factura" },
+        { error: "La orden debe estar reparada para generar remito" },
         { status: 400 }
       )
     }
@@ -106,7 +106,7 @@ export async function POST(request: Request) {
     // may return it as an object instead of an array; normalize before checking)
     if (toArray(orden.facturas).length > 0) {
       return NextResponse.json(
-        { error: "Ya existe una factura para esta orden" },
+        { error: "Ya existe un remito para esta orden" },
         { status: 400 }
       )
     }
@@ -320,7 +320,7 @@ export async function POST(request: Request) {
 
     console.error("[facturacion] Unexpected RPC error (crear):", rpcError)
     return NextResponse.json(
-      { error: "Error al generar factura" },
+      { error: "Error al generar remito" },
       { status: 500 }
     )
   } catch (error) {
@@ -332,7 +332,7 @@ export async function POST(request: Request) {
     }
     console.error("Error generating factura:", error)
     return NextResponse.json(
-      { error: "Error al generar factura" },
+      { error: "Error al generar remito" },
       { status: 500 }
     )
   }
@@ -419,7 +419,7 @@ async function crearFacturaJsFallback(opts: {
       console.error("[facturacion] items_factura insert failed; rolling back factura:", itemsError)
       await supabaseAdmin.from("facturas").delete().eq("id", factura.id)
       return NextResponse.json(
-        { error: "Error al crear items de factura" },
+        { error: "Error al crear items de remito" },
         { status: 500 }
       )
     }
@@ -532,7 +532,7 @@ async function generarFacturaDesdeVenta(opts: {
   // may return it as an object instead of an array; normalize before checking.
   if (toArray(venta.facturas).length > 0) {
     return NextResponse.json(
-      { error: "Ya existe una factura para esta venta" },
+      { error: "Ya existe un remito para esta venta" },
       { status: 400 }
     )
   }
@@ -620,7 +620,7 @@ async function generarFacturaDesdeVenta(opts: {
   }
 
   console.error("[facturacion] Unexpected RPC error (crear venta):", rpcError)
-  return NextResponse.json({ error: "Error al generar factura" }, { status: 500 })
+  return NextResponse.json({ error: "Error al generar remito" }, { status: 500 })
 }
 
 // JS fallback — used when the schema (migration 292) is applied but the RPC
@@ -694,7 +694,7 @@ async function crearFacturaVentaJsFallback(opts: {
     if (itemsError) {
       console.error("[facturacion] items_factura insert failed (venta); rolling back factura:", itemsError)
       await supabaseAdmin.from("facturas").delete().eq("id", factura.id)
-      return NextResponse.json({ error: "Error al crear items de factura" }, { status: 500 })
+      return NextResponse.json({ error: "Error al crear items de remito" }, { status: 500 })
     }
   }
 

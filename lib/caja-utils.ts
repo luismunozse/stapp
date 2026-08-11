@@ -210,7 +210,7 @@ export async function fetchMovimientosDia(
       monto: parseFloat(p.monto),
       metodoPago: p.metodo_pago,
       fecha: p.fecha,
-      referencia: "Factura",
+      referencia: "Remito",
       referenciaId: p.factura_id,
       referenciaNumero: numFactura || (numOrden ? `ORD-${String(numOrden).padStart(4, "0")}` : null),
       observaciones: p.observaciones,
