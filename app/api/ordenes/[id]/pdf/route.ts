@@ -21,14 +21,30 @@ export async function GET(
       .from("ordenes_servicio")
       .select(`
         *,
-        tipos_dispositivo:tipo_dispositivo_id(nombre),
+        tipos_dispositivo:tipo_dispositivo_id(nombre, config),
         clientes (*),
         organizations (*),
         users:entregado_por_user_id (
           nombre
         ),
+        tecnico:tecnico_id (
+          nombre
+        ),
+        recibidoPor:recibido_por (
+          nombre
+        ),
         sectores_cliente (
           nombre
+        ),
+        sucursales:sucursal_id (
+          nombre, direccion, telefono
+        ),
+        repuestos_orden (
+          nombre, cantidad, precio_venta_unitario,
+          inventario:inventario_id ( nombre )
+        ),
+        garantias (
+          dias_validez, fecha_vencimiento, notas
         )
       `)
       .eq("id", id)
@@ -56,7 +72,7 @@ export async function GET(
       .select(`
         valores, notas, firma_cliente, firma_mime,
         checklist_templates (
-          checklist_template_items (id, label, orden)
+          checklist_template_items (id, label, orden, categoria)
         )
       `)
       .eq("orden_id", id)
@@ -83,6 +99,33 @@ export async function GET(
       .order("created_at", { ascending: true })
       .limit(4)
 
+    // Cobros no anulados (expediente: banda de cobros)
+    const { data: cobrosData } = await supabaseAdmin
+      .from("cobros_orden")
+      .select("monto, metodo_pago, numero_referencia, created_at")
+      .eq("orden_id", id)
+      .eq("anulado", false)
+      .order("created_at", { ascending: true })
+
+    // Timeline de estados (expediente): primera ocurrencia de cada estado.
+    const { data: tiemposData } = await supabaseAdmin
+      .from("orden_tiempos_estado")
+      .select("estado, inicio")
+      .eq("orden_id", id)
+      .order("inicio", { ascending: true })
+
+    // Reingreso: resolver el numero de la orden origen (una sola query,
+    // solo cuando corresponde).
+    let ordenOrigenNumero: number | null = null
+    if (orden.es_reingreso && orden.orden_origen_id) {
+      const { data: ordenOrigen } = await supabaseAdmin
+        .from("ordenes_servicio")
+        .select("numero_orden")
+        .eq("id", orden.orden_origen_id)
+        .maybeSingle()
+      ordenOrigenNumero = ordenOrigen?.numero_orden ?? null
+    }
+
     // Build base URL for QR
     const headersList = await headers()
     const host = headersList.get("host") || "localhost:3000"
@@ -94,20 +137,10 @@ export async function GET(
     const entregadoPorUser = orden.users as any
     const sectorObj = orden.sectores_cliente as any
     const tipoDisp = orden.tipos_dispositivo as any
-
-    // Build checklist items with labels
-    let checklistItems: Array<{ label: string; valor: boolean | string | null }> | null = null
-    if (checklistData?.checklist_templates) {
-      const templateItems = (checklistData.checklist_templates as any).checklist_template_items || []
-      const valores = typeof checklistData.valores === "string"
-        ? JSON.parse(checklistData.valores)
-        : checklistData.valores || {}
-      const sortedItems = [...templateItems].sort((a: any, b: any) => (a.orden || 0) - (b.orden || 0))
-      checklistItems = sortedItems.map((item: any) => ({
-        label: item.label,
-        valor: valores[item.id] ?? null,
-      })).filter((item: any) => item.valor !== null && item.valor !== undefined)
-    }
+    const sucursalObj = orden.sucursales as any
+    const tecnicoObj = orden.tecnico as any
+    const recibidoPorObj = orden.recibidoPor as any
+    const garantiaObj = orden.garantias as any
 
     // Helper to ensure we only pass primitive values
     const safeString = (val: unknown): string | null => {
@@ -126,6 +159,76 @@ export async function GET(
       return String(val)
     }
 
+    // Build checklist items with labels
+    let checklistItems: Array<{ label: string; valor: boolean | string | null; categoria?: string | null }> | null = null
+    if (checklistData?.checklist_templates) {
+      const templateItems = (checklistData.checklist_templates as any).checklist_template_items || []
+      const valores = typeof checklistData.valores === "string"
+        ? JSON.parse(checklistData.valores)
+        : checklistData.valores || {}
+      const sortedItems = [...templateItems].sort((a: any, b: any) => (a.orden || 0) - (b.orden || 0))
+      checklistItems = sortedItems.map((item: any) => ({
+        label: item.label,
+        valor: valores[item.id] ?? null,
+        categoria: item.categoria ?? null,
+      })).filter((item: any) => item.valor !== null && item.valor !== undefined)
+    }
+
+    // Metadata JSONB -> camposExtra del tipo de dispositivo. Si una key de
+    // metadata no tiene entrada en config.camposExtra (config vieja o campo
+    // borrado), cae al key crudo como label en vez de perder el dato.
+    const camposExtraConfig: Array<{ key: string; label: string }> = tipoDisp?.config?.camposExtra || []
+    const metadataObj = orden.metadata && typeof orden.metadata === "object" ? orden.metadata : {}
+    const metadataEntries = Object.entries(metadataObj)
+    const metadataCampos = metadataEntries.length > 0
+      ? metadataEntries.map(([key, val]) => {
+          const campo = camposExtraConfig.find((c) => c.key === key)
+          return { label: campo?.label || key, valor: safeString(val) || "" }
+        })
+      : null
+
+    // Trabajos (repuestos_orden): precio de VENTA unicamente, nunca costo
+    // (precio_unitario / costo). El nombre resuelve manual -> join a inventario.
+    const repuestosArr = (orden.repuestos_orden || []) as any[]
+    const trabajos = repuestosArr.length > 0
+      ? repuestosArr.map((r) => {
+          const cantidad = Number(r.cantidad) || 0
+          const precioVenta = Number(r.precio_venta_unitario) || 0
+          return {
+            nombre: safeString(r.nombre) || safeString(r.inventario?.nombre) || "",
+            cantidad,
+            importe: cantidad * precioVenta,
+          }
+        })
+      : null
+
+    const garantia = garantiaObj ? {
+      dias: garantiaObj.dias_validez,
+      fechaVencimiento: new Date(garantiaObj.fecha_vencimiento),
+      notas: safeString(garantiaObj.notas),
+    } : null
+
+    const cobros = cobrosData && cobrosData.length > 0
+      ? cobrosData.map((c: any) => ({
+          fecha: new Date(c.created_at),
+          metodo: c.metodo_pago,
+          referencia: safeString(c.numero_referencia),
+          monto: Number(c.monto) || 0,
+        }))
+      : null
+
+    // Timeline: primera ocurrencia de cada estado (orden_tiempos_estado ya
+    // viene ordenado por inicio ascendente).
+    const timelineSeen = new Set<string>()
+    const timelineAll = ((tiemposData || []) as any[])
+      .filter((t) => {
+        if (timelineSeen.has(t.estado)) return false
+        timelineSeen.add(t.estado)
+        return true
+      })
+      .map((t) => ({ estado: t.estado, fecha: new Date(t.inicio) }))
+    const timeline = timelineAll.length > 0 ? timelineAll : null
+
     // Preparar datos para el PDF - ensuring all values are primitives
     const pdfData: OrdenPDFData = {
       numeroOrden: orden.numero_orden,
@@ -136,6 +239,10 @@ export async function GET(
         telefono: safeString(cliente?.telefono) || "Sin teléfono",
         email: safeString(cliente?.email),
         direccion: safeString(cliente?.direccion),
+        dni: safeString(cliente?.dni),
+        cuit: safeString(cliente?.cuit),
+        razonSocial: safeString(cliente?.razon_social),
+        tipoCliente: safeString(cliente?.tipo_cliente),
       },
       dispositivo: safeString(orden.dispositivo) || "Sin especificar",
       tipoDispositivo: getDeviceTypeLabel(safeString(orden.tipo_dispositivo) || "OTRO", tipoDisp?.nombre),
@@ -175,6 +282,31 @@ export async function GET(
       firmaRecepcion: checklistData?.firma_cliente ?? firmaRecepcionLote,
       firmaRecepcionMime: checklistData?.firma_mime || null,
       fotosIngreso: fotosData && fotosData.length > 0 ? fotosData : null,
+      // Data layer del expediente (Task D2)
+      codigoOrden: safeString(orden.codigo_orden),
+      diagnostico: safeString(orden.diagnostico),
+      costoFinal: typeof orden.costo_final === "number" ? orden.costo_final : null,
+      totalCobrado: typeof orden.total_cobrado === "number" ? orden.total_cobrado : null,
+      estadoCobro: safeString(orden.estado_cobro),
+      descuentoCobro: typeof orden.descuento_cobro === "number" ? orden.descuento_cobro : null,
+      motivoSinCobro: safeString(orden.motivo_sin_cobro),
+      telefonoContacto: safeString(orden.telefono_contacto),
+      metadataCampos,
+      esReingreso: !!orden.es_reingreso,
+      ordenOrigenNumero,
+      fechaCompletado: orden.fecha_completado ? new Date(orden.fecha_completado) : null,
+      emailEmpresa: safeString(org?.email),
+      sucursal: sucursalObj ? {
+        nombre: safeString(sucursalObj.nombre) || "",
+        direccion: safeString(sucursalObj.direccion),
+        telefono: safeString(sucursalObj.telefono),
+      } : null,
+      tecnicoNombre: safeString(tecnicoObj?.nombre),
+      recibidoPorNombre: safeString(recibidoPorObj?.nombre),
+      trabajos,
+      garantia,
+      cobros,
+      timeline,
     }
 
     // Resolver terminología configurable y generar PDF

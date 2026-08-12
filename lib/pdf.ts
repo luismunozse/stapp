@@ -815,6 +815,10 @@ interface OrdenPDFData {
     telefono: string
     email?: string | null
     direccion?: string | null
+    dni?: string | null
+    cuit?: string | null
+    razonSocial?: string | null
+    tipoCliente?: string | null
   }
   dispositivo: string
   tipoDispositivo: string
@@ -851,12 +855,39 @@ interface OrdenPDFData {
   baseUrl?: string | null
   sena?: number | null
   metodoPagoSena?: string | null
-  checklistItems?: Array<{ label: string; valor: boolean | string | null }> | null
+  checklistItems?: Array<{ label: string; valor: boolean | string | null; categoria?: string | null }> | null
   checklistNotas?: string | null
   firmaRecepcion?: string | null
   firmaRecepcionMime?: string | null
   fotosIngreso?: Array<{ url: string; descripcion?: string | null }> | null
   terminologia?: Terminologia
+  // Data layer for the orden expediente redesign (Task D2). Consumed by the
+  // ENTREGA/RECEPCIÓN sheet drawing code (Tasks D3/D4) — this task only feeds
+  // the contract, it draws nothing.
+  codigoOrden?: string | null
+  diagnostico?: string | null
+  costoFinal?: number | null
+  totalCobrado?: number | null
+  estadoCobro?: string | null
+  descuentoCobro?: number | null
+  motivoSinCobro?: string | null
+  telefonoContacto?: string | null
+  /** Flattened from `metadata` JSONB via the tipo de dispositivo's `config.camposExtra`. */
+  metadataCampos?: Array<{ label: string; valor: string }> | null
+  esReingreso?: boolean
+  ordenOrigenNumero?: number | null
+  fechaCompletado?: Date | null
+  emailEmpresa?: string | null
+  sucursal?: { nombre: string; direccion?: string | null; telefono?: string | null } | null
+  tecnicoNombre?: string | null
+  recibidoPorNombre?: string | null
+  /** repuestos_orden — precio de VENTA únicamente, nunca costo. */
+  trabajos?: Array<{ nombre: string; cantidad: number; importe: number }> | null
+  garantia?: { dias: number; fechaVencimiento: Date; notas?: string | null } | null
+  /** cobros_orden no anulados. */
+  cobros?: Array<{ fecha: Date; metodo: string; referencia?: string | null; monto: number }> | null
+  /** orden_tiempos_estado: primera ocurrencia de cada estado, ordenado por inicio. */
+  timeline?: Array<{ estado: string; fecha: Date }> | null
 }
 
 export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
