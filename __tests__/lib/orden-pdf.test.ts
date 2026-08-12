@@ -183,7 +183,11 @@ describe("generateOrdenPDF", () => {
       expect(text).toContain(formatCurrencyValue(48000, "ARS")) // subtotal trabajo (0-item contributes nothing)
       expect(text).toContain(`-${formatCurrencyValue(2000, "ARS")}`) // descuento
       expect(text).toContain(formatCurrencyValue(50000, "ARS")) // TOTAL FINAL = costoFinal
-      expect(text).toContain(formatCurrencyValue(20000, "ARS")) // saldo pendiente = 50000 - 30000
+      // saldo pendiente = costoFinal - descuentoCobro - totalCobrado (same
+      // formula as orden-costos-card.tsx / cobrar-orden-dialog.tsx) =
+      // 50000 - 2000 - 30000 = 18000, NOT 20000 (that would omit the
+      // discount, which is drawn as its own "-$X" line right above it).
+      expect(text).toContain(formatCurrencyValue(18000, "ARS")) // saldo pendiente
 
       // Garantía box (fixture default: 90 días).
       expect(text).toContain("GARANTÍA")
@@ -240,6 +244,43 @@ describe("generateOrdenPDF", () => {
       })
       const text = await extractPdfText(buffer)
       expect(text).toContain("PAGADO")
+    })
+
+    it("subtracts descuentoCobro from the saldo band, distinct from the no-discount case", async () => {
+      // Pins that the discount actually participates in the SALDO math
+      // (not just that it's drawn as its own line): same costoFinal/
+      // totalCobrado as the comprehensive test above, but WITHOUT a
+      // descuentoCobro — saldo here must be costoFinal - totalCobrado =
+      // 20000, the figure the discounted case must NOT show.
+      const buffer = await generateOrdenPDF({
+        ...buildOrdenFixture(),
+        estado: "ENTREGADO",
+        costoFinal: 50000,
+        totalCobrado: 30000,
+      })
+      const text = await extractPdfText(buffer)
+      expect(text).toContain(formatCurrencyValue(20000, "ARS"))
+      expect(text).not.toContain(formatCurrencyValue(18000, "ARS"))
+    })
+
+    it("renders notasEntrega as a labeled client-facing line", async () => {
+      const buffer = await generateOrdenPDF({
+        ...buildOrdenFixture(),
+        estado: "ENTREGADO",
+        notasEntrega: "Se entrega el equipo funcionando correctamente. Cliente conforme.",
+      })
+      const text = await extractPdfText(buffer)
+      expect(text).toContain("Notas de entrega")
+      expect(text).toContain("Se entrega el equipo funcionando correctamente")
+    })
+
+    it("omits the notas de entrega line when absent", async () => {
+      const buffer = await generateOrdenPDF({
+        ...buildOrdenFixture(),
+        estado: "ENTREGADO",
+      })
+      const text = await extractPdfText(buffer)
+      expect(text).not.toContain("Notas de entrega")
     })
   })
 })

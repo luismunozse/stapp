@@ -1411,8 +1411,14 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
         const motivoLabel = MOTIVO_SIN_COBRO_LABELS[data.motivoSinCobro as MotivoSinCobro] || data.motivoSinCobro
         saldoTextEn = `SIN COBRO — ${motivoLabel}`
       } else {
+        // Misma fórmula que orden-costos-card.tsx / cobrar-orden-dialog.tsx:
+        // costoFinal(o su fallback) - descuentoCobro - totalCobrado. Sin
+        // restar el descuento acá el SALDO sobreestima lo que el cliente
+        // debe (el descuento ya se muestra como su propia línea "-$X"
+        // arriba, pero no queda reflejado en el total final dibujado).
         const totalCobradoEn = data.totalCobrado ?? 0
-        const saldoEn = Math.max((totalFinalValueEn as number) - totalCobradoEn, 0)
+        const descuentoCobroEn = data.descuentoCobro ?? 0
+        const saldoEn = Math.max((totalFinalValueEn as number) - descuentoCobroEn - totalCobradoEn, 0)
         saldoTextEn = saldoEn <= 0 ? `${formatCurrencyPDF(0)} — PAGADO` : formatCurrencyPDF(saldoEn)
       }
       ly -= 3
@@ -1534,6 +1540,22 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     ].filter(Boolean).join(" · ")
     if (dateSummaryPartsEn) rxDrawRight(page, dateSummaryPartsEn, width - rxMargin, ey, 7.5, archivoRegular, MONO.label)
     ey -= 20
+
+    // Notas de entrega — texto libre cargado al marcar la orden como
+    // entregada (contenido de cara al cliente, distinto de notas_internas,
+    // que NUNCA se dibuja). Antes vivía en la página "COMPROBANTE DE
+    // ENTREGA" eliminada; se restaura como línea compacta condicional.
+    const notasEntregaEn = safe(data.notasEntrega)
+    if (notasEntregaEn) {
+      page.drawText("Notas de entrega:", { x: rxMargin, y: ey, size: 6.5, font: archivoBold, color: MONO.label })
+      ey -= 9
+      const notasEntregaLinesEn = rxWrap(notasEntregaEn, archivoRegular, 7.5, rxContentW).slice(0, 2)
+      for (const l of notasEntregaLinesEn) {
+        page.drawText(l, { x: rxMargin, y: ey, size: 7.5, font: archivoRegular, color: MONO.ink })
+        ey -= 9
+      }
+      ey -= 3
+    }
 
     // QR + seguimiento + 3 firmas (recepción en archivo, cliente entrega, negocio)
     const sigRowTopEn = ey
