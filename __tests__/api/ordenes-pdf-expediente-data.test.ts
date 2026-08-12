@@ -198,6 +198,14 @@ describe("GET /api/ordenes/[id]/pdf — data layer del expediente (Task D2)", ()
       { estado: "EN_DIAGNOSTICO", fecha: new Date("2026-01-02T00:00:00.000Z") },
       { estado: "REPARADO", fecha: new Date("2026-01-04T00:00:00.000Z") },
     ])
+
+    // Mirror del guard de "sin filas nuevas": con es_reingreso true SI debe
+    // dispararse la segunda llamada a ordenes_servicio (orden principal +
+    // resolver orden_origen_id -> numero_orden).
+    const ordenesServicioCalls = vi.mocked(supabaseAdmin.from).mock.calls.filter(
+      (c) => c[0] === "ordenes_servicio"
+    )
+    expect(ordenesServicioCalls).toHaveLength(2)
   })
 
   it("sin filas nuevas, los campos quedan null/undefined en vez de romper", async () => {
@@ -249,8 +257,12 @@ describe("GET /api/ordenes/[id]/pdf — data layer del expediente (Task D2)", ()
     expect(pdfData.cliente.tipoCliente).toBeNull()
 
     // La segunda llamada a ordenes_servicio (resolver orden_origen_id) NO
-    // debe dispararse cuando es_reingreso es false.
-    expect(vi.mocked(supabaseAdmin.from)).not.toHaveBeenCalledWith("ordenes_servicio", expect.anything())
+    // debe dispararse cuando es_reingreso es false: solo 1 llamada a la
+    // tabla (la orden principal), no 2.
+    const ordenesServicioCalls = vi.mocked(supabaseAdmin.from).mock.calls.filter(
+      (c) => c[0] === "ordenes_servicio"
+    )
+    expect(ordenesServicioCalls).toHaveLength(1)
   })
 
   it("el checklist mapea categoria por item", async () => {
