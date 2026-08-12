@@ -1132,7 +1132,13 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   // Sheet selection (Task D4): terminal delivery estados print the full
   // ENTREGA expediente sheet (client-facing, one page, no cut line, no
   // stub, access code never rendered) instead of the RECEPCIÓN sheet below.
-  const isEntregaSheet = ESTADOS_COMPLETADOS.has(estadoRaw)
+  // Local alias (fix final-review D7): `ESTADOS_COMPLETADOS` here is the Set
+  // from lib/seguimiento-state.ts (entrega terminal states). A DIFFERENT
+  // `ESTADOS_COMPLETADOS` — an array with a different meaning ("completado
+  // exitosamente") — lives in lib/order-states.ts. The alias avoids that
+  // name collision confusing readers of this file.
+  const ESTADOS_HOJA_ENTREGA = ESTADOS_COMPLETADOS
+  const isEntregaSheet = ESTADOS_HOJA_ENTREGA.has(estadoRaw)
 
   if (isEntregaSheet) {
     // ============================================================
@@ -1263,14 +1269,18 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     const colGridWEn = rxContentW / 2
     const isEmpresaEn = clienteTipoCliente.toUpperCase() === "EMPRESA" && !!clienteRazonSocial
     const clienteLinesEn: RxCellLine[] = []
+    // Fix final-review D9: width-aware truncation (rxTruncate) instead of a
+    // flat .substring(0, 60) — razón social + CUIT is free-length and could
+    // overflow the grid cell by ~5pt at 9pt bold before this.
+    const clienteNameMaxWEn = colGridWEn - rxCellPadX * 2
     if (isEmpresaEn) {
       const idSuffix = clienteCuit ? ` · CUIT ${clienteCuit}` : ""
-      clienteLinesEn.push({ text: `${clienteRazonSocial}${idSuffix}`.substring(0, 60), font: archivoBold, size: 9, color: MONO.ink })
+      clienteLinesEn.push({ text: rxTruncate(`${clienteRazonSocial}${idSuffix}`, archivoBold, 9, clienteNameMaxWEn), font: archivoBold, size: 9, color: MONO.ink })
       const contactSuffix = clienteDni ? ` · DNI ${clienteDni}` : ""
       clienteLinesEn.push({ text: `Contacto: ${clienteNombre}${contactSuffix}`.substring(0, 60), font: archivoRegular, size: 8, color: MONO.label })
     } else {
       const idSuffix = clienteDni ? ` · DNI ${clienteDni}` : (clienteCuit ? ` · CUIT ${clienteCuit}` : "")
-      clienteLinesEn.push({ text: `${clienteNombre}${idSuffix}`.substring(0, 60), font: archivoBold, size: 9, color: MONO.ink })
+      clienteLinesEn.push({ text: rxTruncate(`${clienteNombre}${idSuffix}`, archivoBold, 9, clienteNameMaxWEn), font: archivoBold, size: 9, color: MONO.ink })
     }
     const telPartsEn = [clienteTelefono]
     if (telefonoContacto && telefonoContacto !== clienteTelefono) telPartsEn.push(`tel. de esta orden: ${telefonoContacto}`)
@@ -1333,16 +1343,34 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
 
     // LEFT — trabajo realizado (tabla + totales)
     let ly = midTopYEn
-    drawSectionLabel(page, archivoBold, "Trabajo realizado — repuestos y mano de obra", midLeftXEn, ly)
+    const trabajosRawEn = Array.isArray(data.trabajos) ? data.trabajos : []
+    const trabajosPricedEn = trabajosRawEn.filter(it => (Number(it.importe) || 0) !== 0)
+    const omittedCountEn = trabajosRawEn.length - trabajosPricedEn.length
+    // Cap de filas dibujadas (fix final-review D6): sin tope, el bloque de
+    // trabajos empujaba totales/pagos/garantía/firmas fuera de la página con
+    // ~15-20 ítems. 12 sale del presupuesto de layout existente: header
+    // DETALLE (~15pt) + hasta 12 filas (~14pt c/u: 4pt + regla + 10pt de alto
+    // de línea) ≈ 183pt, dejando lugar al resto del bloque izquierdo
+    // (totales + SALDO) dentro del alto fijo de la hoja ENTREGA. El subtotal
+    // sigue sumando TODOS los ítems, no solo los dibujados.
+    const TRABAJOS_DRAW_CAP_EN = 12
+    const trabajosShownEn = trabajosPricedEn.slice(0, TRABAJOS_DRAW_CAP_EN)
+    const trabajosOverflowEn = Math.max(trabajosPricedEn.length - TRABAJOS_DRAW_CAP_EN, 0)
+    const subtotalTrabajoEn = trabajosRawEn.reduce((sum, it) => sum + (Number(it.importe) || 0), 0)
+    // Línea derivada "Mano de obra y otros" (fix final-review D3): solo
+    // cuando costoFinal supera lo que ya suman los ítems con precio — evita
+    // una fila duplicada con TOTAL FINAL cuando no hay trabajos cargados.
+    const manoDeObraEn = data.costoFinal != null && trabajosRawEn.length > 0 && data.costoFinal > subtotalTrabajoEn
+      ? data.costoFinal - subtotalTrabajoEn
+      : null
+    const trabajoHeadingEn = manoDeObraEn != null ? "Trabajo realizado — repuestos y mano de obra" : "Trabajo realizado — repuestos"
+    drawSectionLabel(page, archivoBold, trabajoHeadingEn, midLeftXEn, ly)
     ly -= 12
 
-    const trabajosAllEn = Array.isArray(data.trabajos) ? data.trabajos.slice(0, 20) : []
-    const trabajosShownEn = trabajosAllEn.filter(it => (Number(it.importe) || 0) !== 0)
-    const omittedCountEn = trabajosAllEn.length - trabajosShownEn.length
     const qtyColRightEn = midLeftXEn + midLeftWEn * 0.62
     const amtColRightEn = midLeftXEn + midLeftWEn
 
-    if (trabajosAllEn.length > 0) {
+    if (trabajosRawEn.length > 0) {
       page.drawText("DETALLE", { x: midLeftXEn, y: ly, size: 6.8, font: archivoBold, color: MONO.label })
       rxDrawRight(page, "CANT.", qtyColRightEn, ly, 6.8, archivoBold, MONO.label)
       rxDrawRight(page, "IMPORTE", amtColRightEn, ly, 6.8, archivoBold, MONO.label)
@@ -1360,14 +1388,18 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
           ly -= 10
         }
       } else {
-        page.drawText("Sin ítems con precio.", { x: midLeftXEn, y: ly, size: 8.5, font: archivoRegular, color: MONO.faint })
+        page.drawText("Sin ítems con precio de venta cargado.", { x: midLeftXEn, y: ly, size: 8.5, font: archivoRegular, color: MONO.faint })
         ly -= 12
+      }
+      if (trabajosOverflowEn > 0) {
+        page.drawText(`+${trabajosOverflowEn} ítem${trabajosOverflowEn === 1 ? "" : "s"} más`, { x: midLeftXEn, y: ly, size: 6.5, font: archivoRegular, color: MONO.faint })
+        ly -= 10
       }
       if (omittedCountEn > 0) {
         // Decisión: filas legacy con importe $0 no se listan (no aportan al
         // subtotal ni son cobrables) pero se avisa que existen en vez de
         // esconderlas en silencio — ver task-D4-report.md.
-        page.drawText(`${omittedCountEn} ítem${omittedCountEn === 1 ? "" : "s"} sin precio omitido${omittedCountEn === 1 ? "" : "s"}`, { x: midLeftXEn, y: ly, size: 6.5, font: archivoRegular, color: MONO.faint })
+        page.drawText(`${omittedCountEn} ítem${omittedCountEn === 1 ? "" : "s"} sin precio de venta cargado`, { x: midLeftXEn, y: ly, size: 6.5, font: archivoRegular, color: MONO.faint })
         ly -= 10
       }
     } else {
@@ -1375,7 +1407,6 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
       ly -= 12
     }
 
-    const subtotalTrabajoEn = trabajosAllEn.reduce((sum, it) => sum + (Number(it.importe) || 0), 0)
     const totalFinalValueEn = data.costoFinal != null ? data.costoFinal : (data.presupuesto != null ? data.presupuesto : null)
     const totalFinalLabelEn = data.costoFinal != null ? "TOTAL FINAL" : "PRESUPUESTO"
     const totalsWEn = Math.min(midLeftWEn, 176)
@@ -1383,14 +1414,23 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
 
     type TotalsRowEn = { label: string; value: string; big?: boolean; neg?: boolean }
     const totalsRowsEn: TotalsRowEn[] = []
+    // Orden (fix final-review D3): Presupuesto estimado -> Subtotal trabajo
+    // -> Mano de obra y otros (derivada) -> TOTAL FINAL -> Descuento -> banda
+    // SALDO. El viejo orden ponía Descuento ANTES de TOTAL FINAL: el cliente
+    // restaba Subtotal - Descuento de cabeza y el TOTAL FINAL de abajo no
+    // coincidía con esa resta (el descuento no forma parte de esa suma).
+    // Ahora Subtotal + Mano de obra siempre cierra en TOTAL FINAL, y
+    // Descuento aparece después como el ajuste que lleva a la banda SALDO.
+    //
     // "Presupuesto estimado" solo aporta cuando hay un costoFinal real que
     // comparar contra — si no, sería la misma cifra que ya se muestra abajo
     // como fallback "PRESUPUESTO" en negrita (fila duplicada, ver
     // task-D4-report.md).
     if (data.presupuesto != null && data.costoFinal != null) totalsRowsEn.push({ label: "Presupuesto estimado", value: formatCurrencyPDF(data.presupuesto) })
-    if (trabajosAllEn.length > 0) totalsRowsEn.push({ label: "Subtotal trabajo", value: formatCurrencyPDF(subtotalTrabajoEn) })
-    if (data.descuentoCobro) totalsRowsEn.push({ label: "Descuento", value: `-${formatCurrencyPDF(data.descuentoCobro)}`, neg: true })
+    if (trabajosRawEn.length > 0) totalsRowsEn.push({ label: "Subtotal trabajo", value: formatCurrencyPDF(subtotalTrabajoEn) })
+    if (manoDeObraEn != null) totalsRowsEn.push({ label: "Mano de obra y otros", value: formatCurrencyPDF(manoDeObraEn) })
     if (totalFinalValueEn != null) totalsRowsEn.push({ label: totalFinalLabelEn, value: formatCurrencyPDF(totalFinalValueEn), big: true })
+    if (data.descuentoCobro) totalsRowsEn.push({ label: "Descuento", value: `-${formatCurrencyPDF(data.descuentoCobro)}`, neg: true })
 
     ly -= 4
     for (const row of totalsRowsEn) {
@@ -1406,6 +1446,11 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     const showSaldoBandEn = totalFinalValueEn != null || !!data.motivoSinCobro
     if (showSaldoBandEn) {
       const saldoBandHEn = 18
+      // Fix final-review D4: "SALDO" implica algo ya adeudado con certeza;
+      // cuando no hay costoFinal todavía, el monto sale de `presupuesto`
+      // (una estimación), así que la banda debe decir "SALDO ESTIMADO" — la
+      // app no considera nada adeudado hasta que exista costo_final.
+      const saldoLabelEn = data.costoFinal != null ? "SALDO" : "SALDO ESTIMADO"
       let saldoTextEn: string
       if (data.motivoSinCobro) {
         const motivoLabel = MOTIVO_SIN_COBRO_LABELS[data.motivoSinCobro as MotivoSinCobro] || data.motivoSinCobro
@@ -1423,7 +1468,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
       }
       ly -= 3
       rxInkFill(page, totalsXEn, ly - saldoBandHEn, totalsWEn, saldoBandHEn)
-      page.drawText("SALDO", { x: totalsXEn + 6, y: ly - saldoBandHEn + 6, size: 9, font: archivoBold, color: MONO.white })
+      page.drawText(saldoLabelEn, { x: totalsXEn + 6, y: ly - saldoBandHEn + 6, size: 9, font: archivoBold, color: MONO.white })
       const saldoFontSizeEn = saldoTextEn.length > 16 ? 8 : 11
       rxDrawRight(page, saldoTextEn, totalsXEn + totalsWEn - 6, ly - saldoBandHEn + 6, saldoFontSizeEn, archivoCondensedBold, MONO.white)
       ly -= saldoBandHEn
@@ -1774,14 +1819,18 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const colGridW = rxContentW / 2
   const isEmpresa = clienteTipoCliente.toUpperCase() === "EMPRESA" && !!clienteRazonSocial
   const clienteLines: RxCellLine[] = []
+  // Fix final-review D9: width-aware truncation (rxTruncate) instead of a
+  // flat .substring(0, 60) — razón social + CUIT is free-length and could
+  // overflow the grid cell by ~5pt at 9pt bold before this.
+  const clienteNameMaxW = colGridW - rxCellPadX * 2
   if (isEmpresa) {
     const idSuffix = clienteCuit ? ` · CUIT ${clienteCuit}` : ""
-    clienteLines.push({ text: `${clienteRazonSocial}${idSuffix}`.substring(0, 60), font: archivoBold, size: 9, color: MONO.ink })
+    clienteLines.push({ text: rxTruncate(`${clienteRazonSocial}${idSuffix}`, archivoBold, 9, clienteNameMaxW), font: archivoBold, size: 9, color: MONO.ink })
     const contactSuffix = clienteDni ? ` · DNI ${clienteDni}` : ""
     clienteLines.push({ text: `Contacto: ${clienteNombre}${contactSuffix}`.substring(0, 60), font: archivoRegular, size: 8, color: MONO.label })
   } else {
     const idSuffix = clienteDni ? ` · DNI ${clienteDni}` : (clienteCuit ? ` · CUIT ${clienteCuit}` : "")
-    clienteLines.push({ text: `${clienteNombre}${idSuffix}`.substring(0, 60), font: archivoBold, size: 9, color: MONO.ink })
+    clienteLines.push({ text: rxTruncate(`${clienteNombre}${idSuffix}`, archivoBold, 9, clienteNameMaxW), font: archivoBold, size: 9, color: MONO.ink })
   }
   const telParts = [clienteTelefono]
   if (telefonoContacto && telefonoContacto !== clienteTelefono) telParts.push(`tel. de esta orden: ${telefonoContacto}`)
@@ -1809,6 +1858,18 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     .map(l => ({ text: l, font: archivoRegular, size: 9, color: MONO.ink }))
   const rowH2 = rxDrawGridRow([{ x: rxMargin, width: rxContentW, label: "Falla declarada", lines: fallaLines }], ry)
   ry -= rowH2
+
+  // ---- Observaciones (fila completa, condicional) — fix final-review D1:
+  // restaurada del layout viejo (se dibujaba tanto en la copia cliente como
+  // en el talón; Task D3 la había dejado afuera), acá con el mismo lenguaje
+  // de grilla que el resto de esta hoja.
+  if (data.observaciones) {
+    const obsLines: RxCellLine[] = rxWrap(safe(data.observaciones), archivoRegular, 8.5, rxContentW - rxCellPadX * 2)
+      .slice(0, 2)
+      .map(l => ({ text: l, font: archivoRegular, size: 8.5, color: MONO.ink }))
+    const rowObs = rxDrawGridRow([{ x: rxMargin, width: rxContentW, label: "Observaciones", lines: obsLines }], ry)
+    ry -= rowObs
+  }
 
   // ---- Accesorios recibidos | Fotos de ingreso (fila completa, dividida 65/35) ----
   const accesoriosLines: RxCellLine[] = accesorios
@@ -1895,6 +1956,18 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   if (sigAreaW > 80) {
     const sigColW = (sigAreaW - 10) / 2
     const sigLineY = sigRowTop - qrSize + 6
+    // Fix final-review D2: embeds the reception signature image when
+    // present (mirrors how the ENTREGA sheet embeds firmaClienteEntrega,
+    // ~L1650 above); otherwise the line stays blank, same as before.
+    if (data.firmaRecepcion) {
+      try {
+        const bytes = Uint8Array.from(atob(data.firmaRecepcion), c => c.charCodeAt(0))
+        const img = await pdfDoc.embedPng(bytes)
+        const dims = img.scale(1)
+        const scale = Math.min((sigColW - 6) / dims.width, (qrSize - 14) / dims.height)
+        page.drawImage(img, { x: sigStartX + (sigColW - dims.width * scale) / 2, y: sigLineY + 3, width: dims.width * scale, height: dims.height * scale })
+      } catch { /* ignore embedding errors — la línea queda en blanco */ }
+    }
     drawRule(page, sigStartX, sigStartX + sigColW, sigLineY, { color: MONO.ink })
     page.drawText("FIRMA DEL CLIENTE", { x: sigStartX, y: sigLineY - 8, size: 6, font: archivoBold, color: MONO.label })
     const recibioX = sigStartX + sigColW + 10
@@ -2043,6 +2116,12 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const notasLines: RxCellLine[] = rxWrap(notasMostrador, archivoRegular, 7.5, rxContentW * 0.5 - rxCellPadX * 2)
     .slice(0, 3)
     .map(l => ({ text: l, font: archivoRegular, size: 7.5, color: MONO.ink }))
+  if (data.observaciones) {
+    // Fix final-review D1: talón interno — línea compacta "OBS:", restaurada
+    // del layout viejo (se truncaba a un ancho fijo ahí también).
+    const obsLineText = rxTruncate(`OBS: ${safe(data.observaciones)}`, archivoRegular, 7, rxContentW * 0.5 - rxCellPadX * 2)
+    notasLines.push({ text: obsLineText, font: archivoRegular, size: 7, color: MONO.label })
+  }
   const presupSenaText = `${presupuesto || formatCurrencyPDF(0)} / ${data.sena ? formatCurrencyPDF(data.sena) : "—"}`
   const row3H = rxDrawGridRow([
     { x: rxMargin, width: rxContentW * 0.5, label: "Falla / notas de mostrador", lines: notasLines },
