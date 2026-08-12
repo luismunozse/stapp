@@ -6,9 +6,18 @@
  * mock pattern as configuracion-terminologia.test.ts.
  *
  * Also covers graceful degradation: the migration is not applied on every
- * environment yet, so a PGRST204 on the new columns must not break the rest
- * of GET/PUT (same defensive tier the route already uses for
- * recepcion_terminos / iva_regimen / etc).
+ * environment yet, so a missing-column error on the new columns must not
+ * break the rest of GET/PUT (same defensive tier the route already uses for
+ * recepcion_terminos / iva_regimen / etc). The real PostgREST error shape
+ * DEPENDS on where the unknown column is referenced:
+ *   - a pure SELECT (GET, the no-op PUT branch, or a PUT's RETURNING clause
+ *     when the write payload itself doesn't touch the unknown column) gets
+ *     Postgres' own 42703 ("column ... does not exist") — NOT PGRST204.
+ *   - a write payload that itself names an unknown column (e.g. `cuit` in
+ *     the JSON body) gets PostgREST's schema-cache PGRST204 instead, since
+ *     that's checked before any SQL is even built.
+ * Tests below use whichever shape actually applies to the scenario, so they
+ * pin the real contract instead of a guess (see lib/db-errors.ts).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { mockAuthSuccess, mockSupabaseFrom, createChainMock, parseResponse } from "./helpers"
@@ -94,13 +103,16 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     expect(body.plazoPagoDias).toBeNull()
   })
 
-  it("GET degrades gracefully when migration 295 hasn't run (PGRST204 on the fiscal select), still returning the rest of the config", async () => {
+  it("GET degrades gracefully when migration 295 hasn't run (42703 on the fiscal select), still returning the rest of the config", async () => {
     mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
     const orgData = baseOrgRow()
     const chain = createChainMock()
     chain.single = vi
       .fn()
-      .mockResolvedValueOnce({ data: null, error: { code: "PGRST204" } })
+      // GET is a pure SELECT (no .update()): a real PostgREST/Postgres
+      // missing-column error here is 42703, not PGRST204 — PGRST204 only
+      // fires for write payloads naming an unknown column.
+      .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.cuit does not exist" } })
       .mockResolvedValueOnce({ data: orgData, error: null })
     mockSupabaseFrom({ organizations: chain })
 
@@ -197,6 +209,9 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     const chain = createChainMock()
     chain.single = vi
       .fn()
+      // Here the write PAYLOAD itself names cuit (an unknown column), so
+      // this one genuinely gets PGRST204 from PostgREST's schema-cache
+      // precheck — unlike the SELECT-only sites above/below.
       .mockResolvedValueOnce({ data: null, error: { code: "PGRST204" } })
       .mockResolvedValueOnce({ data: baseOrgRow({ telefono: "123456" }), error: null })
     mockSupabaseFrom({ organizations: chain })
@@ -212,6 +227,37 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
 
     expect(status).toBe(200)
     expect(body.telefono).toBe("123456")
+  })
+
+  it("PUT degrades on a 42703 RETURNING-only error when the write payload has no fiscal fields at all", async () => {
+    // The scenario the Critical finding actually described: a PUT that only
+    // touches an existing field (telefono, no fiscal keys in the body) still
+    // unconditionally asks for the 6 fiscal columns in .select(selectColsFull)
+    // (the RETURNING clause). Since the write payload itself never mentions
+    // an unknown column, PostgREST's schema-cache precheck has nothing to
+    // reject — the query reaches Postgres, which raises 42703 on the
+    // RETURNING list instead. A PGRST204-only guard would never catch this,
+    // so this exact request (which has nothing to do with fiscal data) would
+    // fail outright with a raw 500 instead of retrying.
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    const chain = createChainMock()
+    chain.single = vi
+      .fn()
+      .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.cuit does not exist" } })
+      .mockResolvedValueOnce({ data: baseOrgRow({ telefono: "555-0100" }), error: null })
+    mockSupabaseFrom({ organizations: chain })
+
+    const { PUT } = await import("@/app/api/configuracion/route")
+    const request = new Request("http://localhost:3000/api/configuracion", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ telefono: "555-0100" }), // no fiscal fields in the body at all
+    })
+    const res = await PUT(request)
+    const { status, body } = await parseResponse(res as Response)
+
+    expect(status).toBe(200)
+    expect(body.telefono).toBe("555-0100")
   })
 
   it("PUT with no changed fields (no-op branch) selects the fiscal + legacy-fiscal columns, not the narrow base list", async () => {
@@ -247,7 +293,8 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     const chain = createChainMock()
     chain.single = vi
       .fn()
-      .mockResolvedValueOnce({ data: null, error: { code: "PGRST204" } })
+      // No-op branch is a pure SELECT too (no .update()): real error is 42703.
+      .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.cuit does not exist" } })
       .mockResolvedValueOnce({ data: baseOrgRow({ recepcion_terminos: "Ver adjunto" }), error: null })
     mockSupabaseFrom({ organizations: chain })
 

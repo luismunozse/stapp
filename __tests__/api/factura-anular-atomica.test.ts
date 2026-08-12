@@ -213,6 +213,58 @@ describe("PUT /api/facturacion/[id] — estadoPago=ANULADA", () => {
 
     expect(status).toBe(403)
   })
+
+  // Gender-agnostic matching: the app and migration 295 don't deploy
+  // atomically (this route can ship before 295 runs, or 295 can be rolled
+  // back via supabase/migrations/rollback/295_rollback.sql after this route
+  // already shipped). In both cases the RPC raises the OLD feminine wording
+  // ("La factura ya esta anulada" / "Factura no encontrada") — the route
+  // must still map those to 400/404, not fall through to a raw 500.
+  it("rpc 'La factura ya esta anulada' (pre-295/rolled-back feminine wording) → 400", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+
+    mockSupabaseFrom({
+      facturas: createChainMock(facturaFullRow()),
+    })
+
+    vi.mocked(supabaseAdmin.rpc).mockImplementation(((fn: string) => {
+      if (fn === "anular_factura_atomica") {
+        return Promise.resolve({
+          data: null,
+          error: { code: "P0001", message: "La factura ya esta anulada" },
+        })
+      }
+      return Promise.resolve({ data: null, error: null })
+    }) as any)
+
+    const res = await PUT(createPutRequest({ estadoPago: "ANULADA" }), params)
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(400)
+  })
+
+  it("rpc 'Factura no encontrada' (pre-295/rolled-back feminine wording) → 404", async () => {
+    mockAuthSuccess({ role: "ADMIN" })
+
+    mockSupabaseFrom({
+      facturas: createChainMock(facturaFullRow()),
+    })
+
+    vi.mocked(supabaseAdmin.rpc).mockImplementation(((fn: string) => {
+      if (fn === "anular_factura_atomica") {
+        return Promise.resolve({
+          data: null,
+          error: { code: "P0001", message: "Factura no encontrada" },
+        })
+      }
+      return Promise.resolve({ data: null, error: null })
+    }) as any)
+
+    const res = await PUT(createPutRequest({ estadoPago: "ANULADA" }), params)
+    const { status } = await parseResponse(res)
+
+    expect(status).toBe(404)
+  })
 })
 
 describe("PUT /api/facturacion/[id] — non-ANULADA estadoPago rejected", () => {

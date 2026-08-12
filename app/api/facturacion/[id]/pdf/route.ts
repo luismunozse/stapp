@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { sucursalParaLectura } from "@/lib/sucursal"
 import { generateFacturaPDF } from "@/lib/pdf"
 import { addDaysInTimeZone } from "@/lib/timezone"
+import { isMissingColumnError } from "@/lib/db-errors"
 
 // Org columns for the emisor block, with and without the fiscal identity /
 // collection fields added by migration 295 (cuit, condicion_iva,
@@ -126,8 +127,9 @@ export async function GET(
 
     if (base.orden_id) {
       let { data: factura, error: dbError } = await fetchFacturaOrden(id, organizationId!, sid, verTodas, true)
-      if (dbError?.code === "PGRST204") {
+      if (isMissingColumnError(dbError)) {
         // Migración 295 (datos fiscales) no aplicada todavía en este entorno.
+        // SELECT pura (sin .update()): Postgres devuelve 42703, no PGRST204.
         ;({ data: factura, error: dbError } = await fetchFacturaOrden(id, organizationId!, sid, verTodas, false))
       }
       if (dbError || !factura) {
@@ -191,8 +193,9 @@ export async function GET(
       }
     } else {
       let { data: factura, error: dbError } = await fetchFacturaVenta(id, organizationId!, sid, verTodas, true)
-      if (dbError?.code === "PGRST204") {
+      if (isMissingColumnError(dbError)) {
         // Migración 295 (datos fiscales) no aplicada todavía en este entorno.
+        // SELECT pura (sin .update()): Postgres devuelve 42703, no PGRST204.
         ;({ data: factura, error: dbError } = await fetchFacturaVenta(id, organizationId!, sid, verTodas, false))
       }
       if (dbError || !factura) {

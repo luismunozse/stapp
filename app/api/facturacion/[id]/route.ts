@@ -262,20 +262,26 @@ async function handleAnularFactura(opts: {
   }
 
   // Map known business errors.
-  // Migration 295 changed anular_factura_atomica's RAISE EXCEPTION wording to
-  // "remito" (masculine): "Remito no encontrado" / "El remito ya esta anulado".
-  // The old feminine substrings ("no encontrada" / "ya esta anulada") no
-  // longer match that RPC's messages, so these checks use the new wording.
+  // Migration 295 changed anular_factura_atomica's RAISE EXCEPTION wording
+  // from feminine ("factura") to masculine ("remito"): "Factura no
+  // encontrada" / "La factura ya esta anulada" -> "Remito no encontrado" /
+  // "El remito ya esta anulado". The app and the migration don't deploy
+  // atomically (this route can ship before 295 runs, or 295 can be rolled
+  // back — see supabase/migrations/rollback/295_rollback.sql — after this
+  // route already shipped), so these matches are gender-agnostic and accept
+  // BOTH wordings. This also makes the rollback self-contained: reverting
+  // just the DB function is enough, this route doesn't need a matching
+  // revert to keep working.
   // eliminar_factura_atomica is untouched by migration 295 and still raises
   // "Factura no encontrada" — its own match (below, in DELETE) keeps the old wording.
   const msg = rpcError.message ?? ""
-  if (msg.includes("no encontrado")) {
+  if (/no encontrad[oa]/.test(msg)) {
     return NextResponse.json({ error: "Remito no encontrado" }, { status: 404 })
   }
   if (msg.includes("No autorizado")) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 })
   }
-  if (msg.includes("ya esta anulado")) {
+  if (/ya esta anulad[oa]/.test(msg)) {
     return NextResponse.json({ error: msg }, { status: 400 })
   }
 

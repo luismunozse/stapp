@@ -176,20 +176,22 @@ describe("GET /api/facturacion/[id]/pdf — datos fiscales y de cobro", () => {
     )
   })
 
-  it("degrades gracefully when migration 295 hasn't run (PGRST204 on the fiscal columns), still generating the PDF without fiscal fields", async () => {
+  it("degrades gracefully when migration 295 hasn't run (42703 on the fiscal columns), still generating the PDF without fiscal fields", async () => {
     const baseRow = { id: "f1", orden_id: "orden-1", venta_id: null }
     const fullRowNoFiscal = baseFacturaOrdenRow()
     // organizations embed in fullRowNoFiscal still has the fiscal keys (all
     // null) because that's how the fixture is built, but that's fine — the
     // route's fallback query wouldn't ask PostgREST for them at all in a
-    // real DB; here we only need dbError to surface PGRST204 once, then
-    // succeed, mirroring what PostgREST does when a selected column is
-    // missing from the schema cache.
+    // real DB; here we only need dbError to surface the failure once, then
+    // succeed. This whole route is SELECT-only (no .update() anywhere), so
+    // a real missing-column error here is Postgres' 42703 ("column ... does
+    // not exist"), not PGRST204 — PGRST204 is specific to write payloads
+    // naming an unknown column, which never happens on a GET.
     const chain = createChainMock()
     chain.single = vi
       .fn()
       .mockResolvedValueOnce({ data: baseRow, error: null }) // base lookup (id, orden_id, venta_id)
-      .mockResolvedValueOnce({ data: null, error: { code: "PGRST204" } }) // fiscal-embed query fails
+      .mockResolvedValueOnce({ data: null, error: { code: "42703", message: "column organizations.cuit does not exist" } }) // fiscal-embed query fails
       .mockResolvedValueOnce({ data: fullRowNoFiscal, error: null }) // fallback query succeeds
     mockSupabaseFrom({
       facturas: chain,

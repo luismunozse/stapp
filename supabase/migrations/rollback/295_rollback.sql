@@ -2,11 +2,11 @@
 --
 -- Restaura el estado previo: quita los 6 campos fiscales/de cobro agregados
 -- a organizations y vuelve a dejar anular_factura_atomica con wording de
--- "factura" (verbatim de la migración 292 — ojo: eso reintroduce el
--- descalce de género con la respuesta del route, que ya devuelve
--- "Remito no encontrado" / "El remito ya está anulado" al cliente; el
--- fallback de mapeo de errores del route también debe revertirse junto con
--- este archivo si se hace rollback completo de la 295).
+-- "factura" (verbatim de la migración 292). app/api/facturacion/[id]/route.ts
+-- matchea el mensaje de error de esa RPC con regex género-agnósticas
+-- (/no encontrad[oa]/, /ya esta anulad[oa]/), así que este rollback es
+-- self-contained: no hace falta revertir el route en el mismo deploy para
+-- que la respuesta al cliente (404/400) siga siendo correcta.
 
 ALTER TABLE organizations
   DROP COLUMN IF EXISTS cuit,

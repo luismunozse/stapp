@@ -3,10 +3,12 @@
 --
 -- Part 1: adds the fields the remito PDF (lib/pdf.ts, RC Task 2/3) already
 -- knows how to render — cuitEmpresa/condicionIvaEmpresa/domicilioFiscalEmpresa/
--- mediosPago/cbuAlias — plus plazo_pago_dias (not yet consumed by the PDF;
--- reserved for the fiscal-data config screen, RC Task 6). All nullable: an
--- org that hasn't filled these in yet gets the exact same PDF it gets today
--- (every block in lib/pdf.ts is conditional on the field being present).
+-- mediosPago/cbuAlias — plus plazo_pago_dias, which RC Task 6 wires up: the
+-- fiscal-data config screen persists it, and the remito PDF route computes
+-- vencimiento = fecha de emisión + plazo_pago_dias when it's set. All
+-- nullable: an org that hasn't filled these in yet gets the exact same PDF
+-- it gets today (every block in lib/pdf.ts is conditional on the field
+-- being present).
 --
 -- Part 2: re-creates anular_factura_atomica with "remito" wording in its
 -- user-facing RAISE EXCEPTION strings, verbatim otherwise from migration 292
@@ -18,11 +20,13 @@
 --   'La factura ya esta anulada' -> 'El remito ya esta anulado'
 -- 'No autorizado' is untouched (not factura/remito-specific).
 --
--- Route-side gotcha (app/api/facturacion/[id]/route.ts, handleAnularFactura):
--- the gender changed (encontrada -> encontrado, anulada -> anulado), so the
--- substring matches `msg.includes("no encontrada")` and
--- `msg.includes("ya esta anulada")` used to classify this RPC's errors no
--- longer match and MUST be updated in the same commit (see route.ts diff).
+-- Route-side note (app/api/facturacion/[id]/route.ts, handleAnularFactura):
+-- the gender changed (encontrada -> encontrado, anulada -> anulado). The
+-- route matches this RPC's error message with gender-agnostic regexes
+-- (/no encontrad[oa]/, /ya esta anulad[oa]/) so it accepts both wordings —
+-- this migration and that route don't need to deploy atomically, and the
+-- rollback (supabase/migrations/rollback/295_rollback.sql) doesn't need a
+-- matching route revert either.
 -- eliminar_factura_atomica is NOT touched by this migration and still raises
 -- 'Factura no encontrada', so its own match at line ~449 stays as-is.
 
@@ -37,7 +41,7 @@ ALTER TABLE organizations
 COMMENT ON COLUMN organizations.cuit IS
   'CUIT (Clave Única de Identificación Tributaria) del emisor, impreso en el remito. Nullable: sin CUIT cargado, el bloque simplemente no se imprime (lib/pdf.ts).';
 COMMENT ON COLUMN organizations.condicion_iva IS
-  'Condición frente al IVA del emisor (ej. "Responsable Inscripto", "Monotributista", "Exento"), texto libre impreso en el remito.';
+  'Condición frente al IVA del emisor (ej. "Responsable Inscripto", "Monotributo", "Exento"), texto libre impreso en el remito.';
 COMMENT ON COLUMN organizations.domicilio_fiscal IS
   'Domicilio fiscal del emisor, impreso en el remito junto al CUIT y la condición de IVA.';
 COMMENT ON COLUMN organizations.cbu_alias IS
@@ -45,7 +49,7 @@ COMMENT ON COLUMN organizations.cbu_alias IS
 COMMENT ON COLUMN organizations.medios_pago_texto IS
   'Texto libre con los medios de pago aceptados (ej. "Efectivo, transferencia, tarjeta"), impreso junto al CBU/alias en el remito.';
 COMMENT ON COLUMN organizations.plazo_pago_dias IS
-  'Plazo de pago en días (net terms) del emisor. Aún sin consumidor en el PDF — reservado para la pantalla de configuración de datos fiscales (RC Task 6).';
+  'Plazo de pago en días (net terms) del emisor, configurable en la pantalla de datos fiscales (RC Task 6). Consumido por el remito para calcular vencimiento = fecha de emisión + este plazo; nullable, un remito sin plazo cargado simplemente no muestra vencimiento.';
 
 -- ============================================================
 -- anular_factura_atomica — verbatim from migration 292, remito wording only

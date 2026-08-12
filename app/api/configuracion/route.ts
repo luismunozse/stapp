@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase"
 import { uploadLogo, deleteLogo, dataUrlToBuffer } from "@/lib/storage"
 import { COUNTRIES } from "@/lib/countries"
 import { resolveTerminologia, sanitizeTerminologia } from "@/lib/terminologia"
+import { isMissingColumnError } from "@/lib/db-errors"
 
 // GET - Obtener configuraciÃ³n (solo ADMIN)
 export async function GET() {
@@ -59,8 +60,12 @@ export async function GET() {
       .eq("id", organizationId!)
       .single()
 
-    if (result.error?.code === "PGRST204") {
+    if (isMissingColumnError(result.error)) {
       // Migración 295 no aplicada todavía: reintentar sin las columnas fiscales.
+      // Esta es una SELECT pura (sin .update()), así que Postgres devuelve
+      // 42703 ("column ... does not exist"), no PGRST204 — PGRST204 solo
+      // aparece cuando el payload de una escritura nombra una columna
+      // desconocida. isMissingColumnError() cubre ambos casos.
       result = await supabaseAdmin
         .from("organizations")
         .select(baseSelect)
@@ -68,7 +73,7 @@ export async function GET() {
         .single()
     }
 
-    if (result.error?.code === "PGRST204") {
+    if (isMissingColumnError(result.error)) {
       // Column doesn't exist yet, query without it
       const fallback = await supabaseAdmin
         .from("organizations")
@@ -378,7 +383,8 @@ export async function PUT(request: Request) {
         .select(selectColsFull)
         .eq("id", organizationId!)
         .single()
-      if (selectError?.code === "PGRST204") {
+      if (isMissingColumnError(selectError)) {
+        // SELECT pura otra vez (sin .update()): 42703, no PGRST204.
         ;({ data } = await supabaseAdmin
           .from("organizations")
           .select(selectColsPre295)
@@ -433,11 +439,15 @@ export async function PUT(request: Request) {
       .select(selectColsFull)
       .single()
 
-    if (result2.error?.code === "PGRST204") {
+    if (isMissingColumnError(result2.error)) {
       // Migración 295 no aplicada todavía: reintentar sin los 6 campos
       // fiscales nuevos. El resto de updateData (recepcion_terminos,
       // iva_regimen, terminologia, etc.) sigue intacto: esas columnas SÍ
-      // existen hoy, así que deben persistirse igual.
+      // existen hoy, así que deben persistirse igual. Este primer intento sí
+      // suele dar PGRST204 real (updateData nombra columnas fiscales
+      // desconocidas en el payload de escritura), pero isMissingColumnError
+      // también cubre el 42703 que daría un RETURNING con columnas
+      // desconocidas si el body no las incluyera.
       delete updateData.cuit
       delete updateData.condicion_iva
       delete updateData.domicilio_fiscal
@@ -452,7 +462,7 @@ export async function PUT(request: Request) {
         .single() as any
     }
 
-    if (result2.error?.code === "PGRST204") {
+    if (isMissingColumnError(result2.error)) {
       // recepcion_terminos column doesn't exist yet, retry without it
       delete updateData.recepcion_terminos
       hasRecepcionTerminos = false
