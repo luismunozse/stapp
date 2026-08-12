@@ -18,6 +18,8 @@ import { PDFDocument } from "pdf-lib"
 import { generateOrdenPDF } from "@/lib/pdf"
 import { extractPdfText } from "./pdf-text-helper"
 import { buildOrdenFixture } from "./orden-fixture"
+import { formatCurrencyValue } from "@/lib/currency"
+import { formatDateValue } from "@/lib/timezone"
 
 describe("generateOrdenPDF", () => {
   it("renders the soloCliente variant with all key sections and no talón", async () => {
@@ -113,7 +115,7 @@ describe("generateOrdenPDF", () => {
     expect(buffer.length).toBeGreaterThan(1000)
   })
 
-  it("renders the ENTREGADO variant with fotos and firmas as separate appended pages", async () => {
+  it("renders the ENTREGADO variant with fotos as a separate appended page (signatures now live on the entrega sheet itself)", async () => {
     // Minimal 1x1 PNG, embedded as a data: URL so the fotos-de-ingreso fetch
     // works offline (fetch() resolves data: URLs in Node 18+), and reused as
     // a stand-in signature image — same trick as pdf-samples.test.ts.
@@ -134,11 +136,110 @@ describe("generateOrdenPDF", () => {
       notasEntrega: "Se entrega el equipo funcionando correctamente. Cliente conforme.",
     })
     expect(buffer.length).toBeGreaterThan(1000)
-    // Behavior preserved (Task D3 Global Constraints): the recepción sheet
-    // (now a single combined page) + fotos page + entrega page still append
-    // as separate pages — D4 will rebuild the entrega page itself, not its
-    // presence/ordering.
+    // Task D4: terminal delivery estados now render the full ENTREGA
+    // expediente sheet as page 1 (replacing the old recepción+cut+stub
+    // layout for this estado) — no more separate "comprobante de entrega"
+    // page, its content (attribution + signatures) now lives on that same
+    // sheet. Only the fotos-de-ingreso page still appends separately.
     const doc = await PDFDocument.load(buffer)
-    expect(doc.getPageCount()).toBeGreaterThanOrEqual(3)
+    expect(doc.getPageCount()).toBe(2)
+    const text = await extractPdfText(buffer)
+    expect(text).toContain("ENTREGÓ")
+    expect(text).toContain("MARÍA GÓMEZ")
+  })
+
+  describe("ENTREGA expediente sheet (Task D4)", () => {
+    it("renders trabajos, totals, garantía, cobros and diagnóstico for a terminal delivery estado", async () => {
+      const fixture = buildOrdenFixture()
+      const buffer = await generateOrdenPDF({
+        ...fixture,
+        estado: "ENTREGADO",
+        diagnostico: "Sulfatación en el conector de batería; se reemplaza la celda dañada.",
+        costoFinal: 50000,
+        totalCobrado: 30000,
+        estadoCobro: "PARCIAL",
+        descuentoCobro: 2000,
+        fechaCompletado: new Date(),
+        fechaEntrega: new Date(),
+        entregadoPor: "María Gómez",
+        codigoAccesoDispositivo: "PIN 9911",
+        trabajos: [
+          { nombre: "Batería iPhone 13", cantidad: 1, importe: 48000 },
+          { nombre: "Repuesto legado sin precio", cantidad: 1, importe: 0 },
+        ],
+      })
+      const text = await extractPdfText(buffer)
+
+      // Trabajo realizado: priced item shown, legacy $0 row filtered out
+      // (documented decision — see task-D4-report.md) with a footer note.
+      expect(text).toContain("TRABAJO REALIZADO")
+      expect(text).toContain("Batería iPhone 13")
+      expect(text).not.toContain("Repuesto legado sin precio")
+      expect(text).toContain("sin precio omitido")
+
+      // Totals arithmetic via the same formatter production code uses —
+      // never a hand-typed currency string.
+      expect(text).toContain(formatCurrencyValue(45000, "ARS")) // presupuesto (fixture default)
+      expect(text).toContain(formatCurrencyValue(48000, "ARS")) // subtotal trabajo (0-item contributes nothing)
+      expect(text).toContain(`-${formatCurrencyValue(2000, "ARS")}`) // descuento
+      expect(text).toContain(formatCurrencyValue(50000, "ARS")) // TOTAL FINAL = costoFinal
+      expect(text).toContain(formatCurrencyValue(20000, "ARS")) // saldo pendiente = 50000 - 30000
+
+      // Garantía box (fixture default: 90 días).
+      expect(text).toContain("GARANTÍA")
+      expect(text).toContain("90 DÍAS")
+      const vigenteStr = formatDateValue(fixture.garantia!.fechaVencimiento, fixture.zonaHoraria)
+      expect(text).toContain(vigenteStr)
+
+      // Pagos registrados (cobros).
+      expect(text).toContain(formatCurrencyValue(10000, "ARS")) // fixture cobros default monto
+
+      // Diagnóstico técnico present.
+      expect(text).toContain("Sulfatación")
+
+      // Security: access code NEVER renders on this client-facing sheet.
+      expect(text).not.toContain("9911")
+      expect(text).not.toContain("CÓDIGO DE ACCESO")
+
+      // No cut line / business stub on the entrega sheet.
+      expect(text).not.toContain("TALÓN")
+
+      expect(buffer.length).toBeGreaterThan(1000)
+    })
+
+    it("omits the GARANTÍA box entirely when garantia is absent", async () => {
+      const buffer = await generateOrdenPDF({
+        ...buildOrdenFixture(),
+        estado: "ENTREGADO",
+        garantia: null,
+      })
+      const text = await extractPdfText(buffer)
+      expect(text).not.toContain("GARANTÍA")
+    })
+
+    it("shows a SIN COBRO band with the motivo label instead of a saldo amount", async () => {
+      const buffer = await generateOrdenPDF({
+        ...buildOrdenFixture(),
+        estado: "ENTREGADO_SIN_COBRO",
+        motivoSinCobro: "NO_REPARABLE",
+        costoFinal: null,
+        totalCobrado: null,
+      })
+      const text = await extractPdfText(buffer)
+      expect(text).toContain("SIN COBRO")
+      expect(text).toContain("No reparable")
+      expect(text).not.toContain("TALÓN")
+    })
+
+    it("marks the saldo band PAGADO when totalCobrado covers the total", async () => {
+      const buffer = await generateOrdenPDF({
+        ...buildOrdenFixture(),
+        estado: "ENTREGADO",
+        costoFinal: 45000,
+        totalCobrado: 45000,
+      })
+      const text = await extractPdfText(buffer)
+      expect(text).toContain("PAGADO")
+    })
   })
 })

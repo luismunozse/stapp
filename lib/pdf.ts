@@ -8,7 +8,7 @@ import { parseRecepcionTerminos } from "@/lib/terminos"
 import QRCode from "qrcode"
 import { resolveTerminologia, t, type Terminologia } from "@/lib/terminologia"
 import { MONO, TYPE, RULE_WIDTH, drawRule, drawSectionLabel, drawOutlinedBadge, measureBadgeWidth } from "@/lib/pdf-style"
-import { ESTADO_FLOW } from "@/lib/seguimiento-state"
+import { ESTADO_FLOW, ESTADOS_COMPLETADOS, MOTIVO_SIN_COBRO_LABELS, type MotivoSinCobro } from "@/lib/seguimiento-state"
 
 // Compatibilidad: algunos bundlers ponen el default dentro de .default
 const fontkit = (fontkitModule as any).default || fontkitModule
@@ -1129,6 +1129,507 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     nonCanonicalTag = estadoDisplay
   }
 
+  // Sheet selection (Task D4): terminal delivery estados print the full
+  // ENTREGA expediente sheet (client-facing, one page, no cut line, no
+  // stub, access code never rendered) instead of the RECEPCIÓN sheet below.
+  const isEntregaSheet = ESTADOS_COMPLETADOS.has(estadoRaw)
+
+  if (isEntregaSheet) {
+    // ============================================================
+    // HOJA ENTREGA — expediente completo (Task D4)
+    // ============================================================
+    // Reemplaza, para ENTREGADO/ENTREGADO_SIN_REPARACION/ENTREGADO_SIN_COBRO,
+    // la hoja RECEPCIÓN de más abajo: un único documento client-facing (sin
+    // corte, sin talón interno, sin código de acceso) — el legajo completo
+    // que se entrega al cliente al cerrar la orden. Fuente del diseño:
+    // .tmp-preview/mockups/orden-maximal.html, Hoja 1.
+    let ey = height - rxMargin
+
+    // ---- Header: logo + empresa/sucursal + idbox (#numero, código, tag de
+    // estado ink-fill, línea de reingreso) ----
+    const headerTopY = ey
+    const logoBoxSize = 42
+
+    let enLogo: Awaited<ReturnType<typeof pdfDoc.embedPng>> | Awaited<ReturnType<typeof pdfDoc.embedJpg>> | null = null
+    if (data.logoUrl) {
+      try {
+        const res = await fetch(data.logoUrl)
+        if (res.ok) {
+          const buf = new Uint8Array(await res.arrayBuffer())
+          const ct = res.headers.get("content-type") || ""
+          if (ct.includes("png") || data.logoUrl.toLowerCase().includes(".png")) {
+            enLogo = await pdfDoc.embedPng(buf)
+          } else if (ct.includes("jpeg") || ct.includes("jpg") || data.logoUrl.toLowerCase().includes(".jpg") || data.logoUrl.toLowerCase().includes(".jpeg")) {
+            enLogo = await pdfDoc.embedJpg(buf)
+          }
+        }
+      } catch { /* logo no disponible — se omite, sin placeholder */ }
+    }
+    if (enLogo) {
+      page.drawRectangle({ x: rxMargin, y: headerTopY - logoBoxSize, width: logoBoxSize, height: logoBoxSize, borderColor: MONO.ink, borderWidth: 1 })
+      const s = enLogo.scale(1)
+      const inset = 5
+      const ratio = Math.min((logoBoxSize - inset * 2) / s.width, (logoBoxSize - inset * 2) / s.height)
+      const lw = s.width * ratio
+      const lh = s.height * ratio
+      page.drawImage(enLogo, { x: rxMargin + (logoBoxSize - lw) / 2, y: headerTopY - logoBoxSize + (logoBoxSize - lh) / 2, width: lw, height: lh })
+    }
+
+    const bizX = rxMargin + (enLogo ? logoBoxSize + 12 : 0)
+
+    const reingresoLabelEn = data.esReingreso && data.ordenOrigenNumero
+      ? `Reingreso de #${String(data.ordenOrigenNumero).padStart(4, "0")}`
+      : ""
+
+    const numSizeEn = 20
+    const numWEn = archivoCondensedBlack.widthOfTextAtSize(numeroOrdenPadded, numSizeEn)
+    const codeWEn = codigoOrden ? plexMonoRegular.widthOfTextAtSize(codigoOrden, 8) : 0
+    const tagLabelEn = estadoDisplay.toUpperCase()
+    const tagWEn = archivoBold.widthOfTextAtSize(tagLabelEn, 7) + 10
+    const reingresoWEn = reingresoLabelEn ? archivoRegular.widthOfTextAtSize(reingresoLabelEn, 7.5) : 0
+    const idboxReservedEn = Math.max(numWEn, codeWEn, tagWEn, reingresoWEn) + 4
+    const bizMaxWidthEn = (width - rxMargin) - idboxReservedEn - 10 - bizX
+
+    const bizNameSizeEn = 13
+    page.drawText(rxTruncate(empresaNombre, archivoBlack, bizNameSizeEn, bizMaxWidthEn), { x: bizX, y: headerTopY - 11, size: bizNameSizeEn, font: archivoBlack, color: MONO.ink })
+    const contactLineTextEn = [sucursalNombre, sucursalDireccion || direccionEmpresa, sucursalTelefono || telefonoEmpresa, data.emailEmpresa ? safe(data.emailEmpresa) : ""].filter(Boolean).join(" · ")
+    const contactLinesEn = rxWrap(contactLineTextEn, archivoRegular, 7.5, bizMaxWidthEn).slice(0, 2)
+    let bizYEn = headerTopY - 11 - 14
+    for (const l of contactLinesEn) {
+      page.drawText(l, { x: bizX, y: bizYEn, size: 7.5, font: archivoRegular, color: MONO.label })
+      bizYEn -= 10
+    }
+
+    const idboxRightEn = width - rxMargin
+    rxDrawRight(page, numeroOrdenPadded, idboxRightEn, headerTopY - 16, numSizeEn, archivoCondensedBlack, MONO.ink)
+    let idboxYEn = headerTopY - 27
+    if (codigoOrden) {
+      rxDrawRight(page, codigoOrden, idboxRightEn, idboxYEn, 8, plexMonoRegular, MONO.label)
+      idboxYEn -= 12
+    } else {
+      idboxYEn -= 4
+    }
+    // Tag de estado — relleno ink local (excepción de esta hoja, ver Global
+    // Constraints Task D3/D4).
+    rxInkFill(page, idboxRightEn - tagWEn, idboxYEn - 12, tagWEn, 12)
+    page.drawText(tagLabelEn, { x: idboxRightEn - tagWEn + 5, y: idboxYEn - 9, size: 7, font: archivoBold, color: MONO.white })
+    idboxYEn -= 12
+    if (reingresoLabelEn) {
+      rxDrawRight(page, reingresoLabelEn, idboxRightEn, idboxYEn - 9, 7.5, archivoRegular, MONO.label)
+      idboxYEn -= 11
+    }
+
+    const headerHEn = Math.max(logoBoxSize, 46 + (reingresoLabelEn ? 11 : 0))
+    const headerBottomYEn = Math.min(headerTopY - headerHEn, bizYEn, idboxYEn)
+    ey = headerBottomYEn - 8
+    drawRule(page, rxMargin, width - rxMargin, ey, { color: MONO.ink, thickness: 1.4 })
+    ey -= 10
+
+    // ---- Timeline: los 7 pasos, alcanzados con ✓ + fecha, el paso final
+    // con relleno ink (mismo mecanismo que la hoja RECEPCIÓN) ----
+    const timelineHEn = 24
+    const timelineTopEn = ey
+    const colWEn = rxContentW / 7
+    page.drawRectangle({ x: rxMargin, y: timelineTopEn - timelineHEn, width: rxContentW, height: timelineHEn, borderColor: MONO.ink, borderWidth: 1 })
+    for (let i = 0; i < 7; i++) {
+      const colX = rxMargin + i * colWEn
+      const isOn = i === currentStepIndex
+      const isDone = i < currentStepIndex && !!stepDates[i]
+      if (isOn) rxInkFill(page, colX, timelineTopEn - timelineHEn, colWEn, timelineHEn)
+      if (i > 0) {
+        page.drawLine({ start: { x: colX, y: timelineTopEn }, end: { x: colX, y: timelineTopEn - timelineHEn }, thickness: RULE_WIDTH, color: isOn ? MONO.ink : MONO.rule })
+      }
+      const labelColor = isOn ? MONO.white : (isDone ? MONO.ink : MONO.faint)
+      const dateColor = isOn ? MONO.white : (isDone ? MONO.label : MONO.faint)
+      const stepLabelSize = 6
+      const checkW = isDone ? 6 : 0
+      const stepLabelTrunc = rxTruncate(TIMELINE_LABELS[i].toUpperCase(), archivoBold, stepLabelSize, colWEn - 4 - checkW)
+      const labelW = archivoBold.widthOfTextAtSize(stepLabelTrunc, stepLabelSize)
+      const blockX = colX + (colWEn - (labelW + checkW)) / 2
+      if (isDone) rxDrawCheck(page, blockX, timelineTopEn - 8.7, labelColor)
+      page.drawText(stepLabelTrunc, { x: blockX + checkW, y: timelineTopEn - 10, size: stepLabelSize, font: archivoBold, color: labelColor })
+      let dateText = "—"
+      if (isOn && nonCanonicalTag) {
+        dateText = rxTruncate(nonCanonicalTag, archivoRegular, 6, colWEn - 4)
+      } else if (stepDates[i]) {
+        dateText = formatTimelineDate(stepDates[i] as Date)
+      }
+      const dateW = archivoRegular.widthOfTextAtSize(dateText, 6)
+      page.drawText(dateText, { x: colX + (colWEn - dateW) / 2, y: timelineTopEn - 19, size: 6, font: archivoRegular, color: dateColor })
+    }
+    ey = timelineTopEn - timelineHEn - 10
+
+    // ---- Grid: Cliente | Equipo ----
+    const colGridWEn = rxContentW / 2
+    const isEmpresaEn = clienteTipoCliente.toUpperCase() === "EMPRESA" && !!clienteRazonSocial
+    const clienteLinesEn: RxCellLine[] = []
+    if (isEmpresaEn) {
+      const idSuffix = clienteCuit ? ` · CUIT ${clienteCuit}` : ""
+      clienteLinesEn.push({ text: `${clienteRazonSocial}${idSuffix}`.substring(0, 60), font: archivoBold, size: 9, color: MONO.ink })
+      const contactSuffix = clienteDni ? ` · DNI ${clienteDni}` : ""
+      clienteLinesEn.push({ text: `Contacto: ${clienteNombre}${contactSuffix}`.substring(0, 60), font: archivoRegular, size: 8, color: MONO.label })
+    } else {
+      const idSuffix = clienteDni ? ` · DNI ${clienteDni}` : (clienteCuit ? ` · CUIT ${clienteCuit}` : "")
+      clienteLinesEn.push({ text: `${clienteNombre}${idSuffix}`.substring(0, 60), font: archivoBold, size: 9, color: MONO.ink })
+    }
+    const telPartsEn = [clienteTelefono]
+    if (telefonoContacto && telefonoContacto !== clienteTelefono) telPartsEn.push(`tel. de esta orden: ${telefonoContacto}`)
+    clienteLinesEn.push({ text: telPartsEn.join(" · ").substring(0, 65), font: archivoRegular, size: 8, color: MONO.label })
+    if (clienteEmail) clienteLinesEn.push({ text: clienteEmail.substring(0, 50), font: archivoRegular, size: 8, color: MONO.label })
+
+    const equipoLinesEn: RxCellLine[] = []
+    const equipoTitleEn = [dispositivo, marca, colorDisp].filter(Boolean).join(" · ")
+    equipoLinesEn.push({ text: equipoTitleEn.substring(0, 55), font: archivoBold, size: 9, color: MONO.ink })
+    if (imei) equipoLinesEn.push({ text: `${t(term, "serie")} ${imei}`.substring(0, 55), font: plexMonoRegular, size: 8, color: MONO.ink })
+    if (metadataCampos.length > 0) {
+      const metaText = metadataCampos.map(m => `${m.label}: ${m.valor}`).join(" · ")
+      equipoLinesEn.push({ text: metaText.substring(0, 65), font: archivoRegular, size: 7.5, color: MONO.label })
+    }
+
+    const rowClienteEquipoEn = rxDrawGridRow([
+      { x: rxMargin, width: colGridWEn, label: "Cliente", lines: clienteLinesEn },
+      { x: rxMargin + colGridWEn, width: colGridWEn, label: t(term, "equipo"), lines: equipoLinesEn },
+    ], ey)
+    ey -= rowClienteEquipoEn
+
+    // ---- Falla declarada | Diagnóstico técnico (lado a lado) ----
+    const fallaLinesEn: RxCellLine[] = rxWrap(problemaReportado, archivoRegular, 9, colGridWEn - rxCellPadX * 2)
+      .slice(0, 3)
+      .map(l => ({ text: l, font: archivoRegular, size: 9, color: MONO.ink }))
+    const diagnosticoTextEn = safe(data.diagnostico)
+    const diagnosticoLinesEn: RxCellLine[] = diagnosticoTextEn
+      ? rxWrap(diagnosticoTextEn, archivoRegular, 9, colGridWEn - rxCellPadX * 2).slice(0, 3).map(l => ({ text: l, font: archivoRegular, size: 9, color: MONO.ink }))
+      : [{ text: "—", font: archivoRegular, size: 9, color: MONO.faint }]
+    const rowFallaDiagEn = rxDrawGridRow([
+      { x: rxMargin, width: colGridWEn, label: "Falla declarada", lines: fallaLinesEn },
+      { x: rxMargin + colGridWEn, width: colGridWEn, label: "Diagnóstico técnico", lines: diagnosticoLinesEn },
+    ], ey)
+    ey -= rowFallaDiagEn
+
+    // ---- Accesorios recibidos | Fotos — el código de acceso NUNCA se
+    // dibuja en esta hoja (es client-facing; ver Global Constraints D4) ----
+    const accesoriosLinesEn: RxCellLine[] = accesorios
+      ? [{ text: accesorios.substring(0, 70), font: archivoRegular, size: 9, color: MONO.ink }]
+      : [{ text: "—", font: archivoRegular, size: 9, color: MONO.faint }]
+    const fotosCountEn = Array.isArray(data.fotosIngreso) ? data.fotosIngreso.length : 0
+    // La capa de datos (Task D2) solo expone fotosIngreso — no hay conteo
+    // separado de fotos de reparación/entrega todavía. Se muestra lo que
+    // existe (decisión documentada en task-D4-report.md).
+    const fotosTextEn = fotosCountEn > 0 ? `${fotosCountEn} de ingreso` : "Sin fotos"
+    const accWEn = rxContentW * 0.7
+    const rowAccFotosEn = rxDrawGridRow([
+      { x: rxMargin, width: accWEn, label: "Accesorios recibidos", lines: accesoriosLinesEn },
+      { x: rxMargin + accWEn, width: rxContentW - accWEn, label: "Fotos", lines: [{ text: fotosTextEn, font: archivoRegular, size: 9, color: fotosCountEn > 0 ? MONO.ink : MONO.faint }] },
+    ], ey)
+    ey -= rowAccFotosEn + 8
+
+    // ---- Mid split: TRABAJO REALIZADO + totales (58%) | Pagos + Chequeo (42%) ----
+    const midGapEn = 8
+    const midLeftWEn = (rxContentW - midGapEn) * 0.58
+    const midRightWEn = (rxContentW - midGapEn) * 0.42
+    const midLeftXEn = rxMargin
+    const midRightXEn = rxMargin + midLeftWEn + midGapEn
+    const midTopYEn = ey
+
+    // LEFT — trabajo realizado (tabla + totales)
+    let ly = midTopYEn
+    drawSectionLabel(page, archivoBold, "Trabajo realizado — repuestos y mano de obra", midLeftXEn, ly)
+    ly -= 12
+
+    const trabajosAllEn = Array.isArray(data.trabajos) ? data.trabajos.slice(0, 20) : []
+    const trabajosShownEn = trabajosAllEn.filter(it => (Number(it.importe) || 0) !== 0)
+    const omittedCountEn = trabajosAllEn.length - trabajosShownEn.length
+    const qtyColRightEn = midLeftXEn + midLeftWEn * 0.62
+    const amtColRightEn = midLeftXEn + midLeftWEn
+
+    if (trabajosAllEn.length > 0) {
+      page.drawText("DETALLE", { x: midLeftXEn, y: ly, size: 6.8, font: archivoBold, color: MONO.label })
+      rxDrawRight(page, "CANT.", qtyColRightEn, ly, 6.8, archivoBold, MONO.label)
+      rxDrawRight(page, "IMPORTE", amtColRightEn, ly, 6.8, archivoBold, MONO.label)
+      ly -= 4
+      drawRule(page, midLeftXEn, midLeftXEn + midLeftWEn, ly, { color: MONO.ink, thickness: 1 })
+      ly -= 11
+      if (trabajosShownEn.length > 0) {
+        const nombreWEn = midLeftWEn * 0.48
+        for (const item of trabajosShownEn) {
+          page.drawText(rxTruncate(safe(item.nombre) || "—", archivoRegular, 9, nombreWEn), { x: midLeftXEn, y: ly, size: 9, font: archivoRegular, color: MONO.ink })
+          rxDrawRight(page, item.cantidad ? String(item.cantidad) : "—", qtyColRightEn, ly, 9, archivoRegular, MONO.label)
+          rxDrawRight(page, formatCurrencyPDF(item.importe), amtColRightEn, ly, 8.5, plexMonoRegular, MONO.ink)
+          ly -= 4
+          drawRule(page, midLeftXEn, midLeftXEn + midLeftWEn, ly, { color: MONO.rule })
+          ly -= 10
+        }
+      } else {
+        page.drawText("Sin ítems con precio.", { x: midLeftXEn, y: ly, size: 8.5, font: archivoRegular, color: MONO.faint })
+        ly -= 12
+      }
+      if (omittedCountEn > 0) {
+        // Decisión: filas legacy con importe $0 no se listan (no aportan al
+        // subtotal ni son cobrables) pero se avisa que existen en vez de
+        // esconderlas en silencio — ver task-D4-report.md.
+        page.drawText(`${omittedCountEn} ítem${omittedCountEn === 1 ? "" : "s"} sin precio omitido${omittedCountEn === 1 ? "" : "s"}`, { x: midLeftXEn, y: ly, size: 6.5, font: archivoRegular, color: MONO.faint })
+        ly -= 10
+      }
+    } else {
+      page.drawText("Sin repuestos ni mano de obra registrados.", { x: midLeftXEn, y: ly, size: 8.5, font: archivoRegular, color: MONO.faint })
+      ly -= 12
+    }
+
+    const subtotalTrabajoEn = trabajosAllEn.reduce((sum, it) => sum + (Number(it.importe) || 0), 0)
+    const totalFinalValueEn = data.costoFinal != null ? data.costoFinal : (data.presupuesto != null ? data.presupuesto : null)
+    const totalFinalLabelEn = data.costoFinal != null ? "TOTAL FINAL" : "PRESUPUESTO"
+    const totalsWEn = Math.min(midLeftWEn, 176)
+    const totalsXEn = midLeftXEn + midLeftWEn - totalsWEn
+
+    type TotalsRowEn = { label: string; value: string; big?: boolean; neg?: boolean }
+    const totalsRowsEn: TotalsRowEn[] = []
+    // "Presupuesto estimado" solo aporta cuando hay un costoFinal real que
+    // comparar contra — si no, sería la misma cifra que ya se muestra abajo
+    // como fallback "PRESUPUESTO" en negrita (fila duplicada, ver
+    // task-D4-report.md).
+    if (data.presupuesto != null && data.costoFinal != null) totalsRowsEn.push({ label: "Presupuesto estimado", value: formatCurrencyPDF(data.presupuesto) })
+    if (trabajosAllEn.length > 0) totalsRowsEn.push({ label: "Subtotal trabajo", value: formatCurrencyPDF(subtotalTrabajoEn) })
+    if (data.descuentoCobro) totalsRowsEn.push({ label: "Descuento", value: `-${formatCurrencyPDF(data.descuentoCobro)}`, neg: true })
+    if (totalFinalValueEn != null) totalsRowsEn.push({ label: totalFinalLabelEn, value: formatCurrencyPDF(totalFinalValueEn), big: true })
+
+    ly -= 4
+    for (const row of totalsRowsEn) {
+      if (row.big) {
+        drawRule(page, totalsXEn, totalsXEn + totalsWEn, ly, { color: MONO.ink, thickness: 1.5 })
+        ly -= 12
+      }
+      page.drawText(row.label, { x: totalsXEn, y: ly, size: row.big ? 10 : 9, font: row.big ? archivoBold : archivoRegular, color: row.neg ? MONO.label : (row.big ? MONO.ink : MONO.label) })
+      rxDrawRight(page, row.value, totalsXEn + totalsWEn, ly, row.big ? 11 : 9, row.big ? archivoCondensedBold : plexMonoRegular, row.neg ? MONO.label : MONO.ink)
+      ly -= row.big ? 15 : 11
+    }
+
+    const showSaldoBandEn = totalFinalValueEn != null || !!data.motivoSinCobro
+    if (showSaldoBandEn) {
+      const saldoBandHEn = 18
+      let saldoTextEn: string
+      if (data.motivoSinCobro) {
+        const motivoLabel = MOTIVO_SIN_COBRO_LABELS[data.motivoSinCobro as MotivoSinCobro] || data.motivoSinCobro
+        saldoTextEn = `SIN COBRO — ${motivoLabel}`
+      } else {
+        const totalCobradoEn = data.totalCobrado ?? 0
+        const saldoEn = Math.max((totalFinalValueEn as number) - totalCobradoEn, 0)
+        saldoTextEn = saldoEn <= 0 ? `${formatCurrencyPDF(0)} — PAGADO` : formatCurrencyPDF(saldoEn)
+      }
+      ly -= 3
+      rxInkFill(page, totalsXEn, ly - saldoBandHEn, totalsWEn, saldoBandHEn)
+      page.drawText("SALDO", { x: totalsXEn + 6, y: ly - saldoBandHEn + 6, size: 9, font: archivoBold, color: MONO.white })
+      const saldoFontSizeEn = saldoTextEn.length > 16 ? 8 : 11
+      rxDrawRight(page, saldoTextEn, totalsXEn + totalsWEn - 6, ly - saldoBandHEn + 6, saldoFontSizeEn, archivoCondensedBold, MONO.white)
+      ly -= saldoBandHEn
+    }
+
+    // RIGHT — pagos registrados (panel gris) + chequeo de recepción por categoría
+    let ryCol = midTopYEn
+    const formatShortDateEn = (d: Date): string => {
+      if (Number.isNaN(d.getTime())) return ""
+      const { day, month } = getZonedParts(d, tz)
+      return `${pad2(day)}/${pad2(month)}`
+    }
+    const cobrosAllEn = Array.isArray(data.cobros) ? data.cobros.slice(0, 12) : []
+    if (cobrosAllEn.length > 0) {
+      const padXEn = 8, padYEn = 6, rowHEn = 11
+      const panelHEn = padYEn * 2 + 12 + cobrosAllEn.length * rowHEn
+      page.drawRectangle({ x: midRightXEn, y: ryCol - panelHEn, width: midRightWEn, height: panelHEn, color: MONO.totalBg })
+      drawSectionLabel(page, archivoBold, "Pagos registrados", midRightXEn + padXEn, ryCol - padYEn - 6)
+      let py = ryCol - padYEn - 6 - 12
+      for (const c of cobrosAllEn) {
+        const fechaD = c.fecha instanceof Date ? c.fecha : new Date(c.fecha as unknown as string)
+        const fechaCorta = Number.isNaN(fechaD.getTime()) ? "" : formatShortDateEn(fechaD)
+        const left = [fechaCorta, safe(c.metodo), c.referencia ? safe(c.referencia) : ""].filter(Boolean).join(" · ")
+        page.drawText(rxTruncate(left, archivoRegular, 8.5, midRightWEn - padXEn * 2 - 60), { x: midRightXEn + padXEn, y: py, size: 8.5, font: archivoRegular, color: MONO.ink })
+        rxDrawRight(page, formatCurrencyPDF(c.monto), midRightXEn + midRightWEn - padXEn, py, 8.5, plexMonoRegular, MONO.ink)
+        py -= rowHEn
+      }
+      ryCol -= panelHEn + 8
+    }
+
+    const CATEGORIA_LABELS_EN: Record<string, string> = {
+      FUNCIONAL: "Funcional",
+      CONDICION_FISICA: "Condición física",
+      ACCESORIOS: "Accesorios",
+      OTRO: "Otro",
+      GENERAL: "General",
+    }
+    const checklistAllEn = Array.isArray(data.checklistItems) ? data.checklistItems : []
+    if (checklistAllEn.length > 0) {
+      const padXEn = 8, padYEn = 6
+      const groupsEn = new Map<string, typeof checklistAllEn>()
+      for (const item of checklistAllEn) {
+        const cat = safe(item.categoria).toUpperCase() || "GENERAL"
+        if (!groupsEn.has(cat)) groupsEn.set(cat, [])
+        groupsEn.get(cat)!.push(item)
+      }
+      const panelTopEn = ryCol
+      let cy = panelTopEn - padYEn - 6
+      drawSectionLabel(page, archivoBold, "Chequeo de recepción", midRightXEn + padXEn, cy)
+      cy -= 12
+      for (const [cat, items] of groupsEn) {
+        const groupLabel = CATEGORIA_LABELS_EN[cat] || cat
+        page.drawText(groupLabel, { x: midRightXEn + padXEn, y: cy, size: 6.5, font: archivoBold, color: MONO.faint })
+        cy -= 9
+        const itemsText = items.map(it => {
+          const v = it.valor === true ? "OK" : it.valor === false ? "NO" : safe(it.valor)
+          return `${it.label}: ${v}`
+        }).join(" · ")
+        const itemLinesEn = rxWrap(itemsText, archivoRegular, 8.5, midRightWEn - padXEn * 2).slice(0, 3)
+        for (const l of itemLinesEn) {
+          page.drawText(l, { x: midRightXEn + padXEn, y: cy, size: 8.5, font: archivoRegular, color: MONO.ink })
+          cy -= 10
+        }
+        cy -= 3
+      }
+      const panelBottomEn = cy - padYEn
+      page.drawRectangle({ x: midRightXEn, y: panelBottomEn, width: midRightWEn, height: panelTopEn - panelBottomEn, borderColor: MONO.rule, borderWidth: RULE_WIDTH })
+      ryCol = panelBottomEn - 8
+    }
+
+    ey = Math.min(ly, ryCol)
+
+    // ---- GARANTÍA (solo si hay garantía — bloque omitido si no) ----
+    if (data.garantia) {
+      const garDiasEn = data.garantia.dias
+      const garVencEn = formatDatePDF(data.garantia.fechaVencimiento)
+      const garHeadingEn = `GARANTÍA ${garDiasEn} DÍAS`
+      const garHeadingWEn = archivoCondensedBlack.widthOfTextAtSize(garHeadingEn, 15)
+      const garTextXEn = rxMargin + Math.max(garHeadingWEn + 20, 110)
+      const garNotasEn = [safe(data.garantia.notas), `Presentá este comprobante o el código ${codigoOrden || numeroOrdenPadded} para reclamos.`].filter(Boolean).join(" ")
+      const garLinesEn = rxWrap(garNotasEn, archivoRegular, 8.5, rxContentW - (garTextXEn - rxMargin) - 10).slice(0, 3)
+      const garHeightEn = 20 + 10 + garLinesEn.length * 10
+      ey -= 4
+      page.drawRectangle({ x: rxMargin, y: ey - garHeightEn, width: rxContentW, height: garHeightEn, borderColor: MONO.ink, borderWidth: 1.2 })
+      page.drawText(garHeadingEn, { x: rxMargin + 10, y: ey - garHeightEn / 2 - 5, size: 15, font: archivoCondensedBlack, color: MONO.ink })
+      page.drawText(rxTruncate(`Vigente hasta el ${garVencEn}`, archivoBold, 8.5, rxContentW - (garTextXEn - rxMargin) - 10), { x: garTextXEn, y: ey - 13, size: 8.5, font: archivoBold, color: MONO.ink })
+      let gy = ey - 23
+      for (const l of garLinesEn) {
+        page.drawText(l, { x: garTextXEn, y: gy, size: 8, font: archivoRegular, color: MONO.label })
+        gy -= 9.5
+      }
+      ey -= garHeightEn + 8
+    }
+
+    // ---- Pie: atribución + firmas + QR/seguimiento + términos ----
+    ey -= 4
+    drawRule(page, rxMargin, width - rxMargin, ey, { color: MONO.ink, thickness: 1 })
+    ey -= 12
+
+    const attrPartsEn: Array<{ label: string; value: string }> = []
+    if (recibidoPorNombre) attrPartsEn.push({ label: "Recibió: ", value: recibidoPorNombre })
+    if (tecnicoNombre) attrPartsEn.push({ label: "Técnico: ", value: tecnicoNombre })
+    const entregadoPorEn = safe(data.entregadoPor)
+    if (entregadoPorEn) attrPartsEn.push({ label: "Entregó: ", value: entregadoPorEn })
+    let ax = rxMargin
+    for (const p of attrPartsEn) {
+      ax += rxDrawRun(page, [{ text: p.label, font: archivoRegular, color: MONO.label }, { text: p.value, font: archivoBold, color: MONO.ink }], ax, ey, 8)
+      ax += 16
+    }
+    const dateSummaryPartsEn = [
+      fechaIngreso ? `Ingreso ${fechaIngreso}` : "",
+      data.fechaCompletado ? `Completado ${formatDatePDF(data.fechaCompletado)}` : "",
+      data.fechaEntrega ? `Entrega ${formatDatePDF(data.fechaEntrega)}` : "",
+    ].filter(Boolean).join(" · ")
+    if (dateSummaryPartsEn) rxDrawRight(page, dateSummaryPartsEn, width - rxMargin, ey, 7.5, archivoRegular, MONO.label)
+    ey -= 20
+
+    // QR + seguimiento + 3 firmas (recepción en archivo, cliente entrega, negocio)
+    const sigRowTopEn = ey
+    const qrSizeEn = 40
+    let qrImgEn: Awaited<ReturnType<typeof pdfDoc.embedPng>> | null = null
+    const hasTrackingEn = !!(data.publicToken && data.baseUrl)
+    if (hasTrackingEn) {
+      try {
+        const trackingUrl = `${data.baseUrl}/seguimiento/${data.publicToken}`
+        const qrDataUrl = await QRCode.toDataURL(trackingUrl, { width: 200, margin: 1, color: { dark: "#111111", light: "#ffffff" } })
+        const qrBytes = Uint8Array.from(atob(qrDataUrl.split(",")[1]), c => c.charCodeAt(0))
+        qrImgEn = await pdfDoc.embedPng(qrBytes)
+      } catch { /* ignore QR errors — se sigue sin el código */ }
+    }
+    let afterQrXEn = rxMargin
+    if (qrImgEn) {
+      page.drawImage(qrImgEn, { x: rxMargin, y: sigRowTopEn - qrSizeEn, width: qrSizeEn, height: qrSizeEn })
+      afterQrXEn = rxMargin + qrSizeEn + 10
+    }
+    let trackWEn = 0
+    if (hasTrackingEn) {
+      trackWEn = 110
+      const trackUrlDisplayEn = `${safe(data.baseUrl).replace(/^https?:\/\//, "")}/seguimiento/${safe(data.publicToken)}`
+      const trackLinesEn = ["Historial completo, fotos y", "garantía online:", ...rxWrap(trackUrlDisplayEn, archivoBold, 6.5, trackWEn)]
+      let tY = sigRowTopEn - 8
+      for (const l of trackLinesEn.slice(0, 4)) {
+        page.drawText(l, { x: afterQrXEn, y: tY, size: 6.5, font: l.includes("/") ? archivoBold : archivoRegular, color: MONO.label })
+        tY -= 8
+      }
+    }
+    const sigStartXEn = afterQrXEn + trackWEn + (hasTrackingEn ? 10 : 0)
+    const sigAreaWEn = (rxMargin + rxContentW) - sigStartXEn
+    if (sigAreaWEn > 100) {
+      const gapSigEn = 8
+      const sigColWEn = (sigAreaWEn - gapSigEn * 2) / 3
+      const sigLineYEn = sigRowTopEn - qrSizeEn + 6
+
+      // Firma 1 — cliente, recepción (queda en archivo, no se re-dibuja imagen)
+      const sig1X = sigStartXEn
+      drawRule(page, sig1X, sig1X + sigColWEn, sigLineYEn, { color: MONO.ink })
+      const sig1Label = data.firmaRecepcion ? "CLIENTE — RECEPCIÓN (EN ARCHIVO)" : "CLIENTE — RECEPCIÓN"
+      page.drawText(rxTruncate(sig1Label, archivoBold, 6, sigColWEn), { x: sig1X, y: sigLineYEn - 8, size: 6, font: archivoBold, color: MONO.label })
+
+      // Firma 2 — cliente, entrega (imagen si existe)
+      const sig2X = sig1X + sigColWEn + gapSigEn
+      if (data.firmaClienteEntrega) {
+        try {
+          const bytes = Uint8Array.from(atob(data.firmaClienteEntrega), c => c.charCodeAt(0))
+          const img = await pdfDoc.embedPng(bytes)
+          const dims = img.scale(1)
+          const scale = Math.min((sigColWEn - 6) / dims.width, (qrSizeEn - 14) / dims.height)
+          page.drawImage(img, { x: sig2X + (sigColWEn - dims.width * scale) / 2, y: sigLineYEn + 3, width: dims.width * scale, height: dims.height * scale })
+        } catch { /* ignore embedding errors — la línea queda en blanco */ }
+      }
+      drawRule(page, sig2X, sig2X + sigColWEn, sigLineYEn, { color: MONO.ink })
+      page.drawText("CLIENTE — ENTREGA", { x: sig2X, y: sigLineYEn - 8, size: 6, font: archivoBold, color: MONO.label })
+
+      // Firma 3 — negocio (imagen si existe) + nombre de quien entregó
+      const sig3X = sig2X + sigColWEn + gapSigEn
+      if (data.firmaEncargadoEntrega) {
+        try {
+          const bytes = Uint8Array.from(atob(data.firmaEncargadoEntrega), c => c.charCodeAt(0))
+          const img = await pdfDoc.embedPng(bytes)
+          const dims = img.scale(1)
+          const scale = Math.min((sigColWEn - 6) / dims.width, (qrSizeEn - 14) / dims.height)
+          page.drawImage(img, { x: sig3X + (sigColWEn - dims.width * scale) / 2, y: sigLineYEn + 3, width: dims.width * scale, height: dims.height * scale })
+        } catch { /* ignore embedding errors */ }
+      }
+      drawRule(page, sig3X, sig3X + sigColWEn, sigLineYEn, { color: MONO.ink })
+      const sig3Label = entregadoPorEn ? `ENTREGÓ — ${entregadoPorEn.toUpperCase()}` : "ENTREGÓ"
+      page.drawText(rxTruncate(sig3Label, archivoBold, 6, sigColWEn), { x: sig3X, y: sigLineYEn - 8, size: 6, font: archivoBold, color: MONO.label })
+    }
+    ey = sigRowTopEn - 55
+
+    // ---- Términos (mismo criterio que la hoja RECEPCIÓN) ----
+    const terminosListEn = parseRecepcionTerminos(data.recepcionTerminos)
+    const terminosFlatEn: string[] = []
+    for (const raw of terminosListEn) {
+      terminosFlatEn.push(...rxWrap(raw, archivoRegular, 6, rxContentW))
+    }
+    const shownTerminosEn = terminosFlatEn.slice(0, 6)
+    for (const l of shownTerminosEn) {
+      page.drawText(l, { x: rxMargin, y: ey, size: 6, font: archivoRegular, color: MONO.faint })
+      ey -= 8
+    }
+
+    // ---- Recorte dinámico al contenido real (misma técnica que la hoja RECEPCIÓN) ----
+    const contentBottomEn = ey - 10
+    const minPageHeightEn = width
+    const dynamicHeightEn = Math.max(height - contentBottomEn, minPageHeightEn)
+    if (dynamicHeightEn < height) {
+      page.setMediaBox(0, contentBottomEn, width, dynamicHeightEn)
+      page.setCropBox(0, contentBottomEn, width, dynamicHeightEn)
+      page.setTrimBox(0, contentBottomEn, width, dynamicHeightEn)
+    }
+  } else {
   // ============================================================
   // PARTE CLIENTE
   // ============================================================
@@ -1519,6 +2020,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     page.setCropBox(0, contentBottom, width, dynamicHeight)
     page.setTrimBox(0, contentBottom, width, dynamicHeight)
   }
+  }
 
   // === PAGINA DE FOTOS DE INGRESO (si hay fotos) ===
   if (data.fotosIngreso && data.fotosIngreso.length > 0) {
@@ -1590,105 +2092,13 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     photosPage.drawText(`Impreso: ${fechaImpresion}`, { x: width - margin - 120, y: 25, size: 7, font: helvetica, color: MONO.faint })
   }
 
-  // === SECCION DE ENTREGA (segunda pagina, solo si fue entregado) ===
-  if (data.estado === "ENTREGADO" && data.firmaClienteEntrega) {
-    const page2 = pdfDoc.addPage([width, height])
-    let ey = height - margin
-
-    ey -= 10
-
-    // Titulo
-    page2.drawText("COMPROBANTE DE ENTREGA", { x: margin, y: ey, size: TYPE.docTitle, font: helveticaBold, color: MONO.ink })
-    page2.drawText(`Orden #${numeroOrden}`, { x: width - margin - 80, y: ey, size: 10, font: helveticaBold, color: MONO.label })
-    ey -= 25
-
-    // Linea separadora
-    drawRule(page2, margin, width - margin, ey)
-    ey -= 20
-
-    // Info de entrega
-    page2.drawText("Fecha de entrega:", { x: margin, y: ey, size: TYPE.small, font: helvetica, color: MONO.label })
-    page2.drawText(data.fechaEntrega ? formatDatePDF(data.fechaEntrega) : "-", { x: margin + 110, y: ey, size: TYPE.body, font: helveticaBold, color: MONO.ink })
-    ey -= 16
-
-    page2.drawText("Dispositivo:", { x: margin, y: ey, size: TYPE.small, font: helvetica, color: MONO.label })
-    page2.drawText(safe(data.dispositivo), { x: margin + 110, y: ey, size: TYPE.body, font: helveticaBold, color: MONO.ink })
-    ey -= 16
-
-    page2.drawText("Cliente:", { x: margin, y: ey, size: TYPE.small, font: helvetica, color: MONO.label })
-    page2.drawText(safe(data.cliente.nombre), { x: margin + 110, y: ey, size: TYPE.body, font: helveticaBold, color: MONO.ink })
-    ey -= 16
-
-    if (data.entregadoPor) {
-      page2.drawText("Entregado por:", { x: margin, y: ey, size: TYPE.small, font: helvetica, color: MONO.label })
-      page2.drawText(safe(data.entregadoPor), { x: margin + 110, y: ey, size: TYPE.body, font: helveticaBold, color: MONO.ink })
-      ey -= 16
-    }
-
-    if (data.notasEntrega) {
-      ey -= 5
-      page2.drawText("Notas de entrega:", { x: margin, y: ey, size: TYPE.small, font: helvetica, color: MONO.label })
-      ey -= 14
-      page2.drawText(safe(data.notasEntrega).substring(0, 200), { x: margin, y: ey, size: TYPE.body, font: helvetica, color: MONO.ink })
-      ey -= 16
-    }
-
-    ey -= 15
-
-    // Firmas de entrega
-    const entregaHalfWidth = (width - 2 * margin - 20) / 2
-    const entregaCardX2 = margin + entregaHalfWidth + 20
-
-    // Firma Cliente Entrega
-    page2.drawRectangle({ x: margin, y: ey - 85, width: entregaHalfWidth, height: 100, borderColor: MONO.rule, borderWidth: RULE_WIDTH })
-    drawSectionLabel(page2, helveticaBold, "Cliente (quien recibe)", margin + 12, ey + 5)
-
-    try {
-      const firmaClienteEntregaBytes = Uint8Array.from(atob(data.firmaClienteEntrega), c => c.charCodeAt(0))
-      const firmaClienteEntregaImg = await pdfDoc.embedPng(firmaClienteEntregaBytes)
-      const ceDims = firmaClienteEntregaImg.scale(1)
-      const ceScale = Math.min((entregaHalfWidth - 40) / ceDims.width, 55 / ceDims.height)
-      page2.drawImage(firmaClienteEntregaImg, {
-        x: margin + (entregaHalfWidth - ceDims.width * ceScale) / 2,
-        y: ey - 70,
-        width: ceDims.width * ceScale,
-        height: ceDims.height * ceScale,
-      })
-    } catch (e) {
-      console.error("Error embedding client delivery signature:", e)
-    }
-
-    drawRule(page2, margin + 20, margin + entregaHalfWidth - 20, ey - 55, { color: MONO.ink })
-    page2.drawText(safe(data.cliente.nombre).substring(0, 25), { x: margin + 30, y: ey - 70, size: 8, font: helvetica, color: MONO.ink })
-
-    // Firma Encargado Entrega
-    page2.drawRectangle({ x: entregaCardX2, y: ey - 85, width: entregaHalfWidth, height: 100, borderColor: MONO.rule, borderWidth: RULE_WIDTH })
-    drawSectionLabel(page2, helveticaBold, "Encargado (quien entrega)", entregaCardX2 + 12, ey + 5)
-
-    if (data.firmaEncargadoEntrega) {
-      try {
-        const firmaEncargadoBytes = Uint8Array.from(atob(data.firmaEncargadoEntrega), c => c.charCodeAt(0))
-        const firmaEncargadoImg = await pdfDoc.embedPng(firmaEncargadoBytes)
-        const eeDims = firmaEncargadoImg.scale(1)
-        const eeScale = Math.min((entregaHalfWidth - 40) / eeDims.width, 55 / eeDims.height)
-        page2.drawImage(firmaEncargadoImg, {
-          x: entregaCardX2 + (entregaHalfWidth - eeDims.width * eeScale) / 2,
-          y: ey - 70,
-          width: eeDims.width * eeScale,
-          height: eeDims.height * eeScale,
-        })
-      } catch (e) {
-        console.error("Error embedding employee delivery signature:", e)
-      }
-    }
-
-    drawRule(page2, entregaCardX2 + 20, entregaCardX2 + entregaHalfWidth - 20, ey - 55, { color: MONO.ink })
-    page2.drawText(safe(data.entregadoPor).substring(0, 25), { x: entregaCardX2 + 30, y: ey - 70, size: 8, font: helvetica, color: MONO.ink })
-
-    // Footer pagina 2
-    page2.drawText(`Orden #${numeroOrden} - Comprobante de Entrega`, { x: margin, y: 25, size: 8, font: helveticaBold, color: MONO.ink })
-    page2.drawText(`Impreso: ${fechaImpresion}`, { x: width - margin - 100, y: 25, size: 7, font: helvetica, color: MONO.faint })
-  }
+  // NOTA (Task D4): la vieja "SECCION DE ENTREGA" (segunda página con
+  // COMPROBANTE DE ENTREGA + firmas) se eliminó — para los estados
+  // terminales de entrega ahora se dibuja la hoja ENTREGA completa arriba
+  // (isEntregaSheet), con atribución y firmas incluidas en esa misma
+  // página. Este bloque solo se ejecutaba cuando `data.estado ===
+  // "ENTREGADO"`, que ahora siempre cae en la rama isEntregaSheet — así que
+  // era código inalcanzable en la rama RECEPCIÓN de todas formas.
 
   const pdfBytes = await pdfDoc.save()
   return Buffer.from(pdfBytes)
