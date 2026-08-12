@@ -90,7 +90,26 @@ describe("generateOrdenPDF", () => {
       ],
     })
     const text = await extractPdfText(buffer)
-    expect(text).toContain("CANCELADO")
+    // A bare `toContain("CANCELADO")` passes unconditionally: the header
+    // idbox tag always draws the raw estado, independent of the timeline
+    // fallback below. The actual thing under test is the *closest-reached*
+    // mapping in generateOrdenPDF — with a timeline of RECIBIDO +
+    // EN_DIAGNOSTICO dates, the CANCELADO tag must land specifically in the
+    // DIAGNÓSTICO (index 1) column's date slot: RECIBIDO keeps its real
+    // "DD/MM HH:mm" date, and every later step still shows the untouched
+    // "—" placeholder. Confirmed against the real extracted text before
+    // writing this regex — the timeline row decodes to exactly:
+    //   "RECIBIDO 09/08 13:40 DIAGNÓSTICO CANCELADO PRESUPUESTADO — APROBADO — ..."
+    // A broken/off-by-one closest-reached-step loop (e.g. defaulting to
+    // index 0, or landing one column off) would break this exact
+    // adjacency, even though the header tag alone would still trivially
+    // contain "CANCELADO".
+    expect(text).toMatch(/RECIBIDO \d{2}\/\d{2} \d{2}:\d{2} DIAGNÓSTICO CANCELADO PRESUPUESTADO — APROBADO — /)
+    // Cheap explicit guard alongside the adjacency regex: exactly 2
+    // occurrences total (header idbox tag + the one timeline date slot the
+    // fallback picked) — not 1 (fallback never drew) or 3+ (leaked onto
+    // more than one column).
+    expect((text.match(/CANCELADO/g) || []).length).toBe(2)
     expect(buffer.length).toBeGreaterThan(1000)
   })
 
