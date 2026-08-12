@@ -23,7 +23,12 @@ describe.runIf(process.env.PDF_SAMPLES === "1")("pdf visual samples", () => {
   it("writes orden and remito sample PDFs", async () => {
     mkdirSync(OUT_DIR, { recursive: true })
 
-    const orden = await generateOrdenPDF(buildOrdenFixture())
+    // firmaRecepcion (fix final-review D2): minimal 1x1 PNG, same trick used
+    // elsewhere in this file — exercises the RECEPCIÓN client part's signature
+    // image embed, never raster-checked before (label-only until this fix).
+    const pngBase64 =
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+    const orden = await generateOrdenPDF({ ...buildOrdenFixture(), firmaRecepcion: pngBase64 })
     writeFileSync(`${OUT_DIR}/${TAG}-orden.pdf`, orden)
     expect(orden.length).toBeGreaterThan(1000)
 

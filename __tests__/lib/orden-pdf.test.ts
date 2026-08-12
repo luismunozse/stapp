@@ -28,6 +28,7 @@ describe("generateOrdenPDF", () => {
     for (const section of [
       "CLIENTE", // section label, drawSectionLabel forces uppercase
       "FALLA DECLARADA",
+      "OBSERVACIONES", // fix final-review D1: restored client-part block (fixture sets observaciones)
       "ACCESORIOS RECIBIDOS",
       "Juan Pérez", // body content survives
       "DNI 28.456.789",
@@ -35,6 +36,8 @@ describe("generateOrdenPDF", () => {
     ]) {
       expect(text).toContain(section)
     }
+    // Observaciones body content, not just the section label.
+    expect(text).toContain("El cliente solicita que se lo contacte")
     // client part only: no cut line, no business stub
     expect(text).not.toContain("TALÓN")
     expect(buffer.length).toBeGreaterThan(1000)
@@ -51,10 +54,29 @@ describe("generateOrdenPDF", () => {
       "M. GÓMEZ", // recibidoPorNombre, uppercased in the "Recibió —" signature line
       "PARTE SUPERIOR", // cut line label
       "TALÓN INFERIOR", // cut line label
+      "OBSERVACIONES", // fix final-review D1: client-part block
     ]) {
       expect(text).toContain(section)
     }
+    // fix final-review D1: short "OBS:" line restored on the talón's
+    // notas-de-mostrador cell (distinct from the client-part block above).
+    expect(text).toContain("OBS: El cliente solicita")
     expect(buffer.length).toBeGreaterThan(1000)
+  })
+
+  it("embeds the reception signature image on the client part when firmaRecepcion is present", async () => {
+    // Minimal 1x1 PNG, same trick used elsewhere in this suite.
+    const pngBase64 =
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+    const withoutFirma = await generateOrdenPDF(buildOrdenFixture())
+    const withFirma = await generateOrdenPDF({ ...buildOrdenFixture(), firmaRecepcion: pngBase64 })
+    // No-throw path, and the embedded image actually adds bytes to the
+    // document (an /Image XObject + its data stream) — distinguishes a real
+    // embed from a silently-skipped catch branch. The label itself doesn't
+    // change either way (mirrors the ENTREGA sheet's firmaClienteEntrega).
+    expect(withFirma.length).toBeGreaterThan(withoutFirma.length)
+    const text = await extractPdfText(withFirma)
+    expect(text).toContain("FIRMA DEL CLIENTE")
   })
 
   it("hides the access code from the soloCliente variant but shows it on the talón of the full variant", async () => {
@@ -175,7 +197,7 @@ describe("generateOrdenPDF", () => {
       expect(text).toContain("TRABAJO REALIZADO")
       expect(text).toContain("Batería iPhone 13")
       expect(text).not.toContain("Repuesto legado sin precio")
-      expect(text).toContain("sin precio omitido")
+      expect(text).toContain("sin precio de venta cargado")
 
       // Totals arithmetic via the same formatter production code uses —
       // never a hand-typed currency string.
@@ -188,6 +210,27 @@ describe("generateOrdenPDF", () => {
       // 50000 - 2000 - 30000 = 18000, NOT 20000 (that would omit the
       // discount, which is drawn as its own "-$X" line right above it).
       expect(text).toContain(formatCurrencyValue(18000, "ARS")) // saldo pendiente
+
+      // Fix final-review D3: the totals column reads top-to-bottom as
+      // Presupuesto estimado -> Subtotal trabajo -> Mano de obra y otros
+      // (derived: 50000 costoFinal - 48000 subtotal = 2000) -> TOTAL FINAL
+      // -> Descuento -> SALDO band. Descuento used to sit BEFORE TOTAL
+      // FINAL, so a reader would compute Subtotal - Descuento by eye and
+      // land on a figure that didn't match TOTAL FINAL right below it.
+      const presupIdx = text.indexOf("Presupuesto estimado")
+      const subtotalIdx = text.indexOf("Subtotal trabajo")
+      const manoDeObraIdx = text.indexOf("Mano de obra y otros")
+      const totalFinalIdx = text.indexOf("TOTAL FINAL")
+      const descuentoIdx = text.indexOf("Descuento")
+      const saldoIdx = text.indexOf("SALDO")
+      for (const idx of [presupIdx, subtotalIdx, manoDeObraIdx, totalFinalIdx, descuentoIdx, saldoIdx]) {
+        expect(idx).toBeGreaterThan(-1)
+      }
+      expect(presupIdx).toBeLessThan(subtotalIdx)
+      expect(subtotalIdx).toBeLessThan(manoDeObraIdx)
+      expect(manoDeObraIdx).toBeLessThan(totalFinalIdx)
+      expect(totalFinalIdx).toBeLessThan(descuentoIdx)
+      expect(descuentoIdx).toBeLessThan(saldoIdx)
 
       // Garantía box (fixture default: 90 días).
       expect(text).toContain("GARANTÍA")
@@ -244,6 +287,67 @@ describe("generateOrdenPDF", () => {
       })
       const text = await extractPdfText(buffer)
       expect(text).toContain("PAGADO")
+      // Fix final-review D4: costoFinal is set here, so the band must read
+      // plain "SALDO" — never the "SALDO ESTIMADO" fallback label.
+      expect(text).toContain("SALDO")
+      expect(text).not.toContain("SALDO ESTIMADO")
+      // Fix final-review D3: costoFinal (45000) does NOT exceed the fixture's
+      // default subtotal trabajo (48000), so no derived "Mano de obra y
+      // otros" line and no "Y MANO DE OBRA" heading suffix.
+      expect(text).not.toContain("Mano de obra y otros")
+      expect(text).not.toContain("Y MANO DE OBRA")
+    })
+
+    it("renders the derived 'Mano de obra y otros' line and heading suffix only when costoFinal exceeds subtotal trabajo", async () => {
+      const buffer = await generateOrdenPDF({
+        ...buildOrdenFixture(),
+        estado: "ENTREGADO",
+        trabajos: [{ nombre: "Batería iPhone 13", cantidad: 1, importe: 48000 }],
+        costoFinal: 52500,
+      })
+      const text = await extractPdfText(buffer)
+      expect(text).toContain("Mano de obra y otros")
+      expect(text).toContain(formatCurrencyValue(4500, "ARS")) // 52500 - 48000
+      expect(text).toContain("Y MANO DE OBRA") // heading suffix, uppercased by drawSectionLabel
+    })
+
+    it("labels the saldo band 'SALDO ESTIMADO' when costoFinal is null (falls back to presupuesto)", async () => {
+      const buffer = await generateOrdenPDF({
+        ...buildOrdenFixture(),
+        estado: "ENTREGADO",
+        costoFinal: null,
+        totalCobrado: null,
+      })
+      const text = await extractPdfText(buffer)
+      expect(text).toContain("SALDO ESTIMADO")
+    })
+
+    it("caps drawn trabajos rows and shows a '+N ítems más' footer when the priced list exceeds the budget", async () => {
+      const trabajos = Array.from({ length: 25 }, (_, i) => ({
+        nombre: `Repuesto de prueba ${String(i + 1).padStart(2, "0")}`,
+        cantidad: 1,
+        importe: 1000 + i,
+      }))
+      const buffer = await generateOrdenPDF({
+        ...buildOrdenFixture(),
+        estado: "ENTREGADO",
+        trabajos,
+      })
+      const text = await extractPdfText(buffer)
+      // Fix final-review D6: cap is 12 drawn rows — the 12th priced item is
+      // the last one drawn, the 13th+ are not, and the footer accounts for
+      // all 13 that got cut.
+      expect(text).toContain("Repuesto de prueba 12")
+      expect(text).not.toContain("Repuesto de prueba 13")
+      expect(text).toContain("+13 ítems más")
+      // The tail block (signature row, "ENTREGÓ") must still land on-page —
+      // same MediaBox invariant as fix D5, exercised here with an oversized
+      // trabajos list instead of the default fixture.
+      expect(text).toContain("ENTREGÓ")
+      const doc = await PDFDocument.load(buffer)
+      const mediaBox = doc.getPage(0).getMediaBox()
+      expect(mediaBox.y + mediaBox.height).toBe(842)
+      expect(mediaBox.y).toBeGreaterThanOrEqual(0)
     })
 
     it("subtracts descuentoCobro from the saldo band, distinct from the no-discount case", async () => {
@@ -281,6 +385,24 @@ describe("generateOrdenPDF", () => {
       })
       const text = await extractPdfText(buffer)
       expect(text).not.toContain("Notas de entrega")
+    })
+  })
+
+  describe("MediaBox invariant (fix final-review D5)", () => {
+    // Pins the D5 crop-floor fix: the dynamic-height crop must always anchor
+    // its TOP edge at the real page height (842, A4) and never push its
+    // bottom edge below 0 — a regression here reintroduces the blank-strip-
+    // above-header bug the original Task D5 fix addressed.
+    it.each([
+      ["recepción full (client part + cut line + talón)", buildOrdenFixture()],
+      ["soloCliente (client part only)", { ...buildOrdenFixture(), soloCliente: true }],
+      ["entrega (terminal delivery estado)", { ...buildOrdenFixture(), estado: "ENTREGADO" }],
+    ] as const)("keeps a valid, non-negative-origin MediaBox for the %s variant", async (_label, data) => {
+      const buffer = await generateOrdenPDF(data)
+      const doc = await PDFDocument.load(buffer)
+      const mediaBox = doc.getPage(0).getMediaBox()
+      expect(mediaBox.y + mediaBox.height).toBe(842)
+      expect(mediaBox.y).toBeGreaterThanOrEqual(0)
     })
   })
 })
