@@ -1,13 +1,14 @@
-import { PDFDocument as PDFLib, rgb, StandardFonts } from "pdf-lib"
+import { PDFDocument as PDFLib, rgb, type PDFFont, type RGB } from "pdf-lib"
 import fontkitModule from "@pdf-lib/fontkit"
 import { readFile } from "fs/promises"
 import { join } from "path"
 import { formatCurrencyValue, type CurrencyCode, DEFAULT_CURRENCY } from "@/lib/currency"
-import { formatDateValue, formatDateTimeValue, DEFAULT_TIMEZONE } from "@/lib/timezone"
+import { formatDateValue, formatDateTimeValue, getZonedParts, DEFAULT_TIMEZONE } from "@/lib/timezone"
 import { parseRecepcionTerminos } from "@/lib/terminos"
 import QRCode from "qrcode"
 import { resolveTerminologia, t, type Terminologia } from "@/lib/terminologia"
 import { MONO, TYPE, RULE_WIDTH, drawRule, drawSectionLabel, drawOutlinedBadge, measureBadgeWidth } from "@/lib/pdf-style"
+import { ESTADO_FLOW } from "@/lib/seguimiento-state"
 
 // Compatibilidad: algunos bundlers ponen el default dentro de .default
 const fontkit = (fontkitModule as any).default || fontkitModule
@@ -913,9 +914,6 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const empresaNombre = safe(data.nombreEmpresa) || "Servicio Técnico"
   const telefonoEmpresa = safe(data.telefonoEmpresa)
   const direccionEmpresa = safe(data.direccionEmpresa)
-  const ciudadEmpresa = safe(data.ciudadEmpresa)
-  const provinciaEmpresa = safe(data.provinciaEmpresa)
-  const codigoPostalEmpresa = safe(data.codigoPostalEmpresa)
   const numeroOrden = safe(data.numeroOrden)
   const fechaIngreso = formatDatePDF(data.fechaIngreso)
   const fechaPrometida = formatDatePDF(data.fechaPrometida)
@@ -924,10 +922,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const clienteNombre = safe(cliente.nombre) || "Sin nombre"
   const clienteTelefono = safe(cliente.telefono) || "Sin teléfono"
   const clienteEmail = safe(cliente.email)
-  const clienteDireccion = safe(cliente.direccion)
-  const sector = safe(data.sector)
 
-  const tipoDispositivo = safe(data.tipoDispositivo) || "Otro"
   const dispositivo = safe(data.dispositivo) || "Sin especificar"
   const marca = safe(data.marca)
   const colorDisp = safe(data.color)
@@ -936,695 +931,593 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const accesorios = safe(data.accesorios)
   const codigoAccesoDispositivo = safe(data.codigoAccesoDispositivo)
   const presupuesto = data.presupuesto ? formatCurrencyPDF(data.presupuesto) : ""
-  const observaciones = safe(data.observaciones)
 
   // Fecha y hora de impresion
   const fechaImpresion = formatDateTimeValue(new Date(), data.zonaHoraria || DEFAULT_TIMEZONE)
 
-  // Crear documento PDF
+  // Crear documento PDF — hoja RECEPCIÓN (expediente): parte cliente arriba,
+  // línea de corte, talón interno del negocio abajo — todo en UNA página A4.
+  // Fuente del diseño: .tmp-preview/mockups/orden-maximal.html, Hoja 2 (.sheet.rx).
+  // Reemplaza el viejo par "copia cliente" + "copia local" + su merge vía
+  // embedPages (ver git history de Task D3) por dibujo directo de ambas
+  // zonas en la misma página — ya no hace falta escalar/incrustar.
   const pdfDoc = await PDFLib.create()
   const page = pdfDoc.addPage([595, 842]) // A4
   const { width, height } = page.getSize()
 
-  // Cargar fuentes
+  // Fuentes Inter — solo las usan hoy las páginas de fotos/entrega más abajo
+  // (D4 rediseña la hoja ENTREGA; hasta entonces ese tramo queda intacto).
   const { regular: helvetica, bold: helveticaBold } = await embedCustomFonts(pdfDoc)
-  const courier = await pdfDoc.embedFont(StandardFonts.Courier)
+  // Fuentes del expediente (Archivo + Plex Mono) — Task D1.
+  const {
+    archivoRegular,
+    archivoBold,
+    archivoBlack,
+    archivoCondensedBold,
+    archivoCondensedBlack,
+    plexMonoRegular,
+  } = await embedExpedienteFonts(pdfDoc)
 
-  // Margenes
-  const margin = 40
+  const margin = 40 // preservado: lo siguen usando las páginas de fotos/entrega
   const contentWidth = width - (margin * 2)
-  const cardGap = 10
-  const halfWidth = (contentWidth - cardGap) / 2
+  const tz = data.zonaHoraria || DEFAULT_TIMEZONE
 
-  let y = height - margin + 6
+  // ---- Datos del expediente (Task D2) que esta hoja consume ----
+  const codigoOrden = safe(data.codigoOrden)
+  const recibidoPorNombre = safe(data.recibidoPorNombre)
+  const tecnicoNombre = safe(data.tecnicoNombre)
+  const telefonoContacto = safe(data.telefonoContacto)
+  const sucursalNombre = data.sucursal ? safe(data.sucursal.nombre) : ""
+  const sucursalDireccion = data.sucursal ? safe(data.sucursal.direccion) : ""
+  const sucursalTelefono = data.sucursal ? safe(data.sucursal.telefono) : ""
+  const clienteDni = safe(cliente.dni)
+  const clienteCuit = safe(cliente.cuit)
+  const clienteRazonSocial = safe(cliente.razonSocial)
+  const clienteTipoCliente = safe(cliente.tipoCliente)
+  const metadataCampos = Array.isArray(data.metadataCampos) ? data.metadataCampos : []
+  const timelineRaw = Array.isArray(data.timeline) ? data.timeline : []
+  const numeroOrdenPadded = `#${String(numeroOrden).padStart(4, "0")}`
+  const estadoRaw = safe(data.estado).toUpperCase()
+  const estadoDisplay = (estadoRaw || "RECIBIDO").replace(/_/g, " ")
 
-  // === HEADER: Logo centrado superpuesto, datos a los lados ===
-  // El logo ocupa el centro, los datos de empresa van a la izquierda
-  // y la orden a la derecha, compartiendo las mismas líneas verticales.
+  // ---- Helpers locales de esta hoja ----
+  const rxMargin = 28 // ~10mm, como el mockup
+  const rxContentW = width - rxMargin * 2
 
-  // Calcular alto total del header (3 líneas de texto: nombre, tel, dirección)
-  const headerTextH = 36 // ~12 + 11 + 11 + gaps
-  const logoMaxH = 70
-  const logoMaxW = 120
+  const rxWrap = (text: string, font: PDFFont, size: number, maxWidth: number): string[] => {
+    const lines: string[] = []
+    let line = ""
+    for (const word of text.split(" ")) {
+      const testLine = line ? `${line} ${word}` : word
+      if (font.widthOfTextAtSize(testLine, size) <= maxWidth) {
+        line = testLine
+      } else {
+        if (line) lines.push(line)
+        line = word
+      }
+    }
+    if (line) lines.push(line)
+    return lines
+  }
 
-  // Embed logo primero para saber su tamaño
-  let logoSW = 0
-  let logoSH = 0
-  let embeddedLogo: any = null
+  const rxTruncate = (text: string, font: PDFFont, size: number, maxWidth: number): string => {
+    if (font.widthOfTextAtSize(text, size) <= maxWidth) return text
+    let t2 = text
+    while (t2.length > 0 && font.widthOfTextAtSize(t2 + "…", size) > maxWidth) t2 = t2.slice(0, -1)
+    return t2 + "…"
+  }
 
+  const rxDrawRight = (pg: typeof page, text: string, xRight: number, y: number, size: number, font: PDFFont, color: RGB) => {
+    const w = font.widthOfTextAtSize(text, size)
+    pg.drawText(text, { x: xRight - w, y, size, font, color })
+  }
+
+  // Corre varios segmentos (texto+fuente propios, p.ej. un prefijo en negrita
+  // seguido de texto regular) sobre UNA misma línea de base. Cada segmento
+  // sigue siendo un string completo en su propio drawText — no se trocea
+  // ningún string individual entre llamadas.
+  const rxDrawRun = (pg: typeof page, segments: Array<{ text: string; font: PDFFont; color?: RGB }>, x: number, y: number, size: number): number => {
+    let cx = x
+    for (const seg of segments) {
+      if (!seg.text) continue
+      pg.drawText(seg.text, { x: cx, y, size, font: seg.font, color: seg.color ?? MONO.ink })
+      cx += seg.font.widthOfTextAtSize(seg.text, size)
+    }
+    return cx - x
+  }
+
+  // Nota: NO usar Intl.DateTimeFormat con { day: "2-digit", month: "2-digit",
+  // hour: "2-digit", minute: "2-digit" } sin year — en builds Node con
+  // small-icu (Windows dev) esa combinación pierde el cero a la izquierda del
+  // mes y cae a reloj de 12 hs pese al locale es-AR (confirmado en este
+  // entorno: ICU 78.3 → "12/8, 01:16 p. m." en vez de "12/08 14:32"). Se
+  // arma el string a mano con getZonedParts (ya DST-safe, mismo helper que
+  // usa el resto de lib/timezone.ts) para no depender de esa resolución.
+  const pad2 = (n: number): string => String(n).padStart(2, "0")
+  const formatTimelineDate = (d: Date): string => {
+    if (Number.isNaN(d.getTime())) return ""
+    const { day, month, hour, minute } = getZonedParts(d, tz)
+    return `${pad2(day)}/${pad2(month)} ${pad2(hour)}:${pad2(minute)}`
+  }
+
+  // Excepción LOCAL de esta hoja (ver Global Constraints de Task D3): un
+  // relleno sólido MONO.ink + texto blanco, normalmente reservado a
+  // MONO.totalBg. Solo se usa para el tag de estado, el paso activo del
+  // timeline y la celda de saldo del money3 — nada más en este archivo.
+  const rxInkFill = (pg: typeof page, x: number, y: number, w: number, h: number) => {
+    pg.drawRectangle({ x, y, width: w, height: h, color: MONO.ink })
+  }
+
+  // Íconos dibujados a mano (líneas/círculos), NO como glifo de texto: Archivo
+  // Bold no trae los glifos ✓ (U+2713) ni ✂ (U+2702) en el subset embebido —
+  // pdf-lib los sustituye por .notdef (un tofu ☐), confirmado al rasterizar
+  // el sample. Un ícono vectorial es inmune a la cobertura de la fuente.
+  const rxDrawCheck = (pg: typeof page, x: number, y: number, color: RGB) => {
+    pg.drawLine({ start: { x, y: y + 1.6 }, end: { x: x + 1.5, y: y - 0.6 }, thickness: 0.9, color })
+    pg.drawLine({ start: { x: x + 1.5, y: y - 0.6 }, end: { x: x + 4.2, y: y + 3.2 }, thickness: 0.9, color })
+  }
+  const rxDrawScissors = (pg: typeof page, x: number, y: number, color: RGB) => {
+    const pivotX = x + 7
+    pg.drawLine({ start: { x: pivotX, y }, end: { x: pivotX + 4, y }, thickness: 0.9, color })
+    pg.drawLine({ start: { x: pivotX, y }, end: { x, y: y + 3 }, thickness: 0.9, color })
+    pg.drawLine({ start: { x: pivotX, y }, end: { x, y: y - 3 }, thickness: 0.9, color })
+    pg.drawCircle({ x, y: y + 3, size: 1.5, borderColor: color, borderWidth: 0.8 })
+    pg.drawCircle({ x, y: y - 3, size: 1.5, borderColor: color, borderWidth: 0.8 })
+  }
+
+  // Grilla de celdas con borde (replica el `.grid`/`.cell` del mockup: borde
+  // fino MONO.rule alrededor + separador entre columnas). La altura de la
+  // fila la define el contenido más alto entre las celdas pasadas.
+  type RxCellLine = { text: string; font: PDFFont; size: number; color: RGB }
+  type RxCell = { x: number; width: number; label: string; lines: RxCellLine[] }
+  const rxCellPadX = 8
+  const rxCellPadY = 7
+  const rxDrawGridRow = (cells: RxCell[], topY: number): number => {
+    let maxContentH = 0
+    for (const cell of cells) {
+      const h = 12 + cell.lines.length * 10
+      if (h > maxContentH) maxContentH = h
+    }
+    const rowH = maxContentH + rxCellPadY * 2
+    page.drawRectangle({ x: rxMargin, y: topY - rowH, width: rxContentW, height: rowH, borderColor: MONO.rule, borderWidth: RULE_WIDTH })
+    for (let i = 1; i < cells.length; i++) {
+      page.drawLine({ start: { x: cells[i].x, y: topY }, end: { x: cells[i].x, y: topY - rowH }, thickness: RULE_WIDTH, color: MONO.rule })
+    }
+    for (const cell of cells) {
+      drawSectionLabel(page, archivoBold, cell.label, cell.x + rxCellPadX, topY - rxCellPadY - 6)
+      let cy = topY - rxCellPadY - 6 - 12
+      for (const line of cell.lines) {
+        page.drawText(line.text, { x: cell.x + rxCellPadX, y: cy, size: line.size, font: line.font, color: line.color })
+        cy -= 10
+      }
+    }
+    return rowH
+  }
+
+  // ============================================================
+  // TIMELINE: 7 pasos canónicos, reutilizando el mismo flujo/orden que ya
+  // usa la vista pública de seguimiento (lib/seguimiento-state.ts) para que
+  // el PDF y esa pantalla nunca queden desincronizados.
+  // ============================================================
+  const TIMELINE_LABELS = ["Recibido", "Diagnóstico", "Presupuestado", "Aprobado", "En reparación", "Reparado", "Entregado"]
+  const foldEstado = (raw: string): string => (raw === "ESPERANDO_REPUESTO" ? "EN_REPARACION" : raw)
+
+  const stepDates: Array<Date | null> = ESTADO_FLOW.map(() => null)
+  for (const entry of timelineRaw) {
+    const mapped = foldEstado(safe(entry?.estado).toUpperCase())
+    const idx = ESTADO_FLOW.indexOf(mapped as (typeof ESTADO_FLOW)[number])
+    if (idx < 0) continue
+    const fecha = entry.fecha instanceof Date ? entry.fecha : new Date(entry.fecha as unknown as string)
+    if (Number.isNaN(fecha.getTime())) continue
+    if (!stepDates[idx] || fecha < (stepDates[idx] as Date)) stepDates[idx] = fecha
+  }
+
+  // Estados sin paso lineal (CANCELADO, SIN_REPARACION, SIN_FALLA_DETECTADA,
+  // ENTREGADO_SIN_REPARACION, ENTREGADO_SIN_COBRO, o vacío/desconocido): se
+  // marcan sobre el paso canónico más cercano ya alcanzado según el
+  // timeline (o el paso 0 si no hay ninguno), en vez de perderse.
+  const estadoNormFolded = foldEstado(estadoRaw)
+  const canonicalIdx = ESTADO_FLOW.indexOf(estadoNormFolded as (typeof ESTADO_FLOW)[number])
+  let currentStepIndex = 0
+  let nonCanonicalTag = ""
+  if (canonicalIdx >= 0) {
+    currentStepIndex = canonicalIdx
+  } else {
+    for (let i = ESTADO_FLOW.length - 1; i >= 0; i--) {
+      if (stepDates[i]) { currentStepIndex = i; break }
+    }
+    nonCanonicalTag = estadoDisplay
+  }
+
+  // ============================================================
+  // PARTE CLIENTE
+  // ============================================================
+  let ry = height - rxMargin
+
+  // ---- Header: logo (si hay) + empresa/sucursal + idbox (#numero, código, estado) ----
+  const headerTopY = ry
+  const logoBoxSize = 42
+
+  let rxLogo: Awaited<ReturnType<typeof pdfDoc.embedPng>> | Awaited<ReturnType<typeof pdfDoc.embedJpg>> | null = null
   if (data.logoUrl) {
     try {
-      const logoResponse = await fetch(data.logoUrl)
-      if (logoResponse.ok) {
-        const logoArrayBuffer = await logoResponse.arrayBuffer()
-        const logoBytes = new Uint8Array(logoArrayBuffer)
-        const contentType = logoResponse.headers.get("content-type") || ""
-        if (contentType.includes("png") || data.logoUrl.toLowerCase().includes(".png")) {
-          embeddedLogo = await pdfDoc.embedPng(logoBytes)
-        } else if (contentType.includes("jpeg") || contentType.includes("jpg") || data.logoUrl.toLowerCase().includes(".jpg") || data.logoUrl.toLowerCase().includes(".jpeg")) {
-          embeddedLogo = await pdfDoc.embedJpg(logoBytes)
-        }
-        if (embeddedLogo) {
-          const logoDims = embeddedLogo.scale(1)
-          const scale = Math.min(logoMaxH / logoDims.height, logoMaxW / logoDims.width)
-          logoSW = logoDims.width * scale
-          logoSH = logoDims.height * scale
+      const res = await fetch(data.logoUrl)
+      if (res.ok) {
+        const buf = new Uint8Array(await res.arrayBuffer())
+        const ct = res.headers.get("content-type") || ""
+        if (ct.includes("png") || data.logoUrl.toLowerCase().includes(".png")) {
+          rxLogo = await pdfDoc.embedPng(buf)
+        } else if (ct.includes("jpeg") || ct.includes("jpg") || data.logoUrl.toLowerCase().includes(".jpg") || data.logoUrl.toLowerCase().includes(".jpeg")) {
+          rxLogo = await pdfDoc.embedJpg(buf)
         }
       }
-    } catch (logoError) {
-      console.error("Error loading logo:", logoError)
+    } catch { /* logo no disponible — no se dibuja la caja (skip, no placeholder) */ }
+  }
+
+  if (rxLogo) {
+    page.drawRectangle({ x: rxMargin, y: headerTopY - logoBoxSize, width: logoBoxSize, height: logoBoxSize, borderColor: MONO.ink, borderWidth: 1 })
+    const s = rxLogo.scale(1)
+    const inset = 5
+    const ratio = Math.min((logoBoxSize - inset * 2) / s.width, (logoBoxSize - inset * 2) / s.height)
+    const lw = s.width * ratio
+    const lh = s.height * ratio
+    page.drawImage(rxLogo, { x: rxMargin + (logoBoxSize - lw) / 2, y: headerTopY - logoBoxSize + (logoBoxSize - lh) / 2, width: lw, height: lh })
+  }
+
+  const bizX = rxMargin + (rxLogo ? logoBoxSize + 12 : 0)
+
+  // idbox: se calcula primero su ancho reservado para poder acotar el
+  // ancho disponible del bloque de empresa/sucursal a su izquierda.
+  const numSize = 20
+  const numW = archivoCondensedBlack.widthOfTextAtSize(numeroOrdenPadded, numSize)
+  const codeW = codigoOrden ? plexMonoRegular.widthOfTextAtSize(codigoOrden, 8) : 0
+  const tagLabel = estadoDisplay.toUpperCase()
+  const tagW = archivoBold.widthOfTextAtSize(tagLabel, 7) + 10
+  const idboxReserved = Math.max(numW, codeW, tagW) + 4
+  const bizMaxWidth = (width - rxMargin) - idboxReserved - 10 - bizX
+
+  const bizNameSize = 13
+  page.drawText(rxTruncate(empresaNombre, archivoBlack, bizNameSize, bizMaxWidth), { x: bizX, y: headerTopY - 11, size: bizNameSize, font: archivoBlack, color: MONO.ink })
+  const contactLineText = [sucursalNombre, sucursalDireccion || direccionEmpresa, sucursalTelefono || telefonoEmpresa, data.emailEmpresa ? safe(data.emailEmpresa) : ""].filter(Boolean).join(" · ")
+  const contactLines = rxWrap(contactLineText, archivoRegular, 7.5, bizMaxWidth).slice(0, 2)
+  let bizY = headerTopY - 11 - 14
+  for (const l of contactLines) {
+    page.drawText(l, { x: bizX, y: bizY, size: 7.5, font: archivoRegular, color: MONO.label })
+    bizY -= 10
+  }
+
+  const idboxRight = width - rxMargin
+  rxDrawRight(page, numeroOrdenPadded, idboxRight, headerTopY - 16, numSize, archivoCondensedBlack, MONO.ink)
+  let idboxY = headerTopY - 27
+  if (codigoOrden) {
+    rxDrawRight(page, codigoOrden, idboxRight, idboxY, 8, plexMonoRegular, MONO.label)
+    idboxY -= 12
+  } else {
+    idboxY -= 4
+  }
+  // Tag de estado — relleno ink local (ver rxInkFill más arriba).
+  rxInkFill(page, idboxRight - tagW, idboxY - 12, tagW, 12)
+  page.drawText(tagLabel, { x: idboxRight - tagW + 5, y: idboxY - 9, size: 7, font: archivoBold, color: MONO.white })
+
+  const headerBottomY = headerTopY - Math.max(logoBoxSize, 46)
+  ry = headerBottomY - 8
+  drawRule(page, rxMargin, width - rxMargin, ry, { color: MONO.ink, thickness: 1.4 })
+  ry -= 10
+
+  // ---- Timeline ----
+  const timelineH = 24
+  const timelineTop = ry
+  const colW = rxContentW / 7
+  page.drawRectangle({ x: rxMargin, y: timelineTop - timelineH, width: rxContentW, height: timelineH, borderColor: MONO.ink, borderWidth: 1 })
+  for (let i = 0; i < 7; i++) {
+    const colX = rxMargin + i * colW
+    const isOn = i === currentStepIndex
+    const isDone = i < currentStepIndex && !!stepDates[i]
+    if (isOn) rxInkFill(page, colX, timelineTop - timelineH, colW, timelineH)
+    if (i > 0) {
+      page.drawLine({ start: { x: colX, y: timelineTop }, end: { x: colX, y: timelineTop - timelineH }, thickness: RULE_WIDTH, color: isOn ? MONO.ink : MONO.rule })
+    }
+    const labelColor = isOn ? MONO.white : (isDone ? MONO.ink : MONO.faint)
+    const dateColor = isOn ? MONO.white : (isDone ? MONO.label : MONO.faint)
+    const stepLabelSize = 6
+    const checkW = isDone ? 6 : 0 // vector check (rxDrawCheck) + gap — reserved, not part of the text string
+    const stepLabelTrunc = rxTruncate(TIMELINE_LABELS[i].toUpperCase(), archivoBold, stepLabelSize, colW - 4 - checkW)
+    const labelW = archivoBold.widthOfTextAtSize(stepLabelTrunc, stepLabelSize)
+    const blockX = colX + (colW - (labelW + checkW)) / 2
+    if (isDone) rxDrawCheck(page, blockX, timelineTop - 8.7, labelColor)
+    page.drawText(stepLabelTrunc, { x: blockX + checkW, y: timelineTop - 10, size: stepLabelSize, font: archivoBold, color: labelColor })
+    let dateText = "—"
+    if (isOn && nonCanonicalTag) {
+      dateText = rxTruncate(nonCanonicalTag, archivoRegular, 6, colW - 4)
+    } else if (stepDates[i]) {
+      dateText = formatTimelineDate(stepDates[i] as Date)
+    }
+    const dateW = archivoRegular.widthOfTextAtSize(dateText, 6)
+    page.drawText(dateText, { x: colX + (colW - dateW) / 2, y: timelineTop - 19, size: 6, font: archivoRegular, color: dateColor })
+  }
+  ry = timelineTop - timelineH - 10
+
+  // ---- Grid: Cliente | Equipo ----
+  const colGridW = rxContentW / 2
+  const isEmpresa = clienteTipoCliente.toUpperCase() === "EMPRESA" && !!clienteRazonSocial
+  const clienteLines: RxCellLine[] = []
+  if (isEmpresa) {
+    const idSuffix = clienteCuit ? ` · CUIT ${clienteCuit}` : ""
+    clienteLines.push({ text: `${clienteRazonSocial}${idSuffix}`.substring(0, 60), font: archivoBold, size: 9, color: MONO.ink })
+    const contactSuffix = clienteDni ? ` · DNI ${clienteDni}` : ""
+    clienteLines.push({ text: `Contacto: ${clienteNombre}${contactSuffix}`.substring(0, 60), font: archivoRegular, size: 8, color: MONO.label })
+  } else {
+    const idSuffix = clienteDni ? ` · DNI ${clienteDni}` : (clienteCuit ? ` · CUIT ${clienteCuit}` : "")
+    clienteLines.push({ text: `${clienteNombre}${idSuffix}`.substring(0, 60), font: archivoBold, size: 9, color: MONO.ink })
+  }
+  const telParts = [clienteTelefono]
+  if (telefonoContacto && telefonoContacto !== clienteTelefono) telParts.push(`tel. de esta orden: ${telefonoContacto}`)
+  clienteLines.push({ text: telParts.join(" · ").substring(0, 65), font: archivoRegular, size: 8, color: MONO.label })
+  if (clienteEmail) clienteLines.push({ text: clienteEmail.substring(0, 50), font: archivoRegular, size: 8, color: MONO.label })
+
+  const equipoLines: RxCellLine[] = []
+  const equipoTitle = [dispositivo, marca, colorDisp].filter(Boolean).join(" · ")
+  equipoLines.push({ text: equipoTitle.substring(0, 55), font: archivoBold, size: 9, color: MONO.ink })
+  if (imei) equipoLines.push({ text: `${t(term, "serie")} ${imei}`.substring(0, 55), font: plexMonoRegular, size: 8, color: MONO.ink })
+  if (metadataCampos.length > 0) {
+    const metaText = metadataCampos.map(m => `${m.label}: ${m.valor}`).join(" · ")
+    equipoLines.push({ text: metaText.substring(0, 65), font: archivoRegular, size: 7.5, color: MONO.label })
+  }
+
+  const rowH1 = rxDrawGridRow([
+    { x: rxMargin, width: colGridW, label: "Cliente", lines: clienteLines },
+    { x: rxMargin + colGridW, width: colGridW, label: t(term, "equipo"), lines: equipoLines },
+  ], ry)
+  ry -= rowH1
+
+  // ---- Falla declarada (fila completa) ----
+  const fallaLines: RxCellLine[] = rxWrap(problemaReportado, archivoRegular, 9, rxContentW - rxCellPadX * 2)
+    .slice(0, 3)
+    .map(l => ({ text: l, font: archivoRegular, size: 9, color: MONO.ink }))
+  const rowH2 = rxDrawGridRow([{ x: rxMargin, width: rxContentW, label: "Falla declarada", lines: fallaLines }], ry)
+  ry -= rowH2
+
+  // ---- Accesorios recibidos | Fotos de ingreso (fila completa, dividida 65/35) ----
+  const accesoriosLines: RxCellLine[] = accesorios
+    ? [{ text: accesorios.substring(0, 70), font: archivoRegular, size: 9, color: MONO.ink }]
+    : [{ text: "—", font: archivoRegular, size: 9, color: MONO.faint }]
+  const fotosCount = Array.isArray(data.fotosIngreso) ? data.fotosIngreso.length : 0
+  const fotosLines: RxCellLine[] = [{ text: fotosCount > 0 ? `${fotosCount} registradas` : "Sin fotos", font: archivoRegular, size: 9, color: MONO.ink }]
+  const accW = rxContentW * 0.65
+  const rowH3 = rxDrawGridRow([
+    { x: rxMargin, width: accW, label: "Accesorios recibidos", lines: accesoriosLines },
+    { x: rxMargin + accW, width: rxContentW - accW, label: "Fotos de ingreso", lines: fotosLines },
+  ], ry)
+  ry -= rowH3 + 8
+
+  // ---- money3: presupuesto | seña | saldo (última celda ink-fill) ----
+  if (data.presupuesto || data.sena) {
+    const presupNum = Number(data.presupuesto) || 0
+    const senaNum = Number(data.sena) || 0
+    const saldoNum = Math.max(presupNum - senaNum, 0)
+    const money3Cells = [
+      { label: "Presupuesto estimado", amt: formatCurrencyPDF(presupNum) },
+      { label: `Seña abonada${data.metodoPagoSena ? " · " + data.metodoPagoSena : ""}`, amt: formatCurrencyPDF(senaNum) },
+      { label: "Saldo estimado", amt: formatCurrencyPDF(saldoNum) },
+    ]
+    const mcW = rxContentW / 3
+    const money3H = 34
+    page.drawRectangle({ x: rxMargin, y: ry - money3H, width: rxContentW, height: money3H, borderColor: MONO.ink, borderWidth: 1 })
+    money3Cells.forEach((c, i) => {
+      const cx = rxMargin + i * mcW
+      const isLast = i === 2
+      if (isLast) rxInkFill(page, cx, ry - money3H, mcW, money3H)
+      if (i > 0) page.drawLine({ start: { x: cx, y: ry }, end: { x: cx, y: ry - money3H }, thickness: RULE_WIDTH, color: isLast ? MONO.ink : MONO.rule })
+      const lblColor = isLast ? MONO.faint : MONO.label
+      const amtColor = isLast ? MONO.white : MONO.ink
+      page.drawText(rxTruncate(c.label.toUpperCase(), archivoBold, 6, mcW - 12), { x: cx + 8, y: ry - 13, size: 6, font: archivoBold, color: lblColor })
+      page.drawText(rxTruncate(c.amt, archivoCondensedBold, 13, mcW - 12), { x: cx + 8, y: ry - 27, size: 13, font: archivoCondensedBold, color: amtColor })
+    })
+    ry -= money3H + 8
+  }
+
+  // ---- Retiro estimado ----
+  if (fechaPrometida) {
+    rxDrawRun(page, [
+      { text: "Retiro estimado: ", font: archivoRegular, color: MONO.ink },
+      { text: fechaPrometida, font: archivoBold, color: MONO.ink },
+      { text: " — te avisamos ante cada cambio de estado.", font: archivoRegular, color: MONO.label },
+    ], rxMargin, ry - 9, 9)
+    ry -= 18
+  }
+
+  // ---- QR + seguimiento + firma cliente + "Recibió — {recibidoPorNombre}" ----
+  ry -= 4
+  const sigRowTop = ry
+  const sigBlockH = 55
+  const qrSize = 45
+  let qrImg: Awaited<ReturnType<typeof pdfDoc.embedPng>> | null = null
+  const hasTracking = !!(data.publicToken && data.baseUrl)
+  if (hasTracking) {
+    try {
+      const trackingUrl = `${data.baseUrl}/seguimiento/${data.publicToken}`
+      const qrDataUrl = await QRCode.toDataURL(trackingUrl, { width: 200, margin: 1, color: { dark: "#111111", light: "#ffffff" } })
+      const qrBytes = Uint8Array.from(atob(qrDataUrl.split(",")[1]), c => c.charCodeAt(0))
+      qrImg = await pdfDoc.embedPng(qrBytes)
+    } catch { /* ignore QR errors — se sigue sin el código */ }
+  }
+  let afterQrX = rxMargin
+  if (qrImg) {
+    page.drawImage(qrImg, { x: rxMargin, y: sigRowTop - qrSize, width: qrSize, height: qrSize })
+    afterQrX = rxMargin + qrSize + 10
+  }
+  let trackW = 0
+  if (hasTracking) {
+    trackW = 130
+    const trackUrlDisplay = `${safe(data.baseUrl).replace(/^https?:\/\//, "")}/seguimiento/${safe(data.publicToken)}`
+    const trackLines = ["Estado en vivo, fotos y", "presupuesto online:", ...rxWrap(trackUrlDisplay, archivoBold, 7, trackW)]
+    let tY = sigRowTop - 9
+    for (const l of trackLines.slice(0, 4)) {
+      page.drawText(l, { x: afterQrX, y: tY, size: 7, font: l.includes("/") ? archivoBold : archivoRegular, color: MONO.label })
+      tY -= 9
+    }
+  }
+  const sigStartX = afterQrX + trackW + (hasTracking ? 10 : 0)
+  const sigAreaW = (rxMargin + rxContentW) - sigStartX
+  if (sigAreaW > 80) {
+    const sigColW = (sigAreaW - 10) / 2
+    const sigLineY = sigRowTop - qrSize + 6
+    drawRule(page, sigStartX, sigStartX + sigColW, sigLineY, { color: MONO.ink })
+    page.drawText("FIRMA DEL CLIENTE", { x: sigStartX, y: sigLineY - 8, size: 6, font: archivoBold, color: MONO.label })
+    const recibioX = sigStartX + sigColW + 10
+    drawRule(page, recibioX, recibioX + sigColW, sigLineY, { color: MONO.ink })
+    const recibioLabel = recibidoPorNombre ? `RECIBIÓ — ${recibidoPorNombre.toUpperCase()}` : "RECIBIÓ"
+    page.drawText(rxTruncate(recibioLabel, archivoBold, 6, sigColW), { x: recibioX, y: sigLineY - 8, size: 6, font: archivoBold, color: MONO.label })
+  }
+  ry = sigRowTop - sigBlockH
+
+  // ---- Términos (compacto) ----
+  const terminosList = parseRecepcionTerminos(data.recepcionTerminos)
+  const terminosFlat: string[] = []
+  for (const raw of terminosList) {
+    terminosFlat.push(...rxWrap(raw, archivoRegular, 6, rxContentW))
+  }
+  const shownTerminos = terminosFlat.slice(0, 6)
+  if (shownTerminos.length > 0) {
+    for (const l of shownTerminos) {
+      page.drawText(l, { x: rxMargin, y: ry, size: 6, font: archivoRegular, color: MONO.faint })
+      ry -= 8
     }
   }
 
-  // Header height fijo al texto — el logo se desborda hacia arriba sin empujar contenido
-  const headerH = headerTextH
-
-  // Draw logo centered, shifted up so it overflows into top margin instead of overlapping text
-  if (embeddedLogo) {
-    const logoX = (width - logoSW) / 2
-    const logoY = y - (headerH / 2) - (logoSH / 2) + 12
-    page.drawImage(embeddedLogo, { x: logoX, y: logoY, width: logoSW, height: logoSH })
-  }
-
-  // Left zone: empresa datos (escalonados), right zone: orden datos
-  // Ambos centrados verticalmente en la misma franja que el logo
-  const textStartY = y - (headerH / 2) + (headerTextH / 2)
-
-  // Línea 1: Nombre empresa | # Orden
-  page.drawText(empresaNombre, { x: margin, y: textStartY, size: 12, font: helveticaBold, color: MONO.ink })
-
-  const ordenText = `#${String(numeroOrden).padStart(4, "0")}`
-  const ordenTextWidth = helveticaBold.widthOfTextAtSize(ordenText, TYPE.docNumber)
-  page.drawText(ordenText, { x: width - margin - ordenTextWidth, y: textStartY + 1, size: TYPE.docNumber, font: helveticaBold, color: MONO.ink })
-
-  // Línea 2: Teléfono | Badge RECEPCIÓN (outlined, sin relleno)
-  const line2Y = textStartY - 13
-  if (telefonoEmpresa) {
-    page.drawText(`Tel: ${telefonoEmpresa}`, { x: margin, y: line2Y, size: TYPE.small, font: helvetica, color: MONO.label })
-  }
-  const badgeText = "RECEPCIÓN"
-  const badgeWidth = measureBadgeWidth(helveticaBold, badgeText)
-  drawOutlinedBadge(page, helveticaBold, badgeText, width - margin - badgeWidth, line2Y + 10)
-
-  // Línea 3: Dirección completa | Fechas
-  const line3Y = line2Y - 12
-  const locationParts: string[] = []
-  if (direccionEmpresa) locationParts.push(direccionEmpresa)
-  if (ciudadEmpresa) locationParts.push(ciudadEmpresa)
-  if (codigoPostalEmpresa) locationParts.push(`CP ${codigoPostalEmpresa}`)
-  if (provinciaEmpresa) locationParts.push(provinciaEmpresa)
-  if (locationParts.length > 0) {
-    page.drawText(locationParts.join(", "), { x: margin, y: line3Y, size: TYPE.small, font: helvetica, color: MONO.label })
-  }
-
-  const fechasText = `Ingreso: ${fechaIngreso}` + (fechaPrometida ? `  |  Entrega est.: ${fechaPrometida}` : "")
-  const fechasW = helvetica.widthOfTextAtSize(fechasText, TYPE.fine)
-  page.drawText(fechasText, { x: width - margin - fechasW, y: line3Y, size: TYPE.fine, font: helvetica, color: MONO.faint })
-
-  y -= headerH + 4
-  // Línea separadora + título
-  drawRule(page, margin, width - margin, y)
-  y -= 12
-  const titleText = "COMPROBANTE DE RECEPCIÓN"
-  const titleWidth = helveticaBold.widthOfTextAtSize(titleText, TYPE.docTitle)
-  page.drawText(titleText, { x: (width - titleWidth) / 2, y, size: TYPE.docTitle, font: helveticaBold, color: MONO.ink })
-  y -= 10
-
-  // === GRID: CLIENTE | DISPOSITIVO (compacto) ===
-  let clienteLines = 2
-  if (sector) clienteLines++
-  if (clienteEmail) clienteLines++
-  if (clienteDireccion) clienteLines++
-
-  let dispositivoLines = 1
-  if (marca) dispositivoLines++
-  if (colorDisp && marca) dispositivoLines = dispositivoLines
-  else if (colorDisp) dispositivoLines++
-  if (imei) dispositivoLines++
-
-  const maxLines = Math.max(clienteLines, dispositivoLines)
-  const rowH = 13
-  const cardHeight = 18 + maxLines * rowH + 6
-
-  const truncateToWidth = (text: string, maxW: number, font_: typeof helvetica, size: number): string => {
-    if (font_.widthOfTextAtSize(text, size) <= maxW) return text
-    let t = text
-    while (t.length > 0 && font_.widthOfTextAtSize(t + "...", size) > maxW) t = t.slice(0, -1)
-    return t + "..."
-  }
-
-  const labelCol = 50
-  const valueMaxWidth = halfWidth - labelCol - 20
-
-  // Card Cliente (sin caja: heading tipográfico + columnas planas)
-  drawSectionLabel(page, helveticaBold, "CLIENTE", margin + 10, y - 12)
-
-  let clienteInfoY = y - 30
-  page.drawText("Nombre:", { x: margin + 10, y: clienteInfoY, size: TYPE.small, font: helvetica, color: MONO.label })
-  page.drawText(truncateToWidth(clienteNombre, valueMaxWidth, helveticaBold, TYPE.body), { x: margin + labelCol + 10, y: clienteInfoY, size: TYPE.body, font: helveticaBold, color: MONO.ink })
-  clienteInfoY -= rowH
-  if (sector) {
-    page.drawText("Sector:", { x: margin + 10, y: clienteInfoY, size: TYPE.small, font: helvetica, color: MONO.label })
-    page.drawText(truncateToWidth(sector, valueMaxWidth, helveticaBold, TYPE.body), { x: margin + labelCol + 10, y: clienteInfoY, size: TYPE.body, font: helveticaBold, color: MONO.ink })
-    clienteInfoY -= rowH
-  }
-  page.drawText("Teléfono:", { x: margin + 10, y: clienteInfoY, size: TYPE.small, font: helvetica, color: MONO.label })
-  page.drawText(truncateToWidth(clienteTelefono, valueMaxWidth, helvetica, TYPE.body), { x: margin + labelCol + 10, y: clienteInfoY, size: TYPE.body, font: helvetica, color: MONO.ink })
-  clienteInfoY -= rowH
-  if (clienteEmail) {
-    page.drawText("Email:", { x: margin + 10, y: clienteInfoY, size: TYPE.small, font: helvetica, color: MONO.label })
-    page.drawText(truncateToWidth(clienteEmail, valueMaxWidth, helvetica, TYPE.small), { x: margin + labelCol + 10, y: clienteInfoY, size: TYPE.small, font: helvetica, color: MONO.ink })
-    clienteInfoY -= rowH
-  }
-  if (clienteDireccion) {
-    page.drawText("Dir:", { x: margin + 10, y: clienteInfoY, size: TYPE.small, font: helvetica, color: MONO.label })
-    page.drawText(truncateToWidth(clienteDireccion, valueMaxWidth, helvetica, TYPE.small), { x: margin + labelCol + 10, y: clienteInfoY, size: TYPE.small, font: helvetica, color: MONO.ink })
-  }
-
-  // Card Dispositivo (misma columna derecha, sin caja)
-  const cardX2 = margin + halfWidth + cardGap
-  drawSectionLabel(page, helveticaBold, t(term, "equipo"), cardX2 + 10, y - 12)
-
-  const tipoBadgeText = tipoDispositivo.toUpperCase()
-  const tipoBadgeWidth = helveticaBold.widthOfTextAtSize(tipoBadgeText, TYPE.small)
-  page.drawText(tipoBadgeText, { x: cardX2 + halfWidth - tipoBadgeWidth, y: y - 12, size: TYPE.small, font: helveticaBold, color: MONO.ink })
-
-  let deviceInfoY = y - 30
-  page.drawText(t(term, "equipo") + ":", { x: cardX2 + 10, y: deviceInfoY, size: TYPE.small, font: helvetica, color: MONO.label })
-  page.drawText(truncateToWidth(dispositivo, valueMaxWidth, helveticaBold, TYPE.body), { x: cardX2 + labelCol + 10, y: deviceInfoY, size: TYPE.body, font: helveticaBold, color: MONO.ink })
-  deviceInfoY -= rowH
-  if (marca) {
-    page.drawText("Marca:", { x: cardX2 + 10, y: deviceInfoY, size: TYPE.small, font: helvetica, color: MONO.label })
-    const marcaText = truncateToWidth(marca, colorDisp ? valueMaxWidth * 0.55 : valueMaxWidth, helvetica, TYPE.small)
-    page.drawText(marcaText, { x: cardX2 + labelCol + 10, y: deviceInfoY, size: TYPE.small, font: helvetica, color: MONO.ink })
-    if (colorDisp) {
-      const colorLabelX = cardX2 + halfWidth * 0.6
-      page.drawText("Color:", { x: colorLabelX, y: deviceInfoY, size: TYPE.small, font: helvetica, color: MONO.label })
-      page.drawText(truncateToWidth(colorDisp, halfWidth - (halfWidth * 0.6) - 42, helvetica, TYPE.small), { x: colorLabelX + 32, y: deviceInfoY, size: TYPE.small, font: helvetica, color: MONO.ink })
+  // ============================================================
+  // soloCliente (compartir por WhatsApp): SOLO la parte cliente — sin
+  // talón ni línea de corte. Recorte dinámico al contenido real, igual que
+  // el comportamiento previo.
+  // ============================================================
+  if (data.soloCliente) {
+    const contentBottom = ry - 10
+    const minPageHeight = width
+    const dynamicHeight = Math.max(height - contentBottom, minPageHeight)
+    if (dynamicHeight < height) {
+      page.setMediaBox(0, contentBottom, width, dynamicHeight)
+      page.setCropBox(0, contentBottom, width, dynamicHeight)
+      page.setTrimBox(0, contentBottom, width, dynamicHeight)
     }
-    deviceInfoY -= rowH
-  } else if (colorDisp) {
-    page.drawText("Color:", { x: cardX2 + 10, y: deviceInfoY, size: TYPE.small, font: helvetica, color: MONO.label })
-    page.drawText(truncateToWidth(colorDisp, valueMaxWidth, helvetica, TYPE.small), { x: cardX2 + labelCol + 10, y: deviceInfoY, size: TYPE.small, font: helvetica, color: MONO.ink })
-    deviceInfoY -= rowH
-  }
-  if (imei) {
-    page.drawText(t(term, "serie") + ":", { x: cardX2 + 10, y: deviceInfoY, size: TYPE.small, font: helvetica, color: MONO.label })
-    page.drawText(truncateToWidth(imei, valueMaxWidth, courier, TYPE.small), { x: cardX2 + labelCol + 10, y: deviceInfoY, size: TYPE.small, font: courier, color: MONO.ink })
+    const pdfBytes = await pdfDoc.save()
+    return Buffer.from(pdfBytes)
   }
 
-  drawRule(page, margin, width - margin, y - cardHeight + 4, { dotted: true })
-  y -= cardHeight + 6
-
-  // === PROBLEMA REPORTADO (compacto) ===
-  const problemaLines: string[] = []
-  let tempLine = ""
-  const words = problemaReportado.split(" ")
-  for (const word of words) {
-    if (helvetica.widthOfTextAtSize(tempLine + " " + word, TYPE.body) < contentWidth - 20) {
-      tempLine += (tempLine ? " " : "") + word
-    } else {
-      problemaLines.push(tempLine)
-      tempLine = word
-    }
+  // ============================================================
+  // ✂ LÍNEA DE CORTE
+  // ============================================================
+  ry -= 6
+  const cutY = ry
+  for (let dx = rxMargin + 16; dx < width - rxMargin - 16; dx += 10) {
+    page.drawLine({ start: { x: dx, y: cutY }, end: { x: Math.min(dx + 5, width - rxMargin - 16), y: cutY }, thickness: 0.75, color: MONO.rule })
   }
-  if (tempLine) problemaLines.push(tempLine)
-  const displayedProblemaLines = problemaLines.slice(0, 3)
-  const problemaHeight = 16 + displayedProblemaLines.length * 12 + 4
+  rxDrawScissors(page, rxMargin, cutY - 1, MONO.label)
+  page.drawText("PARTE SUPERIOR · CLIENTE", { x: rxMargin + 16, y: cutY - 9, size: 6.5, font: archivoBold, color: MONO.label })
+  const stubLabel = "TALÓN INFERIOR · NEGOCIO"
+  rxDrawRight(page, stubLabel, width - rxMargin, cutY - 9, 6.5, archivoBold, MONO.label)
 
-  drawSectionLabel(page, helveticaBold, "PROBLEMA REPORTADO", margin + 10, y - 11)
+  // ============================================================
+  // TALÓN INTERNO — NEGOCIO
+  // ============================================================
+  let sy = cutY - 20
 
-  let problemaY = y - 28
-  for (const line of displayedProblemaLines) {
-    page.drawText(line, { x: margin + 10, y: problemaY, size: TYPE.body, font: helvetica, color: MONO.ink })
-    problemaY -= 12
+  page.drawText("TALÓN INTERNO — RECEPCIÓN", { x: rxMargin, y: sy, size: 8, font: archivoBlack, color: MONO.ink })
+  rxDrawRight(page, numeroOrdenPadded, width - rxMargin, sy - 1, 13, archivoCondensedBlack, MONO.ink)
+  sy -= 14
+  const stubSubText = [codigoOrden, fechaIngreso, sucursalNombre].filter(Boolean).join(" · ")
+  if (stubSubText) {
+    rxDrawRight(page, rxTruncate(stubSubText, plexMonoRegular, 7, rxContentW - 140), width - rxMargin, sy, 7, plexMonoRegular, MONO.label)
   }
-  drawRule(page, margin, width - margin, y - problemaHeight + 4, { dotted: true })
-  y -= problemaHeight + 4
+  sy -= 12
 
-  // === ACCESORIOS + CÓDIGO DE ACCESO (lado a lado si hay patrón) ===
-  const hasAccessCode = !!codigoAccesoDispositivo
-  const isPatternCode = hasAccessCode &&
-    (codigoAccesoDispositivo.toLowerCase().startsWith("patrón:") ||
-     codigoAccesoDispositivo.toLowerCase().startsWith("patron:"))
+  // ---- Fila 1: Cliente | Equipo ----
+  const stubClienteLines: RxCellLine[] = [
+    { text: `${clienteNombre} · ${clienteTelefono}`.substring(0, 55), font: archivoBold, size: 8, color: MONO.ink },
+  ]
+  if (clienteDni) stubClienteLines.push({ text: `DNI ${clienteDni}`, font: archivoRegular, size: 7.5, color: MONO.label })
+  const stubEquipoLines: RxCellLine[] = [
+    { text: [dispositivo, marca, colorDisp].filter(Boolean).join(" · ").substring(0, 55), font: archivoBold, size: 8, color: MONO.ink },
+  ]
+  if (imei) stubEquipoLines.push({ text: `IMEI ${imei}`, font: plexMonoRegular, size: 7, color: MONO.label })
+  const stubRow1H = rxDrawGridRow([
+    { x: rxMargin, width: colGridW, label: "Cliente", lines: stubClienteLines },
+    { x: rxMargin + colGridW, width: colGridW, label: t(term, "equipo"), lines: stubEquipoLines },
+  ], sy)
+  sy -= stubRow1H
 
-  if (accesorios) {
-    const accWidth = isPatternCode ? halfWidth : contentWidth
-    const accHeight = 18
-    drawSectionLabel(page, helveticaBold, "Accesorios", margin + 8, y - 12)
-    page.drawText(truncateToWidth(accesorios, accWidth - 85, helvetica, TYPE.small), { x: margin + 75, y: y - 12, size: TYPE.small, font: helvetica, color: MONO.ink })
-    if (!isPatternCode) y -= accHeight + 4
-  }
+  // ---- Fila 2: Código de acceso (PIN/patrón — SOLO acá) | Chequeo rápido ----
+  const checklistItemsList = Array.isArray(data.checklistItems) ? data.checklistItems : []
+  const chequeoParts = checklistItemsList.map(it => {
+    const v = it.valor === true ? "OK" : it.valor === false ? "NO" : safe(it.valor)
+    return `${it.label}: ${v}`
+  })
+  if (data.checklistNotas) chequeoParts.push(safe(data.checklistNotas))
+  const chequeoText = chequeoParts.join(" · ") || "Sin chequeo registrado"
+  const chequeoLines = rxWrap(chequeoText, archivoRegular, 7.5, colGridW - rxCellPadX * 2).slice(0, 4)
 
-  if (hasAccessCode) {
+  const isPatternCode = !!codigoAccesoDispositivo && /^patr[oó]n:/i.test(codigoAccesoDispositivo)
+  const row2H = Math.max(58, 12 + chequeoLines.length * 10 + rxCellPadY * 2)
+  page.drawRectangle({ x: rxMargin, y: sy - row2H, width: rxContentW, height: row2H, borderColor: MONO.rule, borderWidth: RULE_WIDTH })
+  page.drawLine({ start: { x: rxMargin + colGridW, y: sy }, end: { x: rxMargin + colGridW, y: sy - row2H }, thickness: RULE_WIDTH, color: MONO.rule })
+  drawSectionLabel(page, archivoBold, "Código de acceso", rxMargin + rxCellPadX, sy - rxCellPadY - 6)
+  if (codigoAccesoDispositivo) {
     if (isPatternCode) {
-      // Patrón a la derecha de accesorios
       const patternMatch = codigoAccesoDispositivo.match(/[\d-]+$/)
       const patternNumbers = patternMatch
-        ? patternMatch[0].split("-").map(n => parseInt(n.trim())).filter(n => n >= 1 && n <= 9)
+        ? patternMatch[0].split("-").map(n => parseInt(n.trim(), 10)).filter(n => n >= 1 && n <= 9)
         : []
-
-      const patBoxX = margin + halfWidth + cardGap
-      const patBoxW = halfWidth
-      const patBoxH = 60
-      drawSectionLabel(page, helveticaBold, "Código de acceso", patBoxX + 10, y - 10)
-      page.drawText("Patrón", { x: patBoxX + patBoxW - 40, y: y - 10, size: TYPE.fine, font: helvetica, color: MONO.label })
-
-      const gridCenterX = patBoxX + patBoxW / 2
-      const gridStartY = y - 22
-      const cellSize = 14
-      const dotRadius = 2.5
-
-      const getPointPosition = (num: number) => ({
-        x: gridCenterX + ((num - 1) % 3 - 1) * cellSize,
-        y: gridStartY - Math.floor((num - 1) / 3) * cellSize,
-      })
-
-      if (patternNumbers.length > 1) {
-        for (let i = 0; i < patternNumbers.length - 1; i++) {
-          const start = getPointPosition(patternNumbers[i])
-          const end = getPointPosition(patternNumbers[i + 1])
-          page.drawLine({ start, end, thickness: 1.2, color: MONO.ink })
-        }
+      const patCenterX = rxMargin + colGridW - 60
+      const patTopY = sy - rxCellPadY - 16
+      const cellSize = 11
+      const dotR = 2.2
+      const getPos = (num: number) => ({ x: patCenterX + ((num - 1) % 3 - 1) * cellSize, y: patTopY - Math.floor((num - 1) / 3) * cellSize })
+      for (let i = 0; i < patternNumbers.length - 1; i++) {
+        const s = getPos(patternNumbers[i])
+        const e = getPos(patternNumbers[i + 1])
+        page.drawLine({ start: s, end: e, thickness: 1, color: MONO.ink })
       }
       for (let num = 1; num <= 9; num++) {
-        const pos = getPointPosition(num)
+        const pos = getPos(num)
         const inPat = patternNumbers.includes(num)
-        page.drawCircle({ x: pos.x, y: pos.y, size: dotRadius, color: inPat ? MONO.ink : MONO.rule, borderWidth: 0 })
-        if (inPat) page.drawCircle({ x: pos.x, y: pos.y, size: dotRadius - 1.2, color: MONO.white, borderWidth: 0 })
+        page.drawCircle({ x: pos.x, y: pos.y, size: dotR, color: inPat ? MONO.ink : MONO.rule, borderWidth: 0 })
+        if (inPat) page.drawCircle({ x: pos.x, y: pos.y, size: dotR - 1, color: MONO.white, borderWidth: 0 })
       }
-
-      y -= Math.max(patBoxH, accesorios ? 18 : 0) + 4
+      page.drawText("Patrón — solo talón interno", { x: rxMargin + rxCellPadX, y: sy - rxCellPadY - 32, size: 6.5, font: archivoRegular, color: MONO.label })
     } else {
-      // PIN/Contraseña en línea compacta — el marco es una tabla, no un fill
-      const codeH = 28
-      page.drawRectangle({ x: margin, y: y - codeH, width: halfWidth, height: codeH, borderColor: MONO.rule, borderWidth: RULE_WIDTH })
-      drawSectionLabel(page, helveticaBold, "Código de acceso", margin + 10, y - 10)
-      page.drawText(codigoAccesoDispositivo, { x: margin + 10, y: y - 23, size: 10, font: courier, color: MONO.ink })
-      y -= codeH + 4
+      page.drawText(codigoAccesoDispositivo.substring(0, 20), { x: rxMargin + rxCellPadX, y: sy - rxCellPadY - 22, size: 9, font: plexMonoRegular, color: MONO.ink })
     }
+  } else {
+    page.drawText("—", { x: rxMargin + rxCellPadX, y: sy - rxCellPadY - 22, size: 9, font: archivoRegular, color: MONO.faint })
   }
-
-  // === PRESUPUESTO Y SEÑA ===
-  if (presupuesto || data.sena) {
-    const hasSena = data.sena && data.sena > 0
-    const presupuestoHeight = hasSena ? 48 : 36
-    page.drawRectangle({ x: margin, y: y - presupuestoHeight, width: contentWidth, height: presupuestoHeight, color: MONO.totalBg })
-    if (presupuesto) {
-      drawSectionLabel(page, helveticaBold, "Presupuesto estimado", margin + 14, y - 13)
-      const presupuestoAmtWidth = helveticaBold.widthOfTextAtSize(presupuesto, TYPE.total)
-      page.drawText(presupuesto, { x: width - margin - 14 - presupuestoAmtWidth, y: y - 30, size: TYPE.total, font: helveticaBold, color: MONO.ink })
-      page.drawText("* Puede variar según diagnóstico", { x: margin + 14, y: y - 30, size: TYPE.fine, font: helvetica, color: MONO.faint })
-    }
-    if (hasSena) {
-      const senaFormatted = formatCurrencyPDF(data.sena!)
-      const senaY = presupuesto ? y - 44 : y - 13
-      const metodoPago = data.metodoPagoSena || "EFECTIVO"
-      const senaLabelWidth = drawSectionLabel(page, helveticaBold, "Seña abonada", margin + 14, senaY)
-      page.drawText(`(${metodoPago})`, { x: margin + 14 + senaLabelWidth + 6, y: senaY, size: TYPE.fine, font: helvetica, color: MONO.label })
-      const senaAmtWidth = helveticaBold.widthOfTextAtSize(senaFormatted, TYPE.total)
-      page.drawText(senaFormatted, { x: width - margin - 14 - senaAmtWidth, y: senaY, size: TYPE.total, font: helveticaBold, color: MONO.ink })
-    }
-    y -= presupuestoHeight + 8
+  drawSectionLabel(page, archivoBold, "Chequeo rápido", rxMargin + colGridW + rxCellPadX, sy - rxCellPadY - 6)
+  let chqY = sy - rxCellPadY - 6 - 12
+  for (const l of chequeoLines) {
+    page.drawText(l, { x: rxMargin + colGridW + rxCellPadX, y: chqY, size: 7.5, font: archivoRegular, color: MONO.ink })
+    chqY -= 10
   }
+  sy -= row2H
 
-  // === OBSERVACIONES (si hay) ===
-  if (observaciones) {
-    const obsLines: string[] = []
-    let obsTempLine = ""
-    const obsWords = observaciones.split(" ")
-    for (const word of obsWords) {
-      if (helvetica.widthOfTextAtSize(obsTempLine + " " + word, TYPE.body) < contentWidth - 28) {
-        obsTempLine += (obsTempLine ? " " : "") + word
-      } else {
-        obsLines.push(obsTempLine)
-        obsTempLine = word
-      }
-    }
-    if (obsTempLine) obsLines.push(obsTempLine)
-    const displayedObsLines = obsLines.slice(0, 3)
-    const obsHeight = 22 + displayedObsLines.length * 13 + 6
+  // ---- Fila 3: Falla / notas de mostrador (+ técnico) | Presupuesto/Seña | Prometida ----
+  const notasMostrador = [problemaReportado, tecnicoNombre ? `Técnico asignado: ${tecnicoNombre}` : ""].filter(Boolean).join(". ")
+  const notasLines: RxCellLine[] = rxWrap(notasMostrador, archivoRegular, 7.5, rxContentW * 0.5 - rxCellPadX * 2)
+    .slice(0, 3)
+    .map(l => ({ text: l, font: archivoRegular, size: 7.5, color: MONO.ink }))
+  const presupSenaText = `${presupuesto || formatCurrencyPDF(0)} / ${data.sena ? formatCurrencyPDF(data.sena) : "—"}`
+  const row3H = rxDrawGridRow([
+    { x: rxMargin, width: rxContentW * 0.5, label: "Falla / notas de mostrador", lines: notasLines },
+    { x: rxMargin + rxContentW * 0.5, width: rxContentW * 0.25, label: "Presupuesto / Seña", lines: [{ text: presupSenaText, font: archivoBold, size: 8, color: MONO.ink }] },
+    { x: rxMargin + rxContentW * 0.75, width: rxContentW * 0.25, label: "Prometida", lines: [{ text: fechaPrometida || "—", font: archivoBold, size: 8, color: MONO.ink }] },
+  ], sy)
+  sy -= row3H
 
-    drawSectionLabel(page, helveticaBold, "OBSERVACIONES", margin + 12, y - 14)
-    let obsY = y - 30
-    for (const line of displayedObsLines) {
-      page.drawText(line, { x: margin + 12, y: obsY, size: TYPE.body, font: helvetica, color: MONO.ink })
-      obsY -= 13
-    }
-    drawRule(page, margin, width - margin, y - obsHeight + 4, { dotted: true })
-    y -= obsHeight + 8
-  }
-
-  // === CHECKLIST DE RECEPCION (si hay) ===
-  if (data.checklistItems && data.checklistItems.length > 0) {
-    // Separar items booleanos de items con texto libre
-    const boolItems = data.checklistItems.filter(i => i.valor === true || i.valor === false)
-    const textItems = data.checklistItems.filter(i => i.valor !== true && i.valor !== false && i.valor !== null && i.valor !== undefined && String(i.valor).trim() !== "")
-
-    const cols = 2
-    const colWidth = (contentWidth - 4) / cols
-    const checklistRowHeight = 13
-
-    // Calcular altura del card de booleanos
-    if (boolItems.length > 0) {
-      const itemsPerCol = Math.ceil(boolItems.length / cols)
-      const checklistHeight = 24 + Math.min(itemsPerCol, 8) * checklistRowHeight + 6
-
-      if (y - checklistHeight >= 60) {
-        drawRule(page, margin, width - margin, y)
-        drawSectionLabel(page, helveticaBold, "Checklist de recepcion", margin + 14, y - 15)
-
-        for (let col = 0; col < cols; col++) {
-          const startIdx = col * itemsPerCol
-          const colItems = boolItems.slice(startIdx, startIdx + itemsPerCol).slice(0, 8)
-          let itemY = y - 36
-          const colX = margin + 14 + col * colWidth
-          const colRightEdge = col === 0
-            ? margin + 4 + colWidth - 10
-            : margin + contentWidth - 10
-
-          for (const item of colItems) {
-            const symbol = item.valor === true ? "SI" : "NO"
-            const availableW = colRightEdge - colX
-
-            page.drawText(truncateToWidth(item.label, availableW - 30, helvetica, TYPE.small), { x: colX, y: itemY, size: TYPE.small, font: helvetica, color: MONO.ink })
-            page.drawText(symbol, { x: colRightEdge - helveticaBold.widthOfTextAtSize(symbol, TYPE.small), y: itemY, size: TYPE.small, font: helveticaBold, color: MONO.ink })
-            itemY -= checklistRowHeight
-          }
-        }
-        y -= checklistHeight + 4
-      }
-    }
-
-    // Items con texto libre + notas del checklist, ancho completo debajo
-    const notasText = data.checklistNotas ? safe(data.checklistNotas) : ""
-    if (textItems.length > 0 || notasText) {
-      const textRowHeight = 13
-      const rowCount = textItems.length + (notasText ? 1 : 0)
-      const textBlockHeight = 6 + rowCount * textRowHeight + 4
-      const maxTextW = contentWidth - 28
-
-      if (y - textBlockHeight >= 60) {
-        let tY = y - 12
-        for (const item of textItems) {
-          const labelText = item.label + ":"
-          const labelW = helveticaBold.widthOfTextAtSize(labelText, TYPE.small)
-          page.drawText(labelText, { x: margin + 14, y: tY, size: TYPE.small, font: helveticaBold, color: MONO.ink })
-          page.drawText(truncateToWidth(String(item.valor), maxTextW - labelW - 8, helvetica, TYPE.small), { x: margin + 14 + labelW + 6, y: tY, size: TYPE.small, font: helvetica, color: MONO.ink })
-          tY -= textRowHeight
-        }
-        if (notasText) {
-          const notasLabel = "Notas:"
-          const notasLabelW = helveticaBold.widthOfTextAtSize(notasLabel, TYPE.small)
-          page.drawText(notasLabel, { x: margin + 14, y: tY, size: TYPE.small, font: helveticaBold, color: MONO.ink })
-          page.drawText(truncateToWidth(notasText, maxTextW - notasLabelW - 8, helvetica, TYPE.small), { x: margin + 14 + notasLabelW + 6, y: tY, size: TYPE.small, font: helvetica, color: MONO.ink })
-        }
-        y -= textBlockHeight + 8
-      }
-    } else {
-      y -= 4 // solo agregar un poco de espacio si no hay texto
-    }
-  }
-
-  // === QR + FIRMA (fluye desde y, sin gap artificial) ===
-  const hasQR = data.publicToken && data.baseUrl
-  const hasFirma = data.firmaRecepcion
-
-  if (hasQR || hasFirma) {
-    const firmaHeight = 80
-    const qrSize = 60
-
-    drawRule(page, margin, width - margin, y)
-
-    if (hasQR && hasFirma) {
-      // QR a la izquierda, firma a la derecha
-      try {
-        const trackingUrl = `${data.baseUrl}/seguimiento/${data.publicToken}`
-        const qrDataUrl = await QRCode.toDataURL(trackingUrl, {
-          width: 200,
-          margin: 1,
-          color: { dark: "#111111", light: "#ffffff" }
-        })
-        const qrBase64 = qrDataUrl.split(",")[1]
-        const qrBytes = Uint8Array.from(atob(qrBase64), c => c.charCodeAt(0))
-        const qrImage = await pdfDoc.embedPng(qrBytes)
-        page.drawImage(qrImage, { x: margin, y: y - qrSize, width: qrSize, height: qrSize })
-        page.drawText("Escanea para ver el estado", { x: margin, y: y - qrSize - 10, size: TYPE.fine, font: helvetica, color: MONO.label })
-        page.drawText("de tu reparación", { x: margin, y: y - qrSize - 18, size: TYPE.fine, font: helvetica, color: MONO.label })
-      } catch (qrError) {
-        console.error("Error generating QR:", qrError)
-      }
-
-      try {
-        const firmaX = margin + 90
-        const firmaBoxWidth = contentWidth - 90
-
-        drawSectionLabel(page, helveticaBold, "Firma del cliente al entregar equipo", firmaX + 10, y - 12)
-
-        const firmaBytes = Uint8Array.from(atob(data.firmaRecepcion!), c => c.charCodeAt(0))
-        const firmaImg = await pdfDoc.embedPng(firmaBytes)
-        const firmaDims = firmaImg.scale(1)
-        const firmaScale = Math.min((firmaBoxWidth - 40) / firmaDims.width, 50 / firmaDims.height)
-        page.drawImage(firmaImg, {
-          x: firmaX + (firmaBoxWidth - firmaDims.width * firmaScale) / 2,
-          y: y - firmaHeight + 15,
-          width: firmaDims.width * firmaScale,
-          height: firmaDims.height * firmaScale,
-        })
-
-        drawRule(page, firmaX + 20, firmaX + firmaBoxWidth - 20, y - firmaHeight + 12, { color: MONO.ink })
-        page.drawText("Firma del cliente", { x: firmaX + 20, y: y - firmaHeight + 4, size: TYPE.fine, font: helvetica, color: MONO.label })
-      } catch (firmaError) {
-        console.error("Error embedding reception signature:", firmaError)
-      }
-
-      y -= firmaHeight + 8
-    } else if (hasQR) {
-      try {
-        const trackingUrl = `${data.baseUrl}/seguimiento/${data.publicToken}`
-        const qrDataUrl = await QRCode.toDataURL(trackingUrl, {
-          width: 200,
-          margin: 1,
-          color: { dark: "#111111", light: "#ffffff" }
-        })
-        const qrBase64 = qrDataUrl.split(",")[1]
-        const qrBytes = Uint8Array.from(atob(qrBase64), c => c.charCodeAt(0))
-        const qrImage = await pdfDoc.embedPng(qrBytes)
-        page.drawImage(qrImage, { x: margin, y: y - qrSize, width: qrSize, height: qrSize })
-        page.drawText("Escanea para ver el estado", { x: margin + qrSize + 10, y: y - 20, size: TYPE.small, font: helvetica, color: MONO.label })
-        page.drawText("de tu reparación", { x: margin + qrSize + 10, y: y - 30, size: TYPE.small, font: helvetica, color: MONO.label })
-      } catch (qrError) {
-        console.error("Error generating QR:", qrError)
-      }
-      y -= qrSize + 8
-    } else if (hasFirma) {
-      try {
-        drawSectionLabel(page, helveticaBold, "Firma del cliente al entregar equipo", margin + 10, y - 12)
-
-        const firmaBytes = Uint8Array.from(atob(data.firmaRecepcion!), c => c.charCodeAt(0))
-        const firmaImg = await pdfDoc.embedPng(firmaBytes)
-        const firmaDims = firmaImg.scale(1)
-        const firmaScale = Math.min((contentWidth - 40) / firmaDims.width, 50 / firmaDims.height)
-        page.drawImage(firmaImg, {
-          x: margin + (contentWidth - firmaDims.width * firmaScale) / 2,
-          y: y - firmaHeight + 15,
-          width: firmaDims.width * firmaScale,
-          height: firmaDims.height * firmaScale,
-        })
-
-        drawRule(page, margin + 20, width - margin - 20, y - firmaHeight + 12, { color: MONO.ink })
-        page.drawText("Firma del cliente", { x: margin + 20, y: y - firmaHeight + 4, size: TYPE.fine, font: helvetica, color: MONO.label })
-      } catch (firmaError) {
-        console.error("Error embedding reception signature:", firmaError)
-      }
-      y -= firmaHeight + 8
-    }
-  }
-
-  // === TERMINOS Y CONDICIONES ===
-  const terminos = parseRecepcionTerminos(data.recepcionTerminos)
-
-  const terminosWrapped: string[] = []
-  const maxTermWidth = contentWidth - 24
-  for (const t of terminos) {
-    if (helvetica.widthOfTextAtSize(t, 6.5) <= maxTermWidth) {
-      terminosWrapped.push(t)
-    } else {
-      let line = ""
-      for (const word of t.split(" ")) {
-        if (helvetica.widthOfTextAtSize(line + " " + word, 6.5) <= maxTermWidth) {
-          line += (line ? " " : "") + word
-        } else {
-          if (line) terminosWrapped.push(line)
-          line = word
-        }
-      }
-      if (line) terminosWrapped.push(line)
-    }
-  }
-  const displayedTerminos = terminosWrapped.slice(0, 8)
-  const terminosBoxHeight = 14 + displayedTerminos.length * 10 + 4
-
-  // Terminos fluye directamente desde y — sin caja, mismos tamaños que antes.
-  // No usa drawSectionLabel porque esa fine-print entera (heading + líneas) va
-  // en MONO.faint, no en MONO.label (que drawSectionLabel no permite anular).
-  page.drawText("TÉRMINOS Y CONDICIONES", { x: margin + 10, y: y - 11, size: TYPE.sectionLabel, font: helveticaBold, color: MONO.faint })
-
-  let termY = y - 23
-  displayedTerminos.forEach(t => {
-    page.drawText(t, { x: margin + 10, y: termY, size: TYPE.fine, font: helvetica, color: MONO.faint })
-    termY -= 10
-  })
-
-  y -= terminosBoxHeight + 8
-
-  // === FOOTER (fluye desde y) ===
-  const footerY = y - 10
-  drawRule(page, margin, width - margin, footerY + 10)
-  page.drawText(`Orden #${numeroOrden}`, { x: margin, y: footerY, size: TYPE.small, font: helveticaBold, color: MONO.ink })
-  page.drawText(`Impreso: ${fechaImpresion}`, { x: width - margin - 120, y: footerY, size: TYPE.fine, font: helvetica, color: MONO.faint })
-
-  // barraY se conserva únicamente como referencia para el recorte dinámico de
-  // altura de página (ver más abajo): la barra inferior indigo se eliminó
-  // del diseño monocromático, pero el cálculo de contentBottom no cambia.
-  const barraY = footerY - 12
-
-  // === AJUSTAR ALTURA DE PAGINA AL CONTENIDO ===
-  // Minimo: ancho de pagina para mantener orientacion vertical en impresion
+  // ---- Recorte dinámico al contenido real (misma técnica que antes) ----
+  const contentBottom = sy - 14
   const minPageHeight = width
-  const contentBottom = barraY - 10 // espacio debajo de la barra
   const dynamicHeight = Math.max(height - contentBottom, minPageHeight)
   if (dynamicHeight < height) {
     page.setMediaBox(0, contentBottom, width, dynamicHeight)
     page.setCropBox(0, contentBottom, width, dynamicHeight)
     page.setTrimBox(0, contentBottom, width, dynamicHeight)
-  }
-
-  // === PÁGINA COMPACTA PARA EL LOCAL (solo para impresión, no para compartir) ===
-  if (!data.soloCliente) {
-  const localPage = pdfDoc.addPage([595, 842])
-  const lm = 25
-  const lContentW = 595 - lm * 2
-  const lHalf = (lContentW - 8) / 2
-  let ly = 842 - 20
-
-  // Header: heading "COPIA LOCAL" + fechas en misma línea
-  const lHeadingText = `COPIA LOCAL — Orden #${String(numeroOrden).padStart(4, "0")}`
-  localPage.drawText(lHeadingText, { x: lm, y: ly, size: TYPE.docTitle, font: helveticaBold, color: MONO.ink })
-  const fechasText = `Ingreso: ${fechaIngreso}` + (fechaPrometida ? `  |  Entrega est.: ${fechaPrometida}` : "")
-  const fechasW = helvetica.widthOfTextAtSize(fechasText, TYPE.fine)
-  localPage.drawText(fechasText, { x: 595 - lm - fechasW, y: ly + 2, size: TYPE.fine, font: helvetica, color: MONO.faint })
-  ly -= 12
-  drawRule(localPage, lm, 595 - lm, ly)
-  ly -= 10
-
-  // Detectar si hay patrón para reservar espacio a la derecha
-  const isPattern = codigoAccesoDispositivo &&
-    (codigoAccesoDispositivo.toLowerCase().startsWith("patrón:") ||
-     codigoAccesoDispositivo.toLowerCase().startsWith("patron:"))
-  const patternMatch = isPattern ? codigoAccesoDispositivo.match(/[\d-]+$/) : null
-  const patternNumbers = patternMatch
-    ? patternMatch[0].split("-").map(n => parseInt(n.trim())).filter(n => n >= 1 && n <= 9)
-    : []
-  const hasPattern = patternNumbers.length > 0
-
-  // Zona derecha: patrón dibujado o código de acceso
-  const rightColW = hasPattern ? 80 : (codigoAccesoDispositivo ? 100 : 0)
-  const leftColW = lContentW - rightColW - (rightColW > 0 ? 10 : 0)
-  const rightX = lm + leftColW + 10
-
-  // Si hay patrón, dibujarlo a la derecha
-  if (hasPattern) {
-    const patGridY = ly
-    const patCellSize = 16
-    const patDotR = 3
-    const patCenterX = rightX + rightColW / 2
-
-    drawSectionLabel(localPage, helveticaBold, "Acceso", rightX, patGridY)
-
-    const getPatPos = (num: number) => ({
-      x: patCenterX + ((num - 1) % 3 - 1) * patCellSize,
-      y: patGridY - 14 - Math.floor((num - 1) / 3) * patCellSize,
-    })
-
-    // Líneas del patrón
-    for (let i = 0; i < patternNumbers.length - 1; i++) {
-      const s = getPatPos(patternNumbers[i])
-      const e = getPatPos(patternNumbers[i + 1])
-      localPage.drawLine({ start: s, end: e, thickness: 1.2, color: MONO.ink })
-    }
-    // Puntos
-    for (let num = 1; num <= 9; num++) {
-      const pos = getPatPos(num)
-      const inPat = patternNumbers.includes(num)
-      localPage.drawCircle({ x: pos.x, y: pos.y, size: patDotR, color: inPat ? MONO.ink : MONO.rule, borderWidth: 0 })
-      if (inPat) localPage.drawCircle({ x: pos.x, y: pos.y, size: patDotR - 1.5, color: MONO.white, borderWidth: 0 })
-    }
-  } else if (codigoAccesoDispositivo) {
-    // Código de acceso como texto a la derecha
-    drawSectionLabel(localPage, helveticaBold, "Acceso", rightX, ly)
-    localPage.drawText(codigoAccesoDispositivo.substring(0, 20), { x: rightX, y: ly - 12, size: 9, font: courier, color: MONO.ink })
-  }
-
-  // === Columna izquierda: datos compactos ===
-  // Fila: Cliente + Dispositivo
-  drawSectionLabel(localPage, helveticaBold, "Cliente", lm, ly)
-  localPage.drawText(`${clienteNombre.substring(0, 25)}  ·  Tel: ${clienteTelefono}`, { x: lm + 45, y: ly, size: 8, font: helvetica, color: MONO.ink })
-  ly -= 12
-
-  drawSectionLabel(localPage, helveticaBold, "Equipo", lm, ly)
-  const devInfo = [dispositivo, marca, colorDisp].filter(Boolean).join(" - ") + (imei ? `  ·  ${imei}` : "")
-  localPage.drawText(devInfo.substring(0, 55), { x: lm + 45, y: ly, size: 8, font: helvetica, color: MONO.ink })
-  ly -= 14
-
-  // Problema
-  drawSectionLabel(localPage, helveticaBold, "Problema", lm, ly)
-  localPage.drawText(problemaReportado.substring(0, 60), { x: lm + 45, y: ly, size: 8, font: helvetica, color: MONO.ink })
-  ly -= 13
-
-  // Accesorios + Presupuesto en misma línea si caben
-  const infoLine: string[] = []
-  if (accesorios) infoLine.push(`Acc: ${accesorios.substring(0, 30)}`)
-  if (presupuesto) infoLine.push(`Presup: ${presupuesto}`)
-  if (data.sena && data.sena > 0) infoLine.push(`Seña: ${formatCurrencyPDF(data.sena)}`)
-  if (infoLine.length > 0) {
-    localPage.drawText(infoLine.join("  |  "), { x: lm + 8, y: ly, size: 7, font: helvetica, color: MONO.label })
-    ly -= 12
-  }
-
-  // Observaciones
-  if (observaciones) {
-    localPage.drawText(`OBS: ${observaciones.substring(0, 70)}`, { x: lm + 8, y: ly, size: 6, font: helvetica, color: MONO.label })
-    ly -= 11
-  }
-
-  // Checklist compacto en línea
-  if (data.checklistItems && data.checklistItems.length > 0) {
-    drawRule(localPage, lm, lm + leftColW, ly + 4, { dotted: true })
-    const colW = leftColW / 3
-    let cx = lm
-    let cy = ly - 2
-    for (const item of data.checklistItems) {
-      const val = item.valor === true ? "SI" : item.valor === false ? "NO" : String(item.valor || "").substring(0, 12)
-      localPage.drawText(`${item.label}:`, { x: cx, y: cy, size: 5.5, font: helvetica, color: MONO.label })
-      localPage.drawText(val, { x: cx + helvetica.widthOfTextAtSize(`${item.label}: `, 5.5), y: cy, size: 5.5, font: helveticaBold, color: MONO.ink })
-      cx += colW
-      if (cx + colW > lm + leftColW) { cx = lm; cy -= 10 }
-    }
-    ly = cy - 6
-  }
-
-  // Footer compacto
-  drawRule(localPage, lm, 595 - lm, ly)
-  localPage.drawText(`Orden #${numeroOrden} - COPIA LOCAL`, { x: lm, y: ly - 9, size: 6, font: helveticaBold, color: MONO.ink })
-  localPage.drawText(`Impreso: ${fechaImpresion}`, { x: 595 - lm - 100, y: ly - 9, size: 5.5, font: helvetica, color: MONO.faint })
-
-  const localBottom = ly - 16
-  const localDynH = 842 - localBottom
-  if (localDynH < 842) {
-    localPage.setMediaBox(0, localBottom, 595, localDynH)
-    localPage.setCropBox(0, localBottom, 595, localDynH)
-    localPage.setTrimBox(0, localBottom, 595, localDynH)
   }
 
   // === PAGINA DE FOTOS DE INGRESO (si hay fotos) ===
@@ -1797,86 +1690,8 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     page2.drawText(`Impreso: ${fechaImpresion}`, { x: width - margin - 100, y: 25, size: 7, font: helvetica, color: MONO.faint })
   }
 
-  } // fin if (!data.soloCliente)
-
-  // === MODO SOLO CLIENTE (WhatsApp/compartir): devolver solo el comprobante del cliente ===
-  if (data.soloCliente) {
-    const pdfBytes = await pdfDoc.save()
-    return Buffer.from(pdfBytes)
-  }
-
-  // === ENSAMBLAR: COPIA CLIENTE + LÍNEA DE CORTE + COPIA LOCAL en A4 ===
-  // Orden de páginas en pdfDoc: 0=cliente, 1=local, 2+=fotos/entrega
-  const originalBytes = await pdfDoc.save()
-  const sourceDoc = await PDFLib.load(originalBytes)
-  const finalDoc = await PDFLib.create()
-  finalDoc.registerFontkit(fontkit)
-  const fontsForLabel = await loadFonts()
-  const labelFont = await finalDoc.embedFont(fontsForLabel.bold, { subset: true })
-
-  // Obtener mediaBox real (con altura dinámica) de cada página
-  const clientBox = sourceDoc.getPage(0).getMediaBox()
-  const localBox = sourceDoc.getPage(1).getMediaBox()
-
-  // Embeber con boundingBox para recortar al contenido real
-  const [embClientPage] = await finalDoc.embedPages(
-    [sourceDoc.getPage(0)],
-    [{ left: clientBox.x, bottom: clientBox.y, right: clientBox.x + clientBox.width, top: clientBox.y + clientBox.height }]
-  )
-  const [embLocalPage] = await finalDoc.embedPages(
-    [sourceDoc.getPage(1)],
-    [{ left: localBox.x, bottom: localBox.y, right: localBox.x + localBox.width, top: localBox.y + localBox.height }]
-  )
-
-  const clientH = clientBox.height
-  const clientW = clientBox.width
-  const localH = localBox.height
-  const cutZoneH = 14
-  const pageW = 595
-  const a4H = 842
-
-  // Escalar para que ambas copias + línea de corte quepan en A4
-  const totalNeeded = clientH + localH + cutZoneH
-  const scaleVal = Math.min(1, a4H / totalNeeded, pageW / clientW)
-  const scaledClientH = clientH * scaleVal
-  const scaledLocalH = localH * scaleVal
-  const scaledW = clientW * scaleVal
-  const ox = (pageW - scaledW) / 2
-
-  const combinedPage = finalDoc.addPage([pageW, a4H])
-  const labelColor = MONO.label
-
-  // --- Copia cliente arriba (pegada al tope) ---
-  const clientY = a4H - scaledClientH
-  combinedPage.drawPage(embClientPage, { x: ox, y: clientY, width: scaledW, height: scaledClientH })
-
-  // --- Línea de corte punteada ---
-  const cutY = clientY - cutZoneH / 2
-  for (let dx = 12; dx < pageW - 12; dx += 10) {
-    combinedPage.drawLine({
-      start: { x: dx, y: cutY },
-      end: { x: Math.min(dx + 5, pageW - 12), y: cutY },
-      thickness: 0.5,
-      color: labelColor,
-    })
-  }
-  combinedPage.drawText("✂", { x: 3, y: cutY - 4, size: 8, font: labelFont, color: labelColor })
-
-  // --- Copia local abajo (pegada debajo de la línea de corte) ---
-  const localY = clientY - cutZoneH - scaledLocalH
-  combinedPage.drawPage(embLocalPage, { x: ox, y: localY, width: scaledW, height: scaledLocalH })
-
-  // Agregar páginas extras (fotos, entrega) como páginas separadas
-  const extraIndices = sourceDoc.getPageIndices().filter(i => i > 1) // saltar 0=cliente, 1=local
-  if (extraIndices.length > 0) {
-    const copiedExtras = await finalDoc.copyPages(sourceDoc, extraIndices)
-    for (const ep of copiedExtras) {
-      finalDoc.addPage(ep)
-    }
-  }
-
-  const finalBytes = await finalDoc.save()
-  return Buffer.from(finalBytes)
+  const pdfBytes = await pdfDoc.save()
+  return Buffer.from(pdfBytes)
 }
 
 // ========================================

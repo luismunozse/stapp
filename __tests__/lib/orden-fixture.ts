@@ -8,11 +8,16 @@ export function buildOrdenFixture() {
   return {
     numeroOrden: 1042,
     fechaIngreso: new Date(),
+    fechaPrometida: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
     cliente: {
       nombre: "Juan Pérez",
       telefono: "+54 9 11 2345-6789",
       email: "juan.perez@example.com",
       direccion: "Av. Corrientes 1234, CABA",
+      dni: "28.456.789",
+      cuit: null,
+      razonSocial: null,
+      tipoCliente: "INDIVIDUAL",
     },
     dispositivo: "iPhone 13",
     tipoDispositivo: "CELULAR",
@@ -44,5 +49,20 @@ export function buildOrdenFixture() {
       { label: "Accesorios entregados por el cliente", valor: "Cargador original, funda transparente" },
     ],
     checklistNotas: "El cliente indica que el equipo se reinicia solo al usar la cámara.",
+    // Campos del expediente (Task D2) — ejercitan los bloques nuevos de la
+    // hoja RECEPCIÓN (Task D3): código de orden, sucursal, timeline, técnico,
+    // quién recibió, teléfono de contacto de esta orden y metadata flotante.
+    codigoOrden: "CEL-1042",
+    sucursal: { nombre: "Sucursal Centro", direccion: "Av. Rivadavia 5000, CABA", telefono: "+54 11 4000-1234" },
+    tecnicoNombre: "L. Ferreyra",
+    recibidoPorNombre: "M. Gómez",
+    telefonoContacto: "+54 9 11 9988-7766",
+    metadataCampos: [{ label: "Batería", valor: "78%" }],
+    timeline: [{ estado: "RECIBIDO", fecha: new Date() }],
+    // No se dibujan en la hoja RECEPCIÓN (D4 los usa para ENTREGA) — presentes
+    // acá solo para confirmar que generateOrdenPDF los ignora sin romperse.
+    trabajos: [{ nombre: "Batería iPhone 13", cantidad: 1, importe: 48000 }],
+    garantia: { dias: 90, fechaVencimiento: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), notas: null },
+    cobros: [{ fecha: new Date(), metodo: "EFECTIVO", referencia: null, monto: 10000 }],
   }
 }
