@@ -37,6 +37,80 @@ async function embedCustomFonts(pdfDoc: PDFLib) {
 }
 
 // ========================================
+// FUENTES DEL EXPEDIENTE (orden expediente redesign)
+// ========================================
+// Loader separado de loadFonts/embedCustomFonts (Inter) para no tocar el
+// path de las demás generadoras de PDF. Todas son TTF estáticas (SIL OFL,
+// sin tabla `fvar`): pdf-lib/fontkit no aplica ejes de variación, así que
+// una variable font solo renderiza en su instancia default — inaceptable
+// para Archivo Condensed, que necesita el peso Bold/Black reales.
+let expedienteFontCache: {
+  archivoRegular: Buffer
+  archivoBold: Buffer
+  archivoBlack: Buffer
+  archivoCondensedBold: Buffer
+  archivoCondensedBlack: Buffer
+  plexMonoRegular: Buffer
+} | null = null
+
+async function loadExpedienteFonts() {
+  if (expedienteFontCache) return expedienteFontCache
+  const fontsDir = join(process.cwd(), "lib", "fonts")
+  const [
+    archivoRegular,
+    archivoBold,
+    archivoBlack,
+    archivoCondensedBold,
+    archivoCondensedBlack,
+    plexMonoRegular,
+  ] = await Promise.all([
+    readFile(join(fontsDir, "Archivo-Regular.ttf")),
+    readFile(join(fontsDir, "Archivo-Bold.ttf")),
+    readFile(join(fontsDir, "Archivo-Black.ttf")),
+    readFile(join(fontsDir, "ArchivoCondensed-Bold.ttf")),
+    readFile(join(fontsDir, "ArchivoCondensed-Black.ttf")),
+    readFile(join(fontsDir, "IBMPlexMono-Regular.ttf")),
+  ])
+  expedienteFontCache = {
+    archivoRegular,
+    archivoBold,
+    archivoBlack,
+    archivoCondensedBold,
+    archivoCondensedBlack,
+    plexMonoRegular,
+  }
+  return expedienteFontCache
+}
+
+export async function embedExpedienteFonts(pdfDoc: PDFLib) {
+  pdfDoc.registerFontkit(fontkit)
+  const fonts = await loadExpedienteFonts()
+  const [
+    archivoRegular,
+    archivoBold,
+    archivoBlack,
+    archivoCondensedBold,
+    archivoCondensedBlack,
+    plexMonoRegular,
+  ] = await Promise.all([
+    pdfDoc.embedFont(fonts.archivoRegular, { subset: true }),
+    pdfDoc.embedFont(fonts.archivoBold, { subset: true }),
+    pdfDoc.embedFont(fonts.archivoBlack, { subset: true }),
+    pdfDoc.embedFont(fonts.archivoCondensedBold, { subset: true }),
+    pdfDoc.embedFont(fonts.archivoCondensedBlack, { subset: true }),
+    pdfDoc.embedFont(fonts.plexMonoRegular, { subset: true }),
+  ])
+  return {
+    archivoRegular,
+    archivoBold,
+    archivoBlack,
+    archivoCondensedBold,
+    archivoCondensedBlack,
+    plexMonoRegular,
+  }
+}
+
+// ========================================
 // COTIZACION PDF (pdf-lib)
 // ========================================
 
