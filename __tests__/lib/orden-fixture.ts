@@ -40,13 +40,20 @@ export function buildOrdenFixture() {
     estado: "RECIBIDO",
     publicToken: "sample-public-token-1234",
     baseUrl: "https://demo.stapp.com.ar",
+    // categoria (Task D5): agrupa el panel "Chequeo de recepción" de la hoja
+    // ENTREGA (lib/pdf.ts ~L1465) en FUNCIONAL/CONDICION_FISICA/ACCESORIOS en
+    // vez de caer todo en el bucket GENERAL — D4 rasterizó esta hoja sin
+    // categoria puesta (ver task-D4-report.md, "Fotos-count decision" vicino),
+    // así que el agrupado por categoría nunca se vio dibujado hasta ahora.
+    // La hoja RECEPCIÓN (talón "Chequeo rápido") ignora `categoria` por
+    // completo — agregarla acá no cambia nada de lo que esa hoja ya dibuja.
     checklistItems: [
-      { label: "Pantalla táctil funciona", valor: true },
-      { label: "Botón de encendido funciona", valor: true },
-      { label: "Cámara trasera funciona", valor: false },
-      { label: "Puerto de carga funciona", valor: false },
-      { label: "Estado de la carcasa", valor: "Rayones leves en el borde superior" },
-      { label: "Accesorios entregados por el cliente", valor: "Cargador original, funda transparente" },
+      { label: "Pantalla táctil funciona", valor: true, categoria: "FUNCIONAL" },
+      { label: "Botón de encendido funciona", valor: true, categoria: "FUNCIONAL" },
+      { label: "Cámara trasera funciona", valor: false, categoria: "FUNCIONAL" },
+      { label: "Puerto de carga funciona", valor: false, categoria: "FUNCIONAL" },
+      { label: "Estado de la carcasa", valor: "Rayones leves en el borde superior", categoria: "CONDICION_FISICA" },
+      { label: "Accesorios entregados por el cliente", valor: "Cargador original, funda transparente", categoria: "ACCESORIOS" },
     ],
     checklistNotas: "El cliente indica que el equipo se reinicia solo al usar la cámara.",
     // Campos del expediente (Task D2) — ejercitan los bloques nuevos de la

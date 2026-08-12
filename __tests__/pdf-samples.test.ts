@@ -125,20 +125,82 @@ describe.runIf(process.env.PDF_SAMPLES === "1")("pdf visual samples", () => {
     const pngBase64 =
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
 
+    const base = buildOrdenFixture()
+    const now = Date.now()
+    const day = 24 * 60 * 60 * 1000
+
     const orden = await generateOrdenPDF({
-      ...buildOrdenFixture(),
+      ...base,
       estado: "ENTREGADO",
+      // Empresa client (Task D5): exercises the isEmpresa branch of the
+      // ENTREGA sheet's Cliente cell (lib/pdf.ts ~L1264) — razón social +
+      // CUIT in bold, contact person + DNI on the line below. Never
+      // exercised by any checked-in sample before (base fixture's cliente
+      // is INDIVIDUAL, matching the RECEPCIÓN mockup — see orden-fixture.ts).
+      cliente: {
+        ...base.cliente,
+        tipoCliente: "EMPRESA",
+        razonSocial: "Distribuidora Norte S.R.L.",
+        cuit: "30-70918234-5",
+      },
+      diagnostico: "Sulfatación en el conector de batería y en el FPC de pantalla. Placa recuperable con limpieza ultrasónica; la batería tiene una celda dañada y se reemplaza.",
+      // costoFinal/descuentoCobro/totalCobrado together (Task D5): the D4
+      // fix-round SALDO-nets-descuentoCobro bug (49d0f1c6) was only ever
+      // raster-verified via a one-off script that got deleted — the
+      // checked-in sample never exercised the discount path (see
+      // task-D4-report.md, "Raster verification" under the fix report).
+      // costoFinal 46000 = subtotal trabajo 48000 (fixture default) -
+      // descuentoCobro 2000, distinct from presupuesto 45000 so both the
+      // "Presupuesto estimado" and "TOTAL FINAL" rows show different figures.
+      costoFinal: 46000,
+      totalCobrado: 26000,
+      estadoCobro: "PARCIAL",
+      descuentoCobro: 2000,
+      fechaCompletado: new Date(now - 1 * day),
+      // Two rows in the "Pagos registrados" panel, summing to totalCobrado —
+      // narrative consistency with the seña (10000) already on the fixture.
+      cobros: [
+        { fecha: new Date(now - 5 * day), metodo: "EFECTIVO", referencia: null, monto: 10000 },
+        { fecha: new Date(now - 1 * day), metodo: "TRANSFERENCIA", referencia: "TRF-99213", monto: 16000 },
+      ],
+      // Full 7-step timeline (Task D5): base fixture only carries a single
+      // RECIBIDO entry (correct for the RECEPCIÓN sample, which is still
+      // mid-flow) — the ENTREGA sheet's timeline strip has never been
+      // raster-checked with every step checked off + dated before.
+      timeline: [
+        { estado: "RECIBIDO", fecha: new Date(now - 5 * day) },
+        { estado: "EN_DIAGNOSTICO", fecha: new Date(now - 4 * day) },
+        { estado: "PRESUPUESTADO", fecha: new Date(now - 3 * day) },
+        { estado: "APROBADO", fecha: new Date(now - 3 * day + 30 * 60 * 1000) },
+        { estado: "EN_REPARACION", fecha: new Date(now - 2 * day) },
+        { estado: "REPARADO", fecha: new Date(now - 1 * day) },
+        { estado: "ENTREGADO", fecha: new Date(now) },
+      ],
       fotosIngreso: [
         { url: `data:image/png;base64,${pngBase64}`, descripcion: "Pantalla con manchas de humedad" },
         { url: `data:image/png;base64,${pngBase64}`, descripcion: "Puerto de carga oxidado" },
       ],
-      fechaEntrega: new Date(),
+      fechaEntrega: new Date(now),
       firmaClienteEntrega: pngBase64,
       firmaEncargadoEntrega: pngBase64,
       entregadoPor: "María Gómez",
       notasEntrega: "Se entrega el equipo funcionando correctamente. Cliente conforme.",
     })
     writeFileSync(`${OUT_DIR}/${TAG}-orden-entregada.pdf`, orden)
+    expect(orden.length).toBeGreaterThan(1000)
+  }, 60_000)
+
+  it("writes a soloCliente RECIBIDO orden sample (WhatsApp share variant)", async () => {
+    mkdirSync(OUT_DIR, { recursive: true })
+
+    // soloCliente: true on a RECIBIDO order — the public/WhatsApp-share
+    // path (/api/public/ordenes/[token]/pdf) always sets this regardless of
+    // estado. RECIBIDO exercises the RECEPCIÓN sheet's soloCliente branch
+    // (lib/pdf.ts ~L1916): client part only, no ✂ cut line, no talón, no
+    // access code — never regenerated as a checked-in raster sample before
+    // (orden-pdf.test.ts covers it as a text-extraction assertion only).
+    const orden = await generateOrdenPDF({ ...buildOrdenFixture(), soloCliente: true })
+    writeFileSync(`${OUT_DIR}/${TAG}-orden-solocliente.pdf`, orden)
     expect(orden.length).toBeGreaterThan(1000)
   }, 60_000)
 

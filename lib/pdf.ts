@@ -1643,13 +1643,23 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     }
 
     // ---- Recorte dinámico al contenido real (misma técnica que la hoja RECEPCIÓN) ----
+    // El piso `minPageHeightEn` (Task D5 fix, encontrado rasterizando
+    // after-orden-solocliente.pdf) NO se puede sumar hacia arriba desde
+    // `contentBottomEn`: si el contenido real es más corto que el piso, eso
+    // empuja el borde superior de la caja por ENCIMA de `height` — el
+    // límite real donde termina lo dibujado (todo se dibuja hacia abajo
+    // desde `height`) — y aparece una franja en blanco arriba del header en
+    // vez de recortar solo lo que sobra abajo. El piso se aplica bajando el
+    // borde inferior de la caja en cambio, así el superior queda siempre
+    // anclado en `height`.
     const contentBottomEn = ey - 10
     const minPageHeightEn = width
     const dynamicHeightEn = Math.max(height - contentBottomEn, minPageHeightEn)
+    const boxBottomEn = height - dynamicHeightEn
     if (dynamicHeightEn < height) {
-      page.setMediaBox(0, contentBottomEn, width, dynamicHeightEn)
-      page.setCropBox(0, contentBottomEn, width, dynamicHeightEn)
-      page.setTrimBox(0, contentBottomEn, width, dynamicHeightEn)
+      page.setMediaBox(0, boxBottomEn, width, dynamicHeightEn)
+      page.setCropBox(0, boxBottomEn, width, dynamicHeightEn)
+      page.setTrimBox(0, boxBottomEn, width, dynamicHeightEn)
     }
   } else {
   // ============================================================
@@ -1914,13 +1924,21 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   // el comportamiento previo.
   // ============================================================
   if (data.soloCliente) {
+    // El piso `minPageHeight` NO se puede sumar hacia arriba desde
+    // `contentBottom` (Task D5 fix, encontrado rasterizando
+    // after-orden-solocliente.pdf — ver el mismo fix en la hoja ENTREGA más
+    // arriba para el detalle completo): con contenido corto (RECIBIDO, sin
+    // talón) empujaba el borde superior de la caja por encima de `height`,
+    // metiendo una franja en blanco arriba del header. Bajar el borde
+    // inferior en cambio deja el superior siempre anclado en `height`.
     const contentBottom = ry - 10
     const minPageHeight = width
     const dynamicHeight = Math.max(height - contentBottom, minPageHeight)
+    const boxBottom = height - dynamicHeight
     if (dynamicHeight < height) {
-      page.setMediaBox(0, contentBottom, width, dynamicHeight)
-      page.setCropBox(0, contentBottom, width, dynamicHeight)
-      page.setTrimBox(0, contentBottom, width, dynamicHeight)
+      page.setMediaBox(0, boxBottom, width, dynamicHeight)
+      page.setCropBox(0, boxBottom, width, dynamicHeight)
+      page.setTrimBox(0, boxBottom, width, dynamicHeight)
     }
     const pdfBytes = await pdfDoc.save()
     return Buffer.from(pdfBytes)
@@ -2034,13 +2052,18 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   sy -= row3H
 
   // ---- Recorte dinámico al contenido real (misma técnica que antes) ----
+  // Mismo fix de piso que las otras dos ocurrencias (Task D5, ver detalle en
+  // la hoja ENTREGA más arriba): bajar el borde inferior en vez de sumar el
+  // piso hacia arriba de `contentBottom`, para no meter una franja en blanco
+  // por encima de `height`.
   const contentBottom = sy - 14
   const minPageHeight = width
   const dynamicHeight = Math.max(height - contentBottom, minPageHeight)
+  const boxBottom = height - dynamicHeight
   if (dynamicHeight < height) {
-    page.setMediaBox(0, contentBottom, width, dynamicHeight)
-    page.setCropBox(0, contentBottom, width, dynamicHeight)
-    page.setTrimBox(0, contentBottom, width, dynamicHeight)
+    page.setMediaBox(0, boxBottom, width, dynamicHeight)
+    page.setCropBox(0, boxBottom, width, dynamicHeight)
+    page.setTrimBox(0, boxBottom, width, dynamicHeight)
   }
   }
 
