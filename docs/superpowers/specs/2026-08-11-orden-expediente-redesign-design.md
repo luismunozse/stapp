@@ -1,7 +1,7 @@
 # Orden Comprobante — "Expediente" Redesign (Dirección D) — Design
 
 Date: 2026-08-11
-Status: Approved by user (mockups: `.tmp-preview/mockups/orden-maximal.html` — the design target; direction D chosen over A/B/C in `.tmp-preview/mockups/orden-mockups.html`)
+Status: Approved by user (mockups: `docs/superpowers/mockups/2026-08-11-orden-maximal.html` — the design target; direction D chosen over A/B/C in `.tmp-preview/mockups/orden-mockups.html`)
 
 ## Problem
 

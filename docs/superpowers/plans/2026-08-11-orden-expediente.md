@@ -4,7 +4,7 @@
 
 **Goal:** Rebuild `generateOrdenPDF` as the approved "Expediente" design (dirección D): RECEPCIÓN sheet with client part + cut line + business stub, and ENTREGA sheet as a full case file — with logo, Archivo/Plex Mono type, state timeline, work breakdown, warranty box and attribution.
 
-**Architecture:** Data layer first (route joins + `OrdenPDFData` extension), then the two sheets. The mockup file `.tmp-preview/mockups/orden-maximal.html` is the DESIGN SOURCE OF TRUTH — implementers read it before drawing anything. pdf-lib stays; new fonts embed as static TTFs like Inter does today. Branch `feat/orden-expediente` chains on `feat/remito-contable-datos` (PR #290 chain) because both touch `lib/pdf.ts`.
+**Architecture:** Data layer first (route joins + `OrdenPDFData` extension), then the two sheets. The mockup file `docs/superpowers/mockups/2026-08-11-orden-maximal.html` is the DESIGN SOURCE OF TRUTH — implementers read it before drawing anything. pdf-lib stays; new fonts embed as static TTFs like Inter does today. Branch `feat/orden-expediente` chains on `feat/remito-contable-datos` (PR #290 chain) because both touch `lib/pdf.ts`.
 
 **Tech Stack:** pdf-lib, `lib/pdf-style.ts` (`MONO`, `TYPE`, helpers), NEW fonts (Archivo + Archivo Condensed + IBM Plex Mono, SIL OFL), vitest + `extractPdfText` (multi-page), env-gated sample generator.
 
@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Design target: `.tmp-preview/mockups/orden-maximal.html` — Hoja 1 = ENTREGA, Hoja 2 = RECEPCIÓN with ✂ cut line. Match structure and hierarchy; exact mm values may adapt to pdf-lib metrics, proportions may not.
+- Design target: `docs/superpowers/mockups/2026-08-11-orden-maximal.html` — Hoja 1 = ENTREGA, Hoja 2 = RECEPCIÓN with ✂ cut line. Match structure and hierarchy; exact mm values may adapt to pdf-lib metrics, proportions may not.
 - THIS DOCUMENT ONLY may use solid `MONO.ink` fills with white text (money band, estado tag, timeline active step) — supersedes the totalBg-only rule locally. Other generators keep their rules.
 - Fonts: Archivo (Regular/Bold/Black + Condensed Bold/Black for big numbers), IBM Plex Mono (Regular) as static TTFs in `lib/fonts/`, embedded per the existing Inter pattern (`loadFonts`/`embedCustomFonts` — extend, don't break other generators that keep Inter).
 - Access code (PIN/pattern) renders ONLY on the business stub — REMOVED from the client part (security improvement; the plan's tests assert its absence from the soloCliente variant).

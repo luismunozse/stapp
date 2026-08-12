@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Orden de servicio — Expediente completo (maximal)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { background: #3a3a3a; }
+  body { font-family: 'Archivo', sans-serif; color: #111; }
+  .intro { max-width: 210mm; margin: 24px auto 10px; color: #ddd; font-size: 13px; line-height: 1.55; }
+  .intro h1 { font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 4px; }
+  .intro em { color: #9fd; font-style: normal; }
+  .sheet { width: 210mm; min-height: 296mm; margin: 0 auto 30px; background: #fff; box-shadow: 0 8px 40px rgba(0,0,0,.45); padding: 9mm 10mm 7mm; display: flex; flex-direction: column; }
+  @media print { html{background:#fff} .intro{display:none} .sheet{box-shadow:none;margin:0;page-break-after:always} }
+
+  .lbl { font-size: 6.8px; font-weight: 700; letter-spacing: .16em; color: #808080; text-transform: uppercase; margin-bottom: 1mm; }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+
+  /* header */
+  header { display: flex; gap: 5mm; align-items: flex-start; border-bottom: 2px solid #111; padding-bottom: 3.5mm; }
+  .logo { width: 17mm; height: 17mm; border: 1.5px solid #111; border-radius: 2mm; display: flex; align-items: center; justify-content: center; flex: none; }
+  .biz { flex: 1; }
+  .biz h2 { font-size: 17.5px; font-weight: 800; font-stretch: 78%; text-transform: uppercase; letter-spacing: .01em; }
+  .biz p { font-size: 8px; color: #555; line-height: 1.55; margin-top: 1mm; }
+  .biz p b { color: #111; font-weight: 600; }
+  .idbox { text-align: right; flex: none; }
+  .idbox .num { font-size: 30px; font-weight: 900; font-stretch: 68%; line-height: .95; }
+  .idbox .code { font-family: 'IBM Plex Mono', monospace; font-size: 9px; color: #555; margin-top: .5mm; }
+  .idbox .tag { display: inline-block; background: #111; color: #fff; padding: 1.2mm 3mm; font-size: 8px; font-weight: 800; letter-spacing: .14em; margin-top: 1.5mm; }
+  .idbox .re { font-size: 7.5px; color: #555; margin-top: 1mm; }
+
+  /* timeline con fechas */
+  .timeline { display: flex; border: 1px solid #111; margin: 3.5mm 0; }
+  .tstep { flex: 1; text-align: center; padding: 1.8mm 0 1.6mm; border-right: 1px solid #ddd; }
+  .tstep:last-child { border-right: 0; }
+  .tstep .n { font-size: 7px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #999; }
+  .tstep .d { font-size: 7px; color: #bbb; margin-top: .5mm; }
+  .tstep.done .n { color: #111; }
+  .tstep.done .n::before { content: '✓ '; }
+  .tstep.done .d { color: #555; }
+  .tstep.on { background: #111; }
+  .tstep.on .n, .tstep.on .d { color: #fff; }
+
+  /* grid celdas */
+  .grid { display: grid; grid-template-columns: 1fr 1fr; border-left: 1px solid #c4c4c4; border-top: 1px solid #c4c4c4; }
+  .cell { border-right: 1px solid #c4c4c4; border-bottom: 1px solid #c4c4c4; padding: 2mm 2.6mm; }
+  .cell.w { grid-column: 1 / -1; }
+  .val { font-size: 9.5px; font-weight: 500; line-height: 1.5; }
+  .val b { font-weight: 800; }
+  .val .mono { font-size: 9px; }
+  .kv { display: flex; flex-wrap: wrap; gap: 0 4mm; }
+  .kv span { font-size: 9px; }
+  .kv span i { font-style: normal; color: #777; }
+
+  /* trabajo realizado tabla */
+  table.work { width: 100%; border-collapse: collapse; margin-top: .5mm; }
+  table.work th { font-size: 6.8px; font-weight: 700; letter-spacing: .14em; color: #808080; text-transform: uppercase; text-align: left; padding: 1mm 0; border-bottom: 1px solid #111; }
+  table.work th.r, table.work td.r { text-align: right; }
+  table.work td { font-size: 9px; padding: 1.3mm 0; border-bottom: 1px solid #e4e4e4; }
+  table.work td.mono { font-size: 8.5px; }
+  .totals { margin-left: auto; width: 62mm; margin-top: 2mm; font-size: 9px; }
+  .totals .row { display: flex; justify-content: space-between; padding: .8mm 0; }
+  .totals .row.neg { color: #555; }
+  .totals .row.big { border-top: 1.5px solid #111; margin-top: 1mm; padding-top: 1.5mm; font-weight: 800; font-size: 11px; }
+  .totals .row.saldo { background: #111; color: #fff; padding: 1.8mm 2.5mm; font-weight: 800; font-size: 11px; margin-top: 1.5mm; }
+
+  /* dos columnas medias */
+  .mid { display: grid; grid-template-columns: 58fr 42fr; gap: 3mm; margin-top: 3mm; }
+  .panel { border: 1px solid #c4c4c4; padding: 2mm 2.6mm; }
+  .panel.dark { background: #f2f2f2; border-color: #e0e0e0; }
+  .chkgrp { margin-bottom: 1.5mm; }
+  .chkgrp .g { font-size: 6.5px; font-weight: 700; letter-spacing: .12em; color: #999; text-transform: uppercase; }
+  .chkgrp .items { font-size: 8.5px; line-height: 1.7; }
+  .chkgrp .items b { font-weight: 800; }
+  .chkgrp .items s { color: #aaa; }
+
+  .gar { border: 1.5px solid #111; padding: 2mm 2.6mm; margin-top: 3mm; display: flex; align-items: center; gap: 4mm; }
+  .gar .big { font-size: 15px; font-weight: 900; font-stretch: 70%; flex: none; }
+  .gar p { font-size: 8.5px; line-height: 1.5; color: #333; }
+  .gar p b { font-weight: 700; }
+
+  /* pagos */
+  table.pay { width: 100%; border-collapse: collapse; }
+  table.pay td { font-size: 8.5px; padding: 1mm 0; border-bottom: 1px solid #e4e4e4; }
+  table.pay td.r { text-align: right; }
+  table.pay tr:last-child td { border-bottom: 0; }
+
+  /* pie: atribución + firmas + qr */
+  .foot { margin-top: auto; padding-top: 3.5mm; }
+  .attr { display: flex; gap: 6mm; font-size: 8px; color: #555; border-top: 1px solid #111; padding-top: 2mm; }
+  .attr b { color: #111; font-weight: 700; }
+  .sigrow { display: flex; gap: 6mm; align-items: flex-end; margin-top: 6mm; }
+  .qr { display: grid; grid-template-columns: repeat(7,1fr); gap: 1.5px; width: 16mm; flex: none; }
+  .qr i { padding-top: 100%; background: #111; } .qr i.o { background: transparent; }
+  .track { font-size: 7.5px; color: #666; line-height: 1.6; width: 38mm; }
+  .sig { flex: 1; border-top: 1px solid #111; padding-top: 1.2mm; font-size: 7px; letter-spacing: .12em; text-transform: uppercase; color: #555; }
+  .terms { font-size: 6.4px; color: #8a8a8a; line-height: 1.5; margin-top: 3mm; column-count: 2; column-gap: 6mm; }
+
+  /* ── hoja RECEPCIÓN con corte ── */
+  .sheet.rx { padding: 0; }
+  .rx .client { padding: 8mm 10mm 5mm; }
+  .rx .stub { padding: 4mm 10mm 6mm; }
+  .cutline { display: flex; align-items: center; gap: 3mm; padding: 0 6mm; color: #999; }
+  .cutline .dash { flex: 1; border-top: 1.5px dashed #aaa; }
+  .cutline .sc { font-size: 12px; }
+  .cutline .who { font-size: 6.5px; letter-spacing: .18em; text-transform: uppercase; }
+
+  .rx header { padding-bottom: 3mm; }
+  .rx .logo { width: 15mm; height: 15mm; }
+  .rx .idbox .num { font-size: 27px; }
+  .rx .money3 { display: flex; border: 1.5px solid #111; margin-top: 3mm; }
+  .rx .money3 .mc { flex: 1; padding: 2mm 2.6mm; border-right: 1px solid #c4c4c4; }
+  .rx .money3 .mc:last-child { border-right: 0; background: #111; color: #fff; }
+  .rx .money3 .mc:last-child .lbl { color: #999; }
+  .rx .money3 .amt { font-size: 14.5px; font-weight: 800; font-stretch: 75%; }
+  .rx .prometa { font-size: 9px; margin-top: 2.5mm; }
+  .rx .prometa b { font-weight: 800; }
+
+  .stub .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2.5mm; }
+  .stub .head .t { font-size: 9px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
+  .stub .head .n { font-size: 15px; font-weight: 900; font-stretch: 70%; }
+  .stub .head .n small { font-family: 'IBM Plex Mono', monospace; font-size: 8px; font-weight: 400; color: #555; margin-left: 2mm; }
+  .stub .grid .cell { padding: 1.6mm 2.2mm; }
+  .stub .val { font-size: 8.5px; }
+  .stub .plk { display: flex; align-items: center; gap: 2.5mm; }
+</style>
+</head>
+<body>
+
+<div class="intro">
+  <h1>D — Expediente completo (maximal, con logo)</h1>
+  Dos momentos del mismo sistema visual: <em>Hoja 1 = ENTREGA</em> (expediente completo, se imprime al cerrar la orden) y <em>Hoja 2 = RECEPCIÓN</em> (con línea de corte: parte superior para el cliente, talón inferior para el negocio). Cada dato existe hoy en el sistema — ninguno es inventado.
+</div>
+
+<div class="sheet">
+  <header>
+    <div class="logo">
+      <svg width="40" height="40" viewBox="0 0 48 48" fill="none">
+        <path d="M38 12 L30 20 L28 18 L36 10 A9 9 0 0 0 24.5 21.5 L12 34 A4 4 0 1 0 18 40 L30.5 27.5 A9 9 0 0 0 42 16 Z" fill="#111"/>
+        <circle cx="15" cy="37" r="2" fill="#fff"/>
+      </svg>
+    </div>
+    <div class="biz">
+      <h2>TecnoFix Servicio Técnico</h2>
+      <p><b>Sucursal Centro</b> · Av. Corrientes 2450, CABA (C1046) · Argentina<br>
+      11-4555-8890 · hola@tecnofix.com.ar · tecnofix.com.ar</p>
+    </div>
+    <div class="idbox">
+      <div class="num">#0042</div>
+      <div class="code">CEL-0042</div>
+      <span class="tag">ENTREGADO</span>
+      <div class="re">Reingreso: NO · Garantía de origen: —</div>
+    </div>
+  </header>
+
+  <div class="timeline">
+    <div class="tstep done"><div class="n">Recibido</div><div class="d">11/08 14:32</div></div>
+    <div class="tstep done"><div class="n">Diagnóstico</div><div class="d">11/08 16:05</div></div>
+    <div class="tstep done"><div class="n">Presupuestado</div><div class="d">12/08 09:40</div></div>
+    <div class="tstep done"><div class="n">Aprobado</div><div class="d">12/08 10:12 · portal ✓</div></div>
+    <div class="tstep done"><div class="n">En reparación</div><div class="d">12/08 11:00</div></div>
+    <div class="tstep done"><div class="n">Reparado</div><div class="d">14/08 17:20</div></div>
+    <div class="tstep on"><div class="n">Entregado</div><div class="d">15/08 11:47</div></div>
+  </div>
+
+  <div class="grid">
+    <div class="cell">
+      <div class="lbl">Cliente</div>
+      <div class="val"><b>Distribuidora Norte S.R.L.</b> · CUIT 30-70918234-5<br>
+      Contacto: Juan Pérez (Compras) · DNI 28.456.789<br>
+      11-6222-4789 · <span style="color:#555">tel. de esta orden: 11-5099-2211</span><br>
+      compras@distnorte.com.ar</div>
+    </div>
+    <div class="cell">
+      <div class="lbl">Equipo · Celular</div>
+      <div class="val"><b>Apple iPhone 13 · 128 GB · Negro</b><br>
+      <span class="mono">IMEI 353912480021547</span><br>
+      <span class="kv"><span><i>Batería:</i> 78%</span><span><i>iCloud:</i> cerrada</span><span><i>Estado cosmético:</i> B</span></span></div>
+    </div>
+    <div class="cell">
+      <div class="lbl">Falla declarada</div>
+      <div class="val">No enciende después de mojarse con agua salada. Estuvo apagado 48 hs en arroz. Humedad visible en módulo de cámara.</div>
+    </div>
+    <div class="cell">
+      <div class="lbl">Diagnóstico técnico</div>
+      <div class="val">Sulfatación en conector de batería y FPC de pantalla. Placa recuperable con limpieza ultrasónica; batería con celda dañada, se reemplaza.</div>
+    </div>
+    <div class="cell w" style="display:flex; gap: 8mm;">
+      <div style="flex:1"><div class="lbl">Accesorios recibidos</div><div class="val">Cargador original · Funda silicona · Chip Claro</div></div>
+      <div><div class="lbl">Código de acceso</div><div class="val mono" style="font-size:9px;">PIN 4471</div></div>
+      <div><div class="lbl">Fotos</div><div class="val">4 ingreso · 2 reparación · 1 entrega</div></div>
+    </div>
+  </div>
+
+  <div class="mid">
+    <div>
+      <div class="lbl" style="margin-bottom:1.5mm;">Trabajo realizado — repuestos y mano de obra</div>
+      <table class="work">
+        <tr><th>Detalle</th><th class="r">Cant.</th><th class="r">Importe</th></tr>
+        <tr><td>Batería iPhone 13 original (cal. A)</td><td class="r">1</td><td class="r mono">$ 48.000</td></tr>
+        <tr><td>Limpieza ultrasónica de placa + tratamiento anticorrosión</td><td class="r">1</td><td class="r mono">$ 22.000</td></tr>
+        <tr><td>Mano de obra técnica (2,5 hs)</td><td class="r">—</td><td class="r mono">$ 18.000</td></tr>
+      </table>
+      <div class="totals">
+        <div class="row"><span>Presupuesto estimado</span><span class="mono">$ 85.000</span></div>
+        <div class="row"><span>Subtotal trabajo</span><span class="mono">$ 88.000</span></div>
+        <div class="row neg"><span>Descuento</span><span class="mono">− $ 3.000</span></div>
+        <div class="row big"><span>TOTAL FINAL</span><span class="mono">$ 85.000</span></div>
+        <div class="row saldo"><span>SALDO</span><span class="mono">$ 0 — PAGADO</span></div>
+      </div>
+    </div>
+    <div>
+      <div class="panel dark" style="margin-bottom:3mm;">
+        <div class="lbl">Pagos registrados</div>
+        <table class="pay">
+          <tr><td>11/08 · Seña · Efectivo</td><td class="r mono">$ 20.000</td></tr>
+          <tr><td>15/08 · Transferencia <span class="mono" style="color:#777">#TRF-99213</span></td><td class="r mono">$ 65.000</td></tr>
+        </table>
+      </div>
+      <div class="panel">
+        <div class="lbl">Chequeo de recepción</div>
+        <div class="chkgrp"><div class="g">Funcional</div><div class="items"><s>Enciende</s> · Pantalla <b>OK</b> · <s>Táctil</s> · Cámaras <b>OK</b> · Parlante <b>OK</b> · <s>Carga</s></div></div>
+        <div class="chkgrp"><div class="g">Condición física</div><div class="items">Tapa <b>OK</b> · Vidrio <b>OK</b> · Marco <b>golpe leve inf. der.</b></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="gar">
+    <div class="big">GARANTÍA<br>90 DÍAS</div>
+    <p><b>Vigente hasta el 13/11/2026</b> — cubre la reparación realizada (batería y tratamiento de placa) ante el mismo síntoma. No cubre nuevos daños por golpe o líquidos ni fallas derivadas de la sulfatación preexistente advertidas en el diagnóstico. Presentá este comprobante o el código CEL-0042 para reclamos.</p>
+  </div>
+
+  <div class="foot">
+    <div class="attr">
+      <span>Recibió: <b>M. Gómez</b></span>
+      <span>Técnico: <b>L. Ferreyra</b></span>
+      <span>Entregó: <b>M. Gómez</b></span>
+      <span style="margin-left:auto;">Ingreso <b>11/08 14:32</b> · Completado <b>14/08 17:20</b> · Entrega <b>15/08 11:47</b></span>
+    </div>
+    <div class="sigrow">
+      <div class="qr">
+        <i></i><i></i><i></i><i class="o"></i><i></i><i class="o"></i><i></i>
+        <i></i><i class="o"></i><i></i><i></i><i class="o"></i><i></i><i class="o"></i>
+        <i></i><i></i><i class="o"></i><i></i><i></i><i></i><i class="o"></i>
+        <i class="o"></i><i></i><i></i><i class="o"></i><i></i><i class="o"></i><i></i>
+        <i></i><i class="o"></i><i></i><i></i><i class="o"></i><i></i><i></i>
+        <i></i><i></i><i class="o"></i><i></i><i></i><i class="o"></i><i class="o"></i>
+        <i></i><i class="o"></i><i></i><i class="o"></i><i></i><i></i><i></i>
+      </div>
+      <p class="track">Historial completo, fotos y garantía online:<br><b>tecnofix.com.ar/seg/8f3k2</b></p>
+      <div class="sig">Firma del cliente — recepción (en archivo)</div>
+      <div class="sig">Firma del cliente — entrega</div>
+      <div class="sig">Entregó — TecnoFix</div>
+    </div>
+    <p class="terms">El presupuesto es estimativo y puede variar según diagnóstico; toda diferencia se informa antes de reparar. Equipos con daño por líquidos: el diagnóstico puede demorar 72 hs y la garantía no cubre fallas derivadas de sulfatación preexistente. Estadía a partir de 30 días de avisada la reparación. La seña no es reembolsable con el trabajo iniciado. Este comprobante o el código de orden son requisito para retiro y reclamos de garantía. Datos de acceso al equipo se usan solo para diagnóstico y prueba, y se eliminan al cierre de la orden.</p>
+  </div>
+</div>
+
+<!-- ═══════════════ HOJA 2 — RECEPCIÓN con línea de corte ═══════════════ -->
+<div class="sheet rx">
+
+  <!-- ── PARTE CLIENTE ── -->
+  <div class="client">
+    <header style="display:flex; gap:5mm; align-items:flex-start; border-bottom:2px solid #111;">
+      <div class="logo">
+        <svg width="34" height="34" viewBox="0 0 48 48" fill="none">
+          <path d="M38 12 L30 20 L28 18 L36 10 A9 9 0 0 0 24.5 21.5 L12 34 A4 4 0 1 0 18 40 L30.5 27.5 A9 9 0 0 0 42 16 Z" fill="#111"/>
+          <circle cx="15" cy="37" r="2" fill="#fff"/>
+        </svg>
+      </div>
+      <div class="biz">
+        <h2>TecnoFix Servicio Técnico</h2>
+        <p><b>Sucursal Centro</b> · Av. Corrientes 2450, CABA · 11-4555-8890 · hola@tecnofix.com.ar</p>
+      </div>
+      <div class="idbox">
+        <div class="num">#0042</div>
+        <div class="code">CEL-0042</div>
+        <span class="tag">RECIBIDO</span>
+      </div>
+    </header>
+
+    <div class="timeline">
+      <div class="tstep on"><div class="n">Recibido</div><div class="d">11/08 14:32</div></div>
+      <div class="tstep"><div class="n">Diagnóstico</div><div class="d">—</div></div>
+      <div class="tstep"><div class="n">Presupuestado</div><div class="d">—</div></div>
+      <div class="tstep"><div class="n">Aprobado</div><div class="d">—</div></div>
+      <div class="tstep"><div class="n">En reparación</div><div class="d">—</div></div>
+      <div class="tstep"><div class="n">Reparado</div><div class="d">—</div></div>
+      <div class="tstep"><div class="n">Entregado</div><div class="d">—</div></div>
+    </div>
+
+    <div class="grid">
+      <div class="cell">
+        <div class="lbl">Cliente</div>
+        <div class="val"><b>Juan Pérez</b> · DNI 28.456.789<br>11-6222-4789 · juan.perez@gmail.com</div>
+      </div>
+      <div class="cell">
+        <div class="lbl">Equipo · Celular</div>
+        <div class="val"><b>Apple iPhone 13 · 128 GB · Negro</b><br><span class="mono" style="font-size:9px;">IMEI 353912480021547</span></div>
+      </div>
+      <div class="cell w">
+        <div class="lbl">Falla declarada</div>
+        <div class="val">No enciende después de mojarse con agua salada. Estuvo apagado 48 hs en arroz. Humedad visible en módulo de cámara.</div>
+      </div>
+      <div class="cell w" style="display:flex; gap:8mm;">
+        <div style="flex:1"><div class="lbl">Accesorios recibidos</div><div class="val">Cargador original · Funda silicona · Chip Claro</div></div>
+        <div><div class="lbl">Fotos de ingreso</div><div class="val">4 registradas — visibles en el seguimiento</div></div>
+      </div>
+    </div>
+
+    <div class="money3">
+      <div class="mc"><div class="lbl">Presupuesto estimado</div><div class="amt">$ 85.000</div></div>
+      <div class="mc"><div class="lbl">Seña abonada · Efectivo</div><div class="amt">$ 20.000</div></div>
+      <div class="mc"><div class="lbl">Saldo estimado</div><div class="amt">$ 65.000</div></div>
+    </div>
+
+    <p class="prometa">Retiro estimado: <b>viernes 15/08/2026</b> — te avisamos por WhatsApp en cada cambio de estado.</p>
+
+    <div class="sigrow" style="margin-top:4mm;">
+      <div class="qr">
+        <i></i><i></i><i></i><i class="o"></i><i></i><i class="o"></i><i></i>
+        <i></i><i class="o"></i><i></i><i></i><i class="o"></i><i></i><i class="o"></i>
+        <i></i><i></i><i class="o"></i><i></i><i></i><i></i><i class="o"></i>
+        <i class="o"></i><i></i><i></i><i class="o"></i><i></i><i class="o"></i><i></i>
+        <i></i><i class="o"></i><i></i><i></i><i class="o"></i><i></i><i></i>
+        <i></i><i></i><i class="o"></i><i></i><i></i><i class="o"></i><i class="o"></i>
+        <i></i><i class="o"></i><i></i><i class="o"></i><i></i><i></i><i></i>
+      </div>
+      <p class="track">Estado en vivo, fotos y presupuesto online:<br><b>tecnofix.com.ar/seg/8f3k2</b></p>
+      <div class="sig">Firma del cliente</div>
+      <div class="sig">Recibió — M. Gómez, TecnoFix</div>
+    </div>
+
+    <p class="terms" style="margin-top:2.5mm;">El presupuesto es estimativo y puede variar según diagnóstico; toda diferencia se informa antes de reparar. Equipos con daño por líquidos: diagnóstico hasta 72 hs, sin garantía sobre fallas derivadas de sulfatación. Estadía a partir de 30 días de avisada la reparación. La seña no es reembolsable con el trabajo iniciado. Este comprobante es requisito para el retiro del equipo.</p>
+  </div>
+
+  <!-- ── CORTE ── -->
+  <div class="cutline">
+    <span class="sc">✂</span>
+    <span class="who">Parte superior · Cliente</span>
+    <div class="dash"></div>
+    <span class="who">Talón inferior · Negocio</span>
+  </div>
+
+  <!-- ── TALÓN NEGOCIO ── -->
+  <div class="stub">
+    <div class="head">
+      <span class="t">Talón interno — Recepción</span>
+      <span class="n">#0042 <small>CEL-0042 · 11/08/2026 14:32 · Suc. Centro</small></span>
+    </div>
+    <div class="grid">
+      <div class="cell">
+        <div class="lbl">Cliente</div>
+        <div class="val"><b>Juan Pérez</b> · 11-6222-4789<br>DNI 28.456.789</div>
+      </div>
+      <div class="cell">
+        <div class="lbl">Equipo</div>
+        <div class="val"><b>iPhone 13 · 128 GB · Negro</b><br><span class="mono" style="font-size:8px;">IMEI 353912480021547</span></div>
+      </div>
+      <div class="cell">
+        <div class="lbl">Código de acceso</div>
+        <div class="val plk">
+          <svg width="30" height="30" viewBox="0 0 60 60">
+            <polyline points="10,10 30,10 30,30 10,50 50,50" fill="none" stroke="#111" stroke-width="3"/>
+            <g fill="#fff" stroke="#111" stroke-width="2.5">
+              <circle cx="10" cy="10" r="5.5"/><circle cx="30" cy="10" r="5.5"/><circle cx="50" cy="10" r="5.5"/>
+              <circle cx="10" cy="30" r="5.5"/><circle cx="30" cy="30" r="5.5"/><circle cx="50" cy="30" r="5.5"/>
+              <circle cx="10" cy="50" r="5.5"/><circle cx="30" cy="50" r="5.5"/><circle cx="50" cy="50" r="5.5"/>
+            </g>
+          </svg>
+          <span style="font-size:7.5px;color:#555;">Patrón — solo talón interno</span>
+        </div>
+      </div>
+      <div class="cell">
+        <div class="lbl">Chequeo rápido</div>
+        <div class="val" style="font-size:8px; line-height:1.65;"><s>Enciende</s> · Pantalla <b>OK</b> · <s>Táctil</s> · Cámaras <b>OK</b><br>Parlante <b>OK</b> · <s>Carga</s> · Marco: <b>golpe leve inf. der.</b></div>
+      </div>
+      <div class="cell w" style="display:flex; gap:6mm; align-items:center;">
+        <div style="flex:1"><div class="lbl">Falla / notas de mostrador</div>
+        <div class="val" style="font-size:8px;">Mojado agua salada, 48 hs apagado. Prioridad normal. Técnico asignado: L. Ferreyra.</div></div>
+        <div><div class="lbl">Presupuesto / Seña</div><div class="val"><b>$ 85.000</b> / $ 20.000 ef.</div></div>
+        <div><div class="lbl">Prometida</div><div class="val"><b>15/08</b></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
