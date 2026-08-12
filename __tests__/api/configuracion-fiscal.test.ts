@@ -213,4 +213,101 @@ describe("/api/configuracion — datos fiscales y de cobro", () => {
     expect(status).toBe(200)
     expect(body.telefono).toBe("123456")
   })
+
+  it("PUT with no changed fields (no-op branch) selects the fiscal + legacy-fiscal columns, not the narrow base list", async () => {
+    // Regression for the no-op early-return at the top of PUT: it used to
+    // .select(selectCols), which omits recepcion_terminos/comprobante_terminos
+    // AND the 6 new fiscal columns — so the response silently echoed empty
+    // fiscal data regardless of what was actually stored. createChainMock
+    // ignores the select() column string when resolving `data` (fixture data
+    // is fixture data no matter what string is passed), so the only way to
+    // observe this bug/fix is asserting on the SELECT string itself.
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    const chain = createChainMock(baseOrgRow({ cuit: "30-1", condicion_iva: "Monotributo" }))
+    mockSupabaseFrom({ organizations: chain })
+
+    const { PUT } = await import("@/app/api/configuracion/route")
+    const request = new Request("http://localhost:3000/api/configuracion", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}), // no fields => updateData stays empty => no-op branch
+    })
+    const res = await PUT(request)
+    const { status } = await parseResponse(res as Response)
+
+    expect(status).toBe(200)
+    expect(chain.update).not.toHaveBeenCalled() // confirms this hit the no-op branch, not a real update
+    const selectCallArgs = chain.select.mock.calls.map((c: any[]) => c[0])
+    expect(selectCallArgs.some((s: string) => s.includes("cuit") && s.includes("condicion_iva"))).toBe(true)
+    expect(selectCallArgs.some((s: string) => s.includes("recepcion_terminos"))).toBe(true)
+  })
+
+  it("PUT no-op branch degrades to the pre-295 select when migration 295 hasn't run", async () => {
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    const chain = createChainMock()
+    chain.single = vi
+      .fn()
+      .mockResolvedValueOnce({ data: null, error: { code: "PGRST204" } })
+      .mockResolvedValueOnce({ data: baseOrgRow({ recepcion_terminos: "Ver adjunto" }), error: null })
+    mockSupabaseFrom({ organizations: chain })
+
+    const { PUT } = await import("@/app/api/configuracion/route")
+    const request = new Request("http://localhost:3000/api/configuracion", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    })
+    const res = await PUT(request)
+    const { status, body } = await parseResponse(res as Response)
+
+    expect(status).toBe(200)
+    expect(body.recepcionTerminos).toBe("Ver adjunto")
+    const selectCallArgs = chain.select.mock.calls.map((c: any[]) => c[0])
+    expect(selectCallArgs[0]).toContain("cuit") // first attempt: full fiscal select
+    expect(selectCallArgs[1]).not.toContain("cuit") // retry: pre-295, fiscal columns dropped
+    expect(selectCallArgs[1]).toContain("recepcion_terminos") // but the rest survives
+  })
+
+  it("PUT under PGRST204 retains an at-risk existing field (ivaRegimen) while dropping the fiscal field", async () => {
+    // The claim that "other existing fields survive the tier" was previously
+    // untested — the only PGRST204-PUT test sent telefono, which was never at
+    // risk of being stripped by the fiscal-column retry. This sends an
+    // existing field from an earlier "might not exist" tier (iva_regimen,
+    // migration 229) alongside a new fiscal field (migration 295, not
+    // applied) and asserts the RETRY payload keeps iva_regimen but drops cuit.
+    //
+    // The route mutates `updateData` in place (delete updateData.cuit, etc.)
+    // and passes that same reference to .update() both times, so inspecting
+    // chain.update.mock.calls[0][0] AFTER the route finishes would just show
+    // the final, already-mutated object for BOTH calls (mock.calls stores
+    // references, not snapshots). Capturing a shallow copy at call time via
+    // a custom mockImplementation sidesteps that.
+    mockAuthSuccess({ role: "ADMIN", organizationId: "org-1" })
+    const updateCalls: any[] = []
+    const chain = createChainMock()
+    chain.update = vi.fn((data: any) => {
+      updateCalls.push({ ...data })
+      return chain
+    })
+    chain.single = vi
+      .fn()
+      .mockResolvedValueOnce({ data: null, error: { code: "PGRST204" } })
+      .mockResolvedValueOnce({ data: baseOrgRow({ iva_regimen: "INCLUIDO" }), error: null })
+    mockSupabaseFrom({ organizations: chain })
+
+    const { PUT } = await import("@/app/api/configuracion/route")
+    const request = new Request("http://localhost:3000/api/configuracion", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ivaRegimen: "INCLUIDO", cuit: "30-71234567-8" }),
+    })
+    const res = await PUT(request)
+    const { status } = await parseResponse(res as Response)
+
+    expect(status).toBe(200)
+    expect(updateCalls).toHaveLength(2)
+    expect(updateCalls[0]).toEqual(expect.objectContaining({ iva_regimen: "INCLUIDO", cuit: "30-71234567-8" }))
+    expect(updateCalls[1]).toEqual(expect.objectContaining({ iva_regimen: "INCLUIDO" }))
+    expect(updateCalls[1]).not.toHaveProperty("cuit")
+  })
 })

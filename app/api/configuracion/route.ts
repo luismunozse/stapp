@@ -368,12 +368,23 @@ export async function PUT(request: Request) {
 
     // Solo actualizar si hay cambios
     if (Object.keys(updateData).length === 0) {
-      // Retornar estado actual
-      const { data } = await supabaseAdmin
+      // Retornar estado actual. Mismo escalonado PGRST204 que el resto del
+      // archivo: PostgREST solo devuelve las columnas pedidas, así que usar
+      // `selectCols` a secas acá (como antes) devolvía recepcion_terminos/
+      // comprobante_terminos/los 6 campos fiscales siempre vacíos aunque
+      // estuvieran cargados en la DB.
+      let { data, error: selectError } = await supabaseAdmin
         .from("organizations")
-        .select(selectCols)
+        .select(selectColsFull)
         .eq("id", organizationId!)
         .single()
+      if (selectError?.code === "PGRST204") {
+        ;({ data } = await supabaseAdmin
+          .from("organizations")
+          .select(selectColsPre295)
+          .eq("id", organizationId!)
+          .single())
+      }
       const org = data as any
 
       return NextResponse.json({
