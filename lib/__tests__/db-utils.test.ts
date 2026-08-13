@@ -196,6 +196,8 @@ describe('formatCliente', () => {
       cuit: undefined,
       aceptaWhatsapp: true,
       saldoCuenta: 0,
+      tipoPrecio: 'MINORISTA',
+      descuentoPct: null,
       organizationId: 'org-1',
       createdAt: '2024-01-01',
       updatedAt: '2024-01-02',
