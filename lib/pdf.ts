@@ -927,13 +927,34 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const marca = safe(data.marca)
   const colorDisp = safe(data.color)
   const imei = safe(data.imei)
+  const tipoDispositivo = safe(data.tipoDispositivo)
   const problemaReportado = safe(data.problemaReportado) || "Sin descripcion"
+
+  // ---- Equipo line + identifier label, shared by every render site in the
+  // expediente paths (ENTREGA sheet, RECEPCIÓN client part, business stub) ----
+  // Marca-first, space-joined with dispositivo; color trails after a middot.
+  // Each stage skips absent parts gracefully via filter(Boolean).
+  const equipoTitle = [[marca, dispositivo].filter(Boolean).join(" "), colorDisp].filter(Boolean).join(" · ")
+  // Identifier label: phones show "IMEI", everything else shows the org's
+  // terminología "serie" label (defaults to "Número de serie" — see
+  // lib/terminologia.ts). Match is case/accent-insensitive against a small
+  // set of phone-ish tipoDispositivo names — that field is a display name
+  // (org-customizable "nombre" from tipos_dispositivo, or a formatted
+  // fallback — see lib/device-types.ts:getDeviceTypeLabel), never a fixed
+  // enum. Matched on WHOLE TOKENS, not substrings: a naive .includes() check
+  // made "Automóvil" match "móvil" (false positive, review finding) —
+  // normalize, split on non-alphanumerics, and compare each token for
+  // equality against the phone set instead, so "Automóvil" (one token,
+  // "automovil") never matches while "Teléfono móvil" (two tokens,
+  // "telefono" + "movil") still does.
+  const normalizeForMatch = (s: string): string => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+  const PHONE_TIPO_TOKENS = new Set(["celular", "telefono", "smartphone", "movil"])
+  const tipoDispositivoTokens = normalizeForMatch(tipoDispositivo).split(/[^a-z0-9]+/).filter(Boolean)
+  const isTipoDispositivoTelefono = tipoDispositivoTokens.some((tok) => PHONE_TIPO_TOKENS.has(tok))
+  const identificadorLabel = isTipoDispositivoTelefono ? "IMEI" : t(term, "serie")
   const accesorios = safe(data.accesorios)
   const codigoAccesoDispositivo = safe(data.codigoAccesoDispositivo)
   const presupuesto = data.presupuesto ? formatCurrencyPDF(data.presupuesto) : ""
-
-  // Fecha y hora de impresion
-  const fechaImpresion = formatDateTimeValue(new Date(), data.zonaHoraria || DEFAULT_TIMEZONE)
 
   // Crear documento PDF — hoja RECEPCIÓN (expediente): parte cliente arriba,
   // línea de corte, talón interno del negocio abajo — todo en UNA página A4.
@@ -945,10 +966,11 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const page = pdfDoc.addPage([595, 842]) // A4
   const { width, height } = page.getSize()
 
-  // Fuentes Inter — solo las usan hoy las páginas de fotos/entrega más abajo
-  // (D4 rediseña la hoja ENTREGA; hasta entonces ese tramo queda intacto).
-  const { regular: helvetica, bold: helveticaBold } = await embedCustomFonts(pdfDoc)
-  // Fuentes del expediente (Archivo + Plex Mono) — Task D1.
+  // Fuentes del expediente (Archivo + Plex Mono) — Task D1. Inter
+  // (embedCustomFonts) used to be embedded here too, solely for the
+  // FOTOS DE INGRESO page appended below — that page is gone (Item 6:
+  // photos no longer print anywhere, they live in seguimiento only), so
+  // the Inter embed for this generator went with it.
   const {
     archivoRegular,
     archivoBold,
@@ -958,8 +980,6 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     plexMonoRegular,
   } = await embedExpedienteFonts(pdfDoc)
 
-  const margin = 40 // preservado: lo siguen usando las páginas de fotos/entrega
-  const contentWidth = width - (margin * 2)
   const tz = data.zonaHoraria || DEFAULT_TIMEZONE
 
   // ---- Datos del expediente (Task D2) que esta hoja consume ----
@@ -1154,7 +1174,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     // ---- Header: logo + empresa/sucursal + idbox (#numero, código, tag de
     // estado ink-fill, línea de reingreso) ----
     const headerTopY = ey
-    const logoBoxSize = 42
+    const logoBoxSize = 57 // ~20mm (was 42pt/~15mm) — Item 5 header redesign: bigger logo
 
     let enLogo: Awaited<ReturnType<typeof pdfDoc.embedPng>> | Awaited<ReturnType<typeof pdfDoc.embedJpg>> | null = null
     if (data.logoUrl) {
@@ -1196,14 +1216,34 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     const idboxReservedEn = Math.max(numWEn, codeWEn, tagWEn, reingresoWEn) + 4
     const bizMaxWidthEn = (width - rxMargin) - idboxReservedEn - 10 - bizX
 
-    const bizNameSizeEn = 13
-    page.drawText(rxTruncate(empresaNombre, archivoBlack, bizNameSizeEn, bizMaxWidthEn), { x: bizX, y: headerTopY - 11, size: bizNameSizeEn, font: archivoBlack, color: MONO.ink })
-    const contactLineTextEn = [sucursalNombre, sucursalDireccion || direccionEmpresa, sucursalTelefono || telefonoEmpresa, data.emailEmpresa ? safe(data.emailEmpresa) : ""].filter(Boolean).join(" · ")
-    const contactLinesEn = rxWrap(contactLineTextEn, archivoRegular, 7.5, bizMaxWidthEn).slice(0, 2)
-    let bizYEn = headerTopY - 11 - 14
-    for (const l of contactLinesEn) {
-      page.drawText(l, { x: bizX, y: bizYEn, size: 7.5, font: archivoRegular, color: MONO.label })
-      bizYEn -= 10
+    const bizNameSizeEn = 15 // was 13 — Item 5 header redesign
+    const bizNameYEn = headerTopY - 13
+    const bizNameTextEn = rxTruncate(empresaNombre, archivoBlack, bizNameSizeEn, bizMaxWidthEn)
+    page.drawText(bizNameTextEn, { x: bizX, y: bizNameYEn, size: bizNameSizeEn, font: archivoBlack, color: MONO.ink })
+    // Sucursal name (Item 3 header redesign): used to open the combined
+    // contact line below — that line is now 3 dedicated dirección/ciudad/
+    // teléfono rows with no room left for it, so it moves up beside the org
+    // name instead, small.
+    if (sucursalNombre) {
+      const bizNameWEn = archivoBlack.widthOfTextAtSize(bizNameTextEn, bizNameSizeEn)
+      const sucursalMaxWEn = bizMaxWidthEn - bizNameWEn - 6
+      if (sucursalMaxWEn > 20) {
+        page.drawText(rxTruncate(sucursalNombre, archivoRegular, 8, sucursalMaxWEn), { x: bizX + bizNameWEn + 6, y: bizNameYEn + 1, size: 8, font: archivoRegular, color: MONO.label })
+      }
+    }
+    // Shop contact block: 3 stacked lines — dirección / ciudad(, provincia) /
+    // teléfono — replacing the old single wrapped "sucursal · dirección ·
+    // teléfono[ · email]" line (Item 3 header redesign). Each line is
+    // skipped when its source data is absent, same as the old join did.
+    const direccionLineEn = sucursalDireccion || direccionEmpresa
+    const ciudadLineEn = [safe(data.ciudadEmpresa), safe(data.provinciaEmpresa)].filter(Boolean).join(", ")
+    const telefonoLineEn = sucursalTelefono || telefonoEmpresa
+    const shopLinesEn = [direccionLineEn, ciudadLineEn, telefonoLineEn].filter(Boolean)
+    const shopLineSizeEn = 8.5 // was 7.5 — Item 5 header redesign
+    let bizYEn = bizNameYEn - bizNameSizeEn - 1
+    for (const l of shopLinesEn) {
+      page.drawText(rxTruncate(l, archivoRegular, shopLineSizeEn, bizMaxWidthEn), { x: bizX, y: bizYEn, size: shopLineSizeEn, font: archivoRegular, color: MONO.label })
+      bizYEn -= 11
     }
 
     const idboxRightEn = width - rxMargin
@@ -1288,9 +1328,8 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     if (clienteEmail) clienteLinesEn.push({ text: clienteEmail.substring(0, 50), font: archivoRegular, size: 8, color: MONO.label })
 
     const equipoLinesEn: RxCellLine[] = []
-    const equipoTitleEn = [dispositivo, marca, colorDisp].filter(Boolean).join(" · ")
-    equipoLinesEn.push({ text: equipoTitleEn.substring(0, 55), font: archivoBold, size: 9, color: MONO.ink })
-    if (imei) equipoLinesEn.push({ text: `${t(term, "serie")} ${imei}`.substring(0, 55), font: plexMonoRegular, size: 8, color: MONO.ink })
+    equipoLinesEn.push({ text: equipoTitle.substring(0, 55), font: archivoBold, size: 9, color: MONO.ink })
+    if (imei) equipoLinesEn.push({ text: `${identificadorLabel} ${imei}`.substring(0, 55), font: plexMonoRegular, size: 8, color: MONO.ink })
     if (metadataCampos.length > 0) {
       const metaText = metadataCampos.map(m => `${m.label}: ${m.valor}`).join(" · ")
       equipoLinesEn.push({ text: metaText.substring(0, 65), font: archivoRegular, size: 7.5, color: MONO.label })
@@ -1316,20 +1355,15 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     ], ey)
     ey -= rowFallaDiagEn
 
-    // ---- Accesorios recibidos | Fotos — el código de acceso NUNCA se
-    // dibuja en esta hoja (es client-facing; ver Global Constraints D4) ----
+    // ---- Accesorios recibidos (fila completa) — el código de acceso NUNCA
+    // se dibuja en esta hoja (es client-facing; ver Global Constraints D4).
+    // Item 6: la columna "Fotos" (conteo de fotosIngreso) se quitó — las
+    // fotos ya no imprimen en ningún documento, viven solo en seguimiento.
     const accesoriosLinesEn: RxCellLine[] = accesorios
       ? [{ text: accesorios.substring(0, 70), font: archivoRegular, size: 9, color: MONO.ink }]
       : [{ text: "—", font: archivoRegular, size: 9, color: MONO.faint }]
-    const fotosCountEn = Array.isArray(data.fotosIngreso) ? data.fotosIngreso.length : 0
-    // La capa de datos (Task D2) solo expone fotosIngreso — no hay conteo
-    // separado de fotos de reparación/entrega todavía. Se muestra lo que
-    // existe (decisión documentada en task-D4-report.md).
-    const fotosTextEn = fotosCountEn > 0 ? `${fotosCountEn} de ingreso` : "Sin fotos"
-    const accWEn = rxContentW * 0.7
     const rowAccFotosEn = rxDrawGridRow([
-      { x: rxMargin, width: accWEn, label: "Accesorios recibidos", lines: accesoriosLinesEn },
-      { x: rxMargin + accWEn, width: rxContentW - accWEn, label: "Fotos", lines: [{ text: fotosTextEn, font: archivoRegular, size: 9, color: fotosCountEn > 0 ? MONO.ink : MONO.faint }] },
+      { x: rxMargin, width: rxContentW, label: "Accesorios recibidos", lines: accesoriosLinesEn },
     ], ey)
     ey -= rowAccFotosEn + 8
 
@@ -1714,7 +1748,7 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
 
   // ---- Header: logo (si hay) + empresa/sucursal + idbox (#numero, código, estado) ----
   const headerTopY = ry
-  const logoBoxSize = 42
+  const logoBoxSize = 57 // ~20mm (was 42pt/~15mm) — Item 5 header redesign: bigger logo
 
   let rxLogo: Awaited<ReturnType<typeof pdfDoc.embedPng>> | Awaited<ReturnType<typeof pdfDoc.embedJpg>> | null = null
   if (data.logoUrl) {
@@ -1754,14 +1788,34 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const idboxReserved = Math.max(numW, codeW, tagW) + 4
   const bizMaxWidth = (width - rxMargin) - idboxReserved - 10 - bizX
 
-  const bizNameSize = 13
-  page.drawText(rxTruncate(empresaNombre, archivoBlack, bizNameSize, bizMaxWidth), { x: bizX, y: headerTopY - 11, size: bizNameSize, font: archivoBlack, color: MONO.ink })
-  const contactLineText = [sucursalNombre, sucursalDireccion || direccionEmpresa, sucursalTelefono || telefonoEmpresa].filter(Boolean).join(" · ")
-  const contactLines = rxWrap(contactLineText, archivoRegular, 7.5, bizMaxWidth).slice(0, 2)
-  let bizY = headerTopY - 11 - 14
-  for (const l of contactLines) {
-    page.drawText(l, { x: bizX, y: bizY, size: 7.5, font: archivoRegular, color: MONO.label })
-    bizY -= 10
+  const bizNameSize = 15 // was 13 — Item 5 header redesign
+  const bizNameY = headerTopY - 13
+  const bizNameText = rxTruncate(empresaNombre, archivoBlack, bizNameSize, bizMaxWidth)
+  page.drawText(bizNameText, { x: bizX, y: bizNameY, size: bizNameSize, font: archivoBlack, color: MONO.ink })
+  // Sucursal name (Item 3 header redesign): used to open the combined
+  // contact line below — that line is now 3 dedicated dirección/ciudad/
+  // teléfono rows with no room left for it, so it moves up beside the org
+  // name instead, small. Mirrors the ENTREGA sheet's header above.
+  if (sucursalNombre) {
+    const bizNameW = archivoBlack.widthOfTextAtSize(bizNameText, bizNameSize)
+    const sucursalMaxW = bizMaxWidth - bizNameW - 6
+    if (sucursalMaxW > 20) {
+      page.drawText(rxTruncate(sucursalNombre, archivoRegular, 8, sucursalMaxW), { x: bizX + bizNameW + 6, y: bizNameY + 1, size: 8, font: archivoRegular, color: MONO.label })
+    }
+  }
+  // Shop contact block: 3 stacked lines — dirección / ciudad(, provincia) /
+  // teléfono — replacing the old single wrapped "sucursal · dirección ·
+  // teléfono" line (Item 3 header redesign). Each line is skipped when its
+  // source data is absent, same as the old join did.
+  const direccionLine = sucursalDireccion || direccionEmpresa
+  const ciudadLine = [safe(data.ciudadEmpresa), safe(data.provinciaEmpresa)].filter(Boolean).join(", ")
+  const telefonoLine = sucursalTelefono || telefonoEmpresa
+  const shopLines = [direccionLine, ciudadLine, telefonoLine].filter(Boolean)
+  const shopLineSize = 8.5 // was 7.5 — Item 5 header redesign
+  let bizY = bizNameY - bizNameSize - 1
+  for (const l of shopLines) {
+    page.drawText(rxTruncate(l, archivoRegular, shopLineSize, bizMaxWidth), { x: bizX, y: bizY, size: shopLineSize, font: archivoRegular, color: MONO.label })
+    bizY -= 11
   }
 
   const idboxRight = width - rxMargin
@@ -1776,44 +1830,23 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   // Tag de estado — relleno ink local (ver rxInkFill más arriba).
   rxInkFill(page, idboxRight - tagW, idboxY - 12, tagW, 12)
   page.drawText(tagLabel, { x: idboxRight - tagW + 5, y: idboxY - 9, size: 7, font: archivoBold, color: MONO.white })
+  idboxY -= 12
 
-  const headerBottomY = headerTopY - Math.max(logoBoxSize, 46)
+  // Item 5: headerBottomY now also considers bizY/idboxY (not just the
+  // logo), same as the ENTREGA header above — the 3-line shop contact
+  // block can run deeper than the old 2-line one, and without this the
+  // rule below would cut through the teléfono line instead of clearing it.
+  const headerBottomY = Math.min(headerTopY - Math.max(logoBoxSize, 46), bizY, idboxY)
   ry = headerBottomY - 8
   drawRule(page, rxMargin, width - rxMargin, ry, { color: MONO.ink, thickness: 1.4 })
   ry -= 10
 
-  // ---- Timeline ----
-  const timelineH = 24
-  const timelineTop = ry
-  const colW = rxContentW / 7
-  page.drawRectangle({ x: rxMargin, y: timelineTop - timelineH, width: rxContentW, height: timelineH, borderColor: MONO.ink, borderWidth: 1 })
-  for (let i = 0; i < 7; i++) {
-    const colX = rxMargin + i * colW
-    const isOn = i === currentStepIndex
-    const isDone = i < currentStepIndex && !!stepDates[i]
-    if (isOn) rxInkFill(page, colX, timelineTop - timelineH, colW, timelineH)
-    if (i > 0) {
-      page.drawLine({ start: { x: colX, y: timelineTop }, end: { x: colX, y: timelineTop - timelineH }, thickness: RULE_WIDTH, color: isOn ? MONO.ink : MONO.rule })
-    }
-    const labelColor = isOn ? MONO.white : (isDone ? MONO.ink : MONO.faint)
-    const dateColor = isOn ? MONO.white : (isDone ? MONO.label : MONO.faint)
-    const stepLabelSize = 6
-    const checkW = isDone ? 6 : 0 // vector check (rxDrawCheck) + gap — reserved, not part of the text string
-    const stepLabelTrunc = rxTruncate(TIMELINE_LABELS[i].toUpperCase(), archivoBold, stepLabelSize, colW - 4 - checkW)
-    const labelW = archivoBold.widthOfTextAtSize(stepLabelTrunc, stepLabelSize)
-    const blockX = colX + (colW - (labelW + checkW)) / 2
-    if (isDone) rxDrawCheck(page, blockX, timelineTop - 8.7, labelColor)
-    page.drawText(stepLabelTrunc, { x: blockX + checkW, y: timelineTop - 10, size: stepLabelSize, font: archivoBold, color: labelColor })
-    let dateText = "—"
-    if (isOn && nonCanonicalTag) {
-      dateText = rxTruncate(nonCanonicalTag, archivoRegular, 6, colW - 4)
-    } else if (stepDates[i]) {
-      dateText = formatTimelineDate(stepDates[i] as Date)
-    }
-    const dateW = archivoRegular.widthOfTextAtSize(dateText, 6)
-    page.drawText(dateText, { x: colX + (colW - dateW) / 2, y: timelineTop - 19, size: 6, font: archivoRegular, color: dateColor })
-  }
-  ry = timelineTop - timelineH - 10
+  // Item 4: the estado timeline bar used to render here too — removed from
+  // the RECEPCIÓN client part (the business stub below never had it
+  // either). It stays on the ENTREGA sheet above, which carries the dated
+  // history at the point the order actually closes; the client part is
+  // mid-flow and doesn't need it repeated on every reception printout.
+  // Content below flows up into the reclaimed space — no gap left behind.
 
   // ---- Grid: Cliente | Equipo ----
   const colGridW = rxContentW / 2
@@ -1840,9 +1873,8 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   // usarse en este bloque a propósito.
 
   const equipoLines: RxCellLine[] = []
-  const equipoTitle = [dispositivo, marca, colorDisp].filter(Boolean).join(" · ")
   equipoLines.push({ text: equipoTitle.substring(0, 55), font: archivoBold, size: 9, color: MONO.ink })
-  if (imei) equipoLines.push({ text: `${t(term, "serie")} ${imei}`.substring(0, 55), font: plexMonoRegular, size: 8, color: MONO.ink })
+  if (imei) equipoLines.push({ text: `${identificadorLabel} ${imei}`.substring(0, 55), font: plexMonoRegular, size: 8, color: MONO.ink })
   if (metadataCampos.length > 0) {
     const metaText = metadataCampos.map(m => `${m.label}: ${m.valor}`).join(" · ")
     equipoLines.push({ text: metaText.substring(0, 65), font: archivoRegular, size: 7.5, color: MONO.label })
@@ -1873,16 +1905,15 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
     ry -= rowObs
   }
 
-  // ---- Accesorios recibidos | Fotos de ingreso (fila completa, dividida 65/35) ----
+  // ---- Accesorios recibidos (fila completa) ----
+  // Item 6: la columna "Fotos de ingreso" (conteo "N registradas") se
+  // quitó — las fotos ya no imprimen en ningún documento, viven solo en
+  // seguimiento.
   const accesoriosLines: RxCellLine[] = accesorios
     ? [{ text: accesorios.substring(0, 70), font: archivoRegular, size: 9, color: MONO.ink }]
     : [{ text: "—", font: archivoRegular, size: 9, color: MONO.faint }]
-  const fotosCount = Array.isArray(data.fotosIngreso) ? data.fotosIngreso.length : 0
-  const fotosLines: RxCellLine[] = [{ text: fotosCount > 0 ? `${fotosCount} registradas` : "Sin fotos", font: archivoRegular, size: 9, color: MONO.ink }]
-  const accW = rxContentW * 0.65
   const rowH3 = rxDrawGridRow([
-    { x: rxMargin, width: accW, label: "Accesorios recibidos", lines: accesoriosLines },
-    { x: rxMargin + accW, width: rxContentW - accW, label: "Fotos de ingreso", lines: fotosLines },
+    { x: rxMargin, width: rxContentW, label: "Accesorios recibidos", lines: accesoriosLines },
   ], ry)
   ry -= rowH3 + 8
 
@@ -1963,7 +1994,13 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   const sigStartX = afterQrX + captionW + (hasTracking ? 10 : 0)
   const sigAreaW = (rxMargin + rxContentW) - sigStartX
   if (sigAreaW > 80) {
-    const sigColW = sigAreaW
+    // Item 7: the signature line used to fill the entire remaining row
+    // width (~180mm) — capped at 50% of the content width (~90mm) per
+    // print feedback, and centered within the leftover row space instead
+    // of flush against the QR/caption block. QR stays put; only the line's
+    // own width and x-offset change.
+    const sigColW = Math.min(sigAreaW, rxContentW * 0.5)
+    const sigColX = sigStartX + (sigAreaW - sigColW) / 2
     const sigLineY = sigRowTop - qrSize + 6
     // Fix final-review D2: embeds the reception signature image when
     // present (mirrors how the ENTREGA sheet embeds firmaClienteEntrega,
@@ -1974,11 +2011,11 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
         const img = await pdfDoc.embedPng(bytes)
         const dims = img.scale(1)
         const scale = Math.min((sigColW - 6) / dims.width, (qrSize - 14) / dims.height)
-        page.drawImage(img, { x: sigStartX + (sigColW - dims.width * scale) / 2, y: sigLineY + 3, width: dims.width * scale, height: dims.height * scale })
+        page.drawImage(img, { x: sigColX + (sigColW - dims.width * scale) / 2, y: sigLineY + 3, width: dims.width * scale, height: dims.height * scale })
       } catch { /* ignore embedding errors — la línea queda en blanco */ }
     }
-    drawRule(page, sigStartX, sigStartX + sigColW, sigLineY, { color: MONO.ink })
-    page.drawText("FIRMA DEL CLIENTE", { x: sigStartX, y: sigLineY - 8, size: 6, font: archivoBold, color: MONO.label })
+    drawRule(page, sigColX, sigColX + sigColW, sigLineY, { color: MONO.ink })
+    page.drawText("FIRMA DEL CLIENTE", { x: sigColX, y: sigLineY - 8, size: 6, font: archivoBold, color: MONO.label })
   }
   ry = sigRowTop - sigBlockH
 
@@ -2055,9 +2092,9 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   ]
   if (clienteDni) stubClienteLines.push({ text: `DNI ${clienteDni}`, font: archivoRegular, size: 7.5, color: MONO.label })
   const stubEquipoLines: RxCellLine[] = [
-    { text: [dispositivo, marca, colorDisp].filter(Boolean).join(" · ").substring(0, 55), font: archivoBold, size: 8, color: MONO.ink },
+    { text: equipoTitle.substring(0, 55), font: archivoBold, size: 8, color: MONO.ink },
   ]
-  if (imei) stubEquipoLines.push({ text: `IMEI ${imei}`, font: plexMonoRegular, size: 7, color: MONO.label })
+  if (imei) stubEquipoLines.push({ text: `${identificadorLabel} ${imei}`, font: plexMonoRegular, size: 7, color: MONO.label })
   const stubRow1H = rxDrawGridRow([
     { x: rxMargin, width: colGridW, label: "Cliente", lines: stubClienteLines },
     { x: rxMargin + colGridW, width: colGridW, label: t(term, "equipo"), lines: stubEquipoLines },
@@ -2151,75 +2188,15 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   }
   }
 
-  // === PAGINA DE FOTOS DE INGRESO (si hay fotos) ===
-  if (data.fotosIngreso && data.fotosIngreso.length > 0) {
-    const photosPage = pdfDoc.addPage([width, height])
-    let py = height - margin
-
-    py -= 10
-
-    photosPage.drawText("FOTOS DE INGRESO", { x: margin, y: py, size: TYPE.docTitle, font: helveticaBold, color: MONO.ink })
-    photosPage.drawText(`Orden #${numeroOrden}`, { x: width - margin - 80, y: py, size: 10, font: helveticaBold, color: MONO.label })
-    py -= 8
-    drawRule(photosPage, margin, width - margin, py)
-    py -= 20
-
-    const photoSize = (contentWidth - 15) / 2
-    const photoHeight = photoSize * 0.75
-    let photoX = margin
-    let photoCount = 0
-
-    for (const foto of data.fotosIngreso.slice(0, 4)) {
-      try {
-        const photoRes = await fetch(foto.url)
-        if (!photoRes.ok) continue
-        const photoBuffer = new Uint8Array(await photoRes.arrayBuffer())
-        const contentType = photoRes.headers.get("content-type") || ""
-
-        let photoImage
-        if (contentType.includes("png") || foto.url.toLowerCase().includes(".png")) {
-          photoImage = await pdfDoc.embedPng(photoBuffer)
-        } else {
-          photoImage = await pdfDoc.embedJpg(photoBuffer)
-        }
-
-        if (photoImage) {
-          const dims = photoImage.scale(1)
-          const scale = Math.min(photoSize / dims.width, photoHeight / dims.height)
-          const scaledW = dims.width * scale
-          const scaledH = dims.height * scale
-
-          // Border
-          photosPage.drawRectangle({ x: photoX - 2, y: py - photoHeight - 2, width: photoSize + 4, height: photoHeight + 4, borderColor: MONO.rule, borderWidth: RULE_WIDTH })
-          // Image centered in box
-          photosPage.drawImage(photoImage, {
-            x: photoX + (photoSize - scaledW) / 2,
-            y: py - photoHeight + (photoHeight - scaledH) / 2,
-            width: scaledW,
-            height: scaledH,
-          })
-
-          if (foto.descripcion) {
-            photosPage.drawText(safe(foto.descripcion).substring(0, 40), { x: photoX, y: py - photoHeight - 12, size: TYPE.fine, font: helvetica, color: MONO.label })
-          }
-
-          photoCount++
-          if (photoCount % 2 === 0) {
-            photoX = margin
-            py -= photoHeight + 25
-          } else {
-            photoX = margin + photoSize + 15
-          }
-        }
-      } catch (photoError) {
-        console.error("Error embedding photo:", photoError)
-      }
-    }
-
-    // Footer
-    photosPage.drawText(`Orden #${numeroOrden} - Fotos de Ingreso`, { x: margin, y: 25, size: 8, font: helveticaBold, color: MONO.ink })
-    photosPage.drawText(`Impreso: ${fechaImpresion}`, { x: width - margin - 120, y: 25, size: 7, font: helvetica, color: MONO.faint })
-  }
+  // Item 6: la PÁGINA DE FOTOS DE INGRESO que se apendaba acá (si
+  // data.fotosIngreso tenía elementos) se eliminó por completo — el
+  // feedback de impresión real es que las fotos imprimen mal y no
+  // corresponden en un documento de papel; ahora viven solo en la vista de
+  // seguimiento (que las sigue mostrando sin cambios). El soloCliente path
+  // ya retornaba antes de llegar a este bloque (ver arriba), así que para
+  // ese variant esto no cambia nada — el efecto real es en las hojas
+  // RECEPCIÓN completa y ENTREGA, que antes sí llegaban acá. `fotosIngreso`
+  // se mantiene en OrdenPDFData/la ruta (Item 6): solo se dejó de dibujar.
 
   // NOTA (Task D4): la vieja "SECCION DE ENTREGA" (segunda página con
   // COMPROBANTE DE ENTREGA + firmas) se eliminó — para los estados

@@ -82,6 +82,18 @@ describe("generateOrdenPDF", () => {
     expect(text).not.toContain("M. GÓMEZ")
     expect(text).toContain("Escaneá el código para seguir tu reparación")
     expect(text).not.toContain("sample-public-token-1234")
+    // Item 4: the estado timeline bar (7-step strip with checks/dates) no
+    // longer renders on the RECEPCIÓN client part — only its own section
+    // labels prove that; the shared TIMELINE_LABELS words themselves
+    // aren't safe to assert absent (e.g. "REPARADO" already reads as an
+    // estado elsewhere in the fixture's flow).
+    expect(text).not.toContain("DIAGNÓSTICO")
+    expect(text).not.toContain("PRESUPUESTADO")
+    // Item 6: fotos no longer print anywhere — the "Fotos de ingreso"
+    // grid cell (and its "N registradas"/"Sin fotos" count) is gone;
+    // "Accesorios recibidos" now spans the full row width alone.
+    expect(text).not.toContain("FOTOS DE INGRESO")
+    expect(text).toContain("ACCESORIOS RECIBIDOS")
     expect(buffer.length).toBeGreaterThan(1000)
   })
 
@@ -95,6 +107,98 @@ describe("generateOrdenPDF", () => {
     // fallback in the fixture) still print on the header contact line.
     expect(text).toContain("Av. Rivadavia 5000, CABA")
     expect(text).toContain("+54 11 4000-1234")
+  })
+
+  it("omits the shop email from the ENTREGA sheet header too (Item 3: dropped for consistency with RECEPCIÓN)", async () => {
+    // Review finding (Minor): the ENTREGA header used to append emailEmpresa
+    // to its contact line (the RECEPCIÓN header never did) — dropped when
+    // both headers were redesigned to the same 3-line dirección/ciudad/
+    // teléfono stack. Pin the absence on this sheet too, not just RECEPCIÓN.
+    const buffer = await generateOrdenPDF({
+      ...buildOrdenFixture(),
+      estado: "ENTREGADO",
+      emailEmpresa: "contacto@negocio-demo.com.ar",
+    })
+    const text = await extractPdfText(buffer)
+    expect(text).not.toContain("contacto@negocio-demo.com.ar")
+    expect(text).toContain("Av. Rivadavia 5000, CABA")
+    expect(text).toContain("+54 11 4000-1234")
+  })
+
+  it("renders the equipo line marca-first and the ciudad/provincia on its own header line", async () => {
+    // Item 1 (marca-first equipo line): was "{dispositivo} · {marca} ·
+    // {color}" ("iPhone 13 · Apple · Negro"), now "{marca} {dispositivo} ·
+    // {color}" (fixture: marca "Apple", dispositivo "iPhone 13", color
+    // "Negro" -> "Apple iPhone 13 · Negro").
+    const buffer = await generateOrdenPDF(buildOrdenFixture())
+    const text = await extractPdfText(buffer)
+    expect(text).toContain("Apple iPhone 13 · Negro")
+    expect(text).not.toContain("iPhone 13 · Apple")
+
+    // Item 3 (header redesign): ciudad + provincia render as their own
+    // "ciudad, provincia" header line (fixture: "Rosario" / "Santa Fe" —
+    // deliberately distinct from every other address string in the
+    // fixture, see orden-fixture.ts).
+    expect(text).toContain("Rosario, Santa Fe")
+
+    // Same line, provincia absent: renders just the ciudad, no dangling
+    // comma/space from the join.
+    const noProvinciaBuffer = await generateOrdenPDF({ ...buildOrdenFixture(), provinciaEmpresa: null })
+    const noProvinciaText = await extractPdfText(noProvinciaBuffer)
+    expect(noProvinciaText).toContain("Rosario")
+    expect(noProvinciaText).not.toContain("Rosario, Santa Fe")
+  })
+
+  it("labels the identifier IMEI for a phone-ish tipoDispositivo and Número de serie otherwise", async () => {
+    // Item 2: identifier label depends on tipoDispositivo (phone-ish names
+    // -> "IMEI", everything else -> the terminología "serie" label, default
+    // "Número de serie"). Fixture tipoDispositivo is "CELULAR".
+    const phoneBuffer = await generateOrdenPDF(buildOrdenFixture())
+    const phoneText = await extractPdfText(phoneBuffer)
+    expect(phoneText).toContain("IMEI 358400123456789")
+    expect(phoneText).not.toContain("Número de serie 358400123456789")
+
+    const nonPhoneBuffer = await generateOrdenPDF({ ...buildOrdenFixture(), tipoDispositivo: "Notebook" })
+    const nonPhoneText = await extractPdfText(nonPhoneBuffer)
+    expect(nonPhoneText).toContain("Número de serie 358400123456789")
+    expect(nonPhoneText).not.toContain("IMEI 358400123456789")
+
+    // terminología override: a non-phone tipoDispositivo respects a custom
+    // "serie" label instead of the "Número de serie" default...
+    const customSerieBuffer = await generateOrdenPDF({
+      ...buildOrdenFixture(),
+      tipoDispositivo: "Notebook",
+      terminologia: { serie: "N° de chasis" },
+    })
+    const customSerieText = await extractPdfText(customSerieBuffer)
+    expect(customSerieText).toContain("N° de chasis 358400123456789")
+
+    // ...but a phone-ish tipoDispositivo always shows "IMEI", even when the
+    // org set a custom "serie" label — the phone match takes priority.
+    const phoneOverridesTerminologiaBuffer = await generateOrdenPDF({
+      ...buildOrdenFixture(),
+      terminologia: { serie: "N° de chasis" },
+    })
+    const phoneOverridesTerminologiaText = await extractPdfText(phoneOverridesTerminologiaBuffer)
+    expect(phoneOverridesTerminologiaText).toContain("IMEI 358400123456789")
+    expect(phoneOverridesTerminologiaText).not.toContain("N° de chasis")
+
+    // Review finding (Important): the phone match is whole-token, not
+    // substring — "Automóvil" normalizes to the single token "automovil",
+    // which is NOT the token "movil", so it must NOT match even though
+    // "movil" is a substring of it.
+    const automovilBuffer = await generateOrdenPDF({ ...buildOrdenFixture(), tipoDispositivo: "Automóvil" })
+    const automovilText = await extractPdfText(automovilBuffer)
+    expect(automovilText).toContain("Número de serie 358400123456789")
+    expect(automovilText).not.toContain("IMEI 358400123456789")
+
+    // Multi-word tipoDispositivo names still match on a per-token basis —
+    // "Teléfono móvil" splits into the tokens "telefono" and "movil", both
+    // of which are in the phone set individually.
+    const telefonoMovilBuffer = await generateOrdenPDF({ ...buildOrdenFixture(), tipoDispositivo: "Teléfono móvil" })
+    const telefonoMovilText = await extractPdfText(telefonoMovilBuffer)
+    expect(telefonoMovilText).toContain("IMEI 358400123456789")
+    expect(telefonoMovilText).not.toContain("Número de serie 358400123456789")
   })
 
   it("embeds the reception signature image on the client part when firmaRecepcion is present", async () => {
@@ -137,49 +241,32 @@ describe("generateOrdenPDF", () => {
     expect(buffer.length).toBeGreaterThan(1000)
   })
 
-  it("marks a non-canonical estado (CANCELADO) over the closest reached timeline step", async () => {
-    const buffer = await generateOrdenPDF({
-      ...buildOrdenFixture(),
-      estado: "CANCELADO",
-      timeline: [
-        { estado: "RECIBIDO", fecha: new Date(Date.now() - 3 * 86400000) },
-        { estado: "EN_DIAGNOSTICO", fecha: new Date(Date.now() - 2 * 86400000) },
-      ],
-    })
-    const text = await extractPdfText(buffer)
-    // A bare `toContain("CANCELADO")` passes unconditionally: the header
-    // idbox tag always draws the raw estado, independent of the timeline
-    // fallback below. The actual thing under test is the *closest-reached*
-    // mapping in generateOrdenPDF — with a timeline of RECIBIDO +
-    // EN_DIAGNOSTICO dates, the CANCELADO tag must land specifically in the
-    // DIAGNÓSTICO (index 1) column's date slot: RECIBIDO keeps its real
-    // "DD/MM HH:mm" date, and every later step still shows the untouched
-    // "—" placeholder. Confirmed against the real extracted text before
-    // writing this regex — the timeline row decodes to exactly:
-    //   "RECIBIDO 09/08 13:40 DIAGNÓSTICO CANCELADO PRESUPUESTADO — APROBADO — ..."
-    // A broken/off-by-one closest-reached-step loop (e.g. defaulting to
-    // index 0, or landing one column off) would break this exact
-    // adjacency, even though the header tag alone would still trivially
-    // contain "CANCELADO".
-    expect(text).toMatch(/RECIBIDO \d{2}\/\d{2} \d{2}:\d{2} DIAGNÓSTICO CANCELADO PRESUPUESTADO — APROBADO — /)
-    // Cheap explicit guard alongside the adjacency regex: exactly 2
-    // occurrences total (header idbox tag + the one timeline date slot the
-    // fallback picked) — not 1 (fallback never drew) or 3+ (leaked onto
-    // more than one column).
-    expect((text.match(/CANCELADO/g) || []).length).toBe(2)
-    expect(buffer.length).toBeGreaterThan(1000)
-  })
+  // Item 4: the CANCELADO non-canonical-timeline-adjacency test used to
+  // live here, exercising it on the RECEPCIÓN client part. That sheet no
+  // longer draws a timeline at all (see the "estado timeline bar" removal
+  // note in lib/pdf.ts, RECEPCIÓN header block) — and CANCELADO itself is
+  // in ESTADOS_TERMINAL, never ESTADOS_COMPLETADOS, so it can never route
+  // to the ENTREGA sheet either; there's no live estado left that lands the
+  // RECEPCIÓN branch with a timeline to assert against. The scenario moved
+  // into the "ENTREGA expediente sheet" describe block below using
+  // ENTREGADO_SIN_COBRO instead — it's the other estado that shares the
+  // exact same non-canonical-fallback code path (both are outside
+  // ESTADO_FLOW) while still being a member of ESTADOS_COMPLETADOS, so the
+  // ENTREGA sheet's own timeline is the one that renders it.
 
-  it("renders the ENTREGADO variant with fotos as a separate appended page (signatures now live on the entrega sheet itself)", async () => {
-    // Minimal 1x1 PNG, embedded as a data: URL so the fotos-de-ingreso fetch
-    // works offline (fetch() resolves data: URLs in Node 18+), and reused as
-    // a stand-in signature image — same trick as pdf-samples.test.ts.
+  it("renders the ENTREGADO variant with signatures on the entrega sheet itself (no more separate fotos page)", async () => {
+    // Minimal 1x1 PNG, reused as a stand-in signature image — same trick as
+    // pdf-samples.test.ts.
     const pngBase64 =
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
 
     const buffer = await generateOrdenPDF({
       ...buildOrdenFixture(),
       estado: "ENTREGADO",
+      // Item 6: fotosIngreso is still passed here on purpose — proves the
+      // removed FOTOS DE INGRESO page is gone even when photo data IS
+      // present, not just when it's absent. The field stays on
+      // OrdenPDFData/the route; generateOrdenPDF just no longer draws it.
       fotosIngreso: [
         { url: `data:image/png;base64,${pngBase64}`, descripcion: "Pantalla con manchas de humedad" },
         { url: `data:image/png;base64,${pngBase64}`, descripcion: "Puerto de carga oxidado" },
@@ -191,19 +278,67 @@ describe("generateOrdenPDF", () => {
       notasEntrega: "Se entrega el equipo funcionando correctamente. Cliente conforme.",
     })
     expect(buffer.length).toBeGreaterThan(1000)
-    // Task D4: terminal delivery estados now render the full ENTREGA
-    // expediente sheet as page 1 (replacing the old recepción+cut+stub
-    // layout for this estado) — no more separate "comprobante de entrega"
-    // page, its content (attribution + signatures) now lives on that same
-    // sheet. Only the fotos-de-ingreso page still appends separately.
+    // Task D4: terminal delivery estados render the full ENTREGA expediente
+    // sheet as page 1, attribution + signatures included on that same
+    // sheet. Item 6: the FOTOS DE INGRESO page that used to append after it
+    // when fotosIngreso was non-empty is gone — a single page now, always.
     const doc = await PDFDocument.load(buffer)
-    expect(doc.getPageCount()).toBe(2)
+    expect(doc.getPageCount()).toBe(1)
     const text = await extractPdfText(buffer)
     expect(text).toContain("ENTREGÓ")
     expect(text).toContain("MARÍA GÓMEZ")
+    expect(text).not.toContain("FOTOS DE INGRESO")
   })
 
   describe("ENTREGA expediente sheet (Task D4)", () => {
+    it("marks a non-canonical estado (ENTREGADO_SIN_COBRO) over the closest reached timeline step", async () => {
+      // Item 4: migrated from the old RECEPCIÓN-sheet CANCELADO test (see
+      // the note left where it used to live, above) — the RECEPCIÓN client
+      // part no longer draws a timeline at all, so that scenario moved
+      // here. ENTREGADO_SIN_COBRO exercises the exact same non-canonical
+      // fallback code path CANCELADO did (both estados sit outside
+      // ESTADO_FLOW), but it's also in ESTADOS_COMPLETADOS, so it renders
+      // the ENTREGA sheet — which still has the timeline.
+      const buffer = await generateOrdenPDF({
+        ...buildOrdenFixture(),
+        estado: "ENTREGADO_SIN_COBRO",
+        motivoSinCobro: "NO_REPARABLE",
+        costoFinal: null,
+        totalCobrado: null,
+        timeline: [
+          { estado: "RECIBIDO", fecha: new Date(Date.now() - 3 * 86400000) },
+          { estado: "EN_DIAGNOSTICO", fecha: new Date(Date.now() - 2 * 86400000) },
+        ],
+      })
+      const text = await extractPdfText(buffer)
+      // A bare `toContain("ENTREGADO SIN COBRO")` passes unconditionally:
+      // the header idbox tag always draws the raw estado, independent of
+      // the timeline fallback below. The actual thing under test is the
+      // *closest-reached* mapping in generateOrdenPDF — with a timeline of
+      // RECIBIDO + EN_DIAGNOSTICO dates, the tag must land specifically in
+      // the DIAGNÓSTICO (index 1) column's date slot: RECIBIDO keeps its
+      // real "DD/MM HH:mm" date, and every later step still shows the
+      // untouched "—" placeholder. Confirmed against the real extracted
+      // text before writing this regex — the timeline row decodes to
+      // exactly (the tag truncates to fit the ~77pt-wide column at 6pt,
+      // same rxTruncate() every other column label goes through):
+      //   "RECIBIDO 10/08 01:56 DIAGNÓSTICO ENTREGADO SIN COB… PRESUPUESTADO — APROBADO — ..."
+      // A broken/off-by-one closest-reached-step loop (e.g. defaulting to
+      // index 0, or landing one column off) would break this exact
+      // adjacency, even though the header tag alone would still trivially
+      // contain the estado.
+      expect(text).toMatch(/RECIBIDO \d{2}\/\d{2} \d{2}:\d{2} DIAGNÓSTICO ENTREGADO SIN COB… PRESUPUESTADO — APROBADO — /)
+      // Cheap explicit guard alongside the adjacency regex: exactly 2
+      // occurrences of the (unambiguous, un-truncated-prefix) "ENTREGADO
+      // SIN COB" text — header idbox tag (full "…COBRO") + the one
+      // timeline date slot the fallback picked (truncated "…COB…") — not 1
+      // (fallback never drew) or 3+ (leaked onto more than one column).
+      // A bare "ENTREGADO" count would be noisy: it's also the 7th
+      // timeline column's own always-drawn label.
+      expect((text.match(/ENTREGADO SIN COB/g) || []).length).toBe(2)
+      expect(buffer.length).toBeGreaterThan(1000)
+    })
+
     it("renders trabajos, totals, garantía, cobros and diagnóstico for a terminal delivery estado", async () => {
       const fixture = buildOrdenFixture()
       const buffer = await generateOrdenPDF({
@@ -283,6 +418,11 @@ describe("generateOrdenPDF", () => {
 
       // No cut line / business stub on the entrega sheet.
       expect(text).not.toContain("TALÓN")
+
+      // Item 6: the "Fotos" column next to "Accesorios recibidos" is gone —
+      // that row is now "Accesorios recibidos" alone, full width.
+      expect(text).not.toContain("FOTOS")
+      expect(text).toContain("ACCESORIOS RECIBIDOS")
 
       expect(buffer.length).toBeGreaterThan(1000)
     })
