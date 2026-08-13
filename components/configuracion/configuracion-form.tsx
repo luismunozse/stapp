@@ -7,9 +7,10 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { Upload, Trash2, Save, ImageIcon } from "lucide-react"
+import { Upload, Trash2, Save, ImageIcon, Printer } from "lucide-react"
 import { useModal } from "@/contexts/modal-context"
 import { NotificationSettings } from "@/components/configuracion/notification-settings"
+import { PrinterCalibrationWizard } from "@/components/impresora/printer-calibration-wizard"
 import { CURRENCY_OPTIONS } from "@/lib/currency"
 import { TIMEZONE_OPTIONS } from "@/lib/timezone"
 import { COUNTRY_OPTIONS, getCountryConfig } from "@/lib/countries"
@@ -58,6 +59,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
   const [ivaRegimen, setIvaRegimen] = useState<"EXENTO" | "INCLUIDO" | "ADITIVO">("EXENTO")
   const [ivaTasa, setIvaTasa] = useState("21")
   const [redondeoEfectivo, setRedondeoEfectivo] = useState("0")
+  const [wizardOpen, setWizardOpen] = useState(false)
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -755,6 +757,17 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
               Se imprime al final del ticket. Si se deja vacio no aparece ninguna seccion de terminos.
             </p>
           </div>
+
+          <div className="pt-2 border-t">
+            <p className="text-xs sm:text-sm text-muted-foreground mb-2">
+              Si el ticket sale con el texto cortado, acentos ilegibles o no corta el papel,
+              calibre la impresora desde este dispositivo.
+            </p>
+            <Button type="button" variant="outline" onClick={() => setWizardOpen(true)}>
+              <Printer className="mr-2 h-4 w-4" />
+              Calibrar impresora
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -765,6 +778,8 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
 
       {/* Configuración de notificaciones - se guarda por separado */}
       <NotificationSettings allowEdit={allowEdit} />
+
+      <PrinterCalibrationWizard open={wizardOpen} onOpenChange={setWizardOpen} />
     </div>
   )
 }

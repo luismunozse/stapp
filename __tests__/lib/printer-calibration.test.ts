@@ -91,4 +91,14 @@ describe("wizardReducer", () => {
     expect(s.step).toBe("conexion")
     expect(s.profile.columnas).toBe(42)
   })
+
+  it("sync vuelve a conexion y reemplaza el perfil por el dado (releído del storage)", () => {
+    const perfilExterno = { ...defaultProfile(58), columnas: 32 }
+    const s = wizardReducer(
+      { step: "final", profile: { ...defaultProfile(), columnas: 48 } },
+      { type: "sync", profile: perfilExterno },
+    )
+    expect(s.step).toBe("conexion")
+    expect(s.profile).toEqual(perfilExterno)
+  })
 })
