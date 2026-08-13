@@ -514,13 +514,13 @@ describe("generateOrdenPDF", () => {
       expect(text).not.toContain("Repuesto de prueba 13")
       expect(text).toContain("+13 ítems más")
       // The tail block (signature row, "ENTREGÓ") must still land on-page —
-      // same MediaBox invariant as fix D5, exercised here with an oversized
-      // trabajos list instead of the default fixture.
+      // and the page stays the exact, uncropped A4 sheet (fix: orden-a4-fijo)
+      // even with this oversized trabajos list.
       expect(text).toContain("ENTREGÓ")
       const doc = await PDFDocument.load(buffer)
       const mediaBox = doc.getPage(0).getMediaBox()
-      expect(mediaBox.y + mediaBox.height).toBe(842)
-      expect(mediaBox.y).toBeGreaterThanOrEqual(0)
+      expect(mediaBox.y).toBe(0)
+      expect(mediaBox.height).toBe(842)
     })
 
     it("subtracts descuentoCobro from the saldo band, distinct from the no-discount case", async () => {
@@ -561,17 +561,29 @@ describe("generateOrdenPDF", () => {
     })
   })
 
-  describe("MediaBox invariant (fix final-review D5)", () => {
-    // Pins the D5 crop-floor fix: the dynamic-height crop must always anchor
-    // its TOP edge at the real page height (842, A4) and never push its
-    // bottom edge below 0 — a regression here reintroduces the blank-strip-
-    // above-header bug the original Task D5 fix addressed.
+  describe("MediaBox invariant (fix: orden-a4-fijo)", () => {
+    // The two print sheets (RECEPCIÓN full — client part + cut line + talón
+    // — and ENTREGA) no longer crop to content: both the ✂ cut line/talón
+    // and the ENTREGA footer are anchored to the bottom margin instead, so
+    // the page is ALWAYS the full physical A4 sheet. A regression here
+    // (something re-enabling the old dynamic crop) would silently break
+    // that bottom-anchoring on a real printed page.
     it.each([
       ["recepción full (client part + cut line + talón)", buildOrdenFixture()],
-      ["soloCliente (client part only)", { ...buildOrdenFixture(), soloCliente: true }],
       ["entrega (terminal delivery estado)", { ...buildOrdenFixture(), estado: "ENTREGADO" }],
-    ] as const)("keeps a valid, non-negative-origin MediaBox for the %s variant", async (_label, data) => {
+    ] as const)("keeps the exact, uncropped A4 MediaBox for the %s variant", async (_label, data) => {
       const buffer = await generateOrdenPDF(data)
+      const doc = await PDFDocument.load(buffer)
+      const mediaBox = doc.getPage(0).getMediaBox()
+      expect(mediaBox.y).toBe(0)
+      expect(mediaBox.height).toBe(842)
+    })
+
+    // soloCliente (WhatsApp share) is viewed on screen, never printed on a
+    // physical sheet — it keeps the old dynamic crop-to-content behavior
+    // (fix final-review D5): top edge anchored at 842, bottom never negative.
+    it("keeps a valid, non-negative-origin dynamic-crop MediaBox for the soloCliente variant", async () => {
+      const buffer = await generateOrdenPDF({ ...buildOrdenFixture(), soloCliente: true })
       const doc = await PDFDocument.load(buffer)
       const mediaBox = doc.getPage(0).getMediaBox()
       expect(mediaBox.y + mediaBox.height).toBe(842)
