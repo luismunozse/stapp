@@ -2016,18 +2016,26 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
   // quedó top-anchored sin cambios. Lo que sobra entre acá y el corte se
   // reparte en dos huecos — antes y después del bloque dinero/retiro — en
   // vez de quedar pegado al talón como espacio muerto.
+  //
+  // Fix (review Critical #1): soloCliente (compartir por WhatsApp) NUNCA
+  // dibuja el talón ni la línea de corte — anclar esta zona a `cutYTarget`
+  // le metía espacio muerto pegado a un talón que ese variant jamás
+  // renderiza. Solo la hoja impresa (client part + talón) reparte huecos;
+  // soloCliente conserva el flujo pre-diff, ajustado (money3 pegado a
+  // accesorios, retiro con su gap fijo original).
   // ============================================================
   const moneyPresent = !!(data.presupuesto || data.sena)
   const retiroPresent = !!fechaPrometida
+  const isPrintSheet = !data.soloCliente
   const zoneBContentH = (moneyPresent ? 34 : 0) + (moneyPresent && retiroPresent ? 8 : 0) + (retiroPresent ? 9 : 0)
   // Alto fijo de la zona QR/firma/términos, de su propio arranque (el hueco
   // de 4pt previo a la fila QR) hasta la línea de corte (6pt de respiro).
   const zoneCH = 4 + 55 + shownTerminos.length * 8 + 6
   const zoneCTopTarget = cutYTarget + zoneCH
   const MIN_GAP = 8
-  const leftoverGap = Math.max(0, ry - zoneBContentH - zoneCTopTarget - MIN_GAP * 2)
-  const gapTop = MIN_GAP + leftoverGap / 2
-  const gapBottom = MIN_GAP + leftoverGap / 2
+  const leftoverGap = isPrintSheet ? Math.max(0, ry - zoneBContentH - zoneCTopTarget - MIN_GAP * 2) : 0
+  const gapTop = isPrintSheet ? MIN_GAP + leftoverGap / 2 : 0
+  const gapBottom = isPrintSheet ? MIN_GAP + leftoverGap / 2 : 0
   ry -= gapTop
 
   // ---- money3: presupuesto | seña | saldo (última celda ink-fill) ----
@@ -2053,9 +2061,10 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
       page.drawText(rxTruncate(c.label.toUpperCase(), archivoBold, 6, mcW - 12), { x: cx + 8, y: ry - 13, size: 6, font: archivoBold, color: lblColor })
       page.drawText(rxTruncate(c.amt, archivoCondensedBold, 13, mcW - 12), { x: cx + 8, y: ry - 27, size: 13, font: archivoCondensedBold, color: amtColor })
     })
-    // Gap interno fijo (money -> retiro) solo cuando el retiro sigue acá
-    // debajo; si no, el hueco lo pone `gapBottom` más abajo.
-    ry -= money3H + (retiroPresent ? 8 : 0)
+    // Gap interno: en la hoja impresa, solo cuando el retiro sigue acá
+    // debajo (si no, el hueco lo pone `gapBottom` más abajo); en soloCliente
+    // el +8 pre-diff es incondicional (no hay `gapBottom` que lo reemplace).
+    ry -= money3H + (isPrintSheet ? (retiroPresent ? 8 : 0) : 8)
   }
 
   // ---- Retiro estimado ----
@@ -2065,7 +2074,9 @@ export async function generateOrdenPDF(data: OrdenPDFData): Promise<Buffer> {
       { text: fechaPrometida, font: archivoBold, color: MONO.ink },
       { text: " — te avisamos ante cada cambio de estado.", font: archivoRegular, color: MONO.label },
     ], rxMargin, ry - 9, 9)
-    ry -= 9
+    // Hoja impresa: solo el texto (9pt) — `gapBottom` pone el resto.
+    // soloCliente: gap fijo pre-diff (9 de texto + 9 de respiro = 18).
+    ry -= isPrintSheet ? 9 : 18
   }
 
   // Segundo hueco distribuido: empuja el bloque QR/firma/términos hacia la
