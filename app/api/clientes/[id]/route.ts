@@ -14,6 +14,8 @@ const clienteSchema = z.object({
   razonSocial: z.string().optional(),
   cuit: z.string().optional(),
   aceptaWhatsapp: z.boolean().optional(),
+  tipoPrecio: z.enum(["MINORISTA", "MAYORISTA"]).optional(),
+  descuentoPct: z.number().min(0, "El descuento debe estar entre 0 y 100").max(100, "El descuento debe estar entre 0 y 100").nullable().optional(),
 })
 
 export async function GET(
@@ -100,12 +102,29 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { error, organizationId } = await requireAuth()
+    const { error, organizationId, role } = await requireAuth()
     if (error) return error
 
     const { id } = await params
     const body = await request.json()
     const data = clienteSchema.parse(body)
+
+    // Mismo gate que POST /api/clientes (ver design ADR-7): el precio
+    // mayorista solo lo define un ADMIN, se rechaza fuerte, nunca se
+    // aplica parcial en silencio.
+    if ((data.tipoPrecio !== undefined || data.descuentoPct !== undefined) && role !== "ADMIN") {
+      return NextResponse.json(
+        { error: "Solo un administrador puede definir el precio del cliente" },
+        { status: 403 }
+      )
+    }
+
+    if (data.tipoPrecio === "MAYORISTA" && (data.descuentoPct === undefined || data.descuentoPct === null)) {
+      return NextResponse.json(
+        { error: "Definí un descuento para un cliente mayorista" },
+        { status: 400 }
+      )
+    }
 
     // Verificar que el cliente pertenece a la organización
     const { data: existingCliente, error: fetchError } = await supabaseAdmin
@@ -133,6 +152,12 @@ export async function PUT(
     if (data.razonSocial !== undefined) updateData.razon_social = data.razonSocial || null
     if (data.cuit !== undefined) updateData.cuit = data.cuit || null
     if (data.aceptaWhatsapp !== undefined) updateData.acepta_whatsapp = data.aceptaWhatsapp
+    // Flip a MINORISTA anula el % en el mismo update (REQ-5.2) — no queda un
+    // descuento fantasma guardado detrás de un tier que ya no lo usa.
+    if (data.tipoPrecio !== undefined) {
+      updateData.tipo_precio = data.tipoPrecio
+      updateData.descuento_pct = data.tipoPrecio === "MAYORISTA" ? (data.descuentoPct ?? null) : null
+    }
 
     const { data: cliente, error: updateError } = await supabaseAdmin
       .from("clientes")

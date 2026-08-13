@@ -159,6 +159,8 @@ export function formatCliente(cliente: any) {
     razonSocial: cliente.razon_social,
     cuit: cliente.cuit,
     aceptaWhatsapp: cliente.acepta_whatsapp ?? true,
+    tipoPrecio: cliente.tipo_precio || "MINORISTA",
+    descuentoPct: cliente.descuento_pct != null ? Number(cliente.descuento_pct) : null,
     saldoCuenta: parseFloat(cliente.saldo_cuenta || "0"),
     organizationId: cliente.organization_id,
     createdAt: cliente.created_at,
