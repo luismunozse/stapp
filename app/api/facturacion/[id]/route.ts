@@ -261,15 +261,27 @@ async function handleAnularFactura(opts: {
     return await anularFacturaJsFallback({ id, organizationId, userId })
   }
 
-  // Map known business errors
+  // Map known business errors.
+  // Migration 295 changed anular_factura_atomica's RAISE EXCEPTION wording
+  // from feminine ("factura") to masculine ("remito"): "Factura no
+  // encontrada" / "La factura ya esta anulada" -> "Remito no encontrado" /
+  // "El remito ya esta anulado". The app and the migration don't deploy
+  // atomically (this route can ship before 295 runs, or 295 can be rolled
+  // back — see supabase/migrations/rollback/295_rollback.sql — after this
+  // route already shipped), so these matches are gender-agnostic and accept
+  // BOTH wordings. This also makes the rollback self-contained: reverting
+  // just the DB function is enough, this route doesn't need a matching
+  // revert to keep working.
+  // eliminar_factura_atomica is untouched by migration 295 and still raises
+  // "Factura no encontrada" — its own match (below, in DELETE) keeps the old wording.
   const msg = rpcError.message ?? ""
-  if (msg.includes("no encontrada")) {
+  if (/no encontrad[oa]/.test(msg)) {
     return NextResponse.json({ error: "Remito no encontrado" }, { status: 404 })
   }
   if (msg.includes("No autorizado")) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 })
   }
-  if (msg.includes("ya esta anulada")) {
+  if (/ya esta anulad[oa]/.test(msg)) {
     return NextResponse.json({ error: msg }, { status: 400 })
   }
 
@@ -444,7 +456,11 @@ export async function DELETE(
       })
     }
 
-    // Map known business errors
+    // Map known business errors.
+    // eliminar_factura_atomica is untouched by migration 295 — it still raises
+    // "Factura no encontrada" (feminine), unlike anular_factura_atomica above
+    // which migration 295 reworded to "Remito no encontrado". Keep this
+    // matching the old wording; do not "fix" it to match the anular handler.
     const msg = rpcError.message ?? ""
     if (msg.includes("no encontrada")) {
       return NextResponse.json({ error: "Remito no encontrado" }, { status: 404 })

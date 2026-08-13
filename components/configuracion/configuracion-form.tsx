@@ -14,6 +14,18 @@ import { CURRENCY_OPTIONS } from "@/lib/currency"
 import { TIMEZONE_OPTIONS } from "@/lib/timezone"
 import { COUNTRY_OPTIONS, getCountryConfig } from "@/lib/countries"
 
+// Condición frente al IVA del emisor: texto libre (organizations.condicion_iva
+// es TEXT, sin enum en DB) impreso tal cual en el remito — a diferencia de
+// components/proveedores/proveedor-form.tsx, que sí persiste códigos porque
+// proveedores.condicion_iva está validado contra un enum de Zod.
+const CONDICION_IVA_OPTIONS = [
+  "Responsable Inscripto",
+  "Monotributo",
+  "Exento",
+  "Consumidor Final",
+] as const
+const CONDICION_IVA_NONE = "__none__"
+
 interface Config {
   logoData: string | null
   logoMime: string | null
@@ -58,6 +70,13 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
   const [ivaRegimen, setIvaRegimen] = useState<"EXENTO" | "INCLUIDO" | "ADITIVO">("EXENTO")
   const [ivaTasa, setIvaTasa] = useState("21")
   const [redondeoEfectivo, setRedondeoEfectivo] = useState("0")
+  // Datos fiscales y de cobro (migración 295) — alimentan el remito.
+  const [cuit, setCuit] = useState("")
+  const [condicionIva, setCondicionIva] = useState("")
+  const [domicilioFiscal, setDomicilioFiscal] = useState("")
+  const [cbuAlias, setCbuAlias] = useState("")
+  const [mediosPagoTexto, setMediosPagoTexto] = useState("")
+  const [plazoPagoDias, setPlazoPagoDias] = useState("")
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -94,6 +113,12 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
         setIvaRegimen(data.ivaRegimen ?? "EXENTO")
         setIvaTasa(String(data.ivaTasa ?? 21))
         setRedondeoEfectivo(String(data.redondeoEfectivo ?? 0))
+        setCuit(data.cuit || "")
+        setCondicionIva(data.condicionIva || "")
+        setDomicilioFiscal(data.domicilioFiscal || "")
+        setCbuAlias(data.cbuAlias || "")
+        setMediosPagoTexto(data.mediosPagoTexto || "")
+        setPlazoPagoDias(data.plazoPagoDias != null ? String(data.plazoPagoDias) : "")
         // Usar logoUrl si existe, o logoData para compatibilidad
         if (data.logoUrl) {
           setPreview(data.logoUrl)
@@ -178,7 +203,7 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
       const res = await fetch("/api/configuracion", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, comisionAplicaSinReparacion, ivaRegimen, ivaTasa, redondeoEfectivo }),
+        body: JSON.stringify({ logoData, logoMime, nombreEmpresa, telefono, direccion, ciudad, provincia, codigoPostal, moneda, zonaHoraria, ivaPorcentaje, cotizacionValidezDias, cotizacionTerminos, recepcionTerminos, comprobanteTerminos, garantiaDiasDefault, politicaAbandonoDiasDefault, anticipoPorcentajeDefault, pais, moduloAgenda, vendedoresAdministranInventario, comisionAplicaSinReparacion, ivaRegimen, ivaTasa, redondeoEfectivo, cuit, condicionIva, domicilioFiscal, cbuAlias, mediosPagoTexto, plazoPagoDias }),
       })
 
       if (res.ok) {
@@ -603,6 +628,93 @@ export function ConfiguracionForm({ allowEdit = true }: ConfiguracionFormProps) 
             </Select>
             <p className="text-xs sm:text-sm text-muted-foreground mt-1">
               Redondea el total al múltiplo más cercano cuando el pago es en efectivo.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="text-base sm:text-lg">Datos fiscales y de cobro</CardTitle>
+          <CardDescription className="text-xs sm:text-sm">
+            Datos del emisor y condiciones de cobro que se muestran en el remito.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-4 sm:p-6 pt-0 space-y-4">
+          <div>
+            <Label htmlFor="cuit" className="text-sm">CUIT</Label>
+            <Input
+              id="cuit"
+              value={cuit}
+              onChange={(e) => setCuit(e.target.value)}
+              placeholder="30-12345678-9"
+              disabled={!allowEdit}
+            />
+          </div>
+          <div>
+            <Label htmlFor="condicionIva" className="text-sm">Condición frente al IVA</Label>
+            <Select
+              value={condicionIva || CONDICION_IVA_NONE}
+              onValueChange={(val) => setCondicionIva(val === CONDICION_IVA_NONE ? "" : val)}
+              disabled={!allowEdit}
+            >
+              <SelectTrigger id="condicionIva">
+                <SelectValue placeholder="Sin especificar" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={CONDICION_IVA_NONE}>Sin especificar</SelectItem>
+                {CONDICION_IVA_OPTIONS.map((opt) => (
+                  <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor="domicilioFiscal" className="text-sm">Domicilio fiscal</Label>
+            <Input
+              id="domicilioFiscal"
+              value={domicilioFiscal}
+              onChange={(e) => setDomicilioFiscal(e.target.value)}
+              placeholder="Av. Principal 123, Córdoba"
+              disabled={!allowEdit}
+            />
+          </div>
+          <div>
+            <Label htmlFor="cbuAlias" className="text-sm">CBU o alias</Label>
+            <Input
+              id="cbuAlias"
+              value={cbuAlias}
+              onChange={(e) => setCbuAlias(e.target.value)}
+              placeholder="mi.alias.mp"
+              disabled={!allowEdit}
+            />
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+              Se muestra en el remito para pagos por transferencia
+            </p>
+          </div>
+          <div>
+            <Label htmlFor="mediosPagoTexto" className="text-sm">Medios de pago aceptados</Label>
+            <Input
+              id="mediosPagoTexto"
+              value={mediosPagoTexto}
+              onChange={(e) => setMediosPagoTexto(e.target.value)}
+              placeholder="Efectivo, transferencia, tarjeta"
+              disabled={!allowEdit}
+            />
+          </div>
+          <div>
+            <Label htmlFor="plazoPagoDias" className="text-sm">Plazo de pago (días)</Label>
+            <Input
+              id="plazoPagoDias"
+              type="number"
+              min="0"
+              value={plazoPagoDias}
+              onChange={(e) => setPlazoPagoDias(e.target.value)}
+              placeholder="Ej: 30"
+              disabled={!allowEdit}
+            />
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+              Si se completa, el remito muestra la fecha de vencimiento calculada desde la emisión
             </p>
           </div>
         </CardContent>
